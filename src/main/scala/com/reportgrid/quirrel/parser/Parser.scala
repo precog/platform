@@ -1,10 +1,27 @@
 package com.reportgrid.quirrel
 package parser
 
+import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.RegexParsers
+import edu.uwm.cs.gll.Result
+import edu.uwm.cs.gll.Success
 import edu.uwm.cs.gll.ast.Filters
 
-trait Parser extends RegexParsers with AST {
+trait Parser extends RegexParsers with Filters with AST {
+  
+  def input: LineStream
+  
+  override lazy val root = {
+    val results = expr(input)
+    
+    if (results.headOption collect { case _: Success[Expr] => } isDefined)
+      handleSuccess(results)
+    else
+      handleFailure(results)
+  }
+  
+  def handleSuccess(forest: Stream[Result[Expr]]): Expr
+  def handleFailure(forest: Stream[Result[Expr]]): Nothing
   
   private[this] lazy val expr: Parser[Expr] = (
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
