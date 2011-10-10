@@ -21,10 +21,11 @@ package com.reportgrid.quirrel
 package parser
 
 import edu.uwm.cs.gll.RegexParsers
+import edu.uwm.cs.gll.ast.Filters
 
 trait Parser extends RegexParsers with AST {
   
-  lazy val expr: Parser[Expr] = (
+  private[this] lazy val expr: Parser[Expr] = (
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
     | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
     
@@ -67,44 +68,77 @@ trait Parser extends RegexParsers with AST {
     | "~" ~ expr ^^ { (_, e) => Neg(e) }
     
     | "(" ~ expr ~ ")" ^^ { (_, e, _) => Paren(e) }
-  )
+  ) filter (precedence & associativity)
   
-  val formals: Parser[Vector[String]] = (
+  private[this] val formals: Parser[Vector[String]] = (
       formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
     | ticId                 ^^ { Vector(_) }
   )
   
-  val actuals: Parser[Vector[Expr]] = (
+  private[this] val actuals: Parser[Vector[Expr]] = (
       actuals ~ "," ~ expr ^^ { (es, _, e) => es :+ e }
     | expr                 ^^ { Vector(_) }
     | ""                   ^^^ Vector()
   )
   
-  val properties: Parser[Vector[(String, Expr)]] = (
+  private[this] val properties: Parser[Vector[(String, Expr)]] = (
       properties ~ "," ~ property ^^ { (ps, _, p) => ps :+ p }
     | property                    ^^ { Vector(_) }
     | ""                          ^^^ Vector()
   )
   
-  val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
+  private[this] val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
   
-  val id = """[a-zA-Z_]['a-zA-Z_0-9]∗""".r
+  private[this] val id = """[a-zA-Z_]['a-zA-Z_0-9]∗""".r \ "new"
   
-  val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]∗""".r
+  private[this] val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]∗""".r
   
-  val propertyName = """[a-zA-Z_][a-zA-Z_0-9]∗""".r
+  private[this] val propertyName = """[a-zA-Z_][a-zA-Z_0-9]∗""".r
   
-  val pathLiteral = """(//[a-zA-Z_\-0-9]+)+ """.r
+  private[this] val pathLiteral = """(//[a-zA-Z_\-0-9]+)+ """.r
   
-  val strLiteral = """"([^"\n\r\\]|\\.)∗""""
+  private[this] val strLiteral = """"([^"\n\r\\]|\\.)∗""""
   
-  val numLiteral = """[0-9]+(.[0-9]+)?([eE][0-9]+)?""".r
+  private[this] val numLiteral = """[0-9]+(.[0-9]+)?([eE][0-9]+)?""".r
   
-  val boolLiteral = (
+  private[this] val boolLiteral = (
       "true"  ^^^ true
     | "false" ^^^ false
   )
   
   override val whitespace = """--.*|(-([^\-]|-[^)])∗-)|[;\s]+""".r
   override val skipWhitespace = true
+  
+  private[this] val precedence = 
+    prec('dispatch, 'deref,
+      'comp, 'neg,
+      'mul, 'div,
+      'add, 'sub,
+      'lt, 'lteq, 'gt, 'gteq,
+      'eq, 'noteq,
+      'and, 'or,
+      'op,
+      'new,
+      'where,
+      'relate,
+      'bind)
+      
+  private[this] val associativity = (
+      ('mul <)
+    & ('div <)
+    & ('add <)
+    & ('sub <)
+    & ('lt <)
+    & ('lteq <)
+    & ('gt <)
+    & ('gteq <)
+    & ('eq <)
+    & ('noteq <)
+    & ('and <)
+    & ('or <)
+    & ('op <)
+    & ('where <)
+    & ('relate <>)
+    & ('bind <)
+  )
 }

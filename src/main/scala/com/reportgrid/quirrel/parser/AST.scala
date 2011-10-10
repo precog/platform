@@ -20,54 +20,136 @@
 package com.reportgrid.quirrel
 package parser
 
+import edu.uwm.cs.gll.ast._
+
 trait AST { outer => 
   def root: Expr
   
-  sealed trait Expr {
+  sealed trait Expr extends Node {
     def root = outer.root
   }
   
-  case class Binding(id: String, params: Vector[String], body: Expr, in: Expr) extends Expr
+  case class Binding(id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'bind
+  }
   
-  case class New(expr: Expr) extends Expr
+  case class New(child: Expr) extends Expr with UnaryNode {
+    val label = 'new
+  }
   
-  case class Relate(from: Expr, to: Expr, in: Expr) extends Expr
+  case class Relate(from: Expr, to: Expr, in: Expr) extends Expr {
+    val label = 'relate
+    
+    def children = List(from, to, in)
+  }
   
-  case class Var(id: String) extends Expr
+  case class Var(id: String) extends Expr with LeafNode {
+    val label = 'var
+  }
   
-  case class TicVar(id: String) extends Expr
+  case class TicVar(id: String) extends Expr with LeafNode {
+    val label = 'ticvar
+  }
   
-  case class StrLit(value: String) extends Expr
-  case class NumLit(value: String) extends Expr
-  case class BoolLit(value: Boolean) extends Expr
+  case class StrLit(value: String) extends Expr with LeafNode {
+    val label = 'str
+  }
   
-  case class ObjectDef(props: Vector[(String, Expr)]) extends Expr
-  case class ArrayDef(values: Vector[Expr]) extends Expr
+  case class NumLit(value: String) extends Expr with LeafNode {
+    val label = 'num
+  }
   
-  case class Descent(body: Expr, property: String) extends Expr
-  case class Deref(body: Expr, index: Expr) extends Expr
+  case class BoolLit(value: Boolean) extends Expr with LeafNode {
+    val label = 'bool
+  }
   
-  case class Dispatch(name: String, actuals: Vector[Expr]) extends Expr
-  case class Operation(left: Expr, op: String, right: Expr) extends Expr
+  case class ObjectDef(props: Vector[(String, Expr)]) extends Expr {
+    val label = 'object
+    
+    def children = props map { _._2 } toList
+  }
   
-  case class Add(left: Expr, right: Expr) extends Expr
-  case class Sub(left: Expr, right: Expr) extends Expr
-  case class Mul(left: Expr, right: Expr) extends Expr
-  case class Div(left: Expr, right: Expr) extends Expr
+  case class ArrayDef(values: Vector[Expr]) extends Expr {
+    val label = 'array
+    
+    def children = values.toList
+  }
   
-  case class Lt(left: Expr, right: Expr) extends Expr
-  case class LtEq(left: Expr, right: Expr) extends Expr
-  case class Gt(left: Expr, right: Expr) extends Expr
-  case class GtEq(left: Expr, right: Expr) extends Expr
+  case class Descent(child: Expr, property: String) extends Expr with UnaryNode {
+    val label = 'descent
+  }
   
-  case class Eq(left: Expr, right: Expr) extends Expr
-  case class NotEq(left: Expr, right: Expr) extends Expr
+  case class Deref(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'deref
+  }
   
-  case class And(left: Expr, right: Expr) extends Expr
-  case class Or(left: Expr, right: Expr) extends Expr
+  case class Dispatch(name: String, actuals: Vector[Expr]) extends Expr {
+    val label = 'dispatch
+    
+    def children = actuals.toList
+  }
   
-  case class Comp(body: Expr) extends Expr
-  case class Neg(body: Expr) extends Expr
+  case class Operation(left: Expr, op: String, right: Expr) extends Expr with BinaryNode {
+    val label = if (op == "where") 'where else 'op
+  }
   
-  case class Paren(body: Expr) extends Expr
+  case class Add(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'add
+  }
+  
+  case class Sub(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'sub
+  }
+  
+  case class Mul(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'mul
+  }
+  
+  case class Div(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'div
+  }
+  
+  case class Lt(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'lt
+  }
+  
+  case class LtEq(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'lteq
+  }
+  
+  case class Gt(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'gt
+  }
+  
+  case class GtEq(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'gteq
+  }
+  
+  case class Eq(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'eq
+  }
+  
+  case class NotEq(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'noteq
+  }
+  
+  case class And(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'and
+  }
+  
+  case class Or(left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'or
+  }
+  
+  case class Comp(child: Expr) extends Expr with UnaryNode {
+    val label = 'comp
+  }
+  
+  case class Neg(child: Expr) extends Expr with UnaryNode {
+    val label = 'neg
+  }
+  
+  case class Paren(child: Expr) extends Expr with UnaryNode {
+    val label = 'paren
+  }
 }
