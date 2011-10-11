@@ -7,16 +7,9 @@ import jline.Terminal
 
 import parser._
 
-trait REPL {
+trait REPL extends Parser {
   val Prompt = "quirrel> "
   val Follow = "       | "
-  
-  def parse(str: String) = {
-    val parser = new Parser {
-      def input = LineStream(str)
-    }
-    parser.root
-  }
   
   def run() {
     Terminal.setupTerminal().initializeTerminal()
@@ -25,8 +18,18 @@ trait REPL {
     
     var next = readNext(reader)
     while (!next.trim.startsWith(":q")) {
+      val printTree = if (next.startsWith(":tree")) {
+        next = next.substring(":tree".length)
+        true
+      } else {
+        false
+      }
+      
       try {
-        parse(next)
+        val tree = parse(LineStream(next))
+        if (printTree) {
+          println(tree)
+        }
       } catch {
         case e @ ParseException(failures) => 
           println(e.mkString)
