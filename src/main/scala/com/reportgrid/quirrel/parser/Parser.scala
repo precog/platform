@@ -32,9 +32,10 @@ trait Parser extends RegexParsers with Filters with AST {
   def parse(input: LineStream): Tree = {
     val results = expr(input)
     val successes = results collect { case Success(tree, _) => tree }
+    val failures = results collect { case f: Failure => f }
     
     if (successes.isEmpty)
-      handleFailures(results)
+      handleFailures(failures)
     else
       handleSuccesses(successes)
   }
@@ -162,9 +163,8 @@ trait Parser extends RegexParsers with Filters with AST {
     root
   }
   
-  def handleFailures(forest: Stream[Result[Expr]]): Nothing = {
-    val failedForest = forest collect { case f: Failure => f }
-    val sorted = failedForest.toList sort { _.tail.length < _.tail.length }
+  def handleFailures(forest: Stream[Failure]): Nothing = {
+    val sorted = forest.toList sort { _.tail.length < _.tail.length }
     val length = sorted.head.tail.length
     
     val failures = Set(sorted takeWhile { _.tail.length == length }: _*)
