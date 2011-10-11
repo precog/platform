@@ -22,7 +22,7 @@ trait Parser extends RegexParsers with Filters with AST {
       handleSuccesses(successes)
   }
   
-  def handleSuccesses(forest: Stream[Expr]): Tree = {
+  def handleSuccesses(forest: Stream[Expr]): Expr = {
     if ((forest lengthCompare 1) > 0)
       throw new AssertionError("Fatal error: ambiguous parse results: " + forest.mkString(", "))
     else
