@@ -59,6 +59,10 @@ class Atom[A] extends Source[A] with Sink[A] {
       value = a
       isSet = true
       setterThread = null
+      
+      semaphore synchronized {
+        semaphore.notifyAll()
+      }
     } finally {
       lock.unlock()
     }
