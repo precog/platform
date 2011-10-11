@@ -29,9 +29,7 @@ import edu.uwm.cs.gll.ast.Filters
 
 trait Parser extends RegexParsers with Filters with AST {
   
-  def input: LineStream
-  
-  override lazy val root: Tree = {
+  def parse(input: LineStream): Tree = {
     val results = expr(input)
     val successes = results collect { case Success(tree, _) => tree }
     
@@ -42,10 +40,126 @@ trait Parser extends RegexParsers with Filters with AST {
   }
   
   def handleSuccesses(forest: Stream[Expr]): Expr = {
-    if ((forest lengthCompare 1) > 0)
+    val root = if ((forest lengthCompare 1) > 0)
       throw new AssertionError("Fatal error: ambiguous parse results: " + forest.mkString(", "))
     else
       forest.head
+    
+    def bindRoot(e: Expr) {
+      e._root() = root
+      
+      e match {
+        case Binding(_, _, left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case New(child) => bindRoot(child)
+        
+        case Relate(from, to, in) => {
+          bindRoot(from)
+          bindRoot(to)
+          bindRoot(in)
+        }
+        
+        case Var(_) =>
+        case TicVar(_) =>
+        case StrLit(_) =>
+        case NumLit(_) =>
+        case BoolLit(_) =>
+        
+        case ObjectDef(props) => {
+          for ((_, e) <- props) {
+            bindRoot(e)
+          }
+        }
+        
+        case ArrayDef(values) => values foreach bindRoot
+        
+        case Descent(child, _) => bindRoot(child)
+        
+        case Deref(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Dispatch(_, actuals) => actuals foreach bindRoot
+        
+        case Operation(left, _, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Add(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Sub(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Mul(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Div(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Lt(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case LtEq(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Gt(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case GtEq(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Eq(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case NotEq(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case And(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Or(left, right) => {
+          bindRoot(left)
+          bindRoot(right)
+        }
+        
+        case Comp(child) => bindRoot(child)
+        
+        case Neg(child) => bindRoot(child)
+        
+        case Paren(child) => bindRoot(child)
+      }
+    }
+    
+    bindRoot(root)
+    root
   }
   
   def handleFailures(forest: Stream[Result[Expr]]): Nothing = {

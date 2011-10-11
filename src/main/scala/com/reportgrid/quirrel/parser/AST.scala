@@ -20,13 +20,16 @@
 package com.reportgrid.quirrel
 package parser
 
+import com.reportgrid.quirrel.util.Atom
 import edu.uwm.cs.gll.ast._
 
-trait AST { outer => 
-  def root: Tree
+trait AST { 
+  import Atom._
   
   sealed trait Expr extends Node {
-    def root = outer.root
+    private[parser] val _root = atom[Expr]
+    
+    def root = _root()
   }
   
   case class Binding(id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
