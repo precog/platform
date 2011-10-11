@@ -100,17 +100,17 @@ trait Parser extends RegexParsers with Filters with AST {
     | ""                          ^^^ Vector()
   )
   
-  private[this] val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
+  private[this] lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
   
-  private[this] val id = """[a-zA-Z_]['a-zA-Z_0-9]∗""".r \ "new"
+  private[this] val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ "new"
   
-  private[this] val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]∗""".r
+  private[this] val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
-  private[this] val propertyName = """[a-zA-Z_][a-zA-Z_0-9]∗""".r
+  private[this] val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
   
   private[this] val pathLiteral = """(//[a-zA-Z_\-0-9]+)+ """.r
   
-  private[this] val strLiteral = """"([^"\n\r\\]|\\.)∗""""
+  private[this] val strLiteral = """"([^"\n\r\\]|\\.)*""""
   
   private[this] val numLiteral = """[0-9]+(.[0-9]+)?([eE][0-9]+)?""".r
   
