@@ -1,6 +1,7 @@
 package com.reportgrid.quirrel
 package parser
 
+import edu.uwm.cs.gll.Failure
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.RegexParsers
 import edu.uwm.cs.gll.Result
@@ -11,17 +12,31 @@ trait Parser extends RegexParsers with Filters with AST {
   
   def input: LineStream
   
-  override lazy val root = {
+  override lazy val root: Tree = {
     val results = expr(input)
+    val successes = results collect { case Success(tree, _) => tree }
     
-    if (results.headOption collect { case _: Success[Expr] => } isDefined)
-      handleSuccess(results)
+    if (successes.isEmpty)
+      handleFailures(results)
     else
-      handleFailure(results)
+      handleSuccesses(successes)
   }
   
-  def handleSuccess(forest: Stream[Result[Expr]]): Expr
-  def handleFailure(forest: Stream[Result[Expr]]): Nothing
+  def handleSuccesses(forest: Stream[Expr]): Tree = {
+    if ((forest lengthCompare 1) > 0)
+      throw new AssertionError("Fatal error: ambiguous parse results: " + forest.mkString(", "))
+    else
+      forest.head
+  }
+  
+  def handleFailures(forest: Stream[Result[Expr]]): Nothing = {
+    val failedForest = forest collect { case f: Failure => f }
+    val sorted = failedForest.toList sort { _.tail.length < _.tail.length }
+    val length = sorted.head.tail.length
+    
+    val failures = Set(sorted takeWhile { _.tail.length == length }: _*)
+    throw ParseException(failures)
+  }
   
   private[this] lazy val expr: Parser[Expr] = (
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
@@ -76,7 +91,7 @@ trait Parser extends RegexParsers with Filters with AST {
   private[this] val actuals: Parser[Vector[Expr]] = (
       actuals ~ "," ~ expr ^^ { (es, _, e) => es :+ e }
     | expr                 ^^ { Vector(_) }
-    | ""                   ^^^ Vector()
+    | ""                   ^^^ Vector[Expr]()
   )
   
   private[this] val properties: Parser[Vector[(String, Expr)]] = (

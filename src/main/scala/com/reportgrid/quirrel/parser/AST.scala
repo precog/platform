@@ -4,7 +4,7 @@ package parser
 import edu.uwm.cs.gll.ast._
 
 trait AST { outer => 
-  def root: Expr
+  def root: Tree
   
   sealed trait Expr extends Node {
     def root = outer.root
