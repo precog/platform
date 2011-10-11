@@ -17,10 +17,55 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-scalaVersion := "2.9.1"
+package com.reportgrid.quirrel
 
-libraryDependencies ++= Seq(
-  "jline" % "jline" % "0.9.9",
-  "edu.uwm.cs" %% "gll-combinators" % "1.5-SNAPSHOT",
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.5" % "test" withSources)
+import edu.uwm.cs.gll.LineStream
+
+import jline.ConsoleReader
+import jline.Terminal
+
+import parser._
+
+trait REPL {
+  val Prompt = "quirrel> "
+  val Follow = "       | "
+  
+  def parse(str: String) = {
+    val parser = new Parser {
+      def input = LineStream(str)
+    }
+    parser.root
+  }
+  
+  def run() {
+    Terminal.setupTerminal().initializeTerminal()
+    
+    val reader = new ConsoleReader
+    
+    var next = readNext(reader)
+    while (!next.trim.startsWith(":q")) {
+      try {
+        parse(next)
+      } catch {
+        case e @ ParseException(failures) => 
+          println(e.mkString)
+      }
+      next = readNext(reader)
+    }
+  }
+  
+  def readNext(reader: ConsoleReader) = {
+    var input = reader.readLine(Prompt)
+    var line = reader.readLine(Follow)
+    while (line.trim != "") {
+      input += '\n' + line
+      line = reader.readLine(Follow)
+    }
+    input
+  }
+}
+
+object Console extends App {
+  val repl = new REPL {}
+  repl.run()
+}
