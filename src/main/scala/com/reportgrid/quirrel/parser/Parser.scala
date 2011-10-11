@@ -57,7 +57,9 @@ trait Parser extends RegexParsers with Filters with AST {
     throw ParseException(failures)
   }
   
-  private[this] lazy val expr: Parser[Expr] = (
+  // %%
+  
+  lazy val expr: Parser[Expr] = (
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
     | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
     
@@ -102,46 +104,48 @@ trait Parser extends RegexParsers with Filters with AST {
     | "(" ~ expr ~ ")" ^^ { (_, e, _) => Paren(e) }
   ) filter (precedence & associativity)
   
-  private[this] val formals: Parser[Vector[String]] = (
+  lazy val formals: Parser[Vector[String]] = (
       formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
     | ticId                 ^^ { Vector(_) }
   )
   
-  private[this] val actuals: Parser[Vector[Expr]] = (
+  lazy val actuals: Parser[Vector[Expr]] = (
       actuals ~ "," ~ expr ^^ { (es, _, e) => es :+ e }
     | expr                 ^^ { Vector(_) }
     | ""                   ^^^ Vector[Expr]()
   )
   
-  private[this] val properties: Parser[Vector[(String, Expr)]] = (
+  lazy val properties: Parser[Vector[(String, Expr)]] = (
       properties ~ "," ~ property ^^ { (ps, _, p) => ps :+ p }
     | property                    ^^ { Vector(_) }
     | ""                          ^^^ Vector()
   )
   
-  private[this] lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
+  lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
   
-  private[this] val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ "new"
+  lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
-  private[this] val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
+  val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
-  private[this] val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
+  val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
   
-  private[this] val pathLiteral = """(//[a-zA-Z_\-0-9]+)+ """.r
+  val pathLiteral = """(//[a-zA-Z_\-0-9]+)+""".r
   
-  private[this] val strLiteral = """"([^"\n\r\\]|\\.)*""""
+  val strLiteral = """"([^\n\r\\]|\\.)*"""".r
   
-  private[this] val numLiteral = """[0-9]+(.[0-9]+)?([eE][0-9]+)?""".r
+  val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
-  private[this] val boolLiteral = (
+  val boolLiteral = (
       "true"  ^^^ true
     | "false" ^^^ false
   )
   
-  override val whitespace = """--.*|(-([^\-]|-[^)])∗-)|[;\s]+""".r
+  val keywords = "new|true|false".r
+  
+  override val whitespace = """--.*|(-([^\-]|-[^)])*-)|[;\s]+""".r
   override val skipWhitespace = true
   
-  private[this] val precedence = 
+  val precedence = 
     prec('dispatch, 'deref,
       'comp, 'neg,
       'mul, 'div,
@@ -155,7 +159,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'relate,
       'bind)
       
-  private[this] val associativity = (
+  val associativity = (
       ('mul <)
     & ('div <)
     & ('add <)
