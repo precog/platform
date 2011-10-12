@@ -289,8 +289,8 @@ trait Parser extends RegexParsers with Filters with AST {
   }
   
   object ParseException extends (Set[Failure] => ParseException) {
-    private val ExpectedPattern = "error:%%d: expected %s%n  %%s%n  %%s%n"
-    private val SyntaxPattern = "error:%d: syntax error%n  %s%n  %s%n"
+    private val ExpectedPattern = "error:%%d: expected %s%n  %%s%n  %%s"
+    private val SyntaxPattern = "error:%d: syntax error%n  %s%n  %s"
     
     private lazy val Parsers = Map(expr -> "expression", property -> "property",
       regex(pathLiteral) -> "path", id -> "identifier", regex(ticId) -> "tic-variable",
@@ -328,9 +328,24 @@ trait Parser extends RegexParsers with Filters with AST {
         }
       }
       
-      val (expectations, _) = List unzip (expectedCounts.toList.sortWith { case ((_, a), (_, b)) => a > b })
+      val pairs = expectedCounts.toList.sortWith { case ((_, a), (_, b)) => a > b }
       
-      expectations.headOption map { ExpectedPattern format _ } getOrElse SyntaxPattern
+      val expectation = pairs.headOption flatMap {
+        case (_, headCount) => {
+          val (possibilities, _) = List unzip (pairs takeWhile { case (_, c) => headCount == c })
+          val biased = if ((possibilities lengthCompare 1) > 0)
+            possibilities filter ("expression" !=)
+          else
+            possibilities
+          
+          if (biased.isEmpty)
+            None
+          else
+            Some(biased mkString " or ")
+        }
+      }
+      
+      expectation map { ExpectedPattern format _ } getOrElse SyntaxPattern
     }
     
     // %%
