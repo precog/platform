@@ -20,12 +20,18 @@
 package com.reportgrid.quirrel
 package parser
 
+import edu.uwm.cs.gll.ExpectedLiteral
+import edu.uwm.cs.gll.ExpectedRegex
 import edu.uwm.cs.gll.Failure
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.RegexParsers
+import edu.uwm.cs.gll.RegexUtils
 import edu.uwm.cs.gll.Result
 import edu.uwm.cs.gll.Success
+import edu.uwm.cs.gll.UnexpectedEndOfStream
 import edu.uwm.cs.gll.ast.Filters
+import edu.uwm.cs.util.ComplementarySet
+import edu.uwm.cs.util.UniversalCharSet
 
 trait Parser extends RegexParsers with Filters with AST {
   
@@ -249,14 +255,14 @@ trait Parser extends RegexParsers with Filters with AST {
   
   val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
-  val boolLiteral = (
+  val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true
     | "false" ^^^ false
   )
   
   val keywords = "new|true|false".r
   
-  override val whitespace = """--.*|(-([^\-]|-[^)])*-)|[;\s]+""".r
+  override val whitespace = """[;\s]+|[;\s]*(--.*[;\s]*)+|[;\s]*(\(-([^\-]|-[^)])*-\)[;\s]*)+""".r
   override val skipWhitespace = true
   
   val precedence = 
@@ -291,4 +297,77 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('relate <>)
     & ('bind <)
   )
+  
+  // %%
+  
+  case class ParseException(failures: Set[Failure]) extends RuntimeException {
+    def mkString = {
+      val tail = failures.head.tail      // if we have an empty set of failures, that's bad
+      tail formatError (ParseException reduceFailures failures)
+    }
+  }
+  
+  object ParseException extends (Set[Failure] => ParseException) {
+    private val ExpectedPattern = "error:%%d: expected %s%n  %%s%n  %%s%n"
+    private val SyntaxPattern = "error:%d: syntax error%n  %s%n  %s%n"
+    
+    private lazy val Parsers = Map(expr -> "expression", property -> "property",
+      regex(pathLiteral) -> "path", id -> "identifier", regex(ticId) -> "tic-variable",
+      regex(strLiteral) -> "string", regex(numLiteral) -> "number", boolLiteral -> "boolean",
+      op -> "operator")
+      
+    def reduceFailures(failures: Set[Failure]) = {
+      val expectedPowerSet = failures map { _.data } collect {
+        case ExpectedLiteral(expect, _) =>
+          Parsers.keySet filter { _.first contains expect.head } map Parsers
+        
+        case ExpectedRegex(regex) => {
+          val first = {
+            val back = RegexUtils first regex
+            
+            if (back contains None)
+              UniversalCharSet
+            else
+              back flatMap { x => x }
+          }
+          
+          Parsers.keySet filterNot { _.first intersect first isEmpty } map Parsers
+        }
+        
+        case UnexpectedEndOfStream(Some(expect)) =>
+          Parsers.keySet filter { _.first contains expect.head } map Parsers
+      }
+      
+      val expectedCountPS = expectedPowerSet map { set => Map(set map { str => str -> 1 } toSeq: _*) }
+      
+      val expectedCounts = expectedCountPS.fold(Map()) { (left, right) =>
+        right.foldLeft(left) {
+          case (acc, (str, count)) =>
+            acc.updated(str, acc get str map (count +) getOrElse count)
+        }
+      }
+      
+      val (expectations, _) = List unzip (expectedCounts.toList.sortWith { case ((_, a), (_, b)) => a > b })
+      
+      expectations.headOption map { ExpectedPattern format _ } getOrElse SyntaxPattern
+    }
+    
+    // %%
+    
+    private lazy val op = (
+        id
+      | "+"
+      | "-"
+      | "*"
+      | "/"
+      | "<"
+      | "<="
+      | ">"
+      | ">="
+      | "="
+      | "!="
+      | "&"
+      | "|"
+    )
+  }
 }
