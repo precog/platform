@@ -2,8 +2,8 @@ package com.reportgrid.quirrel
 
 import edu.uwm.cs.gll.Failure
 import edu.uwm.cs.gll.LineStream
-
 import edu.uwm.cs.gll.Success
+
 import jline.ConsoleReader
 import jline.Terminal
 
