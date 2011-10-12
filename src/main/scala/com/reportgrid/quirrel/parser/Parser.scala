@@ -284,13 +284,16 @@ trait Parser extends RegexParsers with Filters with AST {
   case class ParseException(failures: Set[Failure]) extends RuntimeException {
     def mkString = {
       val tail = failures.head.tail      // if we have an empty set of failures, that's bad
-      tail formatError (ParseException reduceFailures failures)
+      val result = ParseException reduceFailures failures
+      tail formatError ("error:%d: " + result + "%n  %s%n  %s")
     }
+    
+    override def toString = ParseException reduceFailures failures
   }
   
   object ParseException extends (Set[Failure] => ParseException) {
-    private val ExpectedPattern = "error:%%d: expected %s%n  %%s%n  %%s"
-    private val SyntaxPattern = "error:%d: syntax error%n  %s%n  %s"
+    private val ExpectedPattern = "expected %s"
+    private val SyntaxPattern = "syntax error"
     
     private lazy val Parsers = Map(expr -> "expression", property -> "property",
       regex(pathLiteral) -> "path", id -> "identifier", regex(ticId) -> "tic-variable",
