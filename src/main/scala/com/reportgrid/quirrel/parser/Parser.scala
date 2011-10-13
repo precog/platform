@@ -161,13 +161,13 @@ trait Parser extends RegexParsers with Filters with AST {
   // %%
   
   lazy val expr: Parser[Expr] = (
-      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
-    | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
+      varId ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
+    | varId ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
     
     | "new" ~ expr              ^^ { (_, e) => New(e) }
     | expr ~ "::" ~ expr ~ expr ^^ { (e1, _, e2, e3) => Relate(e1, e2, e3) }
     
-    | id    ^^ Var
+    | varId ^^ Var
     | ticId ^^ TicVar
     
     | pathLiteral ^^ StrLit
@@ -175,13 +175,13 @@ trait Parser extends RegexParsers with Filters with AST {
     | numLiteral  ^^ NumLit
     | boolLiteral ^^ BoolLit
     
-    | "{" ~ properties ~ "}"    ^^ { (_, ps, _) => ObjectDef(ps) }
-    | "[" ~ actuals ~ "]"       ^^ { (_, as, _) => ArrayDef(as) }
-    | expr ~ "." ~ propertyName ^^ { (e, _, p) => Descent(e, p) }
-    | expr ~ "[" ~ expr ~ "]"   ^^ { (e1, _, e2, _) => Deref(e1, e2) }
+    | "{" ~ properties ~ "}"      ^^ { (_, ps, _) => ObjectDef(ps) }
+    | "[" ~ nullableActuals ~ "]" ^^ { (_, as, _) => ArrayDef(as) }
+    | expr ~ "." ~ propertyName   ^^ { (e, _, p) => Descent(e, p) }
+    | expr ~ "[" ~ expr ~ "]"     ^^ { (e1, _, e2, _) => Deref(e1, e2) }
     
-    | id ~ "(" ~ actuals ~ ")" ^^ { (id, _, as, _) => Dispatch(id, as) }
-    | expr ~ id ~ expr         ^^ Operation
+    | varId ~ "(" ~ actuals ~ ")" ^^ { (id, _, as, _) => Dispatch(id, as) }
+    | expr ~ id ~ expr            ^^ Operation
     
     | expr ~ "+" ~ expr ^^ { (e1, _, e2) => Add(e1, e2) }
     | expr ~ "-" ~ expr ^^ { (e1, _, e2) => Sub(e1, e2) }
@@ -213,7 +213,11 @@ trait Parser extends RegexParsers with Filters with AST {
   lazy val actuals: Parser[Vector[Expr]] = (
       actuals ~ "," ~ expr ^^ { (es, _, e) => es :+ e }
     | expr                 ^^ { Vector(_) }
-    | ""                   ^^^ Vector[Expr]()
+  )
+  
+  lazy val nullableActuals = (
+      actuals
+    | ""      ^^^ Vector[Expr]()
   )
   
   lazy val properties: Parser[Vector[(String, Expr)]] = (
@@ -226,13 +230,15 @@ trait Parser extends RegexParsers with Filters with AST {
   
   lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
+  lazy val varId = id \ operations
+  
   val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
   val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
   
-  val pathLiteral = """(//[a-zA-Z_\-0-9]+)+""".r
+  val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
   
-  val strLiteral = """"([^\n\r\\]|\\.)*"""".r
+  val strLiteral = """"([^\n\r\\]|\\.)*"""".r ^^ canonicalizeStr
   
   val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
@@ -243,11 +249,13 @@ trait Parser extends RegexParsers with Filters with AST {
   
   val keywords = "new|true|false".r
   
-  override val whitespace = """[;\s]+|[;\s]*(--.*[;\s]*)+|[;\s]*(\(-([^\-]|-[^)])*-\)[;\s]*)+""".r
+  val operations = "where".r
+  
+  override val whitespace = """([;\s]+|--.*|\(-([^\-]|-[^)])*-\))+""".r
   override val skipWhitespace = true
   
   val precedence = 
-    prec('dispatch, 'deref,
+    prec('descent, 'deref,
       'comp, 'neg,
       'mul, 'div,
       'add, 'sub,
@@ -281,6 +289,25 @@ trait Parser extends RegexParsers with Filters with AST {
   
   // %%
   
+  def canonicalizeStr(str: String): String = {
+    val (back, _) = str.foldLeft(("", false)) {
+      case ((acc, false), '\\') => (acc, true)
+      case ((acc, false), c) => (acc + c, false)
+      
+      case ((acc, true), 'n') => (acc + '\n', false)
+      case ((acc, true), 'r') => (acc + '\r', false)
+      case ((acc, true), 'f') => (acc + '\f', false)
+      case ((acc, true), 't') => (acc + '\t', false)
+      case ((acc, true), '0') => (acc + '\0', false)
+      case ((acc, true), '\\') => (acc + '\\', false)
+      case ((acc, true), c) => (acc + c, false)
+    }
+    
+    back.substring(1, back.length - 1)
+  }
+  
+  def canonicalizePath(str: String): String = str substring 1
+  
   case class ParseException(failures: Set[Failure]) extends RuntimeException {
     def mkString = {
       val tail = failures.head.tail      // if we have an empty set of failures, that's bad
@@ -296,8 +323,8 @@ trait Parser extends RegexParsers with Filters with AST {
     private val SyntaxPattern = "syntax error"
     
     private lazy val Parsers = Map(expr -> "expression", property -> "property",
-      regex(pathLiteral) -> "path", id -> "identifier", regex(ticId) -> "tic-variable",
-      regex(strLiteral) -> "string", regex(numLiteral) -> "number", boolLiteral -> "boolean",
+      pathLiteral -> "path", id -> "identifier", regex(ticId) -> "tic-variable",
+      strLiteral -> "string", regex(numLiteral) -> "number", boolLiteral -> "boolean",
       op -> "operator")
       
     def reduceFailures(failures: Set[Failure]) = {
