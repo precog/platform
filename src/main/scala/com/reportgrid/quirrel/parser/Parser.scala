@@ -307,7 +307,7 @@ trait Parser extends RegexParsers with Filters with AST {
       tail formatError ("error:%d: " + result + "%n  %s%n  %s")
     }
     
-    override def toString = ParseException reduceFailures failures
+    override def getMessage = ParseException reduceFailures failures
   }
   
   object ParseException extends (Set[Failure] => ParseException) {
