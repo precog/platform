@@ -36,113 +36,26 @@ trait Parser extends RegexParsers with Filters with AST {
     def bindRoot(e: Expr) {
       e._root() = root
       
-      e match {
-        case Binding(_, _, left, right) => {
-          bindRoot(left)
-          bindRoot(right)
+      e.productIterator foreach {
+        case e: Expr => bindRoot(e)
+        case v: Vector[_] => v foreach bindElements
+        case _ =>
+      }
+    }
+    
+    def bindElements(a: Any) {
+      a match {
+        case e: Expr => bindRoot(e)
+        
+        case (e1: Expr, e2: Expr) => {
+          bindRoot(e1)
+          bindRoot(e2)
         }
         
-        case New(child) => bindRoot(child)
+        case (e: Expr, _) => bindRoot(e)
+        case (_, e: Expr) => bindRoot(e)
         
-        case Relate(from, to, in) => {
-          bindRoot(from)
-          bindRoot(to)
-          bindRoot(in)
-        }
-        
-        case Var(_) =>
-        case TicVar(_) =>
-        case StrLit(_) =>
-        case NumLit(_) =>
-        case BoolLit(_) =>
-        
-        case ObjectDef(props) => {
-          for ((_, e) <- props) {
-            bindRoot(e)
-          }
-        }
-        
-        case ArrayDef(values) => values foreach bindRoot
-        
-        case Descent(child, _) => bindRoot(child)
-        
-        case Deref(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Dispatch(_, actuals) => actuals foreach bindRoot
-        
-        case Operation(left, _, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Add(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Sub(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Mul(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Div(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Lt(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case LtEq(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Gt(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case GtEq(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Eq(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case NotEq(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case And(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Or(left, right) => {
-          bindRoot(left)
-          bindRoot(right)
-        }
-        
-        case Comp(child) => bindRoot(child)
-        
-        case Neg(child) => bindRoot(child)
-        
-        case Paren(child) => bindRoot(child)
+        case _ =>
       }
     }
     

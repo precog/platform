@@ -7,7 +7,7 @@ import edu.uwm.cs.gll.ast._
 trait AST { 
   import Atom._
   
-  sealed trait Expr extends Node {
+  sealed trait Expr extends Node with Product {
     private[parser] val _root = atom[Expr]
     
     def root = _root()
