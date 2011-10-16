@@ -660,6 +660,16 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
   }
   
+  "composed expression parsing" should {
+    "parse a no param function containing a no param function" in {
+      parse("a := 1 c := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector(), NumLit("2"), NumLit("3")))
+    }
+    
+    "parse a no param function containing a 1 param function" in {
+      parse("a := 1 c('d) := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector("'d"), NumLit("2"), NumLit("3")))
+    }
+  }
+  
   "global ambiguity resolution" should {
     "associate paired consecutive parentheses" in {
       val expected = 
