@@ -44,7 +44,7 @@ trait REPL extends Parser {
       }
       
       case PrintTree(tree) => {
-        println(tree)     // TODO should pretty-print
+        println(prettyPrint(tree))
         true
       }
       
