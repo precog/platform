@@ -10,7 +10,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
   
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {
-      parse("x('a) := 1 2") mustEqual Binding("x", Vector("'a"), NumLit("1"), NumLit("2"))
+      parse("x('a) := 1 2") must beLike {
+        case Binding(_, "x", Vector("'a"), NumLit(_, "1"), NumLit(_, "2")) => ok
+      }
     }
     
     "reject parameterized bind with no parameters" in {
@@ -26,11 +28,15 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept parameterized bind with multiple parameter" in {
-      parse("x('a, 'b, 'c) := 1 2") mustEqual Binding("x", Vector("'a", "'b", "'c"), NumLit("1"), NumLit("2"))
+      parse("x('a, 'b, 'c) := 1 2") must beLike {
+        case Binding(_, "x", Vector("'a", "'b", "'c"), NumLit(_, "1"), NumLit(_, "2")) => ok
+      }
     }
     
     "accept unparameterized bind" in {
-      parse("x := 1 2") mustEqual Binding("x", Vector(), NumLit("1"), NumLit("2"))
+      parse("x := 1 2") must beLike {
+        case Binding(_, "x", Vector(), NumLit(_, "1"), NumLit(_, "2")) => ok
+      }
     }
     
     "reject unparameterized bind with one missing expression" in {
@@ -42,17 +48,21 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a 'new' expression" in {
-      parse("new 1") mustEqual New(NumLit("1"))
+      parse("new 1") must beLike {
+        case New(_, NumLit(_, "1")) => ok
+      }
     }
     
     "accept a relate expression" in {
-      parse("1 :: 2 3") mustEqual Relate(NumLit("1"), NumLit("2"), NumLit("3"))
+      parse("1 :: 2 3") must beLike {
+        case Relate(_, NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3")) => ok
+      }
     }
     
     "accept a variable" in {
-      parse("x") mustEqual Var("x")
-      parse("cafe_Babe__42_") mustEqual Var("cafe_Babe__42_")
-      parse("x'") mustEqual Var("x'")
+      parse("x") must beLike { case Var(_, "x") => ok }
+      parse("cafe_Babe__42_") must beLike { case Var(_, "cafe_Babe__42_") => ok }
+      parse("x'") must beLike { case Var(_, "x'") => ok }
     }
     
     "reject a variable named as a keyword" in {
@@ -66,9 +76,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a tic-variable" in {
-      parse("'x") mustEqual TicVar("'x")
-      parse("'cafe_Babe__42_") mustEqual TicVar("'cafe_Babe__42_")
-      parse("'x'") mustEqual TicVar("'x'")
+      parse("'x") must beLike { case TicVar(_, "'x") => ok }
+      parse("'cafe_Babe__42_") must beLike { case TicVar(_, "'cafe_Babe__42_") => ok }
+      parse("'x'") must beLike { case TicVar(_, "'x'") => ok }
     }
     
     "reject a tic-variable where the second character is a '" in {
@@ -78,14 +88,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a path literal" in {
-      parse("//foo") mustEqual StrLit("/foo")
-      parse("//foo/bar/baz") mustEqual StrLit("/foo/bar/baz")
-      parse("//cafe-babe42_silly/SILLY") mustEqual StrLit("/cafe-babe42_silly/SILLY")
+      parse("//foo") must beLike { case StrLit(_, "/foo") => ok }
+      parse("//foo/bar/baz") must beLike { case StrLit(_, "/foo/bar/baz") => ok }
+      parse("//cafe-babe42_silly/SILLY") must beLike { case StrLit(_, "/cafe-babe42_silly/SILLY") => ok }
     }
     
     "accept a string literal" in {
-      parse("\"I have a dream\"") mustEqual StrLit("I have a dream")
-      parse("\"\"") mustEqual StrLit("")
+      parse("\"I have a dream\"") must beLike { case StrLit(_, "I have a dream") => ok }
+      parse("\"\"") must beLike { case StrLit(_, "") => ok }
     }
     
     "reject a string literal that wraps onto a newline" in {
@@ -101,22 +111,22 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "resolve all escape sequences in string literals" in {
-      parse("\"\\\"\"") mustEqual StrLit("\"")
-      parse("\"\\n\"") mustEqual StrLit("\n")
-      parse("\"\\r\"") mustEqual StrLit("\r")
-      parse("\"\\f\"") mustEqual StrLit("\f")
-      parse("\"\\t\"") mustEqual StrLit("\t")
-      parse("\"\\0\"") mustEqual StrLit("\0")
-      parse("\"\\\\\"") mustEqual StrLit("\\")
+      parse("\"\\\"\"") must beLike { case StrLit(_, "\"") => ok }
+      parse("\"\\n\"") must beLike { case StrLit(_, "\n") => ok }
+      parse("\"\\r\"") must beLike { case StrLit(_, "\r") => ok }
+      parse("\"\\f\"") must beLike { case StrLit(_, "\f") => ok }
+      parse("\"\\t\"") must beLike { case StrLit(_, "\t") => ok }
+      parse("\"\\0\"") must beLike { case StrLit(_, "\0") => ok }
+      parse("\"\\\\\"") must beLike { case StrLit(_, "\\") => ok }
     }
     
     "accept a number literal" in {
-      parse("1") mustEqual NumLit("1")
-      parse("256") mustEqual NumLit("256")
-      parse("256.715") mustEqual NumLit("256.715")
-      parse("3.1415") mustEqual NumLit("3.1415")
-      parse("2.7183e26") mustEqual NumLit("2.7183e26")
-      parse("2.7183E26") mustEqual NumLit("2.7183E26")
+      parse("1") must beLike { case NumLit(_, "1") => ok }
+      parse("256") must beLike { case NumLit(_, "256") => ok }
+      parse("256.715") must beLike { case NumLit(_, "256.715") => ok }
+      parse("3.1415") must beLike { case NumLit(_, "3.1415") => ok }
+      parse("2.7183e26") must beLike { case NumLit(_, "2.7183e26") => ok }
+      parse("2.7183E26") must beLike { case NumLit(_, "2.7183E26") => ok }
     }
     
     "reject a number literal ending with a ." in {
@@ -124,12 +134,12 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a boolean literal" in {
-      parse("true") mustEqual BoolLit(true)
-      parse("false") mustEqual BoolLit(false)
+      parse("true") must beLike { case BoolLit(_, true) => ok }
+      parse("false") must beLike { case BoolLit(_, false) => ok }
     }
     
     "accept an object definition with no properties" in {
-      parse("{}") mustEqual ObjectDef(Vector())
+      parse("{}") must beLike { case ObjectDef(_, Vector()) => ok }
     }
     
     "reject an object definition with a spurious delimiter" in {
@@ -152,7 +162,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an object definition with one property" in {
-      parse("{ x: 1 }") mustEqual ObjectDef(Vector("x" -> NumLit("1")))
+      parse("{ x: 1 }") must beLike { case ObjectDef(_, Vector(("x", NumLit(_, "1")))) => ok }
     }
     
     "reject an object definition with a trailing delimiter" in {
@@ -160,8 +170,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an object definition with multiple properties" in {
-      val expected =  ObjectDef(Vector("a" -> NumLit("1"), "b" -> NumLit("2"), "cafe" -> NumLit("3"), "star_BUckS" -> NumLit("4")))
-      parse("{ a: 1, b: 2, cafe: 3, star_BUckS: 4 }") mustEqual expected
+      parse("{ a: 1, b: 2, cafe: 3, star_BUckS: 4 }") must beLike {
+        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", NumLit(_, "3")), ("star_BUckS", NumLit(_, "4")))) => ok
+      }
     }
     
     "reject an object definition with undelimited properties" in {
@@ -170,7 +181,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an array definition with no actuals" in {
-      parse("[]") mustEqual ArrayDef(Vector())
+      parse("[]") must beLike { case ArrayDef(_, Vector()) => ok }
     }
     
     "reject an array definition with a spurious delimiter" in {
@@ -186,11 +197,13 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an array definition with one actual" in {
-      parse("[1]") mustEqual ArrayDef(Vector(NumLit("1")))
+      parse("[1]") must beLike { case ArrayDef(_, Vector(NumLit(_, "1"))) => ok }
     }
     
     "accept an array definition with multiple actuals" in {
-      parse("[1, 2, 3]") mustEqual ArrayDef(Vector(NumLit("1"), NumLit("2"), NumLit("3")))
+      parse("[1, 2, 3]") must beLike {
+        case ArrayDef(_, Vector(NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3"))) => ok
+      }
     }
     
     "reject undelimited array definitions" in {
@@ -200,8 +213,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a property descent" in {
-      parse("1.foo") mustEqual Descent(NumLit("1"), "foo")
-      parse("1.e42") mustEqual Descent(NumLit("1"), "e42")
+      parse("1.foo") must beLike { case Descent(_, NumLit(_, "1"), "foo") => ok }
+      parse("1.e42") must beLike { case Descent(_, NumLit(_, "1"), "e42") => ok }
     }
     
     "reject property descent with invalid property" in {
@@ -210,8 +223,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an array dereference" in {
-      parse("1[2]") mustEqual Deref(NumLit("1"), NumLit("2"))
-      parse("x[y]") mustEqual Deref(Var("x"), Var("y"))
+      parse("1[2]") must beLike { case Deref(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
+      parse("x[y]") must beLike { case Deref(_, Var(_, "x"), Var(_, "y")) => ok }
     }
     
     "reject an array dereference with multiple indexes" in {
@@ -223,7 +236,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a dispatch with one actual" in {
-      parse("x(1)") mustEqual Dispatch("x", Vector(NumLit("1")))
+      parse("x(1)") must beLike { case Dispatch(_, "x", Vector(NumLit(_, "1"))) => ok }
     }
     
     "reject a dispatch with no actuals" in {
@@ -242,7 +255,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a dispatch with multiple actuals" in {
-      parse("x(1, 2, 3)") mustEqual Dispatch("x", Vector(NumLit("1"), NumLit("2"), NumLit("3")))
+      parse("x(1, 2, 3)") must beLike {
+        case Dispatch(_, "x", Vector(NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3"))) => ok
+      }
     }
     
     "reject a dispatch with multiple actuals named as a keyword" in {
@@ -252,7 +267,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an infix operation" in {
-      parse("1 where 2") mustEqual Operation(NumLit("1"), "where", NumLit("2"))
+      parse("1 where 2") must beLike {
+        case Operation(_, NumLit(_, "1"), "where", NumLit(_, "2")) => ok
+      }
     }
     
     "reject an infix operation *not* named where" in {
@@ -272,7 +289,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an addition operation" in {
-      parse("1 + 2") mustEqual Add(NumLit("1"), NumLit("2"))
+      parse("1 + 2") must beLike { case Add(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject an addition operation lacking a left operand" in {
@@ -284,7 +301,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a subtraction operation" in {
-      parse("1 - 2") mustEqual Sub(NumLit("1"), NumLit("2"))
+      parse("1 - 2") must beLike { case Sub(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a subtraction operation lacking a left operand" in {
@@ -296,7 +313,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a multiplication operation" in {
-      parse("1 * 2") mustEqual Mul(NumLit("1"), NumLit("2"))
+      parse("1 * 2") must beLike { case Mul(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a multiplication operation lacking a left operand" in {
@@ -308,7 +325,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a division operation" in {
-      parse("1 / 2") mustEqual Div(NumLit("1"), NumLit("2"))
+      parse("1 / 2") must beLike { case Div(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a division operation lacking a left operand" in {
@@ -320,7 +337,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a less-than operation" in {
-      parse("1 < 2") mustEqual Lt(NumLit("1"), NumLit("2"))
+      parse("1 < 2") must beLike { case Lt(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a less-than operation lacking a left operand" in {
@@ -332,7 +349,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a less-than-equal operation" in {
-      parse("1 <= 2") mustEqual LtEq(NumLit("1"), NumLit("2"))
+      parse("1 <= 2") must beLike { case LtEq(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a less-than-equal operation lacking a left operand" in {
@@ -344,7 +361,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a greater-than operation" in {
-      parse("1 > 2") mustEqual Gt(NumLit("1"), NumLit("2"))
+      parse("1 > 2") must beLike { case Gt(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a greater-than operation lacking a left operand" in {
@@ -356,7 +373,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a greater-than-equal operation" in {
-      parse("1 >= 2") mustEqual GtEq(NumLit("1"), NumLit("2"))
+      parse("1 >= 2") must beLike { case GtEq(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a greater-than-equal operation lacking a left operand" in {
@@ -368,7 +385,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a equality operation" in {
-      parse("1 = 2") mustEqual Eq(NumLit("1"), NumLit("2"))
+      parse("1 = 2") must beLike { case Eq(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject an equality operation lacking a left operand" in {
@@ -380,7 +397,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a not-equal operation" in {
-      parse("1 != 2") mustEqual NotEq(NumLit("1"), NumLit("2"))
+      parse("1 != 2") must beLike { case NotEq(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a not-equal operation lacking a left operand" in {
@@ -392,7 +409,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a boolean and operation" in {
-      parse("1 & 2") mustEqual And(NumLit("1"), NumLit("2"))
+      parse("1 & 2") must beLike { case And(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a boolean and operation lacking a left operand" in {
@@ -404,7 +421,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a boolean or operation" in {
-      parse("1 | 2") mustEqual Or(NumLit("1"), NumLit("2"))
+      parse("1 | 2") must beLike { case Or(_, NumLit(_, "1"), NumLit(_, "2")) => ok }
     }
     
     "reject a boolean or operation lacking a left operand" in {
@@ -416,15 +433,15 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept boolean complementation" in {
-      parse("!1") mustEqual Comp(NumLit("1"))
+      parse("!1") must beLike { case Comp(_, NumLit(_, "1")) => ok }
     }
     
     "accept numeric negation" in {
-      parse("~1") mustEqual Neg(NumLit("1"))
+      parse("~1") must beLike { case Neg(_, NumLit(_, "1")) => ok }
     }
     
     "accept parentheticals" in {
-      parse("(1)") mustEqual Paren(NumLit("1"))
+      parse("(1)") must beLike { case Paren(_, NumLit(_, "1")) => ok }
     }
     
     "reject unmatched parentheses" in {
@@ -435,205 +452,244 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
   
   "operator precedence" should {
     "favor descent/deref over negation/complement" in {
-      parse("!1.x") mustEqual Comp(Descent(NumLit("1"), "x"))
-      parse("~1.x") mustEqual Neg(Descent(NumLit("1"), "x"))
-      parse("!1[2]") mustEqual Comp(Deref(NumLit("1"), NumLit("2")))
-      parse("~1[2]") mustEqual Neg(Deref(NumLit("1"), NumLit("2")))
+      parse("!1.x") must beLike {
+        case Comp(_, Descent(_, NumLit(_, "1"), "x")) => ok
+      }
+      
+      parse("~1.x") must beLike {
+        case Neg(_, Descent(_, NumLit(_, "1"), "x")) => ok
+      }
+      
+      parse("!1[2]") must beLike {
+        case Comp(_, Deref(_, NumLit(_, "1"), NumLit(_, "2"))) => ok
+      }
+      
+      parse("~1[2]") must beLike {
+        case Neg(_, Deref(_, NumLit(_, "1"), NumLit(_, "2"))) => ok
+      }
     }
     
     "favor negation/complement over multiplication/division" in {
-      parse("!a * b") mustEqual Mul(Comp(Var("a")), Var("b"))
-      parse("~a * b") mustEqual Mul(Neg(Var("a")), Var("b"))
-      parse("!a / b") mustEqual Div(Comp(Var("a")), Var("b"))
-      parse("~a / b") mustEqual Div(Neg(Var("a")), Var("b"))
+      parse("!a * b") must beLike { case Mul(_, Comp(_, Var(_, "a")), Var(_, "b")) => ok }
+      parse("~a * b") must beLike { case Mul(_, Neg(_, Var(_, "a")), Var(_, "b")) => ok }
+      parse("!a / b") must beLike { case Div(_, Comp(_, Var(_, "a")), Var(_, "b")) => ok }
+      parse("~a / b") must beLike { case Div(_, Neg(_, Var(_, "a")), Var(_, "b")) => ok }
     }
     
     "favor multiplication/division over addition/subtraction" in {
-      parse("a + b * c") mustEqual Add(Var("a"), Mul(Var("b"), Var("c")))
-      parse("a - b * c") mustEqual Sub(Var("a"), Mul(Var("b"), Var("c")))
-      parse("a * b + c") mustEqual Add(Mul(Var("a"), Var("b")), Var("c"))
-      parse("a * b - c") mustEqual Sub(Mul(Var("a"), Var("b")), Var("c"))
+      parse("a + b * c") must beLike { case Add(_, Var(_, "a"), Mul(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a - b * c") must beLike { case Sub(_, Var(_, "a"), Mul(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a * b + c") must beLike { case Add(_, Mul(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a * b - c") must beLike { case Sub(_, Mul(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a + b / c") mustEqual Add(Var("a"), Div(Var("b"), Var("c")))
-      parse("a - b / c") mustEqual Sub(Var("a"), Div(Var("b"), Var("c")))
-      parse("a / b + c") mustEqual Add(Div(Var("a"), Var("b")), Var("c"))
-      parse("a / b - c") mustEqual Sub(Div(Var("a"), Var("b")), Var("c"))
+      parse("a + b / c") must beLike { case Add(_, Var(_, "a"), Div(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a - b / c") must beLike { case Sub(_, Var(_, "a"), Div(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a / b + c") must beLike { case Add(_, Div(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a / b - c") must beLike { case Sub(_, Div(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "favor addition/subtraction over inequality operators" in {
-      parse("a < b + c") mustEqual Lt(Var("a"), Add(Var("b"), Var("c")))
-      parse("a <= b + c") mustEqual LtEq(Var("a"), Add(Var("b"), Var("c")))
-      parse("a + b < c") mustEqual Lt(Add(Var("a"), Var("b")), Var("c"))
-      parse("a + b <= c") mustEqual LtEq(Add(Var("a"), Var("b")), Var("c"))
+      parse("a < b + c") must beLike { case Lt(_, Var(_, "a"), Add(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a <= b + c") must beLike { case LtEq(_, Var(_, "a"), Add(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a + b < c") must beLike { case Lt(_, Add(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a + b <= c") must beLike { case LtEq(_, Add(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a < b - c") mustEqual Lt(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a <= b - c") mustEqual LtEq(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a - b < c") mustEqual Lt(Sub(Var("a"), Var("b")), Var("c"))
-      parse("a - b <= c") mustEqual LtEq(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a < b - c") must beLike { case Lt(_, Var(_, "a"), Sub(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a <= b - c") must beLike { case LtEq(_, Var(_, "a"), Sub(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a - b < c") must beLike { case Lt(_, Sub(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a - b <= c") must beLike { case LtEq(_, Sub(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+                                                     
+      parse("a > b + c") must beLike { case Gt(_, Var(_, "a"), Add(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a >= b + c") must beLike { case GtEq(_, Var(_, "a"), Add(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a + b > c") must beLike { case Gt(_, Add(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a + b >= c") must beLike { case GtEq(_, Add(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a > b + c") mustEqual Gt(Var("a"), Add(Var("b"), Var("c")))
-      parse("a >= b + c") mustEqual GtEq(Var("a"), Add(Var("b"), Var("c")))
-      parse("a + b > c") mustEqual Gt(Add(Var("a"), Var("b")), Var("c"))
-      parse("a + b >= c") mustEqual GtEq(Add(Var("a"), Var("b")), Var("c"))
-      
-      parse("a > b - c") mustEqual Gt(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a >= b - c") mustEqual GtEq(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a - b > c") mustEqual Gt(Sub(Var("a"), Var("b")), Var("c"))
-      parse("a - b >= c") mustEqual GtEq(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a > b - c") must beLike { case Gt(_, Var(_, "a"), Sub(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a >= b - c") must beLike { case GtEq(_, Var(_, "a"), Sub(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a - b > c") must beLike { case Gt(_, Sub(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a - b >= c") must beLike { case GtEq(_, Sub(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "favor inequality operators over equality operators" in {
-      parse("a = b < c") mustEqual Eq(Var("a"), Lt(Var("b"), Var("c")))
-      parse("a != b < c") mustEqual NotEq(Var("a"), Lt(Var("b"), Var("c")))
-      parse("a < b = c") mustEqual Eq(Lt(Var("a"), Var("b")), Var("c"))
-      parse("a < b != c") mustEqual NotEq(Lt(Var("a"), Var("b")), Var("c"))
+      parse("a = b < c") must beLike { case Eq(_, Var(_, "a"), Lt(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a != b < c") must beLike { case NotEq(_, Var(_, "a"), Lt(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a < b = c") must beLike { case Eq(_, Lt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a < b != c") must beLike { case NotEq(_, Lt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a = b <= c") mustEqual Eq(Var("a"), LtEq(Var("b"), Var("c")))
-      parse("a != b <= c") mustEqual NotEq(Var("a"), LtEq(Var("b"), Var("c")))
-      parse("a <= b = c") mustEqual Eq(LtEq(Var("a"), Var("b")), Var("c"))
-      parse("a <= b != c") mustEqual NotEq(LtEq(Var("a"), Var("b")), Var("c"))
+      parse("a = b <= c") must beLike { case Eq(_, Var(_, "a"), LtEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a != b <= c") must beLike { case NotEq(_, Var(_, "a"), LtEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a <= b = c") must beLike { case Eq(_, LtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a <= b != c") must beLike { case NotEq(_, LtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a = b > c") mustEqual Eq(Var("a"), Gt(Var("b"), Var("c")))
-      parse("a != b > c") mustEqual NotEq(Var("a"), Gt(Var("b"), Var("c")))
-      parse("a > b = c") mustEqual Eq(Gt(Var("a"), Var("b")), Var("c"))
-      parse("a > b != c") mustEqual NotEq(Gt(Var("a"), Var("b")), Var("c"))
+      parse("a = b > c") must beLike { case Eq(_, Var(_, "a"), Gt(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a != b > c") must beLike { case NotEq(_, Var(_, "a"), Gt(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a > b = c") must beLike { case Eq(_, Gt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a > b != c") must beLike { case NotEq(_, Gt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a = b >= c") mustEqual Eq(Var("a"), GtEq(Var("b"), Var("c")))
-      parse("a != b >= c") mustEqual NotEq(Var("a"), GtEq(Var("b"), Var("c")))
-      parse("a >= b = c") mustEqual Eq(GtEq(Var("a"), Var("b")), Var("c"))
-      parse("a >= b != c") mustEqual NotEq(GtEq(Var("a"), Var("b")), Var("c"))
+      parse("a = b >= c") must beLike { case Eq(_, Var(_, "a"), GtEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a != b >= c") must beLike { case NotEq(_, Var(_, "a"), GtEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a >= b = c") must beLike { case Eq(_, GtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a >= b != c") must beLike { case NotEq(_, GtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "favor equality operators over and/or" in {
-      parse("a & b = c") mustEqual And(Var("a"), Eq(Var("b"), Var("c")))
-      parse("a | b = c") mustEqual Or(Var("a"), Eq(Var("b"), Var("c")))
-      parse("a = b & c") mustEqual And(Eq(Var("a"), Var("b")), Var("c"))
-      parse("a = b | c") mustEqual Or(Eq(Var("a"), Var("b")), Var("c"))
+      parse("a & b = c") must beLike { case And(_, Var(_, "a"), Eq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a | b = c") must beLike { case Or(_, Var(_, "a"), Eq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a = b & c") must beLike { case And(_, Eq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a = b | c") must beLike { case Or(_, Eq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
       
-      parse("a & b != c") mustEqual And(Var("a"), NotEq(Var("b"), Var("c")))
-      parse("a | b != c") mustEqual Or(Var("a"), NotEq(Var("b"), Var("c")))
-      parse("a != b & c") mustEqual And(NotEq(Var("a"), Var("b")), Var("c"))
-      parse("a != b | c") mustEqual Or(NotEq(Var("a"), Var("b")), Var("c"))
+      parse("a & b != c") must beLike { case And(_, Var(_, "a"), NotEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a | b != c") must beLike { case Or(_, Var(_, "a"), NotEq(_, Var(_, "b"), Var(_, "c"))) => ok }
+      parse("a != b & c") must beLike { case And(_, NotEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
+      parse("a != b | c") must beLike { case Or(_, NotEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "favor and/or operators over new" in {
-      parse("new a & b") mustEqual New(And(Var("a"), Var("b")))
-      parse("new a | b") mustEqual New(Or(Var("a"), Var("b")))
+      parse("new a & b") must beLike { case New(_, And(_, Var(_, "a"), Var(_, "b"))) => ok }
+      parse("new a | b") must beLike { case New(_, Or(_, Var(_, "a"), Var(_, "b"))) => ok }
     }
     
     "favor new over where" in {
-      parse("new a where b") mustEqual Operation(New(Var("a")), "where", Var("b"))
+      parse("new a where b") must beLike { case Operation(_, New(_, Var(_, "a")), "where", Var(_, "b")) => ok }
     }
     
     "favor where over relate" in {
-      parse("a where b :: c d") mustEqual Relate(Operation(Var("a"), "where", Var("b")), Var("c"), Var("d"))
-      parse("a :: b where c d") mustEqual Relate(Var("a"), Operation(Var("b"), "where", Var("c")), Var("d"))
+      parse("a where b :: c d") must beLike { case Relate(_, Operation(_, Var(_, "a"), "where", Var(_, "b")), Var(_, "c"), Var(_, "d")) => ok }
+      parse("a :: b where c d") must beLike { case Relate(_, Var(_, "a"), Operation(_, Var(_, "b"), "where", Var(_, "c")), Var(_, "d")) => ok }
     }
   }
   
   "operator associativity" should {
     "associate multiplication to the left" in {
-      parse("a * b * c") mustEqual Mul(Mul(Var("a"), Var("b")), Var("c"))
+      parse("a * b * c") must beLike { case Mul(_, Mul(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate division to the left" in {
-      parse("a / b / c") mustEqual Div(Div(Var("a"), Var("b")), Var("c"))
+      parse("a / b / c") must beLike { case Div(_, Div(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate addition to the left" in {
-      parse("a + b + c") mustEqual Add(Add(Var("a"), Var("b")), Var("c"))
+      parse("a + b + c") must beLike { case Add(_, Add(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate subtraction to the left" in {
-      parse("a - b - c") mustEqual Sub(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a - b - c") must beLike { case Sub(_, Sub(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate less-than to the left" in {
-      parse("a < b < c") mustEqual Lt(Lt(Var("a"), Var("b")), Var("c"))
+      parse("a < b < c") must beLike { case Lt(_, Lt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate less-than-equal to the left" in {
-      parse("a <= b <= c") mustEqual LtEq(LtEq(Var("a"), Var("b")), Var("c"))
+      parse("a <= b <= c") must beLike { case LtEq(_, LtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate greater-than to the left" in {
-      parse("a > b > c") mustEqual Gt(Gt(Var("a"), Var("b")), Var("c"))
+      parse("a > b > c") must beLike { case Gt(_, Gt(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate greater-than-equal to the left" in {
-      parse("a >= b >= c") mustEqual GtEq(GtEq(Var("a"), Var("b")), Var("c"))
+      parse("a >= b >= c") must beLike { case GtEq(_, GtEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate equal to the left" in {
-      parse("a = b = c") mustEqual Eq(Eq(Var("a"), Var("b")), Var("c"))
+      parse("a = b = c") must beLike { case Eq(_, Eq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate not-equal to the left" in {
-      parse("a != b != c") mustEqual NotEq(NotEq(Var("a"), Var("b")), Var("c"))
+      parse("a != b != c") must beLike { case NotEq(_, NotEq(_, Var(_, "a"), Var(_, "b")), Var(_, "c")) => ok }
     }
     
     "associate where to the left" in {
-      parse("a where b where c") mustEqual Operation(Operation(Var("a"), "where", Var("b")), "where", Var("c"))
+      parse("a where b where c") must beLike { case Operation(_, Operation(_, Var(_, "a"), "where", Var(_, "b")), "where", Var(_, "c")) => ok }
     }
   }
   
   "whitespace processing" should {
     "skip any amount of leading space characters" in {
-      parse(" 1") mustEqual NumLit("1")
-      parse("     1") mustEqual NumLit("1")
-      parse("\t  \t 1") mustEqual NumLit("1")
-      parse("\n\r  ;\r\t  \t\n ;;1") mustEqual NumLit("1")
+      parse(" 1") must beLike { case NumLit(_, "1") => ok }
+      parse("     1") must beLike { case NumLit(_, "1") => ok }
+      parse("\t  \t 1") must beLike { case NumLit(_, "1") => ok }
+      parse("\n\r  ;\r\t  \t\n ;;1") must beLike { case NumLit(_, "1") => ok }
     }
     
     "skip any amount of trailing space characters" in {
-      parse("1 ") mustEqual NumLit("1")
-      parse("1     ") mustEqual NumLit("1")
-      parse("1\t  \t ") mustEqual NumLit("1")
-      parse("1\n\r  ;\r\t  \t\n ;;") mustEqual NumLit("1")
+      parse("1 ") must beLike { case NumLit(_, "1") => ok }
+      parse("1     ") must beLike { case NumLit(_, "1") => ok }
+      parse("1\t  \t ") must beLike { case NumLit(_, "1") => ok }
+      parse("1\n\r  ;\r\t  \t\n ;;") must beLike { case NumLit(_, "1") => ok }
     }
     
     "skip leading line comments delimited by newline" in {
-      parse("-- testing one two three\n1") mustEqual NumLit("1")
-      parse("-- testing one two three\n--four five six\n1") mustEqual NumLit("1")
-      parse("   \t  -- testing one two three\n\n  \t--four five six\n\r  1") mustEqual NumLit("1")
+      parse("-- testing one two three\n1") must beLike { case NumLit(_, "1") => ok }
+      parse("-- testing one two three\n--four five six\n1") must beLike { case NumLit(_, "1") => ok }
+      parse("   \t  -- testing one two three\n\n  \t--four five six\n\r  1") must beLike {
+        case NumLit(_, "1") => ok
+      }
     }
     
     "skip trailing line comments delimited by newline" in {
-      parse("1-- testing one two three\n") mustEqual NumLit("1")
-      parse("1-- testing one two three\n--four five six\n") mustEqual NumLit("1")
-      parse("1   \t  -- testing one two three\n\n  \t--four five six\n\r  ") mustEqual NumLit("1")
+      parse("1-- testing one two three\n") must beLike { case NumLit(_, "1") => ok }
+      parse("1-- testing one two three\n--four five six\n") must beLike { case NumLit(_, "1") => ok }
+      parse("1   \t  -- testing one two three\n\n  \t--four five six\n\r  ") must beLike {
+        case NumLit(_, "1") => ok
+      }
     }
     
     "skip leading block comments" in {
-      parse("(- testing one two three -)1") mustEqual NumLit("1")
-      parse("  (- testing one two three -)   1") mustEqual NumLit("1")
-      parse("  (- testing one \n two\n three -)   1") mustEqual NumLit("1")
-      parse("(- testing one two three -)\n(-four five six -)\n1") mustEqual NumLit("1")
-      parse("(- testing one- \\- two three -)\n(-four \n five-- \t six -)\n1") mustEqual NumLit("1")
-      parse("   \t  (- testing one two three -)\n\n  \t(- four five six -)\n\r  1") mustEqual NumLit("1")
+      parse("(- testing one two three -)1") must beLike { case NumLit(_, "1") => ok }
+      parse("  (- testing one two three -)   1") must beLike { case NumLit(_, "1") => ok }
+      parse("  (- testing one \n two\n three -)   1") must beLike { case NumLit(_, "1") => ok }
+      
+      parse("(- testing one two three -)\n(-four five six -)\n1") must beLike {
+        case NumLit(_, "1") => ok
+      }
+      
+      parse("(- testing one- \\- two three -)\n(-four \n five-- \t six -)\n1") must beLike {
+        case NumLit(_, "1") => ok
+      }
+      
+      parse("   \t  (- testing one two three -)\n\n  \t(- four five six -)\n\r  1") must beLike {
+        case NumLit(_, "1") => ok
+      }
     }
     
     "skip trailing line comments delimited by newline" in {
-      parse("1(- testing one two three -)") mustEqual NumLit("1")
-      parse("1  (- testing one two three -)    ") mustEqual NumLit("1")
-      parse("1  (- testing one \n two\n three -)  ") mustEqual NumLit("1")
-      parse("1\t  (- testing one two three -)\n(-four five six -)\n") mustEqual NumLit("1")
-      parse("1(- testing one- \\- two three -)\n(-four \n five-- \t six -)\n") mustEqual NumLit("1")
-      parse("1   \t  (- testing one two three -)\n\n  \t(- four five six -)\n\r  ") mustEqual NumLit("1")
+      parse("1(- testing one two three -)") must beLike { case NumLit(_, "1") => ok }
+      parse("1  (- testing one two three -)    ") must beLike { case NumLit(_, "1") => ok }
+      parse("1  (- testing one \n two\n three -)  ") must beLike { case NumLit(_, "1") => ok }
+      
+      parse("1\t  (- testing one two three -)\n(-four five six -)\n") must beLike {
+        case NumLit(_, "1") => ok
+      }
+      
+      parse("1(- testing one- \\- two three -)\n(-four \n five-- \t six -)\n") must beLike {
+        case NumLit(_, "1") => ok
+      }
+      
+      parse("1   \t  (- testing one two three -)\n\n  \t(- four five six -)\n\r  ") must beLike {
+        case NumLit(_, "1") => ok
+      }
     }
   }
   
   "composed expression parsing" should {
     "parse a no param function containing a parenthetical" in {
-      parse("a := 1 (2)") mustEqual Binding("a", Vector(), NumLit("1"), Paren(NumLit("2")))
+      parse("a := 1 (2)") must beLike {
+        case Binding(_, "a", Vector(), NumLit(_, "1"), Paren(_, NumLit(_, "2"))) => ok
+      }
     }
     
     "parse a no param function containing a no param function" in {
-      parse("a := 1 c := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector(), NumLit("2"), NumLit("3")))
+      parse("a := 1 c := 2 3") must beLike {
+        case Binding(_, "a", Vector(), NumLit(_, "1"), Binding(_, "c", Vector(), NumLit(_, "2"), NumLit(_, "3"))) => ok
+      }
     }
     
     "parse a no param function containing a 1 param function" in {
-      parse("a := 1 c('d) := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector("'d"), NumLit("2"), NumLit("3")))
+      parse("a := 1 c('d) := 2 3") must beLike {
+        case Binding(_, "a", Vector(), NumLit(_, "1"), Binding(_, "c", Vector("'d"), NumLit(_, "2"), NumLit(_, "3"))) => ok
+      }
     }
     
     "correctly nest multiple binds" in {
@@ -645,7 +701,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
         |   d
         | e""".stripMargin
       
-      parse(input) mustEqual Binding("a", Vector(), Binding("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Binding("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Var("d"))), Var("e"))
+      parse(input) must beLike {
+        case Binding(_, "a", Vector(), Binding(_, "b", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/f"))), Binding(_, "c", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/g"))), Var(_, "d"))), Var(_, "e")) => ok
+      }
     }
   }
   
@@ -743,13 +801,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
   
   "global ambiguity resolution" should {
     "associate paired consecutive parentheses" in {
-      val expected = 
-        Binding("a", Vector(),
-          Binding("b", Vector(),
-            Var("c"), Paren(Var("d"))),
-          Paren(Var("e")))
-      
-      parse("a := b := c (d) (e)") mustEqual expected
+      parse("a := b := c (d) (e)") must beLike {
+        case 
+        Binding(_, "a", Vector(), Binding(_, "b", Vector(), Var(_, "c"), Paren(_, Var(_, "d"))), Paren(_, Var(_, "e"))) => ok
+      }
     }
   }
   
