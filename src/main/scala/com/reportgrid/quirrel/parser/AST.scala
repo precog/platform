@@ -16,6 +16,7 @@ trait AST {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
         
         indent + "type: bind\n" +
+          indent + "id: " + id + "\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
