@@ -216,7 +216,6 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('op <)
     & ('where <)
     & ('relate <>)
-    & ('bind <)
   )
   
   // %%
