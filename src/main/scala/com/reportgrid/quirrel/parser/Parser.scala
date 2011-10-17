@@ -80,7 +80,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | "new" ~ expr              ^^ { (_, e) => New(e) }
     | expr ~ "::" ~ expr ~ expr ^^ { (e1, _, e2, e3) => Relate(e1, e2, e3) }
     
-    | id    ^^ Var
+    | id    ^^ { id => Dispatch(id, Vector()) }
     | ticId ^^ TicVar
     
     | pathLiteral ^^ StrLit

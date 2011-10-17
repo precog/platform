@@ -8,8 +8,9 @@ import jline.ConsoleReader
 import jline.Terminal
 
 import parser._
+import typer._
 
-trait REPL extends Parser {
+trait REPL extends Parser with Binder {
   val Prompt = "quirrel> "
   val Follow = "       | "
   

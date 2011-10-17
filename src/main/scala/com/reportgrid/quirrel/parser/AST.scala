@@ -3,8 +3,9 @@ package parser
 
 import com.reportgrid.quirrel.util.Atom
 import edu.uwm.cs.gll.ast._
+import com.reportgrid.quirrel.util.SetAtom
 
-trait AST { 
+trait AST extends Passes { 
   import Atom._
   
   def prettyPrint(e: Expr, level: Int = 0): String = {
@@ -30,11 +31,6 @@ trait AST {
           indent + "from:\n" + prettyPrint(from, level + 2) + "\n" +
           indent + "to:\n" + prettyPrint(to, level + 2) + "\n" +
           indent + "in:\n" + prettyPrint(in, level + 2)
-      }
-      
-      case Var(id) => {
-        indent + "type: var\n" +
-          indent + "id: " + id
       }
       
       case TicVar(id) => {
@@ -197,6 +193,11 @@ trait AST {
     private[parser] val _root = atom[Expr]
     
     def root = _root()
+    
+    protected final lazy val _errors: SetAtom[Error] =
+      if (this eq root) new SetAtom[Error] else root._errors
+    
+    final def errors= _errors()
   }
   
   case class Binding(id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
@@ -211,10 +212,6 @@ trait AST {
     val label = 'relate
     
     def children = List(from, to, in)
-  }
-  
-  case class Var(id: String) extends Expr with LeafNode {
-    val label = 'var
   }
   
   case class TicVar(id: String) extends Expr with LeafNode {
@@ -255,6 +252,12 @@ trait AST {
   
   case class Dispatch(name: String, actuals: Vector[Expr]) extends Expr {
     val label = 'dispatch
+    
+    private[quirrel] val _binding = atom[Option[Binding]] {
+      _errors ++= bindNames(root)
+    }
+    
+    def binding = _binding()
     
     def children = actuals.toList
   }
