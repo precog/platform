@@ -271,11 +271,12 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept an infix operation" in {
-      parse("1 x 2") mustEqual Operation(NumLit("1"), "x", NumLit("2"))
-      parse("1 cafe12_BABE' 2") mustEqual Operation(NumLit("1"), "cafe12_BABE'", NumLit("2"))
+      parse("1 where 2") mustEqual Operation(NumLit("1"), "where", NumLit("2"))
     }
     
-    "reject an infix operation named as a keyword" in {
+    "reject an infix operation *not* named where" in {
+      parse("1 x 2") must throwA[ParseException]
+      parse("1 caFE_BABE42__ 2") must throwA[ParseException]
       parse("1 new 2") must throwA[ParseException]
       parse("1 true 2") must throwA[ParseException]
       parse("1 false 2") must throwA[ParseException]
@@ -534,21 +535,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
       parse("a != b | c") mustEqual Or(NotEq(Var("a"), Var("b")), Var("c"))
     }
     
-    "favor and/or over all other operators" in {
-      parse("a foo b & c") mustEqual Operation(Var("a"), "foo", And(Var("b"), Var("c")))
-      parse("a bar b & c") mustEqual Operation(Var("a"), "bar", And(Var("b"), Var("c")))
-      parse("a & b foo c") mustEqual Operation(And(Var("a"), Var("b")), "foo", Var("c"))
-      parse("a & b bar c") mustEqual Operation(And(Var("a"), Var("b")), "bar", Var("c"))
-      
-      parse("a foo b | c") mustEqual Operation(Var("a"), "foo", Or(Var("b"), Var("c")))
-      parse("a bar b | c") mustEqual Operation(Var("a"), "bar", Or(Var("b"), Var("c")))
-      parse("a | b foo c") mustEqual Operation(Or(Var("a"), Var("b")), "foo", Var("c"))
-      parse("a | b bar c") mustEqual Operation(Or(Var("a"), Var("b")), "bar", Var("c"))
-    }
-    
-    "favor other operators over new" in {
-      parse("new a foo b") mustEqual New(Operation(Var("a"), "foo", Var("b")))
-      parse("new a bar b") mustEqual New(Operation(Var("a"), "bar", Var("b")))
+    "favor and/or operators over new" in {
+      parse("new a & b") mustEqual New(And(Var("a"), Var("b")))
+      parse("new a | b") mustEqual New(Or(Var("a"), Var("b")))
     }
     
     "favor new over where" in {
@@ -600,13 +589,6 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     
     "associate not-equal to the left" in {
       parse("a != b != c") mustEqual NotEq(NotEq(Var("a"), Var("b")), Var("c"))
-    }
-    
-    "associate other operators to the left" in {
-      parse("a foo b foo c") mustEqual Operation(Operation(Var("a"), "foo", Var("b")), "foo", Var("c"))
-      parse("a foo b bar c") mustEqual Operation(Operation(Var("a"), "foo", Var("b")), "bar", Var("c"))
-      parse("a bar b foo c") mustEqual Operation(Operation(Var("a"), "bar", Var("b")), "foo", Var("c"))
-      parse("a bar b bar c") mustEqual Operation(Operation(Var("a"), "bar", Var("b")), "bar", Var("c"))
     }
     
     "associate where to the left" in {
@@ -671,6 +653,18 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     
     "parse a no param function containing a 1 param function" in {
       parse("a := 1 c('d) := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector("'d"), NumLit("2"), NumLit("3")))
+    }
+    
+    "correctly nest multiple binds" in {
+      val input = """
+        | a :=
+        |   b := dataset(//f)
+        |   c := dataset(//g)
+        |
+        |   d
+        | e""".stripMargin
+      
+      parse(input) mustEqual Binding("a", Vector(), Binding("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Binding("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Var("d"))), Var("e"))
     }
   }
   
