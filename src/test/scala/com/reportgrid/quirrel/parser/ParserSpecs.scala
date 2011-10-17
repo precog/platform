@@ -10,7 +10,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
   
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {
-      parse("x('a) := 1 2") mustEqual Binding("x", Vector("'a"), NumLit("1"), NumLit("2"))
+      parse("x('a) := 1 2") mustEqual Let("x", Vector("'a"), NumLit("1"), NumLit("2"))
     }
     
     "reject parameterized bind with no parameters" in {
@@ -26,11 +26,11 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
     }
     
     "accept parameterized bind with multiple parameter" in {
-      parse("x('a, 'b, 'c) := 1 2") mustEqual Binding("x", Vector("'a", "'b", "'c"), NumLit("1"), NumLit("2"))
+      parse("x('a, 'b, 'c) := 1 2") mustEqual Let("x", Vector("'a", "'b", "'c"), NumLit("1"), NumLit("2"))
     }
     
     "accept unparameterized bind" in {
-      parse("x := 1 2") mustEqual Binding("x", Vector(), NumLit("1"), NumLit("2"))
+      parse("x := 1 2") mustEqual Let("x", Vector(), NumLit("1"), NumLit("2"))
     }
     
     "reject unparameterized bind with one missing expression" in {
@@ -625,15 +625,15 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
   
   "composed expression parsing" should {
     "parse a no param function containing a parenthetical" in {
-      parse("a := 1 (2)") mustEqual Binding("a", Vector(), NumLit("1"), Paren(NumLit("2")))
+      parse("a := 1 (2)") mustEqual Let("a", Vector(), NumLit("1"), Paren(NumLit("2")))
     }
     
     "parse a no param function containing a no param function" in {
-      parse("a := 1 c := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector(), NumLit("2"), NumLit("3")))
+      parse("a := 1 c := 2 3") mustEqual Let("a", Vector(), NumLit("1"), Let("c", Vector(), NumLit("2"), NumLit("3")))
     }
     
     "parse a no param function containing a 1 param function" in {
-      parse("a := 1 c('d) := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector("'d"), NumLit("2"), NumLit("3")))
+      parse("a := 1 c('d) := 2 3") mustEqual Let("a", Vector(), NumLit("1"), Let("c", Vector("'d"), NumLit("2"), NumLit("3")))
     }
     
     "correctly nest multiple binds" in {
@@ -645,7 +645,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
         |   d
         | e""".stripMargin
       
-      parse(input) mustEqual Binding("a", Vector(), Binding("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Binding("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Dispatch("d", Vector()))), Dispatch("e", Vector()))
+      parse(input) mustEqual Let("a", Vector(), Let("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Let("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Dispatch("d", Vector()))), Dispatch("e", Vector()))
     }
   }
   
@@ -744,8 +744,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
   "global ambiguity resolution" should {
     "associate paired consecutive parentheses" in {
       val expected = 
-        Binding("a", Vector(),
-          Binding("b", Vector(),
+        Let("a", Vector(),
+          Let("b", Vector(),
             Dispatch("c", Vector()), Paren(Dispatch("d", Vector()))),
           Paren(Dispatch("e", Vector())))
       

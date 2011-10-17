@@ -74,8 +74,8 @@ trait Parser extends RegexParsers with Filters with AST {
   // %%
   
   lazy val expr: Parser[Expr] = (
-      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
-    | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
+      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Let(id, fs, e1, e2) }
+    | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Let(id, Vector(), e1, e2) }
     
     | "new" ~ expr              ^^ { (_, e) => New(e) }
     | expr ~ "::" ~ expr ~ expr ^^ { (e1, _, e2, e3) => Relate(e1, e2, e3) }
@@ -179,7 +179,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'new,
       'where,
       'relate,
-      'bind)
+      'let)
       
   val associativity = (
       ('mul <)

@@ -8,14 +8,16 @@ import com.reportgrid.quirrel.util.SetAtom
 trait AST extends Passes { 
   import Atom._
   
+  type Binding
+  
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
     
     e match {
-      case Binding(id, params, left, right) => {
+      case Let(id, params, left, right) => {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
         
-        indent + "type: bind\n" +
+        indent + "type: let\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
@@ -200,8 +202,8 @@ trait AST extends Passes {
     final def errors= _errors()
   }
   
-  case class Binding(id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'bind
+  case class Let(id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
+    val label = 'let
   }
   
   case class New(child: Expr) extends Expr with UnaryNode {
@@ -253,7 +255,7 @@ trait AST extends Passes {
   case class Dispatch(name: String, actuals: Vector[Expr]) extends Expr {
     val label = 'dispatch
     
-    private[quirrel] val _binding = atom[Option[Binding]] {
+    private[quirrel] val _binding = atom[Binding] {
       _errors ++= bindNames(root)
     }
     
