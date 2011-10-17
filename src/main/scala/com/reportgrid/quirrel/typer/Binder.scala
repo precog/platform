@@ -21,10 +21,21 @@ package com.reportgrid.quirrel
 package typer
 
 trait Binder extends parser.AST {
+  val BuiltInFunctions = Set(
+    BuiltIn("count"),
+    BuiltIn("dataset"),
+    BuiltIn("max"),
+    BuiltIn("mean"),
+    BuiltIn("median"),
+    BuiltIn("min"),
+    BuiltIn("mode"),
+    BuiltIn("stdDev"),
+    BuiltIn("sum"))
+  
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[String, Binding]): Set[Error] = tree match {
-      case b @ Binding(id, _, left, right) =>
-        loop(left, env) ++ loop(right, env + (id -> b))
+      case b @ Let(id, _, left, right) =>
+        loop(left, env) ++ loop(right, env + (id -> UserDef(b)))
       
       case New(child) => loop(child, env)
       
@@ -57,10 +68,10 @@ trait Binder extends parser.AST {
       case d @ Dispatch(name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
         if (env contains name) {
-          d._binding() = Some(env(name))
+          d._binding() = env(name)
           recursive
         } else {
-          d._binding() = None
+          d._binding() = NullBinding
           recursive + Error(d, "undefined function: %s".format(name))
         }
       }
@@ -105,6 +116,15 @@ trait Binder extends parser.AST {
       case Paren(child) => loop(child, env)
     }
     
-    loop(tree, Map())
+    loop(tree, BuiltInFunctions.map({ b => b.name -> b})(collection.breakOut))
   }
+  
+  sealed trait Binding
+  
+  // TODO arity and types
+  case class BuiltIn(name: String) extends Binding
+  
+  case class UserDef(b: Let) extends Binding
+  
+  case object NullBinding extends Binding
 }
