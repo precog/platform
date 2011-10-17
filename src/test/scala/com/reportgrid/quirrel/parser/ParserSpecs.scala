@@ -642,6 +642,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
   }
   
   "composed expression parsing" should {
+    "parse a no param function containing a parenthetical" in {
+      parse("a := 1 (2)") mustEqual Binding("a", Vector(), NumLit("1"), Paren(NumLit("2")))
+    }
+    
     "parse a no param function containing a no param function" in {
       parse("a := 1 c := 2 3") mustEqual Binding("a", Vector(), NumLit("1"), Binding("c", Vector(), NumLit("2"), NumLit("3")))
     }
