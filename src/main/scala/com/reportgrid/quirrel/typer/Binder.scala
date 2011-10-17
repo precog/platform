@@ -122,9 +122,15 @@ trait Binder extends parser.AST {
   sealed trait Binding
   
   // TODO arity and types
-  case class BuiltIn(name: String) extends Binding
+  case class BuiltIn(name: String) extends Binding {
+    override val toString = "<native: %s>".format(name)
+  }
   
-  case class UserDef(b: Let) extends Binding
+  case class UserDef(b: Let) extends Binding {
+    override val toString = "@%d".format(b.nodeId)
+  }
   
-  case object NullBinding extends Binding
+  case object NullBinding extends Binding {
+    override val toString = "<null>"
+  }
 }
