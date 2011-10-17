@@ -74,48 +74,48 @@ trait Parser extends RegexParsers with Filters with AST {
   // %%
   
   lazy val expr: Parser[Expr] = (
-      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Let(id, fs, e1, e2) }
-    | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Let(id, Vector(), e1, e2) }
+      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => Let(loc, id, fs, e1, e2) }
+    | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, id, Vector(), e1, e2) }
     
-    | "new" ~ expr              ^^ { (_, e) => New(e) }
-    | expr ~ "::" ~ expr ~ expr ^^ { (e1, _, e2, e3) => Relate(e1, e2, e3) }
+    | "new" ~ expr              ^# { (loc, _, e) => New(loc, e) }
+    | expr ~ "::" ~ expr ~ expr ^# { (loc, e1, _, e2, e3) => Relate(loc, e1, e2, e3) }
     
-    | id    ^^ { id => Dispatch(id, Vector()) }
-    | ticId ^^ TicVar
+    | id    ^# { (loc, id) => Dispatch(loc, id, Vector()) }
+    | ticId ^# TicVar
     
-    | pathLiteral ^^ StrLit
-    | strLiteral  ^^ StrLit
-    | numLiteral  ^^ NumLit
-    | boolLiteral ^^ BoolLit
+    | pathLiteral ^# StrLit
+    | strLiteral  ^# StrLit
+    | numLiteral  ^# NumLit
+    | boolLiteral ^# BoolLit
     
-    | "{" ~ properties ~ "}"      ^^ { (_, ps, _) => ObjectDef(ps) }
-    | "[" ~ nullableActuals ~ "]" ^^ { (_, as, _) => ArrayDef(as) }
-    | expr ~ "." ~ propertyName   ^^ { (e, _, p) => Descent(e, p) }
-    | expr ~ "[" ~ expr ~ "]"     ^^ { (e1, _, e2, _) => Deref(e1, e2) }
+    | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
+    | "[" ~ nullableActuals ~ "]" ^# { (loc, _, as, _) => ArrayDef(loc, as) }
+    | expr ~ "." ~ propertyName   ^# { (loc, e, _, p) => Descent(loc, e, p) }
+    | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
-    | id ~ "(" ~ actuals ~ ")" ^^ { (id, _, as, _) => Dispatch(id, as) }
-    | expr ~ opId ~ expr       ^^ Operation
+    | id ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }
+    | expr ~ opId ~ expr       ^# Operation
     
-    | expr ~ "+" ~ expr ^^ { (e1, _, e2) => Add(e1, e2) }
-    | expr ~ "-" ~ expr ^^ { (e1, _, e2) => Sub(e1, e2) }
-    | expr ~ "*" ~ expr ^^ { (e1, _, e2) => Mul(e1, e2) }
-    | expr ~ "/" ~ expr ^^ { (e1, _, e2) => Div(e1, e2) }
+    | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
+    | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
+    | expr ~ "*" ~ expr ^# { (loc, e1, _, e2) => Mul(loc, e1, e2) }
+    | expr ~ "/" ~ expr ^# { (loc, e1, _, e2) => Div(loc, e1, e2) }
     
-    | expr ~ "<" ~ expr  ^^ { (e1, _, e2) => Lt(e1, e2) }
-    | expr ~ "<=" ~ expr ^^ { (e1, _, e2) => LtEq(e1, e2) }
-    | expr ~ ">" ~ expr  ^^ { (e1, _, e2) => Gt(e1, e2) }
-    | expr ~ ">=" ~ expr ^^ { (e1, _, e2) => GtEq(e1, e2) }
+    | expr ~ "<" ~ expr  ^# { (loc, e1, _, e2) => Lt(loc, e1, e2) }
+    | expr ~ "<=" ~ expr ^# { (loc, e1, _, e2) => LtEq(loc, e1, e2) }
+    | expr ~ ">" ~ expr  ^# { (loc, e1, _, e2) => Gt(loc, e1, e2) }
+    | expr ~ ">=" ~ expr ^# { (loc, e1, _, e2) => GtEq(loc, e1, e2) }
     
-    | expr ~ "=" ~ expr  ^^ { (e1, _, e2) => Eq(e1, e2) }
-    | expr ~ "!=" ~ expr ^^ { (e1, _, e2) => NotEq(e1, e2) }
+    | expr ~ "=" ~ expr  ^# { (loc, e1, _, e2) => Eq(loc, e1, e2) }
+    | expr ~ "!=" ~ expr ^# { (loc, e1, _, e2) => NotEq(loc, e1, e2) }
     
-    | expr ~ "&" ~ expr ^^ { (e1, _, e2) => And(e1, e2) }
-    | expr ~ "|" ~ expr ^^ { (e1, _, e2) => Or(e1, e2) }
+    | expr ~ "&" ~ expr ^# { (loc, e1, _, e2) => And(loc, e1, e2) }
+    | expr ~ "|" ~ expr ^# { (loc, e1, _, e2) => Or(loc, e1, e2) }
     
-    | "!" ~ expr ^^ { (_, e) => Comp(e) }
-    | "~" ~ expr ^^ { (_, e) => Neg(e) }
+    | "!" ~ expr ^# { (loc, _, e) => Comp(loc, e) }
+    | "~" ~ expr ^# { (loc, _, e) => Neg(loc, e) }
     
-    | "(" ~ expr ~ ")" ^^ { (_, e, _) => Paren(e) }
+    | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
   ) filter (precedence & associativity)
   
   lazy val formals: Parser[Vector[String]] = (
