@@ -13,11 +13,11 @@ trait AST extends Passes {
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
     
-    e match {
+    val back = e match {
       case Let(id, params, left, right) => {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
         
-        indent + "type: let\n" +
+          indent + "type: let\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
@@ -87,12 +87,13 @@ trait AST extends Passes {
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
       
-      case Dispatch(name, actuals) => {
+      case d @ Dispatch(name, actuals) => {
         val actualsStr = actuals map { indent + "  -\n" + prettyPrint(_, level + 4) } mkString "\n"
         
         indent + "type: dispatch\n" +
           indent + "name: " + name + "\n" +
-          indent + "actuals:\n" + actualsStr
+          indent + "actuals:\n" + actualsStr + "\n" +
+          indent + "binding: " + d.binding.toString
       }
       
       case Operation(left, op, right) => {
@@ -189,9 +190,13 @@ trait AST extends Passes {
           indent + "child:\n" + prettyPrint(child, level + 2)
       }
     }
+    
+    indent + "nodeId: " + e.nodeId + "\n" + back
   }
   
   sealed trait Expr extends Node with Product {
+    val nodeId = System.identityHashCode(this)
+    
     private[parser] val _root = atom[Expr]
     
     def root = _root()
