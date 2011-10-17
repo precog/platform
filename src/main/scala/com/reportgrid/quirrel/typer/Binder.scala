@@ -34,38 +34,38 @@ trait Binder extends parser.AST {
   
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[String, Binding]): Set[Error] = tree match {
-      case b @ Let(id, _, left, right) =>
+      case b @ Let(_, id, _, left, right) =>
         loop(left, env) ++ loop(right, env + (id -> UserDef(b)))
       
-      case New(child) => loop(child, env)
+      case New(_, child) => loop(child, env)
       
-      case Relate(from, to, in) =>
+      case Relate(_, from, to, in) =>
         loop(from, env) ++ loop(to, env) ++ loop(in, env)
       
-      case TicVar(_) => Set()
+      case TicVar(_, _) => Set()
         
-      case StrLit(_) => Set()
+      case StrLit(_, _) => Set()
       
-      case NumLit(_) => Set()
+      case NumLit(_, _) => Set()
       
-      case BoolLit(_) => Set()
+      case BoolLit(_, _) => Set()
       
-      case ObjectDef(props) => {
+      case ObjectDef(_, props) => {
         val results = for ((_, e) <- props)
           yield loop(e, env)
         
         results.fold(Set()) { _ ++ _ }
       }
       
-      case ArrayDef(values) =>
+      case ArrayDef(_, values) =>
         (values map { loop(_, env) }).fold(Set()) { _ ++ _ }
       
-      case Descent(child, _) => loop(child, env)
+      case Descent(_, child, _) => loop(child, env)
       
-      case Deref(left, right) =>
+      case Deref(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case d @ Dispatch(name, actuals) => {
+      case d @ Dispatch(_, name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
         if (env contains name) {
           d._binding() = env(name)
@@ -76,44 +76,44 @@ trait Binder extends parser.AST {
         }
       }
       
-      case Operation(left, _, right) =>
+      case Operation(_, left, _, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Add(left, right) =>
+      case Add(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Sub(left, right) =>
+      case Sub(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Mul(left, right) =>
+      case Mul(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Div(left, right) =>
+      case Div(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Lt(left, right) =>
+      case Lt(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case LtEq(left, right) =>
+      case LtEq(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Gt(left, right) =>
+      case Gt(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case GtEq(left, right) =>
+      case GtEq(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case Eq(left, right) =>
+      case Eq(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
-      case NotEq(left, right) =>
+      case NotEq(_, left, right) =>
         loop(left, env) ++ loop(right, env)
      
-      case Comp(child) => loop(child, env)
+      case Comp(_, child) => loop(child, env)
       
-      case Neg(child) => loop(child, env)
+      case Neg(_, child) => loop(child, env)
       
-      case Paren(child) => loop(child, env)
+      case Paren(_, child) => loop(child, env)
     }
     
     loop(tree, BuiltInFunctions.map({ b => b.name -> b})(collection.breakOut))
