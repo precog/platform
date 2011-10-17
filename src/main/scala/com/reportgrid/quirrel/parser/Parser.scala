@@ -74,13 +74,13 @@ trait Parser extends RegexParsers with Filters with AST {
   // %%
   
   lazy val expr: Parser[Expr] = (
-      varId ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
-    | varId ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
+      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^^ { (id, _, fs, _, _, e1, e2) => Binding(id, fs, e1, e2) }
+    | id ~ ":=" ~ expr ~ expr                       ^^ { (id, _, e1, e2) => Binding(id, Vector(), e1, e2) }
     
     | "new" ~ expr              ^^ { (_, e) => New(e) }
     | expr ~ "::" ~ expr ~ expr ^^ { (e1, _, e2, e3) => Relate(e1, e2, e3) }
     
-    | varId ^^ Var
+    | id    ^^ Var
     | ticId ^^ TicVar
     
     | pathLiteral ^^ StrLit
@@ -93,8 +93,8 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "." ~ propertyName   ^^ { (e, _, p) => Descent(e, p) }
     | expr ~ "[" ~ expr ~ "]"     ^^ { (e1, _, e2, _) => Deref(e1, e2) }
     
-    | varId ~ "(" ~ actuals ~ ")" ^^ { (id, _, as, _) => Dispatch(id, as) }
-    | expr ~ id ~ expr            ^^ Operation
+    | id ~ "(" ~ actuals ~ ")" ^^ { (id, _, as, _) => Dispatch(id, as) }
+    | expr ~ opId ~ expr       ^^ Operation
     
     | expr ~ "+" ~ expr ^^ { (e1, _, e2) => Add(e1, e2) }
     | expr ~ "-" ~ expr ^^ { (e1, _, e2) => Sub(e1, e2) }
@@ -143,7 +143,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
-  lazy val varId = id \ operations
+  val opId = "where"
   
   val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
@@ -160,7 +160,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
   
-  val keywords = "new|true|false".r
+  val keywords = "new|true|false|where".r
   
   val operations = "where".r
   
@@ -293,7 +293,7 @@ trait Parser extends RegexParsers with Filters with AST {
     // %%
     
     private lazy val op = (
-        id
+        opId
       | "+"
       | "-"
       | "*"
