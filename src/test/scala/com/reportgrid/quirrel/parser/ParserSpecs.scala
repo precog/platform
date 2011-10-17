@@ -25,7 +25,7 @@ import org.scalacheck.Prop
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
-object ParserSpecs extends Specification with ScalaCheck with Parser {
+object ParserSpecs extends Specification with ScalaCheck with Parser with StubPasses {
   
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {
@@ -69,9 +69,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "accept a variable" in {
-      parse("x") mustEqual Var("x")
-      parse("cafe_Babe__42_") mustEqual Var("cafe_Babe__42_")
-      parse("x'") mustEqual Var("x'")
+      parse("x") mustEqual Dispatch("x", Vector())
+      parse("cafe_Babe__42_") mustEqual Dispatch("cafe_Babe__42_", Vector())
+      parse("x'") mustEqual Dispatch("x'", Vector())
     }
     
     "reject a variable named as a keyword" in {
@@ -230,7 +230,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     
     "accept an array dereference" in {
       parse("1[2]") mustEqual Deref(NumLit("1"), NumLit("2"))
-      parse("x[y]") mustEqual Deref(Var("x"), Var("y"))
+      parse("x[y]") mustEqual Deref(Dispatch("x", Vector()), Dispatch("y", Vector()))
     }
     
     "reject an array dereference with multiple indexes" in {
@@ -461,138 +461,138 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
     }
     
     "favor negation/complement over multiplication/division" in {
-      parse("!a * b") mustEqual Mul(Comp(Var("a")), Var("b"))
-      parse("~a * b") mustEqual Mul(Neg(Var("a")), Var("b"))
-      parse("!a / b") mustEqual Div(Comp(Var("a")), Var("b"))
-      parse("~a / b") mustEqual Div(Neg(Var("a")), Var("b"))
+      parse("!a * b") mustEqual Mul(Comp(Dispatch("a", Vector())), Dispatch("b", Vector()))
+      parse("~a * b") mustEqual Mul(Neg(Dispatch("a", Vector())), Dispatch("b", Vector()))
+      parse("!a / b") mustEqual Div(Comp(Dispatch("a", Vector())), Dispatch("b", Vector()))
+      parse("~a / b") mustEqual Div(Neg(Dispatch("a", Vector())), Dispatch("b", Vector()))
     }
     
     "favor multiplication/division over addition/subtraction" in {
-      parse("a + b * c") mustEqual Add(Var("a"), Mul(Var("b"), Var("c")))
-      parse("a - b * c") mustEqual Sub(Var("a"), Mul(Var("b"), Var("c")))
-      parse("a * b + c") mustEqual Add(Mul(Var("a"), Var("b")), Var("c"))
-      parse("a * b - c") mustEqual Sub(Mul(Var("a"), Var("b")), Var("c"))
+      parse("a + b * c") mustEqual Add(Dispatch("a", Vector()), Mul(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a - b * c") mustEqual Sub(Dispatch("a", Vector()), Mul(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a * b + c") mustEqual Add(Mul(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a * b - c") mustEqual Sub(Mul(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a + b / c") mustEqual Add(Var("a"), Div(Var("b"), Var("c")))
-      parse("a - b / c") mustEqual Sub(Var("a"), Div(Var("b"), Var("c")))
-      parse("a / b + c") mustEqual Add(Div(Var("a"), Var("b")), Var("c"))
-      parse("a / b - c") mustEqual Sub(Div(Var("a"), Var("b")), Var("c"))
+      parse("a + b / c") mustEqual Add(Dispatch("a", Vector()), Div(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a - b / c") mustEqual Sub(Dispatch("a", Vector()), Div(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a / b + c") mustEqual Add(Div(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a / b - c") mustEqual Sub(Div(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "favor addition/subtraction over inequality operators" in {
-      parse("a < b + c") mustEqual Lt(Var("a"), Add(Var("b"), Var("c")))
-      parse("a <= b + c") mustEqual LtEq(Var("a"), Add(Var("b"), Var("c")))
-      parse("a + b < c") mustEqual Lt(Add(Var("a"), Var("b")), Var("c"))
-      parse("a + b <= c") mustEqual LtEq(Add(Var("a"), Var("b")), Var("c"))
+      parse("a < b + c") mustEqual Lt(Dispatch("a", Vector()), Add(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a <= b + c") mustEqual LtEq(Dispatch("a", Vector()), Add(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a + b < c") mustEqual Lt(Add(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a + b <= c") mustEqual LtEq(Add(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a < b - c") mustEqual Lt(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a <= b - c") mustEqual LtEq(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a - b < c") mustEqual Lt(Sub(Var("a"), Var("b")), Var("c"))
-      parse("a - b <= c") mustEqual LtEq(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a < b - c") mustEqual Lt(Dispatch("a", Vector()), Sub(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a <= b - c") mustEqual LtEq(Dispatch("a", Vector()), Sub(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a - b < c") mustEqual Lt(Sub(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a - b <= c") mustEqual LtEq(Sub(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a > b + c") mustEqual Gt(Var("a"), Add(Var("b"), Var("c")))
-      parse("a >= b + c") mustEqual GtEq(Var("a"), Add(Var("b"), Var("c")))
-      parse("a + b > c") mustEqual Gt(Add(Var("a"), Var("b")), Var("c"))
-      parse("a + b >= c") mustEqual GtEq(Add(Var("a"), Var("b")), Var("c"))
+      parse("a > b + c") mustEqual Gt(Dispatch("a", Vector()), Add(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a >= b + c") mustEqual GtEq(Dispatch("a", Vector()), Add(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a + b > c") mustEqual Gt(Add(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a + b >= c") mustEqual GtEq(Add(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a > b - c") mustEqual Gt(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a >= b - c") mustEqual GtEq(Var("a"), Sub(Var("b"), Var("c")))
-      parse("a - b > c") mustEqual Gt(Sub(Var("a"), Var("b")), Var("c"))
-      parse("a - b >= c") mustEqual GtEq(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a > b - c") mustEqual Gt(Dispatch("a", Vector()), Sub(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a >= b - c") mustEqual GtEq(Dispatch("a", Vector()), Sub(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a - b > c") mustEqual Gt(Sub(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a - b >= c") mustEqual GtEq(Sub(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "favor inequality operators over equality operators" in {
-      parse("a = b < c") mustEqual Eq(Var("a"), Lt(Var("b"), Var("c")))
-      parse("a != b < c") mustEqual NotEq(Var("a"), Lt(Var("b"), Var("c")))
-      parse("a < b = c") mustEqual Eq(Lt(Var("a"), Var("b")), Var("c"))
-      parse("a < b != c") mustEqual NotEq(Lt(Var("a"), Var("b")), Var("c"))
+      parse("a = b < c") mustEqual Eq(Dispatch("a", Vector()), Lt(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a != b < c") mustEqual NotEq(Dispatch("a", Vector()), Lt(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a < b = c") mustEqual Eq(Lt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a < b != c") mustEqual NotEq(Lt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a = b <= c") mustEqual Eq(Var("a"), LtEq(Var("b"), Var("c")))
-      parse("a != b <= c") mustEqual NotEq(Var("a"), LtEq(Var("b"), Var("c")))
-      parse("a <= b = c") mustEqual Eq(LtEq(Var("a"), Var("b")), Var("c"))
-      parse("a <= b != c") mustEqual NotEq(LtEq(Var("a"), Var("b")), Var("c"))
+      parse("a = b <= c") mustEqual Eq(Dispatch("a", Vector()), LtEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a != b <= c") mustEqual NotEq(Dispatch("a", Vector()), LtEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a <= b = c") mustEqual Eq(LtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a <= b != c") mustEqual NotEq(LtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a = b > c") mustEqual Eq(Var("a"), Gt(Var("b"), Var("c")))
-      parse("a != b > c") mustEqual NotEq(Var("a"), Gt(Var("b"), Var("c")))
-      parse("a > b = c") mustEqual Eq(Gt(Var("a"), Var("b")), Var("c"))
-      parse("a > b != c") mustEqual NotEq(Gt(Var("a"), Var("b")), Var("c"))
+      parse("a = b > c") mustEqual Eq(Dispatch("a", Vector()), Gt(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a != b > c") mustEqual NotEq(Dispatch("a", Vector()), Gt(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a > b = c") mustEqual Eq(Gt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a > b != c") mustEqual NotEq(Gt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a = b >= c") mustEqual Eq(Var("a"), GtEq(Var("b"), Var("c")))
-      parse("a != b >= c") mustEqual NotEq(Var("a"), GtEq(Var("b"), Var("c")))
-      parse("a >= b = c") mustEqual Eq(GtEq(Var("a"), Var("b")), Var("c"))
-      parse("a >= b != c") mustEqual NotEq(GtEq(Var("a"), Var("b")), Var("c"))
+      parse("a = b >= c") mustEqual Eq(Dispatch("a", Vector()), GtEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a != b >= c") mustEqual NotEq(Dispatch("a", Vector()), GtEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a >= b = c") mustEqual Eq(GtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a >= b != c") mustEqual NotEq(GtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "favor equality operators over and/or" in {
-      parse("a & b = c") mustEqual And(Var("a"), Eq(Var("b"), Var("c")))
-      parse("a | b = c") mustEqual Or(Var("a"), Eq(Var("b"), Var("c")))
-      parse("a = b & c") mustEqual And(Eq(Var("a"), Var("b")), Var("c"))
-      parse("a = b | c") mustEqual Or(Eq(Var("a"), Var("b")), Var("c"))
+      parse("a & b = c") mustEqual And(Dispatch("a", Vector()), Eq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a | b = c") mustEqual Or(Dispatch("a", Vector()), Eq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a = b & c") mustEqual And(Eq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a = b | c") mustEqual Or(Eq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
       
-      parse("a & b != c") mustEqual And(Var("a"), NotEq(Var("b"), Var("c")))
-      parse("a | b != c") mustEqual Or(Var("a"), NotEq(Var("b"), Var("c")))
-      parse("a != b & c") mustEqual And(NotEq(Var("a"), Var("b")), Var("c"))
-      parse("a != b | c") mustEqual Or(NotEq(Var("a"), Var("b")), Var("c"))
+      parse("a & b != c") mustEqual And(Dispatch("a", Vector()), NotEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a | b != c") mustEqual Or(Dispatch("a", Vector()), NotEq(Dispatch("b", Vector()), Dispatch("c", Vector())))
+      parse("a != b & c") mustEqual And(NotEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
+      parse("a != b | c") mustEqual Or(NotEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "favor and/or operators over new" in {
-      parse("new a & b") mustEqual New(And(Var("a"), Var("b")))
-      parse("new a | b") mustEqual New(Or(Var("a"), Var("b")))
+      parse("new a & b") mustEqual New(And(Dispatch("a", Vector()), Dispatch("b", Vector())))
+      parse("new a | b") mustEqual New(Or(Dispatch("a", Vector()), Dispatch("b", Vector())))
     }
     
     "favor new over where" in {
-      parse("new a where b") mustEqual Operation(New(Var("a")), "where", Var("b"))
+      parse("new a where b") mustEqual Operation(New(Dispatch("a", Vector())), "where", Dispatch("b", Vector()))
     }
     
     "favor where over relate" in {
-      parse("a where b :: c d") mustEqual Relate(Operation(Var("a"), "where", Var("b")), Var("c"), Var("d"))
-      parse("a :: b where c d") mustEqual Relate(Var("a"), Operation(Var("b"), "where", Var("c")), Var("d"))
+      parse("a where b :: c d") mustEqual Relate(Operation(Dispatch("a", Vector()), "where", Dispatch("b", Vector())), Dispatch("c", Vector()), Dispatch("d", Vector()))
+      parse("a :: b where c d") mustEqual Relate(Dispatch("a", Vector()), Operation(Dispatch("b", Vector()), "where", Dispatch("c", Vector())), Dispatch("d", Vector()))
     }
   }
   
   "operator associativity" should {
     "associate multiplication to the left" in {
-      parse("a * b * c") mustEqual Mul(Mul(Var("a"), Var("b")), Var("c"))
+      parse("a * b * c") mustEqual Mul(Mul(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate division to the left" in {
-      parse("a / b / c") mustEqual Div(Div(Var("a"), Var("b")), Var("c"))
+      parse("a / b / c") mustEqual Div(Div(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate addition to the left" in {
-      parse("a + b + c") mustEqual Add(Add(Var("a"), Var("b")), Var("c"))
+      parse("a + b + c") mustEqual Add(Add(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate subtraction to the left" in {
-      parse("a - b - c") mustEqual Sub(Sub(Var("a"), Var("b")), Var("c"))
+      parse("a - b - c") mustEqual Sub(Sub(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate less-than to the left" in {
-      parse("a < b < c") mustEqual Lt(Lt(Var("a"), Var("b")), Var("c"))
+      parse("a < b < c") mustEqual Lt(Lt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate less-than-equal to the left" in {
-      parse("a <= b <= c") mustEqual LtEq(LtEq(Var("a"), Var("b")), Var("c"))
+      parse("a <= b <= c") mustEqual LtEq(LtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate greater-than to the left" in {
-      parse("a > b > c") mustEqual Gt(Gt(Var("a"), Var("b")), Var("c"))
+      parse("a > b > c") mustEqual Gt(Gt(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate greater-than-equal to the left" in {
-      parse("a >= b >= c") mustEqual GtEq(GtEq(Var("a"), Var("b")), Var("c"))
+      parse("a >= b >= c") mustEqual GtEq(GtEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate equal to the left" in {
-      parse("a = b = c") mustEqual Eq(Eq(Var("a"), Var("b")), Var("c"))
+      parse("a = b = c") mustEqual Eq(Eq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate not-equal to the left" in {
-      parse("a != b != c") mustEqual NotEq(NotEq(Var("a"), Var("b")), Var("c"))
+      parse("a != b != c") mustEqual NotEq(NotEq(Dispatch("a", Vector()), Dispatch("b", Vector())), Dispatch("c", Vector()))
     }
     
     "associate where to the left" in {
-      parse("a where b where c") mustEqual Operation(Operation(Var("a"), "where", Var("b")), "where", Var("c"))
+      parse("a where b where c") mustEqual Operation(Operation(Dispatch("a", Vector()), "where", Dispatch("b", Vector())), "where", Dispatch("c", Vector()))
     }
   }
   
@@ -664,7 +664,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
         |   d
         | e""".stripMargin
       
-      parse(input) mustEqual Binding("a", Vector(), Binding("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Binding("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Var("d"))), Var("e"))
+      parse(input) mustEqual Binding("a", Vector(), Binding("b", Vector(), Dispatch("dataset", Vector(StrLit("/f"))), Binding("c", Vector(), Dispatch("dataset", Vector(StrLit("/g"))), Dispatch("d", Vector()))), Dispatch("e", Vector()))
     }
   }
   
@@ -765,8 +765,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser {
       val expected = 
         Binding("a", Vector(),
           Binding("b", Vector(),
-            Var("c"), Paren(Var("d"))),
-          Paren(Var("e")))
+            Dispatch("c", Vector()), Paren(Dispatch("d", Vector()))),
+          Paren(Dispatch("e", Vector())))
       
       parse("a := b := c (d) (e)") mustEqual expected
     }
