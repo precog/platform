@@ -19,11 +19,8 @@
  */
 package com.reportgrid.quirrel
 
-trait Passes {
-  type Expr
-  type Error
+trait StringErrors extends Passes {
+  type Error = String
   
-  def bindNames(tree: Expr): Set[Error]
-  
-  def Error(node: Expr, msg: String): Error
+  def Error(node: Expr, msg: String): Error = msg
 }

@@ -29,7 +29,7 @@ import jline.Terminal
 import parser._
 import typer._
 
-trait REPL extends Parser with Binder {
+trait REPL extends Parser with Binder with StringErrors {
   val Prompt = "quirrel> "
   val Follow = "       | "
   
@@ -45,7 +45,14 @@ trait REPL extends Parser with Binder {
       }
       
       case PrintTree(tree) => {
-        println(prettyPrint(tree))
+        handleSuccesses(Stream(tree))      // a little nasty...
+        val result = prettyPrint(tree)
+        
+        if (tree.errors.isEmpty)
+          println(result)
+        else
+          ()
+        
         true
       }
       
