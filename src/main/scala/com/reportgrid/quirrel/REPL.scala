@@ -29,7 +29,7 @@ import jline.Terminal
 import parser._
 import typer._
 
-trait REPL extends Parser with Binder with LineErrors {
+trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
   val Prompt = "quirrel> "
   val Follow = "       | "
   
