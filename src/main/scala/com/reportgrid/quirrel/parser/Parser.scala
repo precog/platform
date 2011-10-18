@@ -16,7 +16,7 @@ import edu.uwm.cs.util.UniversalCharSet
 
 trait Parser extends RegexParsers with Filters with AST {
   
-  def parse(input: LineStream): Expr = {
+  def parse(input: LineStream) = {
     val results = expr(input)
     val successes = results collect { case Success(tree, _) => tree }
     val failures = results collect { case f: Failure => f }

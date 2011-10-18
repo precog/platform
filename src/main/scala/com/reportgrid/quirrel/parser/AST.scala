@@ -1,10 +1,9 @@
 package com.reportgrid.quirrel
 package parser
 
-import com.reportgrid.quirrel.util.Atom
+import com.reportgrid.quirrel.util.{Atom, SetAtom}
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
-import com.reportgrid.quirrel.util.SetAtom
 
 trait AST extends Passes { 
   import Atom._
@@ -217,7 +216,7 @@ trait AST extends Passes {
     protected final lazy val _errors: SetAtom[Error] =
       if (this eq root) new SetAtom[Error] else root._errors
     
-    final def errors= _errors()
+    final def errors = _errors()
     
     def loc: LineStream
   }

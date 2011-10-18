@@ -33,12 +33,13 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
       
       case PrintTree(tree) => {
         handleSuccesses(Stream(tree))      // a little nasty...
-        val result = prettyPrint(tree)
         
-        if (tree.errors.isEmpty)
-          println(result)
-        else
-          println(tree.errors map showError mkString "\n")
+        val errors = runPassesInSequence(tree)
+        if (!errors.isEmpty) {
+          println(errors map showError mkString "\n")
+        } else {
+          println(prettyPrint(tree))
+        }
         
         true
       }
