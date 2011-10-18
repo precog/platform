@@ -10,6 +10,7 @@ trait AST extends Passes {
   import Atom._
   
   type Binding
+  type Provenance
   
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
@@ -205,6 +206,12 @@ trait AST extends Passes {
     private[parser] val _root = atom[Expr]
     
     def root = _root()
+    
+    private[quirrel] val _provenance = atom[Provenance] {
+      _errors ++= checkProvenance(root)
+    }
+    
+    def provenance = _provenance()
     
     protected final lazy val _errors: SetAtom[Error] =
       if (this eq root) new SetAtom[Error] else root._errors
