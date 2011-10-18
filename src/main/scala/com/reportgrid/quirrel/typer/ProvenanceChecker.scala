@@ -279,8 +279,19 @@ trait ProvenanceChecker extends parser.AST with Binder {
   
   sealed trait Provenance
   
-  case class StaticProvenance(path: String) extends Provenance
-  case class DynamicProvenance(id: Int) extends Provenance
-  case object ValueProvenance extends Provenance
-  case object NullProvenance extends Provenance
+  case class StaticProvenance(path: String) extends Provenance {
+    override val toString = path
+  }
+  
+  case class DynamicProvenance(id: Int) extends Provenance {
+    override val toString = "@" + id
+  }
+  
+  case object ValueProvenance extends Provenance {
+    override val toString = "<value>"
+  }
+  
+  case object NullProvenance extends Provenance {
+    override val toString = "<null>"
+  }
 }

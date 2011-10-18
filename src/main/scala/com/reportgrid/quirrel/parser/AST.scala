@@ -197,7 +197,8 @@ trait AST extends Passes {
     indent + "nodeId: " + e.nodeId + "\n" +
       indent + "line: " + e.loc.lineNum + "\n" +
       indent + "col: " + e.loc.colNum + "\n" +
-      back
+      back + "\n" +
+      indent + "provenance: " + e.provenance.toString
   }
   
   sealed trait Expr extends Node with Product {
