@@ -7,3 +7,13 @@ libraryDependencies ++= Seq(
   "edu.uwm.cs" %% "gll-combinators" % "1.5-SNAPSHOT",
   "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
   "org.specs2" %% "specs2" % "1.7-SNAPSHOT" % "test" withSources)
+  
+initialCommands := """
+  | import edu.uwm.cs.gll.LineStream
+  | 
+  | import com.reportgrid.quirrel._
+  | import parser._
+  | import typer._
+  |
+  | val compiler = new Parser with Binder with LineErrors {}
+  """.stripMargin
