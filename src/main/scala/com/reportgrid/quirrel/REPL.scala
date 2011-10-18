@@ -10,7 +10,7 @@ import jline.Terminal
 import parser._
 import typer._
 
-trait REPL extends Parser with Binder with StringErrors {
+trait REPL extends Parser with Binder with LineErrors {
   val Prompt = "quirrel> "
   val Follow = "       | "
   
@@ -32,7 +32,7 @@ trait REPL extends Parser with Binder with StringErrors {
         if (tree.errors.isEmpty)
           println(result)
         else
-          ()
+          println(tree.errors map showError mkString "\n")
         
         true
       }
