@@ -53,6 +53,86 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPa
         d.errors mustEqual Set("undefined function: baz")
       }
     }
+    
+    "not leak into an adjacent scope" in {
+      val Add(_, _, d: Dispatch) = parse("(a := 1 2) + a")
+      d.binding mustEqual NullBinding
+      d.errors mustEqual Set("undefined function: a")
+    }
+    
+    "allow shadowing of user-defined bindings" in {
+      val Let(_, _, _, _, e @ Let(_, _, _, _, d: Dispatch)) = parse("a := 1 a := 2 a")
+      d.binding mustEqual UserDef(e)
+      d.errors must beEmpty
+    }
+    
+    "allow shadowing of built-in bindings" in {
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("count := 1 count")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("dataset := 1 dataset")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("max := 1 max")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("mean := 1 mean")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("median := 1 median")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("mean := 1 mean")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("min := 1 min")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("mode := 1 mode")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("stdDev := 1 stdDev")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("sum := 1 sum")
+        d.binding mustEqual UserDef(e)
+        d.errors must beEmpty
+      }
+    }
+    
+    "not leak shadowing into an adjacent scope" in {
+      val e @ Let(_, _, _, _, Add(_, _, d: Dispatch)) = parse("a := 1 (a := 2 3) + a")
+      d.binding mustEqual UserDef(e)
+      d.errors must beEmpty
+    }
   }
   
   "inherited scoping" should {
