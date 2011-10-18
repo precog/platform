@@ -89,6 +89,12 @@ trait Binder extends parser.AST {
       
       case NotEq(_, left, right) =>
         loop(left, env) ++ loop(right, env)
+      
+      case And(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+      
+      case Or(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
      
       case Comp(_, child) => loop(child, env)
       
