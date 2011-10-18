@@ -22,6 +22,12 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
     def handle(c: Command) = c match {
       case Eval(tree) => {
         handleSuccesses(Stream(tree))      // a little nasty...
+        
+        val errors = runPassesInSequence(tree)
+        if (!errors.isEmpty) {
+          println(errors map showError mkString "\n")
+        }
+        
         true     // TODO
       }
       
