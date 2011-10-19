@@ -15,5 +15,5 @@ initialCommands := """
   | import parser._
   | import typer._
   |
-  | val compiler = new Parser with Binder with LineErrors {}
+  | val compiler = new Parser with Binder with ProvenanceChecker with LineErrors {}
   """.stripMargin
