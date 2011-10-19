@@ -27,9 +27,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
     
     def loop(expr: Expr, relations: Set[(Provenance, Provenance)]): Set[Error] = expr match {
       case Let(_, _, _, left, right) => {
-        val back = loop(left, relations)
+        val back = loop(left, relations) ++ loop(right, relations)
         expr._provenance() = right.provenance
-        back ++ loop(right, relations)
+        back
       }
       
       case New(_, child) => {
@@ -122,7 +122,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
             pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam))
           
           case BuiltIn(_) => ValueProvenance     // note: assumes all primitive functions are reductions!
-          case UserDef(e) => e.provenance
+          case UserDef(e) => e.left.provenance
           case NullBinding => NullProvenance
         }
         
