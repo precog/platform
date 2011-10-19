@@ -705,6 +705,12 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
         case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/f"))), Let(_, "c", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/g"))), Dispatch(_, "d", Vector()))), Dispatch(_, "e", Vector())) => ok
       }
     }
+    
+    "handle new expression within deref parameter" in {
+      parse("1[new 2]") must beLike {
+        case Deref(_, NumLit(_, "1"), New(_, NumLit(_, "2"))) => ok
+      }
+    }
   }
   
   "specification examples" >> {
