@@ -10,6 +10,7 @@ trait AST extends Passes {
   import Atom._
   
   type Binding
+  type FormalBinding
   
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
@@ -37,9 +38,10 @@ trait AST extends Passes {
           indent + "in:\n" + prettyPrint(in, level + 2)
       }
       
-      case TicVar(loc, id) => {
+      case t @ TicVar(loc, id) => {
         indent + "type: ticvar\n" +
-          indent + "id: " + id
+          indent + "id: " + id + "\n" +
+          indent + "binding: " + t.binding.toString
       }
       
       case StrLit(loc, value) => {
@@ -231,6 +233,12 @@ trait AST extends Passes {
   
   case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
     val label = 'ticvar
+    
+    private[quirrel] val _binding = atom[FormalBinding] {
+      _errors ++= bindNames(root)
+    }
+    
+    def binding = _binding()
   }
   
   case class StrLit(loc: LineStream, value: String) extends Expr with LeafNode {

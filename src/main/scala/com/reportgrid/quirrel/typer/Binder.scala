@@ -15,15 +15,31 @@ trait Binder extends parser.AST {
   
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[String, Binding]): Set[Error] = tree match {
-      case b @ Let(_, id, _, left, right) =>
-        loop(left, env) ++ loop(right, env + (id -> UserDef(b)))
+      case b @ Let(_, id, formals, left, right) => {
+        val env2 = formals.foldLeft(env) { (m, s) => m + (s -> UserDef(b)) }
+        loop(left, env2) ++ loop(right, env + (id -> UserDef(b)))
+      }
       
       case New(_, child) => loop(child, env)
       
       case Relate(_, from, to, in) =>
         loop(from, env) ++ loop(to, env) ++ loop(in, env)
       
-      case TicVar(_, _) => Set()
+      case t @ TicVar(_, name) => {
+        env get name match {
+          case Some(b @ UserDef(_)) => {
+            t._binding() = b
+            Set()
+          }
+          
+          case None => {
+            t._binding() = NullBinding
+            Set(Error(t, "undefined tic-variable: %s".format(name)))
+          }
+          
+          case _ => throw new AssertionError("Cannot reach this point")
+        }
+      }
         
       case StrLit(_, _) => Set()
       
@@ -107,17 +123,18 @@ trait Binder extends parser.AST {
   }
   
   sealed trait Binding
+  sealed trait FormalBinding
   
   // TODO arity and types
   case class BuiltIn(name: String) extends Binding {
     override val toString = "<native: %s>".format(name)
   }
   
-  case class UserDef(b: Let) extends Binding {
+  case class UserDef(b: Let) extends Binding with FormalBinding {
     override val toString = "@%d".format(b.nodeId)
   }
   
-  case object NullBinding extends Binding {
+  case object NullBinding extends Binding with FormalBinding {
     override val toString = "<null>"
   }
 }
