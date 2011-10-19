@@ -220,6 +220,7 @@ trait AST extends Passes {
   
   case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
     val label = 'new
+    val isPrefix = true
   }
   
   case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr {
@@ -258,10 +259,13 @@ trait AST extends Passes {
   
   case class Descent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryNode {
     val label = 'descent
+    val isPrefix = false
   }
   
   case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
     val label = 'deref
+    val isPrefix = true
+    val child = left
   }
   
   case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
@@ -330,13 +334,16 @@ trait AST extends Passes {
   
   case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryNode {
     val label = 'comp
+    val isPrefix = true
   }
   
   case class Neg(loc: LineStream, child: Expr) extends Expr with UnaryNode {
     val label = 'neg
+    val isPrefix = true
   }
   
-  case class Paren(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+  case class Paren(loc: LineStream, child: Expr) extends Expr {
     val label = 'paren
+    val children = child :: Nil
   }
 }
