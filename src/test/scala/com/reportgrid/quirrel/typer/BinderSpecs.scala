@@ -40,11 +40,44 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPa
       left.errors mustEqual Set("undefined function: a")
     }
     
+    "bind all tic-variables in expression scope" in {
+      {
+        val e @ Let(_, _, _, t: TicVar, _) = parse("a('b) := 'b a")
+        t.binding mustEqual UserDef(e)
+        t.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, Add(_, Add(_, tb: TicVar, tc: TicVar), td: TicVar), _) = parse("a('b, 'c, 'd) := 'b + 'c + 'd a")
+        
+        tb.binding mustEqual UserDef(e)
+        tc.binding mustEqual UserDef(e)
+        td.binding mustEqual UserDef(e)
+        
+        tb.errors must beEmpty
+        tc.errors must beEmpty
+        td.errors must beEmpty
+      }
+    }
+    
+    "not bind tic-variable in resulting scope" in {
+      val Let(_, _, _, _, t: TicVar) = parse("a('b) := 42 'b")
+      t.binding mustEqual NullBinding
+      t.errors mustEqual Set("undefined tic-variable: 'b")
+    }
+    
     "bind name in inner scope" in {
       val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, _, d: Dispatch)) = parse("a := 42 b := 24 b")
       
       d.binding mustEqual UserDef(e2)
       d.errors must beEmpty
+    }
+    
+    "bind tic-variable in inner scope" in {
+      val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, t: TicVar, _)) = parse("a := 42 b('b) := 'b 24")
+      
+      t.binding mustEqual UserDef(e2)
+      t.errors must beEmpty
     }
     
     "reject unbound dispatch" in {
@@ -73,16 +106,48 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPa
       }
     }
     
-    "not leak into an adjacent scope" in {
+    "reject unbound tic-variables" in {
+      {
+        val d @ TicVar(_, _) = parse("'foo")
+        d.binding mustEqual NullBinding
+        d.errors mustEqual Set("undefined tic-variable: 'foo")
+      }
+      
+      {
+        val d @ TicVar(_, _) = parse("'bar")
+        d.binding mustEqual NullBinding
+        d.errors mustEqual Set("undefined tic-variable: 'bar")
+      }
+      
+      {
+        val d @ TicVar(_, _) = parse("'baz")
+        d.binding mustEqual NullBinding
+        d.errors mustEqual Set("undefined tic-variable: 'baz")
+      }
+    }
+    
+    "not leak dispatch into an adjacent scope" in {
       val Add(_, _, d: Dispatch) = parse("(a := 1 2) + a")
       d.binding mustEqual NullBinding
       d.errors mustEqual Set("undefined function: a")
+    }
+    
+    "not leak tic-variable into an adjacent scope" in {
+      val Add(_, _, t: TicVar) = parse("(a('b) := 1 2) + 'b")
+      t.binding mustEqual NullBinding
+      t.errors mustEqual Set("undefined tic-variable: 'b")
     }
     
     "allow shadowing of user-defined bindings" in {
       val Let(_, _, _, _, e @ Let(_, _, _, _, d: Dispatch)) = parse("a := 1 a := 2 a")
       d.binding mustEqual UserDef(e)
       d.errors must beEmpty
+    }
+    
+    "allow shadowing of tic-variables" in {
+      val Let(_, _, _, _, e @ Let(_, _, _, t: TicVar, _)) = parse("a('c) := 1 b('c) := 'c 2")
+      t.binding mustEqual UserDef(e)
+      t.errors must beEmpty
     }
     
     "allow shadowing of built-in bindings" in {
