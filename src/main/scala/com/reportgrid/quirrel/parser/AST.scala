@@ -286,8 +286,9 @@ trait AST extends Passes {
     val label = 'descent
   }
   
-  case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+  case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with UnaryNode {
     val label = 'deref
+    val child = left
   }
   
   case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
