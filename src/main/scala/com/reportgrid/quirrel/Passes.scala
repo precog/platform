@@ -31,14 +31,8 @@ trait Passes {
   def bindNames(tree: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
   
-  def runPassesInSequence(tree: Expr): Set[Error] = {
-    Passes.foldLeft(Set[Error]()) { (errors, pass) =>
-      if (!errors.isEmpty)
-        errors
-      else
-        pass(tree)
-    }
-  }
+  def runPassesInSequence(tree: Expr): Set[Error] =
+    Passes.foldLeft(Set[Error]()) { _ ++ _(tree) }
   
   def Error(node: Expr, msg: String): Error
   def showError(error: Error): String
