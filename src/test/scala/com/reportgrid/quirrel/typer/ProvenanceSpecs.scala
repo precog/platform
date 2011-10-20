@@ -40,19 +40,19 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
     
     "identify relate according to its last expression" in {
       {
-        val tree = parse("1 :: 2 3")
+        val tree = parse("dataset(//a) :: dataset(//b) 3")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = parse("1 :: 2 dataset(//foo)")
+        val tree = parse("dataset(//a) :: dataset(//b) dataset(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = parse("1 :: 2 (new 1)")
+        val tree = parse("dataset(//a) :: dataset(//b) (new 1)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -1224,6 +1224,34 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
       val tree = parse("(new 1) | (new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+  }
+  
+  "explicit relation" should {
+    "fail on natively-related sets" in {
+      {
+        val tree = parse("dataset(//a) :: dataset(//a) 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot relate sets that are already related")
+      }
+      
+      {
+        val tree = parse("1 :: 2 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot relate sets that are already related")
+      }
+      
+      {
+        val tree = parse("a := new 1 a :: a 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot relate sets that are already related")
+      }
+    }
+    
+    "fail on explicitly related sets" in {
+      val tree = parse("a := dataset(//a) b := dataset(//b) a :: b a :: b 42")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot relate sets that are already related")
     }
   }
   
