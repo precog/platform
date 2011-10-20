@@ -39,12 +39,21 @@ trait ProvenanceChecker extends parser.AST with Binder {
       }
       
       case Relate(_, from, to, in) => {
-        val back = loop(from, relations) ++
-          loop(to, relations) ++
-          loop(in, relations + ((from.provenance, to.provenance)))
-          
-        expr._provenance() = in.provenance
-        back
+        val back = loop(from, relations) ++ loop(to, relations)
+        
+        val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
+          expr._provenance() = NullProvenance
+          Set()
+        } else if (from.provenance == to.provenance || relations.contains(from.provenance -> to.provenance)) {
+          expr._provenance() = NullProvenance
+          Set(Error(expr, "cannot relate sets that are already related"))
+        } else {
+          val back = loop(in, relations + ((from.provenance, to.provenance)))
+          expr._provenance() = in.provenance
+          back
+        }
+        
+        back ++ recursive
       }
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => {
