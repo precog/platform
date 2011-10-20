@@ -549,5 +549,5 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPa
     }
   }
   
-  def parse(str: String): Tree = parse(LineStream(str))
+  def parse(str: String): Expr = parse(LineStream(str))
 }

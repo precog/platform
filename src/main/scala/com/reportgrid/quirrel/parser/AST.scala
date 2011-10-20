@@ -20,16 +20,16 @@
 package com.reportgrid.quirrel
 package parser
 
-import com.reportgrid.quirrel.util.Atom
+import com.reportgrid.quirrel.util.{Atom, SetAtom}
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
-import com.reportgrid.quirrel.util.SetAtom
 
 trait AST extends Passes { 
   import Atom._
   
   type Binding
   type FormalBinding
+  type Provenance
   
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
@@ -217,7 +217,8 @@ trait AST extends Passes {
     indent + "nodeId: " + e.nodeId + "\n" +
       indent + "line: " + e.loc.lineNum + "\n" +
       indent + "col: " + e.loc.colNum + "\n" +
-      back
+      back + "\n" +
+      indent + "provenance: " + e.provenance.toString
   }
   
   sealed trait Expr extends Node with Product {
@@ -227,10 +228,16 @@ trait AST extends Passes {
     
     def root = _root()
     
+    private[quirrel] val _provenance = atom[Provenance] {
+      _errors ++= checkProvenance(root)
+    }
+    
+    def provenance = _provenance()
+    
     protected final lazy val _errors: SetAtom[Error] =
       if (this eq root) new SetAtom[Error] else root._errors
     
-    final def errors= _errors()
+    final def errors = _errors()
     
     def loc: LineStream
   }
@@ -244,10 +251,12 @@ trait AST extends Passes {
     val isPrefix = true
   }
   
-  case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr {
+  case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with BinaryNode {
     val label = 'relate
     
-    def children = List(from, to, in)
+    val left = from
+    val right = to
+    override def children = List(from, to, in)
   }
   
   case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
@@ -289,7 +298,7 @@ trait AST extends Passes {
     val isPrefix = false
   }
   
-  case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+  case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with UnaryNode {
     val label = 'deref
     val isPrefix = true
     val child = left
