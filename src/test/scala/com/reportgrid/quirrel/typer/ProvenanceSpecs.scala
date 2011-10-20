@@ -939,8 +939,308 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
   }
   
   "provenance checking" should {
+    "reject object definition on different datasets" in {
+      val tree = parse("{ a: dataset(//foo), b: dataset(//bar) }")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject object definition on static and dynamic provenances" in {
+      val tree = parse("{ a: dataset(//foo), b: new 1 }")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject object definition on differing dynamic provenances" in {
+      val tree = parse("{ a: new 1, b: new 1 }")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject array definition on different datasets" in {
+      val tree = parse("[ dataset(//foo), dataset(//bar) ]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject array definition on static and dynamic provenances" in {
+      val tree = parse("[ dataset(//foo), new 1 ]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject array definition on differing dynamic provenances" in {
+      val tree = parse("[ new 1, new 1 ]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject deref on different datasets" in {
+      val tree = parse("dataset(//foo)[dataset(//bar)]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject deref on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo)[new 1]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject deref on differing dynamic provenances" in {
+      val tree = parse("(new 1)[new 1]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject dispatch on different datasets" in {
+      val tree = parse("fun := 42 fun(dataset(//foo), dataset(//bar))")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject dispatch on static and dynamic provenances" in {
+      val tree = parse("fun := 42 fun(dataset(//foo), new 1)")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject dispatch on differing dynamic provenances" in {
+      val tree = parse("fun := 42 fun(new 1, new 1)")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject operation on different datasets" in {
+      val tree = parse("dataset(//foo) where dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject operation on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) where new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject operation on differing dynamic provenances" in {
+      val tree = parse("new 1 where new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
     "reject addition on different datasets" in {
-      val tree = parse("dataset(//a) + dataset(//b)")
+      val tree = parse("dataset(//foo) + dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject addition on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) + new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject addition on differing dynamic provenances" in {
+      val tree = parse("(new 1) + (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject subtraction on different datasets" in {
+      val tree = parse("dataset(//foo) - dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject subtraction on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) - new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject subtraction on differing dynamic provenances" in {
+      val tree = parse("(new 1) - (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject multiplication on different datasets" in {
+      val tree = parse("dataset(//foo) * dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject multiplication on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) * new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject multiplication on differing dynamic provenances" in {
+      val tree = parse("(new 1) * (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject division on different datasets" in {
+      val tree = parse("dataset(//foo) / dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject division on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) / new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject division on differing dynamic provenances" in {
+      val tree = parse("(new 1) / (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than on different datasets" in {
+      val tree = parse("dataset(//foo) < dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) < new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than on differing dynamic provenances" in {
+      val tree = parse("(new 1) < (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than-equal on different datasets" in {
+      val tree = parse("dataset(//foo) <= dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than-equal on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) <= new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject less-than-equal on differing dynamic provenances" in {
+      val tree = parse("(new 1) <= (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than on different datasets" in {
+      val tree = parse("dataset(//foo) > dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) > new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than on differing dynamic provenances" in {
+      val tree = parse("(new 1) > (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than-equal on different datasets" in {
+      val tree = parse("dataset(//foo) >= dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than-equal on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) >= new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject greater-than-equal on differing dynamic provenances" in {
+      val tree = parse("(new 1) >= (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject equality on different datasets" in {
+      val tree = parse("dataset(//foo) = dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject equality on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) = new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject equality on differing dynamic provenances" in {
+      val tree = parse("(new 1) = (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject not-equality on different datasets" in {
+      val tree = parse("dataset(//foo) != dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject not-equality on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) != new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject not-equality on differing dynamic provenances" in {
+      val tree = parse("(new 1) != (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean and on different datasets" in {
+      val tree = parse("dataset(//foo) & dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean and on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) & new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean and on differing dynamic provenances" in {
+      val tree = parse("(new 1) & (new 1)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean or on different datasets" in {
+      val tree = parse("dataset(//foo) | dataset(//bar)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean or on static and dynamic provenances" in {
+      val tree = parse("dataset(//foo) | new 1")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "reject boolean or on differing dynamic provenances" in {
+      val tree = parse("(new 1) | (new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
     }
