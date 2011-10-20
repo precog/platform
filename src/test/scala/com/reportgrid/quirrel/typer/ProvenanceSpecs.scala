@@ -1578,6 +1578,12 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
+    
+    "reject addition with unrelated relation" in {
+      val tree = parse("dataset(//a) :: dataset(//b) dataset(//c) + dataset(//d)")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
   }
   
   def parse(str: String): Expr = parse(LineStream(str))
