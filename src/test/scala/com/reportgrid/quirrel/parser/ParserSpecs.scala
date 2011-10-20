@@ -560,6 +560,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
   }
   
   "operator associativity" should {
+    "associate relations to the right" in {
+      parse("a :: b a :: b 42") must beLike {
+        case Relate(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector()),
+               Relate(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector()),
+                 NumLit(_, "42"))) => ok
+      }
+    }
+    
     "associate multiplication to the left" in {
       parse("a * b * c") must beLike { case Mul(_, Mul(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector())), Dispatch(_, "c", Vector())) => ok }
     }
