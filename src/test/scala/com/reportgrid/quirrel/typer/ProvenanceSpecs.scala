@@ -1567,5 +1567,265 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
     }
   }
   
+  "null provenance" should {
+    "not propagate through new" in {
+      val tree = parse("new (dataset(//a) + dataset(//b))")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through relate" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) :: dataset(//c) 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("dataset(//c) :: (dataset(//a) + dataset(//b)) 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through object definition" in {
+      val tree = parse("{ a: dataset(//a) + dataset(//b), b: 42 }")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through array definition" in {
+      val tree = parse("[dataset(//a) + dataset(//b), 42]")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through descent" in {
+      val tree = parse("(dataset(//a) + dataset(//b)).foo")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through dereference" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b))[42]")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42[dataset(//a) + dataset(//b)]")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "not propagate through dispatch" in {
+      val tree = parse("a := 42 a(dataset(//a) + dataset(//b))")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through operation" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) where 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 + (dataset(//a) where dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through addition" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) + 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 + (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through subtraction" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) - 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 - (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through multiplication" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) * 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 * (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through division" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) / 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 / (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through less-than" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) < 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 < (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through less-than-equal" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) <= 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 <= (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through greater-than" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) > 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 > (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through greater-than-equal" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) >= 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 >= (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through equality" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) = 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 = (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through not-equality" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) != 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 != (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through boolean and" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) & 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 & (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through boolean or" in {
+      {
+        val tree = parse("(dataset(//a) + dataset(//b)) | 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+      
+      {
+        val tree = parse("42 | (dataset(//a) + dataset(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+      }
+    }
+    
+    "propagate through complementation" in {
+      val tree = parse("!(dataset(//a) + dataset(//b))")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through negation" in {
+      val tree = parse("~(dataset(//a) + dataset(//b))")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+    
+    "propagate through parenthetical" in {
+      val tree = parse("(dataset(//a) + dataset(//b))")
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set("cannot perform operation on unrelated sets")
+    }
+  }
+  
   def parse(str: String): Expr = parse(LineStream(str))
 }

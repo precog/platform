@@ -297,8 +297,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case (DynamicProvenance(id1), DynamicProvenance(id2)) if id1 == id2 =>
       Some(DynamicProvenance(id1))
     
-    case (NullProvenance, p) => Some(p)
-    case (p, NullProvenance) => Some(p)
+    case (NullProvenance, p) => Some(NullProvenance)
+    case (p, NullProvenance) => Some(NullProvenance)
     
     case (ValueProvenance, p) => Some(p)
     case (p, ValueProvenance) => Some(p)
