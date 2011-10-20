@@ -560,6 +560,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
   }
   
   "operator associativity" should {
+    "associate relations to the right" in {
+      parse("a :: b a :: b 42") must beLike {
+        case Relate(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector()),
+               Relate(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector()),
+                 NumLit(_, "42"))) => ok
+      }
+    }
+    
     "associate multiplication to the left" in {
       parse("a * b * c") must beLike { case Mul(_, Mul(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector())), Dispatch(_, "c", Vector())) => ok }
     }
@@ -705,6 +713,12 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
         case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/f"))), Let(_, "c", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/g"))), Dispatch(_, "d", Vector()))), Dispatch(_, "e", Vector())) => ok
       }
     }
+    
+    "handle new expression within deref parameter" in {
+      parse("1[new 2]") must beLike {
+        case Deref(_, NumLit(_, "1"), New(_, NumLit(_, "2"))) => ok
+      }
+    }
   }
   
   "specification examples" >> {
@@ -807,5 +821,5 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPa
     }
   }
   
-  def parse(str: String): Tree = parse(LineStream(str))
+  def parse(str: String): Expr = parse(LineStream(str))
 }

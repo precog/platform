@@ -11,7 +11,7 @@ trait StringErrors extends Passes {
 }
 
 trait LineErrors extends Passes with parser.AST {
-  private val ErrorPattern = "error:%%d: %s%n%%s%n%%s"
+  private val ErrorPattern = "error:%%d: %s%n    %%s%n    %%s"
   
   def showError(error: Error) = error.loc.formatError(ErrorPattern format error.msg)
   

@@ -1,38 +1,42 @@
 package com.reportgrid.quirrel
 
-import edu.uwm.cs.gll.Failure
-import edu.uwm.cs.gll.LineStream
-import edu.uwm.cs.gll.Success
-
-import jline.ConsoleReader
-import jline.Terminal
-
+import edu.uwm.cs.gll.{Failure, LineStream, Success}
+import jline.{ANSIBuffer, ConsoleReader, Terminal}
 import parser._
 import typer._
 
-trait REPL extends Parser with Binder with LineErrors {
-  val Prompt = "quirrel> "
-  val Follow = "       | "
+trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
+  val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
+  val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
   
   def run() {
     Terminal.setupTerminal().initializeTerminal()
     
     val reader = new ConsoleReader
     
+    def compile(tree: Expr): Boolean = {
+      handleSuccesses(Stream(tree))      // a little nasty...
+      
+      val errors = runPassesInSequence(tree)
+      if (!errors.isEmpty) {
+        println(new ANSIBuffer().red(errors map showError mkString "\n").getAnsiBuffer)
+      }
+      
+      errors.isEmpty
+    }
+    
     def handle(c: Command) = c match {
       case Eval(tree) => {
-        handleSuccesses(Stream(tree))      // a little nasty...
+        compile(tree)
         true     // TODO
       }
       
       case PrintTree(tree) => {
-        handleSuccesses(Stream(tree))      // a little nasty...
-        val result = prettyPrint(tree)
+        println()
         
-        if (tree.errors.isEmpty)
-          println(result)
-        else
-          println(tree.errors map showError mkString "\n")
+        if (compile(tree)) {
+          println(prettyPrint(tree))
+        }
         
         true
       }
