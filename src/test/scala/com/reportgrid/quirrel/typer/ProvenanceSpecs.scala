@@ -1272,6 +1272,312 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot relate sets that are already related")
     }
+    
+    "accept object definition on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) { a: dataset(//foo), b: dataset(//bar) }")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept object definition on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s { a: dataset(//foo), b: s }")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept object definition on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 { a: s1, b: s2 }")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept array definition on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) [ dataset(//foo), dataset(//bar) ]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept array definition on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s [ dataset(//foo), s ]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept array definition on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 [ s1, s2 ]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept deref on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo)[dataset(//bar)]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept deref on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo)[s]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept deref on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1[s2]")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept dispatch on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) fun := 42 fun(dataset(//foo), dataset(//bar))")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors must beEmpty
+    }
+    
+    "accept dispatch on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s fun := 42 fun(dataset(//foo), s)")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors must beEmpty
+    }
+    
+    "accept dispatch on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 fun := 42 fun(s1, s2)")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors must beEmpty
+    }
+    
+    "accept operation on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) where dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept operation on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) where s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept operation on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 where s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept addition on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) + dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept addition on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) + s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept addition on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 + s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept subtraction on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) - dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept subtraction on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) - s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept subtraction on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 - s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept multiplication on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) * dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept multiplication on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) * s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept multiplication on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 * s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept division on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) / dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept division on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) / s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept division on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 / s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) < dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) < s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 < s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than-equal on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) <= dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than-equal on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) <= s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept less-than-equal on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 <= s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) > dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) > s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 > s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than-equal on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) >= dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than-equal on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) >= s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept greater-than-equal on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 >= s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept equality on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) = dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept equality on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) = s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept equality on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 = s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept not-equality on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) != dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept not-equality on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) != s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept not-equality on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 != s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean and on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) & dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean and on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) & s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean and on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 & s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean or on different datasets when related" in {
+      val tree = parse("dataset(//foo) :: dataset(//bar) dataset(//foo) | dataset(//bar)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean or on static and dynamic provenances when related" in {
+      val tree = parse("s := new 1 dataset(//foo) :: s dataset(//foo) | s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept boolean or on differing dynamic provenances when related" in {
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 s1 | s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
   }
   
   def parse(str: String): Expr = parse(LineStream(str))
