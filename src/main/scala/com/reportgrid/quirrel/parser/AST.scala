@@ -249,10 +249,12 @@ trait AST extends Passes {
     val isPrefix = true
   }
   
-  case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr {
+  case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with BinaryNode {
     val label = 'relate
     
-    def children = List(from, to, in)
+    val left = from
+    val right = to
+    override def children = List(from, to, in)
   }
   
   case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
