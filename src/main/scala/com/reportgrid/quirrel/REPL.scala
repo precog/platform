@@ -6,8 +6,8 @@ import parser._
 import typer._
 
 trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
-  val Prompt = new ANSIBuffer().green("quirrel> ").getAnsiBuffer
-  val Follow = new ANSIBuffer().green("       | ").getAnsiBuffer
+  val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
+  val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
   
   def run() {
     Terminal.setupTerminal().initializeTerminal()
@@ -19,9 +19,7 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
       
       val errors = runPassesInSequence(tree)
       if (!errors.isEmpty) {
-        val buffer = new ANSIBuffer
-        println()
-        println(buffer.red(errors map showError mkString "\n").getAnsiBuffer)
+        println(new ANSIBuffer().red(errors map showError mkString "\n").getAnsiBuffer)
       }
       
       errors.isEmpty
@@ -34,6 +32,8 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
       }
       
       case PrintTree(tree) => {
+        println()
+        
         if (compile(tree)) {
           println(prettyPrint(tree))
         }
