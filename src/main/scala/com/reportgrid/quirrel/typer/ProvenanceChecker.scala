@@ -4,8 +4,6 @@ package typer
 trait ProvenanceChecker extends parser.AST with Binder {
   
   override def checkProvenance(expr: Expr) = {
-    val Message = "cannot perform operation on unrelated sets"
-    
     def loop(expr: Expr, relations: Set[(Provenance, Provenance)]): Set[Error] = expr match {
       case Let(_, _, _, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
@@ -27,7 +25,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           Set()
         } else if (from.provenance == to.provenance || relations.contains(from.provenance -> to.provenance)) {
           expr._provenance() = NullProvenance
-          Set(Error(expr, "cannot relate sets that are already related"))
+          Set(Error(expr, AlreadyRelatedSets))
         } else {
           val back = loop(in, relations + ((from.provenance, to.provenance)))
           expr._provenance() = in.provenance
@@ -55,7 +53,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -72,7 +70,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -89,7 +87,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -116,16 +114,16 @@ trait ProvenanceChecker extends parser.AST with Binder {
                   left flatMap { unifyProvenance(relations)(_, right) }
                 }
                 
-                paramProvenance map { p => (p, Set()) } getOrElse (NullProvenance, Set(Error(expr, Message)))
+                paramProvenance map { p => (p, Set()) } getOrElse (NullProvenance, Set(Error(expr, OperationOnUnrelatedSets)))
               } else {
-                (NullProvenance, Set(Error(expr, "incorrect number of parameters for value function: expected %d got %d".format(e.params.length, exprs.length))))
+                (NullProvenance, Set(Error(expr, IncorrectArity(e.params.length, exprs.length))))
               }
             }
             
             case _: StaticProvenance | _: DynamicProvenance => {
               val paramErrors = exprs flatMap {
                 case e if e.provenance != ValueProvenance =>
-                  Set(Error(e, "cannot apply a set function to another set"))
+                  Set(Error(e, SetFunctionAppliedToSet))
                 
                 case _ => Set[Error]()
               }
@@ -150,7 +148,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -161,7 +159,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -172,7 +170,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -183,7 +181,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -194,7 +192,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -205,7 +203,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -216,7 +214,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -227,7 +225,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -238,7 +236,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -249,7 +247,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -260,7 +258,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -271,7 +269,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
@@ -282,7 +280,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
         expr._provenance() = result getOrElse NullProvenance
         
         if (!result.isDefined)
-          back + Error(expr, Message)
+          back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
