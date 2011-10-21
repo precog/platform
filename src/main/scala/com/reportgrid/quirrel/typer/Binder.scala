@@ -53,7 +53,7 @@ trait Binder extends parser.AST {
           
           case None => {
             t._binding() = NullBinding
-            Set(Error(t, "undefined tic-variable: %s".format(name)))
+            Set(Error(t, UndefinedTicVariable(name)))
           }
           
           case _ => throw new AssertionError("Cannot reach this point")
@@ -88,7 +88,7 @@ trait Binder extends parser.AST {
           recursive
         } else {
           d._binding() = NullBinding
-          recursive + Error(d, "undefined function: %s".format(name))
+          recursive + Error(d, UndefinedFunction(name))
         }
       }
       

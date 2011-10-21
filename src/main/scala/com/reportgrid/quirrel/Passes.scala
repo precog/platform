@@ -34,6 +34,6 @@ trait Passes {
   def runPassesInSequence(tree: Expr): Set[Error] =
     Passes.foldLeft(Set[Error]()) { _ ++ _(tree) }
   
-  def Error(node: Expr, msg: String): Error
+  def Error(node: Expr, tp: ErrorType): Error
   def showError(error: Error): String
 }
