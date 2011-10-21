@@ -77,7 +77,10 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
         try {
           handleFailures(failures)
         } catch {
-          case pe: ParseException => println(pe.mkString)     // TODO
+          case pe: ParseException => {
+            println()
+            println(new ANSIBuffer().red(pe.mkString).getAnsiBuffer)
+          }
         }
         println()
         loop()
@@ -110,7 +113,7 @@ trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
       input += '\n' + line
       line = reader.readLine(Follow)
     }
-    input
+    input.trim
   }
   
   def printHelp() {
