@@ -99,27 +99,49 @@ trait ProvenanceChecker extends parser.AST with Binder {
         val provenances = exprs map { _.provenance }
         val back = errorSets.fold(Set()) { _ ++ _ }
         
-        val paramProvenance = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
-          left flatMap { unifyProvenance(relations)(_, right) }
-        }
-        
         lazy val pathParam = exprs.headOption collect {
           case StrLit(_, value) => value
         }
         
-        expr._provenance() = d.binding match {
+        val (prov, errors) = d.binding match {
           case BuiltIn("dataset") =>
-            pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam))
+            (pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam)), Set())
           
-          case BuiltIn(_) => ValueProvenance     // note: assumes all primitive functions are reductions!
-          case UserDef(e) => e.left.provenance
-          case NullBinding => NullProvenance
+          case BuiltIn(_) => (ValueProvenance, Set())     // note: assumes all primitive functions are reductions!
+          
+          case UserDef(e) => e.left.provenance match {
+            case ValueProvenance => {
+              if (exprs.length == e.params.length) {
+                val paramProvenance = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
+                  left flatMap { unifyProvenance(relations)(_, right) }
+                }
+                
+                paramProvenance map { p => (p, Set()) } getOrElse (NullProvenance, Set(Error(expr, Message)))
+              } else {
+                (NullProvenance, Set(Error(expr, "incorrect number of parameters for value function: expected %d got %d".format(e.params.length, exprs.length))))
+              }
+            }
+            
+            case _: StaticProvenance | _: DynamicProvenance => {
+              val paramErrors = exprs flatMap {
+                case e if e.provenance != ValueProvenance =>
+                  Set(Error(e, "cannot apply a set function to another set"))
+                
+                case _ => Set[Error]()
+              }
+              
+              if (paramErrors.isEmpty)
+                (e.left.provenance, Set())
+              else
+                (NullProvenance, paramErrors)
+            }
+            
+            case NullProvenance => (NullProvenance, Set())
+          }
         }
         
-        if (!paramProvenance.isDefined)
-          back + Error(expr, Message)
-        else
-          back
+        expr._provenance() = prov
+        back ++ errors
       }
       
       case Operation(_, left, _, right) => {

@@ -198,88 +198,6 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
       }
     }
     
-    "identify user-defined dispatch according to its results" in {
-      {
-        val tree = parse("a := 1 a")
-        tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := dataset(//foo) a")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := (new 1) a")
-        tree.provenance must beLike {
-          case DynamicProvenance(_) => ok
-        }
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := 1 a(1, 2, 3)")
-        tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := dataset(//foo) a(1, 2, 3)")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := (new 1) a(1, 2, 3)")
-        tree.provenance must beLike {
-          case DynamicProvenance(_) => ok
-        }
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := 1 a(dataset(//foo), dataset(//foo), dataset(//foo))")
-        tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := dataset(//foo) a(dataset(//foo), dataset(//foo), dataset(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("a := (new 1) a(dataset(//foo), dataset(//foo), dataset(//foo))")
-        tree.provenance must beLike {
-          case DynamicProvenance(_) => ok
-        }
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("b := new 1 a := 1 a(b, b, b)")
-        tree.provenance mustEqual ValueProvenance
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("b := new 2 a := dataset(//foo) a(b, b, b)")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-      
-      {
-        val tree = parse("b := new 3 a := (new 1) a(b, b, b)")
-        tree.provenance must beLike {
-          case DynamicProvenance(_) => ok
-        }
-        tree.errors must beEmpty
-      }
-    }
-    
     "identify built-in reduce dispatch as value" in {
       {
         val tree = parse("count")
@@ -975,20 +893,20 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
     }
     
     "reject dispatch on different datasets" in {
-      val tree = parse("fun := 42 fun(dataset(//foo), dataset(//bar))")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("fun('a, 'b) := 42 fun(dataset(//foo), dataset(//bar))")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
     }
     
     "reject dispatch on static and dynamic provenances" in {
-      val tree = parse("fun := 42 fun(dataset(//foo), new 1)")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("fun('a, 'b) := 42 fun(dataset(//foo), new 1)")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
     }
     
     "reject dispatch on differing dynamic provenances" in {
-      val tree = parse("fun := 42 fun(new 1, new 1)")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("fun('a, 'b) := 42 fun(new 1, new 1)")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
     }
     
@@ -1309,20 +1227,20 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
     }
     
     "accept dispatch on different datasets when related" in {
-      val tree = parse("dataset(//foo) :: dataset(//bar) fun := 42 fun(dataset(//foo), dataset(//bar))")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("dataset(//foo) :: dataset(//bar) fun('a, 'b) := 42 fun(dataset(//foo), dataset(//bar))")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     
     "accept dispatch on static and dynamic provenances when related" in {
-      val tree = parse("s := new 1 dataset(//foo) :: s fun := 42 fun(dataset(//foo), s)")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("s := new 1 dataset(//foo) :: s fun('a, 'b) := 42 fun(dataset(//foo), s)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     
     "accept dispatch on differing dynamic provenances when related" in {
-      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 fun := 42 fun(s1, s2)")
-      tree.provenance mustEqual ValueProvenance
+      val tree = parse("s1 := new 1 s2 := new 1 s1 :: s2 fun('a, 'b) := 42 fun(s1, s2)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     
@@ -1620,9 +1538,9 @@ object ProvenanceSpecs extends Specification with Parser with StubPasses with Pr
       }
     }
     
-    "not propagate through dispatch" in {
-      val tree = parse("a := 42 a(dataset(//a) + dataset(//b))")
-      tree.provenance mustEqual ValueProvenance
+    "propagate through dispatch" in {
+      val tree = parse("a('b) := 42 a(dataset(//a) + dataset(//b))")
+      tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set("cannot perform operation on unrelated sets")
     }
     
