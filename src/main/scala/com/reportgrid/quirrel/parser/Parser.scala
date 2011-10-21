@@ -294,15 +294,11 @@ trait Parser extends RegexParsers with Filters with AST {
       val expectation = pairs.headOption flatMap {
         case (_, headCount) => {
           val (possibilities, _) = List unzip (pairs takeWhile { case (_, c) => headCount == c })
-          val biased = if ((possibilities lengthCompare 1) > 0)
-            possibilities filter ("expression" !=)
-          else
-            possibilities
           
-          if (biased.isEmpty)
+          if (possibilities.isEmpty)
             None
           else
-            Some(biased mkString " or ")
+            Some(possibilities mkString " or ")
         }
       }
       
