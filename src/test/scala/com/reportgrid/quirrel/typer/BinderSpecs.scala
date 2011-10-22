@@ -6,7 +6,7 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import parser._
 
-object BinderSpecs extends Specification with ScalaCheck with Parser with StubPasses with Binder {
+object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder {
   
   "let binding" should {
     "bind name in resulting scope" in {

@@ -1,6 +1,6 @@
 package com.reportgrid.quirrel
 
-trait StubPasses extends Passes with RawErrors {
+trait StubPhases extends Phases with RawErrors {
   def bindNames(tree: Expr) = Set()
   def checkProvenance(tree: Expr) = Set()
 }

@@ -5,7 +5,7 @@ import com.reportgrid.quirrel.util.{Atom, SetAtom}
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
 
-trait AST extends Passes { 
+trait AST extends Phases {
   import Atom._
   
   type Binding
