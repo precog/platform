@@ -21,7 +21,7 @@ package com.reportgrid.quirrel
 
 import edu.uwm.cs.gll.LineStream
 
-trait RawErrors extends Passes {
+trait RawErrors extends Phases {
   type Error = ErrorType
   
   override def Error(node: Expr, tp: ErrorType): Error = tp
@@ -29,7 +29,7 @@ trait RawErrors extends Passes {
   def showError(error: Error) = error.toString
 }
 
-trait LineErrors extends Passes with parser.AST {
+trait LineErrors extends Phases with parser.AST {
   private val ErrorPattern = "error:%%d: %s%n    %%s%n    %%s"
   
   def showError(error: Error) = error.loc.formatError(ErrorPattern format error.tp)

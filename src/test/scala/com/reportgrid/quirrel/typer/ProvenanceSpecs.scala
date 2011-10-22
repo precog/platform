@@ -24,7 +24,7 @@ import edu.uwm.cs.gll.LineStream
 import org.specs2.mutable.Specification
 import parser._
 
-object ProvenanceSpecs extends Specification with Parser with StubPasses with ProvenanceChecker {
+object ProvenanceSpecs extends Specification with Parser with StubPhases with ProvenanceChecker {
   
   "provenance computation" should {
     "identify let according to its right expression" in {
