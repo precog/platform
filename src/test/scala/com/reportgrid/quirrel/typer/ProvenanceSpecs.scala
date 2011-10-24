@@ -321,6 +321,100 @@ object ProvenanceSpecs extends Specification with Parser with StubPhases with Pr
       }
     }
     
+    "identify dispatch to value function by its parameters" in {
+      {
+        val tree = parse("a := 42 a")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b) := 42 a(dataset(//foo))")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := 42 a(dataset(//foo), dataset(//foo))")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := 42 a(dataset(//foo), 24)")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := 42 a(23, 24)")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+    }
+    
+    "identify dispatch to set function by its result" in {
+      {
+        val tree = parse("a := dataset(//foo) a")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b) := dataset(//foo) a")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b) := dataset(//foo) a(42)")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := dataset(//foo) a(24)")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := dataset(//foo) a(24, 42)")
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a := new 1 a")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b) := new 1 a")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b) := new 1 a(42)")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := new 1 a(24)")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := new 1 a(24, 42)")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+    
     "identify operation according to its children" in {
       {
         val tree = parse("1 where 2")
@@ -927,6 +1021,138 @@ object ProvenanceSpecs extends Specification with Parser with StubPhases with Pr
       val tree = parse("fun('a, 'b) := 42 fun(new 1, new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "reject dispatch to value function with too few parameters" in {
+      {
+        val tree = parse("a('b) := 42 a")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(1, 0))
+      }
+      
+      {
+        val tree = parse("a('b, 'c, 'd) := 42 a")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(3, 0))
+      }
+      
+      {
+        val tree = parse("a('b, 'c, 'd) := 42 a(1)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(3, 1))
+      }
+      
+      {
+        val tree = parse("a('b, 'c, 'd) := 42 a(1, 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(3, 2))
+      }
+    }
+    
+    "reject dispatch with too many parameters" in {
+      {
+        val tree = parse("a := 42 a(1)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(0, 1))
+      }
+      
+      {
+        val tree = parse("a := dataset(//foo) a(1)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(0, 1))
+      }
+      
+      {
+        val tree = parse("a := 42 a(1, 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(0, 2))
+      }
+      
+      {
+        val tree = parse("a('b) := 42 a(1, 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(1, 2))
+      }
+      
+      {
+        val tree = parse("a('b) := dataset(//foo) a(1, 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(1, 2))
+      }
+      
+      {
+        val tree = parse("a('b, 'c, 'd) := 42 a(1, 2, 3, 4, 5)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(3, 5))
+      }
+      
+      {
+        val tree = parse("a('b, 'c, 'd) := dataset(//foo) a(1, 2, 3, 4, 5)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(3, 5))
+      }
+    }
+    
+    "reject dispatch to a set function with set parameters" in {
+      {
+        val tree = parse("a('b) := dataset(//foo) a(dataset(//foo))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b) := dataset(//foo) a(dataset(//bar))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := dataset(//foo) a(dataset(//foo))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := dataset(//foo) a(dataset(//bar))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := dataset(//foo) a(new 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b) := new 1 a(dataset(//foo))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b) := new 1 a(dataset(//bar))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := new 1 a(dataset(//foo))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := new 1 a(dataset(//bar))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
+      
+      {
+        val tree = parse("a('b, 'c) := new 1 a(new 2)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(SetFunctionAppliedToSet)
+      }
     }
     
     "reject operation on different datasets" in {

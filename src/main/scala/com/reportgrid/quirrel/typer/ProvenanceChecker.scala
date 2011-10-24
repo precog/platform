@@ -140,17 +140,21 @@ trait ProvenanceChecker extends parser.AST with Binder {
             }
             
             case _: StaticProvenance | _: DynamicProvenance => {
-              val paramErrors = exprs flatMap {
-                case e if e.provenance != ValueProvenance =>
-                  Set(Error(e, SetFunctionAppliedToSet))
+              if (exprs.length <= e.params.length) {
+                val paramErrors = exprs flatMap {
+                  case e if e.provenance != ValueProvenance =>
+                    Set(Error(e, SetFunctionAppliedToSet))
+                  
+                  case _ => Set[Error]()
+                }
                 
-                case _ => Set[Error]()
+                if (paramErrors.isEmpty)
+                  (e.left.provenance, Set())
+                else
+                  (NullProvenance, paramErrors)
+              } else {
+                (NullProvenance, Set(Error(expr, IncorrectArity(e.params.length, exprs.length))))
               }
-              
-              if (paramErrors.isEmpty)
-                (e.left.provenance, Set())
-              else
-                (NullProvenance, paramErrors)
             }
             
             case NullProvenance => (NullProvenance, Set())
