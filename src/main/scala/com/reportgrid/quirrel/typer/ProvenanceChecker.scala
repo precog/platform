@@ -136,6 +136,8 @@ trait ProvenanceChecker extends parser.AST with Binder {
             
             case NullProvenance => (NullProvenance, Set())
           }
+          
+          case NullBinding => (NullProvenance, Set())
         }
         
         expr._provenance() = prov
