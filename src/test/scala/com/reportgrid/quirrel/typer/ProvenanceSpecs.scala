@@ -1505,6 +1505,24 @@ object ProvenanceSpecs extends Specification with Parser with StubPhases with Pr
   }
   
   "null provenance" should {
+    "synthesize when name binding is null in dispatch" in {
+      parse("fubar").provenance mustEqual NullProvenance
+    }
+    
+    "propagate through let" in {
+      {
+        val tree = parse("a := dataset(//foo) + dataset(//b) a")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = parse("a := dataset(//foo) a + dataset(//bar)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
     "not propagate through new" in {
       val tree = parse("new (dataset(//a) + dataset(//b))")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
