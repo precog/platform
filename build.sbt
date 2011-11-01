@@ -36,3 +36,5 @@ initialCommands := """
   |
   | val compiler = new Parser with Binder with ProvenanceChecker with LineErrors {}
   """.stripMargin
+  
+logBuffered := false       // gives us incremental output from Specs2
