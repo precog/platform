@@ -1,5 +1,4 @@
 package com.reportgrid.quirrel
-package typer
 
 import edu.uwm.cs.gll.ast.Node
 import scala.annotation.tailrec
