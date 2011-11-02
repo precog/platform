@@ -61,6 +61,152 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
         case Some(Neg(_, NumLit(_, "0"))) => ok
       }
     }
+    
+    "solve parenthetical" in {
+      solve("('a)", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+    }
+  }
+  
+  "compound binary expression solution" should {
+    "solve paired variable addition" in {
+      solve("'a + 'a", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "2"))) => ok
+      }
+    }
+    
+    "solve paired variable subtraction" in {
+      solve("'a - 'a", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+    }
+    
+    "fail to solve paired variable multiplication" in {
+      solve("'a * 'a", 'a) must beLike {
+        case None => ok
+      }
+    }
+    
+    "fail to solve paired variable division" in {
+      solve("'a / 'a", 'a) must beLike {
+        case None => ok
+      }
+    }
+    
+    "solve addition across multiplicand" in {
+      solve("'a * 2 + 'a", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "3"))) => ok
+      }
+      
+      solve("'a + 'a * 2", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "3"))) => ok
+      }
+    }
+    
+    "solve multi-addition across multiplicand" in {
+      solve("'a * 2 + 'a + 'a", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "4"))) => ok
+      }
+      
+      solve("'a + 'a * 2 + 'a", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "4"))) => ok
+      }
+      
+      solve("'a + 'a + 'a * 2", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "4"))) => ok
+      }
+    }
+    
+    "solve multi-addition parenthetical across multiplicand" in {
+      solve("'a * 2 + ('a + 'a)", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "4"))) => ok
+      }
+      
+      solve("('a + 'a) + 'a * 2", 'a) must beLike {
+        case Some(Div(_, NumLit(_, "0"), NumLit(_, "4"))) => ok
+      }
+    }
+    
+    "solve addition across dividend" in {
+      solve("'a / 2 + 'a", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), NumLit(_, "3"))) => ok
+      }
+      
+      solve("'a + 'a / 2", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), NumLit(_, "3"))) => ok
+      }
+    }
+    
+    "solve addition of dividends" in {
+      solve("'a / 2 + 'a / 3", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), NumLit(_, "1"))) => ok
+      }
+      
+      solve("'a / 3 + 'a / 2", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), NumLit(_, "1"))) => ok
+      }
+    }
+    
+    "solve subtraction of dividends" in {
+      solve("('a * 3) / 2 - 'a / 3", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Sub(_, NumLit(_, "9"), NumLit(_, "2")))) => ok
+      }
+      
+      solve("'a / 3 - ('a * 3) / 2", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Sub(_, NumLit(_, "9"), NumLit(_, "2")))) => ok
+      }
+    }
+    
+    "solve self multiplication of self dividend" in {
+      solve("('a / 'a) * 'a", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+      
+      solve("'a * ('a / 'a)", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+    }
+    
+    "solve self addition of self dividend" in {
+      solve("('a / 'a) + 'a", 'a) must beLike {
+        case Some(Sub(_, NumLit(_, "0"), NumLit(_, "1"))) => ok
+      }
+      
+      solve("'a + ('a / 'a)", 'a) must beLike {
+        case Some(Sub(_, NumLit(_, "0"), NumLit(_, "1"))) => ok
+      }
+    }
+    
+    "solve addition with negation" in {
+      solve("2 * 'a + ~'a", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+      
+      solve("~'a + 2 * 'a", 'a) must beLike {
+        case Some(NumLit(_, "0")) => ok
+      }
+    }
+    
+    "solve multiplication of dividends" in {
+      solve("(2 / 'a) * ('a * 'a / 3)", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+      
+      solve("('a * 'a / 3) * (2 / 'a)", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+    }
+    
+    "solve division of dividends" in {
+      solve("(2 / 'a) / (3 / ('a * 'a))", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+      
+      solve("('a * 'a / 3) / ('a / 2)", 'a) must beLike {
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+    }
   }
   
   def solve(str: String, id: Symbol): Option[Expr] = {
