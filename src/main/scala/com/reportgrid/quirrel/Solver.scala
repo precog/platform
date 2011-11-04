@@ -29,13 +29,13 @@ trait Solver extends parser.AST {
   
   // VERY IMPORTANT!!!  each rule must represent a monotonic reduction in tree complexity
   private val Rules: Set[PartialFunction[Expr, Set[Expr]]] = Set(
-    // { case Add(loc, left, right) if left equalsIgnoreLoc right => Set(Mul(loc, NumLit(loc, "2"), left)) },
-    // { case Sub(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "0")) },
-    // { case Div(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "1")) },
+    { case Add(loc, left, right) if left equalsIgnoreLoc right => Set(Mul(loc, NumLit(loc, "2"), left)) },
+    { case Sub(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "0")) },
+    { case Div(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "1")) },
     
     { case Add(loc, left, right) => Set(Add(loc, right, left)) },
     { case Sub(loc, left, right) => Set(Add(loc, Neg(loc, right), left)) },
-    // { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
+    { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
     { case Mul(loc, left, right) => Set(Mul(loc, right, left)) },
     
     { case Add(loc, Mul(loc2, x, y), z) if y equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, x, NumLit(loc, "1")), y)) },
@@ -54,6 +54,8 @@ trait Solver extends parser.AST {
     
     { case Neg(loc, child) => possibilities(child) map neg(loc) },
     { case Paren(_, child) => Set(child) })
+    
+  private[this] val enableTrace = false
   
   def solve(tree: Expr)(predicate: PartialFunction[Node, Boolean]): Expr => Option[Expr] = tree match {
     case n if predicate.isDefinedAt(n) && predicate(n) => Some apply _
@@ -72,34 +74,38 @@ trait Solver extends parser.AST {
     val inRight = isSubtree(totalPred)(right)
     
     if (inLeft && inRight) {
-      val results = simplify(tree, totalPred) map { e =>
-        solve(e)(predicate)
+      val results = simplify(tree, totalPred) map { xs =>
+        (solve(xs.head)(predicate), xs)
       }
       
-      results.fold(const[Option[Expr], Expr](None) _) { (acc, f) => e =>
-        acc(e) orElse f(e)
+      results.foldLeft(const[Option[Expr], Expr](None) _) { 
+        case (acc, (f, trace)) => e =>
+          acc(e) orElse (f(e) map { e2 => printTrace(trace); e2 })
       }
     } else if (inLeft && !inRight) {
-      solve(left)(predicate) andThen { _ map flip(invertLeft)(right) }
+      solve(left)(predicate) compose flip(invertLeft)(right)
     } else if (!inLeft && inRight) {
-      solve(right)(predicate) andThen { _ map flip(invertRight)(left) }
+      solve(right)(predicate) compose flip(invertRight)(left)
     } else {
       const(None)
     }
   }
   
   def simplify(tree: Expr, predicate: Node => Boolean) =
-    search(predicate, Set(tree), Set(), Set())
+    search(predicate, Set(tree :: Nil), Set(), Set())
   
   @tailrec
-  private[this] def search(predicate: Node => Boolean, work: Set[Expr], seen: Set[Expr], results: Set[Expr]): Set[Expr] = {
-    val filteredWork = work &~ seen
+  private[this] def search(predicate: Node => Boolean, work: Set[List[Expr]], seen: Set[Expr], results: Set[List[Expr]]): Set[List[Expr]] = {
+    val filteredWork = work filterNot { xs => seen(xs.head) }
     // println("Examining: " + (filteredWork map { e => "\n" + printSExp(e) }))
     if (filteredWork.isEmpty) {
       results
     } else {
-      val (results2, newWork) = filteredWork partition isSimplified(predicate)
-      search(predicate, newWork flatMap possibilities, seen ++ filteredWork, results ++ results2)
+      val (results2, newWork) = filteredWork partition { xs => isSimplified(predicate)(xs.head) }
+      val newWorkLists = newWork flatMap { xs =>
+        possibilities(xs.head) map { _ :: xs }
+      }
+      search(predicate, newWorkLists, seen ++ (filteredWork map { _.head }), results ++ results2)
     }
   }
   
@@ -116,6 +122,13 @@ trait Solver extends parser.AST {
   
   def isSubtree(predicate: Node => Boolean)(tree: Node): Boolean =
     predicate(tree) || (tree.children map isSubtree(predicate) exists identity)
+  
+  def printTrace(trace: List[Expr]) {
+    if (enableTrace) {
+      println("*** Solution Point!")
+      println(trace.reverse map { e => printSExp(e) } mkString "\n\n")
+    }
+  }
   
   private val add = curried(Add)
   private val sub = curried(Sub)

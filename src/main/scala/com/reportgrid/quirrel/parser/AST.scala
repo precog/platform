@@ -43,6 +43,18 @@ trait AST extends Phases {
     case _ => indent + "<unprintable>"
   }
   
+  def printInfix(tree: Expr): String = tree match {
+    case Add(_, left, right) => "(%s + %s)".format(printInfix(left), printInfix(right))
+    case Sub(_, left, right) => "(%s - %s)".format(printInfix(left), printInfix(right))
+    case Mul(_, left, right) => "(%s * %s)".format(printInfix(left), printInfix(right))
+    case Div(_, left, right) => "(%s / %s)".format(printInfix(left), printInfix(right))
+    case Neg(_, child) => "~%s".format(printInfix(child))
+    case Paren(_, child) => "(%s)".format(printInfix(child))
+    case NumLit(_, value) => value
+    case TicVar(_, id) => id
+    case _ => "<unprintable>"
+  }
+  
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
     
@@ -253,17 +265,25 @@ trait AST extends Phases {
     
     def loc: LineStream
     
-    def equalsIgnoreLoc(that: Expr): Boolean = {
-      val pred: Any => Boolean = { case _: LineStream => false case _ => true }
-      val thisNoLoc = this.productIterator filter pred
-      val thatNoLoc = that.productIterator filter pred
+    def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
+      case (Add(_, left1, right1), Add(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
-      val matching = thisNoLoc zip thatNoLoc forall {
-        case (a: Expr, b: Expr) => a equalsIgnoreLoc b
-        case (a, b) => a == b
-      }
+      case (Sub(_, left1, right1), Sub(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
       
-      matching && this.productArity == that.productArity
+      case (Mul(_, left1, right1), Mul(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Div(_, left1, right1), Div(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
+      case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
+      
+      case (TicVar(_, id1), TicVar(_, id2)) => id1 == id2
+      
+      case _ => false
     }
   }
   

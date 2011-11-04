@@ -89,6 +89,16 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
   }
   
   "compound binary expression solution" should {
+    "solve chained addition and multiplication" in {
+      solve("'a * 2 + 3", 'a) must beLike {
+        case Some(Div(_, Sub(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+      
+      solve("3 + 2 * 'a", 'a) must beLike {
+        case Some(Div(_, Sub(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+      }
+    }
+    
     "solve paired variable addition" in {
       solve("'a + 'a", 'a) must beLike {
         case Some(Div(_, NumLit(_, "0"), NumLit(_, "2"))) => ok
@@ -168,12 +178,12 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
     "solve addition across dividend" in {
       solve("'a / 2 + 'a", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), NumLit(_, "3"))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "1"))), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), Add(_, NumLit(_, "2"), NumLit(_, "1")))) => ok
       }
       
       solve("'a + 'a / 2", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), NumLit(_, "3"))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "1"))), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "2")), Add(_, NumLit(_, "2"), NumLit(_, "1")))) => ok
       }
     }
     
@@ -191,31 +201,24 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
     
     "solve addition of dividends" in {
       solve("'a / 2 + 'a / 3", 'a) must beLike {
-        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), NumLit(_, "1"))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "3"))), Mul(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "3"))), Mul(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "3"), NumLit(_, "2"))), Mul(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "3"), NumLit(_, "2"))), Mul(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Add(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "3"), NumLit(_, "2"))), Add(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
+        
       }
       
       solve("'a / 3 + 'a / 2", 'a) must beLike {
-        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), NumLit(_, "1"))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "3"))), Mul(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "2"), NumLit(_, "3"))), Mul(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "3"), NumLit(_, "2"))), Mul(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, NumLit(_, "0"), Add(_, NumLit(_, "3"), NumLit(_, "2"))), Mul(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Add(_, NumLit(_, "3"), NumLit(_, "2")))) => ok
+        case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "3"), NumLit(_, "2"))), Add(_, NumLit(_, "2"), NumLit(_, "3")))) => ok
       }
     }
     
     "solve subtraction of dividends" in {
       solve("('a * 3) / 2 - 'a / 3", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Sub(_, NumLit(_, "9"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, Neg(_, Mul(_, NumLit(_, "0"), NumLit(_, "3"))), Add(_, NumLit(_, "2"), NumLit(_, "1"))), NumLit(_, "2"))) => ok
       }
       
       solve("'a / 3 - ('a * 3) / 2", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "2"), NumLit(_, "3"))), Sub(_, NumLit(_, "9"), NumLit(_, "2")))) => ok
-        case Some(Mul(_, Div(_, Neg(_, Mul(_, NumLit(_, "0"), NumLit(_, "3"))), Add(_, NumLit(_, "2"), NumLit(_, "1"))), NumLit(_, "2"))) => ok
       }
     }
     
