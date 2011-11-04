@@ -29,13 +29,13 @@ trait Solver extends parser.AST {
   
   // VERY IMPORTANT!!!  each rule must represent a monotonic reduction in tree complexity
   private val Rules: Set[PartialFunction[Expr, Set[Expr]]] = Set(
-    { case Add(loc, left, right) if left equalsIgnoreLoc right => Set(Mul(loc, NumLit(loc, "2"), left)) },
-    { case Sub(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "0")) },
-    { case Div(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "1")) },
+    // { case Add(loc, left, right) if left equalsIgnoreLoc right => Set(Mul(loc, NumLit(loc, "2"), left)) },
+    // { case Sub(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "0")) },
+    // { case Div(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "1")) },
     
     { case Add(loc, left, right) => Set(Add(loc, right, left)) },
     { case Sub(loc, left, right) => Set(Add(loc, Neg(loc, right), left)) },
-    { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
+    // { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
     { case Mul(loc, left, right) => Set(Mul(loc, right, left)) },
     
     { case Add(loc, Mul(loc2, x, y), z) if y equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, x, NumLit(loc, "1")), y)) },
@@ -88,7 +88,7 @@ trait Solver extends parser.AST {
     }
   }
   
-  private def simplify(tree: Expr, predicate: Node => Boolean) =
+  def simplify(tree: Expr, predicate: Node => Boolean) =
     search(predicate, Set(tree), Set(), Set())
   
   @tailrec
@@ -99,7 +99,6 @@ trait Solver extends parser.AST {
       results
     } else {
       val (results2, newWork) = filteredWork partition isSimplified(predicate)
-      if (!results2.isEmpty) return results2
       search(predicate, newWork flatMap possibilities, seen ++ filteredWork, results ++ results2)
     }
   }
@@ -112,7 +111,7 @@ trait Solver extends parser.AST {
     case _ => true
   }
   
-  private def possibilities(expr: Expr): Set[Expr] =
+  def possibilities(expr: Expr): Set[Expr] =
     Rules filter { _ isDefinedAt expr } flatMap { _(expr) }
   
   def isSubtree(predicate: Node => Boolean)(tree: Node): Boolean =
