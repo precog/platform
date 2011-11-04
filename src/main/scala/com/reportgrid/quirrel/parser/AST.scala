@@ -31,6 +31,18 @@ trait AST extends Phases {
   type FormalBinding
   type Provenance
   
+  def printSExp(tree: Expr, indent: String = ""): String = tree match {
+    case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
+    case Sub(_, left, right) => "%s(-\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
+    case Mul(_, left, right) => "%s(*\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
+    case Div(_, left, right) => "%s(/\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
+    case Neg(_, child) => "%s(~\n%s)".format(indent, printSExp(child, indent + "  "))
+    case Paren(_, child) => printSExp(child, indent)
+    case NumLit(_, value) => indent + value
+    case TicVar(_, id) => indent + id
+    case _ => indent + "<unprintable>"
+  }
+  
   def prettyPrint(e: Expr, level: Int = 0): String = {
     val indent = 0 until level map Function.const(' ') mkString
     
@@ -240,6 +252,19 @@ trait AST extends Phases {
     final def errors = _errors()
     
     def loc: LineStream
+    
+    def equalsIgnoreLoc(that: Expr): Boolean = {
+      val pred: Any => Boolean = { case _: LineStream => false case _ => true }
+      val thisNoLoc = this.productIterator filter pred
+      val thatNoLoc = that.productIterator filter pred
+      
+      val matching = thisNoLoc zip thatNoLoc forall {
+        case (a: Expr, b: Expr) => a equalsIgnoreLoc b
+        case (a, b) => a == b
+      }
+      
+      matching && this.productArity == that.productArity
+    }
   }
   
   case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {

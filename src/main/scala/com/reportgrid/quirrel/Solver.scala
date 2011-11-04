@@ -20,6 +20,7 @@
 package com.reportgrid.quirrel
 
 import edu.uwm.cs.gll.ast.Node
+import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.tailrec
 import scala.collection.parallel.ParSet
 
@@ -27,7 +28,32 @@ trait Solver extends parser.AST {
   import Function._
   
   // VERY IMPORTANT!!!  each rule must represent a monotonic reduction in tree complexity
-  private val Rules: ParSet[PartialFunction[Expr, Set[Expr]]] = ParSet()
+  private val Rules: Set[PartialFunction[Expr, Set[Expr]]] = Set(
+    { case Add(loc, left, right) if left equalsIgnoreLoc right => Set(Mul(loc, NumLit(loc, "2"), left)) },
+    { case Sub(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "0")) },
+    { case Div(loc, left, right) if left equalsIgnoreLoc right => Set(NumLit(loc, "1")) },
+    
+    { case Add(loc, left, right) => Set(Add(loc, right, left)) },
+    { case Sub(loc, left, right) => Set(Add(loc, Neg(loc, right), left)) },
+    { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
+    { case Mul(loc, left, right) => Set(Mul(loc, right, left)) },
+    
+    { case Add(loc, Mul(loc2, x, y), z) if y equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, x, NumLit(loc, "1")), y)) },
+    { case Add(loc, Mul(loc2, w, x), Mul(loc3, y, z)) if x equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, w, y), x)) },
+    
+    { case Add(loc, Div(loc2, x, y), z) => Set(Div(loc2, Add(loc, x, Mul(loc, z, y)), y)) },
+    { case Add(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Add(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
+    
+    { case Neg(loc, Div(loc2, x, y)) => Set(Div(loc2, Neg(loc, x), y), Div(loc2, x, Neg(loc, y))) },
+    { case Neg(loc, Mul(loc2, x, y)) => Set(Mul(loc2, Neg(loc, x), y), Mul(loc2, x, Neg(loc, y))) },
+  
+    { case Add(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Add(loc, left2, right2) },
+    { case Sub(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Sub(loc, left2, right2) },
+    { case Mul(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Mul(loc, left2, right2) },
+    { case Div(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Div(loc, left2, right2) },
+    
+    { case Neg(loc, child) => possibilities(child) map neg(loc) },
+    { case Paren(_, child) => Set(child) })
   
   def solve(tree: Expr)(predicate: PartialFunction[Node, Boolean]): Expr => Option[Expr] = tree match {
     case n if predicate.isDefinedAt(n) && predicate(n) => Some apply _
@@ -36,6 +62,7 @@ trait Solver extends parser.AST {
     case Mul(loc, left, right) => solveBinary(tree, left, right, predicate)(div(loc), div(loc))
     case Div(loc, left, right) => solveBinary(tree, left, right, predicate)(mul(loc), flip(div(loc)))
     case Neg(loc, child) => solve(child)(predicate) andThen { _ map neg(loc) }
+    case Paren(_, child) => solve(child)(predicate)
     case _ => const(None) _
   }
   
@@ -45,9 +72,11 @@ trait Solver extends parser.AST {
     val inRight = isSubtree(totalPred)(right)
     
     if (inLeft && inRight) {
-      val results = simplify(tree, predicate) map { solve(_)(predicate) }
+      val results = simplify(tree, totalPred) map { e =>
+        solve(e)(predicate)
+      }
       
-      results.foldLeft(const[Option[Expr], Expr](None) _) { (acc, f) => e =>
+      results.fold(const[Option[Expr], Expr](None) _) { (acc, f) => e =>
         acc(e) orElse f(e)
       }
     } else if (inLeft && !inRight) {
@@ -59,23 +88,31 @@ trait Solver extends parser.AST {
     }
   }
   
-  private def simplify(tree: Expr, predicate: PartialFunction[Node, Boolean]) =
-    search(predicate, ParSet(tree), ParSet(), ParSet()).seq
+  private def simplify(tree: Expr, predicate: Node => Boolean) =
+    search(predicate, Set(tree), Set(), Set())
   
   @tailrec
-  private[this] def search(predicate: PartialFunction[Node, Boolean], work: ParSet[Expr], seen: ParSet[Expr], results: ParSet[Expr]): ParSet[Expr] = {
+  private[this] def search(predicate: Node => Boolean, work: Set[Expr], seen: Set[Expr], results: Set[Expr]): Set[Expr] = {
     val filteredWork = work &~ seen
+    // println("Examining: " + (filteredWork map { e => "\n" + printSExp(e) }))
     if (filteredWork.isEmpty) {
       results
     } else {
       val (results2, newWork) = filteredWork partition isSimplified(predicate)
+      if (!results2.isEmpty) return results2
       search(predicate, newWork flatMap possibilities, seen ++ filteredWork, results ++ results2)
     }
   }
   
-  private def isSimplified(predicate: PartialFunction[Node, Boolean])(tree: Expr) = false
+  private def isSimplified(predicate: Node => Boolean)(tree: Expr) = tree match {
+    case Add(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
+    case Sub(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
+    case Mul(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
+    case Div(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
+    case _ => true
+  }
   
-  private def possibilities(expr: Expr): ParSet[Expr] =
+  private def possibilities(expr: Expr): Set[Expr] =
     Rules filter { _ isDefinedAt expr } flatMap { _(expr) }
   
   def isSubtree(predicate: Node => Boolean)(tree: Node): Boolean =
