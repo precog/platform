@@ -37,6 +37,8 @@ trait Solver extends parser.AST {
     { case Div(_, Mul(_, x, y), z) if x equalsIgnoreLoc z => Set(y) },
     { case Div(loc, Mul(_, w, x), Mul(_, y, z)) if w equalsIgnoreLoc y => Set(Div(loc, x, z)) },
     
+    { case Div(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc, Mul(loc2, w, z), Mul(loc3, x, y))) },
+    
     { case Sub(loc, Div(loc2, x, y), z) => Set(Div(loc2, Sub(loc, x, Mul(loc, z, y)), y)) },
     { case Sub(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Sub(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
     
