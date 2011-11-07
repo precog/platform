@@ -234,6 +234,8 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
         case Some(Div(_, Mul(_, NumLit(_, "0"), Mul(_, NumLit(_, "3"), NumLit(_, "2"))), Sub(_, NumLit(_, "2"), Mul(_, NumLit(_, "3"), NumLit(_, "3"))))) => ok
         case Some(Div(_, Mul(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2")), Add(_, Mul(_, NumLit(_, "3"), Neg(_, NumLit(_, "3"))), NumLit(_, "2")))) => ok
         case Some(Div(_, Mul(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), Neg(_, NumLit(_, "2"))), Add(_, Mul(_, NumLit(_, "3"), NumLit(_, "3")), Neg(_, NumLit(_, "2"))))) => ok
+        case Some(Div(_, Mul(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2")), Sub(_, NumLit(_, "2"), Mul(_, NumLit(_, "3"), NumLit(_, "3"))))) => ok
+        case Some(Div(_, Mul(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2")), Add(_, Neg(_, Mul(_, NumLit(_, "3"), NumLit(_, "3"))), NumLit(_, "2")))) => ok
       }
     }
     
