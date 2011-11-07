@@ -105,7 +105,12 @@ trait Solver extends parser.AST {
       val newWorkLists = newWork flatMap { xs =>
         possibilities(xs.head) map { _ :: xs }
       }
-      search(predicate, newWorkLists, seen ++ (filteredWork map { _.head }), results ++ results2)
+      
+      // return just the first set of results we find
+      if (results2.isEmpty)
+        search(predicate, newWorkLists, seen ++ (filteredWork map { _.head }), results ++ results2)
+      else
+        results2
     }
   }
   
