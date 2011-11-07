@@ -49,7 +49,13 @@ trait Solver extends parser.AST {
     
     { case Add(loc, Div(loc2, x, y), z) => Set(Div(loc2, Add(loc, x, Mul(loc, z, y)), y)) },
     { case Add(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Add(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
-           
+    
+    { case Mul(loc, Div(loc2, x, y), z) => Set(Div(loc2, Mul(loc, x, z), y)) },
+    { case Mul(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Mul(loc, w, y), Mul(loc, x, z))) },
+    
+    { case Div(_, Mul(_, x, y), z) if x equalsIgnoreLoc z => Set(y) },
+    { case Div(loc, Mul(_, w, x), Mul(_, y, z)) if w equalsIgnoreLoc y => Set(Div(loc, x, z)) },
+    
     { case Sub(loc, Div(loc2, x, y), z) => Set(Div(loc2, Sub(loc, x, Mul(loc, z, y)), y)) },
     { case Sub(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Sub(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
     
@@ -109,7 +115,7 @@ trait Solver extends parser.AST {
   @tailrec
   private[this] def search(predicate: Node => Boolean, work: Set[List[Expr]], seen: Set[Expr], results: Set[List[Expr]]): Set[List[Expr]] = {
     val filteredWork = work filterNot { xs => seen(xs.head) }
-    // println("Examining: " + (filteredWork map { e => "\n" + printSExp(e) }))
+    // println("Examining: " + (filteredWork map { _.head } map printInfix))
     if (filteredWork.isEmpty) {
       results
     } else {
