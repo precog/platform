@@ -139,7 +139,7 @@ trait Solver extends parser.AST {
     case Sub(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
     case Mul(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
     case Div(_, left, right) => !isSubtree(predicate)(left) || !isSubtree(predicate)(right)
-    case _ => true
+    case _ => !isSubtree(predicate)(tree)
   }
   
   def possibilities(expr: Expr): Set[Expr] =
