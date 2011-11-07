@@ -19,15 +19,27 @@ trait Solver extends parser.AST {
     { case Add(loc, Neg(_, left), right) => Set(Sub(loc, right, left)) },
     { case Mul(loc, left, right) => Set(Mul(loc, right, left)) },
     
+    { case Add(loc, Add(loc2, x, y), z) => Set(Add(loc, x, Add(loc2, y, z))) },
+    { case Mul(loc, Mul(loc2, x, y), z) => Set(Mul(loc, x, Mul(loc2, y, z))) },
+    
     { case Add(loc, Mul(loc2, x, y), z) if y equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, x, NumLit(loc, "1")), y)) },
     { case Add(loc, Mul(loc2, w, x), Mul(loc3, y, z)) if x equalsIgnoreLoc z => Set(Mul(loc2, Add(loc, w, y), x)) },
     
+    { case Sub(loc, Mul(loc2, x, y), z) if y equalsIgnoreLoc z => Set(Mul(loc2, Sub(loc, x, NumLit(loc, "1")), y)) },
+    { case Sub(loc, Mul(loc2, w, x), Mul(loc3, y, z)) if x equalsIgnoreLoc z => Set(Mul(loc2, Sub(loc, w, y), x)) },
+    
     { case Add(loc, Div(loc2, x, y), z) => Set(Div(loc2, Add(loc, x, Mul(loc, z, y)), y)) },
     { case Add(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Add(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
+           
+    { case Sub(loc, Div(loc2, x, y), z) => Set(Div(loc2, Sub(loc, x, Mul(loc, z, y)), y)) },
+    { case Sub(loc, Div(loc2, w, x), Div(loc3, y, z)) => Set(Div(loc2, Sub(loc, Mul(loc2, w, z), Mul(loc3, y, x)), Mul(loc2, x, z))) },
     
-    { case Neg(loc, Div(loc2, x, y)) => Set(Div(loc2, Neg(loc, x), y), Div(loc2, x, Neg(loc, y))) },
+    { case Neg(loc, Add(loc2, x, y)) => Set(Add(loc2, Neg(loc, x), Neg(loc, y))) },
+    { case Neg(loc, Sub(loc2, x, y)) => Set(Sub(loc2, Neg(loc, x), Neg(loc, y))) },
     { case Neg(loc, Mul(loc2, x, y)) => Set(Mul(loc2, Neg(loc, x), y), Mul(loc2, x, Neg(loc, y))) },
-  
+    { case Neg(loc, Div(loc2, x, y)) => Set(Div(loc2, Neg(loc, x), y), Div(loc2, x, Neg(loc, y))) },
+    { case Neg(_, Neg(_, x)) => Set(x) },
+    
     { case Add(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Add(loc, left2, right2) },
     { case Sub(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Sub(loc, left2, right2) },
     { case Mul(loc, left, right) => for (left2 <- possibilities(left) + left; right2 <- possibilities(right) + right) yield Mul(loc, left2, right2) },
