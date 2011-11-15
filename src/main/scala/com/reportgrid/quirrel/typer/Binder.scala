@@ -123,7 +123,7 @@ trait Binder extends parser.AST {
   }
   
   sealed trait Binding
-  sealed trait FormalBinding
+  sealed trait FormalBinding extends Binding
   
   // TODO arity and types
   case class BuiltIn(name: String) extends Binding {

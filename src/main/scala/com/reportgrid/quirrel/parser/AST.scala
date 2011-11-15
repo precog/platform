@@ -226,6 +226,32 @@ trait AST extends Phases {
       indent + "provenance: " + e.provenance.toString
   }
   
+  protected def bindRoot(root: Expr, e: Expr) {
+    def bindElements(a: Any) {
+      a match {
+        case e: Expr => bindRoot(root, e)
+        
+        case (e1: Expr, e2: Expr) => {
+          bindRoot(root, e1)
+          bindRoot(root, e2)
+        }
+        
+        case (e: Expr, _) => bindRoot(root, e)
+        case (_, e: Expr) => bindRoot(root, e)
+        
+        case _ =>
+      }
+    }
+  
+    e._root() = root
+    
+    e.productIterator foreach {
+      case e: Expr => bindRoot(root, e)
+      case v: Vector[_] => v foreach bindElements
+      case _ =>
+    }
+  }
+  
   sealed trait Expr extends Node with Product {
     val nodeId = System.identityHashCode(this)
     

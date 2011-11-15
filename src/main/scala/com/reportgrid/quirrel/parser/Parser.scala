@@ -33,33 +33,7 @@ trait Parser extends RegexParsers with Filters with AST {
     else
       forest.head
     
-    def bindRoot(e: Expr) {
-      e._root() = root
-      
-      e.productIterator foreach {
-        case e: Expr => bindRoot(e)
-        case v: Vector[_] => v foreach bindElements
-        case _ =>
-      }
-    }
-    
-    def bindElements(a: Any) {
-      a match {
-        case e: Expr => bindRoot(e)
-        
-        case (e1: Expr, e2: Expr) => {
-          bindRoot(e1)
-          bindRoot(e2)
-        }
-        
-        case (e: Expr, _) => bindRoot(e)
-        case (_, e: Expr) => bindRoot(e)
-        
-        case _ =>
-      }
-    }
-    
-    bindRoot(root)
+    bindRoot(root, root)
     root
   }
   
