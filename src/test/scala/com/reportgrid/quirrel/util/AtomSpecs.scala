@@ -22,10 +22,10 @@ object AtomSpecs extends Specification with ScalaCheck {
       a() must throwA[RuntimeException]
     }
     
-    "throw exception for multiply-set value" in {
+    "silently fail on multiply-set value" in {
       val a = atom[Int]
       a() = 42
-      (a() = 12) must throwA[RuntimeException]
+      (a() = 12) must not(throwA[RuntimeException])
       a() mustEqual 42
     }
     
@@ -71,12 +71,12 @@ object AtomSpecs extends Specification with ScalaCheck {
       a() mustEqual (xs + i)
     }
     
-    "throw exception for mutation following force" in {
+    "silently fail for mutation following force" in {
       val a = new SetAtom[Int]
       a += 42
       a() mustEqual Set(42)
       
-      (a += 12) must throwA[RuntimeException]
+      (a += 12) must not(throwA[RuntimeException])
       a() mustEqual Set(42)
     }
   }
