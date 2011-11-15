@@ -46,22 +46,20 @@ class Atom[A] extends Source[A] with Sink[A] {
   private val semaphore = new AnyRef
   
   protected def populate() {
-    error("Cannot self-populate atom")
+    sys.error("Cannot self-populate atom")
   }
   
   def update(a: A) {
     lock.lock()
     try {
-      if (isSet) {
-        error("Cannot multiply-assign atom")
-      }
-      
-      value = a
-      isSet = true
-      setterThread = null
-      
-      semaphore synchronized {
-        semaphore.notifyAll()
+      if (!isSet) {
+        value = a
+        isSet = true
+        setterThread = null
+        
+        semaphore synchronized {
+          semaphore.notifyAll()
+        }
       }
     } finally {
       lock.unlock()
@@ -78,7 +76,7 @@ class Atom[A] extends Source[A] with Sink[A] {
           value
         } else if (setterThread != null) {
           if (setterThread == Thread.currentThread) {
-            error("Recursive atom definition detected")
+            sys.error("Recursive atom definition detected")
           } else {
             lock.unlock()
             try {
@@ -137,10 +135,6 @@ trait Aggregate[A, Coll[_]] extends Source[Coll[A]] {
       val set = ref.get
       val set2 = f(set)
       successful = ref.compareAndSet(set, set2)
-    }
-    
-    if (isForced) {
-      error("Aggregate has already been forced; cannot subsequently extend")
     }
   }
   
