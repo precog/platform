@@ -59,6 +59,11 @@ object AtomSpecs extends Specification with ScalaCheck {
       a() must throwA[RuntimeException]
     }
     
+    "fail on invalid self-population" in {
+      val a: Atom[Int] = atom[Int] {}   // null self-populator
+      a() must throwA[RuntimeException]
+    }
+    
     // TODO spec multi-thread behavior
   }
   
