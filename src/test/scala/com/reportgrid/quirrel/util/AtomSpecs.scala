@@ -22,9 +22,18 @@ object AtomSpecs extends Specification with ScalaCheck {
       a() must throwA[RuntimeException]
     }
     
-    "silently fail on multiply-set value" in {
+    "store last update on multiple sets" in {
       val a = atom[Int]
       a() = 42
+      a() = 12
+      a() mustEqual 12
+    }
+    
+    "silently fail on multiply-set value after force" in {
+      val a = atom[Int]
+      a() = 42
+      a()      // force
+      
       (a() = 12) must not(throwA[RuntimeException])
       a() mustEqual 42
     }
