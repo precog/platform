@@ -40,6 +40,9 @@ class Atom[A] extends Source[A] with Sink[A] {
   private var isSet = false
   
   @volatile
+  private var isForced = false
+  
+  @volatile
   private var setterThread: Thread = null
   
   private val lock = new ReentrantLock
@@ -52,7 +55,7 @@ class Atom[A] extends Source[A] with Sink[A] {
   def update(a: A) {
     lock.lock()
     try {
-      if (!isSet) {
+      if (!isSet || !isForced) {
         value = a
         isSet = true
         setterThread = null
@@ -67,6 +70,8 @@ class Atom[A] extends Source[A] with Sink[A] {
   }
   
   def apply(): A = {
+    isForced = true
+    
     if (isSet) {
       value
     } else {
