@@ -23,7 +23,7 @@ trait Phases {
   type Expr
   type Error
   
-  private type Phase = Expr => Set[Error]
+  type Phase = Expr => Set[Error]
   
   private val Phases: List[Phase] =
     bindNames _ :: checkProvenance _ :: Nil

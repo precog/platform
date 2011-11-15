@@ -249,13 +249,9 @@ trait AST extends Phases {
     val nodeId = System.identityHashCode(this)
     
     private[parser] val _root = atom[Expr]
-    
     def root = _root()
     
-    private[quirrel] val _provenance = atom[Provenance] {
-      _errors ++= checkProvenance(root)
-    }
-    
+    private[quirrel] val _provenance = attribute[Provenance](checkProvenance)
     def provenance = _provenance()
     
     protected final lazy val _errors: SetAtom[Error] =
@@ -285,6 +281,10 @@ trait AST extends Phases {
       
       case _ => false
     }
+    
+    protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
+      _errors ++= phase(root)
+    }
   }
   
   case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
@@ -307,10 +307,7 @@ trait AST extends Phases {
   case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
     val label = 'ticvar
     
-    private[quirrel] val _binding = atom[FormalBinding] {
-      _errors ++= bindNames(root)
-    }
-    
+    private[quirrel] val _binding = attribute[FormalBinding](bindNames)
     def binding = _binding()
   }
   
@@ -352,10 +349,7 @@ trait AST extends Phases {
   case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
     val label = 'dispatch
     
-    private[quirrel] val _binding = atom[Binding] {
-      _errors ++= bindNames(root)
-    }
-    
+    private[quirrel] val _binding = attribute[Binding](bindNames)
     def binding = _binding()
     
     def children = actuals.toList
