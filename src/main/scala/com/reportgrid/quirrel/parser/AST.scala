@@ -261,7 +261,7 @@ trait AST extends Phases {
     private[quirrel] val _provenance = attribute[Provenance](checkProvenance)
     def provenance = _provenance()
     
-    protected final lazy val _errors: SetAtom[Error] =
+    private[quirrel] final lazy val _errors: SetAtom[Error] =
       if (this eq root) new SetAtom[Error] else root._errors
     
     final def errors = _errors()
