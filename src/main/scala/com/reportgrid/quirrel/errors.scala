@@ -66,3 +66,11 @@ case object SetFunctionAppliedToSet extends ErrorType {
   override def toString = "cannot apply a set function to another set"
 }
 
+// intended to be a warning
+case class UnusedLetBinding(id: String) extends ErrorType {
+  override def toString = "binding '%s' defined but not referenced in scope".format(id)
+}
+
+case class UnusedTicVariable(id: String) extends ErrorType {
+  override def toString = "function parameter %s defined but not referenced or constrained".format(id)
+}
