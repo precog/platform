@@ -820,6 +820,4 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
   }
-  
-  def parse(str: String): Expr = parse(LineStream(str))
 }
