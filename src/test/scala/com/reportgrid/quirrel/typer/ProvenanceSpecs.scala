@@ -4,7 +4,11 @@ package typer
 import edu.uwm.cs.gll.LineStream
 import org.specs2.mutable.Specification
 
-object ProvenanceSpecs extends Specification with StubPhases with Compiler with ProvenanceChecker {
+object ProvenanceSpecs extends Specification
+    with StubPhases
+    with Compiler
+    with ProvenanceChecker
+    with CriticalConditionFinder {
   
   "provenance computation" should {
     "identify let according to its right expression" in {   // using raw, no-op let
@@ -421,11 +425,11 @@ object ProvenanceSpecs extends Specification with StubPhases with Compiler with 
     "identify dispatch to an unquantified function with relate as dynamic" in {
       val input = """
         | fun('a) :=
-        |   foo = dataset(//foo)
-        |   bar = dataset(//bar)
+        |   foo := dataset(//foo)
+        |   bar := dataset(//bar)
         |
-        |   foo' = foo where foo = 'a
-        |   bar' = bar where bar = 'a
+        |   foo' := foo where foo = 'a
+        |   bar' := bar where bar = 'a
         |
         |   foo' :: bar'
         |     foo.left + bar.right
