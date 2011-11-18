@@ -290,7 +290,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(count)")
+        val tree = compile("dataset(count(42))")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }

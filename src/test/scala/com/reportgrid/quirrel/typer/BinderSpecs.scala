@@ -477,55 +477,55 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   "pre-binding of built-in functions" should {
     "bind count" in {
       val d @ Dispatch(_, _, _) = parse("count")
-      d.binding mustEqual BuiltIn("count")
+      d.binding mustEqual BuiltIn("count", 1)
       d.errors must beEmpty
     }
     
     "bind dataset" in {
       val d @ Dispatch(_, _, _) = parse("dataset")
-      d.binding mustEqual BuiltIn("dataset")
+      d.binding mustEqual BuiltIn("dataset", 1)
       d.errors must beEmpty
     }
     
     "bind max" in {
       val d @ Dispatch(_, _, _) = parse("max")
-      d.binding mustEqual BuiltIn("max")
+      d.binding mustEqual BuiltIn("max", 1)
       d.errors must beEmpty
     }
     
     "bind mean" in {
       val d @ Dispatch(_, _, _) = parse("mean")
-      d.binding mustEqual BuiltIn("mean")
+      d.binding mustEqual BuiltIn("mean", 1)
       d.errors must beEmpty
     }
     
     "bind median" in {
       val d @ Dispatch(_, _, _) = parse("median")
-      d.binding mustEqual BuiltIn("median")
+      d.binding mustEqual BuiltIn("median", 1)
       d.errors must beEmpty
     }
     
     "bind min" in {
       val d @ Dispatch(_, _, _) = parse("min")
-      d.binding mustEqual BuiltIn("min")
+      d.binding mustEqual BuiltIn("min", 1)
       d.errors must beEmpty
     }
     
     "bind mode" in {
       val d @ Dispatch(_, _, _) = parse("mode")
-      d.binding mustEqual BuiltIn("mode")
+      d.binding mustEqual BuiltIn("mode", 1)
       d.errors must beEmpty
     }
     
     "bind stdDev" in {
       val d @ Dispatch(_, _, _) = parse("stdDev")
-      d.binding mustEqual BuiltIn("stdDev")
+      d.binding mustEqual BuiltIn("stdDev", 1)
       d.errors must beEmpty
     }
     
     "bind sum" in {
       val d @ Dispatch(_, _, _) = parse("sum")
-      d.binding mustEqual BuiltIn("sum")
+      d.binding mustEqual BuiltIn("sum", 1)
       d.errors must beEmpty
     }
   }
