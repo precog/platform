@@ -22,15 +22,15 @@ package typer
 
 trait Binder extends parser.AST {
   val BuiltInFunctions = Set(
-    BuiltIn("count"),
-    BuiltIn("dataset"),
-    BuiltIn("max"),
-    BuiltIn("mean"),
-    BuiltIn("median"),
-    BuiltIn("min"),
-    BuiltIn("mode"),
-    BuiltIn("stdDev"),
-    BuiltIn("sum"))
+    BuiltIn("count", 1),
+    BuiltIn("dataset", 1),
+    BuiltIn("max", 1),
+    BuiltIn("mean", 1),
+    BuiltIn("median", 1),
+    BuiltIn("min", 1),
+    BuiltIn("mode", 1),
+    BuiltIn("stdDev", 1),
+    BuiltIn("sum", 1))
   
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[String, Binding]): Set[Error] = tree match {
@@ -145,7 +145,7 @@ trait Binder extends parser.AST {
   sealed trait FormalBinding extends Binding
   
   // TODO arity and types
-  case class BuiltIn(name: String) extends Binding {
+  case class BuiltIn(name: String, arity: Int) extends Binding {
     override val toString = "<native: %s>".format(name)
   }
   

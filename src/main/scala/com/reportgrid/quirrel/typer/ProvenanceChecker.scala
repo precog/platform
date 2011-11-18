@@ -121,10 +121,19 @@ trait ProvenanceChecker extends parser.AST with Binder {
         }
         
         val (prov, errors) = d.binding match {
-          case BuiltIn("dataset") =>
-            (pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam)), Set())
+          case BuiltIn("dataset", arity) => {
+            if (exprs.length == arity)
+              (pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam)), Set())
+            else
+              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+          }
           
-          case BuiltIn(_) => (ValueProvenance, Set())     // note: assumes all primitive functions are reductions!
+          case BuiltIn(_, arity) => {
+            if (exprs.length == arity)
+              (ValueProvenance, Set())     // note: assumes all primitive functions are reductions!
+            else
+              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+          }
           
           case UserDef(e) => e.left.provenance match {
             case ValueProvenance => {
