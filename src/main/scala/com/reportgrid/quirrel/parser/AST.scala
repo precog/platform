@@ -140,7 +140,8 @@ trait AST extends Phases {
         indent + "type: dispatch\n" +
           indent + "name: " + name + "\n" +
           indent + "actuals:\n" + actualsStr + "\n" +
-          indent + "binding: " + d.binding.toString
+          indent + "binding: " + d.binding.toString + "\n" +
+          indent + "is-reduction: " + d.isReduction
       }
       
       case Operation(loc, left, op, right) => {
@@ -376,6 +377,9 @@ trait AST extends Phases {
   
   case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
     val label = 'dispatch
+    
+    private[quirrel] val _isReduction = attribute[Boolean](bindNames)
+    def isReduction = _isReduction()
     
     private[quirrel] val _binding = attribute[Binding](bindNames)
     def binding = _binding()
