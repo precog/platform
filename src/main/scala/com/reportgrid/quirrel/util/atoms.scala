@@ -6,10 +6,12 @@ import java.util.concurrent.locks.ReentrantLock
 
 trait Source[+A] {
   def apply(): A
+  def into(sink: Sink[A])
 }
 
 trait Sink[-A] {
   def update(a: A)
+  def from(src: Source[A])
 }
 
 class Atom[A] extends Source[A] with Sink[A] {
@@ -25,6 +27,9 @@ class Atom[A] extends Source[A] with Sink[A] {
   
   @volatile
   private var setterThread: Thread = null
+  
+  @volatile
+  private var targets = Set[Sink[A]]()
   
   private val lock = new ReentrantLock
   private val semaphore = new AnyRef
@@ -50,6 +55,28 @@ class Atom[A] extends Source[A] with Sink[A] {
     }
   }
   
+  def from(source: Source[A]) {
+    source.into(this)
+  }
+  
+  def into(sink: Sink[A]) {
+    if (isSet) {
+      sink() = value
+    } else {
+      lock.lock()
+      if (isSet) {
+        sink() = value
+      } else {
+        try {
+          targets += sink
+        } finally {
+          lock.unlock()
+        }
+      }
+    }
+  }
+  
+  // TODO should force source atom (if any) at this point
   def apply(): A = {
     isForced = true
     
@@ -82,12 +109,24 @@ class Atom[A] extends Source[A] with Sink[A] {
           } finally {
             lock.lock()
           }
+          
           value
         }
       } finally {
         lock.unlock()
       }
     }
+    
+    if (!targets.isEmpty) {
+      lock.lock()
+      try {
+        targets foreach { _() = value }
+        targets = Set()
+      } finally {
+        lock.unlock()
+      }
+    }
+    
     value
   }
 }
@@ -113,12 +152,52 @@ trait Aggregate[A, Coll[_]] extends Source[Coll[A]] {
   @volatile
   private var isForced = false
   
+  @volatile
+  private var targets = Set[Sink[Coll[A]]]()
+  
+  private val lock = new ReentrantLock
+  
   def +=(a: A)
   def ++=(s: Coll[A])
   
   def apply() = {
-    isForced = true
-    ref.get
+    if (isForced) {
+      ref.get
+    } else {
+      lock.lock()
+      try {
+        if (isForced) {
+          ref.get
+        } else {
+          isForced = true
+          val back = ref.get
+          
+          targets foreach { _() = back }
+          targets = Set()
+          
+          back
+        }
+      } finally {
+        lock.unlock()
+      }
+    }
+  }
+  
+  def into(sink: Sink[Coll[A]]) {
+    if (isForced) {
+      sink() = ref.get
+    } else {
+      lock.lock()
+      try {
+        if (isForced) {
+          sink() = ref.get
+        } else {
+          targets += sink
+        }
+      } finally {
+        lock.unlock()
+      }
+    }
   }
   
   protected final def swap(f: Coll[A] => Coll[A]) {

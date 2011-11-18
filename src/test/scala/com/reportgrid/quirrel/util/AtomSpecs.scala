@@ -64,6 +64,57 @@ object AtomSpecs extends Specification with ScalaCheck {
       a() must throwA[RuntimeException]
     }
     
+    "receive another atom's valuation when linked prior to assignment" in {
+      val a1 = atom[Int]
+      val a2 = atom[Int]
+      a1.from(a2)
+      
+      a2() = 42
+      a2() mustEqual 42
+      
+      a1() mustEqual 42
+    }
+    
+    "receive another atom's valuation when linked after to assignment" in {
+      val a1 = atom[Int]
+      val a2 = atom[Int]
+      
+      a2() = 42
+      a2() mustEqual 42
+      
+      a1.from(a2)
+      
+      a1() mustEqual 42
+    }
+    
+    "disregard link when overridden by value" in ({
+      {
+        val a1 = atom[Int]
+        val a2 = atom[Int]
+        a1.from(a2)
+        a1() = 24
+        
+        a2() = 42
+        
+        // ordering might matter here
+        a2() mustEqual 42
+        a1() mustEqual 24
+      }
+      
+      {
+        val a1 = atom[Int]
+        val a2 = atom[Int]
+        a1.from(a2)
+        a1() = 24
+        
+        a2() = 42
+        
+        // ordering might matter here
+        a1() mustEqual 24
+        a2() mustEqual 42
+      }
+    } pendingUntilFixed)
+    
     // TODO spec multi-thread behavior
   }
   
