@@ -31,6 +31,8 @@ trait Phases {
   def bindNames(tree: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
   
+  def findCriticalConditions(expr: Expr): Map[String, Set[Expr]]
+  
   def runPassesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
   

@@ -24,7 +24,12 @@ import jline.{ANSIBuffer, ConsoleReader, Terminal}
 import parser._
 import typer._
 
-trait REPL extends Parser with Binder with ProvenanceChecker with LineErrors {
+trait REPL extends Parser
+    with Binder
+    with ProvenanceChecker
+    with CriticalConditionFinder
+    with LineErrors {
+  
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
   val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
   

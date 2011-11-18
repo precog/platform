@@ -315,6 +315,8 @@ trait AST extends Phases {
   
   case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
     val label = 'let
+    
+    lazy val criticalConditions = findCriticalConditions(this)
   }
   
   case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
