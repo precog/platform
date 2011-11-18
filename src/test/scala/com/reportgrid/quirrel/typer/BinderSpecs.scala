@@ -548,6 +548,4 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
   }
-  
-  def parse(str: String): Expr = parse(LineStream(str))
 }
