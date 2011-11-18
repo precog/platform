@@ -66,9 +66,17 @@ trait Binder extends parser.AST {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
         if (env contains name) {
           d._binding() = env(name)
+          
+          d._isReduction() = env(name) match {
+            case BuiltIn("dataset", _) => false
+            case BuiltIn(_, _) => true
+            case _ => false
+          }
+          
           recursive
         } else {
           d._binding() = NullBinding
+          d._isReduction() = false
           recursive + Error(d, UndefinedFunction(name))
         }
       }
@@ -127,7 +135,7 @@ trait Binder extends parser.AST {
   
   // TODO arity and types
   case class BuiltIn(name: String, arity: Int) extends Binding {
-    override val toString = "<native: %s>".format(name)
+    override val toString = "<native: %s(%d)>".format(name, arity)
   }
   
   case class UserDef(b: Let) extends Binding with FormalBinding {
