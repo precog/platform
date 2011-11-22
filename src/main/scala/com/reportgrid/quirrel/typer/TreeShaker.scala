@@ -42,7 +42,8 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       (Relate(loc, from2, to2, in2), fromBindings ++ toBindings ++ inBindings, fromErrors ++ toErrors ++ inErrors)
     }
     
-    case e @ TicVar(_, id) => (e, Set(id -> e.binding), Set())
+    case e @ TicVar(loc, id) =>
+      (TicVar(loc, id), Set(id -> e.binding), Set())
     
     case e @ StrLit(_, _) => (e, Set(), Set())
     case e @ NumLit(_, _) => (e, Set(), Set())
