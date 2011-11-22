@@ -413,11 +413,30 @@ object ProvenanceSpecs extends Specification
           |   
           |   'a + count(foo :: bar foo where foo = 'a & bar = 12)
           | 
-          | histogram
-          """
+          | histogram""".stripMargin
         
         val tree = compile(input)
         tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+      
+      {
+        val input = """
+          | histogram('a) :=
+          |   foo := dataset(//foo)
+          |   bar := dataset(//bar)
+          |   
+          |   foo' := foo where foo = 'a
+          |   bar' := bar where bar = 'a
+          | 
+          |   'a + count(foo :: bar foo + bar)
+          | 
+          | histogram""".stripMargin
+        
+        val tree = compile(input)
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
         tree.errors must beEmpty
       }
     }
@@ -1078,19 +1097,19 @@ object ProvenanceSpecs extends Specification
     "reject dispatch to where-less value function with too few parameters" in {
       val tree = compile("fun('a) := 'a + 5 fun")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IncorrectArity(1, 0))
+      tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
     
     "reject dispatch to where-less static function with too few parameters" in {
       val tree = compile("fun('a) := 'a + dataset(//foo) fun")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IncorrectArity(1, 0))
+      tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
     
     "reject dispatch to where-less dynamic function with too few parameters" in {
       val tree = compile("fun('a) := 'a + new 42 fun")
       tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IncorrectArity(1, 0))
+      tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
     
     "reject dispatch with too many parameters" in {
@@ -1333,19 +1352,19 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//foo))")
+        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//foo), dataset(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//bar))")
+        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//bar), dataset(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(new 2)")
+        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(new 2, 42)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
@@ -1363,19 +1382,19 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//foo))")
+        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//foo), dataset(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//bar))")
+        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//bar), dataset(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(new 2)")
+        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(new 2, 42)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }

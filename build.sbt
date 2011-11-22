@@ -15,11 +15,12 @@ initialCommands := """
   | import parser._
   | import typer._
   |
-  | val compiler = new Parser with Binder with ProvenanceChecker with LineErrors {}
+  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionFinder with Compiler with LineErrors {}
   | 
   | trait StubPhases extends Phases with RawErrors {
   |   def bindNames(tree: Expr) = Set()
   |   def checkProvenance(tree: Expr) = Set()
+  |   def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = Map()
   | }
   | 
   | val solver = new Solver with Parser with StubPhases {}

@@ -43,8 +43,16 @@ case class IncorrectArity(expected: Int, got: Int) extends ErrorType {
   override def toString = "incorrect number of parameters: expected %d, got %d".format(expected, got)
 }
 
+case class UnspecifiedRequiredParams(missing: Seq[String]) extends ErrorType {
+  override def toString = "unconstrained parameters on function invoked without specification: " + (missing mkString ", ")
+}
+
 case object SetFunctionAppliedToSet extends ErrorType {
   override def toString = "cannot apply a set function to another set"
+}
+
+case object FunctionArgsInapplicable extends ErrorType {
+  override def toString = "cannot apply function to specified arguments"
 }
 
 // intended to be a warning

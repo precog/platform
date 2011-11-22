@@ -40,14 +40,29 @@ trait AST extends Phases {
     val indent = 0 until level map Function.const(' ') mkString
     
     val back = e match {
-      case Let(loc, id, params, left, right) => {
+      case e @ Let(loc, id, params, left, right) => {
         val paramStr = params map { indent + "  - " + _ } mkString "\n"
+        
+        val assumptionStr = e.assumptions map {
+          case (name, prov) => {
+            indent + "  - \n" +
+              indent + "    name: " + name + "\n" +
+              indent + "    provenance:\n" + prov.toString
+          }
+        } mkString "\n"
+        
+        val unconstrainedStr = e.unconstrainedParams map { name =>
+          indent + "  - " + name
+        } mkString "\n"
         
         indent + "type: let\n" +
           indent + "id: " + id + "\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
-          indent + "right:\n" + prettyPrint(right, level + 2)
+          indent + "right:\n" + prettyPrint(right, level + 2) +
+          indent + "assumptions:\n" + assumptionStr + "\n" +
+          indent + "unconstrained-params:\n" + unconstrainedStr + "\n" +
+          indent + "required-params: " + e.requiredParams
       }
       
       case New(loc, child) => {
@@ -299,6 +314,15 @@ trait AST extends Phases {
     val label = 'let
     
     lazy val criticalConditions = findCriticalConditions(this)
+    
+    private[quirrel] val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
+    def assumptions = _assumptions()
+    
+    private[quirrel] val _unconstrainedParams = attribute[Set[String]](checkProvenance)
+    def unconstrainedParams = _unconstrainedParams()
+    
+    private[quirrel] val _requiredParams = attribute[Int](checkProvenance)
+    def requiredParams = _requiredParams()
   }
   
   case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {

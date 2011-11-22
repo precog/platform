@@ -1,10 +1,12 @@
 package com.reportgrid.quirrel
 package typer
 
-trait CriticalConditionFinder extends parser.AST {
+trait CriticalConditionFinder extends parser.AST with Binder {
+  import Utils._
+  
   override def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = {
     def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[Expr]] = expr match {
-      case Let(_, _, _, left, right) =>
+      case Let(_, _, _, left, right) => 
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case New(_, child) => loop(root, child, currentWhere)
@@ -16,10 +18,10 @@ trait CriticalConditionFinder extends parser.AST {
         merge(merge(first, second), third)
       }
       
-      case t @ TicVar(_, id) if t.binding == root =>
-        currentWhere map { where => Map(id -> Set(where)) } getOrElse Map()
-      
-      case t @ TicVar(_, _) if t.binding != root => Map()
+      case t @ TicVar(_, id) => t.binding match {
+        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(where)) } getOrElse Map()
+        case _ => Map()
+      }
       
       case StrLit(_, _) => Map()
       case NumLit(_, _) => Map()
@@ -100,13 +102,6 @@ trait CriticalConditionFinder extends parser.AST {
     expr match {
       case root @ Let(_, _, _, left, _) => loop(root, left, None)
       case _ => Map()
-    }
-  }
-  
-  private[this] def merge[A, B](first: Map[A, Set[B]], second: Map[A, Set[B]]): Map[A, Set[B]] = {
-    second.foldLeft(first) {
-      case (acc, (key, set)) if acc contains key => acc.updated(key, acc(key) ++ set)
-      case (acc, pair) => acc + pair
     }
   }
 }
