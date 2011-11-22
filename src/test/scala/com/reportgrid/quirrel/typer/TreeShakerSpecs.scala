@@ -1277,4 +1277,32 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker {
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
   }
+  
+  "name binding after tree shake" should {
+    "re-bind tic variables" in {
+      val tree = Let(LineStream(), "a", Vector("'a"), Paren(LineStream(), TicVar(LineStream(), "'a")), Dispatch(LineStream(), "a", Vector()))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors must beEmpty
+      
+      result must beLike {
+        case Let(LineStream(), "a", Vector("'a"), t @ TicVar(LineStream(), "'a"), Dispatch(LineStream(), "a", Vector())) =>
+          t.binding must beLike { case UserDef(`result`) => ok }
+      }
+    }
+    
+    "re-bind dispatch" in {
+      val tree = Let(LineStream(), "a", Vector("'a"), Paren(LineStream(), TicVar(LineStream(), "'a")), Dispatch(LineStream(), "a", Vector()))
+      bindRoot(tree, tree)
+      
+      val result = shakeTree(tree)
+      result.errors must beEmpty
+      
+      result must beLike {
+        case Let(LineStream(), "a", Vector("'a"), TicVar(LineStream(), "'a"), d @ Dispatch(LineStream(), "a", Vector())) =>
+          d.binding must beLike { case UserDef(`result`) => ok }
+      }
+    }
+  }
 }
