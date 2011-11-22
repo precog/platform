@@ -64,7 +64,7 @@ trait AST extends Phases {
         
         val assumptionStr = e.assumptions map {
           case (name, prov) => {
-            indent + "  - \n" +
+            indent + "  -\n" +
               indent + "    name: " + name + "\n" +
               indent + "    provenance:\n" + prov.toString
           }
@@ -78,7 +78,7 @@ trait AST extends Phases {
           indent + "id: " + id + "\n" +
           indent + "params:\n" + paramStr + "\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
-          indent + "right:\n" + prettyPrint(right, level + 2) +
+          indent + "right:\n" + prettyPrint(right, level + 2) + "\n" +
           indent + "assumptions:\n" + assumptionStr + "\n" +
           indent + "unconstrained-params:\n" + unconstrainedStr + "\n" +
           indent + "required-params: " + e.requiredParams
