@@ -448,7 +448,7 @@ object ProvenanceSpecs extends Specification
           |   foo' := foo where foo = 'a
           |   bar' := bar where bar = 'a
           | 
-          |   'a + count(foo :: bar foo + bar)
+          |   'a + count(foo' :: bar' foo + bar)
           | 
           | histogram""".stripMargin
         
@@ -1991,6 +1991,87 @@ object ProvenanceSpecs extends Specification
       val tree = compile("dataset(//a) :: dataset(//b) dataset(//c) + dataset(//d)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
+    
+    "accept operations according to the commutative relation" in {
+      {
+        val input = """
+          | foo := dataset(//foo)
+          | bar := dataset(//bar)
+          | 
+          | foo :: bar
+          |   foo + bar""".stripMargin
+          
+        val tree = compile(input)
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+      
+      {
+        val input = """
+          | foo := dataset(//foo)
+          | bar := dataset(//bar)
+          | 
+          | foo :: bar
+          |   bar + foo""".stripMargin
+          
+        val tree = compile(input)
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
+    }
+    
+    "accept operations according to the transitive relation" in {
+      val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        | baz := dataset(//baz)
+        | 
+        | foo :: bar
+        |   bar :: baz
+        |     foo + baz""".stripMargin
+        
+      val tree = compile(input)
+      tree.provenance must beLike {
+        case DynamicProvenance(_) => ok
+      }
+      tree.errors must beEmpty
+    }
+    
+    "accept operations according to the commutative-transitive relation" in {
+      val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        | baz := dataset(//baz)
+        | 
+        | foo :: bar
+        |   bar :: baz
+        |     baz + foo""".stripMargin
+        
+      val tree = compile(input)
+      tree.provenance must beLike {
+        case DynamicProvenance(_) => ok
+      }
+      tree.errors must beEmpty
+    }
+    
+    "accept multiple nested expressions in relation" in {
+      val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        | 
+        | foo :: bar
+        |   foo + bar + foo""".stripMargin
+        
+      val tree = compile(input)
+      tree.provenance must beLike {
+        case DynamicProvenance(_) => ok
+      }
+      tree.errors must beEmpty
     }
   }
   
