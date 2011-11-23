@@ -47,7 +47,7 @@ trait AST extends Phases {
           case (name, prov) => {
             indent + "  -\n" +
               indent + "    name: " + name + "\n" +
-              indent + "    provenance:\n" + prov.toString
+              indent + "    provenance: " + prov.toString
           }
         } mkString "\n"
         
