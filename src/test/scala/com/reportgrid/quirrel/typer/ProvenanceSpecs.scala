@@ -2333,4 +2333,109 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
   }
+  
+  "specification examples" >> {
+    "deviant-durations.qrl" >> {
+      val input = """
+        | interactions := dataset(//interactions)
+        | 
+        | big1z('userId) :=
+        |   userInteractions := interactions where interactions.userId = 'userId
+        |   
+        |   m := mean(userInteractions.duration)
+        |   sd := stdDev(userInteractions.duration)
+        | 
+        |   {
+        |     userId: 'userId,
+        |     interaction: userInteractions where userInteractions.duration > m + (sd * 3)
+        |   }
+        |   
+        | big1z
+        """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustNotEqual NullProvenance
+      tree.errors must beEmpty
+    }
+    
+    "first-conversion.qrl" >> {
+      val input = """
+        | firstConversionAfterEachImpression('userId) :=
+        |   conversions' := dataset(//conversions)
+        |   impressions' := dataset(//impressions)
+        | 
+        |   conversions := conversions' where conversions'.userId = 'userId
+        |   impressions := impressions' where impressions'.userId = 'userId
+        | 
+        |   greaterConversions('time) :=
+        |     impressionTimes := impressions where impressions.time = 'time
+        |     conversionTimes :=
+        |       conversions where conversions.time = min(conversions where conversions.time > 'time).time
+        |     
+        |     conversionTimes :: impressionTimes
+        |       { impression: impressions, nextConversion: conversions }
+        | 
+        |   greaterConversions
+        | 
+        | firstConversionAfterEachImpression
+        """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustNotEqual NullProvenance
+      tree.errors must beEmpty
+    }
+    
+    "histogram.qrl" >> {
+      val input = """
+        | clicks := dataset(//clicks)
+        | 
+        | histogram('value) :=
+        |   { cnt: count(clicks where clicks = 'value), value: 'value }
+        |   
+        | histogram
+        """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustNotEqual NullProvenance
+      tree.errors must beEmpty
+    }
+    
+    "interaction-totals.qrl" >> {
+      val input = """
+        | interactions := dataset(//interactions)
+        | 
+        | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
+        | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
+        | 
+        | total('hour, 'day) :=
+        |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+        |   sum(interactions where dayAndHour)
+        |   
+        | total
+        """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustNotEqual NullProvenance
+      tree.errors must beEmpty
+    }
+    
+    "relative-durations.qrl" >> {
+      val input = """
+        | interactions := dataset(//interactions)
+        | 
+        | relativeDurations('userId, 'value) :=
+        |   userInteractions := interactions where interactions.userId = 'userId
+        |   interactionDurations := (userInteractions where userInteractions = 'value).duration
+        |   totalDurations := sum(userInteractions.duration)
+        | 
+        |   { userId: 'userId, ratio: interactionDurations / totalDurations }
+        | 
+        | relativeDurations
+        """.stripMargin
+      
+      val tree = compile(input)
+      tree.provenance mustNotEqual NullProvenance
+      tree.errors must beEmpty
+    }
+  }
 }
