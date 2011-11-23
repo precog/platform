@@ -570,6 +570,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
   }
   
   private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
+    // not actually DFS, but that's alright since we can't have cycles
     def dfs(seen: Set[Provenance])(from: Provenance): Boolean = {
       if (seen contains from) {
         false
