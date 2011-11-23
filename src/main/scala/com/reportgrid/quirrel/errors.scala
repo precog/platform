@@ -21,20 +21,34 @@ package com.reportgrid.quirrel
 
 import edu.uwm.cs.gll.LineStream
 
-trait RawErrors extends Phases {
+trait Errors extends Phases {
+  def isWarning(error: Error): Boolean
+}
+
+trait RawErrors extends Errors with Phases {
   type Error = ErrorType
   
   override def Error(node: Expr, tp: ErrorType): Error = tp
   
   def showError(error: Error) = error.toString
+  
+  override def isWarning(error: Error) = error match {
+    case UnusedLetBinding(_) => true
+    case _ => false
+  }
 }
 
-trait LineErrors extends Phases with parser.AST {
+trait LineErrors extends Errors with Phases with parser.AST {
   private val ErrorPattern = "error:%%d: %s%n    %%s%n    %%s"
   
   def showError(error: Error) = error.loc.formatError(ErrorPattern format error.tp)
   
   override def Error(node: Expr, tp: ErrorType) = Error(node.loc, tp)
+  
+  override def isWarning(error: Error) = error match {
+    case Error(_, UnusedLetBinding(_)) => true
+    case _ => false
+  }
   
   case class Error(loc: LineStream, tp: ErrorType)
 }
