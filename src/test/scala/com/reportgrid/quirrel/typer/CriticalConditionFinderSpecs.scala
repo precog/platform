@@ -113,5 +113,65 @@ object CriticalConditionFinderSpecs extends Specification
         case Eq(_, NumLit(_, "4"), TicVar(_, "'a")) => ok
       }
     }
+    
+    "detect critical condition hidden by dispatch" in {
+      val tree @ Let(_, _, _, _, _) = compile("a('b) := h := 'b = 5 42 where h a")
+      
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'b")
+      
+      val conditions = tree.criticalConditions("'b")
+      conditions must haveSize(1)
+      
+      conditions.head must beLike {
+        case Dispatch(_, "h", Vector()) => ok
+      }
+    }
+    
+    "remove extraneous conjunctions" in {
+      val tree @ Let(_, _, _, _, _) = compile("a('b) := 42 where 'b = 2 & 4 = 5 a")
+      
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'b")
+      
+      val conditions = tree.criticalConditions("'b")
+      conditions must haveSize(1)
+      
+      conditions.head must beLike {
+        case Eq(_, TicVar(_, "'b"), NumLit(_, "2")) => ok
+      }
+    }
+    
+    "split conjunctions" in {
+      val tree @ Let(_, _, _, _, _) = compile("a('b) := 42 where 'b = 2 & 4 = 'b a")
+      
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'b")
+      
+      val conditions = tree.criticalConditions("'b")
+      conditions must haveSize(2)
+      
+      val sorted = conditions.toList sortWith { _.loc.toString < _.loc.toString }
+      sorted(0) must beLike {
+        case Eq(_, TicVar(_, "'b"), NumLit(_, "2")) => ok
+      }
+      sorted(1) must beLike {
+        case Eq(_, NumLit(_, "4"), TicVar(_, "'b")) => ok
+      }
+    }
+    
+    "not split disjunctions" in {
+      val tree @ Let(_, _, _, _, _) = compile("a('b) := 42 where 'b = 2 | 4 = 5 a")
+      
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'b")
+      
+      val conditions = tree.criticalConditions("'b")
+      conditions must haveSize(1)
+      
+      conditions.head must beLike {
+        case Or(_, Eq(_, TicVar(_, "'b"), NumLit(_, "2")), Eq(_, NumLit(_, "4"), NumLit(_, "5"))) => ok
+      }
+    }
   }
 }
