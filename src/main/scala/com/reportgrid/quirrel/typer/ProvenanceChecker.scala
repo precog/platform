@@ -5,7 +5,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
   import Utils._
   
   override def checkProvenance(expr: Expr) = {
-    def loop(expr: Expr, relations: Set[(Provenance, Provenance)]): Set[Error] = expr match {
+    def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]]): Set[Error] = expr match {
       case expr @ Let(_, _, params, left, right) => {
         val leftErrors = loop(left, relations)
         
@@ -48,12 +48,26 @@ trait ProvenanceChecker extends parser.AST with Binder {
         val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
           expr._provenance() = NullProvenance
           Set()
-        } else if (from.provenance == to.provenance || relations.contains(from.provenance -> to.provenance)) {
+        } else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) {
+          expr._provenance() = NullProvenance
+          Set(Error(expr, AlreadyRelatedSets))
+        } else if (pathExists(relations, from.provenance, to.provenance)) {
           expr._provenance() = NullProvenance
           Set(Error(expr, AlreadyRelatedSets))
         } else {
-          val back = loop(in, relations + ((from.provenance, to.provenance)))
-          expr._provenance() = in.provenance
+          val fromExisting = relations.getOrElse(from.provenance, Set())
+          val toExisting = relations.getOrElse(to.provenance, Set())
+          
+          val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
+          val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
+          
+          val back = loop(in, relations3)
+          
+          if (in.provenance == from.provenance || in.provenance == to.provenance)
+            expr._provenance() = DynamicProvenance(System.identityHashCode(expr))
+          else
+            expr._provenance() = in.provenance
+          
           back
         }
         
@@ -378,15 +392,25 @@ trait ProvenanceChecker extends parser.AST with Binder {
       }                                    
     }                                                                           
                                                                                       
-    loop(expr, Set())
+    loop(expr, Map())
   }
   
-  private def computeResultProvenance(body: Expr, relations: Set[(Provenance, Provenance)], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
+  private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
     case body @ Let(_, _, _, left, right) =>
       computeResultProvenance(right, relations, varAssumptions)
     
-    case Relate(_, from, to, in) =>
-      computeResultProvenance(in, relations + (from.provenance -> to.provenance), varAssumptions)
+    case Relate(_, from, to, in) => {
+      val fromExisting = relations.getOrElse(from.provenance, Set())
+      val toExisting = relations.getOrElse(to.provenance, Set())
+      
+      val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
+      val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
+      
+      if (in.provenance == from.provenance || in.provenance == to.provenance)
+        DynamicProvenance(System.identityHashCode(body))
+      else
+        computeResultProvenance(in, relations3, varAssumptions)
+    }
     
     case t @ TicVar(_, id) => t.binding match {
       case UserDef(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
@@ -526,9 +550,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => body.provenance
   }
   
-  private def unifyProvenance(relations: Set[(Provenance, Provenance)])(p1: Provenance, p2: Provenance) = (p1, p2) match {
-    case pair if relations contains pair => 
-      Some(DynamicProvenance(System.identityHashCode(pair)))
+  private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance) = (p1, p2) match {
+    case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
+      Some(p1)
     
     case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
       Some(StaticProvenance(path1))
@@ -543,6 +567,22 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case (p, ValueProvenance) => Some(p)
     
     case _ => None
+  }
+  
+  private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
+    def dfs(seen: Set[Provenance])(from: Provenance): Boolean = {
+      if (seen contains from) {
+        false
+      } else if (from == to) {
+        true
+      } else {
+        val next = graph.getOrElse(from, Set())
+        val seen2 = seen + from
+        next exists dfs(seen2)
+      }
+    }
+    
+    dfs(Set())(from)
   }
   
   private def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
