@@ -7,6 +7,7 @@ import typer._
 
 trait REPL extends Parser
     with Binder
+    with TreeShaker
     with ProvenanceChecker
     with CriticalConditionFinder
     with LineErrors {
@@ -19,15 +20,27 @@ trait REPL extends Parser
     
     val reader = new ConsoleReader
     
-    def compile(tree: Expr): Boolean = {
-      handleSuccesses(Stream(tree))      // a little nasty...
+    def compile(oldTree: Expr): Boolean = {
+      bindRoot(oldTree, oldTree)
       
-      val errors = runPassesInSequence(tree)
-      if (!errors.isEmpty) {
-        println(new ANSIBuffer().red(errors map showError mkString "\n").getAnsiBuffer)
+      val tree = shakeTree(oldTree)
+      val phaseErrors = runPassesInSequence(tree)
+      val allErrors = tree.errors ++ phaseErrors
+      
+      val strs = for (error <- allErrors) yield {
+        val buffer = new ANSIBuffer
+        
+        if (isWarning(error))
+          buffer.yellow(showError(error)).getAnsiBuffer
+        else
+          buffer.red(showError(error)).getAnsiBuffer
       }
       
-      errors.isEmpty
+      if (!tree.errors.isEmpty || !phaseErrors.isEmpty) {
+        println(strs mkString "\n")
+      }
+      
+      allErrors filterNot isWarning isEmpty
     }
     
     def handle(c: Command) = c match {
@@ -40,7 +53,7 @@ trait REPL extends Parser
         println()
         
         if (compile(tree)) {
-          println(prettyPrint(tree))
+          println(prettyPrint(shakeTree(tree)))
         }
         
         true
