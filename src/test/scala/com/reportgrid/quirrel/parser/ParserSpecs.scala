@@ -765,11 +765,9 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "first-conversion.qrl" >> {
       val input = """
         | firstConversionAfterEachImpression('userId) :=
-        |   clicks'      := dataset(//clicks)
         |   conversions' := dataset(//conversions)
         |   impressions' := dataset(//impressions)
         | 
-        |   clicks      := clicks' where clicks'.userId = 'userId
         |   conversions := conversions' where conversions'.userId = 'userId
         |   impressions := impressions' where impressions'.userId = 'userId
         | 
@@ -805,8 +803,13 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "interaction-totals.qrl" >> {
       val input = """
         | interactions := dataset(//interactions)
+        | 
+        | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
+        | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
+        | 
         | total('hour, 'day) :=
-        |   sum(hourOfDay((interactions where dayOfWeek(interactions.time) = 'day).time) = 'hour)
+        |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+        |   sum(interactions where dayAndHour)
         |   
         | total
         """.stripMargin
