@@ -278,7 +278,7 @@ trait AST extends Phases {
       }
     }
   
-    e._root() = root
+    e.root = root
     
     e.productIterator foreach {
       case e: Expr => bindRoot(root, e)
@@ -290,11 +290,13 @@ trait AST extends Phases {
   sealed trait Expr extends Node with Product {
     val nodeId = System.identityHashCode(this)
     
-    private[parser] val _root = atom[Expr]
+    private val _root = atom[Expr]
     def root = _root()
+    private[AST] def root_=(e: Expr) = _root() = e
     
-    private[quirrel] val _provenance = attribute[Provenance](checkProvenance)
+    private val _provenance = attribute[Provenance](checkProvenance)
     def provenance = _provenance()
+    private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
     
     private[quirrel] final lazy val _errors: SetAtom[Error] =
       if (this eq root) new SetAtom[Error] else root._errors
@@ -334,14 +336,17 @@ trait AST extends Phases {
     
     lazy val criticalConditions = findCriticalConditions(this)
     
-    private[quirrel] val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
+    private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
     def assumptions = _assumptions()
+    private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
     
-    private[quirrel] val _unconstrainedParams = attribute[Set[String]](checkProvenance)
+    private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
     def unconstrainedParams = _unconstrainedParams()
+    private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
     
-    private[quirrel] val _requiredParams = attribute[Int](checkProvenance)
+    private val _requiredParams = attribute[Int](checkProvenance)
     def requiredParams = _requiredParams()
+    private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
   }
   
   case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
@@ -360,8 +365,9 @@ trait AST extends Phases {
   case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
     val label = 'ticvar
     
-    private[quirrel] val _binding = attribute[FormalBinding](bindNames)
+    private val _binding = attribute[FormalBinding](bindNames)
     def binding = _binding()
+    private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
   }
   
   case class StrLit(loc: LineStream, value: String) extends Expr with LeafNode {
@@ -402,11 +408,13 @@ trait AST extends Phases {
   case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
     val label = 'dispatch
     
-    private[quirrel] val _isReduction = attribute[Boolean](bindNames)
+    private val _isReduction = attribute[Boolean](bindNames)
     def isReduction = _isReduction()
+    private[quirrel] def isReduction_=(b: Boolean) = _isReduction() = b
     
-    private[quirrel] val _binding = attribute[Binding](bindNames)
+    private val _binding = attribute[Binding](bindNames)
     def binding = _binding()
+    private[quirrel] def binding_=(b: Binding) = _binding() = b
     
     def children = actuals.toList
   }

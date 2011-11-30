@@ -40,24 +40,24 @@ trait ProvenanceChecker extends parser.AST with Binder {
           val unconstrained = params filterNot (assumptions contains)
           val required = unconstrained.lastOption map { params indexOf _ } map (1 +) getOrElse 0
           
-          expr._assumptions() = assumptions
-          expr._unconstrainedParams() = Set(unconstrained: _*)
-          expr._requiredParams() = required
+          expr.assumptions = assumptions
+          expr.unconstrainedParams = Set(unconstrained: _*)
+          expr.requiredParams = required
         } else {
-          expr._assumptions() = Map()
-          expr._unconstrainedParams() = Set()
-          expr._requiredParams() = 0
+          expr.assumptions = Map()
+          expr.unconstrainedParams = Set()
+          expr.requiredParams = 0
         }
         
         val rightErrors = loop(right, relations)
-        expr._provenance() = right.provenance
+        expr.provenance = right.provenance
         
         leftErrors ++ rightErrors
       }
       
       case New(_, child) => {
         val back = loop(child, relations)
-        expr._provenance() = DynamicProvenance(expr.nodeId)
+        expr.provenance = DynamicProvenance(expr.nodeId)
         back
       }
       
@@ -65,13 +65,13 @@ trait ProvenanceChecker extends parser.AST with Binder {
         val back = loop(from, relations) ++ loop(to, relations)
         
         val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
-          expr._provenance() = NullProvenance
+          expr.provenance = NullProvenance
           Set()
         } else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) {
-          expr._provenance() = NullProvenance
+          expr.provenance = NullProvenance
           Set(Error(expr, AlreadyRelatedSets))
         } else if (pathExists(relations, from.provenance, to.provenance)) {
-          expr._provenance() = NullProvenance
+          expr.provenance = NullProvenance
           Set(Error(expr, AlreadyRelatedSets))
         } else {
           val fromExisting = relations.getOrElse(from.provenance, Set())
@@ -83,9 +83,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
           val back = loop(in, relations3)
           
           if (in.provenance == from.provenance || in.provenance == to.provenance)
-            expr._provenance() = DynamicProvenance(System.identityHashCode(expr))
+            expr.provenance = DynamicProvenance(System.identityHashCode(expr))
           else
-            expr._provenance() = in.provenance
+            expr.provenance = in.provenance
           
           back
         }
@@ -94,7 +94,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       }
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => {
-        expr._provenance() = ValueProvenance
+        expr.provenance = ValueProvenance
         Set()
       }
       
@@ -108,7 +108,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           left flatMap { unifyProvenance(relations)(_, right) }
         }
         
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -125,7 +125,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
           left flatMap { unifyProvenance(relations)(_, right) }
         }
         
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -135,14 +135,14 @@ trait ProvenanceChecker extends parser.AST with Binder {
       
       case Descent(_, child, _) => {
         val back = loop(child, relations)
-        expr._provenance() = child.provenance
+        expr.provenance = child.provenance
         back
       }
       
       case Deref(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -245,14 +245,14 @@ trait ProvenanceChecker extends parser.AST with Binder {
           case NullBinding => (NullProvenance, Set())
         }
         
-        expr._provenance() = prov
+        expr.provenance = prov
         back ++ errors
       }
       
       case Operation(_, left, _, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -263,7 +263,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Add(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -274,7 +274,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Sub(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -285,7 +285,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Mul(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -296,7 +296,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Div(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -307,7 +307,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Lt(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -318,7 +318,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case LtEq(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -329,7 +329,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Gt(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -340,7 +340,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case GtEq(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -351,7 +351,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Eq(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -362,7 +362,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case NotEq(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -373,7 +373,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case And(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -384,7 +384,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
       case Or(_, left, right) => {
         val back = loop(left, relations) ++ loop(right, relations)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr._provenance() = result getOrElse NullProvenance
+        expr.provenance = result getOrElse NullProvenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -394,19 +394,19 @@ trait ProvenanceChecker extends parser.AST with Binder {
       
       case Comp(_, child) => {
         val back = loop(child, relations)
-        expr._provenance() = child.provenance
+        expr.provenance = child.provenance
         back
       }
       
       case Neg(_, child) => {
         val back = loop(child, relations)
-        expr._provenance() = child.provenance
+        expr.provenance = child.provenance
         back
       }
       
       case Paren(_, child) => {
         val back = loop(child, relations)
-        expr._provenance() = child.provenance
+        expr.provenance = child.provenance
         back
       }                                    
     }                                                                           

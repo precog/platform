@@ -47,12 +47,12 @@ trait Binder extends parser.AST {
       case t @ TicVar(_, name) => {
         env get name match {
           case Some(b @ UserDef(_)) => {
-            t._binding() = b
+            t.binding = b
             Set()
           }
           
           case None => {
-            t._binding() = NullBinding
+            t.binding = NullBinding
             Set(Error(t, UndefinedTicVariable(name)))
           }
           
@@ -84,9 +84,9 @@ trait Binder extends parser.AST {
       case d @ Dispatch(_, name, actuals) => {
         val recursive = (actuals map { loop(_, env) }).fold(Set()) { _ ++ _ }
         if (env contains name) {
-          d._binding() = env(name)
+          d.binding = env(name)
           
-          d._isReduction() = env(name) match {
+          d.isReduction = env(name) match {
             case BuiltIn("dataset", _) => false
             case BuiltIn(_, _) => true
             case _ => false
@@ -94,8 +94,8 @@ trait Binder extends parser.AST {
           
           recursive
         } else {
-          d._binding() = NullBinding
-          d._isReduction() = false
+          d.binding = NullBinding
+          d.isReduction = false
           recursive + Error(d, UndefinedFunction(name))
         }
       }
