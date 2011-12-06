@@ -1,2 +1,3 @@
-(:project-name "Quirrel"
- :use-sbt t)
+(:project-name "platform"
+ :use-sbt t
+ :sbt-subprojects (:name "quirrel"))
