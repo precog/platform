@@ -11,7 +11,7 @@ libraryDependencies ++= Seq(
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
-  | import com.reportgrid.quirrel._
+  | import com.quereo.quirrel._
   | import parser._
   | import typer._
   |
