@@ -8,7 +8,7 @@ libraryDependencies ++= Seq(
   "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
   "org.specs2" %% "specs2" % "1.7-SNAPSHOT" % "test" withSources)
   
-initialCommands := """
+initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
   | import com.reportgrid.quirrel._
