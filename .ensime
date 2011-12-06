@@ -1,3 +1,4 @@
 (:project-name "platform"
  :use-sbt t
- :sbt-subprojects (:name "quirrel"))
+ :sbt-subprojects (:name "bytecode"
+                   :name "quirrel"))

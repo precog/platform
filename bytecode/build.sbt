@@ -17,14 +17,14 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import sbt._
-import Keys._
+name := "bytecode"
 
-object PlatformBuild extends Build {
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode)
-  
-  lazy val bytecode = Project(id = "bytecode", base = file("bytecode"))
-  lazy val quirrel = Project(id = "quirrel", base = file("quirrel")) dependsOn bytecode
-  lazy val storage = Project(id = "storage", base = file("storage/leveldbstore"))
-}
+organization := "com.quereo"
 
+version := "0.1.0"
+
+scalaVersion := "2.9.1"
+
+resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
+
+logBuffered := false
