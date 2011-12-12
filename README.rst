@@ -1,4 +1,4 @@
-This is the main super-project for the Quereo platform.  Current components:
+This is the main super-project for the Querio platform.  Current components:
 
 * Quirrel
 * Bytecode
