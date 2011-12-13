@@ -2,7 +2,7 @@ package reportgrid.storage.leveldb
 
 object SimpleTest {
   def main (argv : Array[String]) {
-    val c = new Column("test", "/tmp")
+    val c = new Column[java.math.BigDecimal]("test", "/tmp")
 
     c.insert(12364534l, BigDecimal("1.445322").underlying)
   }
