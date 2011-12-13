@@ -5,6 +5,7 @@ trait Instructions {
   type Predicate = Vector[PredicateInstr]
   
   sealed trait Instruction
+  sealed trait DataInstr extends Instruction
   
   case class Map1(op: UnaryOperation) extends Instruction
   case class Map2Match(op: BinaryOperation) extends Instruction
@@ -23,17 +24,18 @@ trait Instructions {
   case object Split extends Instruction
   case object Merge extends Instruction
   
-  case class FilterMatch(depth: Int, pred: Predicate) extends Instruction
-  case class FilterCross(depth: Int, pred: Predicate) extends Instruction
+  case class FilterMatch(depth: Int, pred: Predicate) extends Instruction with DataInstr
+  case class FilterCross(depth: Int, pred: Predicate) extends Instruction with DataInstr
   
   case object Dup extends Instruction
-  case class Swap(depth: Int) extends Instruction
-  case class Line(num: Int, text: String) extends Instruction
+  case class Swap(depth: Int) extends Instruction with DataInstr
+  
+  case class Line(num: Int, text: String) extends Instruction with DataInstr
   
   case class LoadLocal(tpe: Type) extends Instruction
   
-  case class PushString(str: String) extends Instruction
-  case class PushNum(num: String) extends Instruction
+  case class PushString(str: String) extends Instruction with DataInstr
+  case class PushNum(num: String) extends Instruction with DataInstr
   case object PushTrue extends Instruction
   case object PushFalse extends Instruction
   case object PushObject extends Instruction
