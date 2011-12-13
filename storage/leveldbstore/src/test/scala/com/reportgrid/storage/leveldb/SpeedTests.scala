@@ -31,7 +31,7 @@ object SpeedTests {
       }
     }
 
-    val c = new Column("speed", "/tmp")
+    val c = new Column[java.math.BigDecimal]("speed", "/tmp")
 
     val biGen = Arbitrary.arbitrary[BigInt]
     val intGen = Arbitrary.arbitrary[Int]

@@ -30,7 +30,39 @@ import scalaz.Scalaz._
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
 
-class Column(name : String, dataDir : String) {
+trait ColumnComparator[T] extends DBComparator {
+  // Don't override unless you really know what you're doing
+  def findShortestSeparator(start : Array[Byte], limit : Array[Byte]) = start
+  def findShortSuccessor(key : Array[Byte]) = key
+}
+
+object ColumnComparator {
+  implicit val longComparator = Some(new ColumnComparator[Long] {
+    val name = "LongComparatorV1"
+    def compare(a : Array[Byte], b : Array[Byte]) = {
+      val valCompare = a.take(a.length - 8).as[Long].compareTo(b.take(b.length - 8).as[Long])
+
+      if (valCompare == 0)
+        a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
+      else
+        0
+    }
+  })
+
+  implicit val bigDecimalComparator = Some(new ColumnComparator[BigDecimal] {
+    val name = "BigDecimalComparatorV1"
+    def compare(a : Array[Byte], b : Array[Byte]) = {
+      val valCompare = a.take(a.length - 8).as[BigDecimal].compareTo(b.take(b.length - 8).as[BigDecimal])
+
+      if (valCompare == 0)
+        a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
+      else
+        0
+    }
+  })
+}
+
+class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
   val logger = Logger("col:" + name)
 
   private lazy val baseDir = {
@@ -43,6 +75,7 @@ class Column(name : String, dataDir : String) {
 
   private val createOptions = (new Options).createIfMissing(true)
   private val idIndexFile =  factory.open(new File(baseDir, "idIndex"), createOptions)
+  comparator.foreach{ c => createOptions.comparator(c); logger.debug("Using custom comparator: " + c.name) }
   private val valIndexFile = factory.open(new File(baseDir, "valIndex"), createOptions)
 
   def close() {
@@ -50,23 +83,19 @@ class Column(name : String, dataDir : String) {
     valIndexFile.close()
   }
 
-  def eval[T](db : DB)(f : DB => T): T = {
+  def eval[A](db : DB)(f : DB => A): A = {
     f(db)
   }
 
-  def insert(id : Long, v : BigDecimal) = {
+  def insert(id : Long, v : T) = {
     val idBytes = id.as[Array[Byte]]
     val valBytes = v.as[Array[Byte]]
 
     eval(idIndexFile) { _.put(idBytes, valBytes) } 
-    eval(valIndexFile) { db =>
-      val currentIds = Option(db.get(valBytes)).map(_.as[Iterable[Long]].toList).getOrElse(Nil)
-                        
-      db.put(valBytes, (id :: currentIds).sorted.toIterable.as[Array[Byte]])
-    }
+    eval(valIndexFile) { _.put(valBytes ++ idBytes, Array[Byte]()) }
   }
   
-  def getByRange(range: Interval[Long])(implicit ord: Ordering[Long]): Seq[(Long, BigDecimal)] = {
+  def getByRange(range: Interval[Long])(implicit ord: Ordering[Long]): Stream[(Long, T)] = {
     import scala.math.Ordered._
 
     eval(idIndexFile) { db =>
@@ -81,31 +110,32 @@ class Column(name : String, dataDir : String) {
         case None => (l : Long) => true
       }
 
-      iter.asScala.map(kv => (kv.getKey.as[Long], kv.getValue.as[BigDecimal])).takeWhile(t => endCondition(t._1)).toSeq
+      iter.asScala.map(kv => (kv.getKey.as[Long], kv.getValue.as[T])).takeWhile(t => endCondition(t._1)).toStream
     }
   }
 
-  def getIds(v: BigDecimal): Seq[Long] = {
+  def getIds(v: T)(implicit o : Ordering[T]): Stream[(T,Long)] = {
+    import scala.math.Ordered._
+
     eval(valIndexFile) { db =>
-      Option(db.get(v.as[Array[Byte]])).map(_.as[Iterable[Long]].toSeq).getOrElse(Nil)
+      val iter = db.iterator
+      iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
+      iter.asScala.map(_.getKey).map{ kv => (valueOf(kv), idOf(kv)) }.takeWhile(_._1 <= v).toStream
     }
   }
 
-  def getAllIds : Iterator[Long] = eval(idIndexFile){ db =>
-    new Iterator[Long] {
-      private val iter = db.iterator 
-      iter.seekToFirst
-      def hasNext = iter.hasNext
-      def next = iter.next.getKey.as[Long]
-    }
+  def getAllIds : Stream[Long] = eval(idIndexFile){ db =>
+    val iter = db.iterator 
+    iter.seekToFirst
+    iter.asScala.map(_.getKey.as[Long]).toStream
   }
 
-  def getAllValues : Iterator[BigDecimal] = eval(valIndexFile){ db =>
-    new Iterator[BigDecimal] {
-      private val iter = db.iterator
-      iter.seekToFirst
-      def hasNext = iter.hasNext
-      def next = iter.next.getKey.as[BigDecimal]
-    }
+  def getAllValues : Stream[T] = eval(valIndexFile){ db =>
+    val iter = db.iterator
+    iter.seekToFirst
+    iter.asScala.map(t => valueOf(t.getKey)).toStream.distinct
   }
+
+  def valueOf(ab : Array[Byte]) : T = ab.take(ab.length - 8).as[T]
+  def idOf(ab : Array[Byte]) : Long = ab.drop(ab.length - 8).as[Long]
 }

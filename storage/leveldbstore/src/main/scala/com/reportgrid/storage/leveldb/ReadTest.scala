@@ -19,11 +19,10 @@
  */
 package reportgrid.storage.leveldb
 
-
 object ReadTest {
   def main (argv : Array[String]) {
     val (column, chunkSize, seed) = argv match {
-      case Array(name, basedir, size, sd) => (new Column(name,basedir), size.toInt, sd.toInt)
+      case Array(name, basedir, size, sd) => (new Column[Long](name,basedir), size.toInt, sd.toInt)
       case _ => {
         println("Usage: ReadTest <column name> <base dir>")
         sys.exit(1)
@@ -61,7 +60,7 @@ object ConfirmTest {
   def main (args : Array[String]) {
     args match {
       case Array(name,base) => {
-        val c = new Column(name, base)
+        val c = new Column[java.math.BigDecimal](name, base)
         val bd = BigDecimal("123.45")
 
         List(12l,15l,45345435l,2423423l).foreach(c.insert(_, bd.underlying))
