@@ -1,5 +1,4 @@
 package com.querio.bytecode
-package ops
 
 trait Instructions {
   
