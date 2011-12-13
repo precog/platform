@@ -1,6 +1,6 @@
 name := "bytecode"
 
-organization := "com.quereo"
+organization := "com.querio"
 
 version := "0.1.0"
 

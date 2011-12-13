@@ -1,4 +1,4 @@
-package com.quereo.bytecode
+package com.querio.bytecode
 
 sealed trait Instruction
 
