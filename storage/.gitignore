@@ -1,9 +1,0 @@
-project/boot
-target
-*.swp
-tags
-*~
-*.aux
-*.log
-*.pdf
-*.tex
