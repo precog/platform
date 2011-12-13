@@ -25,6 +25,8 @@ object PlatformBuild extends Build {
   
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode"))
   lazy val quirrel = Project(id = "quirrel", base = file("quirrel")) dependsOn bytecode
-  lazy val storage = Project(id = "storage", base = file("storage/leveldbstore"))
+  lazy val storage = Project(id = "storage", base = file("storage"))
+  
+  // lazy val daze = Project(id = "storage", base = file("daze")) dependsOn bytecode
 }
 
