@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.quereo.bytecode
+package com.querio.bytecode
 
 sealed trait Instruction
 

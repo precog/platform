@@ -17,14 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "bytecode"
+package com.querio.quirrel
 
-organization := "com.querio"
-
-version := "0.1.0"
-
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-logBuffered := false
+trait StubPhases extends Phases with RawErrors {
+  def bindNames(tree: Expr): Set[Error] = Set()
+  def checkProvenance(tree: Expr): Set[Error] = Set()
+  def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = Map()
+}

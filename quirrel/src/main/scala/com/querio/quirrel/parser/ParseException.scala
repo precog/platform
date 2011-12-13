@@ -17,14 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "bytecode"
+package com.querio.quirrel
+package parser
 
-organization := "com.querio"
+import edu.uwm.cs.gll.Failure
+import edu.uwm.cs.gll.LineStream
 
-version := "0.1.0"
-
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-logBuffered := false
+case class ParseException(failures: Set[Failure]) extends RuntimeException {
+  private val Pattern = "  error:%%d: %s%n    %%s%n    %%s%n"
+  
+  def mkString = {
+    
+    
+    val errors = for (Failure(msg, tail) <- failures) yield {
+      val partial = Pattern format msg
+      tail formatError partial
+    }
+    
+    errors.mkString("\n")
+  }
+}

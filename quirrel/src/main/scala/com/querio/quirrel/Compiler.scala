@@ -17,14 +17,16 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "bytecode"
+package com.querio.quirrel
 
-organization := "com.querio"
+import edu.uwm.cs.gll.LineStream
 
-version := "0.1.0"
-
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-logBuffered := false
+/**
+ * Not ''really'' the full compiler.  Technically, this trait just gives you the
+ * function you need to turn an input stream into an attributed tree, provided
+ * you mix in the other requisite traits.
+ */
+trait Compiler extends Phases with parser.Parser with typer.TreeShaker {
+  def compile(str: LineStream): Expr = shakeTree(parse(str))
+  def compile(str: String): Expr = compile(LineStream(str))
+}
