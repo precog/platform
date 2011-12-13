@@ -27,7 +27,7 @@ trait Instructions {
   case class FilterCross(depth: Int, pred: Predicate) extends Instruction
   
   case object Dup extends Instruction
-  case object Swap extends Instruction
+  case class Swap(depth: Int) extends Instruction
   case class Line(num: Int, text: String) extends Instruction
   
   case class LoadLocal(tpe: Type) extends Instruction
@@ -70,8 +70,8 @@ trait Instructions {
   case object JoinObject extends BinaryOperation
   case object JoinArray extends BinaryOperation
   
-  case object DerefObject extends BinaryOperation
-  case object DerefArray extends BinaryOperation
+  case object DerefObject extends BinaryOperation with PredicateInstr
+  case object DerefArray extends BinaryOperation with PredicateInstr
   
   case object Range extends PredicateInstr
   
