@@ -76,7 +76,7 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     eval(valIndexFile) { _.put(valBytes ++ idBytes, Array[Byte]()) }
   }
   
-  def getByRange(range: Interval[Long])(implicit ord: Ordering[Long]): Stream[(Long, T)] = {
+  def getValuesByIdRange(range: Interval[Long])(implicit ord: Ordering[Long]): Stream[(Long, T)] = {
     import scala.math.Ordered._
 
     eval(idIndexFile) { db =>
@@ -95,13 +95,33 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     }
   }
 
-  def getIds(v: T)(implicit o : Ordering[T]): Stream[(T,Long)] = {
+  def getIds(v : T)(implicit o : Ordering[T]): Stream[Long] = {
+    import scala.math.Ordered._
+
+    eval (valIndexFile) { db =>
+      val iter = db.iterator
+      iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
+      iter.asScala.map(i => i.getKey).takeWhile(kv => valueOf(kv) == v).map(idOf).toStream
+    }
+  }
+
+  def getIdsByValueRange(range : Interval[T])(implicit o : Ordering[T]): Stream[(T,Long)] = {
     import scala.math.Ordered._
 
     eval(valIndexFile) { db =>
       val iter = db.iterator
-      iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
-      iter.asScala.map(_.getKey).map{ kv => (valueOf(kv), idOf(kv)) }.takeWhile(_._1 <= v).toStream
+
+      range.start match {
+        case Some(v) => iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
+        case None => iter.seekToFirst
+      }
+
+      val endCondition = range.end match {
+        case Some(v) => (t : T) => t < v
+        case None => (t : T) => true
+      }
+
+      iter.asScala.map(_.getKey).map{ kv => (valueOf(kv), idOf(kv)) }.takeWhile{ case(v,i) => endCondition(v) }.toStream
     }
   }
 
