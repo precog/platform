@@ -119,26 +119,26 @@ trait Parser extends RegexParsers with Filters with AST {
   
   lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
-  val opId = "where"
+  lazy val opId = "where"
   
-  val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
+  lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
-  val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
+  lazy val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
   
-  val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
+  lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
   
-  val strLiteral = """"([^\n\r\\]|\\.)*"""".r ^^ canonicalizeStr
+  lazy val strLiteral = """"([^\n\r\\]|\\.)*"""".r ^^ canonicalizeStr
   
-  val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
-  val boolLiteral: Parser[Boolean] = (
+  lazy val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true
     | "false" ^^^ false
   )
   
-  val keywords = "new|true|false|where".r
+  lazy val keywords = "new|true|false|where".r
   
-  val operations = "where".r
+  lazy val operations = "where".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-[^)])*-\))+""".r
   override val skipWhitespace = true
