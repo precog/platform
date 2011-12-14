@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
 
 case class Interval[T: Ordering](start : Option[T], end : Option[T]) {
   import scala.math.Ordered._

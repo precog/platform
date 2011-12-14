@@ -19,6 +19,8 @@
  */
 package com.reportgrid.storage.leveldb
 
+import org.iq80.leveldb._
+import java.math.BigDecimal
 import Bijection._
 
 trait ColumnComparator[T] extends DBComparator {
