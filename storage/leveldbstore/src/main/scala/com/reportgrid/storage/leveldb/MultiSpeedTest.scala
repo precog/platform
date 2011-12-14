@@ -1,4 +1,4 @@
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
 
 import org.scalacheck.Arbitrary
 import akka.actor.Actor

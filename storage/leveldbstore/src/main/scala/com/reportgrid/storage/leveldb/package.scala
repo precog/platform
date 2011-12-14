@@ -1,4 +1,4 @@
-package reportgrid.storage
+package com.reportgrid.storage
 import java.math._
 import scala.collection.generic.CanBuildFrom
 

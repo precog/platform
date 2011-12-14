@@ -1,4 +1,4 @@
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
 
 object ReadTest {
   def main (argv : Array[String]) {
