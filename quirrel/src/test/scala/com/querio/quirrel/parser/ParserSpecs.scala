@@ -738,6 +738,60 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
         case Deref(_, NumLit(_, "1"), New(_, NumLit(_, "2"))) => ok
       }
     }
+    
+    "accept a binary expression involving a number and a string" in {
+      parse("1 + \"a\"") must beLike {
+        case Add(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 - \"a\"") must beLike {
+        case Sub(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 * \"a\"") must beLike {
+        case Mul(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 / \"a\"") must beLike {
+        case Div(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 < \"a\"") must beLike {
+        case Lt(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 <= \"a\"") must beLike {
+        case LtEq(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 > \"a\"") must beLike {
+        case Gt(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 >= \"a\"") must beLike {
+        case GtEq(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 = \"a\"") must beLike {
+        case Eq(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 != \"a\"") must beLike {
+        case NotEq(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 & \"a\"") must beLike {
+        case And(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 | \"a\"") must beLike {
+        case Or(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 where \"a\"") must beLike {
+        case Operation(_, NumLit(_, "1"), "where", StrLit(_, "a")) => ok
+      }
+    }
   }
   
   "specification examples" >> {
