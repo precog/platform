@@ -17,20 +17,17 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "bytecode"
+package com.querio.bytecode
 
-organization := "com.querio"
+import org.scalacheck._
 
-version := "0.1.0"
-
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-libraryDependencies ++= Seq(
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.7-SNAPSHOT" % "test" withSources)
-
-logBuffered := false
-
-publishArtifact in packageDoc := false
+trait UtilGenerators {
+  import Arbitrary.arbitrary
+  import Gen._
+  
+  implicit def arbVector[A : Arbitrary]: Arbitrary[Vector[A]] =
+    Arbitrary(genVector[A])
+  
+  private def genVector[A : Arbitrary]: Gen[Vector[A]] = 
+    listOf(implicitly[Arbitrary[A]].arbitrary) map { xs => Vector(xs: _*) }
+}

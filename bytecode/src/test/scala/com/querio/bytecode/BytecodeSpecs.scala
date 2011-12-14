@@ -17,20 +17,35 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "bytecode"
+package com.querio.bytecode
 
-organization := "com.querio"
+import org.specs2.ScalaCheck
+import org.specs2.mutable._
+import org.scalacheck.Prop
+import java.nio.ByteBuffer
 
-version := "0.1.0"
-
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-libraryDependencies ++= Seq(
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.7-SNAPSHOT" % "test" withSources)
-
-logBuffered := false
-
-publishArtifact in packageDoc := false
+class BytecodeSpecs extends Specification
+    with ScalaCheck
+    with InstructionGenerators
+    with UtilGenerators
+    with Reader
+    with BytecodeWriter {
+  
+  import Prop._
+  
+  "bytecode reader/writer" should {
+    "be consistent" in check { stream: Vector[Instruction] =>
+      val dataEstimate = 200 * 8
+      val tableEstimate = stream.length * (4 + 4 + dataEstimate) 
+      val sizeEstimate = (stream.length * 8) + 4 + 4 + tableEstimate
+      
+      val buffer = ByteBuffer.allocate(sizeEstimate)
+      
+      write(stream, buffer)
+      buffer.rewind()
+      val stream2 = read(buffer)
+      
+      stream2 mustEqual stream
+    }
+  }
+}
