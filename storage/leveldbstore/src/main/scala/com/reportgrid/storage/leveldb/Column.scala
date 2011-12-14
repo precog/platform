@@ -23,6 +23,7 @@ import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import java.io._
 import java.math.BigDecimal
+import java.nio.ByteBuffer
 import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
@@ -30,14 +31,19 @@ import scalaz.Scalaz._
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
 
-import reportgrid.analytics.Path
-import blueeyes.json.JPath
+//import reportgrid.analytics.Path
+//import blueeyes.json.JPath
 import java.util.concurrent.CyclicBarrier
+
+import scalaz.effect._
 import scalaz.iteratee._
+import scalaz.iteratee.Input._
+import scalaz.Scalaz._
 
-case class ColumnMetadata(path: Path, dataPath: JPath, storageType: String /* placeholder */) 
+//case class ColumnMetadata(path: Path, dataPath: JPath, storageType: String /* placeholder */) 
+case class ColumnMetadata(path: String, dataPath: String, storageType: String)
 
-class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
+class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
   val logger = Logger("col:" + name)
 
   private lazy val baseDir = {
@@ -80,14 +86,13 @@ class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(impli
   }
   
   def getValuesByIdRange[A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, IO, A] = {
-    def enumerator[A](iter: DBIterator): EnumeratorT[Unit, ByteBuffer, IO, A] = { s => 
-      def terminate = s.pointI.map(a => iter.close; a)
+    def enumerator[A](iter: DBIterator, close: IO[Unit]): EnumeratorT[Unit, ByteBuffer, IO, A] = { s => 
       s.fold(
         cont = k => if (iter.hasNext) {
           val n = iter.next
           range.end match {
             case Some(end) if end <= n.getKey.as[Long] => s.pointI
-            case _ => k(elInput(n)) >>== enumerator(iter)
+            case _ => k(elInput(ByteBuffer.wrap(n.getValue))) >>== enumerator(iter, close)
           }
         } else {
           s.pointI
@@ -104,7 +109,7 @@ class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(impli
         case None => iter.seekToFirst
       }
 
-      enumerator(iter)
+      enumerator(iter, IO(iter.close))
     }
   }
 
@@ -118,6 +123,7 @@ class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(impli
     }
   }
 
+/*
   def getIdsByValueRange(range : Interval[T])(implicit o : Ordering[T]): Stream[(T,Long)] = {
     import scala.math.Ordered._
 
@@ -137,6 +143,7 @@ class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(impli
       iter.asScala.map(_.getKey).map{ kv => (valueOf(kv), idOf(kv)) }.takeWhile{ case(v,i) => endCondition(v) }.toStream
     }
   }
+  */
 
   def getAllIds : Stream[Long] = eval(idIndexFile){ db =>
     val iter = db.iterator 
