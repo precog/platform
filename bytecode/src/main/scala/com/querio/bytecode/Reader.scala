@@ -8,6 +8,14 @@ trait Reader extends Instructions {
   import Function._
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
+    val version = buffer.getInt()
+    
+    val major = (version >> 24) & 0x7F
+    val minor = (version >> 16) & 0xFF
+    val release = version & 0xFFFF
+    
+    // TODO check version compatibility
+    
     val table = readSymbolTable(buffer)
     readStream(buffer, table, Vector())
   }

@@ -7,9 +7,12 @@ trait Writer extends Instructions {
   def write(stream: Vector[Instruction], buffer: ByteBuffer)
 }
 
-trait BytecodeWriter extends Writer {
+trait BytecodeWriter extends Writer with Version {
   
   def write(stream: Vector[Instruction], buffer: ByteBuffer) {
+    val version = ((Major & 0x7F) << 24) & ((Minor & 0xFF) << 16) & (Release & 0xFFFF)
+    writeInt(version, buffer)
+    
     val table = createTable(Set(stream: _*))
     writeTable(table, buffer)
     writeInstructions(stream, table, buffer)
