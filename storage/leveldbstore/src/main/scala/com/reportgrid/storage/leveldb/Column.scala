@@ -1,4 +1,4 @@
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
@@ -11,39 +11,14 @@ import scalaz.Scalaz._
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
 
-trait ColumnComparator[T] extends DBComparator {
-  // Don't override unless you really know what you're doing
-  def findShortestSeparator(start : Array[Byte], limit : Array[Byte]) = start
-  def findShortSuccessor(key : Array[Byte]) = key
-}
+import reportgrid.analytics.Path
+import blueeyes.json.JPath
+import java.util.concurrent.CyclicBarrier
+import scalaz.iteratee._
 
-object ColumnComparator {
-  implicit val longComparator = Some(new ColumnComparator[Long] {
-    val name = "LongComparatorV1"
-    def compare(a : Array[Byte], b : Array[Byte]) = {
-      val valCompare = a.take(a.length - 8).as[Long].compareTo(b.take(b.length - 8).as[Long])
+case class ColumnMetadata(path: Path, dataPath: JPath, storageType: String /* placeholder */) 
 
-      if (valCompare == 0)
-        a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
-      else
-        0
-    }
-  })
-
-  implicit val bigDecimalComparator = Some(new ColumnComparator[BigDecimal] {
-    val name = "BigDecimalComparatorV1"
-    def compare(a : Array[Byte], b : Array[Byte]) = {
-      val valCompare = a.take(a.length - 8).as[BigDecimal].compareTo(b.take(b.length - 8).as[BigDecimal])
-
-      if (valCompare == 0)
-        a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
-      else
-        0
-    }
-  })
-}
-
-class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
+class Column[T](name : String, dataDir : String, metadata: ColumnMetadata)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
   val logger = Logger("col:" + name)
 
   private lazy val baseDir = {
@@ -54,10 +29,15 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     bd
   }
 
+  logger.debug("Opening column index files")
+
   private val createOptions = (new Options).createIfMissing(true)
   private val idIndexFile =  factory.open(new File(baseDir, "idIndex"), createOptions)
   comparator.foreach{ c => createOptions.comparator(c); logger.debug("Using custom comparator: " + c.name) }
   private val valIndexFile = factory.open(new File(baseDir, "valIndex"), createOptions)
+
+  def sync() {
+  }
 
   def close() {
     idIndexFile.close()
@@ -68,6 +48,10 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     f(db)
   }
 
+  private def shouldSync : Boolean = {
+    false
+  }
+
   def insert(id : Long, v : T) = {
     val idBytes = id.as[Array[Byte]]
     val valBytes = v.as[Array[Byte]]
@@ -76,9 +60,24 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     eval(valIndexFile) { _.put(valBytes ++ idBytes, Array[Byte]()) }
   }
   
-  def getValuesByIdRange(range: Interval[Long])(implicit ord: Ordering[Long]): Stream[(Long, T)] = {
-    import scala.math.Ordered._
-
+  def getValuesByIdRange[A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, IO, A] = {
+    def enumerator[A](iter: DBIterator): EnumeratorT[Unit, ByteBuffer, IO, A] = { s => 
+      def terminate = s.pointI.map(a => iter.close; a)
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          val n = iter.next
+          range.end match {
+            case Some(end) if end <= n.getKey.as[Long] => s.pointI
+            case _ => k(elInput(n)) >>== enumerator(iter)
+          }
+        } else {
+          s.pointI
+        },
+        done = (_, _) => s.pointI,
+        err = _ => s.pointI
+      )
+    }
+    
     eval(idIndexFile) { db =>
       val iter = db.iterator
       range.start match {
@@ -86,12 +85,7 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
         case None => iter.seekToFirst
       }
 
-      val endCondition = range.end match {
-        case Some(id) => (l : Long) => l < id
-        case None => (l : Long) => true
-      }
-
-      iter.asScala.map(kv => (kv.getKey.as[Long], kv.getValue.as[T])).takeWhile(t => endCondition(t._1)).toStream
+      enumerator(iter)
     }
   }
 

@@ -7,3 +7,5 @@ tags
 *.log
 *.pdf
 *.tex
+.history
+leveldbstore/scalaz
