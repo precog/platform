@@ -1,0 +1,6 @@
+HEAP_OPTS="-Xms4096m -Xmx4096m"
+GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode"
+GC_LOG_OPTS="-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/var/log/reportgrid/analytics-v1.gc.log"
+JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=30029 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=appserver01.reportgrid.com"
+
+JAVA_OPTS="$GC_LOG_OPTS $HEAP_OPTS"
