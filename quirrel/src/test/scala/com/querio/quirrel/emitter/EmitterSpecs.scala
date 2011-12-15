@@ -28,6 +28,7 @@ import org.specs2.mutable._
 
 import typer._
 
+import scalaz.Success
 import scalaz.Scalaz._
 
 // import scalaz.std.function._
@@ -48,10 +49,10 @@ object EmitterSpecs extends Specification
   "emitter" should {
     "emit load of literal dataset" in {
       compileEmit("""dataset("foo")""") mustEqual 
-        Vector(
+        Success(Vector(
           PushString("foo"),
           LoadLocal(Het)
-        )
+        ))
     }
   }
 }
