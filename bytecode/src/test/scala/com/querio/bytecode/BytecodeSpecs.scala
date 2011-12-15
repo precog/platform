@@ -16,11 +16,7 @@ class BytecodeSpecs extends Specification
   
   "bytecode reader/writer" should {
     "be consistent" in check { stream: Vector[Instruction] =>
-      val dataEstimate = 200 * 8
-      val tableEstimate = stream.length * (4 + 4 + dataEstimate) 
-      val sizeEstimate = (stream.length * 8) + 4 + 4 + tableEstimate
-      
-      val buffer = ByteBuffer.allocate(sizeEstimate)
+      val buffer = ByteBuffer.allocate(estimateSpace(stream))
       
       write(stream, buffer)
       buffer.rewind()

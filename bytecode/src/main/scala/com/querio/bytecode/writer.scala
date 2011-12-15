@@ -6,32 +6,46 @@ import scala.annotation.tailrec
 trait Writer extends Instructions {
   import instructions._
   
-  def write(stream: Vector[Instruction], buffer: ByteBuffer)
+  def estimateSpace(stream: Vector[Instruction]): Int
+  def write(stream: Vector[Instruction], buffer: ByteBuffer): Int
+  
+  def writeAndTrim(stream: Vector[Instruction]): ByteBuffer = {
+    val buffer = ByteBuffer.allocate(estimateSpace(stream))
+    write(stream, buffer)
+    buffer.flip()
+    buffer
+  }
 }
 
 trait BytecodeWriter extends Writer with Version {
   import instructions._
   
-  def write(stream: Vector[Instruction], buffer: ByteBuffer) {
-    val version = ((Major & 0x7F) << 24) & ((Minor & 0xFF) << 16) & (Release & 0xFFFF)
+  def estimateSpace(stream: Vector[Instruction]) = {
+    val dataEstimate = 200 * 8
+    val tableEstimate = stream.length * (4 + 4 + dataEstimate) 
+    (stream.length * 8) + 4 + 4 + tableEstimate
+  }
+  
+  def write(stream: Vector[Instruction], buffer: ByteBuffer): Int = {
+    val version = ((Major & 0x7F) << 24) | ((Minor & 0xFF) << 16) | (Release & 0xFFFF)
     writeInt(version, buffer)
     
     val table = createTable(Set(stream: _*))
-    writeTable(table, buffer)
-    writeInstructions(stream, table, buffer)
+    4 + writeTable(table, buffer) + writeInstructions(stream, table, buffer, 0)
   }
   
-  private def writeTable(table: Map[DataInstr, Int], buffer: ByteBuffer) {
-    for ((instr, id) <- table) {
+  private def writeTable(table: Map[DataInstr, Int], buffer: ByteBuffer) = {
+    val lengths = for ((instr, id) <- table) yield {
       buffer.putInt(id)
       
-      instr match {
+      val pred = instr match {
         case FilterMatch(_, pred) => writePredicate(pred, buffer)
         case FilterCross(_, pred) => writePredicate(pred, buffer)
         
         case Swap(depth) => {
           writeInt(4, buffer)
           writeInt(depth, buffer)
+          8
         }
         
         case Line(num, text) => writeLineInfo(num, text, buffer)
@@ -39,13 +53,17 @@ trait BytecodeWriter extends Writer with Version {
         case PushString(str) => writeString(str, buffer)
         case PushNum(num) => writeNum(num, buffer)
       }
+      
+      4 + pred
     }
     
     buffer.putInt(0x0)
+    
+    lengths.sum + 4
   }
   
   @tailrec
-  private[this] def writeInstructions(stream: Vector[Instruction], table: Map[DataInstr, Int], buffer: ByteBuffer) {
+  private[this] def writeInstructions(stream: Vector[Instruction], table: Map[DataInstr, Int], buffer: ByteBuffer, written: Int): Int = {
     def unaryOpNum(op: UnaryOperation) = op match {
       case Comp => 0x40
       case Neg => 0x41
@@ -142,16 +160,18 @@ trait BytecodeWriter extends Writer with Version {
       
       buffer.putInt(arg)
       
-      writeInstructions(stream.tail, table, buffer)
+      writeInstructions(stream.tail, table, buffer, written + 8)
+    } else {
+      written
     }
   }
   
-  private def writePredicate(pred: Predicate, buffer: ByteBuffer) {
+  private def writePredicate(pred: Predicate, buffer: ByteBuffer) = {
     writeInt(pred.length, buffer)
-    writePredicateStream(pred, buffer)
+    writePredicateStream(pred, buffer, 4)
   }
   
-  private[this] def writePredicateStream(stream: Vector[PredicateInstr], buffer: ByteBuffer) {
+  private[this] def writePredicateStream(stream: Vector[PredicateInstr], buffer: ByteBuffer, written: Int): Int = {
     if (!stream.isEmpty) {
       val opcode = stream.head match {
         case Add => 0x00
@@ -173,24 +193,27 @@ trait BytecodeWriter extends Writer with Version {
       }
       
       buffer.put(opcode.toByte)
-      writePredicateStream(stream.tail, buffer)
+      writePredicateStream(stream.tail, buffer, written + 4)
+    } else {
+      written
     }
   }
   
-  private def writeLineInfo(num: Int, text: String, buffer: ByteBuffer) {
+  private def writeLineInfo(num: Int, text: String, buffer: ByteBuffer) = {
     writeInt(text.length * 2 + 4, buffer)
     buffer.putInt(num)
     text foreach buffer.putChar
+    4 + 4 + (text.length * 8)
   }
   
-  private def writeString(str: String, buffer: ByteBuffer) {
+  private def writeString(str: String, buffer: ByteBuffer) = {
     writeInt(str.length * 2, buffer)
     str foreach buffer.putChar
+    4 + (str.length * 8)
   }
   
-  private def writeNum(num: String, buffer: ByteBuffer) {
+  private def writeNum(num: String, buffer: ByteBuffer) =
     writeString(num, buffer)
-  }
   
   private def writeInt(len: Int, buffer: ByteBuffer) {
     buffer.putInt(len)
@@ -224,7 +247,7 @@ trait BytecodeWriter extends Writer with Version {
 trait MnemonicWriter extends Writer {
   import instructions._
   
-  def write(stream: Vector[Instruction], buffer: ByteBuffer) {
-    // TODO
-  }
+  def estimateSpace(stream: Vector[Instruction]) = 0
+  
+  def write(stream: Vector[Instruction], buffer: ByteBuffer) = 0         // TODO
 }
