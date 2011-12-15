@@ -4,10 +4,13 @@ import java.nio.ByteBuffer
 import scala.annotation.tailrec
 
 trait Writer extends Instructions {
+  import instructions._
+  
   def write(stream: Vector[Instruction], buffer: ByteBuffer)
 }
 
 trait BytecodeWriter extends Writer with Version {
+  import instructions._
   
   def write(stream: Vector[Instruction], buffer: ByteBuffer) {
     val version = ((Major & 0x7F) << 24) & ((Minor & 0xFF) << 16) & (Release & 0xFFFF)
@@ -219,6 +222,8 @@ trait BytecodeWriter extends Writer with Version {
  * Writes a stream of instructions using the ASCII mnemonic format.
  */
 trait MnemonicWriter extends Writer {
+  import instructions._
+  
   def write(stream: Vector[Instruction], buffer: ByteBuffer) {
     // TODO
   }
