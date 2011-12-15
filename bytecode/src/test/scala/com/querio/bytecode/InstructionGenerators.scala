@@ -73,12 +73,12 @@ trait InstructionGenerators extends Instructions {
   private lazy val genMerge = Merge
   
   private lazy val genFilterMatch = for {
-    depth <- arbitrary[Int]
+    depth <- arbitrary[Short]
     pred <- genPredicate
   } yield FilterMatch(depth, pred)
   
   private lazy val genFilterCross = for {
-    depth <- arbitrary[Int]
+    depth <- arbitrary[Short]
     pred <- genPredicate
   } yield FilterCross(depth, pred)
   

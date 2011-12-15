@@ -117,39 +117,39 @@ trait BytecodeWriter extends Writer with Version {
     
     if (!stream.isEmpty) {
       val (opcode, pad, arg) = stream.head match {
-        case Map1(op) => (0x00, 0, unaryOpNum(op))
-        case Map2Match(op) => (0x01, 0, binaryOpNum(op))
-        case Map2CrossLeft(op) => (0x02, 0, binaryOpNum(op))
-        case Map2CrossRight(op) => (0x04, 0, binaryOpNum(op))
-        case Map2Cross(op) => (0x06, 0, binaryOpNum(op))
+        case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
+        case Map2Match(op) => (0x01, 0.toShort, binaryOpNum(op))
+        case Map2CrossLeft(op) => (0x02, 0.toShort, binaryOpNum(op))
+        case Map2CrossRight(op) => (0x04, 0.toShort, binaryOpNum(op))
+        case Map2Cross(op) => (0x06, 0.toShort, binaryOpNum(op))
         
-        case Reduce(red) => (0x08, 0, reductionNum(red))
+        case Reduce(red) => (0x08, 0.toShort, reductionNum(red))
         
-        case VUnion => (0x10, 0, 0)
-        case VIntersect => (0x11, 0, 0)
+        case VUnion => (0x10, 0.toShort, 0)
+        case VIntersect => (0x11, 0.toShort, 0)
         
-        case IUnion => (0x12, 0, 0)
-        case IIntersect => (0x13, 0, 0)
+        case IUnion => (0x12, 0.toShort, 0)
+        case IIntersect => (0x13, 0.toShort, 0)
         
         case i @ FilterMatch(depth, _) => (0x14, depth, table(i))
         case i @ FilterCross(depth, _) => (0x16, depth, table(i))
         
-        case Split => (0x1A, 0, 0)
-        case Merge => (0x1B, 0, 0)
+        case Split => (0x1A, 0.toShort, 0)
+        case Merge => (0x1B, 0.toShort, 0)
         
-        case Dup => (0x20, 0, 0)
-        case i @ Swap(_) => (0x20, 0, table(i))
+        case Dup => (0x20, 0.toShort, 0)
+        case i @ Swap(_) => (0x28, 0.toShort, table(i))
         
-        case i @ Line(_, _) => (0x2A, 0, table(i))
+        case i @ Line(_, _) => (0x2A, 0.toShort, table(i))
         
-        case LoadLocal(tpe) => (0x40, 0, typeNum(tpe))
+        case LoadLocal(tpe) => (0x40, 0.toShort, typeNum(tpe))
         
-        case i @ PushString(_) => (0x80, 0, table(i))
-        case i @ PushNum(_) => (0x81, 0, table(i))
-        case PushTrue => (0x82, 0, 0)
-        case PushFalse => (0x83, 0, 0)
-        case PushObject => (0x84, 0, 0)
-        case PushArray => (0x85, 0, 0)
+        case i @ PushString(_) => (0x80, 0.toShort, table(i))
+        case i @ PushNum(_) => (0x81, 0.toShort, table(i))
+        case PushTrue => (0x82, 0.toShort, 0)
+        case PushFalse => (0x83, 0.toShort, 0)
+        case PushObject => (0x84, 0.toShort, 0)
+        case PushArray => (0x85, 0.toShort, 0)
       }
       
       buffer.put(opcode.toByte)

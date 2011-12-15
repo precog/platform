@@ -26,8 +26,8 @@ trait Instructions {
     case object Split extends Instruction
     case object Merge extends Instruction
     
-    case class FilterMatch(depth: Int, pred: Predicate) extends Instruction with DataInstr
-    case class FilterCross(depth: Int, pred: Predicate) extends Instruction with DataInstr
+    case class FilterMatch(depth: Short, pred: Predicate) extends Instruction with DataInstr
+    case class FilterCross(depth: Short, pred: Predicate) extends Instruction with DataInstr
     
     case object Dup extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
