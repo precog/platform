@@ -4,16 +4,23 @@ package typer
 trait Binder extends parser.AST {
   import ast._
 
-  val BuiltInFunctions = Set(
-    BuiltIn("count", 1),
-    BuiltIn("dataset", 1),
-    BuiltIn("max", 1),
-    BuiltIn("mean", 1),
-    BuiltIn("median", 1),
-    BuiltIn("min", 1),
-    BuiltIn("mode", 1),
-    BuiltIn("stdDev", 1),
-    BuiltIn("sum", 1))
+  object BuiltIns {
+    val Count   = BuiltIn("count", 1)
+    val Load    = BuiltIn("dataset", 1)
+    val Max     = BuiltIn("max", 1)
+    val Mean    = BuiltIn("mean", 1)
+    val Median  = BuiltIn("median", 1)
+    val Min     = BuiltIn("min", 1)
+    val Mode    = BuiltIn("mode", 1)
+    val StdDev  = BuiltIn("stdDev", 1)
+    val Sum     = BuiltIn("sum", 1)
+  }
+
+  val BuiltInFunctions = {
+    import BuiltIns._
+
+    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum)
+  }
   
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[String, Binding]): Set[Error] = tree match {
@@ -70,7 +77,7 @@ trait Binder extends parser.AST {
           d.binding = env(name)
           
           d.isReduction = env(name) match {
-            case BuiltIn("dataset", _) => false
+            case BuiltIn(BuiltIns.Load.name, _) => false
             case BuiltIn(_, _) => true
             case _ => false
           }
