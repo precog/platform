@@ -61,7 +61,9 @@ trait Reader extends Instructions {
       
       lazy val num = tableEntry flatMap readNum
       
-      lazy val unOp = (code & 0xFF).toByte match {
+      lazy val tableInt = tableEntry flatMap readInt
+      
+      lazy val unOp = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
         
@@ -70,7 +72,7 @@ trait Reader extends Instructions {
         case _ => None
       }
       
-      lazy val binOp = (code & 0xFF).toByte match {
+      lazy val binOp = (code & 0xFF) match {
         case 0x00 => Some(Add)
         case 0x01 => Some(Sub)
         case 0x02 => Some(Mul)
@@ -98,7 +100,7 @@ trait Reader extends Instructions {
         case _ => None
       }
       
-      lazy val reduction = (code & 0xFF).toByte match {
+      lazy val reduction = (code & 0xFF) match {
         case 0x00 => Some(Count)
         
         case 0x01 => Some(Mean)
@@ -114,13 +116,13 @@ trait Reader extends Instructions {
         case _ => None
       }
       
-      lazy val tpe = (code & 0xFF).toByte match {
+      lazy val tpe = (code & 0xFF) match {
         case 0x00 => Some(Het)
       }
       
-      lazy val depth = ((code >> 32) & 0xFFFFFF).toInt
+      lazy val depth = ((code >> 32) & 0xFFFFFF).toShort
       
-      lazy val instruction = ((code >> 62) & 0xFF).toByte match {
+      lazy val instruction = ((code >> 56) & 0xFF) match {
         // operative instructions
         
         case 0x00 => unOp map Map1
@@ -146,7 +148,7 @@ trait Reader extends Instructions {
         // manipulative instructions
         
         case 0x20 => Some(Dup)
-        case 0x21 => Some(Swap(parameter))
+        case 0x28 => tableInt map { _.toInt } map Swap     // TODO is this *supposed* to be like so?
         
         case 0x2A => lineInfo map tupled(Line)
         
@@ -176,7 +178,7 @@ trait Reader extends Instructions {
   @tailrec
   private[this] def readPredicate(buffer: ByteBuffer, acc: Vector[PredicateInstr]): Predicate = {
     val opcode = try {
-      Some(buffer.get)
+      Some(buffer.get & 0xFF)     // promote the *unsigned* byte to int
     } catch {
       case _: BufferUnderflowException => None
     }
@@ -202,7 +204,10 @@ trait Reader extends Instructions {
     
     instr match {
       case Some(i) => readPredicate(buffer, acc :+ i)
-      case None => acc
+      case None => {
+        buffer.rewind()
+        acc
+      }
     }
   }
   
@@ -217,13 +222,25 @@ trait Reader extends Instructions {
   
   private def readString(buffer: ByteBuffer): Option[String] = {
     try {
-      Some(buffer.asCharBuffer.toString)
+      val back = Some(buffer.asCharBuffer.toString)
+      buffer.rewind()
+      back
     } catch {
       case _ => None
     }
   }
   
   private def readNum(buffer: ByteBuffer): Option[String] = readString(buffer)
+  
+  private def readInt(buffer: ByteBuffer): Option[Int] = {
+    try {
+      val back = Some(buffer.getInt)
+      buffer.rewind()
+      back
+    } catch {
+      case _ => None
+    }
+  }
   
   private def readSymbolTable(buffer: ByteBuffer): Map[Int, ByteBuffer] = {
     def loop(acc: Map[Int, ByteBuffer]): Map[Int, ByteBuffer] = {
@@ -244,6 +261,7 @@ trait Reader extends Instructions {
     val arr = new Array[Byte](len)
     buffer.get(arr)
     back.put(arr)
+    back.rewind()
     back
   }
 }
