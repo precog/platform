@@ -15,6 +15,7 @@ import edu.uwm.cs.util.ComplementarySet
 import edu.uwm.cs.util.UniversalCharSet
 
 trait Parser extends RegexParsers with Filters with AST {
+  import ast._
   
   def parse(str: String): Expr = parse(LineStream(str))
   

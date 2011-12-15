@@ -11,6 +11,8 @@ trait AST extends Phases {
   type Binding
   type FormalBinding
   type Provenance
+
+  import ast._
   
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
     case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
@@ -267,203 +269,205 @@ trait AST extends Phases {
       case _ =>
     }
   }
-  
+
   sealed trait Expr extends Node with Product {
-    val nodeId = System.identityHashCode(this)
-    
-    private val _root = atom[Expr]
-    def root = _root()
-    private[AST] def root_=(e: Expr) = _root() = e
-    
-    private val _provenance = attribute[Provenance](checkProvenance)
-    def provenance = _provenance()
-    private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
-    
-    private[quirrel] final lazy val _errors: SetAtom[Error] =
-      if (this eq root) new SetAtom[Error] else root._errors
-    
-    final def errors = _errors()
-    
-    def loc: LineStream
-    
-    def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
-      case (Add(_, left1, right1), Add(_, left2, right2)) =>
-        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      val nodeId = System.identityHashCode(this)
       
-      case (Sub(_, left1, right1), Sub(_, left2, right2)) =>
-        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      private val _root = atom[Expr]
+      def root = _root()
+      private[AST] def root_=(e: Expr) = _root() = e
       
-      case (Mul(_, left1, right1), Mul(_, left2, right2)) =>
-        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      private val _provenance = attribute[Provenance](checkProvenance)
+      def provenance = _provenance()
+      private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
       
-      case (Div(_, left1, right1), Div(_, left2, right2)) =>
-        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      private[quirrel] final lazy val _errors: SetAtom[Error] =
+        if (this eq root) new SetAtom[Error] else root._errors
       
-      case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
-      case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
+      final def errors = _errors()
       
-      case (TicVar(_, id1), TicVar(_, id2)) => id1 == id2
+      def loc: LineStream
       
-      case _ => false
+      def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
+        case (Add(_, left1, right1), Add(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Sub(_, left1, right1), Sub(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Mul(_, left1, right1), Mul(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Div(_, left1, right1), Div(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
+        case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
+        
+        case (TicVar(_, id1), TicVar(_, id2)) => id1 == id2
+        
+        case _ => false
+      }
+      
+      protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
+        _errors ++= phase(root)
+      }
+    }
+  
+  object ast {    
+    final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'let
+      
+      lazy val criticalConditions = findCriticalConditions(this)
+      
+      private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
+      def assumptions = _assumptions()
+      private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
+      
+      private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
+      def unconstrainedParams = _unconstrainedParams()
+      private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
+      
+      private val _requiredParams = attribute[Int](checkProvenance)
+      def requiredParams = _requiredParams()
+      private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
     }
     
-    protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
-      _errors ++= phase(root)
+    final case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+      val label = 'new
+      val isPrefix = true
     }
-  }
-  
-  final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'let
     
-    lazy val criticalConditions = findCriticalConditions(this)
+    final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with BinaryNode {
+      val label = 'relate
+      
+      val left = from
+      val right = to
+      override def children = List(from, to, in)
+    }
     
-    private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
-    def assumptions = _assumptions()
-    private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
+    final case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
+      val label = 'ticvar
+      
+      private val _binding = attribute[FormalBinding](bindNames)
+      def binding = _binding()
+      private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
+    }
     
-    private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
-    def unconstrainedParams = _unconstrainedParams()
-    private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
+    final case class StrLit(loc: LineStream, value: String) extends Expr with LeafNode {
+      val label = 'str
+    }
     
-    private val _requiredParams = attribute[Int](checkProvenance)
-    def requiredParams = _requiredParams()
-    private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
-  }
-  
-  final case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
-    val label = 'new
-    val isPrefix = true
-  }
-  
-  final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with BinaryNode {
-    val label = 'relate
+    final case class NumLit(loc: LineStream, value: String) extends Expr with LeafNode {
+      val label = 'num
+    }
     
-    val left = from
-    val right = to
-    override def children = List(from, to, in)
-  }
-  
-  final case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
-    val label = 'ticvar
+    final case class BoolLit(loc: LineStream, value: Boolean) extends Expr with LeafNode {
+      val label = 'bool
+    }
     
-    private val _binding = attribute[FormalBinding](bindNames)
-    def binding = _binding()
-    private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
-  }
-  
-  final case class StrLit(loc: LineStream, value: String) extends Expr with LeafNode {
-    val label = 'str
-  }
-  
-  final case class NumLit(loc: LineStream, value: String) extends Expr with LeafNode {
-    val label = 'num
-  }
-  
-  final case class BoolLit(loc: LineStream, value: Boolean) extends Expr with LeafNode {
-    val label = 'bool
-  }
-  
-  final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr {
-    val label = 'object
+    final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr {
+      val label = 'object
+      
+      def children = props map { _._2 } toList
+    }
     
-    def children = props map { _._2 } toList
-  }
-  
-  final case class ArrayDef(loc: LineStream, values: Vector[Expr]) extends Expr {
-    val label = 'array
+    final case class ArrayDef(loc: LineStream, values: Vector[Expr]) extends Expr {
+      val label = 'array
+      
+      def children = values.toList
+    }
     
-    def children = values.toList
-  }
-  
-  final case class Descent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryNode {
-    val label = 'descent
-    val isPrefix = false
-  }
-  
-  final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with UnaryNode {
-    val label = 'deref
-    val isPrefix = true
-    val child = left
-  }
-  
-  final case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
-    val label = 'dispatch
+    final case class Descent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryNode {
+      val label = 'descent
+      val isPrefix = false
+    }
     
-    private val _isReduction = attribute[Boolean](bindNames)
-    def isReduction = _isReduction()
-    private[quirrel] def isReduction_=(b: Boolean) = _isReduction() = b
+    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with UnaryNode {
+      val label = 'deref
+      val isPrefix = true
+      val child = left
+    }
     
-    private val _binding = attribute[Binding](bindNames)
-    def binding = _binding()
-    private[quirrel] def binding_=(b: Binding) = _binding() = b
+    final case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
+      val label = 'dispatch
+      
+      private val _isReduction = attribute[Boolean](bindNames)
+      def isReduction = _isReduction()
+      private[quirrel] def isReduction_=(b: Boolean) = _isReduction() = b
+      
+      private val _binding = attribute[Binding](bindNames)
+      def binding = _binding()
+      private[quirrel] def binding_=(b: Binding) = _binding() = b
+      
+      def children = actuals.toList
+    }
     
-    def children = actuals.toList
-  }
-  
-  final case class Operation(loc: LineStream, left: Expr, op: String, right: Expr) extends Expr with BinaryNode {
-    val label = if (op == "where") 'where else 'op
-  }
-  
-  final case class Add(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'add
-  }
-  
-  final case class Sub(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'sub
-  }
-  
-  final case class Mul(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'mul
-  }
-  
-  final case class Div(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'div
-  }
-  
-  final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'lt
-  }
-  
-  final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'lteq
-  }
-  
-  final case class Gt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'gt
-  }
-  
-  final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'gteq
-  }
-  
-  final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'eq
-  }
-  
-  final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'noteq
-  }
-  
-  final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'and
-  }
-  
-  final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
-    val label = 'or
-  }
-  
-  final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryNode {
-    val label = 'comp
-    val isPrefix = true
-  }
-  
-  final case class Neg(loc: LineStream, child: Expr) extends Expr with UnaryNode {
-    val label = 'neg
-    val isPrefix = true
-  }
-  
-  final case class Paren(loc: LineStream, child: Expr) extends Expr {
-    val label = 'paren
-    val children = child :: Nil
+    final case class Operation(loc: LineStream, left: Expr, op: String, right: Expr) extends Expr with BinaryNode {
+      val label = if (op == "where") 'where else 'op
+    }
+    
+    final case class Add(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'add
+    }
+    
+    final case class Sub(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'sub
+    }
+    
+    final case class Mul(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'mul
+    }
+    
+    final case class Div(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'div
+    }
+    
+    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'lt
+    }
+    
+    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'lteq
+    }
+    
+    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'gt
+    }
+    
+    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'gteq
+    }
+    
+    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'eq
+    }
+    
+    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'noteq
+    }
+    
+    final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'and
+    }
+    
+    final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+      val label = 'or
+    }
+    
+    final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+      val label = 'comp
+      val isPrefix = true
+    }
+    
+    final case class Neg(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+      val label = 'neg
+      val isPrefix = true
+    }
+    
+    final case class Paren(loc: LineStream, child: Expr) extends Expr {
+      val label = 'paren
+      val children = child :: Nil
+    }
   }
 }

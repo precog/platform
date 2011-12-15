@@ -2,6 +2,8 @@ package com.querio.quirrel
 package typer
 
 trait Binder extends parser.AST {
+  import ast._
+
   val BuiltInFunctions = Set(
     BuiltIn("count", 1),
     BuiltIn("dataset", 1),

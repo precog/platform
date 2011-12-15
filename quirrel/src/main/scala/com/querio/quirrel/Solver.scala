@@ -7,6 +7,7 @@ import scala.collection.parallel.ParSet
 
 trait Solver extends parser.AST {
   import Function._
+  import ast._
   
   // VERY IMPORTANT!!!  each rule must represent a monotonic reduction in tree complexity
   private val Rules: Set[PartialFunction[Expr, Set[Expr]]] = Set(
