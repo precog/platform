@@ -20,11 +20,18 @@
 package com.querio.quirrel
 package emitter
 
+import com.querio.bytecode.Instructions
+
 import org.scalacheck.Prop
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 import typer._
+
+import scalaz.Scalaz._
+
+// import scalaz.std.function._
+// import scalaz.syntax.arrow._
 
 object EmitterSpecs extends Specification
     with ScalaCheck
@@ -34,5 +41,17 @@ object EmitterSpecs extends Specification
     with CriticalConditionFinder 
     with Emitter {
 
-  import ast._
+  import instructions._
+
+  val compileEmit = ((_: String).stripMargin) >>> (compile(_: String)) >>> (emit _)
+
+  "emitter" should {
+    "emit load of literal dataset" in {
+      compileEmit("""dataset("foo")""") mustEqual 
+        Vector(
+          PushString("foo"),
+          LoadLocal(Het)
+        )
+    }
+  }
 }
