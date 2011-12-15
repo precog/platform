@@ -45,7 +45,7 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String)  extends Actor {
-      private val column = new Column[BigDecimal](name, basedir)
+      private val column = new Column[BigDecimal](name, basedir, JBigDecimalOrdering)
 
       private var count = 0
       
