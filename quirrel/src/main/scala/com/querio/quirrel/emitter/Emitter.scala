@@ -30,16 +30,19 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   import instructions._
   case class EmitterError(expr: Expr, message: String) extends Exception(message)
 
-  private def notImpl(expr: Expr): Validation[EmitterError, Vector[Instruction]] = Failure(EmitterError(expr, "Not implemented"))
+  type EmitterType = Validation[EmitterError, Vector[Instruction]]
 
-  def emit(expr: Expr): Validation[EmitterError, Vector[Instruction]] = {
-    def emitBinary(left: Expr, right: Expr, op: BinaryOperation): Validation[EmitterError, Vector[Instruction]] = {
+  private def nullProvenanceError(expr: Expr): EmitterType = Failure(EmitterError(expr, "Expression has null provenance"))
+  private def notImpl(expr: Expr): EmitterType = Failure(EmitterError(expr, "Not implemented"))
+
+  def emit(expr: Expr): EmitterType = {
+    def emitBinary(left: Expr, right: Expr, op: BinaryOperation): EmitterType = {
       (left.provenance, right.provenance) match {
         case (NullProvenance, _) => 
-          Failure(EmitterError(left, "Expression has null provenance"))
+          nullProvenanceError(left)
 
         case (_, NullProvenance) => 
-          Failure(EmitterError(right, "Expression has null provenance"))
+          nullProvenanceError(right)
 
         case (p1, p2) =>
           val bytecode = (p1, p2) match {
@@ -60,7 +63,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
       }
     }
 
-    def emit0(expr: Expr, vector: Vector[Instruction]): Validation[EmitterError, Vector[Instruction]] = {
+    def emit0(expr: Expr, vector: Vector[Instruction]): EmitterType = {
       ((expr match {
         case ast.New(loc, child) => 
           notImpl(expr)
@@ -157,7 +160,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         
         case ast.Paren(loc, child) => 
           notImpl(expr)
-      }): Validation[EmitterError, Vector[Instruction]]).map[Vector[Instruction]](vector ++ _)
+      }): EmitterType).map[Vector[Instruction]](vector ++ _)
     }
 
     emit0(expr, Vector.empty)
