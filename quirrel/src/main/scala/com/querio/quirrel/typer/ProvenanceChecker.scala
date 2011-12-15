@@ -22,6 +22,7 @@ package typer
 
 trait ProvenanceChecker extends parser.AST with Binder {
   import Utils._
+  import ast._
   
   override def checkProvenance(expr: Expr) = {
     def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]]): Set[Error] = expr match {

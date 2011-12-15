@@ -22,6 +22,7 @@ package typer
 
 trait CriticalConditionFinder extends parser.AST with Binder {
   import Utils._
+  import ast._
   
   override def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = {
     def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[Expr]] = expr match {

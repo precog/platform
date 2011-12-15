@@ -21,7 +21,8 @@ package com.querio.quirrel
 package typer
 
 trait TreeShaker extends Phases with parser.AST with Binder {
-  
+  import ast._
+
   /**
    * @return The <em>root</em> of the shaken tree
    */
