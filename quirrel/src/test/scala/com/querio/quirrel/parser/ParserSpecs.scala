@@ -7,6 +7,7 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
 object ParserSpecs extends Specification with ScalaCheck with Parser with StubPhases {
+  import ast._
   
   "uncomposed expression parsing" should {
     "accept parameterized bind with one parameter" in {

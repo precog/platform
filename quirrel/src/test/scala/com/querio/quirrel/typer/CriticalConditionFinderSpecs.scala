@@ -7,6 +7,7 @@ object CriticalConditionFinderSpecs extends Specification
     with StubPhases
     with Compiler
     with CriticalConditionFinder {
+  import ast._  
   
   "critical condition finding" should {
     "detect critical conditions in a simple where" in {

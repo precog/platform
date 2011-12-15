@@ -6,6 +6,7 @@ import edu.uwm.cs.gll.ast.Node
 import org.specs2.mutable.Specification
 
 object SolverSpecs extends Specification with parser.Parser with Solver with StubPhases {
+  import ast._
   
   "simple expression solution" should {
     "solve left addition" in {

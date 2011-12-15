@@ -9,6 +9,7 @@ object ProvenanceSpecs extends Specification
     with Compiler
     with ProvenanceChecker
     with CriticalConditionFinder {
+  import ast._
   
   "provenance computation" should {
     "identify let according to its right expression" in {   // using raw, no-op let
