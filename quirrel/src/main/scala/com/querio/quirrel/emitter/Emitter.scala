@@ -33,6 +33,33 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   private def notImpl(expr: Expr): Validation[EmitterError, Vector[Instruction]] = Failure(EmitterError(expr, "Not implemented"))
 
   def emit(expr: Expr): Validation[EmitterError, Vector[Instruction]] = {
+    def emitBinary(left: Expr, right: Expr, op: BinaryOperation): Validation[EmitterError, Vector[Instruction]] = {
+      (left.provenance, right.provenance) match {
+        case (NullProvenance, _) => 
+          Failure(EmitterError(left, "Expression has null provenance"))
+
+        case (_, NullProvenance) => 
+          Failure(EmitterError(right, "Expression has null provenance"))
+
+        case (p1, p2) =>
+          val bytecode = (p1, p2) match {
+            case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
+              Map2Match(op)
+            
+            case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
+              Map2Match(op)
+
+            case (_, _) =>
+              Map2Cross(op)
+          }
+
+          for {
+            leftInstr   <- emit(left)
+            rightInstr  <- emit(right)
+          } yield (leftInstr ++ rightInstr) :+ bytecode
+      }
+    }
+
     def emit0(expr: Expr, vector: Vector[Instruction]): Validation[EmitterError, Vector[Instruction]] = {
       ((expr match {
         case ast.New(loc, child) => 
@@ -87,26 +114,16 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           notImpl(expr)
         
         case ast.Add(loc, left, right) => 
-          (left.provenance, right.provenance) match {
-            case (NullProvenance, _) | (_, NullProvenance) => 
-              
-
-            case (StaticProvenance(p1), StaticProvenance(p2)) => 
-              
-
-            case _ =>
-          }
-
-          notImpl(expr)
+          emitBinary(left, right, Add)
         
         case ast.Sub(loc, left, right) => 
-          notImpl(expr)
+          emitBinary(left, right, Sub)
 
         case ast.Mul(loc, left, right) => 
-          notImpl(expr)
+          emitBinary(left, right, Mul)
         
         case ast.Div(loc, left, right) => 
-          notImpl(expr)
+          emitBinary(left, right, Div)
         
         case ast.Lt(loc, left, right) => 
           notImpl(expr)
