@@ -24,6 +24,7 @@ import java.nio.BufferUnderflowException
 import scala.annotation.tailrec
 
 trait Reader extends Instructions {
+  import instructions._
   import Function._
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
