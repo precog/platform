@@ -34,3 +34,19 @@ libraryDependencies ++= Seq(
 logBuffered := false
 
 publishArtifact in packageDoc := false
+
+initialCommands in console := """
+  | import com.querio.bytecode._
+  | import java.nio.ByteBuffer
+  | 
+  | val cake = new Reader with BytecodeWriter
+  | 
+  | def printBuffer(buffer: ByteBuffer) {
+  |   try {
+  |     val b = buffer.get()
+  |     printf("%02X ", b)
+  |   } catch {
+  |     case _ => return
+  |   }
+  |   printBuffer(buffer)
+  | }""".stripMargin
