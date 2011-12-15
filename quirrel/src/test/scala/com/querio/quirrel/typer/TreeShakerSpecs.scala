@@ -24,6 +24,7 @@ import org.specs2.mutable.Specification
 import edu.uwm.cs.gll.LineStream
 
 object TreeShakerSpecs extends Specification with StubPhases with TreeShaker {
+  import ast._
   
   "tree shaking" should {
     "bind root on result" in {
