@@ -22,6 +22,8 @@ package com.querio.quirrel.emitter
 import com.querio.quirrel.parser.AST
 import com.querio.bytecode.{Instructions}
 
+import scalaz._
+
 trait Emitter extends AST with Instructions {
   import instructions._
 
