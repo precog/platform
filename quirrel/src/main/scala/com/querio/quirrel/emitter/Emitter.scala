@@ -40,10 +40,16 @@ trait Emitter extends AST with Instructions with Binder {
         case t @ ast.TicVar(loc, id) => 
         
         case ast.StrLit(loc, value) => 
+          Vector(PushString(value))
         
         case ast.NumLit(loc, value) => 
+          Vector(PushNum(value))
         
         case ast.BoolLit(loc, value) => 
+          value match {
+            case true  => PushTrue
+            case false => PushFalse
+          }
         
         case ast.ObjectDef(loc, props) => 
         
@@ -56,6 +62,7 @@ trait Emitter extends AST with Instructions with Binder {
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case BuiltIn(BuiltIns.Load.name, arity) =>
+              emit(actuals.head) :+ LoadLocal(Het)
 
             case BuiltIn(n, arity) =>
 
