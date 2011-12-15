@@ -10,6 +10,7 @@ import java.math._
 import java.util.concurrent.{CyclicBarrier,LinkedBlockingQueue}
 import java.util.Random
 
+import scala.math.Ordering
 
 object ContinuousSpeedTest {
   def main (argv : Array[String]) {
@@ -78,8 +79,8 @@ object ContinuousSpeedTest {
     }
 
     (dataType.toLowerCase match {
-      case "long" => new TestHarness[Long](new Column(_,basedir), r.nextLong)
-      case "decimal" => new TestHarness[BigDecimal](new Column(_,basedir), BigDecimal.valueOf(r.nextDouble))
+      case "long" => new TestHarness[Long](new Column(_,basedir,Ordering.Long), r.nextLong)
+      case "decimal" => new TestHarness[BigDecimal](new Column(_,basedir,JBigDecimalOrdering), BigDecimal.valueOf(r.nextDouble))
     }).run()
   }
 }

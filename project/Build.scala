@@ -22,13 +22,10 @@ object PlatformBuild extends Build {
   lazy val storage = condeps.addDeps(Project(
     "storage", file("storage/leveldbstore"), 
     settings = Defaults.defaultSettings ++ commonSettings ++ Seq(
-
       version := "0.0.1-SNAPSHOT",
-
       organization := "com.reportgrid",
-
       scalaVersion := "2.9.1",
-
+      //scalacOptions ++= Seq("-deprecation", "-unchecked", "-verbose"),
       scalacOptions ++= Seq("-deprecation", "-unchecked"),
 
       libraryDependencies ++= Seq(

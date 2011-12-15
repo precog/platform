@@ -1,9 +1,13 @@
 package com.reportgrid.storage.leveldb
 
+import scala.math.Ordering
+import scalaz.effect.IO
+import scalaz.iteratee.Iteratee._
+
 object ReadTest {
   def main (argv : Array[String]) {
     val (column, chunkSize, seed) = argv match {
-      case Array(name, basedir, size, sd) => (new Column[Long](name,basedir), size.toInt, sd.toInt)
+      case Array(name, basedir, size, sd) => (new Column[Long](name,basedir,Ordering.Long), size.toInt, sd.toInt)
       case _ => {
         println("Usage: ReadTest <column name> <base dir>")
         sys.exit(1)
@@ -25,7 +29,7 @@ object ReadTest {
       val startTime = System.currentTimeMillis
       while (index < chunkSize) {
         val toRead = allVals(r.nextInt(allVals.size))
-        val relatedIds = column.getIds(toRead)
+        val relatedIds : List[Long] = ((fold[Unit, Long, IO, List[Long]](Nil)((a,e) => e :: a) >>== column.getIds(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
         totalRead += relatedIds.size
         println(toRead + " => " + relatedIds)
         index += 1
@@ -41,7 +45,7 @@ object ConfirmTest {
   def main (args : Array[String]) {
     args match {
       case Array(name,base) => {
-        val c = new Column[java.math.BigDecimal](name, base)
+        val c = new Column[java.math.BigDecimal](name, base, JBigDecimalOrdering)
         val bd = BigDecimal("123.45")
 
         List(12l,15l,45345435l,2423423l).foreach(c.insert(_, bd.underlying))

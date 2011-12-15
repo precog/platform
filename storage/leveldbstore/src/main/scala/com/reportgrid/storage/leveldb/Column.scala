@@ -12,19 +12,14 @@ import scalaz.Scalaz._
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
 
-//import reportgrid.analytics.Path
-//import blueeyes.json.JPath
-import java.util.concurrent.CyclicBarrier
-
+import scalaz.{Ordering => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.iteratee.Input._
+import IterateeT._
 import scalaz.Scalaz._
 
-//case class ColumnMetadata(path: Path, dataPath: JPath, storageType: String /* placeholder */) 
-case class ColumnMetadata(path: String, dataPath: String, storageType: String)
-
-class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
+class Column[T](name : String, dataDir : String, order : Ordering[T])(implicit b : Bijection[T,Array[Byte]], comparator : Option[ColumnComparator[T]] = None) {
   val logger = Logger("col:" + name)
 
   private lazy val baseDir = {
@@ -50,10 +45,6 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     valIndexFile.close()
   }
 
-  def eval[A](db : DB)(f : DB => A): A = {
-    f(db)
-  }
-
   private def shouldSync : Boolean = {
     false
   }
@@ -62,46 +53,56 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
     val idBytes = id.as[Array[Byte]]
     val valBytes = v.as[Array[Byte]]
 
-    eval(idIndexFile) { _.put(idBytes, valBytes) } 
-    eval(valIndexFile) { _.put(valBytes ++ idBytes, Array[Byte]()) }
+    idIndexFile.put(idBytes, valBytes) 
+    valIndexFile.put(valBytes ++ idBytes, Array[Byte]())
   }
+
   
-  def getValuesByIdRange[A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, IO, A] = {
-    def enumerator[A](iter: DBIterator, close: IO[Unit]): EnumeratorT[Unit, ByteBuffer, IO, A] = { s => 
+  def getValuesByIdRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, F, A] = {
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s => 
       s.fold(
         cont = k => if (iter.hasNext) {
           val n = iter.next
           range.end match {
-            case Some(end) if end <= n.getKey.as[Long] => s.pointI
+            case Some(end) if end <= n.getKey.as[Long] => iterateeT(close >> s.pointI.value)
             case _ => k(elInput(ByteBuffer.wrap(n.getValue))) >>== enumerator(iter, close)
           }
         } else {
-          s.pointI
+          iterateeT(close >> s.pointI.value)
         },
-        done = (_, _) => s.pointI,
-        err = _ => s.pointI
+        done = (_, _) => iterateeT(close >> s.pointI.value),
+        err = _ => iterateeT(close >> s.pointI.value)
       )
     }
     
-    eval(idIndexFile) { db =>
-      val iter = db.iterator
-      range.start match {
-        case Some(id) => iter.seek(id.as[Array[Byte]])
-        case None => iter.seekToFirst
-      }
-
-      enumerator(iter, IO(iter.close))
+    val iter = idIndexFile.iterator
+    range.start match {
+      case Some(id) => iter.seek(id.as[Array[Byte]])
+      case None => iter.seekToFirst
     }
+
+    enumerator(iter, IO(iter.close).liftIO[F])
   }
 
-  def getIds(v : T)(implicit o : Ordering[T]): Stream[Long] = {
-    import scala.math.Ordered._
-
-    eval (valIndexFile) { db =>
-      val iter = db.iterator
-      iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
-      iter.asScala.map(i => i.getKey).takeWhile(kv => valueOf(kv) == v).map(idOf).toStream
+  def getIds[F[_] : MonadIO, A](v : T): EnumeratorT[Unit, Long, F, A] = {
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Long, F, A] = { s =>
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          val n = iter.next
+          val (cv,ci) = n.getKey.splitAt(n.getKey.length - 8)
+          if (order.compare(cv.as[T], v) > 0) iterateeT(close >> s.pointI.value)
+          else k(elInput(ci.as[Long])) >>== enumerator(iter, close)
+        } else {
+          iterateeT(close >> s.pointI.value)
+        },
+        done = (_, _) => iterateeT(close >> s.pointI.value),
+        err = _ => iterateeT(close >> s.pointI.value)
+      )
     }
+
+    val iter = valIndexFile.iterator
+    iter.seek(v.as[Array[Byte]] ++ 0L.as[Array[Byte]])
+    enumerator(iter, IO(iter.close).liftIO[F])
   }
 
 /*
@@ -126,14 +127,14 @@ class Column[T](name : String, dataDir : String)(implicit b : Bijection[T,Array[
   }
   */
 
-  def getAllIds : Stream[Long] = eval(idIndexFile){ db =>
-    val iter = db.iterator 
+  def getAllIds : Stream[Long] = {
+    val iter = idIndexFile.iterator 
     iter.seekToFirst
     iter.asScala.map(_.getKey.as[Long]).toStream
   }
 
-  def getAllValues : Stream[T] = eval(valIndexFile){ db =>
-    val iter = db.iterator
+  def getAllValues : Stream[T] = {
+    val iter = valIndexFile.iterator
     iter.seekToFirst
     iter.asScala.map(t => valueOf(t.getKey)).toStream.distinct
   }
