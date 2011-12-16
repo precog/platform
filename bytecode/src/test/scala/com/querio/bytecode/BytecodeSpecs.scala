@@ -33,6 +33,9 @@ class BytecodeSpecs extends Specification
   
   import Prop._
   
+  val numCores = Runtime.getRuntime.availableProcessors
+  implicit val params = set(minTestsOk -> (10000 * numCores), workers -> numCores)
+  
   "bytecode reader/writer" should {
     "be consistent" in check { stream: Vector[Instruction] =>
       val buffer = ByteBuffer.allocate(estimateSpace(stream))
