@@ -21,6 +21,7 @@ package com.reportgrid.storage.leveldb
 
 import comparators._
 import java.io.File
+import java.nio.ByteBuffer
 import scala.math.Ordering
 import scalaz.effect.IO
 import scalaz.iteratee.Iteratee._
@@ -39,7 +40,7 @@ object ReadTest {
     val r = new java.util.Random(seed)
 
     // Get a set of all values in the column
-    val allVals = column.getAllValues.toArray
+    val allVals = (fold[Unit, ByteBuffer, IO, List[ByteBuffer]](Nil)((a, e) => e :: a) >>== column.getAllValues) apply (_ => IO(Nil)) unsafePerformIO
 
     println("Read " + allVals.size + " distinct values")
 
@@ -50,9 +51,9 @@ object ReadTest {
       val startTime = System.currentTimeMillis
       while (index < chunkSize) {
         val toRead = allVals(r.nextInt(allVals.size))
-        //val relatedIds : List[Long] = ((fold[Unit, Long, IO, List[Long]](Nil)((a,e) => e :: a) >>== column.getIds(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
-        //totalRead += relatedIds.size
-        //println(toRead + " => " + relatedIds)
+        val relatedIds : List[ByteBuffer] = ((fold[Unit, ByteBuffer, IO, List[ByteBuffer]](Nil)((a,e) => e :: a) >>== column.getIdsForValue(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
+        totalRead += relatedIds.size
+        println(toRead + " => " + relatedIds)
         index += 1
       }
       val duration = System.currentTimeMillis - startTime
@@ -62,6 +63,7 @@ object ReadTest {
   }
 }
 
+/*
 object ConfirmTest {
   def main (args : Array[String]) {
     args match {
@@ -76,3 +78,4 @@ object ConfirmTest {
     }
   }
 }
+*/
