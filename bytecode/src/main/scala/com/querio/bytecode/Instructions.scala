@@ -83,19 +83,22 @@ trait Instructions {
     
     sealed trait DataInstr extends Instruction
     
-    case class Map1(op: UnaryOperation) extends Instruction
-    case class Map2Match(op: BinaryOperation) extends Instruction
-    case class Map2CrossLeft(op: BinaryOperation) extends Instruction
-    case class Map2CrossRight(op: BinaryOperation) extends Instruction
-    case class Map2Cross(op: BinaryOperation) extends Instruction
+    sealed trait OpInstr extends Instruction
+    sealed trait JoinInstr extends Instruction
+    
+    case class Map1(op: UnaryOperation) extends Instruction with OpInstr
+    case class Map2Match(op: BinaryOperation) extends Instruction with JoinInstr
+    case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
+    case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
+    case class Map2Cross(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: Reduction) extends Instruction
     
-    case object VUnion extends Instruction
-    case object VIntersect extends Instruction
+    case object VUnion extends Instruction with JoinInstr
+    case object VIntersect extends Instruction with JoinInstr
     
-    case object IUnion extends Instruction
-    case object IIntersect extends Instruction
+    case object IUnion extends Instruction with JoinInstr
+    case object IIntersect extends Instruction with JoinInstr
     
     case object Split extends Instruction
     case object Merge extends Instruction
@@ -110,12 +113,14 @@ trait Instructions {
     
     case class LoadLocal(tpe: Type) extends Instruction
     
-    case class PushString(str: String) extends Instruction with DataInstr
-    case class PushNum(num: String) extends Instruction with DataInstr
-    case object PushTrue extends Instruction
-    case object PushFalse extends Instruction
-    case object PushObject extends Instruction
-    case object PushArray extends Instruction
+    sealed trait RootInstr extends Instruction
+    
+    case class PushString(str: String) extends Instruction with DataInstr with RootInstr
+    case class PushNum(num: String) extends Instruction with DataInstr with RootInstr
+    case object PushTrue extends Instruction with RootInstr
+    case object PushFalse extends Instruction with RootInstr
+    case object PushObject extends Instruction with RootInstr
+    case object PushArray extends Instruction with RootInstr
     
     
     sealed trait UnaryOperation
@@ -142,10 +147,12 @@ trait Instructions {
       }
     }
     
-    case object Add extends BinaryOperation with PredicateInstr
-    case object Sub extends BinaryOperation with PredicateInstr
-    case object Mul extends BinaryOperation with PredicateInstr
-    case object Div extends BinaryOperation with PredicateInstr
+    sealed trait PredicateOp
+    
+    case object Add extends BinaryOperation with PredicateInstr with PredicateOp
+    case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
+    case object Mul extends BinaryOperation with PredicateInstr with PredicateOp
+    case object Div extends BinaryOperation with PredicateInstr with PredicateOp
     
     case object Lt extends BinaryOperation
     case object LtEq extends BinaryOperation
@@ -159,7 +166,7 @@ trait Instructions {
     case object And extends BinaryOperation with PredicateInstr
     
     case object Comp extends UnaryOperation with PredicateInstr
-    case object Neg extends UnaryOperation with PredicateInstr
+    case object Neg extends UnaryOperation with PredicateInstr with PredicateOp
     
     case object WrapObject extends BinaryOperation
     case object WrapArray extends UnaryOperation
