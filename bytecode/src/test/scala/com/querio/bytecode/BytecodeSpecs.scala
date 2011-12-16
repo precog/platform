@@ -9,7 +9,7 @@ class BytecodeSpecs extends Specification
     with ScalaCheck
     with InstructionGenerators
     with UtilGenerators
-    with Reader
+    with BytecodeReader
     with BytecodeWriter {
   
   import Prop._
