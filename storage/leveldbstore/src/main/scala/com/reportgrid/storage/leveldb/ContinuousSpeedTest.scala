@@ -1,12 +1,16 @@
 package com.reportgrid.storage.leveldb
 
+import comparators._
+import Bijection._
+
 import org.scalacheck.Arbitrary
 import akka.actor.Actor
 import akka.dispatch.Future
 import Actor._
 
-import java.math._
-
+import java.io.File
+import java.math.BigDecimal
+import java.nio.ByteBuffer
 import java.util.concurrent.{CyclicBarrier,LinkedBlockingQueue}
 import java.util.Random
 
@@ -24,7 +28,7 @@ object ContinuousSpeedTest {
     
     val r = new java.util.Random(seed)
 
-    class TestHarness[T](dbGen : (String) => Column[T], valGen : => T) extends Runnable {
+    class TestHarness[T: ({type X[a] = Bijection[a, Array[Byte]]})#X](dbGen : (String) => Column, valGen : => T) extends Runnable {
       sealed trait DBOp
       case class Insert(id : Long, value : T) extends DBOp
       case object Flush extends DBOp
@@ -51,7 +55,7 @@ object ContinuousSpeedTest {
           override def run {
             while (true) {
               queue.take match {
-                case Insert(id,v) => column.insert(id,v);
+                case Insert(id, v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]);
                 case Flush => barrier.await()
               }
             }
@@ -79,8 +83,8 @@ object ContinuousSpeedTest {
     }
 
     (dataType.toLowerCase match {
-      case "long" => new TestHarness[Long](new Column(_,basedir,Ordering.Long), r.nextLong)
-      case "decimal" => new TestHarness[BigDecimal](new Column(_,basedir,JBigDecimalOrdering), BigDecimal.valueOf(r.nextDouble))
+      case "long" => new TestHarness[Long](n => new Column(new File(basedir, n), ColumnComparator.Long), r.nextLong)
+      case "decimal" => new TestHarness[BigDecimal](n => new Column(new File(basedir, n), ColumnComparator.BigDecimal), BigDecimal.valueOf(r.nextDouble))
     }).run()
   }
 }
