@@ -1,5 +1,7 @@
 package com.reportgrid.storage.leveldb
 
+import comparators._
+import java.io.File
 import scala.math.Ordering
 import scalaz.effect.IO
 import scalaz.iteratee.Iteratee._
@@ -7,7 +9,7 @@ import scalaz.iteratee.Iteratee._
 object ReadTest {
   def main (argv : Array[String]) {
     val (column, chunkSize, seed) = argv match {
-      case Array(name, basedir, size, sd) => (new Column[Long](name,basedir,Ordering.Long), size.toInt, sd.toInt)
+      case Array(name, basedir, size, sd) => (new Column(new File(basedir, name), ColumnComparator.Long), size.toInt, sd.toInt)
       case _ => {
         println("Usage: ReadTest <column name> <base dir>")
         sys.exit(1)
@@ -29,9 +31,9 @@ object ReadTest {
       val startTime = System.currentTimeMillis
       while (index < chunkSize) {
         val toRead = allVals(r.nextInt(allVals.size))
-        val relatedIds : List[Long] = ((fold[Unit, Long, IO, List[Long]](Nil)((a,e) => e :: a) >>== column.getIds(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
-        totalRead += relatedIds.size
-        println(toRead + " => " + relatedIds)
+        //val relatedIds : List[Long] = ((fold[Unit, Long, IO, List[Long]](Nil)((a,e) => e :: a) >>== column.getIds(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
+        //totalRead += relatedIds.size
+        //println(toRead + " => " + relatedIds)
         index += 1
       }
       val duration = System.currentTimeMillis - startTime
@@ -45,7 +47,7 @@ object ConfirmTest {
   def main (args : Array[String]) {
     args match {
       case Array(name,base) => {
-        val c = new Column[java.math.BigDecimal](name, base, JBigDecimalOrdering)
+        val c = new Column(new File(base, name), ColumnComparator.BigDecimal)
         val bd = BigDecimal("123.45")
 
         List(12l,15l,45345435l,2423423l).foreach(c.insert(_, bd.underlying))
