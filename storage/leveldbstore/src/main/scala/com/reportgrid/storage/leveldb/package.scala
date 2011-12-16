@@ -1,6 +1,7 @@
 package com.reportgrid.storage
 import java.math._
 import scala.collection.generic.CanBuildFrom
+import java.nio.ByteBuffer
 
 import leveldb.Bijection._
 
@@ -56,5 +57,15 @@ package object leveldb {
   }
 
   def idLen(length: Int) = Array[Byte]((length >> 8).asInstanceOf[Byte], (length & 0xff).asInstanceOf[Byte])
+
+  implicit object bb2ab extends Bijection[ByteBuffer, Array[Byte]] {
+    def apply(bb: ByteBuffer) = {
+      val result = new Array[Byte](bb.remaining)
+      bb.get(result)
+      result
+    }
+
+    def unapply(ab: Array[Byte]) = ByteBuffer.wrap(ab)
+  }
 }
 
