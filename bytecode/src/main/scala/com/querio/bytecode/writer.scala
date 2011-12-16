@@ -58,8 +58,11 @@ trait BytecodeWriter extends Writer with Version {
       buffer.putInt(id)
       
       val pred = instr match {
-        case FilterMatch(_, pred) => writePredicate(pred, buffer)
-        case FilterCross(_, pred) => writePredicate(pred, buffer)
+        case FilterMatch(_, Some(pred)) => writePredicate(pred, buffer)
+        case FilterCross(_, Some(pred)) => writePredicate(pred, buffer)
+        
+        case FilterMatch(_, None) => 0
+        case FilterCross(_, None) => 0
         
         case Swap(depth) => {
           writeInt(4, buffer)
@@ -150,8 +153,11 @@ trait BytecodeWriter extends Writer with Version {
         case IUnion => (0x12, 0.toShort, 0)
         case IIntersect => (0x13, 0.toShort, 0)
         
-        case i @ FilterMatch(depth, _) => (0x14, depth, table(i))
-        case i @ FilterCross(depth, _) => (0x16, depth, table(i))
+        case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
+        case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))
+        
+        case FilterMatch(depth, None) => (0x14, depth, 0)
+        case FilterCross(depth, None) => (0x16, depth, 0)
         
         case Split => (0x1A, 0.toShort, 0)
         case Merge => (0x1B, 0.toShort, 0)
@@ -247,8 +253,8 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     instructions.collect({
-      case i: FilterMatch => i -> currentInt()
-      case i: FilterCross => i -> currentInt()
+      case i @ FilterMatch(_, Some(_)) => i -> currentInt()
+      case i @ FilterCross(_, Some(_)) => i -> currentInt()
       
       case i: Swap => i -> currentInt()
       

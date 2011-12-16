@@ -73,50 +73,50 @@ object ValidatorSpecs extends Specification with Validator {
     }
     
     "reject a negative filter_match depth" in {
-      val inst = FilterMatch(-1, Vector())
+      val inst = FilterMatch(-1, Some(Vector()))
       validate(Vector(inst)) must beSome(NegativeFilterDepth(inst))
     }
     
     "reject a negative filter_cross depth" in {
-      val inst = FilterCross(-1, Vector())
+      val inst = FilterCross(-1, Some(Vector()))
       validate(Vector(inst)) must beSome(NegativeFilterDepth(inst))
     }
   }
   
   "predicate stack validator" should {
     "reject a predicate with non-matching depth" in {
-      val inst = FilterCross(0, Vector(Comp))
+      val inst = FilterCross(0, Some(Vector(Comp)))
       validate(Vector(PushNum("42"), PushNum("12"), inst)) must beSome(PredicateStackUnderflow(inst))
     }
     
     "accept a predicate with matching depth" in {
-      val inst = FilterCross(1, Vector(Comp))
+      val inst = FilterCross(1, Some(Vector(Comp)))
       validate(Vector(PushString("test"), PushNum("42"), PushNum("12"), inst)) must beNone
     }
     
     "reject a zero filter_match depth" in {
-      val inst = FilterMatch(0, Vector())
+      val inst = FilterMatch(0, Some(Vector()))
       validate(Vector(PushNum("42"), PushNum("12"), inst)) must beSome(ExcessPredicateOperands(inst))
     }
     
     "reject a zero filter_cross depth" in {
-      val inst = FilterCross(0, Vector())
+      val inst = FilterCross(0, Some(Vector()))
       validate(Vector(PushNum("42"), PushNum("12"), inst)) must beSome(ExcessPredicateOperands(inst))
     }
     
     "reject a predicate that underflows" in {
-      val inst = FilterCross(1, Vector(Add))
+      val inst = FilterCross(1, Some(Vector(Add)))
       validate(Vector(PushNum("42"), PushNum("12"), PushNum("6"), inst)) must beSome(PredicateStackUnderflow(inst))
     }
     
     // TODO we will reject this once we have stack *type* validation
     "accept an empty predicate that results in a depth of 1" in {
-      val inst = FilterCross(1, Vector())
+      val inst = FilterCross(1, Some(Vector()))
       validate(Vector(PushNum("42"), PushNum("12"), PushNum("6"), inst)) must beNone
     }
     
     "reject a predicate that results in a stack with more than one operand" in {
-      val inst = FilterCross(2, Vector())
+      val inst = FilterCross(2, Some(Vector()))
       validate(Vector(PushString("foo"), PushNum("42"), PushNum("12"), PushNum("6"), inst)) must beSome(ExcessPredicateOperands(inst))
     }
   }

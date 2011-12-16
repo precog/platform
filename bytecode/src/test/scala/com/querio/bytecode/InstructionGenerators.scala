@@ -94,12 +94,14 @@ trait InstructionGenerators extends Instructions {
   private lazy val genFilterMatch = for {
     depth <- arbitrary[Short]
     pred <- genPredicate
-  } yield FilterMatch(depth, pred)
+    optPred <- oneOf(Some(pred), None)
+  } yield FilterMatch(depth, optPred)
   
   private lazy val genFilterCross = for {
     depth <- arbitrary[Short]
     pred <- genPredicate
-  } yield FilterCross(depth, pred)
+    optPred <- oneOf(Some(pred), None)
+  } yield FilterCross(depth, optPred)
   
   private lazy val genDup = Dup
   private lazy val genSwap = arbitrary[Int] map Swap
