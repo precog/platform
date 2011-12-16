@@ -1,4 +1,4 @@
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
 
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
