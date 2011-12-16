@@ -49,7 +49,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case ast.Let(loc, id, params, left, right) =>
           params.length match {
             case 0 =>
-              emit(right).map(vector ++ _)
+              emit(right)
 
             case n =>
               notImpl(expr)
@@ -97,7 +97,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
               notImpl(expr)
 
             case UserDef(ast.Let(loc, id, params, left, right)) =>
-              emit(left).map(vector ++ _)
+              emit(left)
 
             case NullBinding => 
               notImpl(expr)
