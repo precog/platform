@@ -23,8 +23,8 @@ trait Validator extends Instructions {
           
           case _ => {
             val predError = inst match {
-              case FilterMatch(d, pred) => validatePredicate(inst, pred, d)
-              case FilterCross(d, pred) => validatePredicate(inst, pred, d)
+              case FilterMatch(d, Some(pred)) => validatePredicate(inst, pred, d)
+              case FilterCross(d, Some(pred)) => validatePredicate(inst, pred, d)
               case _ => None
             }
             
