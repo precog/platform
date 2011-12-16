@@ -62,6 +62,10 @@ object ValidatorSpecs extends Specification with Validator {
       val inst = FilterCross(-1, Some(Vector()))
       validate(Vector(inst)) must beSome(NegativeFilterDepth(inst))
     }
+    
+    "ignore asserted filter depth with null predicate" in {
+      validate(Vector(PushNum("42"), PushNum("12"), FilterMatch(27, None))) must beNone
+    }
   }
   
   "predicate stack validator" should {

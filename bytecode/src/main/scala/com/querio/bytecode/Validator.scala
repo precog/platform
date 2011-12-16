@@ -15,10 +15,10 @@ trait Validator extends Instructions {
           case Swap(d) if d <= 0 =>
             (Some(NonPositiveSwapDepth(inst)), d)
           
-          case FilterMatch(d, _) if d < 0 =>
+          case FilterMatch(d, Some(_)) if d < 0 =>
             (Some(NegativeFilterDepth(inst)), depth)
           
-          case FilterCross(d, _) if d < 0 =>
+          case FilterCross(d, Some(_)) if d < 0 =>
             (Some(NegativeFilterDepth(inst)), depth)
           
           case _ => {
@@ -78,8 +78,11 @@ trait Validator extends Instructions {
     case IUnion => (2, 1)
     case IIntersect => (2, 1)
     
-    case FilterMatch(depth, _) => (2 + depth, 1)
-    case FilterCross(depth, _) => (2 + depth, 1)
+    case FilterMatch(depth, Some(_)) => (2 + depth, 1)
+    case FilterCross(depth, Some(_)) => (2 + depth, 1)
+    
+    case FilterMatch(_, None) => (2, 1)
+    case FilterCross(_, None) => (2, 1)
     
     case Split => (1, 1)
     case Merge => (1, 1)
