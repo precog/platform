@@ -25,6 +25,12 @@ import scala.annotation.tailrec
 
 trait Reader extends Instructions {
   import instructions._
+  
+  def read(buffer: ByteBuffer): Vector[Instruction]
+}
+
+trait BytecodeReader extends Reader {
+  import instructions._
   import Function._
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
