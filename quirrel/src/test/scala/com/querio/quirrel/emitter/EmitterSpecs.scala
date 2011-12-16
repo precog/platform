@@ -48,7 +48,7 @@ object EmitterSpecs extends Specification
 
   def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Success(Vector(i: _*))
 
-  "for literals, emitter" should {
+  "literals: emitter" should {
     "emit literal string" in {
       testEmit("\"foo\"")(
         PushString("foo")
@@ -115,6 +115,18 @@ object EmitterSpecs extends Specification
       testEmit("""dataset("foo")""")(
         PushString("foo"),
         LoadLocal(Het)
+      )
+    }
+  }
+
+  "emitter" should {
+    "use dup bytecode to duplicate the same dataset" in {
+      testEmit("""clicks := dataset("foo") clicks + clicks""")(
+        PushString("foo"),
+        LoadLocal(Het),
+        PushString("foo"), // TODO: DELETE (should be DUP)
+        LoadLocal(Het),    // TODO: DELETE
+        Map2Match(Add)
       )
     }
   }

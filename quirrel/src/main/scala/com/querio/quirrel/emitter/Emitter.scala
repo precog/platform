@@ -65,6 +65,15 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
     def emit0(expr: Expr, vector: Vector[Instruction]): EmitterType = {
       ((expr match {
+        case ast.Let(loc, id, params, left, right) =>
+          params.length match {
+            case 0 =>
+              emit(right).map(vector ++ _)
+
+            case n =>
+              notImpl(expr)
+          }
+
         case ast.New(loc, child) => 
           notImpl(expr)
         
@@ -106,8 +115,8 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
             case BuiltIn(n, arity) =>
               notImpl(expr)
 
-            case UserDef(e) =>
-              notImpl(expr)
+            case UserDef(ast.Let(loc, id, params, left, right)) =>
+              emit(left).map(vector ++ _)
 
             case NullBinding => 
               notImpl(expr)
@@ -159,7 +168,8 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           emit(child).map(_ :+ Map1(Neg))
         
         case ast.Paren(loc, child) => 
-          notImpl(expr)
+          // NOOP
+          Success(vector)
       }): EmitterType).map[Vector[Instruction]](vector ++ _)
     }
 
