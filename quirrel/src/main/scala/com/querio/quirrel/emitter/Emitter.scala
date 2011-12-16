@@ -156,7 +156,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           notImpl(expr)
         
         case ast.Neg(loc, child) => 
-          notImpl(expr)
+          emit(child).map(_ :+ Map1(Neg))
         
         case ast.Paren(loc, child) => 
           notImpl(expr)

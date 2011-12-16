@@ -46,13 +46,76 @@ object EmitterSpecs extends Specification
 
   val compileEmit = ((_: String).stripMargin) >>> (compile(_: String)) >>> (emit _)
 
-  "emitter" should {
+  def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Success(Vector(i: _*))
+
+  "for literals, emitter" should {
+    "emit literal string" in {
+      testEmit("\"foo\"")(
+        PushString("foo")
+      )
+    }
+
+    "emit literal boolean" in {
+      testEmit("true")(
+        PushTrue
+      )
+
+      testEmit("false")(
+        PushFalse
+      )
+    }
+
+    "emit literal number" in {
+      testEmit("23.23123")(
+        PushNum("23.23123")
+      )
+    }
+
+    "emit cross-addition of two added datasets with value provenance" in {
+      testEmit("5 + 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Add)
+      )
+    }
+
+    "emit cross-subtraction of two subtracted datasets with value provenance" in {
+      testEmit("5 - 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Sub)
+      )
+    }
+
+    "emit cross-division of two divided datasets with value provenance" in {
+      testEmit("5 / 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Div)
+      )
+    }
+
+    "emit negation of literal numeric dataset with value provenance" in {
+      testEmit("~5")(
+        PushNum("5"),
+        Map1(Neg)
+      )
+    }
+
+    "emit negation of sum of two literal numeric datasets with value provenance" in {
+      testEmit("~(5 + 2)")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Add),
+        Map1(Neg)
+      )
+    }
+
     "emit load of literal dataset" in {
-      compileEmit("""dataset("foo")""") mustEqual 
-        Success(Vector(
-          PushString("foo"),
-          LoadLocal(Het)
-        ))
+      testEmit("""dataset("foo")""")(
+        PushString("foo"),
+        LoadLocal(Het)
+      )
     }
   }
 }
