@@ -19,12 +19,17 @@
  */
 package com.reportgrid.storage.leveldb
 
+import comparators._
+import Bijection._
+
 import org.scalacheck.Arbitrary
 import akka.actor.Actor
 import akka.dispatch.Future
 import Actor._
 
-import java.math._
+import java.io.File
+import java.math.BigDecimal
+import java.nio.ByteBuffer
 
 object MultiSpeedTest {
   case class Insert(id : Long, value : BigDecimal)
@@ -44,13 +49,13 @@ object MultiSpeedTest {
     implicit val actorTimeout = Timeout(300000)
 
     // Spin up some actor
-    class DBActor(name : String, basedir : String)  extends Actor {
-      private val column = new Column[BigDecimal](name, basedir, JBigDecimalOrdering)
+    class DBActor(name : String, basedir : String) extends Actor {
+      private val column = new Column(new File(basedir, name), ColumnComparator.BigDecimal)
 
       private var count = 0
       
       def receive = {
-        case Insert(id,v) => column.insert(id,v); count += 1
+        case Insert(id,v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]); count += 1
         case KillMeNow => column.close(); self.tryReply(ShutdownComplete(name, count)); self.stop()
       }
     }
