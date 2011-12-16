@@ -30,10 +30,31 @@ trait Validator extends Instructions {
       case ((None, depth), inst) => {
         val (pop, push) = stackDelta(inst)
         
-        if (depth < pop)
-          (Some(StackUnderflow(inst)), depth - pop)
-        else
-          (None, depth - pop + push)
+        inst match {
+          case Swap(d) if d <= 0 =>
+            (Some(NonPositiveSwapDepth(inst)), d)
+          
+          case FilterMatch(d, _) if d < 0 =>
+            (Some(NegativeFilterDepth(inst)), depth)
+          
+          case FilterCross(d, _) if d < 0 =>
+            (Some(NegativeFilterDepth(inst)), depth)
+          
+          case _ => {
+            val predError = inst match {
+              case FilterMatch(d, pred) => validatePredicate(inst, pred, d)
+              case FilterCross(d, pred) => validatePredicate(inst, pred, d)
+              case _ => None
+            }
+            
+            if (depth < pop)
+              (Some(StackUnderflow(inst)), depth - pop)
+            else if (predError.isDefined)
+              (predError, depth)
+            else
+              (None, depth - pop + push)
+          }
+        }
       }
       
       case (pair @ (Some(_), _), _) => pair
@@ -57,7 +78,7 @@ trait Validator extends Instructions {
       case (pair @ (Some(_), _), _) => pair
     }
     
-    val excessError = if (depth2 != 1) Some(ExcessPredicateOperands) else None
+    val excessError = if (depth2 != 1) Some(ExcessPredicateOperands(origin)) else None
     error orElse excessError
   }
   
@@ -83,7 +104,7 @@ trait Validator extends Instructions {
     case Merge => (1, 1)
     
     case Dup => (1, 2)
-    case Swap(depth) => (depth, depth)
+    case Swap(depth) => (depth + 1, depth + 1)
     
     case Line(_, _) => (0, 0)
     
@@ -122,5 +143,8 @@ trait Validator extends Instructions {
   case class StackUnderflow(inst: Instruction) extends StackError
   case class PredicateStackUnderflow(inst: Instruction) extends StackError
   case object ExcessOperands extends StackError
-  case object ExcessPredicateOperands extends StackError
+  case class ExcessPredicateOperands(inst: Instruction) extends StackError
+  
+  case class NonPositiveSwapDepth(inst: Instruction) extends StackError
+  case class NegativeFilterDepth(inst: Instruction) extends StackError
 }
