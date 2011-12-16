@@ -131,7 +131,7 @@ class Column(baseDir : File, comparator: DBComparator) {
   /**
    * Retrieve all IDs for the given value
    */
-  def getIds[F[_] : MonadIO, A](v : ByteBuffer): EnumeratorT[Unit, ByteBuffer, F, A] = {
+  def getIdsForValue[F[_] : MonadIO, A](v : ByteBuffer): EnumeratorT[Unit, ByteBuffer, F, A] = {
     val vBytes = v.as[Array[Byte]]
     def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
       s.fold(
