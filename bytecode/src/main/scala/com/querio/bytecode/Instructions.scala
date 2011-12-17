@@ -1,7 +1,62 @@
 package com.querio.bytecode
 
+import scalaz.Scalaz._
+
 trait Instructions {
-  sealed trait Instruction
+  sealed trait Instruction { self =>
+    import instructions._
+
+    def operandStackDelta: (Int, Int) = self match {
+      case Map1(_) => (1, 1)
+      case Map2Match(_) => (2, 1)
+      case Map2CrossLeft(_) => (2, 1)
+      case Map2CrossRight(_) => (2, 1)
+      case Map2Cross(_) => (2, 1)
+        
+      case Reduce(_) => (1, 1)
+      
+      case VUnion => (2, 1)
+      case VIntersect => (2, 1)
+      
+      case IUnion => (2, 1)
+      case IIntersect => (2, 1)
+      
+      case FilterMatch(depth, Some(_)) => (2 + depth, 1)
+      case FilterCross(depth, Some(_)) => (2 + depth, 1)
+      
+      case FilterMatch(_, None) => (2, 1)
+      case FilterCross(_, None) => (2, 1)
+      
+      case Split => (1, 1)
+      case Merge => (1, 1)
+      
+      case Dup => (1, 2)
+      case Swap(depth) => (depth + 1, depth + 1)
+      
+      case Line(_, _) => (0, 0)
+      
+      case LoadLocal(_) => (1, 1)
+      
+      case PushString(_) => (0, 1)
+      case PushNum(_) => (0, 1)
+      case PushTrue => (0, 1)
+      case PushFalse => (0, 1)
+      case PushObject => (0, 1)
+      case PushArray => (0, 1)
+    }
+
+    def predicateStackDelta: (Int, Int) = self match {
+      case FilterMatch(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
+      case FilterCross(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
+      case _ => (0, 0)
+    }
+
+    def vmStackDelta: (Int, Int) = self match {
+      case Split => (0, 1)
+      case Merge => (1, 0)
+      case _ => (0, 0)
+    }
+  }
   
   // namespace
   object instructions {
@@ -47,7 +102,26 @@ trait Instructions {
     sealed trait UnaryOperation
     sealed trait BinaryOperation
     
-    sealed trait PredicateInstr
+    sealed trait PredicateInstr { self =>
+      def predicateStackDelta: (Int, Int) = self match {
+        case Add => (2, 1)
+        case Sub => (2, 1)
+        case Mul => (2, 1)
+        case Div => (2, 1)
+        
+        case Neg => (1, 1)
+        
+        case Or => (2, 1)
+        case And => (2, 1)
+        
+        case Comp => (1, 1)
+        
+        case DerefObject => (1, 1)
+        case DerefArray => (1, 1)
+        
+        case Range => (2, 1)
+      }
+    }
     
     case object Add extends BinaryOperation with PredicateInstr
     case object Sub extends BinaryOperation with PredicateInstr
