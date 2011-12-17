@@ -151,7 +151,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         
         case ast.Paren(loc, child) => 
           // NOOP
-          Success(vector)
+          Success(Vector.empty)
       }): EmitterType).map[Vector[Instruction]](vector ++ _)
     }
 
