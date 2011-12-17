@@ -53,6 +53,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
               Map2Match(op)
 
             case (_, _) =>
+              // TODO: Not correct in general
               Map2Cross(op)
           }
 

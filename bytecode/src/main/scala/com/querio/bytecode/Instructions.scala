@@ -25,42 +25,49 @@ trait Instructions {
   // namespace
   object instructions {
     type Predicate = Vector[PredicateInstr]
+  
+    private[instructions] class AbstractInstruction(
+      val opstack: Int, val predstack: Int = 0, val vmstack: Int = 0
+    ) extends Instruction
     
     sealed trait DataInstr extends Instruction
     
-    case class Map1(op: UnaryOperation) extends Instruction
-    case class Map2Match(op: BinaryOperation) extends Instruction
-    case class Map2CrossLeft(op: BinaryOperation) extends Instruction
-    case class Map2CrossRight(op: BinaryOperation) extends Instruction
-    case class Map2Cross(op: BinaryOperation) extends Instruction
+    case class Map1(op: UnaryOperation) extends AbstractInstruction(0)
+    case class Map2Match(op: BinaryOperation) extends AbstractInstruction(-1)
+    case class Map2CrossLeft(op: BinaryOperation) extends AbstractInstruction(-1)
+    case class Map2CrossRight(op: BinaryOperation) extends AbstractInstruction(-1)
+    case class Map2Cross(op: BinaryOperation) extends AbstractInstruction(-1)
     
-    case class Reduce(red: Reduction) extends Instruction
+    case class Reduce(red: Reduction) extends AbstractInstruction(0)
     
-    case object VUnion extends Instruction
-    case object VIntersect extends Instruction
+    case object VUnion extends AbstractInstruction(-1)
+    case object VIntersect extends AbstractInstruction(-1)
     
-    case object IUnion extends Instruction
-    case object IIntersect extends Instruction
+    case object IUnion extends AbstractInstruction(-1)
+    case object IIntersect extends AbstractInstruction(-1)
     
-    case object Split extends Instruction
-    case object Merge extends Instruction
+    case object Split extends AbstractInstruction(1, 0, 1)
+    case object Merge extends AbstractInstruction(-1, 0, -1)
     
-    case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCross(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
+    case class FilterMatch(depth: Short, pred: Option[Predicate]) extends 
+      AbstractInstruction(depth - 1) with DataInstr
+
+    case class FilterCross(depth: Short, pred: Option[Predicate]) extends 
+      AbstractInstruction(depth - 1) with DataInstr
     
-    case object Dup extends Instruction
-    case class Swap(depth: Int) extends Instruction with DataInstr
+    case object Dup extends AbstractInstruction(1)
+    case class Swap(depth: Int) extends AbstractInstruction(0) with DataInstr
     
-    case class Line(num: Int, text: String) extends Instruction with DataInstr
+    case class Line(num: Int, text: String) extends AbstractInstruction(0) with DataInstr
     
-    case class LoadLocal(tpe: Type) extends Instruction
+    case class LoadLocal(tpe: Type) extends AbstractInstruction(1)
     
-    case class PushString(str: String) extends Instruction with DataInstr
-    case class PushNum(num: String) extends Instruction with DataInstr
-    case object PushTrue extends Instruction
-    case object PushFalse extends Instruction
-    case object PushObject extends Instruction
-    case object PushArray extends Instruction
+    case class PushString(str: String) extends AbstractInstruction(1) with DataInstr
+    case class PushNum(num: String) extends AbstractInstruction(1) with DataInstr
+    case object PushTrue extends AbstractInstruction(1)
+    case object PushFalse extends AbstractInstruction(1)
+    case object PushObject extends AbstractInstruction(1)
+    case object PushArray extends AbstractInstruction(1)
     
     
     sealed trait UnaryOperation
