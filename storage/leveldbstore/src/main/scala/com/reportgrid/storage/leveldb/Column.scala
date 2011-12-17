@@ -74,6 +74,7 @@ object Column {
   def columnKeys(id: Long, v: ByteBuffer) = {
     val idBytes = id.as[Array[Byte]]
     val vBytes = v.as[Array[Byte]]
+
     (idBytes, ByteBuffer.allocate(idBytes.length + vBytes.length).put(vBytes).put(idBytes).array)
   }
 
@@ -100,22 +101,24 @@ class Column(baseDir : File, comparator: DBComparator) {
   private val idIndexFile =  factory.open(new File(baseDir, "idIndex"), createOptions)
   private val valIndexFile = factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
 
-  def sync() {
-  }
+  private final val syncOptions = (new WriteOptions).sync(true)
 
   def close() {
+    logger.info("Closing column index files")
     idIndexFile.close()
     valIndexFile.close()
   }
 
-  private def shouldSync : Boolean = {
-    false
-  }
-
-  def insert(id : Long, v : ByteBuffer) = {
+  def insert(id : Long, v : ByteBuffer, shouldSync: Boolean = false) = {
     val (idBytes, valIndexBytes) = columnKeys(id, v)
-    idIndexFile.put(idBytes, v) 
-    valIndexFile.put(valIndexBytes, Array[Byte]())
+
+    if (shouldSync) {
+      valIndexFile.put(valIndexBytes, Array[Byte](), syncOptions)
+      idIndexFile.put(idBytes, v, syncOptions)
+    } else {
+      valIndexFile.put(valIndexBytes, Array[Byte]())
+      idIndexFile.put(idBytes, v)
+    }
   }
 
   /**
@@ -228,19 +231,24 @@ class Column(baseDir : File, comparator: DBComparator) {
     def enumerator(iter : DBIterator, close : F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
       s.fold(
         cont = k => if (iter.hasNext) {
+          logger.trace("Processing next valIndex value")
           val valueKey = iter.next.getKey
           val value = valuePart(valueKey)
 
           // advance the iterator until the next value to be taken from it is either the end of the iterator
           // or not equal to the current value (this operation gives 'distinct' semantics)
-          while (iter.hasNext && comparator.compare(value, valuePart(iter.peekNext.getKey)) == 0) iter.next
+          while (iter.hasNext && comparator.compare(valueKey, iter.peekNext.getKey) == 0) {
+            logger.trace("  advancing iterator on same value")
+            iter.next
+          }
 
           k(elInput(ByteBuffer.wrap(value))) >>== enumerator(iter, close)
         } else {
+          logger.trace("No more values")
           iterateeT(close >> s.pointI.value)
         }, 
-        done = (_, _) => iterateeT(close >> s.pointI.value),
-        err = _ => iterateeT(close >> s.pointI.value)
+        done = (_, _) => { logger.trace("Done with iteration"); iterateeT(close >> s.pointI.value) },
+        err = _ => { logger.trace("Error on iteration"); iterateeT(close >> s.pointI.value) }
       )
     }
        

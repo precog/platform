@@ -38,7 +38,7 @@ class LongComparator extends ColumnComparator[Long] {
     if (valCompare == 0) {
       a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
     } else {
-      0
+      valCompare
     }
   }
 }
@@ -51,7 +51,7 @@ class BigDecimalComparator extends ColumnComparator[BigDecimal] {
     if (valCompare == 0) {
       a.drop(a.length - 8).as[Long].compareTo(b.drop(b.length - 8).as[Long])
     } else {
-      0
+      valCompare
     }
   }
 }
