@@ -7,40 +7,55 @@ import scala.math.Ordering
 import scalaz.effect.IO
 import scalaz.iteratee.Iteratee._
 
-object ReadTest {
+import Bijection._
+
+import com.weiglewilczek.slf4s.Logging
+
+object ReadTest extends Logging {
   def main (argv : Array[String]) {
-    val (column, chunkSize, seed) = argv match {
-      case Array(name, basedir, size, sd) => (new Column(new File(basedir, name), ColumnComparator.Long), size.toInt, sd.toInt)
+    val (column, size, seed) = argv match {
+      case Array(name, size, sd) => (Column(new File(name), Some(ColumnComparator.Long)), size.toInt, sd.toLong)
       case _ => {
-        println("Usage: ReadTest <column name> <base dir>")
+        println("Usage: ReadTest <column dir> <insertion count> <random seed>")
         sys.exit(1)
       }
     }
 
-    // Setup our PRNG
-    val r = new java.util.Random(seed)
-
-    // Get a set of all values in the column
-    val allVals = (fold[Unit, ByteBuffer, IO, List[ByteBuffer]](Nil)((a, e) => e :: a) >>== column.getAllValues) apply (_ => IO(Nil)) unsafePerformIO
-
-    println("Read " + allVals.size + " distinct values")
-
-    // Outer loop forever
-    while (true) {
-      var index = 0
-      var totalRead = 0
-      val startTime = System.currentTimeMillis
-      while (index < chunkSize) {
-        val toRead = allVals(r.nextInt(allVals.size))
-        val relatedIds : List[ByteBuffer] = ((fold[Unit, ByteBuffer, IO, List[ByteBuffer]](Nil)((a,e) => e :: a) >>== column.getIdsForValue(toRead)) apply(_ => IO(Nil)) unsafePerformIO)
-        totalRead += relatedIds.size
-        println(toRead + " => " + relatedIds)
-        index += 1
+    column.fold({ e => e.list.foreach{ t => logger.error(t.getMessage)}}, { c =>
+      // Setup our PRNG
+      val r = new java.util.Random(seed)
+  
+      // Create a set of values to insert based on the size
+      val values = Array.fill(size)(r.nextLong)
+  
+      logger.info("Inserting %d values".format(size))
+  
+      // Insert values, syncing every 10%
+      values.grouped(size / 10).foreach { a =>
+        val (first,last) = a.splitAt(a.length - 1)
+        first.foreach { v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]])) }
+        logger.info("  Syncing insert")
+        last.foreach { v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]), true) }
       }
-      val duration = System.currentTimeMillis - startTime
+  
+      // Get a set of all values in the column as ByteBuffers
+      val allVals = (fold[Unit, ByteBuffer, IO, List[Long]](Nil)((a, e) => e.as[Long] :: a) >>== 
+                     c.getAllValues) apply (_ => IO(Nil)) unsafePerformIO
+  
+      logger.info("Read " + allVals.size + " distinct values")
+  
+      allVals.foreach {
+        v => if (! values.contains(v)) {
+          logger.error("Missing input value: " + v)
+        }
+      }
 
-      println("%d\t%f".format(totalRead, chunkSize / (duration / 1000.0)))
-    }
+      logger.info("Completed check")
+  
+      c.close
+
+      logger.info("Test complete, shutting down")
+    })
   }
 }
 

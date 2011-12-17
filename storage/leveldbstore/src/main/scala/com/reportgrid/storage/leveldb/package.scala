@@ -67,5 +67,10 @@ package object leveldb {
 
     def unapply(ab: Array[Byte]) = ByteBuffer.wrap(ab)
   }
+
+  implicit object bb2l extends Bijection[ByteBuffer, Long] {
+    def apply(bb : ByteBuffer) = bb.getLong
+    def unapply(l : Long) = ByteBuffer.allocate(8).putLong(l).flip.asInstanceOf[ByteBuffer]
+  }
 }
 

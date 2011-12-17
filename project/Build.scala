@@ -25,8 +25,10 @@ object PlatformBuild extends Build {
       version := "0.0.1-SNAPSHOT",
       organization := "com.reportgrid",
       scalaVersion := "2.9.1",
-      //scalacOptions ++= Seq("-deprecation", "-unchecked", "-verbose"),
       scalacOptions ++= Seq("-deprecation", "-unchecked"),
+      fork := true,
+      // For now, skip column specs because SBT will die a horrible, horrible death
+      testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec"))),
 
       libraryDependencies ++= Seq(
         "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.1-SNAPSHOT",
