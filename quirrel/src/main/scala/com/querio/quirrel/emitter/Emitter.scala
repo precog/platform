@@ -161,8 +161,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           emitExpr(child) >> emitInstr(PushString(property)) >> emitInstr(Map2Cross(DerefObject))
         
         case ast.Deref(loc, left, right) => 
-          // TODO: Non-constants for 'right'
-          emitExpr(left) >> emitExpr(right) >> emitInstr(Map2Cross(DerefArray))
+          emitMap(left, right, DerefArray)
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
