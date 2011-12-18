@@ -16,7 +16,7 @@ import com.weiglewilczek.slf4s.Logging
 object ReadTest extends Logging {
   def main (argv : Array[String]) {
     val (column, size, seed) = argv match {
-      case Array(name, size, sd) => (Column(new File(name), Some(ColumnComparator.Long)), size.toInt, sd.toLong)
+      case Array(name, size, sd) => (LevelDBColumn(new File(name), Some(ColumnComparator.Long)), size.toInt, sd.toLong)
       case _ => {
         println("Usage: ReadTest <column dir> <insertion count> <random seed>")
         sys.exit(1)

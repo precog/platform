@@ -31,7 +31,9 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
-      private val column = new Column(new File(basedir, name), ColumnComparator.BigDecimal)
+      private val column = LevelDBColumn(new File(basedir, name), Some(ColumnComparator.BigDecimal)) ||| {
+        errors => errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
+      }
 
       private var count = 0
       

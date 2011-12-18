@@ -1,9 +1,9 @@
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
+package leveldb
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import java.io._
-import java.math.BigDecimal
 import java.nio.ByteBuffer
 import Bijection._
 
@@ -23,7 +23,7 @@ import scalaz.Scalaz._
 import IterateeT._
 //import scalaz.Scalaz._
 
-object Column {
+object LevelDBColumn {
   private final val comparatorMetadataFilename = "comparator"
 
   def restoreComparator(baseDir: File) : Validation[Throwable, DBComparator] = {
@@ -59,7 +59,7 @@ object Column {
     (idBytes, ByteBuffer.allocate(idBytes.length + vBytes.length).put(vBytes).put(idBytes).array)
   }
 
-  def apply(baseDir : File, comparator: Option[DBComparator] = None) = {
+  def apply(baseDir : File, comparator: Option[DBComparator] = None): ValidationNEL[Throwable, LevelDBColumn] = {
     val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
                    else baseDir.success[Throwable]
 
@@ -68,12 +68,12 @@ object Column {
       c <- restoreComparator(bd).toValidationNel orElse comparator.toSuccess(new RuntimeException("No database comparator was provided."): Throwable).flatMap(saveComparator(bd, _)).toValidationNel
     } yield c
 
-    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new Column(bd, c) }
+    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBColumn(bd, c) }
   }
 }
 
-class Column(baseDir : File, comparator: DBComparator) {
-  import Column._
+class LevelDBColumn private (baseDir : File, comparator: DBComparator) extends Column {
+  import LevelDBColumn._
 
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
@@ -102,23 +102,42 @@ class Column(baseDir : File, comparator: DBComparator) {
     }
   }
 
+  def getAllIds[F[_] : MonadIO, A] : EnumeratorT[Unit, Long, F, A] = {
+    def enumerator(iter : DBIterator, close : F[Unit]): EnumeratorT[Unit, Long, F, A] = { s =>
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          k(elInput(iter.next.getKey.as[Long])) >>== enumerator(iter, close)
+        } else {
+          iterateeT(close >> s.pointI.value)
+        }, 
+        done = (_, _) => iterateeT(close >> s.pointI.value),
+        err = _ => iterateeT(close >> s.pointI.value)
+      )
+    }
+       
+    val iter = idIndexFile.iterator 
+    iter.seekToFirst()
+    enumerator(iter, IO(iter.close).liftIO[F])
+  }
+
   /**
-   * Retrieve all values for IDs in the given range [start,end]
+   * Retrieve all IDs for IDs in the given range [start,end]
    */  
-  def getValuesByIdRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, F, A] = {
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s => 
+  def getIdsInRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, Long, F, A] = {
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Long, F, A] = { s => 
+      val _done = iterateeT(close >> s.pointI.value)
+
       s.fold(
         cont = k => if (iter.hasNext) {
           val n = iter.next
+          val id = n.getKey.as[Long]
           range.end match {
-            case Some(end) if end <= n.getKey.as[Long] => iterateeT(close >> s.pointI.value)
-            case _ => k(elInput(ByteBuffer.wrap(n.getValue))) >>== enumerator(iter, close)
+            case Some(end) if end <= id => _done
+            case _ => k(elInput(id)) >>== enumerator(iter, close)
           }
-        } else {
-          iterateeT(close >> s.pointI.value)
-        },
-        done = (_, _) => iterateeT(close >> s.pointI.value),
-        err = _ => iterateeT(close >> s.pointI.value)
+        } else _done,
+        done = (_, _) => _done,
+        err = _ => _done
       )
     }
     
@@ -134,42 +153,22 @@ class Column(baseDir : File, comparator: DBComparator) {
   /**
    * Retrieve all IDs for the given value
    */
-  def getIdsForValue[F[_] : MonadIO, A](v : ByteBuffer): EnumeratorT[Unit, ByteBuffer, F, A] = {
-    val vBytes = v.as[Array[Byte]]
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
-      s.fold(
-        cont = k => if (iter.hasNext) {
-          val n = iter.next
-          val (cv,ci) = n.getKey.splitAt(n.getKey.length - 8)
-          if (comparator.compare(cv, vBytes) > 0) iterateeT(close >> s.pointI.value)
-          else k(elInput(ByteBuffer.wrap(ci))) >>== enumerator(iter, close)
-        } else {
-          iterateeT(close >> s.pointI.value)
-        },
-        done = (_, _) => iterateeT(close >> s.pointI.value),
-        err = _ => iterateeT(close >> s.pointI.value)
-      )
-    }
-
-    val iter = valIndexFile.iterator
-    val (_, valIndexBytes) = columnKeys(0L, v)
-    iter.seek(valIndexBytes)
-    enumerator(iter, IO(iter.close).liftIO[F])
-  }
+  def getIdsForValue[F[_] : MonadIO, A](v : ByteBuffer): EnumeratorT[Unit, Long, F, A] = 
+    getIdsByValueRange(Interval(Some(v), Some(v)))
 
   /**
    * Retrieve all IDs for values in the given range [start,end]
    */
-  def getIdsByValueRange[F[_] : MonadIO, A](range : Interval[ByteBuffer]): EnumeratorT[Unit, ByteBuffer, F, A] = {
+  def getIdsByValueRange[F[_] : MonadIO, A](range : Interval[ByteBuffer]): EnumeratorT[Unit, Long, F, A] = {
     val rangeEnd = range.end.map(_.as[Array[Byte]])
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Long, F, A] = { s =>
       s.fold(
         cont = k => if (iter.hasNext) {
           val n = iter.next
-          val (cv,ci) = n.getKey.splitAt(n.getKey.length - 8)
+          val (cv, ci) = n.getKey.splitAt(n.getKey.length - 8)
           rangeEnd match {
             case Some(end) if comparator.compare(cv, end) >= 0 => iterateeT(close >> s.pointI.value)
-            case _ => k(elInput(ByteBuffer.wrap(ci))) >>== enumerator(iter, close)
+            case _ => k(elInput(ci.as[Long])) >>== enumerator(iter, close)
           }
         } else {
           iterateeT(close >> s.pointI.value)
@@ -181,29 +180,10 @@ class Column(baseDir : File, comparator: DBComparator) {
 
     val iter = valIndexFile.iterator
     range.start match {
-      case Some(v) => 
-        val (_, valIndexBytes) = columnKeys(0L, v)
-        iter.seek(valIndexBytes)
-      case None => iter.seekToFirst()
+      case Some(v) => iter.seek(columnKeys(0L, v)._2)
+      case None    => iter.seekToFirst()
     }
-    enumerator(iter, IO(iter.close).liftIO[F])
-  }
 
-  def getAllIds[F[_] : MonadIO, A] : EnumeratorT[Unit, ByteBuffer, F, A] = {
-    def enumerator(iter : DBIterator, close : F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
-      s.fold(
-        cont = k => if (iter.hasNext) {
-          k(elInput(ByteBuffer.wrap(iter.next.getKey))) >>== enumerator(iter, close)
-        } else {
-          iterateeT(close >> s.pointI.value)
-        }, 
-        done = (_, _) => iterateeT(close >> s.pointI.value),
-        err = _ => iterateeT(close >> s.pointI.value)
-      )
-    }
-       
-    val iter = idIndexFile.iterator 
-    iter.seekToFirst()
     enumerator(iter, IO(iter.close).liftIO[F])
   }
 
@@ -237,4 +217,69 @@ class Column(baseDir : File, comparator: DBComparator) {
     iter.seekToFirst()
     enumerator(iter, IO(iter.close).liftIO[F])
   }
+
+  /**
+   * Retrieve all values in the given range [start,end]
+   */
+  def getValuesInRange[F[_] : MonadIO, A](range : Interval[ByteBuffer]): EnumeratorT[Unit, ByteBuffer, F, A] = {
+    val rangeEnd = range.end.map(_.as[Array[Byte]])
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s =>
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          val n = iter.next
+          val (cv,ci) = n.getKey.splitAt(n.getKey.length - 8)
+          rangeEnd match {
+            case Some(end) if comparator.compare(cv, end) >= 0 => iterateeT(close >> s.pointI.value)
+            case _ => k(elInput(ByteBuffer.wrap(cv))) >>== enumerator(iter, close)
+          }
+        } else {
+          iterateeT(close >> s.pointI.value)
+        },
+        done = (_, _) => iterateeT(close >> s.pointI.value),
+        err = _ => iterateeT(close >> s.pointI.value)
+      )
+    }
+
+    val iter = valIndexFile.iterator
+    range.start match {
+      case Some(v) => 
+        val (_, valIndexBytes) = columnKeys(0L, v)
+        iter.seek(valIndexBytes)
+      case None => iter.seekToFirst()
+    }
+    enumerator(iter, IO(iter.close).liftIO[F])
+  }
+
+  def getValueForId[F[_]: MonadIO, A](id: Long): EnumeratorT[Unit, ByteBuffer, F, A] =
+    getValuesByIdRange(Interval(Some(id), Some(id)))
+
+  /**
+   * Retrieve all values for IDs in the given range [start,end]
+   */  
+  def getValuesByIdRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, F, A] = {
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s => 
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          val n = iter.next
+          range.end match {
+            case Some(end) if end <= n.getKey.as[Long] => iterateeT(close >> s.pointI.value)
+            case _ => k(elInput(ByteBuffer.wrap(n.getValue))) >>== enumerator(iter, close)
+          }
+        } else {
+          iterateeT(close >> s.pointI.value)
+        },
+        done = (_, _) => iterateeT(close >> s.pointI.value),
+        err = _ => iterateeT(close >> s.pointI.value)
+      )
+    }
+    
+    val iter = idIndexFile.iterator
+    range.start match {
+      case Some(id) => iter.seek(id.as[Array[Byte]])
+      case None => iter.seekToFirst()
+    }
+
+    enumerator(iter, IO(iter.close).liftIO[F])
+  }
+
 }
