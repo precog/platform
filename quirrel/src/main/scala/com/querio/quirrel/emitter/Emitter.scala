@@ -139,10 +139,12 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
         
         case ast.Descent(loc, child, property) => 
-          notImpl(expr)
+          // Object
+          emitExpr(child) >> emitInstr(PushString(property)) >> emitInstr(Map2Cross(DerefObject))
         
         case ast.Deref(loc, left, right) => 
-          notImpl(expr)
+          // TODO: Non-constants for 'right'
+          emitExpr(left) >> emitExpr(right) >> emitInstr(Map2Cross(DerefArray))
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
