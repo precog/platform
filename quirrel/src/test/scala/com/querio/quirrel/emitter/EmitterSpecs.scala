@@ -191,6 +191,24 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit filter cross for where datasets from value provenance" in {
+      testEmit("""1 where true""")(
+        PushNum("1"),
+        PushTrue,
+        FilterCross(0, None)
+      )
+    }
+
+    "emit filter match for where datasets from same provenance" in {
+      testEmit("""foo := dataset("foo") foo where foo""")(
+        PushString("foo"),
+        LoadLocal(Het),
+        PushString("foo"), // TODO: DELETE (should be DUP)
+        LoadLocal(Het),    // TODO: DELETE
+        FilterMatch(0, None)
+      )
+    }
+
     "use dup bytecode to duplicate the same dataset" in {
       testEmit("""clicks := dataset("foo") clicks + clicks""")(
         PushString("foo"),

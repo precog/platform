@@ -139,7 +139,19 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           }
         
         case ast.Operation(loc, left, op, right) => 
-          notImpl(expr)
+          // WHERE clause -- to be refactored (!)
+          op match {
+            case "where" => 
+              emitExpr(left) >> emitExpr(right) >> {
+                (left.provenance, right.provenance) match {
+                  case (p1, p2) if (p1 == p2 & p1 != ValueProvenance) => emitInstr(FilterMatch(0, None))
+
+                  case _ => emitInstr(FilterCross(0, None))
+                }
+              }
+
+            case _ => notImpl(expr)
+          }
         
         case ast.Add(loc, left, right) => 
           emitExprBinary(left, right, Add)
