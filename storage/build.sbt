@@ -10,8 +10,12 @@ scalaVersion := "2.9.1"
 
 scalacOptions ++= Seq("-deprecation", "-unchecked")
 
+fork := true
+
+// For now, skip column specs because SBT will die a horrible, horrible death
+testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
+
 libraryDependencies ++= Seq(
-  "org.scalaz"                  %% "scalaz-core"        % "6.0.2",
   "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.1-SNAPSHOT",
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT",
   "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
