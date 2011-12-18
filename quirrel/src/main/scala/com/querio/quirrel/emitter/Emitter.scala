@@ -40,35 +40,52 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   def emit(expr: Expr): Vector[Instruction] = {
     import Emission._
 
-    def emitExprBinary(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
-      (left.provenance, right.provenance) match {
-        case (NullProvenance, _) => 
+    def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
+      val mapInstr = emitInstr((left.provenance, right.provenance) match {
+        case (NullProvenance, _) =>
           nullProvenanceError(left)
 
-        case (_, NullProvenance) => 
+        case (_, NullProvenance) =>
           nullProvenanceError(right)
 
-        case (p1, p2) =>
-          val bytecode = (p1, p2) match {
-            case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
-              Map2Match(op)
-            
-            case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
-              Map2Match(op)
+        case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
+          Map2Match(op)
+        
+        case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
+          Map2Match(op)
 
-            case (ValueProvenance, p2) if (p2 != ValueProvenance) =>
-              Map2CrossRight(op)
+        case (ValueProvenance, p2) if (p2 != ValueProvenance) =>
+          Map2CrossRight(op)
 
-            case (p1, ValueProvenance) if (p1 != ValueProvenance) =>
-              Map2CrossLeft(op)
+        case (p1, ValueProvenance) if (p1 != ValueProvenance) =>
+          Map2CrossLeft(op)
 
-            case (_, _) =>
-              // TODO: Not correct in general
-              Map2Cross(op)
-          }
+        case (_, _) =>
+          Map2Cross(op)
+      })
 
-          emitExpr(left) >> emitExpr(right) >> emitInstr(bytecode)
-      }
+      emitExpr(left) >> emitExpr(right) >> mapInstr
+    }
+
+    def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
+      val filterInstr = emitInstr((left.provenance, right.provenance) match {
+        case (NullProvenance, _) =>
+          nullProvenanceError(left)
+
+        case (_, NullProvenance) =>
+          nullProvenanceError(right)
+
+        case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
+          FilterMatch(depth, pred)
+        
+        case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
+          FilterMatch(depth, pred)
+
+        case (_, _) =>
+          FilterCross(depth, pred)
+      })
+
+      emitExpr(left) >> emitExpr(right) >> filterInstr
     }
 
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
@@ -121,6 +138,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         
         case ast.Descent(loc, child, property) => 
           // Object
+          // TODO: Why is "property" not expression???????
           emitExpr(child) >> emitInstr(PushString(property)) >> emitInstr(Map2Cross(DerefObject))
         
         case ast.Deref(loc, left, right) => 
@@ -148,52 +166,46 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           // WHERE clause -- to be refactored (!)
           op match {
             case "where" => 
-              emitExpr(left) >> emitExpr(right) >> {
-                (left.provenance, right.provenance) match {
-                  case (p1, p2) if (p1 == p2 & p1 != ValueProvenance) => emitInstr(FilterMatch(0, None))
-
-                  case _ => emitInstr(FilterCross(0, None))
-                }
-              }
+              emitFilter(left, right, 0, None)
 
             case _ => notImpl(expr)
           }
         
         case ast.Add(loc, left, right) => 
-          emitExprBinary(left, right, Add)
+          emitMap(left, right, Add)
         
         case ast.Sub(loc, left, right) => 
-          emitExprBinary(left, right, Sub)
+          emitMap(left, right, Sub)
 
         case ast.Mul(loc, left, right) => 
-          emitExprBinary(left, right, Mul)
+          emitMap(left, right, Mul)
         
         case ast.Div(loc, left, right) => 
-          emitExprBinary(left, right, Div)
+          emitMap(left, right, Div)
         
         case ast.Lt(loc, left, right) => 
-          emitExprBinary(left, right, Lt)
+          emitMap(left, right, Lt)
         
         case ast.LtEq(loc, left, right) => 
-          emitExprBinary(left, right, LtEq)
+          emitMap(left, right, LtEq)
         
         case ast.Gt(loc, left, right) => 
-          emitExprBinary(left, right, Gt)
+          emitMap(left, right, Gt)
         
         case ast.GtEq(loc, left, right) => 
-          emitExprBinary(left, right, GtEq)
+          emitMap(left, right, GtEq)
         
         case ast.Eq(loc, left, right) => 
-          emitExprBinary(left, right, Eq)
+          emitMap(left, right, Eq)
         
         case ast.NotEq(loc, left, right) => 
-          emitExprBinary(left, right, NotEq)
+          emitMap(left, right, NotEq)
         
         case ast.Or(loc, left, right) => 
-          emitExprBinary(left, right, Or)
+          emitMap(left, right, Or)
         
         case ast.And(loc, left, right) =>
-          emitExprBinary(left, right, And)
+          emitMap(left, right, And)
         
         case ast.Comp(loc, child) =>
           emitExpr(child) >> emitInstr(Map1(Comp))
