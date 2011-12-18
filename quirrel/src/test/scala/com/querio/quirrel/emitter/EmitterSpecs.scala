@@ -190,6 +190,24 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit descent for object dataset" in {
+      testEmit("clicks := dataset(//clicks) clicks.foo")(
+        PushString("/clicks"),
+        LoadLocal(Het),
+        PushString("foo"),
+        Map2Cross(DerefObject)
+      )
+    }
+
+    "emit descent for array dataset" in {
+      testEmit("clicks := dataset(//clicks) clicks[1]")(
+        PushString("/clicks"),
+        LoadLocal(Het),
+        PushNum("1"),
+        Map2Cross(DerefArray)
+      )
+    }
+
     "emit load of literal dataset" in {
       testEmit("""dataset("foo")""")(
         PushString("foo"),
