@@ -55,8 +55,9 @@ object MultiSpeedTest {
       private var count = 0
       
       def receive = {
-        case Insert(id,v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]); count += 1
-        case KillMeNow => column.close(); self.tryReply(ShutdownComplete(name, count)); self.stop()
+        case Insert(id,v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]).map(_ => count += 1).unsafePerformIO
+
+        case KillMeNow => column.close.map(_ => self.tryReply(ShutdownComplete(name, count))).map(_ => self.stop()).unsafePerformIO
       }
     }
 

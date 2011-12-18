@@ -103,13 +103,13 @@ class Column(baseDir : File, comparator: DBComparator) {
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
-  def close() {
+  def close: IO[Unit] = IO {
     logger.info("Closing column index files")
     idIndexFile.close()
     valIndexFile.close()
   }
 
-  def insert(id : Long, v : ByteBuffer, shouldSync: Boolean = false) = {
+  def insert(id : Long, v : ByteBuffer, shouldSync: Boolean = false): IO[Unit] = IO {
     val (idBytes, valIndexBytes) = columnKeys(id, v)
 
     if (shouldSync) {
