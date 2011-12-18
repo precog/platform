@@ -48,7 +48,7 @@ object EmitterSpecs extends Specification
 
   def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Vector(i: _*)
 
-  "literals: emitter" should {
+  "emitter" should {
     "emit literal string" in {
       testEmit("\"foo\"")(
         PushString("foo")
@@ -76,6 +76,61 @@ object EmitterSpecs extends Specification
         PushNum("5"),
         PushNum("2"),
         Map2Cross(Add)
+      )
+    }
+
+    "emit cross < for datasets with value provenance" in {
+      testEmit("5 < 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Lt)
+      )
+    }
+
+    "emit cross <= for datasets with value provenance" in {
+      testEmit("5 <= 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(LtEq)
+      )
+    }
+
+    "emit cross > for datasets with value provenance" in {
+      testEmit("5 > 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Gt)
+      )
+    }
+
+    "emit cross >= for datasets with value provenance" in {
+      testEmit("5 >= 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(GtEq)
+      )
+    }
+
+    "emit cross != for datasets with value provenance" in {
+      testEmit("5 != 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(NotEq)
+      )
+    }
+
+    "emit cross = for datasets with value provenance" in {
+      testEmit("5 = 2")(
+        PushNum("5"),
+        PushNum("2"),
+        Map2Cross(Eq)
+      )
+    }
+
+    "emit cross ! for dataset with value provenance" in {
+      testEmit("!5")(
+        PushNum("5"),
+        Map1(Comp)
       )
     }
 
@@ -135,9 +190,7 @@ object EmitterSpecs extends Specification
         LoadLocal(Het)
       )
     }
-  }
 
-  "emitter" should {
     "use dup bytecode to duplicate the same dataset" in {
       testEmit("""clicks := dataset("foo") clicks + clicks""")(
         PushString("foo"),
