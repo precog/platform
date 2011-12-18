@@ -4,6 +4,8 @@ import comparators._
 import java.io.File
 import java.nio.ByteBuffer
 import scala.math.Ordering
+import scalaz.syntax.traverse._
+import scalaz.std.list._
 import scalaz.effect.IO
 import scalaz.iteratee.Iteratee._
 
@@ -21,41 +23,49 @@ object ReadTest extends Logging {
       }
     }
 
-    column.fold({ e => e.list.foreach{ t => logger.error(t.getMessage)}}, { c =>
-      // Setup our PRNG
-      val r = new java.util.Random(seed)
-  
-      // Create a set of values to insert based on the size
-      val values = Array.fill(size)(r.nextLong)
-  
-      logger.info("Inserting %d values".format(size))
-  
-      // Insert values, syncing every 10%
-      values.grouped(size / 10).foreach { a =>
-        val (first,last) = a.splitAt(a.length - 1)
-        first.foreach { v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]])) }
-        logger.info("  Syncing insert")
-        last.foreach { v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]), true) }
-      }
-  
-      // Get a set of all values in the column as ByteBuffers
-      val allVals = (fold[Unit, ByteBuffer, IO, List[Long]](Nil)((a, e) => e.as[Long] :: a) >>== 
-                     c.getAllValues) apply (_ => IO(Nil)) unsafePerformIO
-  
-      logger.info("Read " + allVals.size + " distinct values")
-  
-      allVals.foreach {
-        v => if (! values.contains(v)) {
-          logger.error("Missing input value: " + v)
+    column.fold(
+      e => e.list.foreach{ t => logger.error(t.getMessage)}, //if unable to construct a column
+      c => {
+        // Setup our PRNG
+        val r = new java.util.Random(seed)
+    
+        // Create a set of values to insert based on the size
+        val values = Array.fill(size)(r.nextLong)
+    
+        logger.info("Inserting %d values".format(size))
+    
+        // Insert values, syncing every 10%
+        val inserts = values.grouped(size / 10).toList.map { a =>
+          val (first, last) = a.splitAt(a.length - 1)
+          for { 
+            _ <- first.toList.map(v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]))).sequence[IO, Unit]
+            _ <- IO { logger.info("  Syncing insert")} 
+            _ <- last.toList.map(v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]), true)).sequence[IO, Unit]
+          } yield ()
         }
+
+        def report(vals: List[Long]) = IO {
+          logger.info("Read " + vals.size + " distinct values")
+      
+          vals.foreach {
+            v => if (! values.contains(v)) logger.error("Missing input value: " + v)
+          }
+
+          logger.info("Completed check")
+        }
+
+        val runTest = for {
+          _       <- inserts.sequence[IO, Unit]
+          allVals <- (fold[Unit, ByteBuffer, IO, List[Long]](Nil)((a, e) => e.as[Long] :: a) >>== c.getAllValues) apply (_ => IO(Nil))
+          _       <- report(allVals)
+          _       <- c.close
+        } yield {
+          logger.info("Test complete, shutting down")
+        }
+
+        runTest.unsafePerformIO
       }
-
-      logger.info("Completed check")
-  
-      c.close
-
-      logger.info("Test complete, shutting down")
-    })
+    )
   }
 }
 
