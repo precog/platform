@@ -17,8 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-resolvers += "Condep repo" at "http://samskivert.github.com/sbt-condep-plugin/maven"
+package com.reportgrid.storage.leveldb
 
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.7.2")
+import scala.math.Ordering
 
-addSbtPlugin("com.samskivert" %% "sbt-condep-plugin" % "1.1")
+import java.math._
+
+object JBigDecimalOrdering extends Ordering[BigDecimal] {
+  def compare(a : BigDecimal, b : BigDecimal) = a.compareTo(b)
+}

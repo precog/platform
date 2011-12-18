@@ -17,13 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package reportgrid.storage.leveldb
+package com.reportgrid.storage.leveldb
+
+import comparators._
+import Bijection._
+
+import java.io.File
+import java.math.BigDecimal
+import java.nio.ByteBuffer
 
 object SimpleTest {
   def main (argv : Array[String]) {
-    val c = new Column[java.math.BigDecimal]("test", "/tmp")
+    val c = new Column(new File("/tmp/test"), ColumnComparator.BigDecimal)
 
-    c.insert(12364534l, BigDecimal("1.445322").underlying)
+    c.insert(12364534l, new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer])
   }
 }
 
