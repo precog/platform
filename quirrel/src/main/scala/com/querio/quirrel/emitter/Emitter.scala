@@ -4,20 +4,32 @@ import com.querio.quirrel.parser.AST
 import com.querio.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.querio.bytecode.{Instructions}
 
-import scalaz.{Validation, Success, Failure}
+import scalaz.{StateT, Id, Identity}
 import scalaz.Scalaz._
 
 trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   import instructions._
   case class EmitterError(expr: Expr, message: String) extends Exception(message)
 
-  type EmitterType = Validation[EmitterError, Vector[Instruction]]
+  private def nullProvenanceError[A](expr: Expr): A = throw EmitterError(expr, "Expression has null provenance")
+  private def notImpl[A](expr: Expr): A = throw EmitterError(expr, "Not implemented")
 
-  private def nullProvenanceError(expr: Expr): EmitterType = Failure(EmitterError(expr, "Expression has null provenance"))
-  private def notImpl(expr: Expr): EmitterType = Failure(EmitterError(expr, "Not implemented"))
+  private case class Emission(
+    bytecode: Vector[Instruction] = Vector.empty
+  )
+  
+  private type EmitterState = StateT[Id, Emission, Unit]
 
-  def emit(expr: Expr): EmitterType = {
-    def emitBinary(left: Expr, right: Expr, op: BinaryOperation): EmitterType = {
+  private object Emission {
+    def emitInstr(i: Instruction): EmitterState = StateT.apply[Id, Emission, Unit](e => (Unit, e.copy(bytecode = e.bytecode :+ i)))
+
+    def emitInstrs(is: Seq[Instruction]): EmitterState = StateT.apply[Id, Emission, Unit](e => (Unit, e.copy(bytecode = e.bytecode ++ is)))
+  }
+
+  def emit(expr: Expr): Vector[Instruction] = {
+    import Emission._
+
+    def emitExprBinary(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
       (left.provenance, right.provenance) match {
         case (NullProvenance, _) => 
           nullProvenanceError(left)
@@ -38,19 +50,16 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
               Map2Cross(op)
           }
 
-          for {
-            leftInstr   <- emit(left)
-            rightInstr  <- emit(right)
-          } yield (leftInstr ++ rightInstr) :+ bytecode
+          emitExpr(left) >> emitExpr(right) >> emitInstr(bytecode)
       }
     }
 
-    def emit0(expr: Expr, vector: Vector[Instruction]): EmitterType = {
+    def emitExpr(expr: Expr): StateT[Id, Emission, _] = {
       ((expr match {
         case ast.Let(loc, id, params, left, right) =>
           params.length match {
             case 0 =>
-              emit(right)
+              emitExpr(right)
 
             case n =>
               notImpl(expr)
@@ -66,15 +75,15 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           notImpl(expr)
         
         case ast.StrLit(loc, value) => 
-          Success(Vector(PushString(value)))
+          emitInstr(PushString(value))
         
         case ast.NumLit(loc, value) => 
-          Success(Vector(PushNum(value)))
+          emitInstr(PushNum(value))
         
         case ast.BoolLit(loc, value) => 
-          Success(value match {
-            case true  => Vector(PushTrue)
-            case false => Vector(PushFalse)
+          emitInstr(value match {
+            case true  => PushTrue
+            case false => PushFalse
           })
         
         case ast.ObjectDef(loc, props) => 
@@ -92,13 +101,13 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case BuiltIn(BuiltIns.Load.name, arity) =>
-              emit(actuals.head).map(_ :+ LoadLocal(Het))
+              emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
             case BuiltIn(n, arity) =>
               notImpl(expr)
 
             case UserDef(ast.Let(loc, id, params, left, right)) =>
-              emit(left)
+              emitExpr(left)
 
             case NullBinding => 
               notImpl(expr)
@@ -108,16 +117,16 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           notImpl(expr)
         
         case ast.Add(loc, left, right) => 
-          emitBinary(left, right, Add)
+          emitExprBinary(left, right, Add)
         
         case ast.Sub(loc, left, right) => 
-          emitBinary(left, right, Sub)
+          emitExprBinary(left, right, Sub)
 
         case ast.Mul(loc, left, right) => 
-          emitBinary(left, right, Mul)
+          emitExprBinary(left, right, Mul)
         
         case ast.Div(loc, left, right) => 
-          emitBinary(left, right, Div)
+          emitExprBinary(left, right, Div)
         
         case ast.Lt(loc, left, right) => 
           notImpl(expr)
@@ -147,14 +156,14 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           notImpl(expr)
         
         case ast.Neg(loc, child) => 
-          emit(child).map(_ :+ Map1(Neg))
+          emitExpr(child) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
           // NOOP
-          Success(Vector.empty)
-      }): EmitterType).map[Vector[Instruction]](vector ++ _)
+          StateT.stateT[Id, Unit, Emission](Unit)
+      }))
     }
 
-    emit0(expr, Vector.empty)
+    emitExpr(expr).exec(Emission()).bytecode
   }
 }
