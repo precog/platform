@@ -135,37 +135,36 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           emitExprBinary(left, right, Div)
         
         case ast.Lt(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, Lt)
         
         case ast.LtEq(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, LtEq)
         
         case ast.Gt(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, Gt)
         
         case ast.GtEq(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, GtEq)
         
         case ast.Eq(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, Eq)
         
         case ast.NotEq(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, NotEq)
         
         case ast.Or(loc, left, right) => 
-          notImpl(expr)
+          emitExprBinary(left, right, Or)
         
         case ast.And(loc, left, right) =>
-          notImpl(expr)
+          emitExprBinary(left, right, And)
         
         case ast.Comp(loc, child) =>
-          notImpl(expr)
+          emitExpr(child) >> emitInstr(Map1(Comp))
         
         case ast.Neg(loc, child) => 
           emitExpr(child) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
-          // NOOP
           StateT.stateT[Id, Unit, Emission](Unit)
       }
     }
