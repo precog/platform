@@ -22,6 +22,7 @@ package com.reportgrid.storage.leveldb
 import comparators._
 import Bijection._
 
+import org.iq80.leveldb._
 import org.scalacheck.Arbitrary
 import akka.actor.Actor
 import akka.dispatch.Future
@@ -47,7 +48,7 @@ object ContinuousSpeedTest {
     
     val r = new java.util.Random(seed)
 
-    class TestHarness[T: ({type X[a] = Bijection[a, Array[Byte]]})#X](dbGen : (String) => Column, valGen : => T) extends Runnable {
+    class TestHarness[T: ({type X[a] = Bijection[a, Array[Byte]]})#X](dbGen : (String) => LevelDBColumn, valGen : => T) extends Runnable {
       sealed trait DBOp
       case class Insert(id : Long, value : T) extends DBOp
       case object Flush extends DBOp
@@ -101,9 +102,15 @@ object ContinuousSpeedTest {
       }
     }
 
+    def column(n: String, comparator: DBComparator): LevelDBColumn = {
+      LevelDBColumn(new File(basedir, n), Some(comparator)) ||| { errors =>
+        errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
+      }
+    }
+
     (dataType.toLowerCase match {
-      case "long" => new TestHarness[Long](n => new Column(new File(basedir, n), ColumnComparator.Long), r.nextLong)
-      case "decimal" => new TestHarness[BigDecimal](n => new Column(new File(basedir, n), ColumnComparator.BigDecimal), BigDecimal.valueOf(r.nextDouble))
+      case "long"    => new TestHarness[Long](n => column(n, ColumnComparator.Long), r.nextLong)
+      case "decimal" => new TestHarness[BigDecimal](n => column(n, ColumnComparator.BigDecimal), BigDecimal.valueOf(r.nextDouble))
     }).run()
   }
 }
