@@ -37,36 +37,25 @@ import java.nio.charset.CharsetDecoder
 import java.nio.charset.CharsetEncoder
 import blueeyes.json.JsonParser
 
-trait EventReceivers {
-  def find(address: MailboxAddress): List[EventReceiver]
+import org.scalacheck.Gen._
+
+import com.querio.ingest.util.ArbitraryIngestMessage
+
+trait IngestMessageReceivers {
+  def find(address: MailboxAddress): List[IngestMessageReceiver]
 }
 
-trait EventReceiver {
-  def get(): Event
+trait IngestMessageReceiver {
+  def get(): IngestMessage 
+}
+
+object TestIngestMessageRecievers extends IngestMessageReceivers with ArbitraryIngestMessage {
+  def find(address: MailboxAddress) = List(new IngestMessageReceiver() {
+    def get() = genRandomEventMessage.sample.get
+  })
 }
 
 case class MailboxAddress(id: Long)
-
-case class Event(path: String, token: String, content: JValue)
-
-class EventSerialization {
-  implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
-    override def decompose(event: Event): JValue = JObject(
-      List(
-        JField("path", event.path.serialize),
-        JField("token", event.token.serialize),
-        JField("content", event.content.serialize)))
-  }
-
-  implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
-    override def validated(obj: JValue): Validation[Error, Event] =
-      ((obj \ "path").validated[String] |@|
-        (obj \ "token").validated[String] |@|
-        (obj \ "content").validated[JValue]).apply(Event(_, _, _))
-  }  
-}
-
-object Event extends EventSerialization
 
 abstract class IngestMessage
 
@@ -80,6 +69,7 @@ class IngestMessageSerialization {
 }
 
 object IngestMessage extends IngestMessageSerialization
+
 
 case class SyncMessage(producerId: Int, syncId: Int, eventIds: List[Int])  extends IngestMessage
 
@@ -114,6 +104,29 @@ trait SyncMessageSerialization {
   }  
 }
 
+
+case class Event(path: String, token: String, content: JValue)
+
+class EventSerialization {
+  implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
+    override def decompose(event: Event): JValue = JObject(
+      List(
+        JField("path", event.path.serialize),
+        JField("token", event.token.serialize),
+        JField("content", event.content.serialize)))
+  }
+
+  implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
+    override def validated(obj: JValue): Validation[Error, Event] =
+      ((obj \ "path").validated[String] |@|
+        (obj \ "token").validated[String] |@|
+        (obj \ "content").validated[JValue]).apply(Event(_, _, _))
+  }  
+}
+
+object Event extends EventSerialization
+
+
 case class EventMessage(producerId: Int, eventId: Int, event: Event) extends IngestMessage
 
 trait EventMessageSerialization {
@@ -134,6 +147,7 @@ trait EventMessageSerialization {
 }
 
 object EventMessage extends EventMessageSerialization
+
 
 object IngestMessageSerialization {
   
