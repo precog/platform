@@ -44,9 +44,9 @@ object EmitterSpecs extends Specification
 
   import instructions._
 
-  val compileEmit = ((_: String).stripMargin) >>> (compile(_: String)) >>> (emit _)
+  val compileEmit = ((_: String).stripMargin) >>> (compile _) >>> (emit _)
 
-  def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Success(Vector(i: _*))
+  def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Vector(i: _*)
 
   "literals: emitter" should {
     "emit literal string" in {
