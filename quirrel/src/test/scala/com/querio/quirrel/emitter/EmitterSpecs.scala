@@ -204,7 +204,7 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         PushNum("1"),
-        Map2Cross(DerefArray)
+        Map2CrossLeft(DerefArray)
       )
     }
 
@@ -220,6 +220,16 @@ object EmitterSpecs extends Specification
         PushNum("1"),
         PushTrue,
         FilterCross(0, None)
+      )
+    }
+
+    "emit descent for array dataset with non-constant indices" in {
+      testEmit("clicks := dataset(//clicks) clicks[clicks]")(
+        PushString("/clicks"),
+        LoadLocal(Het),
+        PushString("/clicks"), // TODO: DELETE (should be DUP)
+        LoadLocal(Het),        // TODO: DELETE
+        Map2Match(DerefArray)
       )
     }
 
