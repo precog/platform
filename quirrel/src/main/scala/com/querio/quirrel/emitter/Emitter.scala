@@ -45,6 +45,12 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
             case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
               Map2Match(op)
 
+            case (ValueProvenance, p2) if (p2 != ValueProvenance) =>
+              Map2CrossRight(op)
+
+            case (p1, ValueProvenance) if (p1 != ValueProvenance) =>
+              Map2CrossLeft(op)
+
             case (_, _) =>
               // TODO: Not correct in general
               Map2Cross(op)
@@ -55,7 +61,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
     }
 
     def emitExpr(expr: Expr): StateT[Id, Emission, _] = {
-      ((expr match {
+      expr match {
         case ast.Let(loc, id, params, left, right) =>
           params.length match {
             case 0 =>
@@ -161,7 +167,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case ast.Paren(loc, child) => 
           // NOOP
           StateT.stateT[Id, Unit, Emission](Unit)
-      }))
+      }
     }
 
     emitExpr(expr).exec(Emission()).bytecode

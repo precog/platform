@@ -76,6 +76,24 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit left-cross for division of dataset in static provenance with dataset in value provenance" in {
+      testEmit("dataset(\"foo\") * 2")(
+        PushString("foo"),
+        LoadLocal(Het),
+        PushNum("2"),
+        Map2CrossLeft(Mul)
+      )
+    }
+
+    "emit right-cross for division of dataset in static provenance with dataset in value provenance" in {
+      testEmit("2 * dataset(\"foo\")")(
+        PushNum("2"),
+        PushString("foo"),
+        LoadLocal(Het),
+        Map2CrossRight(Mul)
+      )
+    }
+
     "emit negation of literal numeric dataset with value provenance" in {
       testEmit("~5")(
         PushNum("5"),
