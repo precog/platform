@@ -5,3 +5,5 @@ target/
 .settings
 .history
 ingest.*.log
+tags
+*.swp
