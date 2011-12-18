@@ -184,6 +184,26 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit wrap object for object with single field having constant value" in {
+      testEmit("{foo: 1}")(
+        PushString("foo"),
+        PushNum("1"),
+        Map2Cross(WrapObject)
+      )
+    }
+
+    "emit join of wrapped objects for object with two fields having constant values" in {
+      testEmit("{foo: 1, bar: \"baz\"}")(
+        PushString("foo"),
+        PushNum("1"),
+        Map2Cross(WrapObject),
+        PushString("bar"),
+        PushString("baz"),
+        Map2Cross(WrapObject),
+        Map2Cross(JoinObject)
+      )
+    }
+
     "emit load of literal dataset" in {
       testEmit("""dataset("foo")""")(
         PushString("foo"),

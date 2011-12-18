@@ -23,7 +23,7 @@ import com.querio.quirrel.parser.AST
 import com.querio.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.querio.bytecode.{Instructions}
 
-import scalaz.{StateT, Id, Identity}
+import scalaz.{StateT, Id, Identity, Bind, Semigroup}
 import scalaz.Scalaz._
 
 trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
@@ -36,8 +36,17 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   private case class Emission(
     bytecode: Vector[Instruction] = Vector.empty
   )
+
+  // This doesn't seem to work
+  /*private implicit def BindSemigroup[M[_], A](implicit bind: Bind[M]): Semigroup[M[A]] = new Semigroup[M[A]] {
+    def append(v1: M[A], v2: => M[A]): M[A] = bind.bind(v1)((a: A) => v2)
+  }*/
   
   private type EmitterState = StateT[Id, Emission, Unit]
+
+  private implicit val EmitterStateSemigroup: Semigroup[EmitterState] = new Semigroup[EmitterState] {
+    def append(v1: EmitterState, v2: => EmitterState): EmitterState = v1 >> v2
+  }
 
   private object Emission {
     def emitInstr(i: Instruction): EmitterState = StateT.apply[Id, Emission, Unit](e => (Unit, e.copy(bytecode = e.bytecode :+ i)))
@@ -79,7 +88,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
       }
     }
 
-    def emitExpr(expr: Expr): StateT[Id, Emission, _] = {
+    def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
       expr match {
         case ast.Let(loc, id, params, left, right) =>
           params.length match {
@@ -112,7 +121,13 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           })
         
         case ast.ObjectDef(loc, props) => 
-          notImpl(expr)
+          def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
+
+          // TODO: Non-constants
+          val singles = props.map(field2ObjInstr)
+          val joins   = Vector.fill(props.length - 1)(emitInstr(Map2Cross(JoinObject)))
+
+          (singles ++ joins).foldLeft[EmitterState](StateT.stateT[Id, Unit, Emission](()))(_ |+| _)
         
         case ast.ArrayDef(loc, values) => 
           notImpl(expr)
@@ -126,6 +141,8 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case BuiltIn(BuiltIns.Load.name, arity) =>
+              assert(arity == 1)
+
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
             case BuiltIn(n, arity) =>
