@@ -23,7 +23,7 @@ import com.querio.quirrel.parser.AST
 import com.querio.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.querio.bytecode.{Instructions}
 
-import scalaz.{StateT, Id, Identity, Bind, Semigroup}
+import scalaz.{StateT, Id, Identity, Bind, Monoid}
 import scalaz.Scalaz._
 
 trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
@@ -44,7 +44,9 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
-  private implicit val EmitterStateSemigroup: Semigroup[EmitterState] = new Semigroup[EmitterState] {
+  private implicit val EmitterStateMonoid: Monoid[EmitterState] = new Monoid[EmitterState] {
+    val zero = StateT.stateT[Id, Unit, Emission](())
+
     def append(v1: EmitterState, v2: => EmitterState): EmitterState = v1 >> v2
   }
 
@@ -127,10 +129,14 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val singles = props.map(field2ObjInstr)
           val joins   = Vector.fill(props.length - 1)(emitInstr(Map2Cross(JoinObject)))
 
-          (singles ++ joins).foldLeft[EmitterState](StateT.stateT[Id, Unit, Emission](()))(_ |+| _)
+          (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
         
         case ast.ArrayDef(loc, values) => 
-          notImpl(expr)
+          // TODO: Non-constants
+          val singles = values.map(v => emitExpr(v) >> emitInstr(Map1(WrapArray)))
+          val joins   = Vector.fill(values.length - 1)(emitInstr(Map2Cross(JoinArray)))
+
+          (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
         
         case ast.Descent(loc, child, property) => 
           notImpl(expr)

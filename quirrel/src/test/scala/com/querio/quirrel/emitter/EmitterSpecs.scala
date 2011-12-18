@@ -192,15 +192,20 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit join of wrapped objects for object with two fields having constant values" in {
-      testEmit("{foo: 1, bar: \"baz\"}")(
+    "emit wrap array for array with single element having constant value" in {
+      testEmit("[\"foo\"]")(
         PushString("foo"),
-        PushNum("1"),
-        Map2Cross(WrapObject),
-        PushString("bar"),
-        PushString("baz"),
-        Map2Cross(WrapObject),
-        Map2Cross(JoinObject)
+        Map1(WrapArray)
+      )
+    }
+
+    "emit join of wrapped arrays for array with two elements having constant values" in {
+      testEmit("[\"foo\", true]")(
+        PushString("foo"),
+        Map1(WrapArray),
+        PushTrue,
+        Map1(WrapArray),
+        Map2Cross(JoinArray)
       )
     }
 
