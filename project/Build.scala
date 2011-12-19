@@ -17,8 +17,8 @@ object PlatformBuild extends Build {
   )
   
   val nexusSettings = Seq(
-    resolvers ++= Seq("ReportGrid repo" at            "http://devci01.reportgrid.com:8081/content/repositories/releases",
-                      "ReportGrid snapshot repo" at   "http://devci01.reportgrid.com:8081/content/repositories/snapshots"),
+    resolvers ++= Seq("ReportGrid repo" at            "http://nexus.reportgrid.com/content/repositories/releases",
+                      "ReportGrid snapshot repo" at   "http://nexus.reportgrid.com/content/repositories/snapshots"),
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )
   
