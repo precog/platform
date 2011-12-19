@@ -53,7 +53,7 @@ object WebappIngestProducer extends IngestProducer {
 
   def send(event: Event) {
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", event.token)
+                                                .query("tokenId", event.tokens(0))
                                                 .contentType(application/json)
                                                 .post[JValue](event.path)(event.content)
     while(!f.isDone) {}
@@ -81,8 +81,13 @@ object DirectIngestProducer extends IngestProducer {
     val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topic, props))
     
     val defaultAddresses = List(MailboxAddress(0))
-    
-    new DefaultEventStore(0,
+
+   
+
+    val qz = QuerioZookeeper.testQuerioZookeeper("127.0.0.1:2181")
+    val producerId = qz.acquireProducerId
+    qz.close
+    new DefaultEventStore(producerId,
                           new ConstantEventRouter(defaultAddresses),
                           new MappedMessageSenders(messageSenderMap))
   }

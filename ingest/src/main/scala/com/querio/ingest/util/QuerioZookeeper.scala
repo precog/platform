@@ -33,7 +33,7 @@ class QuerioZookeeper(zkHosts: String,
     }
   }
   
-  def stop() {
+  def close() {
     zk.close()
   }
 
@@ -47,8 +47,8 @@ object QuerioZookeeper {
   val paths = List("com", "querio", "ingest", "v1", "producer", "id")
 
   val testHosts = "localhost:2181"
-  def testQuerioZookeeper = new QuerioZookeeper(testHosts, "test" :: paths, prefix)
+  def testQuerioZookeeper(hosts: String = testHosts) = new QuerioZookeeper(hosts, "test" :: paths, prefix)
 
   val prodHosts = "localhost:2181"
-  def prodQuerioZookeeper = new QuerioZookeeper(prodHosts, paths, prefix)
+  def prodQuerioZookeeper(hosts: String = testHosts) = new QuerioZookeeper(hosts, paths, prefix)
 }

@@ -115,21 +115,21 @@ trait SyncMessageSerialization {
 }
 
 
-case class Event(path: String, token: String, content: JValue)
+case class Event(path: String, tokens: List[String], content: JValue)
 
 class EventSerialization {
   implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
     override def decompose(event: Event): JValue = JObject(
       List(
         JField("path", event.path.serialize),
-        JField("token", event.token.serialize),
+        JField("tokens", event.tokens.serialize),
         JField("content", event.content.serialize)))
   }
 
   implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
     override def validated(obj: JValue): Validation[Error, Event] =
       ((obj \ "path").validated[String] |@|
-        (obj \ "token").validated[String] |@|
+        (obj \ "tokens").validated[List[String]] |@|
         (obj \ "content").validated[JValue]).apply(Event(_, _, _))
   }  
 }
@@ -137,7 +137,10 @@ class EventSerialization {
 object Event extends EventSerialization
 
 
-case class EventMessage(producerId: Int, eventId: Int, event: Event) extends IngestMessage
+case class EventMessage(producerId: Int, eventId: Int, event: Event) extends IngestMessage {
+  val uid = (producerId.toLong << 32) | (eventId.toLong & 0xFFFFFFFFL)
+  
+}
 
 trait EventMessageSerialization {
   implicit val EventMessageDecomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {

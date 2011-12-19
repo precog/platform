@@ -19,6 +19,7 @@ import java.util.Date
 import net.lag.configgy.ConfigMap
 
 import com.querio.ingest.api._
+import com.querio.ingest.util.QuerioZookeeper
 
 object IngestServer extends BlueEyesServer with IngestService {
 
@@ -64,8 +65,11 @@ object IngestServer extends BlueEyesServer with IngestService {
     val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topic, props))
     
     val defaultAddresses = List(MailboxAddress(0))
-    
-    new DefaultEventStore(0,
+
+    val qz = QuerioZookeeper.testQuerioZookeeper("127.0.0.1:2181")
+    val producerId = qz.acquireProducerId
+    qz.close
+    new DefaultEventStore(producerId,
                           new ConstantEventRouter(defaultAddresses),
                           new MappedMessageSenders(messageSenderMap))
   }
