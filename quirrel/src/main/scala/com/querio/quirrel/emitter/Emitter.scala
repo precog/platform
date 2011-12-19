@@ -38,7 +38,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
     def operandStackSize(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
       // TODO: This should really go into a Bytecode abstraction, which should hold Vector[Instruction]
-      val operandStackSize = e.bytecode.take(idx - 1).foldLeft(0) {
+      val operandStackSize = e.bytecode.take(idx).foldLeft(0) {
         case (size, instr) => size + (instr.operandStackDelta._2 - instr.operandStackDelta._1)
       }
 
@@ -62,7 +62,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val idx = start + exprBytecode.length
           
           val beforeStackSize = operandStackSize(idx).eval(e)   
-          val entireStackSize = operandStackSize(e.bytecode.length).eval(e)
+          val finalStackSize  = operandStackSize(e.bytecode.length).eval(e) + 1 // Add the DUP
 
           val before = e.bytecode.take(idx)
           val after  = e.bytecode.drop(idx)
@@ -71,7 +71,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
 
           // There may be a final swap at the end to access the dup:
-          val finalSwap = if (entireStackSize < 2) Vector.empty else Vector(Swap(entireStackSize - 1))
+          val finalSwap = (1 until finalStackSize).map(Swap.apply)
 
           ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
       }
@@ -164,11 +164,31 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case ast.ObjectDef(loc, props) => 
           def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
 
+          val provToField = props.groupBy(_._2.provenance)
+
+          val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
+            case (vector, (provenance, fields)) =>
+              val singles = fields.map(field2ObjInstr)
+
+              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinObject) else Map2Match(JoinObject))
+
+              val joins = Vector.fill(singles.length - 1)(joinInstr)
+
+              vector ++ (singles ++ joins)
+          }
+
+          val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
+
+          (groups ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
+
+
+          /*
           // TODO: Non-constants
           val singles = props.map(field2ObjInstr)
           val joins   = Vector.fill(props.length - 1)(emitInstr(Map2Cross(JoinObject)))
 
           (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
+          */
         
         case ast.ArrayDef(loc, values) => 
           // TODO: Non-constants

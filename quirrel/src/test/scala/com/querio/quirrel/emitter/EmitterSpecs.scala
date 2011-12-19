@@ -109,8 +109,8 @@ object EmitterSpecs extends Specification
     }
 
     "emit cross ! for dataset with value provenance" in {
-      testEmit("!5")(
-        PushNum("5"),
+      testEmit("!true")(
+        PushTrue,
         Map1(Comp)
       )
     }
@@ -173,6 +173,35 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit join of wrapped object for object with two fields having constant values" in {
+      testEmit("{foo: 2, bar: true}")(
+        PushString("foo"),
+        PushNum("2"),
+        Map2Cross(WrapObject),
+        PushString("bar"),
+        PushTrue,
+        Map2Cross(WrapObject),
+        Map2Cross(JoinObject)
+      )
+    }
+
+    "emit matched join of wrapped object for object with two fields having same provenance" in {
+      testEmit("clicks := dataset(//clicks) {foo: clicks, bar: clicks}")(
+        PushString("foo"),
+        PushString("/clicks"),
+        LoadLocal(Het),
+        Dup,
+        Swap(2),
+        Swap(1),
+        Map2Cross(WrapObject),
+        PushString("bar"),
+        Swap(1),
+        Swap(2),
+        Map2Cross(WrapObject),
+        Map2Match(JoinObject)
+      )
+    }
+
     "emit wrap array for array with single element having constant value" in {
       testEmit("[\"foo\"]")(
         PushString("foo"),
@@ -228,6 +257,7 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         Dup,
+        Swap(1),
         Map2Match(DerefArray)
       )
     }
@@ -237,6 +267,7 @@ object EmitterSpecs extends Specification
         PushString("foo"),
         LoadLocal(Het),
         Dup,
+        Swap(1),
         FilterMatch(0, None)
       )
     }
@@ -246,6 +277,7 @@ object EmitterSpecs extends Specification
         PushString("foo"),
         LoadLocal(Het),
         Dup,
+        Swap(1),
         Map2Match(Add)
       )
     }
