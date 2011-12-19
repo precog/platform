@@ -33,10 +33,14 @@ import com.reportgrid.analytics.TokenManager
 import com.reportgrid.api.Server
 import com.reportgrid.api.blueeyes.ReportGrid
 
+import java.util.Properties
 import java.util.Date
 import net.lag.configgy.ConfigMap
 
+import com.querio.ingest.api._
+
 object IngestServer extends BlueEyesServer with IngestService {
+
   def mongoFactory(configMap: ConfigMap): Mongo = {
     new blueeyes.persistence.mongo.RealMongo(configMap)
   }
@@ -69,6 +73,21 @@ object IngestServer extends BlueEyesServer with IngestService {
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
     new TokenManager(database, tokensCollection, deletedTokensCollection)
+
+  def eventStoreFactory(configMap: ConfigMap): EventStore = {
+    val topic = "test-topic-0"
+    val props = new Properties()
+    props.put("zk.connect", "127.0.0.1:2181")
+    props.put("serializer.class", "com.querio.ingest.api.IngestMessageCodec")
+    
+    val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topic, props))
+    
+    val defaultAddresses = List(MailboxAddress(0))
+    
+    new DefaultEventStore(0,
+                          new ConstantEventRouter(defaultAddresses),
+                          new MappedMessageSenders(messageSenderMap))
+  }
 
   val clock = Clock.System
 }

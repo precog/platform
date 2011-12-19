@@ -22,6 +22,7 @@ package service
 
 import blueeyes._
 import blueeyes.concurrent.Future
+import blueeyes.concurrent.FutureImplicits
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -36,6 +37,7 @@ import com.reportgrid.api.ReportGridTrackingClient
 import com.reportgrid.api.Trackable
 import rosetta.json.blueeyes._
 
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import scalaz.Scalaz._
 import scalaz.Success
@@ -46,6 +48,7 @@ import scalaz.NonEmptyList
 import com.weiglewilczek.slf4s.Logging
 
 import com.reportgrid.analytics._
+import com.querio.ingest.api._
 
 trait StorageReporting {
   def tokenId: String
@@ -102,10 +105,14 @@ object StorageMetrics {
   }
 }
 
-class TrackingService(storageReporting: StorageReporting, clock: Clock, autoTimestamp: Boolean)
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+class TrackingService(eventStore: EventStore, storageReporting: StorageReporting, clock: Clock, autoTimestamp: Boolean)
+extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging with FutureImplicits {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success( (t: Token, p: Path) => Future.sync(HttpResponse[JValue](OK)))
+    Success{ (t: Token, p: Path) =>
+      request.content.map { _.flatMap { event  => 
+        eventStore.save(Event(p.toString, t.accountTokenId, event)).map(_ => HttpResponse[JValue](OK)).toBlueEyes
+      }}.getOrElse(Future.sync(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
+    }
   }
 
   private def accountPath(path: Path): Path = path.parent match {

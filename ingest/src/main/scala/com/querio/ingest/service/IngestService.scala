@@ -68,8 +68,9 @@ import com.querio.ct.Mult.MDouble._
 import com.querio.instrumentation.blueeyes.ReportGridInstrumentation
 import com.reportgrid.api.ReportGridTrackingClient
 import com.querio.ingest.service.service._
+import com.querio.ingest.service._
 
-case class IngestState(eventsMongo: Mongo, indexMongo: Mongo, tokenManager: TokenManager, storageReporting: StorageReporting, auditClient: ReportGridTrackingClient[JValue])
+case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting, auditClient: ReportGridTrackingClient[JValue])
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with ReportGridInstrumentation {
   import IngestService._
@@ -78,6 +79,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkFutureJson._
 
   implicit val timeout = akka.actor.Actor.Timeout(Long.MaxValue) //for now
+
+  def eventStoreFactory(configMap: ConfigMap): EventStore
 
   def mongoFactory(configMap: ConfigMap): Mongo
 
@@ -96,10 +99,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         startup {
           import context._
 
-          val eventsdbConfig = config.configMap("eventsdb")
-          val eventsMongo = mongoFactory(eventsdbConfig)
-          val eventsdb = eventsMongo.database(eventsdbConfig.getString("database", "events-v" + serviceVersion))
-
           val indexdbConfig = config.configMap("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
           val indexdb  = indexMongo.database(indexdbConfig.getString("database", "analytics-v" + serviceVersion))
@@ -108,10 +107,12 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           val deletedTokensCollection = config.getString("tokens.deleted", "deleted_tokens")
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
+          val eventStore = eventStoreFactory(config.configMap("events"))
+
           Future.sync(IngestState(
-            eventsMongo,
             indexMongo,
-            tokenMgr, 
+            tokenMgr,
+            eventStore,
             storageReporting(config.configMap("storageReporting")),
             auditClient(config.configMap("audit"))))
         } ->
@@ -127,11 +128,11 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
                */
               path("/store") {
                 dataPath("vfs") {
-                  post(new TrackingService(state.storageReporting, clock, false)).audited("store")
+                  post(new TrackingService(state.eventStore, state.storageReporting, clock, false)).audited("store")
                 }
               } ~ 
               dataPath("vfs") {
-                post(new TrackingService(state.storageReporting, clock, true)).audited("track")
+                post(new TrackingService(state.eventStore, state.storageReporting, clock, true)).audited("track")
               }
             }
           }
@@ -140,8 +141,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           Future.sync( 
             Option(
               Stoppable(
-                state.indexMongo,
-                Stoppable(state.eventsMongo) :: Nil
+                state.indexMongo, Nil
               )
             )
           )
