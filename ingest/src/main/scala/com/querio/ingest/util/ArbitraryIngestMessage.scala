@@ -39,7 +39,7 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
   
   def genPath: Gen[List[String]] = Gen.resize(10, Gen.containerOf[List, String](alphaStr))
 
-  def genRandomEvent: Gen[Event] = for(path <- genPath; token <- alphaStr; content <- genContentJValue) yield Event("/" + path.filter(_.length != 0).mkString("/"), token, content)
+  def genRandomEvent: Gen[Event] = for(path <- genPath; token <- alphaStr; content <- genContentJValue) yield Event("/" + path.filter(_.length != 0).mkString("/"), List(token), content)
   
   def genRandomEventMessage: Gen[EventMessage] = for(producerId <- choose(0,1000000); eventId <- choose(0, 1000000); event <- genRandomEvent) 
                                            yield EventMessage(producerId, eventId, event)
@@ -78,7 +78,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event(path, Token.Root.tokenId, event)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event(path, List(Token.Root.tokenId), event)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)
