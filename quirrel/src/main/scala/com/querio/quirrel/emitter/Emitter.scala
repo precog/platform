@@ -70,7 +70,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           // Operation preserving transform:
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
 
-          // There may be a final swap at the end to access the dup:
+          // There may be some final swaps at the end to move up the DUP:
           val finalSwap = (1 until finalStackSize).map(Swap.apply)
 
           ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
@@ -166,6 +166,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
           val provToField = props.groupBy(_._2.provenance)
 
+          // TODO: The fields are not in the right order because of the group operation
           val groups = provToField.foldLeft(Vector.empty[EmitterState]) {
             case (vector, (provenance, fields)) =>
               val singles = fields.map(field2ObjInstr)
@@ -180,7 +181,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
           (groups ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
-        
+
         case ast.ArrayDef(loc, values) => 
           // TODO: Non-constants
           val singles = values.map(v => emitExpr(v) >> emitInstr(Map1(WrapArray)))
