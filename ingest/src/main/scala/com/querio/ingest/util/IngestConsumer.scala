@@ -32,23 +32,19 @@ object IngestConsumer {
 
   def main(args: Array[String]) {
    
-    val stream = kafkaConsumer(topic)
- 
-    println("waiting on stream")
+    val rec = kafkaReceiver(topic)
 
-    stream.foreach(println)
+    while(rec.hasNext) {
+      println(rec.next)
+    }
   }
 
-  def kafkaConsumer(topic: String): KafkaMessageStream[IngestMessage] = {
-    val props = new Properties()
-    props.put("zk.connect", "127.0.0.1:2181")
-    props.put("zk.connectiontimeout.ms", "1000000")
-    props.put("groupid", "test_group")
-   
-    val config = new ConsumerConfig(props) 
-    val connector = Consumer.create(config) 
-
-    val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new IngestMessageCodec)
-    streams(topic)(0)
+  def kafkaReceiver(topic: String) = { 
+    val config = new Properties()
+    config.put("zk.connect", "127.0.0.1:2181")
+    config.put("zk.connectiontimeout.ms", "1000000")
+    config.put("groupid", "test_group")
+  
+    new KafkaIngestMessageReceiver(topic, config)
   }
 }

@@ -51,14 +51,16 @@ trait IngestMessageReceivers {
   def find(address: MailboxAddress): List[IngestMessageReceiver]
 }
 
-trait IngestMessageReceiver {
-  def get(): IngestMessage 
+trait IngestMessageReceiver extends Iterator[IngestMessage] {
+  def hasNext: Boolean
+  def next(): IngestMessage 
   def sync()
 }
 
 object TestIngestMessageRecievers extends IngestMessageReceivers with ArbitraryIngestMessage {
   def find(address: MailboxAddress) = List(new IngestMessageReceiver() {
-    def get() = genRandomEventMessage.sample.get
+    def hasNext = true
+    def next() = genRandomEventMessage.sample.get
     def sync() = Unit
   })
 }
@@ -67,22 +69,18 @@ class KafkaIngestMessageRecievers(receivers: Map[MailboxAddress, List[IngestMess
   def find(address: MailboxAddress) = receivers(address)
 }
 
-class KafkaIngestMessageReciever(topic: String, config: Properties) {
+class KafkaIngestMessageReceiver(topic: String, config: Properties) extends IngestMessageReceiver {
   
-  config.put("autocommit.enable", false)
+  config.put("autocommit.enable", "false")
   
   val connector = Consumer.create(new ConsumerConfig(config))
   val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new IngestMessageCodec)  
   val stream = streams(topic)(0)
   val itr = stream.iterator
-
-  def get(): IngestMessage = {
-    itr.next
-  }
-
-  def sync() {
-    connector.commitOffsets
-  }
+  
+  def hasNext() = itr.hasNext
+  def next() = itr.next
+  def sync() = connector.commitOffsets
 
 }
 
