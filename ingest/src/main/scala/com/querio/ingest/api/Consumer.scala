@@ -1,24 +1,28 @@
 package com.querio.ingest.api
 
-import blueeyes.json.JPath
+import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
+import java.nio.ByteBuffer
+import java.nio.charset.Charset
+import java.nio.charset.CharsetDecoder
+import java.nio.charset.CharsetEncoder
+
+import scalaz._
+import Scalaz._
+
+import org.scalacheck.Gen._
+
+import kafka.consumer._
+
 import blueeyes.json.JsonAST._
+import blueeyes.json.JPath
+import blueeyes.json.JsonParser
 import blueeyes.json.Printer
 
 import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
-
-import scalaz._
-import Scalaz._
-import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicInteger
-import java.nio.charset.Charset
-import java.nio.charset.CharsetDecoder
-import java.nio.charset.CharsetEncoder
-import blueeyes.json.JsonParser
-
-import org.scalacheck.Gen._
 
 import com.querio.ingest.util.ArbitraryIngestMessage
 
@@ -28,12 +32,36 @@ trait IngestMessageReceivers {
 
 trait IngestMessageReceiver {
   def get(): IngestMessage 
+  def sync()
 }
 
 object TestIngestMessageRecievers extends IngestMessageReceivers with ArbitraryIngestMessage {
   def find(address: MailboxAddress) = List(new IngestMessageReceiver() {
     def get() = genRandomEventMessage.sample.get
+    def sync() = Unit
   })
+}
+
+class KafkaIngestMessageRecievers(receivers: Map[MailboxAddress, List[IngestMessageReceiver]]) {
+  def find(address: MailboxAddress) = receivers(address)
+}
+
+class KafkaIngestMessageReciever(topic: String, config: Properties) {
+  
+  config.put("autocommit.enable", false)
+  
+  val connector = Consumer.create(new ConsumerConfig(config))
+  val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new IngestMessageCodec)  
+  val stream = streams(topic)(0)
+
+  def get(): IngestMessage = {
+    stream.next
+  }
+
+  def sync() {
+    connector.commitOffsets
+  }
+
 }
 
 case class MailboxAddress(id: Long)
@@ -136,7 +164,20 @@ object IngestMessageSerialization {
   private val jsonEventFlag: Byte = 0x01
   private val jsonSyncFlag: Byte = 0x02
   private val magicByte: Byte = -123
-  
+
+  def toBytes(msg: IngestMessage): Array[Byte] = {
+    val buf = ByteBuffer.allocate(1024*1024)
+    write(buf, msg)
+    buf.flip()
+    val result = new Array[Byte](buf.limit)
+    buf.get(result)
+    result
+  }
+
+  def fromBytes(bytes: Array[Byte]): IngestMessage = {
+    read(ByteBuffer.wrap(bytes))
+  }
+
   def write(buffer: ByteBuffer, msg: IngestMessage) {
     (msg match {
       case SyncMessage(_, _, _)     => writeSync _
@@ -164,7 +205,14 @@ object IngestMessageSerialization {
     buffer.put(msgBuffer)
     buffer
   }
-  
+
+  def read(buf: ByteBuffer): IngestMessage = {
+    readMessage(buf) match {
+      case Failure(e)   => throw new RuntimeException("Ingest message parse error: " + e)
+      case Success(msg) => msg
+    }
+  }
+
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
     if(magic != magicByte) {
