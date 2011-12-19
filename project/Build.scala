@@ -12,13 +12,15 @@ object PlatformBuild extends Build {
     ("blueeyes",         null, "com.reportgrid"                  %% "blueeyes"         % "0.5.0-SNAPSHOT")
   )
 
-  val ingestDeps = com.samskivert.condep.Depends(
-    ("client-libraries", null, "com.reportgrid"                  %% "client-libraries" % "0.3.1")
+  val clientLibDeps = com.samskivert.condep.Depends(
+    ("client-libraries", null, "com.reportgrid"                  %% "scala-client" % "0.3.1")
   )
-  
-  val nexusSettings = Seq(
-    resolvers ++= Seq("ReportGrid repo" at            "http://nexus.reportgrid.com/content/repositories/releases",
-                      "ReportGrid snapshot repo" at   "http://nexus.reportgrid.com/content/repositories/snapshots"),
+
+  val nexusSettings : Seq[Project.Setting[_]] = Seq(
+    resolvers ++= Seq("ReportGrid repo"          at   "http://nexus.reportgrid.com/content/repositories/releases",
+                      "ReportGrid repo (public)" at   "http://nexus.reportgrid.com/content/repositories/public-releases",
+                      "ReportGrid snapshot repo"          at   "http://nexus.reportgrid.com/content/repositories/snapshots",
+                      "ReportGrid snapshot repo (public)" at   "http://nexus.reportgrid.com/content/repositories/public-snapshots"),
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )
 
@@ -33,8 +35,11 @@ object PlatformBuild extends Build {
   
   lazy val daze = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn bytecode // (bytecode, storage)
   
-  lazy val common = blueeyesDeps.addDeps(Project(id = "common", base = file("common")).settings(nexusSettings: _*))
 
-  lazy val ingest = ((blueeyesDeps.addDeps _) andThen (ingestDeps.addDeps _))(Project(id = "ingest", base = file("ingest")).settings((sbtassembly.Plugin.assemblySettings ++ nexusSettings): _*) dependsOn(common))
+  val commonSettings = nexusSettings ++ Seq(libraryDependencies ++= blueeyesDeps.libDeps)
+  lazy val common = blueeyesDeps.addDeps(Project(id = "common", base = file("common")).settings(commonSettings: _*))
+
+  val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings ++ Seq(libraryDependencies ++= clientLibDeps.libDeps)
+  lazy val ingest = clientLibDeps.addDeps(Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*) dependsOn(common))
 }
 
