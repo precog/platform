@@ -90,7 +90,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
 
           // There may be a final swap at the end to access the dup:
-          val finalSwap = if (entireStackSize <= 2) Vector.empty else Vector(Swap(entireStackSize))
+          val finalSwap = if (entireStackSize < 2) Vector.empty else Vector(Swap(entireStackSize - 1))
 
           ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
       }

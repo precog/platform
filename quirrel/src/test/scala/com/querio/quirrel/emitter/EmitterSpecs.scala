@@ -278,6 +278,7 @@ object EmitterSpecs extends Specification
         Swap(2),
         Swap(1),
         Map2CrossRight(Mul),
+        Swap(1),
         Map2Match(Add)
       )
     }
