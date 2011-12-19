@@ -199,15 +199,6 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
           (groups ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
-
-
-          /*
-          // TODO: Non-constants
-          val singles = props.map(field2ObjInstr)
-          val joins   = Vector.fill(props.length - 1)(emitInstr(Map2Cross(JoinObject)))
-
-          (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
-          */
         
         case ast.ArrayDef(loc, values) => 
           // TODO: Non-constants
