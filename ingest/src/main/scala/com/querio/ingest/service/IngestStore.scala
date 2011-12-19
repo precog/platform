@@ -18,30 +18,6 @@ import kafka.producer._
 import com.querio.ingest.api._
 import com.querio.ingest.util.ArbitraryJValue
 
-
-//object QuickEventStoreDemo extends ArbitraryJValue {
-//  def main(args: Array[String]) {
-//    
-//    val eventSenderMap = Map() + (MailboxAddress(0L) -> new EchoEventSender())
-//    
-//    val defaultAddresses = List(MailboxAddress(0))
-//    
-//    val store = new DefaultEventStore(0,
-//                                      new ConstantEventRouter(defaultAddresses),
-//                                      new MappedEventSenders(eventSenderMap))
-//    
-//    val jv1 = JObject(List(JField("foo", JString("bar")), JField("array", JArray(List(JInt(1), JInt(2)))), JField("sub", JObject(List(JField("age", JInt(100)), JField("height", JInt(63)))))))
-//    val jv2 = JArray(List(JInt(1), JInt(2)))
-//    val jv3 = JInt(1)
-//    
-//    val jvs = jv1 :: jv2 :: jv3 :: Nil
-//    
-//    val path = "/foo/bar/event"
-//
-//    jvs.foreach(jv => store.save(Event(path, "token", jv)))    
-//  }
-//}
-
 // todo
 //
 // - write unit test against collecting senders
