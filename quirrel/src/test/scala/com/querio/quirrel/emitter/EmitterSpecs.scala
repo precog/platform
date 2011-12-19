@@ -227,8 +227,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := dataset(//clicks) clicks[clicks]")(
         PushString("/clicks"),
         LoadLocal(Het),
-        PushString("/clicks"), // TODO: DELETE (should be DUP)
-        LoadLocal(Het),        // TODO: DELETE
+        Dup,
         Map2Match(DerefArray)
       )
     }
@@ -237,8 +236,7 @@ object EmitterSpecs extends Specification
       testEmit("""foo := dataset("foo") foo where foo""")(
         PushString("foo"),
         LoadLocal(Het),
-        PushString("foo"), // TODO: DELETE (should be DUP)
-        LoadLocal(Het),    // TODO: DELETE
+        Dup,
         FilterMatch(0, None)
       )
     }
@@ -247,8 +245,20 @@ object EmitterSpecs extends Specification
       testEmit("""clicks := dataset("foo") clicks + clicks""")(
         PushString("foo"),
         LoadLocal(Het),
-        PushString("foo"), // TODO: DELETE (should be DUP)
-        LoadLocal(Het),    // TODO: DELETE
+        Dup,
+        Map2Match(Add)
+      )
+    }
+
+    "use dup bytecode non-locally" in {
+      testEmit("""clicks := dataset("foo") two := 2 * clicks two + clicks""")(
+        PushNum("2"),
+        PushString("foo"),
+        LoadLocal(Het),
+        Dup,
+        Swap(2),
+        Swap(1),
+        Map2CrossRight(Mul),
         Map2Match(Add)
       )
     }

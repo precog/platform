@@ -32,9 +32,50 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   }
 
   private object Emission {
-    def emitInstr(i: Instruction): EmitterState = StateT.apply[Id, Emission, Unit](e => (Unit, e.copy(bytecode = e.bytecode :+ i)))
+    def emitInstr(i: Instruction): EmitterState = StateT.apply[Id, Emission, Unit](e => ((), e.copy(bytecode = e.bytecode :+ i)))
 
-    def emitInstrs(is: Seq[Instruction]): EmitterState = StateT.apply[Id, Emission, Unit](e => (Unit, e.copy(bytecode = e.bytecode ++ is)))
+    def emitInstr(is: Seq[Instruction]): EmitterState = StateT.apply[Id, Emission, Unit](e => ((), e.copy(bytecode = e.bytecode ++ is)))
+
+    def operandStackSize(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+      // TODO: This should really go into a Bytecode abstraction, which should hold Vector[Instruction]
+      val operandStackSize = e.bytecode.take(idx - 1).foldLeft(0) {
+        case (size, instr) => size + (instr.operandStackDelta._2 - instr.operandStackDelta._1)
+      }
+
+      (operandStackSize, e)
+    }
+
+    // TODO: This should really use metadata inside Emission
+    def dupOrAppend(expr: EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      // Get the bytecode for the expression:
+      val exprBytecode = expr.exec(Emission()).bytecode
+
+      // Look for the expression bytecode in the emission bytecode:
+      e.bytecode.indexOfSlice(exprBytecode) match {
+        case -1 =>
+          // If it's not found, then simply emit the bytecode here:
+          ((), e.copy(bytecode = e.bytecode ++ exprBytecode))
+
+        case start =>
+          // The expression bytecode was found. Need to duplicate it and 
+          // transform the instruction stack so the DUP has no effect:
+          val idx = start + exprBytecode.length
+          
+          val beforeStackSize = operandStackSize(idx).eval(e)   
+          val entireStackSize = operandStackSize(e.bytecode.length).eval(e)
+
+          val before = e.bytecode.take(idx)
+          val after  = e.bytecode.drop(idx) // TODO: Go through all these and remap the swaps, some of which will be broken now (!!!!)
+
+          // Operation preserving transform:
+          val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
+
+          // There may be a final swap at the end to access the dup:
+          val finalSwap = if (entireStackSize <= 2) Vector.empty else Vector(Swap(entireStackSize))
+
+          ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
+      }
+    }
   }
 
   def emit(expr: Expr): Vector[Instruction] = {
@@ -155,7 +196,13 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
               notImpl(expr)
 
             case UserDef(ast.Let(loc, id, params, left, right)) =>
-              emitExpr(left)
+              params.length match {
+                case 0 =>
+                  dupOrAppend(emitExpr(left))
+
+                case n =>
+                  notImpl(expr)
+              }
 
             case NullBinding => 
               notImpl(expr)
