@@ -81,6 +81,8 @@ trait BytecodeReader extends Reader {
         case 0x80 => Some(JoinObject)
         case 0x81 => Some(JoinArray)
         
+        case 0x8A => Some(ArraySwap)
+        
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
         

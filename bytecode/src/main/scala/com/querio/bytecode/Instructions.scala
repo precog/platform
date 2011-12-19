@@ -148,6 +148,8 @@ trait Instructions {
     case object JoinObject extends BinaryOperation
     case object JoinArray extends BinaryOperation
     
+    case object ArraySwap extends BinaryOperation
+    
     case object DerefObject extends BinaryOperation with PredicateInstr
     case object DerefArray extends BinaryOperation with PredicateInstr
     

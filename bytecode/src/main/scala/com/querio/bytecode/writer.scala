@@ -96,6 +96,8 @@ trait BytecodeWriter extends Writer with Version {
       case JoinObject => 0x80
       case JoinArray => 0x81
       
+      case ArraySwap => 0x8A
+      
       case DerefObject => 0xA0
       case DerefArray => 0xA1
     }
