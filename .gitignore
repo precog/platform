@@ -7,3 +7,6 @@ target/
 ingest.*.log
 tags
 *.swp
+blueeyes
+client-libraries
+scalaz
