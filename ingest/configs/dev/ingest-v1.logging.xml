@@ -1,5 +1,5 @@
 <configuration scan="true">
-  <property name="SERVICE" value="analytics-v1" />
+  <property name="SERVICE" value="ingest-v1" />
   <property name="LOG_DIR" value="/var/log/reportgrid" />
 
   <appender name="SERVERLOG" class="ch.qos.logback.core.rolling.RollingFileAppender">
@@ -32,7 +32,7 @@
 
   <logger name="blueeyes.core.http" level="trace" />
 
-  <logger name="com.reportgrid.analytics.service.TrackingService" level="debug" additivity="false">
+  <logger name="com.reportgrid.ingest.service.service.TrackingService" level="debug" additivity="false">
     <appender-ref ref="EVENTLOG" />
   </logger>
 

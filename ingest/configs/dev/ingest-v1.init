@@ -1,0 +1,24 @@
+# ingest-v1 - ReportGrid ingest service (v1)
+#
+#
+
+description "ingest-v1 - ReportGrid ingest service (v1)"
+
+start on runlevel [2345]
+stop on runlevel [06]
+
+respawn
+
+pre-start script
+  [ -d /var/run/reportgrid ] || install -m 755 -o reportgrid -g reportgrid -d /var/run/reportgrid
+end script
+
+script
+  ulimit -n 65535
+  if [ -f /etc/default/ingest-v1 ]; then . /etc/default/ingest-v1; fi
+  su reportgrid -s "/bin/bash" -c "/usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/reportgrid/ingest-v1.logging.xml -jar /usr/share/java/ingest-v1.jar --configFile /etc/reportgrid/ingest-v1.conf"
+end script
+
+post-start script
+  echo `status ingest-v1 | egrep -o '[0-9]+$' | head -n1` > /var/run/reportgrid/ingest-v1.pid
+end script
