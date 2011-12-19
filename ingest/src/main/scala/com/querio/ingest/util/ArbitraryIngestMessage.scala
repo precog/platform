@@ -30,6 +30,8 @@ import Arbitrary.arbitrary
 
 import com.querio.ingest.api._
 
+import com.reportgrid.analytics.Token
+
 trait ArbitraryIngestMessage extends ArbitraryJValue {
   import JsonAST._
   
@@ -76,7 +78,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event(path, "token-id", event)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event(path, Token.Root.tokenId, event)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)
