@@ -17,11 +17,6 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   private case class Emission(
     bytecode: Vector[Instruction] = Vector.empty
   )
-
-  // This doesn't seem to work
-  /*private implicit def BindSemigroup[M[_], A](implicit bind: Bind[M]): Semigroup[M[A]] = new Semigroup[M[A]] {
-    def append(v1: M[A], v2: => M[A]): M[A] = bind.bind(v1)((a: A) => v2)
-  }*/
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -180,14 +175,59 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
-          (groups ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
+          (groups ++ joins).foldLeft(mzero[EmitterState])(_ >> _)
 
         case ast.ArrayDef(loc, values) => 
-          // TODO: Non-constants
-          val singles = values.map(v => emitExpr(v) >> emitInstr(Map1(WrapArray)))
-          val joins   = Vector.fill(values.length - 1)(emitInstr(Map2Cross(JoinArray)))
+          val indexedValues = values.zipWithIndex
 
-          (singles ++ joins).foldLeft(mzero[EmitterState])(_ |+| _)
+          val provToElements = indexedValues.groupBy(_._1.provenance)
+
+          val (groups, indices) = provToElements.foldLeft((Vector.empty[EmitterState], Vector.empty[Int])) {
+            case ((allStates, allIndices), (provenance, elements)) =>
+              val singles = elements.map { case (expr, idx) => emitExpr(expr) >> emitInstr(Map1(WrapArray)) }
+              val indices = elements.map(_._2)
+
+              val joinInstr = emitInstr(if (provenance == ValueProvenance) Map2Cross(JoinArray) else Map2Match(JoinArray))
+
+              val joins = Vector.fill(singles.length - 1)(joinInstr)
+
+              (allStates ++ (singles ++ joins), allIndices ++ indices)
+          }
+
+          val joins = Vector.fill(provToElements.size - 1)(emitInstr(Map2Cross(JoinArray)))
+
+          val joined = (groups ++ joins).foldLeft(mzero[EmitterState])(_ >> _)
+
+          // This function takes a list of indices and a state, and produces
+          // a new list of indices and a new state, where the Nth index of the
+          // array will be moved into the correct location.
+          def fixN(n: Int): StateT[Id, (Seq[Int], EmitterState), Unit] = StateT.apply[Id, (Seq[Int], EmitterState), Unit] { 
+            case (indices, state) =>
+              val currentIndex = indices.indexOf(n)
+              val targetIndex  = n
+
+              ((), 
+              if (currentIndex == targetIndex) (indices, state)
+              else {
+                var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
+
+                val startValue = indices(startIndex)
+                val newIndices = indices.updated(startIndex, indices(endIndex)).updated(endIndex, startValue)
+
+                val newState = (startIndex until endIndex).foldLeft(state) {
+                  case (state, idx) =>
+                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
+                }
+
+                (newIndices, newState)
+              })
+          }
+
+          val fixAll = (0 until indices.length).map(fixN)
+
+          val fixedState = fixAll.foldLeft[StateT[Id, (Seq[Int], EmitterState), Unit]](StateT.stateT(()))(_ >> _).exec((indices, mzero[EmitterState]))._2
+
+          joined >> fixedState
         
         case ast.Descent(loc, child, property) => 
           // Object
