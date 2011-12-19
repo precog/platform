@@ -238,6 +238,40 @@ object EmitterSpecs extends Specification
       )
     }
 
+    "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
+      // TODO: This is not correct (it was pasted from output)
+      testEmit("foo := dataset(//foo) bar := dataset(//bar) [foo.a, bar.a, foo.b, bar.b]")(
+        PushString("/foo"),
+        LoadLocal(Het),
+        Dup, 
+        PushString("a"),
+        Map2Cross(DerefObject),
+        Map1(WrapArray),
+        Swap(1),
+        PushString("b"),
+        Map2Cross(DerefObject),
+        Map1(WrapArray),
+        Map2Match(JoinArray),
+        PushString("/bar"),
+        LoadLocal(Het),
+        Dup,
+        Swap(2),
+        Swap(1),
+        PushString("a"),
+        Map2Cross(DerefObject),
+        Map1(WrapArray),
+        Swap(1),
+        Swap(2),
+        PushString("b"),
+        Map2Cross(DerefObject),
+        Map1(WrapArray),
+        Map2Match(JoinArray),
+        Map2Cross(JoinArray),
+        PushNum("1"),
+        Map2Cross(ArraySwap)
+      )
+    }
+
     "emit descent for object dataset" in {
       testEmit("clicks := dataset(//clicks) clicks.foo")(
         PushString("/clicks"),
