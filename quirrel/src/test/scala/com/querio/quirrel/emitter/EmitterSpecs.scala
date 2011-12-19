@@ -220,7 +220,6 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      // TODO: This is not correct (it was pasted from output)
       testEmit("foo := dataset(//foo) bar := dataset(//bar) [foo.a, bar.a, foo.b, bar.b]")(
         PushString("/foo"),
         LoadLocal(Het),

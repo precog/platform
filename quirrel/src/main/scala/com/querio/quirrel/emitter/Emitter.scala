@@ -62,7 +62,9 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val before = e.bytecode.take(idx)
           val after  = e.bytecode.drop(idx)
 
-          // Operation preserving transform:
+          // Operation preserving transform -- note, if the stack only has one element,
+          // there's no need to perform a swap since it doesn't materially change 
+          // anything -- whatever was on the stack was DUP'd.
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
 
           // There may be some final swaps at the end to move up the DUP:
