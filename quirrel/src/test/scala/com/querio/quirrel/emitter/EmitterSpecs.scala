@@ -328,5 +328,68 @@ object EmitterSpecs extends Specification
         Map2Match(Add)
       )
     }
+
+    "emit count reduction" in {
+      testEmit("count(1)")(
+        PushNum("1"),
+        Reduce(Count)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("count(1)")(
+        PushNum("1"),
+        Reduce(Count)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("mean(1)")(
+        PushNum("1"),
+        Reduce(Mean)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("median(1)")(
+        PushNum("1"),
+        Reduce(Median)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("mode(1)")(
+        PushNum("1"),
+        Reduce(Mode)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("max(1)")(
+        PushNum("1"),
+        Reduce(Max)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("min(1)")(
+        PushNum("1"),
+        Reduce(Min)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("stdDev(1)")(
+        PushNum("1"),
+        Reduce(StdDev)
+      )
+    }
+
+    "emit count reduction" in {
+      testEmit("sum(1)")(
+        PushNum("1"),
+        Reduce(Sum)
+      )
+    }
   }
 }
