@@ -14,8 +14,6 @@ import blueeyes.json.JsonAST._
 import org.scalacheck.Gen
 
 import kafka.producer._
-import kafka.message._
-import kafka.serializer._
 
 import com.querio.ingest.api._
 import com.querio.ingest.util.ArbitraryJValue
@@ -110,19 +108,6 @@ class KafkaMessageSender(topic: String, config: Properties) extends MessageSende
         case x => x.printStackTrace(System.out); throw x
       }
     }
-  }
-}
-
-// This could be made more efficient by writing a custom message class that bootstraps from
-// a ByteBuffer, but this was the quick and dirty way to get moving
-
-class IngestMessageCodec extends Encoder[IngestMessage] with Decoder[IngestMessage] {
-  def toMessage(event: IngestMessage) = {
-    new Message(IngestMessageSerialization.toBytes(event))
-  }
-
-  def toEvent(msg: Message) = {
-    IngestMessageSerialization.read(msg.payload)
   }
 }
 

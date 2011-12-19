@@ -13,6 +13,8 @@ import Scalaz._
 import org.scalacheck.Gen._
 
 import kafka.consumer._
+import kafka.message._
+import kafka.serializer._
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
@@ -53,9 +55,10 @@ class KafkaIngestMessageReciever(topic: String, config: Properties) {
   val connector = Consumer.create(new ConsumerConfig(config))
   val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new IngestMessageCodec)  
   val stream = streams(topic)(0)
+  val itr = stream.iterator
 
   def get(): IngestMessage = {
-    stream.next
+    itr.next
   }
 
   def sync() {
@@ -253,3 +256,17 @@ object IngestMessageSerialization {
     JsonParser.parse(charBuffer.toString())
   }
 }
+
+// This could be made more efficient by writing a custom message class that bootstraps from
+// a ByteBuffer, but this was the quick and dirty way to get moving
+
+class IngestMessageCodec extends Encoder[IngestMessage] with Decoder[IngestMessage] {
+  def toMessage(event: IngestMessage) = {
+    new Message(IngestMessageSerialization.toBytes(event))
+  }
+
+  def toEvent(msg: Message) = {
+    IngestMessageSerialization.read(msg.payload)
+  }
+}
+
