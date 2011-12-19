@@ -24,7 +24,7 @@ trait IngestServiceCombinators extends HttpRequestHandlerCombinators {
         val delegate = next
         val service = (request: HttpRequest[A]) => {
           val path: Option[String] = request.parameters.get('prefixPath).filter(_ != null) 
-          next.service(request) map { f => (token: Token) => f(token, path.map(token.path / _).getOrElse(token.path)) }
+          next.service(request) map { f => (token: Token) => f(token, Path(path.getOrElse(""))) }
         }
 
         val metadata = None

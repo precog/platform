@@ -1,6 +1,6 @@
-conf=dev/analytics-v1.conf.test
-default=dev/analytics-v1.default
-init=dev/analytics-v1.init
-/etc/monit/conf.d/analytics-v1.monit=dev/analytics-v1.monit
-/etc/reportgrid/analytics-v1.logging.xml=dev/analytics-v1.logging.xml
+conf=dev/ingest-v1.conf.test
+default=dev/ingest-v1.default
+init=dev/ingest-v1.init
+/etc/monit/conf.d/ingest-v1.monit=dev/ingest-v1.monit
+/etc/reportgrid/ingest-v1.logging.xml=dev/ingest-v1.logging.xml
 postinstall=dev/postinstall.sh

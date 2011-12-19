@@ -11,10 +11,10 @@ if /etc/init.d/monit stop; then
 fi
 
 # Stop and start the service
-stop analytics-v1
+stop ingest-v1
 sleep 5
 
-if ! RESULT=`start analytics-v1 2>&1` > /dev/null ; then
+if ! RESULT=`start ingest-v1 2>&1` > /dev/null ; then
         if echo "$RESULT" | grep -v "already running" > /dev/null ; then
 		echo "Failure: $RESULT"
 		exit 1
@@ -31,7 +31,7 @@ fi
 sleep 30
 
 echo "Checking health"
-curl -v -f -G "http://localhost:30020/blueeyes/services/analytics/v1/health"
+curl -v -f -G "http://localhost:30050/blueeyes/services/ingest/v1/health"
 echo "Completed health check"
 
 exit 0

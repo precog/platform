@@ -27,3 +27,5 @@ resolvers ++= Seq(
   "Nexus Scala Tools" at          "http://nexus.scala-tools.org/content/repositories/releases",
   "Maven Repo 1" at               "http://repo1.maven.org/maven2/"
 )
+
+mainClass := Some("com.querio.ingest.service.IngestServer")
