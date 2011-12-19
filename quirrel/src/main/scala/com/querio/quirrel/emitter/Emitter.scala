@@ -65,7 +65,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           val entireStackSize = operandStackSize(e.bytecode.length).eval(e)
 
           val before = e.bytecode.take(idx)
-          val after  = e.bytecode.drop(idx) // TODO: Go through all these and remap the swaps, some of which will be broken now (!!!!)
+          val after  = e.bytecode.drop(idx)
 
           // Operation preserving transform:
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
