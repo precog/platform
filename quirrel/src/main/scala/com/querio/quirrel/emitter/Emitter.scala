@@ -265,6 +265,46 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
+            case BuiltIn(BuiltIns.Count.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Count))
+            
+            case BuiltIn(BuiltIns.Max.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Max))
+            
+            case BuiltIn(BuiltIns.Mean.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Mean))
+            
+            case BuiltIn(BuiltIns.Median.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Median))
+            
+            case BuiltIn(BuiltIns.Min.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Min))
+            
+            case BuiltIn(BuiltIns.Mode.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Mode))
+            
+            case BuiltIn(BuiltIns.StdDev.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(StdDev))
+
+            case BuiltIn(BuiltIns.Sum.name, arity) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
+
             case BuiltIn(n, arity) =>
               notImpl(expr)
 
