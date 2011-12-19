@@ -40,7 +40,7 @@ object PlatformBuild extends Build {
                       "ReportGrid snapshot repo" at   "http://nexus.reportgrid.com/content/repositories/snapshots"),
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )
-  
+
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode, daze, ingest)
   
   lazy val blueeyes = RootProject(uri("../blueeyes"))
@@ -54,6 +54,6 @@ object PlatformBuild extends Build {
   
   lazy val common = blueeyesDeps.addDeps(Project(id = "common", base = file("common")).settings(nexusSettings: _*))
 
-  lazy val ingest = ((blueeyesDeps.addDeps _) andThen (ingestDeps.addDeps _))(Project(id = "ingest", base = file("ingest")).settings(nexusSettings: _*) dependsOn(common))
+  lazy val ingest = ((blueeyesDeps.addDeps _) andThen (ingestDeps.addDeps _))(Project(id = "ingest", base = file("ingest")).settings((sbtassembly.Plugin.assemblySettings ++ nexusSettings): _*) dependsOn(common))
 }
 
