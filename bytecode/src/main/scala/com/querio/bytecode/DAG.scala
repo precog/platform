@@ -15,8 +15,7 @@ trait DAG extends Instructions {
     case class Operate(loc: Line, instr: OpInstr, parent: DepGraph) extends DepGraph
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph
     
-    case class Split(loc: Line, parent: DepGraph) extends DepGraph
-    case class Merge(loc: Line, parent: DepGraph) extends DepGraph
+    case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph
     case class Filter(loc: Line, cross: Boolean, ranges: Set[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph
