@@ -144,6 +144,8 @@ trait InstructionGenerators extends Instructions {
     JoinObject,
     JoinArray,
     
+    ArraySwap,
+    
     DerefObject,
     DerefArray)
     
