@@ -1,0 +1,80 @@
+How To Run
+===================================
+
+- IngestService requires both mongo, kafka and zookeeper (note kafka also requires zookeeper)
+-- mongo is required for access to the tokens collection (borrowed from analytics service)
+-- kafka is used to send messages
+-- zookeeper is used to provide atomic assingment of producerIds for multiple IngestService instances
+
+1. Mongo
+
+- probably already running... ;)
+- if not start it okay
+- current the tokens collection may be required (although the current batch of driver tools only use the
+  master report grid token which I may not come from the database but rather from hardwired config?)
+
+
+2. Start zookeeper
+
+- zookeeper can most easily be run out of a standard zookeeper binary distribution (3.3.4 has been tested)
+- from the root of the zookeeper dist run
+
+{zookeeper root}> bin/zkServer.sh start {kafka-root}/config/zookeeper.properties
+
+3. Start kafka
+
+- currently kafka needs to be built and run from out github fork
+
+{kafka root}> bin/new-kafka-server-start.sh config/server.properties
+
+4. (Optional) start ingest service (same as for all our existing blueeyes services)
+
+- the dev config file may need some minor adjustment to supporting running in a local dev environment
+
+java -jar ingest....jar --configFile {config file}
+
+5. Run test event driver (easiest from sbt command line, but could also be run from the ingest jar)
+The command expects the name of a java properties file as the sole argument. The ingest consumer and
+producer main classes should dump a command usage with a list of available properties if you don't 
+provide the config file as an argument.
+
+> project ingest
+[info] Set current project to ingest (in build file:/Users/matheson/Work/repos/platform/)
+> run /tmp/test.properies
+
+Multiple main classes detected, select one to run:
+
+ [1] com.querio.ingest.util.IngestConsumer
+ [2] com.querio.ingest.service.IngestServer
+ [3] com.querio.ingest.util.WebappIngestProducer
+ [4] com.querio.ingest.util.DirectIngestProducer
+
+Enter number: 
+
+- WebappIngestProducer sends events the blueeyes service
+- DirectIngestProducer bypasses the webapp and sends events directly to the kafka queue (via the same EventStore class used in the webapp)
+
+- IngestConsumer is a simple application that reads IngestMessages from an kafka queue
+
+
+
+TODO
+===================================
+
+Implementation
+-----------------------------------
+
+- replicated queue sending logic (partial failure results in success)
+- sync messages per queue
+- consumer reconsiliation of sync messages
+
+Test
+-----------------------------------
+
+Other
+-----------------------------------
+
+- determine responsible party for access control
+- determine when/where/how routing aspects will be handled
+- any utility in tracking active producers?
+

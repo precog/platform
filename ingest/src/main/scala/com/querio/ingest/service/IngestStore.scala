@@ -23,15 +23,15 @@ import com.querio.ingest.util.ArbitraryJValue
 // - write unit test against collecting senders
 // - test failure semantics against senders
 // - write simple kafka backed senders
-// - producer id generation taken from zookeeper
 //
+// - add sync behavior
 
 trait EventStore {
   def save(event: Event): Future[Unit]
 }
 
-class DefaultEventStore(producerId: Int, router: EventRouter, senders: MessageSenders) extends EventStore {
-  private val nextEventId = new AtomicInteger
+class DefaultEventStore(producerId: Int, router: EventRouter, senders: MessageSenders, firstEventId: Int = 0) extends EventStore {
+  private val nextEventId = new AtomicInteger(firstEventId)
   
   def save(event: Event): Future[Unit] = {
     val eventId = nextEventId.incrementAndGet
@@ -53,6 +53,7 @@ class ConstantEventRouter(addresses: List[MailboxAddress]) extends EventRouter {
 
 trait MessageSender {
   def send(msg: IngestMessage): Future[Unit]
+  def close(): Future[Unit] = Future(())
 }
 
 class EchoMessageSender extends MessageSender {
@@ -85,6 +86,13 @@ class KafkaMessageSender(topic: String, config: Properties) extends MessageSende
       }
     }
   }
+
+  override def close() = {
+    Future {
+      producer.close()
+    }
+  }
+
 }
 
 trait MessageSenders {
