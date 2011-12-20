@@ -16,20 +16,16 @@ How To Run
 
 2. Start zookeeper
 
-- zookeeper can most easily be runA out of a standard kafka binary distribution
-- from the root of the kafka dist run
+- zookeeper can most easily be run out of a standard zookeeper binary distribution (3.3.4 has been tested)
+- from the root of the zookeeper dist run
 
-> bin/zookeeper-server-start.sh config/zookeeper.properties
-
-- I would like to migrate this to run out of a standard zookeeper dist and a kafka/querio specific config
-
+{zookeeper root}> bin/zkServer.sh start {kafka-root}/config/zookeeper.properties
 
 3. Start kafka
 
 - currently kafka needs to be built and run from out github fork
 
-> bin/new-kafka-server-start.sh config/server.properties
-
+{kafka root}> bin/new-kafka-server-start.sh config/server.properties
 
 4. (Optional) start ingest service (same as for all our existing blueeyes services)
 
@@ -38,10 +34,13 @@ How To Run
 java -jar ingest....jar --configFile {config file}
 
 5. Run test event driver (easiest from sbt command line, but could also be run from the ingest jar)
+The command expects the name of a java properties file as the sole argument. The ingest consumer and
+producer main classes should dump a command usage with a list of available properties if you don't 
+provide the config file as an argument.
 
 > project ingest
 [info] Set current project to ingest (in build file:/Users/matheson/Work/repos/platform/)
-> run
+> run /tmp/test.properies
 
 Multiple main classes detected, select one to run:
 
