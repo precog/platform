@@ -1,6 +1,5 @@
 package com.reportgrid.storage.leveldb
 
-import comparators._
 import Bijection._
 
 import org.scalacheck.Arbitrary
@@ -8,6 +7,7 @@ import org.scalacheck.Arbitrary
 import java.io.File
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+import scalaz.effect._
 
 object SpeedTests {
   def main (argv : Array[String]) {
@@ -15,11 +15,14 @@ object SpeedTests {
       case Array(c,cs) => (c.toInt,cs.toInt)
       case _ => {
         println("Usage: SpeedTests <count>")
-        exit(1)
+        sys.exit(1)
       }
     }
 
-    val column = new Column(new File("/tmp/speed"), ColumnComparator.BigDecimal)
+    val column = LevelDBProjection(new File("/tmp/speed"), Some(ProjectionComparator.BigDecimal)) ||| {
+      errors => for (err <- errors.list) err.printStackTrace
+                sys.error("Errors prevented creation of a LevelDB projection.")
+    }
 
     val biGen = Arbitrary.arbitrary[BigInt]
     val intGen = Arbitrary.arbitrary[Int]
@@ -42,11 +45,11 @@ object SpeedTests {
       }
 
       time("writes") {
-        toInsert.foreach { case Some((id, value)) => column.insert(id, value.as[Array[Byte]].as[ByteBuffer]) }
+        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(id, value.as[Array[Byte]].as[ByteBuffer])) } unsafePerformIO
       }
     }
 
-    column.close()
+    column.close.unsafePerformIO
 
     val count = chunks * chunksize
     val totalduration = results.map(_._2).sum

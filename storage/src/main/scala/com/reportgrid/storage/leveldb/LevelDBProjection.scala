@@ -1,6 +1,8 @@
 package com.reportgrid.storage
 package leveldb
 
+import com.reportgrid.analytics.Path
+
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import java.io._
@@ -23,7 +25,15 @@ import scalaz.Scalaz._
 import IterateeT._
 //import scalaz.Scalaz._
 
-object LevelDBColumn {
+case class FileProjectionDescriptor(baseDir: File, path: Path, columns: List[ColumnDescriptor], sortDepth: Int) extends ProjectionDescriptor {
+  override def sync = IO(())
+}
+
+object FileProjectionDescriptor {
+  //def restore(baseDir: File): ProjectionDescriptor
+}
+
+object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 
   def restoreComparator(baseDir: File) : Validation[Throwable, DBComparator] = {
@@ -59,21 +69,22 @@ object LevelDBColumn {
     (idBytes, ByteBuffer.allocate(idBytes.length + vBytes.length).put(vBytes).put(idBytes).array)
   }
 
-  def apply(baseDir : File, comparator: Option[DBComparator] = None): ValidationNEL[Throwable, LevelDBColumn] = {
+  def apply(baseDir : File, comparator: Option[DBComparator] = None): ValidationNEL[Throwable, LevelDBProjection] = {
     val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
                    else baseDir.success[Throwable]
 
     val comparatorV = for {
       bd <- baseDirV.toValidationNel
-      c <- restoreComparator(bd).toValidationNel orElse comparator.toSuccess(new RuntimeException("No database comparator was provided."): Throwable).flatMap(saveComparator(bd, _)).toValidationNel
+      c <- restoreComparator(bd).toValidationNel.
+           orElse(comparator.toSuccess(new RuntimeException("No database comparator was provided."): Throwable).flatMap(saveComparator(bd, _)).toValidationNel)
     } yield c
 
-    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBColumn(bd, c) }
+    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, c) }
   }
 }
 
-class LevelDBColumn private (baseDir : File, comparator: DBComparator) extends Column {
-  import LevelDBColumn._
+class LevelDBProjection private (baseDir : File, comparator: DBComparator) extends Projection {
+  import LevelDBProjection._
 
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
@@ -89,6 +100,8 @@ class LevelDBColumn private (baseDir : File, comparator: DBComparator) extends C
     idIndexFile.close()
     valIndexFile.close()
   }
+
+  def sync: IO[Unit] = IO { } 
 
   def insert(id : Long, v : ByteBuffer, shouldSync: Boolean = false): IO[Unit] = IO {
     val (idBytes, valIndexBytes) = columnKeys(id, v)

@@ -8,11 +8,9 @@ import com.querio.ingest.service._
 import kafka.consumer._
 
 object IngestConsumer {
-  
   val topic = "test-topic-0"
 
   def main(args: Array[String]) {
-   
     val rec = kafkaReceiver(topic)
 
     while(rec.hasNext) {

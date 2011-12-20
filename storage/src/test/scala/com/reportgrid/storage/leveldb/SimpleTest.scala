@@ -1,6 +1,5 @@
 package com.reportgrid.storage.leveldb
 
-import comparators._
 import Bijection._
 
 import java.io.File
@@ -9,7 +8,10 @@ import java.nio.ByteBuffer
 
 object SimpleTest {
   def main (argv : Array[String]) {
-    val c = new Column(new File("/tmp/test"), ColumnComparator.BigDecimal)
+    val c = LevelDBProjection(new File("/tmp/test"), Some(ProjectionComparator.BigDecimal)) ||| {
+      errors => for (err <- errors.list) err.printStackTrace
+                sys.error("Errors prevented creation of LevelDBProjection")
+    }
 
     c.insert(12364534l, new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer])
   }

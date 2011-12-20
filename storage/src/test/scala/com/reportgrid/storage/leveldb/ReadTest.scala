@@ -1,6 +1,5 @@
 package com.reportgrid.storage.leveldb
 
-import comparators._
 import java.io.File
 import java.nio.ByteBuffer
 import scala.math.Ordering
@@ -16,7 +15,7 @@ import com.weiglewilczek.slf4s.Logging
 object ReadTest extends Logging {
   def main (argv : Array[String]) {
     val (column, size, seed) = argv match {
-      case Array(name, size, sd) => (LevelDBColumn(new File(name), Some(ColumnComparator.Long)), size.toInt, sd.toLong)
+      case Array(name, size, sd) => (LevelDBProjection(new File(name), Some(ProjectionComparator.Long)), size.toInt, sd.toLong)
       case _ => {
         println("Usage: ReadTest <column dir> <insertion count> <random seed>")
         sys.exit(1)

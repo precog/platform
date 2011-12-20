@@ -1,6 +1,5 @@
 package com.reportgrid.storage.leveldb
 
-import comparators._
 import Bijection._
 
 import org.scalacheck.Arbitrary
@@ -31,7 +30,7 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
-      private val column = LevelDBColumn(new File(basedir, name), Some(ColumnComparator.BigDecimal)) ||| {
+      private val column = LevelDBProjection(new File(basedir, name), Some(ProjectionComparator.BigDecimal)) ||| {
         errors => errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
       }
 
