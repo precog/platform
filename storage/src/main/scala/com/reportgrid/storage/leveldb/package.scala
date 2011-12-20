@@ -1,6 +1,7 @@
 package com.reportgrid.storage
 
 import blueeyes.json.JsonAST._
+import blueeyes.json.Printer._
 
 import java.math._
 import java.nio.ByteBuffer
@@ -38,13 +39,6 @@ package object leveldb {
     def unapply(ab : Array[Byte]) = new String(ab, UTF8)
   }
 
-  trait LengthEncodedArray {
-    def lengthEncoded : Array[Byte]
-  }
-
-  implicit def a2lea (a : Array[Byte]) = new LengthEncodedArray {
-    def lengthEncoded = ByteBuffer.allocate(a.length + 4).putInt(a.length).put(a).array
-  }
 
   trait LengthEncodedArrayBijection[A] extends Bijection[A, Array[Byte]] {
     abstract override def apply(a : A) = {
@@ -103,21 +97,32 @@ package object leveldb {
   }
 
   def projectionBijection(descriptor: ProjectionDescriptor): Bijection[JValue, ByteBuffer] = new Bijection[JValue, ByteBuffer] {
+    def useColumnWidth: Boolean = true //descriptor.columns.size > 1
+
     def apply(jv: JValue) = {
       // Don't need to encode for single value projections
-      val lengthEncoding : Array[Byte] => Array[Byte] = if (descriptor.columns.size > 1) {
-        a => a.lengthEncoded
-      } else {
-        a => a
-      }
+      def lengthEncoded(columnType: ColumnType) : Array[Byte] => Array[Byte] = {
+        (a: Array[Byte]) => columnType match {
+          case ColumnType.BigDecimal(None)    if useColumnWidth => ByteBuffer.allocate(a.length + 4).putInt(a.length).put(a).array
+          case ColumnType.BigDecimal(Some(l)) if useColumnWidth => sys.error("BigDecimal may not be used fixed-length yet.")
+          case ColumnType.String(None)        if useColumnWidth => ByteBuffer.allocate(a.length + 4).putInt(a.length).put(a).array
+          case ColumnType.String(Some(l))     if useColumnWidth => ByteBuffer.allocate(l).put(a, 0, l).array
+          case _ => a
+        }
+      } 
 
       val (len, arrays) = descriptor.columns.foldRight((0, List.empty[Array[Byte]])) {
         case (ColumnDescriptor(selector, columnType), (len, acc)) =>
-          val v = jv(selector) match {
-            case JBool(value)   => value.as[Array[Byte]]
-            case JInt(value)    => lengthEncoding(value.bigInteger.toByteArray) //TODO: Specialize to long if possible
-            case JDouble(value) => value.as[Array[Byte]]
-            case JString(value) => lengthEncoding(value.as[Array[Byte]]) //TODO: Specialize for fixed length
+          val v = lengthEncoded(columnType) {
+            jv(selector) match {
+              case JBool(value)   => value.as[Array[Byte]]
+              case JInt(value)    => value.bigInteger.toByteArray //TODO: Specialize to long if possible
+              case JDouble(value) => value.as[Array[Byte]]
+              case JString(value) => value.as[Array[Byte]] //TODO: Specialize for fixed length
+              case JNothing       => Array[Byte]()
+              case JNull          => Array[Byte]()
+              case x              => sys.error("Column selector " + selector + " returns a non-leaf JSON value: " + compact(render(x)))
+            }
           }
 
           (len + v.length, v :: acc)
@@ -128,20 +133,23 @@ package object leveldb {
 
     def unapply(buf: ByteBuffer) = {
       def getColumnValue(columnType: ColumnType) = columnType match {
-        case ColumnType.Long => JInt(buf.getLong)
-        case ColumnType.Double => JDouble(buf.getDouble)
+        case ColumnType.Long    => JInt(buf.getLong)
+        case ColumnType.Double  => JDouble(buf.getDouble)
         case ColumnType.Boolean => JBool(buf.get != 0x0)
-        case ColumnType.BigDecimal(_) => //TODO: Specialize for fixed length
-          val len = buf.getInt
+        case ColumnType.Null    => JNull
+        case ColumnType.Nothing => JNothing
+        case ColumnType.BigDecimal(length) => //TODO: Specialize for fixed length
+          val len = if (useColumnWidth) length.getOrElse(buf.getInt) else buf.remaining
           val scale = buf.getInt
           val target = new Array[Byte](len - 4)
           buf.get(target)
           JInt(new BigInt(new BigInteger(target))) //TODO: Assume that we're storing BigInt as BigDecimal
 
-        case ColumnType.String(_) => //TODO: Specialize for fixed length
-          val len = buf.getInt
+        case ColumnType.String(length) => //TODO: Specialize for fixed length
+          val len = if (useColumnWidth) length.getOrElse(buf.getInt) else buf.remaining
           val target = new Array[Byte](len)
-          JString(new String(buf.get(target), UTF8))
+          buf.get(target)
+          JString(new String(target, UTF8))
       }
 
       descriptor.columns match {

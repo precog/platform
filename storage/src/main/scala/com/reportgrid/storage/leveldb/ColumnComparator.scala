@@ -15,6 +15,8 @@ object ColumnComparator {
     case ColumnType.Long    => new LongComparator
     case ColumnType.Double  => new DoubleComparator
     case ColumnType.Boolean => new BooleanComparator
+    case ColumnType.Null    => AlwaysEqualComparator
+    case ColumnType.Nothing => AlwaysEqualComparator
 
     case ColumnType.String(width) => 
       width.map(w => new StringComparator(_ => w))
@@ -26,6 +28,10 @@ object ColumnComparator {
   }
 }
 
+object AlwaysEqualComparator extends ColumnComparator {
+  def width: Array[Byte] => Int = a => 0
+  def compare(a : Array[Byte], b : Array[Byte]) = 0
+}
 
 trait ProjectionComparator extends Comparator[Array[Byte]] with DBComparator { 
   /** ID-based comparison is common to all other comparators, and must have lowest

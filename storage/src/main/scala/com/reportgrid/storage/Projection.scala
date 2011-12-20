@@ -34,10 +34,13 @@ trait LengthEncoder {
 
 sealed trait ColumnType 
 
+
 object ColumnType {
-  case object Long extends ColumnType 
-  case object Double extends ColumnType 
+  case object Long    extends ColumnType 
+  case object Double  extends ColumnType 
   case object Boolean extends ColumnType 
+  case object Null    extends ColumnType
+  case object Nothing extends ColumnType
   case class BigDecimal(width: Option[Int]) extends ColumnType 
   case class String(width: Option[Int]) extends ColumnType 
 

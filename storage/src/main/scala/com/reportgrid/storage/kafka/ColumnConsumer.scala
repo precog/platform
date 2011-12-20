@@ -24,6 +24,8 @@ import scalaz._
 import scalaz.syntax.std.optionV._
 import scalaz.effect._
 
+
+
 case object Stop
 
 class RoutingActor(baseDir: File) extends Actor with Logging {
