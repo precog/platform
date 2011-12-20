@@ -19,8 +19,6 @@
  */
 package com.reportgrid.storage.leveldb
 
-import comparators.ColumnComparator
-
 import java.io.File
 
 import org.scalacheck.{Arbitrary,Gen}
@@ -52,19 +50,19 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
 
   "Columns" should {
     "Fail to create a new column without a provided comparator" in new columnSetup {
-      Column(dataDir).isFailure must_== true
+      LevelDBProjection(dataDir).isFailure must_== true
     }
 
     "Create a new column with a provided comparator" in new columnSetup {
-      val c = Column(dataDir, Some(ColumnComparator.Long))
+      val c = LevelDBProjection(dataDir, Some(ProjectionComparator.Long))
       c.isSuccess must_== true
-      c.map(_.close())
+      c.map(_.close.unsafePerformIO)
     }
 
     "Open an existing column with a restored comparator" in new columnSetup {
-      val initial = Column(dataDir, Some(ColumnComparator.Long))
+      val initial = LevelDBProjection(dataDir, Some(ProjectionComparator.Long))
       initial.isSuccess must_== true
-      initial.map(_.close()).flatMap(_ => Column(dataDir)).isSuccess must_== true
+      initial.map(_.close.unsafePerformIO).flatMap(_ => LevelDBProjection(dataDir)).isSuccess must_== true
     }
 
 
