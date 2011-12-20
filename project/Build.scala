@@ -31,7 +31,9 @@ object PlatformBuild extends Build {
   
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings : _*)
   lazy val quirrel = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings : _*) dependsOn bytecode
-  lazy val storage = scalaz.addDeps(Project(id = "storage", base = file("storage")).settings(nexusSettings : _*))
+  
+  val storageSettings = nexusSettings ++ Seq(libraryDependencies ++= scalaz.libDeps ++ blueeyesDeps.libDeps)
+  lazy val storage = scalaz.addDeps(Project(id = "storage", base = file("storage")).settings(storageSettings : _*))
   
   lazy val daze = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn bytecode // (bytecode, storage)
   
