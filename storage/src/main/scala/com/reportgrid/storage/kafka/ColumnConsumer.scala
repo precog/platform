@@ -21,10 +21,12 @@ package com.reportgrid.storage
 package kafka
 
 import leveldb._
+import Bijection._
 
 import akka.actor.Actor
 import akka.actor.ActorRef
 
+import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy
@@ -36,6 +38,7 @@ import com.weiglewilczek.slf4s._
 import _root_.kafka.consumer._
 
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -72,13 +75,13 @@ class RoutingActor(baseDir: File) extends Actor with Logging {
         val comparator = ProjectionComparator.forProjection(dataShape)
         val actor = routing.get(dataShape).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse(
           //todo: add selector metadata to column
-          LevelDBProjection(new File(baseDir, path.path), Some(comparator)).map(p => Actor.actorOf(new ProjectionActor(p)))
+          LevelDBProjection(new File(baseDir, path.path), Some(comparator)).map(p => Actor.actorOf(new ProjectionActor(p, dataShape)))
         )
 
         actor match {
           case Success(actor) =>
             routing.putIfAbsent(dataShape, actor)
-            actor ! (ev.uid -> jvalue)
+            actor ! ProjectionInsert(ev.uid, jvalue)
 
           case Failure(errors) => 
             for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
@@ -87,11 +90,17 @@ class RoutingActor(baseDir: File) extends Actor with Logging {
   }
 }
 
-class ProjectionActor(projection: LevelDBProjection) extends Actor {
+case class ProjectionInsert(id: Long, jvalue: JValue)
+
+class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
+  implicit val bijection: Bijection[JValue, ByteBuffer] = projectionBijection(descriptor)
+
   def receive = {
     case Stop => //close the db
+      projection.close.unsafePerformIO
 
-    case (id, jvalue) =>
+    case ProjectionInsert(id, jvalue) => 
+      projection.insert(id, jvalue.as[ByteBuffer]).unsafePerformIO
   }
 }
 
