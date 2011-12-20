@@ -54,4 +54,13 @@ resolvers ++= Seq(
   "Maven Repo 1" at               "http://repo1.maven.org/maven2/"
 )
 
+ivyXML :=
+  <dependencies>
+    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
+      <exclude org="com.sun.jdmk"/>
+      <exclude org="com.sun.jmx"/>
+      <exclude org="javax.jms"/>
+    </dependency>
+  </dependencies>
+
 seq(assemblySettings: _*)
