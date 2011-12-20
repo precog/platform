@@ -76,16 +76,18 @@ object IngestServer extends BlueEyesServer with IngestService {
     new TokenManager(database, tokensCollection, deletedTokensCollection)
 
   def eventStoreFactory(configMap: ConfigMap): EventStore = {
-    val topic = "test-topic-0"
+    val topicId = config.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
+    val zookeeperHosts = config.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
+    
     val props = new Properties()
-    props.put("zk.connect", "127.0.0.1:2181")
+    props.put("zk.connect", zookeeperHosts)
     props.put("serializer.class", "com.querio.ingest.api.IngestMessageCodec")
     
-    val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topic, props))
+    val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topicId, props))
     
     val defaultAddresses = List(MailboxAddress(0))
 
-    val qz = QuerioZookeeper.testQuerioZookeeper("127.0.0.1:2181")
+    val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
     val producerId = qz.acquireProducerId
     qz.close
     new DefaultEventStore(producerId,
