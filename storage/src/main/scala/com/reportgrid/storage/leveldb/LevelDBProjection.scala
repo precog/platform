@@ -109,15 +109,18 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
   logger.debug("Opening column index files")
 
   private val createOptions = (new Options).createIfMissing(true)
-  private val idIndexFile =  factory.open(new File(baseDir, "idIndex"), createOptions)
-  private val valIndexFile = factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
+  private val idIndexFile: DB =  factory.open(new File(baseDir, "idIndex"), createOptions)
+  private lazy val valIndexFile: DB = {
+    sys.error("Value-based indexes have not been enabled.")
+     //factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
+  }
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
   def close: IO[Unit] = IO {
     logger.info("Closing column index files")
     idIndexFile.close()
-    valIndexFile.close()
+    //valIndexFile.close()
   }
 
   def sync: IO[Unit] = IO { } 
@@ -126,10 +129,10 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
     val (idBytes, valIndexBytes) = columnKeys(id, v)
 
     if (shouldSync) {
-      valIndexFile.put(valIndexBytes, Array[Byte](), syncOptions)
+      //valIndexFile.put(valIndexBytes, Array[Byte](), syncOptions)
       idIndexFile.put(idBytes, v, syncOptions)
     } else {
-      valIndexFile.put(valIndexBytes, Array[Byte]())
+      //valIndexFile.put(valIndexBytes, Array[Byte]())
       idIndexFile.put(idBytes, v)
     }
   }
