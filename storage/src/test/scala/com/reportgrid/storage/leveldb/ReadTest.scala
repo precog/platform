@@ -55,7 +55,7 @@ object ReadTest extends Logging {
 
         val runTest = for {
           _       <- inserts.sequence[IO, Unit]
-          allVals <- (fold[Unit, ByteBuffer, IO, List[Long]](Nil)((a, e) => e.as[Long] :: a) >>== c.getAllValues) apply (_ => IO(Nil))
+          allVals <- (fold[Unit, Long, IO, List[Long]](Nil)((a, e) => e :: a) >>== c.getAllIds) apply (_ => IO(Nil))
           _       <- report(allVals)
           _       <- c.close
         } yield {
