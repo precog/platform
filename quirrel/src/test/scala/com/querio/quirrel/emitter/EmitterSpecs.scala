@@ -225,11 +225,11 @@ object EmitterSpecs extends Specification
         LoadLocal(Het),
         Dup, 
         PushString("a"),
-        Map2Cross(DerefObject),
+        Map2CrossLeft(DerefObject),
         Map1(WrapArray),
         Swap(1),
         PushString("b"),
-        Map2Cross(DerefObject),
+        Map2CrossLeft(DerefObject),
         Map1(WrapArray),
         Map2Match(JoinArray),
         PushString("/bar"),
@@ -238,17 +238,17 @@ object EmitterSpecs extends Specification
         Swap(2),
         Swap(1),
         PushString("a"),
-        Map2Cross(DerefObject),
+        Map2CrossLeft(DerefObject),
         Map1(WrapArray),
         Swap(1),
         Swap(2),
         PushString("b"),
-        Map2Cross(DerefObject),
+        Map2CrossLeft(DerefObject),
         Map1(WrapArray),
         Map2Match(JoinArray),
         Map2Cross(JoinArray),
         PushNum("1"),
-        Map2Cross(ArraySwap)
+        Map2CrossLeft(ArraySwap)
       )
     }
 
@@ -257,7 +257,7 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         PushString("foo"),
-        Map2Cross(DerefObject)
+        Map2CrossLeft(DerefObject)
       )
     }
 
@@ -290,7 +290,6 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         Dup,
-        Swap(1),
         Map2Match(DerefArray)
       )
     }
@@ -300,7 +299,19 @@ object EmitterSpecs extends Specification
         PushString("foo"),
         LoadLocal(Het),
         Dup,
-        Swap(1),
+        FilterMatch(0, None)
+      )
+    }
+
+    "emit filter match for datasets from same provenance when performing equality filter" in {
+      testEmit("foo := dataset(//foo) foo where foo.id = 2")(
+        PushString("/foo"),
+        LoadLocal(Het),
+        Dup,
+        PushString("id"),
+        Map2CrossLeft(DerefObject),
+        PushNum("2"),
+        Map2CrossLeft(Eq),
         FilterMatch(0, None)
       )
     }
@@ -310,7 +321,6 @@ object EmitterSpecs extends Specification
         PushString("foo"),
         LoadLocal(Het),
         Dup,
-        Swap(1),
         Map2Match(Add)
       )
     }
@@ -391,5 +401,14 @@ object EmitterSpecs extends Specification
         Reduce(Sum)
       )
     }
+
+    /*"emit body of characteristic function substituted for concrete parameters" in {
+      testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")"(
+        PushString("/clicks"),
+        LoadLocal(Het),
+        Dup,
+
+      )
+    }*/
   }
 }
