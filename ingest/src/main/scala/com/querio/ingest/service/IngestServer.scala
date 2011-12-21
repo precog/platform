@@ -75,9 +75,9 @@ object IngestServer extends BlueEyesServer with IngestService {
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
     new TokenManager(database, tokensCollection, deletedTokensCollection)
 
-  def eventStoreFactory(configMap: ConfigMap): EventStore = {
-    val topicId = config.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
-    val zookeeperHosts = config.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
+  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
+    val topicId = eventConfig.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
+    val zookeeperHosts = eventConfig.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
     
     val props = new Properties()
     props.put("zk.connect", zookeeperHosts)

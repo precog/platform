@@ -107,7 +107,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           val deletedTokensCollection = config.getString("tokens.deleted", "deleted_tokens")
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
-          val eventStore = eventStoreFactory(config.configMap("events"))
+          val eventStore = eventStoreFactory(config.configMap("eventStore"))
 
           Future.sync(IngestState(
             indexMongo,
