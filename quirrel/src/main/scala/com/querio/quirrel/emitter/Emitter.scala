@@ -28,10 +28,10 @@ import scalaz.Scalaz._
 
 trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   import instructions._
-  case class EmitterError(expr: Expr, message: String) extends Exception(message)
+  case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
 
-  private def nullProvenanceError[A](expr: Expr): A = throw EmitterError(expr, "Expression has null provenance")
-  private def notImpl[A](expr: Expr): A = throw EmitterError(expr, "Not implemented")
+  private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
+  private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
   private case class Emission(
     bytecode: Vector[Instruction] = Vector.empty
@@ -86,8 +86,10 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           // anything -- whatever was on the stack was DUP'd.
           val swaps = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
 
-          // There may be some final swaps at the end to move up the DUP:
-          val finalSwap = (1 until finalStackSize).map(Swap.apply)
+          // There may be some final swaps at the end to move up the DUP -- but not if there are no
+          // opcodes after the expression we're DUPing (in this case, inserting a Swap(1) would have
+          // no effect, since the two datasets on the stack are identical):
+          val finalSwap = if (after.length == 0) Vector.empty else (1 until finalStackSize).map(Swap.apply)
 
           ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
       }
@@ -97,13 +99,13 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   def emit(expr: Expr): Vector[Instruction] = {
     import Emission._
 
-    def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
-      val mapInstr = emitInstr((left.provenance, right.provenance) match {
+    def emitMapState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, op: BinaryOperation): EmitterState = {
+      val mapInstr = emitInstr((leftProv, rightProv) match {
         case (NullProvenance, _) =>
-          nullProvenanceError(left)
+          nullProvenanceError()
 
         case (_, NullProvenance) =>
-          nullProvenanceError(right)
+          nullProvenanceError()
 
         case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
           Map2Match(op)
@@ -121,16 +123,20 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           Map2Cross(op)
       })
 
-      emitExpr(left) >> emitExpr(right) >> mapInstr
+      left >> right >> mapInstr
     }
 
-    def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
-      val filterInstr = emitInstr((left.provenance, right.provenance) match {
+    def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
+      emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
+    }
+
+    def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
+      val filterInstr = emitInstr((leftProv, rightProv) match {
         case (NullProvenance, _) =>
-          nullProvenanceError(left)
+          nullProvenanceError()
 
         case (_, NullProvenance) =>
-          nullProvenanceError(right)
+          nullProvenanceError()
 
         case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
           FilterMatch(depth, pred)
@@ -142,22 +148,21 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           FilterCross(depth, pred)
       })
 
-      emitExpr(left) >> emitExpr(right) >> filterInstr
+      left >> right >> filterInstr
+    }
+
+    def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
+      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, depth, pred)
     }
 
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
       expr match {
         case ast.Let(loc, id, params, left, right) =>
-          params.length match {
-            case 0 =>
-              emitExpr(right)
-
-            case n =>
-              notImpl(expr)
-          }
+          // params.length
+          emitExpr(right)
 
         case ast.New(loc, child) => 
-          notImpl(expr)
+          mzero[EmitterState]
         
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
           notImpl(expr)
@@ -237,7 +242,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
 
                 val newState = (startIndex until endIndex).foldLeft(state) {
                   case (state, idx) =>
-                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
+                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2CrossLeft(ArraySwap)))
                 }
 
                 (newIndices, newState)
@@ -251,9 +256,7 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
           joined >> fixedState
         
         case ast.Descent(loc, child, property) => 
-          // Object
-          // TODO: Why is "property" not expression???????
-          emitExpr(child) >> emitInstr(PushString(property)) >> emitInstr(Map2Cross(DerefObject))
+          emitMapState(emitExpr(child), child.provenance, emitInstr(PushString(property)), ValueProvenance, DerefObject)
         
         case ast.Deref(loc, left, right) => 
           emitMap(left, right, DerefArray)
