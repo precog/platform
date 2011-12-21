@@ -21,7 +21,7 @@ initialCommands in console := """
   | import com.querio.bytecode._
   | import java.nio.ByteBuffer
   | 
-  | val cake = new Reader with BytecodeWriter
+  | val cake = new BytecodeReader with BytecodeWriter with DAG
   | 
   | def printBuffer(buffer: ByteBuffer) {
   |   try {
