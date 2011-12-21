@@ -15,7 +15,8 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
   private case class Emission(
-    bytecode: Vector[Instruction] = Vector.empty
+    bytecode:     Vector[Instruction] = Vector.empty,
+    applications: Map[ast.Let, Seq[(String, Expr)]] = Map.empty
   )
   
   private type EmitterState = StateT[Id, Emission, Unit]
@@ -38,6 +39,22 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
       }
 
       (operandStackSize, e)
+    }
+
+    def applyTicVars(let: ast.Let, values: Seq[(String, Expr)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      ((), e.copy(applications = e.applications + (let -> values)))
+    }
+
+    def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      ((), e.copy(applications = e.applications - let))
+    }
+
+    def getTicVar(let: ast.Let, name: String): StateT[Id, Emission, Expr] = StateT.apply[Id, Emission, Expr] { e =>
+      (e.applications(let).find(_._1 == name).get._2, e)
+    }
+
+    def setTicVars(let: ast.Let, values: Seq[(String, Expr)])(f: EmitterState): EmitterState = {
+      applyTicVars(let, values) >> f >> unapplyTicVars(let)
     }
 
     // TODO: This should really use metadata inside Emission
@@ -139,7 +156,6 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
       expr match {
         case ast.Let(loc, id, params, left, right) =>
-          // params.length
           emitExpr(right)
 
         case ast.New(loc, child) => 
@@ -148,8 +164,13 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
           notImpl(expr)
         
-        case t @ ast.TicVar(loc, id) => 
-          notImpl(expr)
+        case t @ ast.TicVar(loc, name) => 
+          t.binding match {
+            case UserDef(let) =>
+              getTicVar(let, name) >>= (ticVar => emitExpr(ticVar))              
+
+            case _ => notImpl(expr)
+          }
         
         case ast.StrLit(loc, value) => 
           emitInstr(PushString(value))
@@ -292,13 +313,20 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
             case BuiltIn(n, arity) =>
               notImpl(expr)
 
-            case UserDef(ast.Let(loc, id, params, left, right)) =>
+            case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {
                 case 0 =>
                   dupOrAppend(emitExpr(left))
 
                 case n =>
-                  notImpl(expr)
+                  setTicVars(let, params.zip(actuals)) {
+                    if (actuals.length == n) {
+                      emitExpr(left)
+                    } 
+                    else {
+                      notImpl(expr)
+                    } 
+                  }
               }
 
             case NullBinding => 
