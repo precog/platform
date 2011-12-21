@@ -421,13 +421,17 @@ object EmitterSpecs extends Specification
       )
     }
 
-    /*"emit body of characteristic function substituted for concrete parameters" in {
-      testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")"(
+    "emit body of characteristic function substituted for concrete parameters" in {
+      testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         PushString("/clicks"),
         LoadLocal(Het),
         Dup,
-
+        PushString("userId"),
+        Map2CrossLeft(DerefObject),
+        PushString("foo"),
+        Map2CrossLeft(Eq),
+        FilterMatch(0, None)
       )
-    }*/
+    }
   }
 }
