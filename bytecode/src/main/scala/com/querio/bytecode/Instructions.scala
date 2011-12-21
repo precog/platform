@@ -83,10 +83,9 @@ trait Instructions {
     
     sealed trait DataInstr extends Instruction
     
-    sealed trait OpInstr extends Instruction
     sealed trait JoinInstr extends Instruction
     
-    case class Map1(op: UnaryOperation) extends Instruction with OpInstr
+    case class Map1(op: UnaryOperation) extends Instruction
     case class Map2Match(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
