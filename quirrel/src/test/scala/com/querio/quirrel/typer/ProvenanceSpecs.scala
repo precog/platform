@@ -2061,18 +2061,35 @@ object ProvenanceSpecs extends Specification
     }
     
     "accept multiple nested expressions in relation" in {
-      val input = """
+      {
+        val input = """
         | foo := dataset(//foo)
         | bar := dataset(//bar)
         | 
         | foo :: bar
         |   foo + bar + foo""".stripMargin
         
-      val tree = compile(input)
-      tree.provenance must beLike {
-        case DynamicProvenance(_) => ok
+        val tree = compile(input)
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
       }
-      tree.errors must beEmpty
+      
+      {
+        val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        | 
+        | foo :: bar
+        |   bar + foo + foo""".stripMargin
+        
+        val tree = compile(input)
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
     }
   }
   
