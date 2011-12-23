@@ -33,8 +33,9 @@ initialCommands in console := """
   | val solver = new Solver with Parser with StubPhases {}
   |
   | def solve(str: String, id: Symbol): Option[solver.Expr] = {
-  |   val f = solver.solve(solver.parse(LineStream(str))) { case solver.TicVar(_, id2) => id.toString == id2 }
-  |   f(solver.NumLit(LineStream(), "0"))
+  |   import solver.ast._
+  |   val f = solver.solve(solver.parse(LineStream(str))) { case TicVar(_, id2) => id.toString == id2 }
+  |   f(NumLit(LineStream(), "0"))
   | }
   """.stripMargin
   
