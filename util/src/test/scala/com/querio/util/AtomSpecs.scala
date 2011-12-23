@@ -1,4 +1,4 @@
-package com.querio.quirrel
+package com.querio
 package util
 
 import org.scalacheck.Prop

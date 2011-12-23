@@ -1,4 +1,4 @@
-package com.querio.quirrel
+package com.querio
 package util
 
 import java.util.concurrent.atomic.AtomicReference
