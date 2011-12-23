@@ -202,37 +202,38 @@ trait ProvenanceChecker extends parser.AST with Binder {
                   left flatMap { unifyProvenance(relations)(_, right) }
                 }
                 
-                optUnified match {      // TODO add case for union
+                optUnified match {
                   case Some(unified) => {
-                    (e.left.provenance, unified) match {
-                      case (StaticProvenance(_), StaticProvenance(_)) =>
-                        (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
+                    val resultPoss = e.left.provenance.possibilities
+                    val resultIsSet = resultPoss exists {
+                      case StaticProvenance(_) => true
+                      case DynamicProvenance(_) => true
+                      case _ => false
+                    }
+                    
+                    val paramPoss = unified.possibilities
+                    val paramsAreSet = paramPoss exists {
+                      case StaticProvenance(_) => true
+                      case DynamicProvenance(_) => true
+                      case _ => false
+                    }
+                    
+                    if (resultIsSet && paramsAreSet)
+                      (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
+                    else if (resultPoss.contains(NullProvenance) || paramPoss.contains(NullProvenance))
+                      (NullProvenance, Set())
+                    else {
+                      val varAssumptions = e.assumptions ++ Map(e.params zip provenances: _*) map {
+                        case (id, prov) => ((id, e), prov)
+                      }
                       
-                      case (StaticProvenance(_), DynamicProvenance(_)) =>
-                        (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
+                      val resultProv = computeResultProvenance(e.left, relations, varAssumptions)
                       
-                      case (DynamicProvenance(_), DynamicProvenance(_)) =>
-                        (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
-                      
-                      case (DynamicProvenance(_), StaticProvenance(_)) =>
-                        (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
-                      
-                      case (NullProvenance, _) => (NullProvenance, Set())
-                      case (_, NullProvenance) => (NullProvenance, Set())
-                      
-                      case _ => {
-                        val varAssumptions = e.assumptions ++ Map(e.params zip provenances: _*) map {
-                          case (id, prov) => ((id, e), prov)
-                        }
+                      resultProv match {
+                        case NullProvenance =>
+                          (NullProvenance, Set(Error(expr, FunctionArgsInapplicable)))
                         
-                        val resultProv = computeResultProvenance(e.left, relations, varAssumptions)
-                        
-                        resultProv match {
-                          case NullProvenance =>
-                            (NullProvenance, Set(Error(expr, FunctionArgsInapplicable)))
-                          
-                          case _ => (resultProv, Set())
-                        }
+                        case _ => (resultProv, Set())
                       }
                     }
                   }
