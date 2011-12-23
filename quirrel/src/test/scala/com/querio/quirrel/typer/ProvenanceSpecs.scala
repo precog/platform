@@ -2087,6 +2087,52 @@ object ProvenanceSpecs extends Specification
         tree.errors must beEmpty
       }
     }
+    
+    "attribute union provenance to constituents in trinary operation" in {
+      val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        | baz := dataset(//baz)
+        |
+        | foo :: bar
+        |   bar :: baz
+        |     (foo.a - bar.a) * (bar.b / baz.b)
+        """.stripMargin
+        
+      val tree @ Let(_, _, _, _, Let(_, _, _, _, Let(_, _, _, _, Relate(_, _, _, Relate(_, _, _, body @ Mul(_, left @ Sub(_, minLeft, minRight), right @ Div(_, divLeft, divRight))))))) =
+        compile(input)
+      
+      tree.provenance must beLike {
+        case DynamicProvenance(_) => ok
+      }
+      tree.errors must beEmpty
+      
+      body.provenance must beLike {
+        case p: UnionProvenance => {
+          p.possibilities must contain(StaticProvenance("/foo"))
+          p.possibilities must contain(StaticProvenance("/bar"))
+          p.possibilities must contain(StaticProvenance("/baz"))
+        }
+      }
+      
+      body.provenance.possibilities must contain(StaticProvenance("/foo"))
+      body.provenance.possibilities must contain(StaticProvenance("/bar"))
+      body.provenance.possibilities must contain(StaticProvenance("/baz"))
+      
+      left.provenance.possibilities must contain(StaticProvenance("/foo"))
+      left.provenance.possibilities must contain(StaticProvenance("/bar"))
+      left.provenance.possibilities must not(contain(StaticProvenance("/baz")))
+      
+      right.provenance.possibilities must not(contain(StaticProvenance("/foo")))
+      right.provenance.possibilities must contain(StaticProvenance("/bar"))
+      right.provenance.possibilities must contain(StaticProvenance("/baz"))
+      
+      minLeft.provenance mustEqual StaticProvenance("/foo")
+      minRight.provenance mustEqual StaticProvenance("/bar")
+      
+      divLeft.provenance mustEqual StaticProvenance("/bar")
+      divRight.provenance mustEqual StaticProvenance("/baz")
+    }
   }
   
   "null provenance" should {
