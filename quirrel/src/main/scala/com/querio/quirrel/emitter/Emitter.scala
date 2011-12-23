@@ -20,13 +20,14 @@
 package com.querio.quirrel.emitter
 
 import com.querio.quirrel.parser.AST
+import com.querio.quirrel.Solver
 import com.querio.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.querio.bytecode.{Instructions}
 
 import scalaz.{StateT, Id, Identity, Bind, Monoid}
 import scalaz.Scalaz._
 
-trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
+trait Emitter extends AST with Instructions with Binder with Solver with ProvenanceChecker {
   import instructions._
   case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
 
@@ -343,6 +344,18 @@ trait Emitter extends AST with Instructions with Binder with ProvenanceChecker {
                       emitExpr(left)
                     } 
                     else {
+                      val remainingParams = params.drop(actuals.length)
+
+                      val nameToSolutions = let.criticalConditions.map {
+                        case (name, conditions) =>
+                          conditions.map {
+                            case eq @ ast.Eq(_, lhs, rhs) =>
+                              (solve(lhs) { case ast.TicVar(_, _) => true })(rhs).getOrElse(EmitterError(Some(eq), "Cannot solve for " + name))
+                          }
+                      }
+
+                      // solve(left)(predicate: PartialFunction[Node, Boolean])
+
                       notImpl(expr)
                     } 
                   }
