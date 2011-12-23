@@ -17,10 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.quirrel
+package com.querio
+package quirrel
 package parser
 
-import com.querio.quirrel.util.{Atom, SetAtom}
+import util.{Atom, SetAtom}
+
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
 

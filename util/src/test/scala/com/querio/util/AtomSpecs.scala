@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.quirrel
+package com.querio
 package util
 
 import org.scalacheck.Prop
