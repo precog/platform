@@ -1095,6 +1095,21 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
+    "reject dispatch to dataset-modified identity function with union provenance" in {
+      val input = """
+        | foo := dataset(//foo)
+        | bar := dataset(//bar)
+        |
+        | id('a, 'b) := 'a + 'b + foo
+        |
+        | foo :: bar
+        |   id(foo, bar)
+        """.stripMargin
+      val tree = compile(input)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(SetFunctionAppliedToSet)
+    }
+    
     "reject dispatch to where-less value function with too few parameters" in {
       val tree = compile("fun('a) := 'a + 5 fun")
       tree.provenance mustEqual NullProvenance
