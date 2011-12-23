@@ -21,6 +21,7 @@ package com.querio.quirrel
 package typer
 
 trait ProvenanceChecker extends parser.AST with Binder {
+  import Function._
   import Utils._
   import ast._
   
@@ -82,8 +83,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
           val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
           
           val back = loop(in, relations3)
+          val possibilities = in.provenance.possibilities
           
-          if (in.provenance == from.provenance || in.provenance == to.provenance)
+          if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
             expr.provenance = DynamicProvenance(System.identityHashCode(expr))
           else
             expr.provenance = in.provenance
@@ -200,7 +202,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
                   left flatMap { unifyProvenance(relations)(_, right) }
                 }
                 
-                optUnified match {
+                optUnified match {      // TODO add case for union
                   case Some(unified) => {
                     (e.left.provenance, unified) match {
                       case (StaticProvenance(_), StaticProvenance(_)) =>
@@ -234,7 +236,7 @@ trait ProvenanceChecker extends parser.AST with Binder {
                       }
                     }
                   }
-                    
+                  
                   case None => (NullProvenance, Set(Error(expr, OperationOnUnrelatedSets)))
                 }
               } else {
@@ -426,7 +428,9 @@ trait ProvenanceChecker extends parser.AST with Binder {
       val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
       val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
       
-      if (in.provenance == from.provenance || in.provenance == to.provenance)
+      val possibilities = in.provenance.possibilities
+      
+      if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
         DynamicProvenance(System.identityHashCode(body))
       else
         computeResultProvenance(in, relations3, varAssumptions)
@@ -570,9 +574,29 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => body.provenance
   }
   
-  private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance) = (p1, p2) match {
+  private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
-      Some(p1)
+      Some(p1 & p2)
+    
+    case (UnionProvenance(left, right), p2) => {
+      val leftP = unifyProvenance(relations)(left, p2)
+      val rightP = unifyProvenance(relations)(right, p2)
+      val unionP = (leftP.toList zip rightP.toList headOption) map {
+        case (p1, p2) => p1 & p2
+      }
+      
+      unionP orElse leftP orElse rightP
+    }
+    
+    case (p1, UnionProvenance(left, right)) => {
+      val leftP = unifyProvenance(relations)(p1, left)
+      val rightP = unifyProvenance(relations)(p1, right)
+      val unionP = (leftP.toList zip rightP.toList headOption) map {
+        case (p1, p2) => p1 & p2
+      }
+      
+      unionP orElse leftP orElse rightP
+    }
     
     case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
       Some(StaticProvenance(path1))
@@ -622,7 +646,22 @@ trait ProvenanceChecker extends parser.AST with Binder {
     case pair => DynamicProvenance(System.identityHashCode(pair))
   }
   
-  sealed trait Provenance
+  sealed trait Provenance {
+    def &(that: Provenance) = (this, that) match {
+      case (`that`, `that`) => that
+      case (NullProvenance, _) => that
+      case (_, NullProvenance) => this
+      case _ => UnionProvenance(this, that)
+    }
+    
+    def possibilities = Set(this)
+  }
+  
+  case class UnionProvenance(left: Provenance, right: Provenance) extends Provenance {
+    override val toString = "(%s & %s)".format(left, right)
+    
+    override def possibilities = left.possibilities ++ right.possibilities + this
+  }
   
   case class StaticProvenance(path: String) extends Provenance {
     override val toString = path
