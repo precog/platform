@@ -26,6 +26,9 @@ import util.{Atom, SetAtom}
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
 
+import scalaz.Scalaz._
+import scalaz.Tree
+
 trait AST extends Phases {
   import Atom._
   
@@ -308,6 +311,20 @@ trait AST extends Phases {
       final def errors = _errors()
       
       def loc: LineStream
+
+      override def children: List[Expr]
+
+      private lazy val subForest: Stream[Tree[Expr]] = {
+        def subForest0(l: List[Expr]): Stream[Tree[Expr]] = l match {
+          case Nil => Stream.empty
+
+          case head :: tail => Stream.cons(head.tree, subForest0(tail))
+        }
+
+        subForest0(children)
+      }
+
+      def tree: Tree[Expr] = Tree.node(this, subForest)
       
       def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
         case (Add(_, left1, right1), Add(_, left2, right2)) =>
@@ -336,7 +353,20 @@ trait AST extends Phases {
     }
   
   object ast {    
-    final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends Expr with BinaryNode {
+    sealed trait ExprLeafNode extends Expr with LeafNode
+    sealed trait ExprBinaryNode extends Expr with BinaryNode {
+      override def left: Expr
+      override def right: Expr
+
+      override def children = List(left, right)
+    }
+    sealed trait ExprUnaryNode extends Expr with UnaryNode {
+      override def child: Expr
+
+      override def children = List(child)
+    }
+
+    final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'let
       
       lazy val criticalConditions = findCriticalConditions(this)
@@ -354,12 +384,12 @@ trait AST extends Phases {
       private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
     }
     
-    final case class New(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+    final case class New(loc: LineStream, child: Expr) extends ExprUnaryNode {
       val label = 'new
       val isPrefix = true
     }
     
-    final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with BinaryNode {
+    final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends ExprBinaryNode {
       val label = 'relate
       
       val left = from
@@ -367,7 +397,7 @@ trait AST extends Phases {
       override def children = List(from, to, in)
     }
     
-    final case class TicVar(loc: LineStream, id: String) extends Expr with LeafNode {
+    final case class TicVar(loc: LineStream, id: String) extends ExprLeafNode {
       val label = 'ticvar
       
       private val _binding = attribute[FormalBinding](bindNames)
@@ -375,15 +405,15 @@ trait AST extends Phases {
       private[quirrel] def binding_=(b: FormalBinding) = _binding() = b
     }
     
-    final case class StrLit(loc: LineStream, value: String) extends Expr with LeafNode {
+    final case class StrLit(loc: LineStream, value: String) extends ExprLeafNode {
       val label = 'str
     }
     
-    final case class NumLit(loc: LineStream, value: String) extends Expr with LeafNode {
+    final case class NumLit(loc: LineStream, value: String) extends ExprLeafNode {
       val label = 'num
     }
     
-    final case class BoolLit(loc: LineStream, value: Boolean) extends Expr with LeafNode {
+    final case class BoolLit(loc: LineStream, value: Boolean) extends ExprLeafNode {
       val label = 'bool
     }
     
@@ -399,12 +429,12 @@ trait AST extends Phases {
       def children = values.toList
     }
     
-    final case class Descent(loc: LineStream, child: Expr, property: String) extends Expr with UnaryNode {
+    final case class Descent(loc: LineStream, child: Expr, property: String) extends ExprUnaryNode {
       val label = 'descent
       val isPrefix = false
     }
     
-    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with UnaryNode {
+    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends ExprUnaryNode {
       val label = 'deref
       val isPrefix = true
       val child = left
@@ -424,64 +454,64 @@ trait AST extends Phases {
       def children = actuals.toList
     }
     
-    final case class Operation(loc: LineStream, left: Expr, op: String, right: Expr) extends Expr with BinaryNode {
+    final case class Operation(loc: LineStream, left: Expr, op: String, right: Expr) extends ExprBinaryNode {
       val label = if (op == "where") 'where else 'op
     }
     
-    final case class Add(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Add(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'add
     }
     
-    final case class Sub(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Sub(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'sub
     }
     
-    final case class Mul(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Mul(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'mul
     }
     
-    final case class Div(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Div(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'div
     }
     
-    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'lt
     }
     
-    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'lteq
     }
     
-    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'gt
     }
     
-    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'gteq
     }
     
-    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'eq
     }
     
-    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'noteq
     }
     
-    final case class And(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class And(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'and
     }
     
-    final case class Or(loc: LineStream, left: Expr, right: Expr) extends Expr with BinaryNode {
+    final case class Or(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'or
     }
     
-    final case class Comp(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+    final case class Comp(loc: LineStream, child: Expr) extends ExprUnaryNode {
       val label = 'comp
       val isPrefix = true
     }
     
-    final case class Neg(loc: LineStream, child: Expr) extends Expr with UnaryNode {
+    final case class Neg(loc: LineStream, child: Expr) extends ExprUnaryNode {
       val label = 'neg
       val isPrefix = true
     }

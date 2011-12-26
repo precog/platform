@@ -88,6 +88,23 @@ trait Solver extends parser.AST {
     case Paren(_, child) => solve(child)(predicate)
     case _ => const(None) _
   }
+
+  def solveRelation(n: ExprBinaryNode)(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
+    val left  = n.left
+    val right = n.right
+
+    val inLeft  = left.tree.flatten.collect(predicate).length  > 0
+    val inRight = right.tree.flatten.collect(predicate).length > 0
+
+    val inOut = if (inLeft && !inRight) Some((left, right))
+                else if (inRight && !inLeft) Some((right, left))
+                else None
+
+    for {
+      (in, out) <- inOut
+      solution  <- solve(in)(predicate)(out)
+    } yield solution
+  }
   
   private def solveBinary(tree: Expr, left: Expr, right: Expr, predicate: PartialFunction[Node, Boolean])(invertLeft: Expr => Expr => Expr, invertRight: Expr => Expr => Expr): Expr => Option[Expr] = {
     val totalPred = predicate.lift andThen { _ getOrElse false }
