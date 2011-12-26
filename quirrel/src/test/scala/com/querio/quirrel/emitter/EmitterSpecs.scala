@@ -131,21 +131,21 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit left-cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
       testEmit("dataset(\"foo\") * 2")(
         PushString("foo"),
         LoadLocal(Het),
         PushNum("2"),
-        Map2CrossLeft(Mul)
+        Map2Cross(Mul)
       )
     }
 
-    "emit right-cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
       testEmit("2 * dataset(\"foo\")")(
         PushNum("2"),
         PushString("foo"),
         LoadLocal(Het),
-        Map2CrossRight(Mul)
+        Map2Cross(Mul)
       )
     }
 
@@ -225,11 +225,11 @@ object EmitterSpecs extends Specification
         LoadLocal(Het),
         Dup, 
         PushString("a"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         Map1(WrapArray),
         Swap(1),
         PushString("b"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         Map1(WrapArray),
         Map2Match(JoinArray),
         PushString("/bar"),
@@ -238,17 +238,17 @@ object EmitterSpecs extends Specification
         Swap(2),
         Swap(1),
         PushString("a"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         Map1(WrapArray),
         Swap(1),
         Swap(2),
         PushString("b"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         Map1(WrapArray),
         Map2Match(JoinArray),
         Map2Cross(JoinArray),
         PushNum("1"),
-        Map2CrossLeft(ArraySwap)
+        Map2Cross(ArraySwap)
       )
     }
 
@@ -257,7 +257,7 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         PushString("foo"),
-        Map2CrossLeft(DerefObject)
+        Map2Cross(DerefObject)
       )
     }
 
@@ -266,7 +266,7 @@ object EmitterSpecs extends Specification
         PushString("/clicks"),
         LoadLocal(Het),
         PushNum("1"),
-        Map2CrossLeft(DerefArray)
+        Map2Cross(DerefArray)
       )
     }
 
@@ -309,9 +309,9 @@ object EmitterSpecs extends Specification
         LoadLocal(Het),
         Dup,
         PushString("id"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         PushNum("2"),
-        Map2CrossLeft(Eq),
+        Map2Cross(Eq),
         FilterMatch(0, None)
       )
     }
@@ -333,7 +333,7 @@ object EmitterSpecs extends Specification
         Dup,
         Swap(2),
         Swap(1),
-        Map2CrossRight(Mul),
+        Map2Cross(Mul),
         Swap(1),
         Map2Match(Add)
       )
@@ -402,16 +402,43 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit body of characteristic function substituted for concrete parameters" in {
+    "emit body of fully applied characteristic function" in {
       testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         PushString("/clicks"),
         LoadLocal(Het),
         Dup,
         PushString("userId"),
-        Map2CrossLeft(DerefObject),
+        Map2Cross(DerefObject),
         PushString("foo"),
-        Map2CrossLeft(Eq),
+        Map2Cross(Eq),
         FilterMatch(0, None)
+      )
+    }
+
+    "emit match for first-level union provenance" in {
+      testEmit("a := dataset(//a) b := dataset(//b) (b.x - a.x) * (a.y - b.y)")(
+        PushString("/b"),
+        LoadLocal(Het),
+        Dup,
+        PushString("x"),
+        Map2Cross(DerefObject),
+        PushString("/a"),
+        LoadLocal(Het),
+        Dup,
+        Swap(2),
+        Swap(1),
+        PushString("x"),
+        Map2Cross(DerefObject),
+        Map2Cross(Sub),
+        Swap(1),
+        PushString("y"),
+        Map2Cross(DerefObject),
+        Swap(1),
+        Swap(2),
+        PushString("y"),
+        Map2Cross(DerefObject),
+        Map2Cross(Sub),
+        Map2Cross(Mul) // TODO: Change!!!! Map2Match(Mul)
       )
     }
   }

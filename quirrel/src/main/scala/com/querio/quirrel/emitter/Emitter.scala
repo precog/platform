@@ -98,31 +98,20 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   def emit(expr: Expr): Vector[Instruction] = {
     import Emission._
 
+    def emitCrossOrMatchState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance)
+        (ifCross: => Instruction, ifMatch: => Instruction): EmitterState = {
+      val itx = leftProv.possibilities.intersect(rightProv.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
+
+      val instr = emitInstr(if (itx.isEmpty) ifCross else ifMatch)
+
+      left >> right >> instr
+    }
+
     def emitMapState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, op: BinaryOperation): EmitterState = {
-      val mapInstr = emitInstr((leftProv, rightProv) match {
-        case (NullProvenance, _) =>
-          nullProvenanceError()
-
-        case (_, NullProvenance) =>
-          nullProvenanceError()
-
-        case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
-          Map2Match(op)
-        
-        case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
-          Map2Match(op)
-
-        case (ValueProvenance, p2) if (p2 != ValueProvenance) =>
-          Map2CrossRight(op)
-
-        case (p1, ValueProvenance) if (p1 != ValueProvenance) =>
-          Map2CrossLeft(op)
-
-        case (_, _) =>
-          Map2Cross(op)
-      })
-
-      left >> right >> mapInstr
+      emitCrossOrMatchState(left, leftProv, right, rightProv)(
+        ifCross = Map2Cross(op),
+        ifMatch = Map2Match(op)
+      )
     }
 
     def emitMap(left: Expr, right: Expr, op: BinaryOperation): EmitterState = {
@@ -130,24 +119,10 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     }
 
     def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
-      val filterInstr = emitInstr((leftProv, rightProv) match {
-        case (NullProvenance, _) =>
-          nullProvenanceError()
-
-        case (_, NullProvenance) =>
-          nullProvenanceError()
-
-        case (StaticProvenance(p1), StaticProvenance(p2)) if (p1 == p2) => 
-          FilterMatch(depth, pred)
-        
-        case (DynamicProvenance(id1), DynamicProvenance(id2)) if (id1 == id2) =>
-          FilterMatch(depth, pred)
-
-        case (_, _) =>
-          FilterCross(depth, pred)
-      })
-
-      left >> right >> filterInstr
+      emitCrossOrMatchState(left, leftProv, right, rightProv)(
+        ifCross = FilterCross(depth, pred),
+        ifMatch = FilterMatch(depth, pred)
+      )
     }
 
     def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
@@ -245,7 +220,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
                 val newState = (startIndex until endIndex).foldLeft(state) {
                   case (state, idx) =>
-                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2CrossLeft(ArraySwap)))
+                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
                 }
 
                 (newIndices, newState)
