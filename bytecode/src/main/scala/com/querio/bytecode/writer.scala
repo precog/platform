@@ -124,8 +124,6 @@ trait BytecodeWriter extends Writer with Version {
       val (opcode, pad, arg) = stream.head match {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
         case Map2Match(op) => (0x01, 0.toShort, binaryOpNum(op))
-        case Map2CrossLeft(op) => (0x02, 0.toShort, binaryOpNum(op))
-        case Map2CrossRight(op) => (0x04, 0.toShort, binaryOpNum(op))
         case Map2Cross(op) => (0x06, 0.toShort, binaryOpNum(op))
         
         case Reduce(red) => (0x08, 0.toShort, reductionNum(red))

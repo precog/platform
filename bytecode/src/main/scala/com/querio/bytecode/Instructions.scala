@@ -9,8 +9,6 @@ trait Instructions {
     def operandStackDelta: (Int, Int) = self match {
       case Map1(_) => (1, 1)
       case Map2Match(_) => (2, 1)
-      case Map2CrossLeft(_) => (2, 1)
-      case Map2CrossRight(_) => (2, 1)
       case Map2Cross(_) => (2, 1)
         
       case Reduce(_) => (1, 1)
@@ -68,8 +66,6 @@ trait Instructions {
     
     case class Map1(op: UnaryOperation) extends Instruction
     case class Map2Match(op: BinaryOperation) extends Instruction with JoinInstr
-    case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
-    case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2Cross(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: Reduction) extends Instruction

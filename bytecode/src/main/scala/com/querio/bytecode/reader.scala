@@ -116,8 +116,6 @@ trait BytecodeReader extends Reader {
         
         case 0x00 => unOp map Map1
         case 0x01 => binOp map Map2Match
-        case 0x02 => binOp map Map2CrossLeft
-        case 0x04 => binOp map Map2CrossRight
         case 0x06 => binOp map Map2Cross
         
         case 0x08 => reduction map Reduce
