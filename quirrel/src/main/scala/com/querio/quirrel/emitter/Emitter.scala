@@ -110,6 +110,12 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       (e.bytecode.length, e)
     }
 
+    def saveAs(expr: Expr): EmitterState = {
+      
+    }
+
+    def restore(expr: Expr): 
+
     def dupOrAppend(expr: EmitterState): EmitterState = {
       for {
         start <-  findIndexOf(expr)
@@ -127,9 +133,9 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                     val swaps          = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
                     val finalSwaps     = if (idx == len) Vector.empty else (1 until finalStackSize).map(Swap.apply)
 
-                    result          <- insertInstrAt(Dup, idx) >> 
-                                       insertInstrAt(swaps, idx + 1) >> 
-                                       insertInstrAt(finalSwaps, len + 1 + swaps.length)
+                    result  <- insertInstrAt(Dup, idx) >> 
+                               insertInstrAt(swaps, idx + 1) >> 
+                               insertInstrAt(finalSwaps, len + 1 + swaps.length)
                   } yield ()
       } yield state
     }
@@ -379,13 +385,16 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
                       val nameToSolutions = let.criticalConditions.filterKeys(remainingParams.contains _).map {
                         case (name, conditions) =>
-                          conditions.map {
+                          (name, conditions.map {
                             case node : ast.ExprBinaryNode =>
                               (solveRelation(node) { case ast.TicVar(_, _) => true }).getOrElse(EmitterError(Some(node), "Cannot solve for " + name))
-                          }
+                          })
                       }
 
-
+                      nameToSolutions.map {
+                        (name, solutions) =>
+                          (name, solutions.map(emitExpr))
+                      }
 
                       notImpl(expr)
                     } 
