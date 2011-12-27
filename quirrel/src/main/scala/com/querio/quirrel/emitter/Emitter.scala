@@ -17,7 +17,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
   private case class Emission private (
     bytecode:     Vector[Instruction] = Vector.empty,
-    applications: Map[ast.Let, Seq[(String, Expr)]] = Map.empty
+    applications: Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty
   )
   
   private type EmitterState = StateT[Id, Emission, Unit]
@@ -61,19 +61,19 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
     def operandStackSize: StateT[Id, Emission, Int] = for { len <- bytecodeLength; size <- operandStackSize(len) } yield size
 
-    def applyTicVars(let: ast.Let, values: Seq[(String, Expr)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    private def applyTicVars(let: ast.Let, values: Seq[(String, EmitterState)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       ((), e.copy(applications = e.applications + (let -> values)))
     }
 
-    def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    private def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       ((), e.copy(applications = e.applications - let))
     }
 
-    def getTicVar(let: ast.Let, name: String): StateT[Id, Emission, Expr] = StateT.apply[Id, Emission, Expr] { e =>
-      (e.applications(let).find(_._1 == name).get._2, e)
+    def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      e.applications(let).find(_._1 == name).get._2(e)
     }
 
-    def setTicVars(let: ast.Let, values: Seq[(String, Expr)])(f: => EmitterState): EmitterState = {
+    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
       applyTicVars(let, values) >> f >> unapplyTicVars(let)
     }
 
@@ -205,7 +205,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
         case t @ ast.TicVar(loc, name) => 
           t.binding match {
             case UserDef(let) =>
-              getTicVar(let, name) >>= (ticVar => emitExpr(ticVar))              
+              emitTicVar(let, name)
 
             case _ => notImpl(expr)
           }
@@ -357,7 +357,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                   dupOrAppend(emitExpr(left))
 
                 case n =>
-                  setTicVars(let, params.zip(actuals)) {
+                  setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
                     if (actuals.length == n) {
                       emitExpr(left)
                     } 
