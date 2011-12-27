@@ -34,7 +34,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
-  private case class Emission(
+  private case class Emission private (
     bytecode:     Vector[Instruction] = Vector.empty,
     applications: Map[ast.Let, Seq[(String, Expr)]] = Map.empty
   )
@@ -48,9 +48,22 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   }
 
   private object Emission {
-    def emitInstr(i: Instruction): EmitterState = StateT.apply[Id, Emission, Unit](e => ((), e.copy(bytecode = e.bytecode :+ i)))
+    def empty = new Emission()
 
-    def emitInstr(is: Seq[Instruction]): EmitterState = StateT.apply[Id, Emission, Unit](e => ((), e.copy(bytecode = e.bytecode ++ is)))
+    def insertInstrAt(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
+      val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
+
+      val before = e.bytecode.take(idx)
+      val after  = e.bytecode.drop(idx)
+
+      ((), e.copy(bytecode = before ++ is ++ after))
+    }
+
+    def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
+
+    def emitInstr(i: Instruction): EmitterState = insertInstrAt(i, -1)
+
+    def emitInstr(is: Seq[Instruction]): EmitterState = insertInstrAt(is, -1)
 
     def operandStackSize(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
       // TODO: This should really go into a Bytecode abstraction, which should hold Vector[Instruction]
@@ -60,6 +73,12 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
       (operandStackSize, e)
     }
+
+    def bytecodeLength: StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+      (e.bytecode.length, e)
+    }
+
+    def operandStackSize: StateT[Id, Emission, Int] = for { len <- bytecodeLength; size <- operandStackSize(len) } yield size
 
     def applyTicVars(let: ast.Let, values: Seq[(String, Expr)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       ((), e.copy(applications = e.applications + (let -> values)))
@@ -73,20 +92,58 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       (e.applications(let).find(_._1 == name).get._2, e)
     }
 
-    def setTicVars(let: ast.Let, values: Seq[(String, Expr)])(f: EmitterState): EmitterState = {
+    def setTicVars(let: ast.Let, values: Seq[(String, Expr)])(f: => EmitterState): EmitterState = {
       applyTicVars(let, values) >> f >> unapplyTicVars(let)
     }
 
-    // TODO: This should really use metadata inside Emission
-    def dupOrAppend(expr: EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def findIndexOf(expr: EmitterState): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+      val exprBytecode = expr.exec(Emission.empty).bytecode
+
+      (e.bytecode.indexOfSlice(exprBytecode), e)
+    }
+
+    def instrLengthOf(expr: EmitterState): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+      (expr.exec(Emission.empty).bytecode.length, e)
+    }
+
+    def instrLength: StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+      (e.bytecode.length, e)
+    }
+
+    def dupOrAppend(expr: EmitterState): EmitterState = {
+      for {
+        start <-  findIndexOf(expr)
+        state <-  if (start == -1) expr
+                  else for {
+                    exprLen <- instrLengthOf(expr)
+                    len     <- instrLength
+                    
+                    val idx = start + exprLen
+                    
+                    beforeStackSize <- operandStackSize(idx)
+                    afterStackSize  <- operandStackSize
+                    
+                    val finalStackSize = afterStackSize + 1
+                    val swaps          = if (beforeStackSize == 1) Vector.empty else (1 to beforeStackSize).reverse.map(Swap.apply)
+                    val finalSwaps     = if (idx == len) Vector.empty else (1 until finalStackSize).map(Swap.apply)
+
+                    result          <- insertInstrAt(Dup, idx) >> 
+                                       insertInstrAt(swaps, idx + 1) >> 
+                                       insertInstrAt(finalSwaps, len + 1 + swaps.length)
+                  } yield ()
+      } yield state
+    }
+
+    def dupOrAppend2(expr: EmitterState): EmitterState = 
+    StateT.apply[Id, Emission, Unit] { e =>
       // Get the bytecode for the expression:
-      val exprBytecode = expr.exec(Emission()).bytecode
+      val exprBytecode = expr.exec(Emission.empty).bytecode
 
       // Look for the expression bytecode in the emission bytecode:
       e.bytecode.indexOfSlice(exprBytecode) match {
         case -1 =>
           // If it's not found, then simply emit the bytecode here:
-          ((), e.copy(bytecode = e.bytecode ++ exprBytecode))
+          emitInstr(exprBytecode).apply(e)
 
         case start =>
           // The expression bytecode was found. Need to duplicate it and 
@@ -94,10 +151,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
           val idx = start + exprBytecode.length
           
           val beforeStackSize = operandStackSize(idx).eval(e)   
-          val finalStackSize  = operandStackSize(e.bytecode.length).eval(e) + 1 // Add the DUP
-
-          val before = e.bytecode.take(idx)
-          val after  = e.bytecode.drop(idx)
+          val finalStackSize  = operandStackSize.eval(e) + 1 // Add the DUP
 
           // Operation preserving transform -- note, if the stack only has one element,
           // there's no need to perform a swap since it doesn't materially change 
@@ -107,9 +161,11 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
           // There may be some final swaps at the end to move up the DUP -- but not if there are no
           // opcodes after the expression we're DUPing (in this case, inserting a Swap(1) would have
           // no effect, since the two datasets on the stack are identical):
-          val finalSwap = if (after.length == 0) Vector.empty else (1 until finalStackSize).map(Swap.apply)
+          val finalSwaps = if (idx == e.bytecode.length) Vector.empty else (1 until finalStackSize).map(Swap.apply)
 
-          ((), e.copy(bytecode = (before :+ Dup) ++ swaps ++ after ++ finalSwap))
+          (insertInstrAt(Dup, idx) >> 
+          insertInstrAt(swaps, idx + 1) >> 
+          insertInstrAt(finalSwaps, e.bytecode.length + 1 + swaps.length)).apply(e)
       }
     }
   }
@@ -157,7 +213,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
           mzero[EmitterState]
         
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
-          notImpl(expr)
+          emitExpr(in)
         
         case t @ ast.TicVar(loc, name) => 
           t.binding match {
@@ -321,15 +377,15 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                     else {
                       val remainingParams = params.drop(actuals.length)
 
-                      val nameToSolutions = let.criticalConditions.map {
+                      val nameToSolutions = let.criticalConditions.filterKeys(remainingParams.contains _).map {
                         case (name, conditions) =>
                           conditions.map {
-                            case eq @ ast.Eq(_, lhs, rhs) =>
-                              (solve(lhs) { case ast.TicVar(_, _) => true })(rhs).getOrElse(EmitterError(Some(eq), "Cannot solve for " + name))
+                            case node : ast.ExprBinaryNode =>
+                              (solveRelation(node) { case ast.TicVar(_, _) => true }).getOrElse(EmitterError(Some(node), "Cannot solve for " + name))
                           }
                       }
 
-                      // solve(left)(predicate: PartialFunction[Node, Boolean])
+
 
                       notImpl(expr)
                     } 
@@ -396,6 +452,6 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       }
     }
 
-    emitExpr(expr).exec(Emission()).bytecode
+    emitExpr(expr).exec(Emission.empty).bytecode
   }
 }

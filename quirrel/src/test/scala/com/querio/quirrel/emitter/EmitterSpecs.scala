@@ -435,7 +435,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := dataset(//a) b := dataset(//b) (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := dataset(//a) b := dataset(//b) a :: b (b.x - a.x) * (a.y - b.y)")(
         PushString("/b"),
         LoadLocal(Het),
         Dup,
@@ -457,7 +457,7 @@ object EmitterSpecs extends Specification
         PushString("y"),
         Map2Cross(DerefObject),
         Map2Cross(Sub),
-        Map2Cross(Mul) // TODO: Change!!!! Map2Match(Mul)
+        Map2Match(Mul)
       )
     }
   }
