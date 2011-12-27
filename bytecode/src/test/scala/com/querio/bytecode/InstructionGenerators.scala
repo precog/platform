@@ -42,8 +42,6 @@ trait InstructionGenerators extends Instructions {
   private lazy val genInstruction: Gen[Instruction] = oneOf(
     genMap1,
     genMap2Match,
-    genMap2CrossLeft,
-    genMap2CrossRight,
     genMap2Cross,
     
     genReduce,
@@ -76,8 +74,6 @@ trait InstructionGenerators extends Instructions {
     
   private lazy val genMap1 = genUnaryOp map Map1
   private lazy val genMap2Match = genBinaryOp map Map2Match
-  private lazy val genMap2CrossLeft = genBinaryOp map Map2CrossLeft
-  private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   private lazy val genMap2Cross = genBinaryOp map Map2Cross
   
   private lazy val genReduce = genReduction map Reduce

@@ -86,18 +86,6 @@ object DAGSpecs extends Specification with DAG {
         result mustEqual Right(Join(line, Map2Match(Add), Root(line, PushTrue), Root(line, PushFalse)))
       }
       
-      "map2_crossl" >> {
-        val line = Line(0, "")
-        val result = decorate(Vector(line, PushFalse, PushTrue, Map2CrossLeft(Add)))
-        result mustEqual Right(Join(line, Map2CrossLeft(Add), Root(line, PushTrue), Root(line, PushFalse)))
-      }
-      
-      "map2_crossr" >> {
-        val line = Line(0, "")
-        val result = decorate(Vector(line, PushFalse, PushTrue, Map2CrossRight(Add)))
-        result mustEqual Right(Join(line, Map2CrossRight(Add), Root(line, PushTrue), Root(line, PushFalse)))
-      }
-      
       "map2_cross" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushFalse, PushTrue, Map2Cross(Add)))
@@ -262,40 +250,6 @@ object DAGSpecs extends Specification with DAG {
         {
           val instr = Map2Match(Add)
           decorate(Vector(Line(0, ""), PushTrue, Map1(Comp), instr, Map2Match(Sub))) mustEqual Left(StackUnderflow(instr))
-        }
-      }
-      
-      "map2_crossl" >> {
-        {
-          val instr = Map2CrossLeft(Add)
-          decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
-        }
-        
-        {
-          val instr = Map2CrossLeft(Add)
-          decorate(Vector(Line(0, ""), PushTrue, instr)) mustEqual Left(StackUnderflow(instr))
-        }
-        
-        {
-          val instr = Map2CrossLeft(Add)
-          decorate(Vector(Line(0, ""), PushTrue, Map1(Comp), instr, Map2CrossLeft(Sub))) mustEqual Left(StackUnderflow(instr))
-        }
-      }
-      
-      "map2_crossr" >> {
-        {
-          val instr = Map2CrossRight(Add)
-          decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
-        }
-        
-        {
-          val instr = Map2CrossRight(Add)
-          decorate(Vector(Line(0, ""), PushTrue, instr)) mustEqual Left(StackUnderflow(instr))
-        }
-        
-        {
-          val instr = Map2CrossRight(Add)
-          decorate(Vector(Line(0, ""), PushTrue, Map1(Comp), instr, Map2CrossRight(Sub))) mustEqual Left(StackUnderflow(instr))
         }
       }
       
