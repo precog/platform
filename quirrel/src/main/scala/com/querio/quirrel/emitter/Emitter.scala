@@ -91,11 +91,11 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       (e.bytecode.length, e)
     }
 
-    def saveAs(expr: Expr): EmitterState = {
+    /*def saveAs(expr: Expr): EmitterState = {
       
     }
 
-    def restore(expr: Expr): 
+    def restore(expr: Expr): */
 
     def dupOrAppend(expr: EmitterState): EmitterState = {
       for {
@@ -364,16 +364,17 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                     else {
                       val remainingParams = params.drop(actuals.length)
 
-                      val nameToSolutions = let.criticalConditions.filterKeys(remainingParams.contains _).map {
+                      val nameToSolutions: Map[String, Set[Expr]] = let.criticalConditions.filterKeys(remainingParams.contains _).transform {
                         case (name, conditions) =>
-                          (name, conditions.map {
+                          conditions.map {
                             case node : ast.ExprBinaryNode =>
-                              (solveRelation(node) { case ast.TicVar(_, _) => true }).getOrElse(EmitterError(Some(node), "Cannot solve for " + name))
-                          })
+                              (solveRelation(node) { case ast.TicVar(_, _) => true }).
+                                getOrElse[Expr](throw EmitterError(Some(node), "Cannot solve for " + name))
+                          }
                       }
 
                       nameToSolutions.map {
-                        (name, solutions) =>
+                        case (name, solutions) =>
                           (name, solutions.map(emitExpr))
                       }
 
