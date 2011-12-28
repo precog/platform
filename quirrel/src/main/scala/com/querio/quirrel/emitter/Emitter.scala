@@ -15,10 +15,21 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
+  private case class Mark(idx: Int, len: Int) {
+    def insert(idx2: Int, len2: Int) = copy(idx = if (idx2 <= idx) idx + len2 else idx, len)
+  }
+
   private case class Emission private (
-    bytecode:     Vector[Instruction] = Vector.empty,
-    applications: Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty
+    bytecode: Vector[Instruction] = Vector.empty,
+    ticVars:  Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty,
+    marks:    Vector[Mark] = Vector.empty
   )
+
+  private val MarkSemigroup: Monoid[Mark] = new Monoid[Mark] {
+    val zero = Mark(Int.MaxValue, 0)
+
+    def append(v1: Mark, v2: => Mark) = Mark(v1.len + v2.len, v1.idx.min(v2.idx))
+  }
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -37,7 +48,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       val before = e.bytecode.take(idx)
       val after  = e.bytecode.drop(idx)
 
-      ((), e.copy(bytecode = before ++ is ++ after))
+      ((), e.copy(bytecode = before ++ is ++ after, marks = e.marks.map(m => m.insert(idx, is.length))))
     }
 
     def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
@@ -46,7 +57,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
     def emitInstr(is: Seq[Instruction]): EmitterState = insertInstrAt(is, -1)
 
-    def operandStackSize(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
+    def operandStackSizeAt(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
       // TODO: This should really go into a Bytecode abstraction, which should hold Vector[Instruction]
       val operandStackSize = e.bytecode.take(idx).foldLeft(0) {
         case (size, instr) => size + (instr.operandStackDelta._2 - instr.operandStackDelta._1)
@@ -59,22 +70,26 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       (e.bytecode.length, e)
     }
 
-    def operandStackSize: StateT[Id, Emission, Int] = for { len <- bytecodeLength; size <- operandStackSize(len) } yield size
+    def operandStackSize: StateT[Id, Emission, Int] = for { len <- bytecodeLength; size <- operandStackSizeAt(len) } yield size
 
     private def applyTicVars(let: ast.Let, values: Seq[(String, EmitterState)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(applications = e.applications + (let -> values)))
+      ((), e.copy(ticVars = e.ticVars + (let -> values)))
     }
 
     private def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(applications = e.applications - let))
+      ((), e.copy(ticVars = e.ticVars - let))
     }
 
     def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      e.applications(let).find(_._1 == name).get._2(e)
+      e.ticVars(let).find(_._1 == name).get._2(e)
     }
 
     def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
       applyTicVars(let, values) >> f >> unapplyTicVars(let)
+    }
+
+    def setTicVarFromStack(let: ast.Let, name: String): EmitterState = {
+      null
     }
 
     def findIndexOf(expr: EmitterState): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
@@ -91,12 +106,6 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       (e.bytecode.length, e)
     }
 
-    /*def saveAs(expr: Expr): EmitterState = {
-      
-    }
-
-    def restore(expr: Expr): */
-
     def dupOrAppend(expr: EmitterState): EmitterState = {
       for {
         start <-  findIndexOf(expr)
@@ -107,7 +116,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                     
                     val idx = start + exprLen
                     
-                    beforeStackSize <- operandStackSize(idx)
+                    beforeStackSize <- operandStackSizeAt(idx)
                     afterStackSize  <- operandStackSize
                     
                     val finalStackSize = afterStackSize + 1
@@ -137,7 +146,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
           // transform the instruction stack so the DUP has no effect:
           val idx = start + exprBytecode.length
           
-          val beforeStackSize = operandStackSize(idx).eval(e)   
+          val beforeStackSize = operandStackSizeAt(idx).eval(e)   
           val finalStackSize  = operandStackSize.eval(e) + 1 // Add the DUP
 
           // Operation preserving transform -- note, if the stack only has one element,
