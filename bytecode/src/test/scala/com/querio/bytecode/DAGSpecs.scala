@@ -183,6 +183,16 @@ object DAGSpecs extends Specification with DAG {
       // TODO more complicated stuff requires swap and dup
     }
     
+    "continue processing beyond a filter" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterMatch(0, None), Map1(Neg)))
+      result mustEqual Right(
+        Operate(line, Neg,
+          Filter(line, false, None,
+            Root(line, PushFalse),
+            Root(line, PushTrue))))
+    }
+    
     "parse and factor a dup" in {
       {
         val line = Line(0, "")
