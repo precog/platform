@@ -147,7 +147,7 @@ trait DAG extends Instructions {
             val result = pred map { p => loopPred(instr, predRoots map ValueOperand map { Left(_) }, p) }
             val range = result map { _.right map { Some(_) } } getOrElse Right(None)
             
-            range.right map { r => Filter(loc, cross, r, target, boolean) }
+            range.right flatMap { r => loop(loc, Filter(loc, cross, r, target, boolean) :: roots2, splits, stream.tail) }
           }
         }
       }
