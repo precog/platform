@@ -5,7 +5,7 @@ trait DAGPrinter extends DAG {
   import instructions._
   import dag._
   
-  def show(root: DepGraph): String = {
+  def showDAG(root: DepGraph): String = {
     def loop(root: DepGraph, split: Option[String]): String = root match {
       case SplitRoot(_) => split match {
         case Some(str) => "{%s}".format(str)
