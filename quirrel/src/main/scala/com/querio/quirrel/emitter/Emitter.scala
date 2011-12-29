@@ -69,10 +69,10 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     def append(v1: EmitterState, v2: => EmitterState): EmitterState = v1 >> v2
   }
 
+  private def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
+
   private object Emission {
     def empty = new Emission()
-
-    def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
 
     def insertInstrAt(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
@@ -87,7 +87,27 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
     def emitInstr(i: Instruction): EmitterState = insertInstrAt(i, -1)
 
-    def emitInstr(is: Seq[Instruction]): EmitterState = insertInstrAt(is, -1)
+    def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      if (e.marks.contains(MarkTicVar(let, name))) {
+        // We've seen this tic var before, DUP it:
+        emitDup(MarkTicVar(let, name))(e)
+      } else {
+        // Must emit bytecode for the tic var and mark it so we can DUP it
+        // in the future:
+        val state = e.ticVars(let).find(_._1 == name).map(_._2).get
+
+        emitAndMark(MarkTicVar(let, name))(state)(e)
+      }
+    }
+
+    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
+      applyTicVars(let, values) >> f >> unapplyTicVars(let)
+    }
+
+    def emitOrDup(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      if (e.marks.contains(markType)) emitDup(markType)(e) 
+      else emitAndMark(markType)(f)(e)
+    }
 
     private def operandStackSizes(is: Vector[Instruction]): Vector[Int] = {
       (is.foldLeft((Vector(0), 0)) {
@@ -100,16 +120,6 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       })._1
     }
 
-    def operandStackSizeBefore(idx: Int): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
-      (operandStackSizes(e.bytecode)(idx), e)
-    }
-
-    def bytecodeLength: StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
-      (e.bytecode.length, e)
-    }
-
-    def operandStackSize: StateT[Id, Emission, Int] = for { len <- bytecodeLength; size <- operandStackSizeBefore(len) } yield size
-
     private def applyTicVars(let: ast.Let, values: Seq[(String, EmitterState)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       ((), e.copy(ticVars = e.ticVars + (let -> values)))
     }
@@ -118,26 +128,11 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       ((), e.copy(ticVars = e.ticVars - let))
     }
 
-    def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      if (e.marks.contains(MarkTicVar(let, name))) {
-        emitMark(MarkTicVar(let, name))(e)
-      } else {
-        val state = e.ticVars(let).find(_._1 == name).map(_._2).get
-
-        emitAndMark(MarkTicVar(let, name))(state)(e)
-      }
-    }
-
-    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
-      applyTicVars(let, values) >> f >> unapplyTicVars(let)
-    }
-
-    def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    // Emits the bytecode and marks it so it can be reused in DUPing operations.
+    private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val markIdx = e.bytecode.length
 
-      if (e.marks.contains(markType)) {
-        emitMark(markType)(e)
-      } else f(e) match {
+      f(e) match {
         case (_, e) =>
           val len = e.bytecode.length - markIdx
 
@@ -147,7 +142,8 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
       }
     }
 
-    def emitMark(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    // Dup's previously marked bytecode:
+    private def emitDup(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val mark = e.marks(markType)
 
       val insertIdx = mark.endIdx
@@ -165,20 +161,6 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
       (insertInstrAt(Dup +: saveSwaps, insertIdx) >> 
       insertInstrAt(restoreSwaps, e.bytecode.length + 1 + saveSwaps.length)).apply(e)
-    }
-
-    def findIndexOf(expr: EmitterState): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
-      val exprBytecode = expr.exec(Emission.empty).bytecode
-
-      (e.bytecode.indexOfSlice(exprBytecode), e)
-    }
-
-    def instrLengthOf(expr: EmitterState): StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
-      (expr.exec(Emission.empty).bytecode.length, e)
-    }
-
-    def instrLength: StateT[Id, Emission, Int] = StateT.apply[Id, Emission, Int] { e =>
-      (e.bytecode.length, e)
     }
   }
 
@@ -379,7 +361,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {
                 case 0 =>
-                  emitAndMark(MarkExpr(left))(emitExpr(left))
+                  emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n =>
                   setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
@@ -413,6 +395,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                           (name, reduce(datasets ++ unions) >> emitInstr(Split))
                       }
 
+                      // At the end we have to merge everything back together:
                       val merges = reduce(Vector.fill(remainingParams.length)(emitInstr(Merge)))
 
                       setTicVars(let, ticVarStates) {
