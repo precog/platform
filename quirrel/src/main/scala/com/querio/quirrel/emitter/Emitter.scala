@@ -21,10 +21,14 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     def endIdx = startIdx + len
   }
 
+  private sealed trait MarkType
+  private case class MarkExpr(expr: Expr) extends MarkType
+  private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
+
   private case class Emission private (
     bytecode: Vector[Instruction] = Vector.empty,
     ticVars:  Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty,
-    marks:    Map[Expr, Mark] = Map.empty
+    marks:    Map[MarkType, Mark] = Map.empty
   )
 
   private implicit val MarkSemigroup: Monoid[Mark] = new Monoid[Mark] {
@@ -48,6 +52,8 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
   private object Emission {
     def empty = new Emission()
+
+    def reduce[A](xs: Iterable[A])(implicit m: Monoid[A]) = xs.foldLeft(mzero[A])(_ |+| _)
 
     def insertInstrAt(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
@@ -94,30 +100,36 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     }
 
     def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      e.ticVars(let).find(_._1 == name).get._2(e)
+      if (e.marks.contains(MarkTicVar(let, name))) {
+        emitMark(MarkTicVar(let, name))(e)
+      } else {
+        val state = e.ticVars(let).find(_._1 == name).map(_._2).get
+
+        emitAndMark(MarkTicVar(let, name))(state)(e)
+      }
     }
 
     def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
       applyTicVars(let, values) >> f >> unapplyTicVars(let)
     }
 
-    def emitAndMark(expr: Expr)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val markIdx = e.bytecode.length
 
-      if (e.marks.contains(expr)) {
-        emitMark(expr)(e)
+      if (e.marks.contains(markType)) {
+        emitMark(markType)(e)
       } else f(e) match {
         case (_, e) =>
           val len = e.bytecode.length - markIdx
 
           val mark = Mark(markIdx, len)
 
-          ((), e.copy(marks = e.marks + (expr -> mark)))
+          ((), e.copy(marks = e.marks + (markType -> mark)))
       }
     }
 
-    def emitMark(expr: Expr): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val mark = e.marks(expr)
+    def emitMark(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      val mark = e.marks(markType)
 
       val insertIdx = mark.endIdx
 
@@ -235,7 +247,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
           val joins = Vector.fill(provToField.size - 1)(emitInstr(Map2Cross(JoinObject)))
 
-          (groups ++ joins).foldLeft(mzero[EmitterState])(_ >> _)
+          reduce(groups ++ joins)
 
         case ast.ArrayDef(loc, values) => 
           val indexedValues = values.zipWithIndex
@@ -256,7 +268,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
 
           val joins = Vector.fill(provToElements.size - 1)(emitInstr(Map2Cross(JoinArray)))
 
-          val joined = (groups ++ joins).foldLeft(mzero[EmitterState])(_ >> _)
+          val joined = reduce(groups ++ joins)
 
           // This function takes a list of indices and a state, and produces
           // a new list of indices and a new state, where the Nth index of the
@@ -348,7 +360,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {
                 case 0 =>
-                  emitAndMark(left)(emitExpr(left))
+                  emitAndMark(MarkExpr(left))(emitExpr(left))
 
                 case n =>
                   setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
@@ -358,20 +370,35 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                     else {
                       val remainingParams = params.drop(actuals.length)
 
-                      val nameToSolutions: Map[String, Set[Expr]] = let.criticalConditions.filterKeys(remainingParams.contains _).transform {
+                      // Remove params already handled:
+                      val filteredConditions = let.criticalConditions.toSeq.filter(t => remainingParams.contains(t._1))
+
+                      // Sort by order of parameters:
+                      val sortedConditions = filteredConditions.sortWith((a, b) => remainingParams.indexOf(a) < remainingParams.indexOf(b))
+
+                      // Solve for each tic var:
+                      val nameToSolutions: Seq[(String, Set[Expr])] = sortedConditions.map {
                         case (name, conditions) =>
-                          conditions.collect { case eq: ast.Eq => eq }.map { node =>
-                            (solveRelation(node) { case ast.TicVar(_, _) => true }).
+                          (name, conditions.collect { case eq: ast.Eq => eq }.map { node =>
+                            (solveRelation(node) { case ast.TicVar(_, name) => true }).
                               getOrElse[Expr](throw EmitterError(Some(node), "Cannot solve for " + name))
-                          }
+                          })
                       }
 
-                      nameToSolutions.map {
+                      // Compute bytecode for every tic var:
+                      val ticVarStates = nameToSolutions.map {
                         case (name, solutions) =>
-                          (name, solutions.map(emitExpr))
+                          val datasets = solutions.toSeq.map(emitExpr)
+                          val unions   = (1 until datasets.size).map(v => emitInstr(VUnion))
+
+                          (name, reduce(datasets ++ unions) >> emitInstr(Split))
                       }
 
-                      notImpl(expr)
+                      val merges = reduce(Vector.fill(remainingParams.length)(emitInstr(Merge)))
+
+                      setTicVars(let, ticVarStates) {
+                        emitExpr(left) >> merges
+                      }
                     } 
                   }
               }
