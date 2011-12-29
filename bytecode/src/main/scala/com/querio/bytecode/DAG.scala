@@ -183,7 +183,7 @@ trait DAG extends Instructions {
         case Merge => {
           val eitherTails = (roots, splits) match {
             case (child :: rootsTail, OpenSplit(loc2, parent :: roots2) :: splitsTail) => {
-              if (rootsTail == roots2)
+              if (roots2.tails contains rootsTail)
                 Right((Split(loc2, parent, child) :: rootsTail, splitsTail))
               else
                 Left(MergeWithUnmatchedTails)

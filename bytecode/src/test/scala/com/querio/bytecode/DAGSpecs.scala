@@ -79,6 +79,24 @@ object DAGSpecs extends Specification with DAG {
       result mustEqual Right(dag.Split(line, Root(line, PushTrue), dag.Split(line, SplitRoot(line), Join(line, VUnion, Root(line, PushFalse), SplitRoot(line)))))
     }
     
+    "accept split which reduces the stack" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(
+        line,
+        PushTrue,
+        PushFalse,
+        instructions.Split,
+        Map2Match(Add),
+        Merge))
+        
+      result mustEqual Right(
+        dag.Split(line,
+          Root(line, PushFalse),
+          Join(line, Map2Match(Add),
+            SplitRoot(line),
+            Root(line, PushTrue))))
+    }
+    
     "recognize a join instruction" in {
       "map2_match" >> {
         val line = Line(0, "")
@@ -545,6 +563,19 @@ object DAGSpecs extends Specification with DAG {
     
     "reject split without corresponding merge" in {
       decorate(Vector(Line(0, ""), PushTrue, instructions.Split)) mustEqual Left(UnmatchedSplit)
+    }
+    
+    "reject split which increases the stack" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(
+        line,
+        PushTrue,
+        PushFalse,
+        instructions.Split,
+        PushTrue,
+        Merge))
+        
+      result mustEqual Left(MergeWithUnmatchedTails)
     }
   }
 }
