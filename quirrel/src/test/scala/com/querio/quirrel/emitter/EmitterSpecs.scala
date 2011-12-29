@@ -46,7 +46,7 @@ object EmitterSpecs extends Specification
 
   val compileEmit = ((_: String).stripMargin) >>> (compile _) >>> (emit _)
 
-  def testEmit(v: String)(i: Instruction*) = compileEmit(v) mustEqual Vector(i: _*)
+  def testEmit(v: String)(i: Instruction*) = compileEmit(v).filter { case _ : Line => false; case _ => true } mustEqual Vector(i: _*)
 
   "emitter" should {
     "emit literal string" in {
@@ -476,6 +476,62 @@ object EmitterSpecs extends Specification
         Split,
         Map2Cross(Eq),
         FilterMatch(0,None), 
+        Merge
+      )
+    }
+
+    "emit split and merge for ctr example" in {
+      testEmit("clicks := dataset(//clicks) " + 
+               "imps   := dataset(//impressions)" +
+               "ctr('day) := count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)" +
+               "ctr")(
+        PushString("/clicks"),
+        LoadLocal(Het), 
+        Dup,
+        Dup,
+        PushString("day"),
+        Map2Cross(DerefObject),
+        Swap(1),
+        Swap(2),
+        PushString("day"),
+        Map2Cross(DerefObject),
+        PushString("/impressions"),
+        LoadLocal(Het),
+        Dup,
+        Swap(4),
+        Swap(3),
+        Swap(2),
+        Dup,
+        Swap(5),
+        Swap(4),
+        Swap(3),
+        Swap(2),
+        Swap(1),
+        Swap(1),
+        Dup,
+        Swap(4),
+        Swap(3),
+        Swap(2),
+        Swap(1),
+        PushString("day"),
+        Map2Cross(DerefObject),
+        VUnion,
+        Split,
+        Map2Cross(Eq),
+        FilterMatch(0,None),
+        Reduce(Count),
+        Swap(1),
+        Swap(1),
+        Swap(2),
+        PushString("day"),
+        Map2Cross(DerefObject),
+        Swap(1),
+        Swap(2),
+        Swap(3),
+        Map2Cross(Eq),
+        FilterMatch(0,None),
+        Reduce(Count),
+        Map2Cross(Div),
         Merge
       )
     }
