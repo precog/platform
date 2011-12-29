@@ -460,5 +460,24 @@ object EmitterSpecs extends Specification
         Map2Match(Mul)
       )
     }
+
+    "emit split and merge for trivial cf example" in {
+      testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day onDay")(
+        PushString("/clicks"),
+        LoadLocal(Het),
+        Dup,
+        Dup,
+        PushString("day"),
+        Map2Cross(DerefObject), 
+        Swap(1),
+        Swap(2),
+        PushString("day"),
+        Map2Cross(DerefObject),
+        Split,
+        Map2Cross(Eq),
+        FilterMatch(0,None), 
+        Merge
+      )
+    }
   }
 }
