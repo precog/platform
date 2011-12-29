@@ -28,7 +28,8 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   private case class Emission private (
     bytecode: Vector[Instruction] = Vector.empty,
     ticVars:  Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty,
-    marks:    Map[MarkType, Mark] = Map.empty
+    marks:    Map[MarkType, Mark] = Map.empty,
+    curLine:  Option[(Int, String)] = None
   )
 
   private implicit val MarkSemigroup: Monoid[Mark] = new Monoid[Mark] {
@@ -88,6 +89,14 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     def emitOrDup(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       if (e.marks.contains(markType)) emitDup(markType)(e) 
       else emitAndMark(markType)(f)(e)
+    }
+
+    def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      e.curLine match {
+        case Some((`lineNum`, `line`)) => ((), e)
+
+        case _ => emitInstr(Line(lineNum, line))(e.copy(curLine = Some((lineNum, line))))
+      }
     }
 
     private def operandStackSizes(is: Vector[Instruction]): Vector[Int] = {
@@ -180,7 +189,8 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     }
 
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
-      expr match {
+      emitLine(expr.loc.lineNum, expr.loc.line) >>
+      (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right)
 
@@ -371,7 +381,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                       val ticVarStates = nameToSolutions.map {
                         case (name, solutions) =>
                           val datasets = solutions.toSeq.map(emitExpr)
-                          val unions   = (1 until datasets.size).map(v => emitInstr(VUnion))
+                          val unions   = Vector.fill(datasets.size - 1)(emitInstr(VUnion))
 
                           (name, reduce(datasets ++ unions) >> emitInstr(Split))
                       }
@@ -443,7 +453,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
         
         case ast.Paren(loc, child) => 
           StateT.stateT[Id, Unit, Emission](Unit)
-      }
+      })
     }
 
     emitExpr(expr).exec(Emission.empty).bytecode
