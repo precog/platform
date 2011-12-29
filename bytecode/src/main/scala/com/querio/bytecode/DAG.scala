@@ -9,7 +9,7 @@ trait DAG extends Instructions {
     def loopPred(instr: Instruction, roots: List[Either[RangeOperand, IndexRange]], pred: Vector[PredicateInstr]): Either[StackError, IndexRange] = {
       def processOperandBin(op: BinaryOperation with PredicateOp) = {
         val eitherRoots = roots match {
-          case Left(hd1) :: Left(hd2) :: tl => Right(Left(BinaryOperand(hd1, op, hd2)) :: tl)
+          case Left(hd2) :: Left(hd1) :: tl => Right(Left(BinaryOperand(hd1, op, hd2)) :: tl)
           case _ :: _ :: _ => Left(OperandOpAppliedToRange(instr))
           case _ => Left(PredicateStackUnderflow(instr))
         }
@@ -30,7 +30,7 @@ trait DAG extends Instructions {
       val tail = pred.headOption map {
         case Or => {
           val eitherRoots = roots match {
-            case Right(hd1) :: Right(hd2) :: tl => Right(Right(Disjunction(hd1, hd2)) :: tl)
+            case Right(hd2) :: Right(hd1) :: tl => Right(Right(Disjunction(hd1, hd2)) :: tl)
             case _ :: _ :: _ => Left(RangeOpAppliedToOperand(instr))
             case _ => Left(PredicateStackUnderflow(instr))
           }
@@ -40,7 +40,7 @@ trait DAG extends Instructions {
         
         case And => {
           val eitherRoots = roots match {
-            case Right(hd1) :: Right(hd2) :: tl => Right(Right(Conjunction(hd1, hd2)) :: tl)
+            case Right(hd2) :: Right(hd1) :: tl => Right(Right(Conjunction(hd1, hd2)) :: tl)
             case _ :: _ :: _ => Left(RangeOpAppliedToOperand(instr))
             case _ => Left(PredicateStackUnderflow(instr))
           }
@@ -82,7 +82,7 @@ trait DAG extends Instructions {
         
         case Range => {
           val eitherRoots = roots match {
-            case Left(hd1) :: Left(hd2) :: tl => Right(Right(Contiguous(hd1, hd2)) :: tl)
+            case Left(hd2) :: Left(hd1) :: tl => Right(Right(Contiguous(hd1, hd2)) :: tl)
             case _ :: _ :: _ => Left(OperandOpAppliedToRange(instr))
             case _ => Left(PredicateStackUnderflow(instr))
           }
@@ -108,7 +108,7 @@ trait DAG extends Instructions {
     def loop(loc: Line, roots: List[DepGraph], splits: List[OpenSplit], stream: Vector[Instruction]): Either[StackError, DepGraph] = {
       def processJoinInstr(instr: JoinInstr) = {
         val eitherRoots = roots match {
-          case hd1 :: hd2 :: tl => Right(Join(loc, instr, hd1, hd2) :: tl)
+          case right :: left :: tl => Right(Join(loc, instr, left, right) :: tl)
           case _ => Left(StackUnderflow(instr))
         }
         
@@ -124,7 +124,7 @@ trait DAG extends Instructions {
           if (args.lengthCompare(depth + 2) < 0) {
             Left(StackUnderflow(instr))
           } else {
-            val (target :: boolean :: predRoots) = args
+            val (boolean :: target :: predRoots) = args
             val result = pred map { p => loopPred(instr, predRoots map ValueOperand map { Left(_) }, p) }
             val range = result map { _.right map { Some(_) } } getOrElse Right(None)
             
