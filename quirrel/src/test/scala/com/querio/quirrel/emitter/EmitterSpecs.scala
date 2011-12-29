@@ -48,6 +48,8 @@ object EmitterSpecs extends Specification
 
   def testEmit(v: String)(i: Instruction*) = compileEmit(v).filter { case _ : Line => false; case _ => true } mustEqual Vector(i: _*)
 
+  def testEmitLine(v: String)(i: Instruction*) = compileEmit(v) mustEqual Vector(i: _*)
+
   "emitter" should {
     "emit literal string" in {
       testEmit("\"foo\"")(
@@ -152,6 +154,16 @@ object EmitterSpecs extends Specification
 
     "emit cross for division of dataset in static provenance with dataset in value provenance" in {
       testEmit("dataset(\"foo\") * 2")(
+        PushString("foo"),
+        LoadLocal(Het),
+        PushNum("2"),
+        Map2Cross(Mul)
+      )
+    }
+
+    "emit line information for cross for division of dataset in static provenance with dataset in value provenance" in {
+      testEmitLine("dataset(\"foo\") * 2")(
+        Line(1,"dataset(\"foo\") * 2"),
         PushString("foo"),
         LoadLocal(Het),
         PushNum("2"),
