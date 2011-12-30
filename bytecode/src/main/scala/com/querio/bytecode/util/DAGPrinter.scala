@@ -24,6 +24,7 @@ trait DAGPrinter extends DAG {
       
       case Operate(_, Neg, parent) => "~%s".format(loop(parent, split))
       case Operate(_, Comp, parent) => "!%s".format(loop(parent, split))
+      case Operate(_, WrapArray, parent) => "[%s]".format(loop(parent, split))
       
       case dag.Reduce(_, red, parent) => "%s(%s)".format(showReduction(red), loop(parent, split))
       
@@ -32,6 +33,12 @@ trait DAGPrinter extends DAG {
       
       case Join(_, IUnion, left, right) => "(%s iunion %s)".format(loop(left, split), loop(right, split))
       case Join(_, IIntersect, left, right) => "(%s iintersect %s)".format(loop(left, split), loop(right, split))
+      
+      case Join(_, Map2Match(WrapObject), Root(_, PushString(property)), value) =>
+        "{ %s: %s }".format(property, loop(value, split))
+      
+      case Join(_, Map2Cross(WrapObject), Root(_, PushString(property)), value) =>
+        "{ %s: %s }".format(property, loop(value, split))
       
       case Join(_, Map2Cross(DerefObject), left, Root(_, PushString(prop))) =>
         "%s.%s".format(loop(left, split), prop)
@@ -91,5 +98,7 @@ trait DAGPrinter extends DAG {
     
     case DerefObject => "deref_object"
     case DerefArray => "deref_array"
+    
+    case WrapObject => "wrap_object"
   }
 }
