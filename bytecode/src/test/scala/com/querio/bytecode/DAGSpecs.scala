@@ -211,7 +211,7 @@ object DAGSpecs extends Specification with DAG {
       "1" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushFalse, PushTrue, Swap(1), VUnion))
-        result mustEqual Right(Join(line, VUnion, Root(line, PushFalse), Root(line, PushTrue)))
+        result mustEqual Right(Join(line, VUnion, Root(line, PushTrue), Root(line, PushFalse)))
       }
       
       "3" >> {
@@ -219,10 +219,10 @@ object DAGSpecs extends Specification with DAG {
         val result = decorate(Vector(line, PushTrue, PushString("foo"), PushFalse, PushNum("42"), Swap(3), VUnion, VUnion, VUnion))
         result mustEqual Right(
           Join(line, VUnion,
-            Root(line, PushTrue),
+            Root(line, PushNum("42")),
             Join(line, VUnion,
-              Root(line, PushNum("42")),
-              Join(line, VUnion, Root(line, PushFalse), Root(line, PushString("foo"))))))
+              Root(line, PushString("foo")),
+              Join(line, VUnion, Root(line, PushFalse), Root(line, PushTrue)))))
       }
     }
     
