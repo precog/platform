@@ -7,10 +7,11 @@ trait Phases {
   type Phase = Expr => Set[Error]
   
   private val Phases: List[Phase] =
-    bindNames _ :: checkProvenance _ :: Nil
+    bindNames _ :: checkProvenance _ :: solveCriticalConditions _ :: Nil
   
-  def bindNames(tree: Expr): Set[Error]
+  def bindNames(expr: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
+  def solveCriticalConditions(expr: Expr): Set[Error]
   
   def findCriticalConditions(expr: Expr): Map[String, Set[Expr]]
   

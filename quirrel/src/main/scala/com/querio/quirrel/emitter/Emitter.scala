@@ -8,8 +8,14 @@ import com.querio.bytecode.{Instructions}
 import scalaz.{StateT, Id, Identity, Bind, Monoid}
 import scalaz.Scalaz._
 
-trait Emitter extends AST with Instructions with Binder with Solver with ProvenanceChecker {
+trait Emitter extends AST
+    with Instructions
+    with Binder
+    with ProvenanceChecker
+    with CriticalConditionSolver {
+  
   import instructions._
+  
   case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
 
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")

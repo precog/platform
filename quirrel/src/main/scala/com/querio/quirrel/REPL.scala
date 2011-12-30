@@ -2,6 +2,7 @@ package com.querio.quirrel
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 import jline.{ANSIBuffer, ConsoleReader, Terminal}
+import emitter._
 import parser._
 import typer._
 
@@ -10,6 +11,7 @@ trait REPL extends Parser
     with TreeShaker
     with ProvenanceChecker
     with CriticalConditionFinder
+    with CriticalConditionSolver
     with LineErrors {
   
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer

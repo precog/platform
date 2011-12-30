@@ -77,3 +77,7 @@ case class UnusedLetBinding(id: String) extends ErrorType {
 case class UnusedTicVariable(id: String) extends ErrorType {
   override def toString = "function parameter %s defined but not referenced or constrained".format(id)
 }
+
+case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
+  override def toString = "unable to solve critical condition for function parameter %s".format(id)
+}
