@@ -357,9 +357,9 @@ trait Emitter extends AST
                       val ticVarStates = nameToSolutions.map {
                         case (name, solutions) =>
                           val datasets = solutions.toSeq.map(emitExpr)
-                          val unions   = Vector.fill(datasets.size - 1)(emitInstr(VUnion))
+                          val intersects = Vector.fill(datasets.size - 1)(emitInstr(VIntersect))
 
-                          (name, reduce(datasets ++ unions) >> emitInstr(Split))
+                          (name, reduce(datasets ++ intersects) >> emitInstr(Split))
                       }
 
                       // At the end we have to merge everything back together:
