@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.quirrel
+package com.querio
+package quirrel
 package emitter
 
 import com.querio.bytecode.Instructions
@@ -36,11 +37,10 @@ import scalaz.Scalaz._
 
 object EmitterSpecs extends Specification
     with ScalaCheck
-    with StubPhases
     with Compiler
-    with ProvenanceChecker
-    with CriticalConditionFinder 
-    with Emitter with com.querio.bytecode.util.DAGPrinter {
+    with Emitter
+    with RawErrors
+    with bytecode.util.DAGPrinter {
 
   import instructions._
 
