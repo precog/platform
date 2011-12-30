@@ -374,7 +374,7 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
                       val nameToSolutions: Seq[(String, Set[Expr])] = sortedConditions.map {
                         case (name, conditions) =>
                           (name, conditions.collect { case eq: ast.Eq => eq }.map { node =>
-                            (solveRelation(node) { case ast.TicVar(_, name) => true }).
+                            (solveRelation(node) { case ast.TicVar(_, `name`) => true }).
                               getOrElse[Expr](throw EmitterError(Some(node), "Cannot solve for " + name))
                           })
                       }
