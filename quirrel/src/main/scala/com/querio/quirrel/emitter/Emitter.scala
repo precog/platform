@@ -15,10 +15,8 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
-  private case class Mark(startIdx: Int, len: Int) { self =>
-    def insert(idx2: Int, len2: Int) = copy(startIdx = self.startIdx + (if (idx2 <= startIdx) len2 else 0), len)
-
-    def endIdx = startIdx + len
+  private case class Mark(index: Int) { self =>
+    def insert(insertIdx: Int, length: Int): Mark = copy(index = self.index + (if (insertIdx < index) length else 0))
   }
 
   private sealed trait MarkType
@@ -31,17 +29,6 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     marks:    Map[MarkType, Mark] = Map.empty,
     curLine:  Option[(Int, String)] = None
   )
-
-  private implicit val MarkSemigroup: Monoid[Mark] = new Monoid[Mark] {
-    val zero = Mark(Int.MaxValue, 0)
-
-    def append(v1: Mark, v2: => Mark) = {
-      val min = v1.startIdx.min(v2.startIdx)
-      val max = v1.endIdx.max(v2.endIdx)
-
-      Mark(min, max - min)
-    }
-  }
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -115,18 +102,14 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     }
 
     private def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(ticVars = e.ticVars - let))
+      ((), e.copy(ticVars = e.ticVars - let)) // TODO: Remove marks
     }
 
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
     private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val markIdx = e.bytecode.length
-
       f(e) match {
         case (_, e) =>
-          val len = e.bytecode.length - markIdx
-
-          val mark = Mark(markIdx, len)
+          val mark = Mark(e.bytecode.length)
 
           ((), e.copy(marks = e.marks + (markType -> mark)))
       }
@@ -136,11 +119,11 @@ trait Emitter extends AST with Instructions with Binder with Solver with Provena
     private def emitDup(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val mark = e.marks(markType)
 
-      val insertIdx = mark.endIdx
+      val insertIdx = mark.index
 
       val stackSizes = operandStackSizes(e.bytecode)
 
-      val insertStackSize = stackSizes(mark.endIdx)
+      val insertStackSize = stackSizes(mark.index)
       val finalStackSize  = stackSizes(e.bytecode.length) + 1 // Add the DUP
 
       // Save the value by pushing it to the tail of the stack:
