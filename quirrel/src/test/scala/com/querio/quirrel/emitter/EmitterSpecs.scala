@@ -535,4 +535,101 @@ object EmitterSpecs extends Specification
       )
     }
   }
+
+  "emitter" should {
+    "emit code for examples" in {
+      "deviant-durations.qrl" >> {
+        testEmitShow("""
+          | interactions := dataset(//interactions)
+          | 
+          | big1z('userId) :=
+          |   userInteractions := interactions where interactions.userId = 'userId
+          |   
+          |   m := mean(userInteractions.duration)
+          |   sd := stdDev(userInteractions.duration)
+          | 
+          |   {
+          |     userId: 'userId,
+          |     interaction: userInteractions where userInteractions.duration > m + (sd * 3)
+          |   }
+          |   
+          | big1z
+          """)(
+        )
+      }
+      /*
+      
+      "first-conversion.qrl" >> {
+        val input = """
+          | firstConversionAfterEachImpression('userId) :=
+          |   conversions' := dataset(//conversions)
+          |   impressions' := dataset(//impressions)
+          | 
+          |   conversions := conversions' where conversions'.userId = 'userId
+          |   impressions := impressions' where impressions'.userId = 'userId
+          | 
+          |   greaterConversions('time) :=
+          |     impressionTimes := impressions where impressions.time = 'time
+          |     conversionTimes :=
+          |       conversions where conversions.time = min(conversions where conversions.time > 'time).time
+          |     
+          |     conversionTimes :: impressionTimes
+          |       { impression: impressions, nextConversion: conversions }
+          | 
+          |   greaterConversions
+          | 
+          | firstConversionAfterEachImpression
+          """.stripMargin
+        
+        parse(input) must not(throwA[ParseException])
+      }
+      
+      "histogram.qrl" >> {
+        val input = """
+          | clicks := dataset(//clicks)
+          | 
+          | histogram('value) :=
+          |   { cnt: count(clicks where clicks = 'value), value: 'value }
+          |   
+          | histogram
+          """.stripMargin
+        
+        parse(input) must not(throwA[ParseException])
+      }
+      
+      "interaction-totals.qrl" >> {
+        val input = """
+          | interactions := dataset(//interactions)
+          | 
+          | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
+          | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
+          | 
+          | total('hour, 'day) :=
+          |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
+          |   sum(interactions where dayAndHour)
+          |   
+          | total
+          """.stripMargin
+        
+        parse(input) must not(throwA[ParseException])
+      }
+      
+      "relative-durations.qrl" >> {
+        val input = """
+          | interactions := dataset(//interactions)
+          | 
+          | relativeDurations('userId, 'value) :=
+          |   userInteractions := interactions where interactions.userId = 'userId
+          |   interactionDurations := (userInteractions where userInteractions = 'value).duration
+          |   totalDurations := sum(userInteractions.duration)
+          | 
+          |   { userId: 'userId, ratio: interactionDurations / totalDurations }
+          | 
+          | relativeDurations
+          """.stripMargin
+        
+        parse(input) must not(throwA[ParseException])
+      }*/
+    }
+  }
 }
