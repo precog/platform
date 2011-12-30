@@ -89,21 +89,50 @@ trait Solver extends parser.AST {
     case _ => const(None) _
   }
 
-  def solveRelation(n: ExprBinaryNode)(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
-    val left  = n.left
-    val right = n.right
-
-    val inLeft  = left.tree.flatten.collect(predicate).length  > 0
-    val inRight = right.tree.flatten.collect(predicate).length > 0
-
-    val inOut = if (inLeft && !inRight) Some((left, right))
-                else if (inRight && !inLeft) Some((right, left))
-                else None
-
-    for {
-      (in, out) <- inOut
-      solution  <- solve(in)(predicate)(out)
-    } yield solution
+  /**
+   * Note that this really only works for `Eq` at present.  Will improve things
+   * further in future.
+   */
+  def solveRelation(re: RelationExpr)(predicate: PartialFunction[Node, Boolean]): Option[Expr] = {
+    val leftRight = re match {
+      case Lt(_, _, _) => None
+      case LtEq(_, _, _) => None
+      case Gt(_, _, _) => None
+      case GtEq(_, _, _) => None
+      
+      case Eq(loc, left, right) => Some((loc, left, right))
+      case NotEq(_, _, _) => None
+    }
+    
+    val result = leftRight flatMap {
+      case (loc, left, right) => {
+        // try both addition and multiplication groups
+        lazy val sub = Sub(loc, left, right)
+        lazy val div = Div(loc, left, right)
+        
+        lazy val first = solve(sub)(predicate)(NumLit(loc, "0"))
+        lazy val second = solve(div)(predicate)(NumLit(loc, "1"))
+        
+        first orElse second
+      }
+    }
+    
+    // big assumption here!!!!  we're assuming that these phases only require synthetic attributes
+    result foreach runPassesInSequence
+    
+    result
+  }
+  
+  def solveComplement(c: Comp): PartialFunction[Node, Boolean] => Option[Expr] = c.child match {
+    case Lt(loc, left, right) => solveRelation(GtEq(loc, left, right))
+    case LtEq(loc, left, right) => solveRelation(Gt(loc, left, right))
+    case Gt(loc, left, right) => solveRelation(LtEq(loc, left, right))
+    case GtEq(loc, left, right) => solveRelation(Lt(loc, left, right))
+    
+    case Eq(loc, left, right) => solveRelation(NotEq(loc, left, right))
+    case NotEq(loc, left, right) => solveRelation(Eq(loc, left, right))
+    
+    case _ => const(None)
   }
   
   private def solveBinary(tree: Expr, left: Expr, right: Expr, predicate: PartialFunction[Node, Boolean])(invertLeft: Expr => Expr => Expr, invertRight: Expr => Expr => Expr): Expr => Option[Expr] = {

@@ -354,12 +354,16 @@ trait AST extends Phases {
   
   object ast {    
     sealed trait ExprLeafNode extends Expr with LeafNode
+    
     sealed trait ExprBinaryNode extends Expr with BinaryNode {
       override def left: Expr
       override def right: Expr
 
       override def children = List(left, right)
     }
+    
+    sealed trait RelationExpr extends ExprBinaryNode
+    
     sealed trait ExprUnaryNode extends Expr with UnaryNode {
       override def child: Expr
 
@@ -474,27 +478,27 @@ trait AST extends Phases {
       val label = 'div
     }
     
-    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Lt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'lt
     }
     
-    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'lteq
     }
     
-    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Gt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'gt
     }
     
-    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'gteq
     }
     
-    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Eq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'eq
     }
     
-    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
       val label = 'noteq
     }
     
