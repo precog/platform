@@ -214,8 +214,9 @@ trait DAG extends Instructions {
             if (roots.lengthCompare(depth + 1) < 0) {
               Left(StackUnderflow(instr))
             } else {
-              val (span, rest) = roots splitAt depth
-              val roots2 = span.last :: (span.init.foldRight(span.head :: rest) { _ :: _ } tail)
+              val (span, rest) = roots splitAt (depth + 1)
+              val (spanInit, spanTail) = span splitAt depth
+              val roots2 = spanTail ::: spanInit.tail ::: (span.head :: rest)
               loop(loc, roots2, splits, stream.tail)
             }
           } else {
