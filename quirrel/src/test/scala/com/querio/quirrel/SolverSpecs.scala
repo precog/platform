@@ -278,12 +278,16 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
     "solve when target is in lhs of equality relation" in {
       solveRelation("(2 / 'a) / (3 / ('a * 'a)) = 0", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, Add(_, NumLit(_, "0"), NumLit(_, "0")), NumLit(_, "3")), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, Neg(_, Sub(_, NumLit(_, "0"), NumLit(_, "0"))), NumLit(_, "3")), NumLit(_, "2"))) => ok
       }
     }
 
     "solve when target is in rhs of equality relation" in {
       solveRelation("0 = (2 / 'a) / (3 / ('a * 'a))", 'a) must beLike {
         case Some(Div(_, Mul(_, NumLit(_, "0"), NumLit(_, "3")), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, Add(_, NumLit(_, "0"), NumLit(_, "0")), NumLit(_, "3")), NumLit(_, "2"))) => ok
+        case Some(Div(_, Mul(_, Neg(_, Sub(_, NumLit(_, "0"), NumLit(_, "0"))), NumLit(_, "3")), NumLit(_, "2"))) => ok
       }
     }
   }
@@ -296,6 +300,6 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
   def solveRelation(str: String, id: Symbol): Option[Expr] = {
     val expr = parse(LineStream(str))
 
-    solveRelation(expr.asInstanceOf[ExprBinaryNode]) { case TicVar(_, id2) => id.toString == id2; }
+    solveRelation(expr.asInstanceOf[RelationExpr]) { case TicVar(_, id2) => id.toString == id2; }
   }
 }
