@@ -349,21 +349,8 @@ trait Emitter extends AST
                       emitExpr(left)
                     } 
                     else {
-                      val remainingParams = params.drop(actuals.length)
-
-                      // Remove params already handled:
-                      val filteredConditions = let.criticalConditions.toSeq.filter(t => remainingParams.contains(t._1))
-
-                      // Sort by order of parameters:
-                      val sortedConditions = filteredConditions.sortWith((a, b) => remainingParams.indexOf(a) < remainingParams.indexOf(b))
-
-                      // Solve for each tic var:
-                      val nameToSolutions: Seq[(String, Set[Expr])] = sortedConditions.map {
-                        case (name, conditions) =>
-                          (name, conditions.collect { case eq: ast.Eq => eq }.map { node =>
-                            (solveRelation(node) { case ast.TicVar(_, `name`) => true }).
-                              getOrElse[Expr](throw EmitterError(Some(node), "Cannot solve for " + name))
-                          })
+                      val nameToSolutions = d.criticalSolutions.toSeq sortWith { (a, b) =>
+                        params.indexOf(a) < params.indexOf(b)
                       }
 
                       // Compute bytecode for every tic var:
@@ -376,7 +363,7 @@ trait Emitter extends AST
                       }
 
                       // At the end we have to merge everything back together:
-                      val merges = reduce(Vector.fill(remainingParams.length)(emitInstr(Merge)))
+                      val merges = reduce(Vector.fill(nameToSolutions.length)(emitInstr(Merge)))
 
                       setTicVars(let, ticVarStates) {
                         emitExpr(left) >> merges
