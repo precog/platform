@@ -40,7 +40,7 @@ object EmitterSpecs extends Specification
     with Compiler
     with ProvenanceChecker
     with CriticalConditionFinder 
-    with Emitter {
+    with Emitter with com.querio.bytecode.util.DAGPrinter {
 
   import instructions._
 
@@ -49,6 +49,12 @@ object EmitterSpecs extends Specification
   def testEmit(v: String)(i: Instruction*) = compileEmit(v).filter { case _ : Line => false; case _ => true } mustEqual Vector(i: _*)
 
   def testEmitLine(v: String)(i: Instruction*) = compileEmit(v) mustEqual Vector(i: _*)
+
+  def testEmitShow(v: String)(is: Instruction*) = {
+    decorate(compileEmit(v)) must beLike {
+      case Right(d) => println(showDAG(d)); ok
+    }
+  }
 
   "emitter" should {
     "emit literal string" in {
@@ -498,7 +504,7 @@ object EmitterSpecs extends Specification
                "ctr('day) := count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)" +
                "ctr")(
         PushString("/clicks"),
-        LoadLocal(Het), 
+        LoadLocal(Het),
         Dup,
         Dup,
         PushString("day"),
@@ -513,12 +519,6 @@ object EmitterSpecs extends Specification
         Swap(4),
         Swap(3),
         Swap(2),
-        Dup,
-        Swap(5),
-        Swap(4),
-        Swap(3),
-        Swap(2),
-        Swap(1),
         Swap(1),
         Dup,
         Swap(4),
@@ -529,6 +529,12 @@ object EmitterSpecs extends Specification
         Map2Cross(DerefObject),
         VUnion,
         Split,
+        Dup,
+        Swap(5),
+        Swap(4),
+        Swap(3),
+        Swap(2),
+        Swap(1),
         Map2Cross(Eq),
         FilterMatch(0,None),
         Reduce(Count),
