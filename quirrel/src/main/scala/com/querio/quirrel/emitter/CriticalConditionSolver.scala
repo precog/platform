@@ -61,7 +61,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
           
           val solutions = for ((name, conditions) <- work; expr <- conditions) yield {
             val result = expr match {
-              case expr: Eq => solveRelation(expr) { case TicVar(_, `name`) => true }
+              case expr: RelationExpr => solveRelation(expr) { case TicVar(_, `name`) => true }
               case _ => None
             }
             
