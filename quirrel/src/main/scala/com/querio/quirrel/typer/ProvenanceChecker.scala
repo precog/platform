@@ -1,7 +1,7 @@
 package com.querio.quirrel
 package typer
 
-trait ProvenanceChecker extends parser.AST with Binder {
+trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
   import Function._
   import Utils._
   import ast._
