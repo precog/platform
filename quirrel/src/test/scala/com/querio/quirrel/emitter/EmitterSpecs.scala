@@ -558,7 +558,8 @@ object EmitterSpecs extends Specification
   "emitter" should {
     "emit code for examples" in {
       "deviant-durations.qrl" >> {
-        testEmitShow("""
+        // TODO: Verify match/cross for tic variable solution fragmentsA
+        testEmit("""
           | interactions := dataset(//interactions)
           | 
           | big1z('userId) :=
@@ -574,12 +575,84 @@ object EmitterSpecs extends Specification
           |   
           | big1z
           """)(
+          PushString("userId"),
+          PushString("/interactions"),
+          LoadLocal(Het),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          PushString("userId"),
+          Map2Cross(DerefObject),
+          Split,
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Map2Cross(WrapObject),
+          PushString("interaction"),
+          Swap(1),
+          Swap(2),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("userId"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Map2Cross(Eq),
+          FilterMatch(0,None),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("duration"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("duration"),
+          Map2Cross(DerefObject),
+          Reduce(Mean),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Swap(5),
+          PushString("duration"),
+          Map2Cross(DerefObject),
+          Reduce(StdDev),
+          PushNum("3"),
+          Map2Cross(Mul),
+          Map2Cross(Add),
+          Map2Cross(Gt),
+          FilterMatch(0,None),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
+          Merge
         )
       }
-      /*
       
+      /*
       "first-conversion.qrl" >> {
-        val input = """
+        testEmitShow("""
           | firstConversionAfterEachImpression('userId) :=
           |   conversions' := dataset(//conversions)
           |   impressions' := dataset(//impressions)
@@ -598,11 +671,10 @@ object EmitterSpecs extends Specification
           |   greaterConversions
           | 
           | firstConversionAfterEachImpression
-          """.stripMargin
-        
-        parse(input) must not(throwA[ParseException])
+          """)(
+        )
       }
-      
+
       "histogram.qrl" >> {
         val input = """
           | clicks := dataset(//clicks)
