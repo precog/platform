@@ -487,7 +487,7 @@ object EmitterSpecs extends Specification
           Merge))
     }
 
-    "emit split and merge for trivial cf example with conjunction" in {
+    "emit vintersect for trivial cf example with conjunction" in {
       testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
@@ -536,7 +536,7 @@ object EmitterSpecs extends Specification
           Merge))
     }
 
-    "emit split and merge for trivial cf example with disjunction" in {
+    "emit vunion for trivial cf example with disjunction" in {
       testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
