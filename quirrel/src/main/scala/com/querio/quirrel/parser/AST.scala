@@ -436,9 +436,9 @@ trait AST extends Phases {
       def binding = _binding()
       private[quirrel] def binding_=(b: Binding) = _binding() = b
       
-      private val _criticalSolutions = attribute[Map[String, Set[Expr]]](solveCriticalConditions)
+      private val _criticalSolutions = attribute[Map[String, Solution]](solveCriticalConditions)
       def criticalSolutions = _criticalSolutions()
-      private[quirrel] def criticalSolutions_=(map: Map[String, Set[Expr]]) = _criticalSolutions() = map
+      private[quirrel] def criticalSolutions_=(map: Map[String, Solution]) = _criticalSolutions() = map
       
       def children = actuals.toList
     }

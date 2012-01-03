@@ -40,25 +40,19 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
           val remaining = let.params drop actuals.length
           val work = let.criticalConditions filterKeys remaining.contains
           
-          val solutions = for ((name, conditions) <- work; expr <- conditions) yield {
-            val result = expr match {
-              case expr: RelationExpr => solveRelation(expr) { case TicVar(_, `name`) => true }
-              case expr: Comp => solveComplement(expr) { case TicVar(_, `name`) => true }
-              case _ => None
-            }
-            
-            result map { e => Left(name -> e) } getOrElse Right(Set(Error(expr, UnableToSolveCriticalCondition(name))))
-          }
+          val solutions = for ((name, conditions) <- work.toSeq; expr <- conditions)
+            yield name -> solveCondition(name, expr)
           
-          val errors = (solutions map { _.right getOrElse Set() }).fold(Set[Error]()) { _ ++ _ }
-          val pairs = solutions flatMap { _.left.toSeq }
+          val (_, values) = solutions.unzip
+          val errors = (values map { _.left getOrElse Set() }).fold(Set[Error]()) { _ ++ _ }
+          val pairs = solutions collect { case (name, Right(sol)) => name -> sol }
           
-          val results = pairs.foldLeft(Map[String, Set[Expr]]()) {
-            case (acc, (name, solution)) => {
+          val results = pairs.foldLeft(Map[String, Solution]()) {
+            case (acc, pair @ (name, solution)) => {
               if (acc contains name)
-                acc.updated(name, acc(name) + solution)
+                acc.updated(name, Conjunction(acc(name), solution))
               else
-                acc.updated(name, Set(solution))
+                acc + pair
             }
           }
           
@@ -124,4 +118,52 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     
     case Paren(_, child) => solveCriticalConditions(child)
   }
+  
+  private def solveCondition(name: String, expr: Expr): Either[Set[Error], Solution] = expr match {
+    case And(_, left, right) => {
+      val recLeft = solveCondition(name, left)
+      val recRight = solveCondition(name, right)
+      
+      val sol = for {
+        leftSol <- recLeft.right
+        rightSol <- recRight.right
+      } yield Conjunction(leftSol, rightSol)
+      
+      for {
+        leftErr <- sol.left
+        rightErr <- recRight.left
+      } yield leftErr ++ rightErr
+    }
+    
+    case Or(_, left, right) => {
+      val recLeft = solveCondition(name, left)
+      val recRight = solveCondition(name, right)
+      
+      val sol = for {
+        leftSol <- recLeft.right
+        rightSol <- recRight.right
+      } yield Disjunction(leftSol, rightSol)
+      
+      for {
+        leftErr <- sol.left
+        rightErr <- recRight.left
+      } yield leftErr ++ rightErr
+    }
+    
+    case _ => {
+      val result = expr match {
+        case expr: RelationExpr => solveRelation(expr) { case TicVar(_, `name`) => true }
+        case expr: Comp => solveComplement(expr) { case TicVar(_, `name`) => true }
+        case _ => None
+      }
+      
+      result map { e => Right(Definition(e)) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
+    }
+  }
+  
+  
+  sealed trait Solution
+  case class Conjunction(left: Solution, right: Solution) extends Solution
+  case class Disjunction(left: Solution, right: Solution) extends Solution
+  case class Definition(expr: Expr) extends Solution
 }
