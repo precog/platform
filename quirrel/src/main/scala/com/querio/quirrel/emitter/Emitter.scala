@@ -195,6 +195,17 @@ trait Emitter extends AST
     def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
       emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, depth, pred)
     }
+    
+    def emitSolution(solution: Solution): EmitterState = solution match {
+      case Conjunction(left, right) =>
+        emitSolution(left) >> emitSolution(right) >> emitInstr(VIntersect)
+      
+      case Disjunction(left, right) =>
+        emitSolution(left) >> emitSolution(right) >> emitInstr(VUnion)
+      
+      case Definition(expr) =>
+        emitExpr(expr)
+    }
 
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
       emitLine(expr.loc.lineNum, expr.loc.line) >>
@@ -374,11 +385,8 @@ trait Emitter extends AST
 
                       // Compute bytecode for every tic var:
                       val ticVarStates = nameToSolutions.map {
-                        case (name, solutions) =>
-                          val datasets = solutions.toSeq.map(emitExpr)
-                          val intersects = Vector.fill(datasets.size - 1)(emitInstr(VIntersect))
-
-                          (name, reduce(datasets ++ intersects) >> emitInstr(Split))
+                        case (name, solution) =>
+                          (name, emitSolution(solution) >> emitInstr(Split))
                       }
 
                       // At the end we have to merge everything back together:

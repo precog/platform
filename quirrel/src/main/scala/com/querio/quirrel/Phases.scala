@@ -21,6 +21,7 @@ package com.querio.quirrel
 
 trait Phases {
   type Expr
+  type Solution
   type Error
   
   type Phase = Expr => Set[Error]
