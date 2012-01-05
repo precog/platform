@@ -59,6 +59,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
           val remaining = let.params drop actuals.length
           val work = let.criticalConditions filterKeys remaining.contains
           
+          // note: the correctness of this *depends* on pre-splitting of top-level conjunctions
           val solutions = for ((name, conditions) <- work.toSeq; expr <- conditions)
             yield name -> solveCondition(name, expr)
           
@@ -75,12 +76,14 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
             }
           }
           
-          if (errors.isEmpty)
-            d.criticalSolutions = results
-          else
-            d.criticalSolutions = Map()
+          d.criticalSolutions = results
           
-          errors
+          val finalErrors = if (remaining forall results.contains)
+            Set()
+          else
+            Set(remaining filterNot results.contains map UnableToDetermineDefiningSet map { Error(d, _) }: _*)
+          
+          errors ++ finalErrors
         }
         
         case _ => {

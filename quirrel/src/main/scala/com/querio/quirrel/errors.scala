@@ -97,6 +97,11 @@ case class UnusedTicVariable(id: String) extends ErrorType {
   override def toString = "function parameter %s defined but not referenced or constrained".format(id)
 }
 
+// intended to be a warning
 case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
   override def toString = "unable to solve critical condition for function parameter %s".format(id)
+}
+
+case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
+  override def toString = "unable to solve defining set for function parameter %s".format(id)
 }
