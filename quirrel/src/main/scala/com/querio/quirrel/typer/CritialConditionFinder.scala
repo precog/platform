@@ -51,7 +51,14 @@ trait CriticalConditionFinder extends parser.AST with Binder {
           case _ => Map[String, Set[ConditionTree]]()
         }
         
-        merge(merged, fromDef)
+        val back = merge(merged, fromDef)
+        
+        d.binding match {
+          case b: BuiltIn if d.isReduction =>
+            back map { case (key, value) => key -> Set(Reduction(b, value): ConditionTree) }
+          
+          case _ => back
+        }
       }
       
       case Operation(_, left, "where", right) => {
