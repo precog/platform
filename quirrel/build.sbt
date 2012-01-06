@@ -19,15 +19,17 @@ initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
   | import com.querio.quirrel._
+  | import emitter._
   | import parser._
   | import typer._
   |
-  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionFinder with Compiler with LineErrors {}
+  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with LineErrors {}
   | 
   | trait StubPhases extends Phases with RawErrors {
   |   def bindNames(tree: Expr) = Set()
   |   def checkProvenance(tree: Expr) = Set()
-  |   def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = Map()
+  |   def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
+  |   def solveCriticalConditions(expr: Expr) = Set()
   | }
   | 
   | val solver = new Solver with Parser with StubPhases {}
