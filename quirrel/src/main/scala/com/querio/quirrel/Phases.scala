@@ -5,6 +5,11 @@ trait Phases {
   type Solution
   type Error
   
+  type Binding
+  type FormalBinding
+  type Provenance
+  type ConditionTree
+  
   type Phase = Expr => Set[Error]
   
   private val Phases: List[Phase] =
@@ -14,7 +19,7 @@ trait Phases {
   def checkProvenance(expr: Expr): Set[Error]
   def solveCriticalConditions(expr: Expr): Set[Error]
   
-  def findCriticalConditions(expr: Expr): Map[String, Set[Expr]]
+  def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]]
   
   def runPassesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }

@@ -14,7 +14,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         if (!params.isEmpty && left.provenance != NullProvenance) {
           val assumptions = expr.criticalConditions map {
             case (id, exprs) => {
-              val provenances = exprs map { _.provenance }
+              val provenances = flattenForest(exprs) map { _.provenance }
               val unified = provenances reduce unifyProvenanceAssumingRelated
               (id -> unified)
             }
@@ -627,6 +627,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case pair => DynamicProvenance(System.identityHashCode(pair))
   }
+  
+  private def flattenForest(forest: Set[ConditionTree]): Set[Expr] = forest flatMap {
+    case Condition(expr) => Set(expr)
+    case Reduction(_, forest) => flattenForest(forest)
+  }
+  
   
   sealed trait Provenance {
     def &(that: Provenance) = (this, that) match {
