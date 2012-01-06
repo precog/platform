@@ -29,7 +29,6 @@ trait REPL extends Parser
     with Binder
     with TreeShaker
     with ProvenanceChecker
-    with CriticalConditionFinder
     with CriticalConditionSolver
     with LineErrors {
   
@@ -45,7 +44,7 @@ trait REPL extends Parser
       bindRoot(oldTree, oldTree)
       
       val tree = shakeTree(oldTree)
-      val phaseErrors = runPassesInSequence(tree)
+      val phaseErrors = runPhasesInSequence(tree)
       val allErrors = tree.errors ++ phaseErrors
       
       val strs = for (error <- allErrors) yield {
