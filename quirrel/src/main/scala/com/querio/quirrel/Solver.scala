@@ -99,7 +99,7 @@ trait Solver extends parser.AST {
     }
     
     // big assumption here!!!!  we're assuming that these phases only require synthetic attributes
-    result foreach runPassesInSequence
+    result foreach runPhasesInSequence
     
     result
   }
