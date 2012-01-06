@@ -1,8 +1,0 @@
-(:project-name "platform"
- :use-sbt t
- :sbt-subprojects ((:name "bytecode")
-                   (:name "common")
-                   (:name "daze")
-                   (:name "ingest")
-                   (:name "quirrel")
-                   (:name "storage")))
