@@ -37,7 +37,7 @@ object CriticalConditionFinderSpecs extends Specification
       
       tree.criticalConditions("'b") must haveSize(1)
       tree.criticalConditions("'b").head must beLike {
-        case Add(_, TicVar(_, "'b"), NumLit(_, "24")) => ok
+        case Condition(Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
       }
     }
     
@@ -49,7 +49,7 @@ object CriticalConditionFinderSpecs extends Specification
       
       tree.criticalConditions("'b") must haveSize(1)
       tree.criticalConditions("'b").head must beLike {
-        case Add(_, TicVar(_, "'b"), NumLit(_, "24")) => ok
+        case Condition(Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
       }
     }
     
@@ -62,12 +62,14 @@ object CriticalConditionFinderSpecs extends Specification
       val conditions = tree.criticalConditions("'b")
       conditions must haveSize(2)
       
-      val sorted = conditions.toList sortWith { _.loc.toString < _.loc.toString }
+      forall(conditions) { _ must beLike { case Condition(_) => ok } }
+      
+      val sorted = conditions.toList sortWith unsafeConditionSort
       sorted(0) must beLike {
-        case Add(_, TicVar(_, "'b"), NumLit(_, "24")) => ok
+        case Condition(Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
       }
       sorted(1) must beLike {
-        case Operation(_, Add(_, NumLit(_, "12"), TicVar(_, "'b")), "where", Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
+        case Condition(Operation(_, Add(_, NumLit(_, "12"), TicVar(_, "'b")), "where", Add(_, TicVar(_, "'b"), NumLit(_, "24")))) => ok
       }
     }
     
@@ -80,12 +82,14 @@ object CriticalConditionFinderSpecs extends Specification
       val conditions = tree.criticalConditions("'b")
       conditions must haveSize(2)
       
-      val sorted = conditions.toList sortWith { _.loc.toString < _.loc.toString }
+      forall(conditions) { _ must beLike { case Condition(_) => ok } }
+      
+      val sorted = conditions.toList sortWith unsafeConditionSort
       sorted(0) must beLike {
-        case Add(_, TicVar(_, "'b"), NumLit(_, "24")) => ok
+        case Condition(Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
       }
       sorted(1) must beLike {
-        case Add(_, NumLit(_, "12"), TicVar(_, "'b")) => ok
+        case Condition(Add(_, NumLit(_, "12"), TicVar(_, "'b"))) => ok
       }
     }
     
@@ -106,12 +110,14 @@ object CriticalConditionFinderSpecs extends Specification
       val conditions = tree.criticalConditions("'a")
       conditions must haveSize(2)
       
-      val sorted = conditions.toList sortWith { _.loc.toString < _.loc.toString }
+      forall(conditions) { _ must beLike { case Condition(_) => ok } }
+      
+      val sorted = conditions.toList sortWith unsafeConditionSort
       sorted(0) must beLike {
-        case Eq(_, NumLit(_, "2"), TicVar(_, "'a")) => ok
+        case Condition(Eq(_, NumLit(_, "2"), TicVar(_, "'a"))) => ok
       }
       sorted(1) must beLike {
-        case Eq(_, NumLit(_, "4"), TicVar(_, "'a")) => ok
+        case Condition(Eq(_, NumLit(_, "4"), TicVar(_, "'a"))) => ok
       }
     }
     
@@ -125,7 +131,7 @@ object CriticalConditionFinderSpecs extends Specification
       conditions must haveSize(1)
       
       conditions.head must beLike {
-        case Dispatch(_, "h", Vector()) => ok
+        case Condition(Dispatch(_, "h", Vector())) => ok
       }
     }
     
@@ -139,7 +145,7 @@ object CriticalConditionFinderSpecs extends Specification
       conditions must haveSize(1)
       
       conditions.head must beLike {
-        case Eq(_, TicVar(_, "'b"), NumLit(_, "2")) => ok
+        case Condition(Eq(_, TicVar(_, "'b"), NumLit(_, "2"))) => ok
       }
     }
     
@@ -152,12 +158,14 @@ object CriticalConditionFinderSpecs extends Specification
       val conditions = tree.criticalConditions("'b")
       conditions must haveSize(2)
       
-      val sorted = conditions.toList sortWith { _.loc.toString < _.loc.toString }
+      forall(conditions) { _ must beLike { case Condition(_) => ok } }
+      
+      val sorted = conditions.toList sortWith unsafeConditionSort
       sorted(0) must beLike {
-        case Eq(_, TicVar(_, "'b"), NumLit(_, "2")) => ok
+        case Condition(Eq(_, TicVar(_, "'b"), NumLit(_, "2"))) => ok
       }
       sorted(1) must beLike {
-        case Eq(_, NumLit(_, "4"), TicVar(_, "'b")) => ok
+        case Condition(Eq(_, NumLit(_, "4"), TicVar(_, "'b"))) => ok
       }
     }
     
@@ -171,8 +179,12 @@ object CriticalConditionFinderSpecs extends Specification
       conditions must haveSize(1)
       
       conditions.head must beLike {
-        case Or(_, Eq(_, TicVar(_, "'b"), NumLit(_, "2")), Eq(_, NumLit(_, "4"), NumLit(_, "5"))) => ok
+        case Condition(Or(_, Eq(_, TicVar(_, "'b"), NumLit(_, "2")), Eq(_, NumLit(_, "4"), NumLit(_, "5")))) => ok
       }
     }
+  }
+  
+  def unsafeConditionSort(left: ConditionTree, right: ConditionTree) = (left, right) match {
+    case (Condition(left), Condition(right)) => left.loc.toString < right.loc.toString
   }
 }

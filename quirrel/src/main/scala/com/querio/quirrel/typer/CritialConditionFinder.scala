@@ -24,8 +24,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   import Utils._
   import ast._
   
-  override def findCriticalConditions(expr: Expr): Map[String, Set[Expr]] = {
-    def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[Expr]] = expr match {
+  override def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = {
+    def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[ConditionTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
       case New(_, child) => loop(root, child, currentWhere)
@@ -38,7 +38,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(where)) } getOrElse Map()
+        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
         case _ => Map()
       }
       
@@ -67,7 +67,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         
         val fromDef = d.binding match {
           case UserDef(e) => loop(root, e.left, currentWhere)
-          case _ => Map[String, Set[Expr]]()
+          case _ => Map[String, Set[ConditionTree]]()
         }
         
         merge(merged, fromDef)
@@ -130,10 +130,25 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         val wheres = loop(root, left, None)
         
         wheres map {
-          case (key, value) => key -> (value flatMap splitConj filter referencesTicVar(root))
+          case (key, value) => {
+            val result = runAtLevels(value) { e => splitConj(e) filter referencesTicVar(root) }
+            key -> result
+          }
         }
       }
       case _ => Map()
+    }
+  }
+  
+  private def runAtLevels(trees: Set[ConditionTree])(f: Expr => Set[Expr]): Set[ConditionTree] = trees flatMap {
+    case Condition(expr) => f(expr) map { Condition(_): ConditionTree }
+    
+    case Reduction(b, trees) => {
+      val rec = runAtLevels(trees)(f)
+      if (rec.isEmpty)
+        Set[ConditionTree]()
+      else
+        Set(Reduction(b, rec): ConditionTree)
     }
   }
   
@@ -207,4 +222,10 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     
     case Paren(_, child) => referencesTicVar(root)(child)
   }
+  
+  
+  sealed trait ConditionTree
+  
+  case class Condition(expr: Expr) extends ConditionTree
+  case class Reduction(b: BuiltIn, children: Set[ConditionTree]) extends ConditionTree
 }

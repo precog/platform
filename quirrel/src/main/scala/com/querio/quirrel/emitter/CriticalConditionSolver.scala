@@ -60,7 +60,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
           val work = let.criticalConditions filterKeys remaining.contains
           
           // note: the correctness of this *depends* on pre-splitting of top-level conjunctions
-          val solutions = for ((name, conditions) <- work.toSeq; expr <- conditions)
+          val solutions = for ((name, conditions) <- work.toSeq; Condition(expr) <- conditions)
             yield name -> solveCondition(name, expr)
           
           val (_, values) = solutions.unzip

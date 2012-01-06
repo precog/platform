@@ -31,11 +31,6 @@ import scalaz.Tree
 
 trait AST extends Phases {
   import Atom._
-  
-  type Binding
-  type FormalBinding
-  type Provenance
-
   import ast._
   
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
