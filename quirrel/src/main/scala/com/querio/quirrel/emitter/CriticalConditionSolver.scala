@@ -20,6 +20,10 @@
 package com.querio.quirrel
 package emitter
 
+import scala.collection.GenTraversableOnce
+import scala.collection.generic.CanBuildFrom
+import scala.collection.mutable.Builder
+
 import parser._
 import typer._
 
@@ -59,29 +63,21 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
           val remaining = let.params drop actuals.length
           val work = let.criticalConditions filterKeys remaining.contains
           
-          // note: the correctness of this *depends* on pre-splitting of top-level conjunctions
-          val solutions = for ((name, conditions) <- work.toSeq; Condition(expr) <- conditions)
-            yield name -> solveCondition(name, expr)
-          
-          val (_, values) = solutions.unzip
-          val errors = (values map { _.left getOrElse Set() }).fold(Set[Error]()) { _ ++ _ }
-          val pairs = solutions collect { case (name, Right(sol)) => name -> sol }
-          
-          val results = pairs.foldLeft(Map[String, Solution]()) {
-            case (acc, pair @ (name, solution)) => {
-              if (acc contains name)
-                acc.updated(name, Conjunction(acc(name), solution))
-              else
-                acc + pair
-            }
+          val solvedData = work map {
+            case (name, forest) => name -> solveConditionForest(d, name, forest)
           }
           
-          d.equalitySolutions = results
+          val errors = solvedData.values map { case (errorSet, _) => errorSet } flatten
+          val solutions = solvedData collect {
+            case (name, (_, Some(solution))) => name -> solution
+          }
           
-          val finalErrors = if (remaining forall results.contains)
+          d.equalitySolutions = solutions
+          
+          val finalErrors = if (remaining forall solutions.contains)
             Set()
           else
-            Set(remaining filterNot results.contains map UnableToDetermineDefiningSet map { Error(d, _) }: _*)
+            Set(remaining filterNot solutions.contains map UnableToDetermineDefiningSet map { Error(d, _) }: _*)
           
           errors ++ finalErrors
         }
@@ -180,6 +176,43 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       }
       
       result map { e => Right(Definition(e)) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
+    }
+  }
+  
+  private def solveConditionForest(d: Dispatch, name: String, conditions: Set[ConditionTree]): (Set[Error], Option[Solution]) = {
+    if (conditions exists { case Condition(_) => true case _ => false }) {
+      val solutions = conditions collect {
+        case Condition(expr) => solveCondition(name, expr)
+      }
+      
+      val successes = solutions flatMap { _.right.toSeq }
+      val errors = (solutions flatMap { _.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
+      
+      val (addend, result) = if (!successes.isEmpty)
+        (None, Some(successes reduce Conjunction))
+      else
+        (Some(Error(d, UnableToSolveCriticalCondition(name))), None)
+      
+      (addend map (errors +) getOrElse errors, result)
+    } else if (conditions exists { case Reduction(_, _) => true case _ => false }) {
+      val (errors, successes) = conditions collect {
+        case Reduction(_, children) => solveConditionForest(d, name, children)
+      } unzip
+      
+      val result = sequence(successes) map { _ reduce Disjunction }
+      
+      if (result.isEmpty)
+        (errors.flatten + Error(d, UnableToSolveCriticalCondition(name)), result)
+      else
+        (errors.flatten, result)
+    } else {
+      (Set(Error(d, UnableToSolveCriticalCondition(name))), None)
+    }
+  }
+  
+  private def sequence[A](set: Set[Option[A]]): Option[Set[A]] = {
+    set.foldLeft(Some(Set()): Option[Set[A]]) { (acc, opt) =>
+      for (s <- acc; v <- opt) yield s + v
     }
   }
   
