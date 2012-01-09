@@ -379,7 +379,7 @@ trait Emitter extends AST
                       emitExpr(left)
                     } 
                     else {
-                      val nameToSolutions = d.criticalSolutions.toSeq sortWith { (a, b) =>
+                      val nameToSolutions = d.equalitySolutions.toSeq sortWith { (a, b) =>
                         params.indexOf(a) < params.indexOf(b)
                       }
 
