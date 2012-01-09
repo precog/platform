@@ -191,7 +191,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       val (addend, result) = if (!successes.isEmpty)
         (None, Some(successes reduce Conjunction))
       else
-        (Some(Error(d, UnableToSolveCriticalCondition(name))), None)
+        (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
       
       (addend map (errors +) getOrElse errors, result)
     } else if (conditions exists { case Reduction(_, _) => true case _ => false }) {
@@ -202,11 +202,11 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       val result = sequence(successes) map { _ reduce Disjunction }
       
       if (result.isEmpty)
-        (errors.flatten + Error(d, UnableToSolveCriticalCondition(name)), result)
+        (errors.flatten + Error(d, UnableToDetermineDefiningSet(name)), result)
       else
         (errors.flatten, result)
     } else {
-      (Set(Error(d, UnableToSolveCriticalCondition(name))), None)
+      (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
     }
   }
   
