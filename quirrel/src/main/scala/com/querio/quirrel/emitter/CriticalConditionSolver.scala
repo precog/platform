@@ -57,7 +57,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
             }
           }
           
-          d.criticalSolutions = results
+          d.equalitySolutions = results
           
           val finalErrors = if (remaining forall results.contains)
             Set()
@@ -68,7 +68,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
         }
         
         case _ => {
-          d.criticalSolutions = Map()
+          d.equalitySolutions = Map()
           Set()
         }
       }
