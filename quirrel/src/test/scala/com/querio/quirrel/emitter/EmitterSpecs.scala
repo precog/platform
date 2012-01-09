@@ -697,7 +697,7 @@ object EmitterSpecs extends Specification
           Reduce(Count),
           Map2Cross(Div),
           Merge))
-    }.pendingUntilFixed
+    }
   }
 
   "emitter" should {
