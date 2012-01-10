@@ -54,8 +54,8 @@ trait Parser extends RegexParsers with Filters with AST {
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => Let(loc, id, fs, e1, e2) }
     | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, id, Vector(), e1, e2) }
     
-    | "new" ~ expr              ^# { (loc, _, e) => New(loc, e) }
-    | expr ~ "::" ~ expr ~ expr ^# { (loc, e1, _, e2, e3) => Relate(loc, e1, e2, e3) }
+    | "new" ~ expr     ^# { (loc, _, e) => New(loc, e) }
+    | relations ~ expr ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
     
     | id    ^# { (loc, id) => Dispatch(loc, id, Vector()) }
     | ticId ^# TicVar
@@ -98,6 +98,11 @@ trait Parser extends RegexParsers with Filters with AST {
   lazy val formals: Parser[Vector[String]] = (
       formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
     | ticId                 ^^ { Vector(_) }
+  )
+  
+  lazy val relations: Parser[Vector[Expr]] = (
+      relations ~ "::" ~ expr ^^ { (es, _, e) => es :+ e }
+    | expr ~ "::" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
   )
   
   lazy val actuals: Parser[Vector[Expr]] = (
@@ -177,6 +182,14 @@ trait Parser extends RegexParsers with Filters with AST {
   )
   
   // %%
+  
+  def buildDeepRelate(loc: LineStream, relations: Vector[Expr], e: Expr): Expr = {
+    val builders = relations zip (relations drop 1) map {
+      case (e1, e2) => { e3: Expr => Relate(loc, e1, e2, e3) }
+    }
+    
+    builders.foldRight(e) { _(_) }
+  }
   
   def canonicalizeStr(str: String): String = {
     val (back, _) = str.foldLeft(("", false)) {
