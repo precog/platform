@@ -29,7 +29,7 @@ import scalaz.NonEmptyList
 import com.weiglewilczek.slf4s.Logging
 
 import com.reportgrid.analytics._
-import com.querio.ingest.api._
+import com.reportgrid.common._
 
 trait StorageReporting {
   def tokenId: String
@@ -91,7 +91,7 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success{ (t: Token, p: Path) =>
       request.content.map { _.flatMap { event  => 
-        eventStore.save(Event(p.toString, List(t.accountTokenId), event)).map(_ => HttpResponse[JValue](OK)).toBlueEyes
+        eventStore.save(Event.fromJValue(p.toString, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK)).toBlueEyes
       }}.getOrElse(Future.sync(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
     }
   }
@@ -114,5 +114,18 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
         Timestamps are not added by default.
       """
     }
+  ))
+}
+
+class EchoServiceHandler
+extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging with FutureImplicits {
+  val service = (request: HttpRequest[Future[JValue]]) => { 
+    Success{ (t: Token, p: Path) => Future.sync(HttpResponse[JValue](OK, content=Some(JString("Testing 123.")))) }
+  }
+
+  val metadata = Some(DescriptionMetadata(
+    """
+      This is a dummy echo service.
+    """
   ))
 }

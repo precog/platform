@@ -2,11 +2,16 @@ package com.querio.ingest.service
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
+import scala.collection.JavaConversions._
 
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.Properties
 
-import akka.dispatch.Future
+import scalaz._
+import scalaz.Scalaz._
+
+import akka.dispatch.{Future, Futures}
+import akka.dispatch.DefaultCompletableFuture
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
@@ -15,6 +20,7 @@ import org.scalacheck.Gen
 
 import kafka.producer._
 
+import com.reportgrid.common._
 import com.querio.ingest.api._
 import com.querio.ingest.util.ArbitraryJValue
 
@@ -26,57 +32,105 @@ import com.querio.ingest.util.ArbitraryJValue
 //
 // - add sync behavior
 
-trait EventStore {
-  def save(event: Event): Future[Unit]
-}
-
-class DefaultEventStore(producerId: Int, router: EventRouter, senders: MessageSenders, firstEventId: Int = 0) extends EventStore {
-  private val nextEventId = new AtomicInteger(firstEventId)
+object FutureHelper {
+  def singleSuccess[T](futures: Seq[Future[T]], timeout: Long = Long.MaxValue): Future[T] = new FirstResultFuture(futures, timeout)
   
-  def save(event: Event): Future[Unit] = {
-    val eventId = nextEventId.incrementAndGet
-    Future.sequence(router.route(event).map(address => {
-      senders.find(address).map(sender => {
-        sender.send(EventMessage(producerId, eventId, event))
-      }).getOrElse(Future(()))
-    })).map(_ => ())    
-  }  
-}
+  class FirstResultFuture[T](futures: Seq[Future[T]], timeout: Long = Long.MaxValue) extends DefaultCompletableFuture[T](timeout) {
 
-trait EventRouter {
-  def route(event: Event): List[MailboxAddress]
-}
+    val counter = new AtomicInteger(futures.size)
 
-class ConstantEventRouter(addresses: List[MailboxAddress]) extends EventRouter {
-  def route(event: Event): List[MailboxAddress] = addresses
-}
+    def failIfLastChild(t: Throwable) {
+      val current = counter.decrementAndGet()
+      if (current <= 0 && mayComplete) {
+        complete(Left(t))
+      }
+    }
 
-trait MessageSender {
-  def send(msg: IngestMessage): Future[Unit]
-  def close(): Future[Unit] = Future(())
-}
+    def mayComplete(): Boolean = mayComplete(counter.get)
 
-class EchoMessageSender extends MessageSender {
-  def send(msg: IngestMessage) = {
-    Future(println("Sending: " + msg))
+    def mayComplete(cur: Int): Boolean = {
+      if(cur == -1) false
+      else counter.compareAndSet(cur, -1) || mayComplete(counter.get)
+    }
+
+    val childResult: PartialFunction[T, Unit] = {
+      case t if mayComplete => complete(Right(t))
+    }
+
+    val childException: PartialFunction[Throwable, Unit] = {
+      case t => failIfLastChild(t)
+    }
+
+    val childTimeout: PartialFunction[Future[T], Unit] = {
+      case f => failIfLastChild(new RuntimeException("Akka future timed out."))
+    }
+
+    for (f <- futures) {
+      f.onResult(childResult)
+      f.onException(childException)
+      f.onTimeout(childTimeout)
+    }
   }
 }
 
-class CollectingMessageSender extends MessageSender {
+
+class EventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0) {
+  
+  private val nextEventId = new AtomicInteger(firstEventId)
+  
+  def save(event: Event) = router.route(EventMessage(producerId, nextEventId.incrementAndGet, event))
+  def close(): Future[Unit] = router.close
+}
+
+trait RouteTable {
+  def routeTo(event: Event): NonEmptyList[MailboxAddress]
+  def close(): Future[Unit]
+}
+
+trait Messaging {
+  def send(address: MailboxAddress, msg: EventMessage): Future[Unit]
+  def close(): Future[Unit]
+}
+
+class EventRouter(routeTable: RouteTable, messaging: Messaging) {
+  def route(msg: EventMessage): Future[Unit] = {
+    FutureHelper.singleSuccess( routeTable.routeTo(msg.event).map { messaging.send(_, msg) }.list )
+  }
+  def close(): Future[Unit] = {
+    Futures.sequence(List(routeTable.close, messaging.close), Long.MaxValue).map(_ => ())
+  }
+}
+
+class ConstantRouteTable(addresses: NonEmptyList[MailboxAddress]) extends RouteTable {
+  def routeTo(event: Event): NonEmptyList[MailboxAddress] = addresses
+  def close() = Future(())
+}
+
+class EchoMessaging extends Messaging {
+  def send(address: MailboxAddress, msg: EventMessage): Future[Unit] = {
+    Future(println("Sending: " + msg + " to " + address))
+  }
+
+  def close() = Future(())
+}
+
+class CollectingMessaging extends Messaging {
 
   val events = ListBuffer[IngestMessage]()
 
-  def send(msg: IngestMessage) = {
+  def send(address: MailboxAddress, msg: EventMessage): Future[Unit] = {
     events += msg
     Future(())
   }
+
+  def close() = Future(())
 }
 
-class KafkaMessageSender(topic: String, config: Properties) extends MessageSender {
+class SimpleKafkaMessaging(topic: String, config: Properties) extends Messaging {
  
   val producer = new Producer[String, IngestMessage](new ProducerConfig(config))
 
-  def send(msg: IngestMessage) = {
+  def send(address: MailboxAddress, msg: EventMessage) = {
     Future {
       val data = new ProducerData[String, IngestMessage](topic, msg)
       try {
@@ -87,7 +141,7 @@ class KafkaMessageSender(topic: String, config: Properties) extends MessageSende
     }
   }
 
-  override def close() = {
+  def close() = {
     Future {
       producer.close()
     }
@@ -95,12 +149,3 @@ class KafkaMessageSender(topic: String, config: Properties) extends MessageSende
 
 }
 
-trait MessageSenders {
-  def find(outboxId: MailboxAddress): Option[MessageSender]
-}
-
-class MappedMessageSenders(map: Map[MailboxAddress, MessageSender]) extends MessageSenders {
-  def find(address: MailboxAddress) = {
-    map.get(address)
-  }
-}

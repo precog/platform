@@ -25,7 +25,7 @@ import net.lag.configgy.ConfigMap
 import org.specs2.mutable.Specification
 import org.specs2.specification._
 import org.scalacheck.Gen._
-import scalaz.Success
+import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 
 import com.reportgrid.analytics._
@@ -122,17 +122,16 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new ReportGridStorageReporting(TrackingToken.tokenId, testClient) 
   }
 
-  val messages = new CollectingMessageSender
+  val messaging = new CollectingMessaging
 
   def eventStoreFactory(configMap: ConfigMap): EventStore = {
     
-    val messageSenderMap = Map() + (MailboxAddress(0L) -> messages)
+    val defaultAddresses = NonEmptyList(MailboxAddress(0))
+
+    val routeTable = new ConstantRouteTable(defaultAddresses)
+
+    new EventStore(new EventRouter(routeTable, messaging), 0)
     
-    val defaultAddresses = List(MailboxAddress(0))
-    
-    new DefaultEventStore(0,
-                          new ConstantEventRouter(defaultAddresses),
-                          new MappedMessageSenders(messageSenderMap))
   }
 
   lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).

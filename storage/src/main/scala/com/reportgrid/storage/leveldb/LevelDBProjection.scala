@@ -1,6 +1,7 @@
 package com.reportgrid.storage
 package leveldb
 
+import com.reportgrid.common._ 
 import com.reportgrid.analytics.Path
 
 import org.iq80.leveldb._
@@ -15,42 +16,40 @@ import scala.collection.JavaConverters._
 import scala.collection.Iterator
 import scala.io.Source
 
-import scalaz.{Ordering => _, Source => _, _}
+import scalaz.{Ordering => _, Source => _, Validation => ZValidation, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.iteratee.Input._
 import scalaz.syntax.plus._
 import scalaz.syntax.applicativePlus._
+import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 import IterateeT._
-//import scalaz.Scalaz._
 
-case class FileProjectionDescriptor(baseDir: File, path: Path, columns: List[ColumnDescriptor], sortDepth: Int) extends ProjectionDescriptor {
-  override def sync = IO(())
-}
-
-object FileProjectionDescriptor {
-  //def restore(baseDir: File): ProjectionDescriptor
-}
+import blueeyes.json._
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema._
+import blueeyes.json.xschema.Extractor._
+import blueeyes.json.xschema.DefaultSerialization._
 
 object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 
-  def restoreComparator(baseDir: File) : Validation[Throwable, DBComparator] = {
+  def restoreComparator(baseDir: File) : ZValidation[Throwable, DBComparator] = {
     val comparatorMetadata = new File(baseDir, comparatorMetadataFilename)
 
     for {
-      source          <- Validation.fromTryCatch(Source.fromFile(comparatorMetadata, "UTF-8"))
+      source          <- ZValidation.fromTryCatch(Source.fromFile(comparatorMetadata, "UTF-8"))
       line            <- source.getLines.toList.headOption.toSuccess(new RuntimeException("Comparator metadata file was empty."): Throwable)
-      comparatorClass <- Validation.fromTryCatch(Class.forName(line.trim).asInstanceOf[Class[DBComparator]])
-      comparator      <- Validation.fromTryCatch(comparatorClass.newInstance)
+      comparatorClass <- ZValidation.fromTryCatch(Class.forName(line.trim).asInstanceOf[Class[DBComparator]])
+      comparator      <- ZValidation.fromTryCatch(comparatorClass.newInstance)
     } yield {
       comparator
     }
   }
 
-  def saveComparator(baseDir: File, comparator: DBComparator) : Validation[Throwable, DBComparator] = {
-    Validation.fromTryCatch {
+  def saveComparator(baseDir: File, comparator: DBComparator) : ZValidation[Throwable, DBComparator] = {
+    ZValidation.fromTryCatch {
       import java.io.{FileOutputStream,OutputStreamWriter}
       val output = new OutputStreamWriter(new FileOutputStream(new File(baseDir, comparatorMetadataFilename)), "UTF-8")
       try {
@@ -80,6 +79,45 @@ object LevelDBProjection {
     } yield c
 
     (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, c) }
+  }
+
+  val descriptorFile = "projection_descriptor.json"
+  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
+
+  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
+    import java.io._
+
+    val df = new File(baseDir, filename)
+
+    def read = 
+      if (df.exists) Some {
+        IO {
+          val reader = new FileReader(df)
+          try {
+            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
+          } finally {
+            reader.close
+          }
+        }
+      } else {
+        None
+      }
+
+    def sync(data: T) = IO {
+      ZValidation.fromTryCatch {
+        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
+        val writer = new FileWriter(tmpFile)
+        try {
+          import Printer._
+          compact(render(data.serialize(decomposer)), writer)
+        } finally {
+          writer.close
+        }
+        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
+        Success(())
+      }
+    }
+
   }
 }
 
@@ -139,8 +177,20 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
   /**
    * Retrieve all IDs for IDs in the given range [start,end]
    */  
-  def getIdsInRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, Long, F, A] = {
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Long, F, A] = { s => 
+  def getIdsInRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, Long, F, A] = traverseIdRange(range, (id,v) => id)
+  
+  /**
+   * Retrieve all values for IDs in the given range [start,end]
+   */  
+  def getValuesByIdRange[F[_] : MonadIO, A](range : Interval[Long]) : EnumeratorT[Unit, ByteBuffer, F, A] = traverseIdRange(range, (id,v) => v)
+
+  def getPairsByIdRange[F[_] : MonadIO, A](range : Interval[Long]) : EnumeratorT[Unit, (Long,ByteBuffer), F, A] = traverseIdRange(range, (id,v) => (id,v))
+
+  def getValueForId[F[_]: MonadIO, A](id: Long): EnumeratorT[Unit, ByteBuffer, F, A] =
+    getValuesByIdRange(Interval(Some(id), Some(id)))
+
+  private def traverseIdRange[F[_] : MonadIO, A, B](range : Interval[Long], f : (Long,ByteBuffer) => B) : EnumeratorT[Unit, B, F, A] = { 
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, B, F, A] = { s => 
       val _done = iterateeT(close >> s.pointI.value)
 
       s.fold(
@@ -149,7 +199,7 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
           val id = n.getKey.as[Long]
           range.end match {
             case Some(end) if end <= id => _done
-            case _ => k(elInput(id)) >>== enumerator(iter, close)
+            case _ => k(elInput(f(id,ByteBuffer.wrap(n.getValue)))) >>== enumerator(iter, close)
           }
         } else _done,
         done = (_, _) => _done,
@@ -165,6 +215,7 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
 
     enumerator(iter, IO(iter.close).liftIO[F])
   }
+
 
   /**
    * Retrieve all IDs for the given value
@@ -265,37 +316,4 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
     }
     enumerator(iter, IO(iter.close).liftIO[F])
   }
-
-  def getValueForId[F[_]: MonadIO, A](id: Long): EnumeratorT[Unit, ByteBuffer, F, A] =
-    getValuesByIdRange(Interval(Some(id), Some(id)))
-
-  /**
-   * Retrieve all values for IDs in the given range [start,end]
-   */  
-  def getValuesByIdRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, F, A] = {
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, ByteBuffer, F, A] = { s => 
-      s.fold(
-        cont = k => if (iter.hasNext) {
-          val n = iter.next
-          range.end match {
-            case Some(end) if end <= n.getKey.as[Long] => iterateeT(close >> s.pointI.value)
-            case _ => k(elInput(ByteBuffer.wrap(n.getValue))) >>== enumerator(iter, close)
-          }
-        } else {
-          iterateeT(close >> s.pointI.value)
-        },
-        done = (_, _) => iterateeT(close >> s.pointI.value),
-        err = _ => iterateeT(close >> s.pointI.value)
-      )
-    }
-    
-    val iter = idIndexFile.iterator
-    range.start match {
-      case Some(id) => iter.seek(id.as[Array[Byte]])
-      case None => iter.seekToFirst()
-    }
-
-    enumerator(iter, IO(iter.close).liftIO[F])
-  }
-
 }

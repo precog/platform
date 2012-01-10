@@ -1,4 +1,4 @@
-package com.querio.ingest.api
+package com.reportgrid.common
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -51,28 +51,6 @@ object SyncMessage extends SyncMessageSerialization {
   val start = SyncMessage(_: Int, 0, List.empty)
   def finish = SyncMessage(_: Int, Int.MaxValue, _: List[Int])
 }
-
-case class Event(path: String, tokens: List[String], content: JValue)
-
-class EventSerialization {
-  implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
-    override def decompose(event: Event): JValue = JObject(
-      List(
-        JField("path", event.path.serialize),
-        JField("tokens", event.tokens.serialize),
-        JField("content", event.content.serialize)))
-  }
-
-  implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
-    override def validated(obj: JValue): Validation[Error, Event] =
-      ((obj \ "path").validated[String] |@|
-        (obj \ "tokens").validated[List[String]] |@|
-        (obj \ "content").validated[JValue]).apply(Event(_, _, _))
-  }  
-}
-
-object Event extends EventSerialization
-
 
 case class EventMessage(producerId: Int, eventId: Int, event: Event) extends IngestMessage {
   val uid = (producerId.toLong << 32) | (eventId.toLong & 0xFFFFFFFFL)

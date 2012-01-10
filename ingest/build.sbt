@@ -20,7 +20,6 @@ libraryDependencies ++= Seq(
 )
 
 resolvers ++= Seq(
-  "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository",
   "Scala-Tools Releases" at       "http://scala-tools.org/repo-releases/",
   "Scala-Tools Snapshots" at      "http://scala-tools.org/repo-snapshots/",
   "Akka Repository" at            "http://akka.io/repository/",
@@ -37,4 +36,4 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-mainClass := Some("com.querio.ingest.service.IngestServer")
+mainClass := Some("com.querio.ingest.service.EchoServer")

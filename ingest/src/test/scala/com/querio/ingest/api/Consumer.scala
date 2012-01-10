@@ -10,6 +10,8 @@ import org.scalacheck.Gen._
 
 import com.querio.ingest.util.ArbitraryIngestMessage
 
+import com.reportgrid.common._
+
 object EventMessageSerializationSpec extends Specification with ScalaCheck with ArbitraryIngestMessage {
   
   "Event message serialization " should {
@@ -27,7 +29,7 @@ object EventMessageSerializationSpec extends Specification with ScalaCheck with 
       val out = ser.readMessage(buf)
 
       out.toOption must beSome like {
-        case Some(o) => o must_== in
+        case Some(o) => o.sort must_== in.sort
       }
     }}
   }
