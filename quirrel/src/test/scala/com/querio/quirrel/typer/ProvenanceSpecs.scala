@@ -2432,6 +2432,62 @@ object ProvenanceSpecs extends Specification
     }
   }
   
+  "constraining expression determination" should {
+    "leave values unconstrained" in {
+      compile("42").constrainingExpr must beNone
+    }
+    
+    "leave datasets unconstrained when outside a relation" in {
+      compile("dataset(//foo)").constrainingExpr must beNone
+    }
+    
+    "constrain datasets within a relation" in {
+      {
+        val Relate(_, from, _, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//foo)")
+        in.constrainingExpr must beSome(from)
+      }
+      
+      {
+        val Relate(_, _, to, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//bar)")
+        in.constrainingExpr must beSome(to)
+      }
+    }
+    
+    "leave unconnected datasets unconstrained within a relation" in {
+      val Relate(_, from, _, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//baz)")
+      in.constrainingExpr must beNone
+    }
+    
+    "propagate constraints through a nested relation" in {
+      {
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+          | dataset(//foo) :: dataset(//bar)
+          |   dataset(//foo) :: dataset(//baz)
+          |     dataset(//foo)""".stripMargin)
+        
+        in.constrainingExpr must beSome(from2)
+      }
+      
+      {
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+          | dataset(//foo) :: dataset(//bar)
+          |   dataset(//foo) :: dataset(//baz)
+          |     dataset(//bar)""".stripMargin)
+        
+        in.constrainingExpr must beSome(to1)
+      }
+      
+      {
+        val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
+          | dataset(//foo) :: dataset(//bar)
+          |   dataset(//foo) :: dataset(//baz)
+          |     dataset(//baz)""".stripMargin)
+        
+        in.constrainingExpr must beSome(to2)
+      }
+    }
+  }
+  
   "specification examples" >> {
     "deviant-durations.qrl" >> {
       val input = """
