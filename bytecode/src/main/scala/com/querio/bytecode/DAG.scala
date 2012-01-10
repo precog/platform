@@ -122,7 +122,7 @@ trait DAG extends Instructions {
         eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
       }
       
-      def processFilter(instr: Instruction, cross: Boolean, depth: Short, pred: Option[Predicate]) = {
+      def processFilter(instr: Instruction, cross: Option[CrossType], depth: Short, pred: Option[Predicate]) = {
         if (depth < 0) {
           Left(NegativePredicateDepth(instr))
         } else {
@@ -187,8 +187,10 @@ trait DAG extends Instructions {
           }
         }
         
-        case instr @ FilterMatch(depth, pred) => processFilter(instr, false, depth, pred)
-        case instr @ FilterCross(depth, pred) => processFilter(instr, true, depth, pred)
+        case instr @ FilterMatch(depth, pred) => processFilter(instr, None, depth, pred)
+        case instr @ FilterCross(depth, pred) => processFilter(instr, Some(CrossNeutral), depth, pred)
+        case instr @ FilterCrossLeft(depth, pred) => processFilter(instr, Some(CrossLeft), depth, pred)
+        case instr @ FilterCrossRight(depth, pred) => processFilter(instr, Some(CrossRight), depth, pred)
         
         case Dup => {
           roots match {
@@ -283,7 +285,14 @@ trait DAG extends Instructions {
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph
-    case class Filter(loc: Line, cross: Boolean, range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph
+    case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph
+    
+    
+    sealed trait CrossType
+    
+    case object CrossNeutral extends CrossType
+    case object CrossLeft extends CrossType
+    case object CrossRight extends CrossType
     
     
     sealed trait IndexRange

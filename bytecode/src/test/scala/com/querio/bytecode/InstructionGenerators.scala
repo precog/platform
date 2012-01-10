@@ -24,6 +24,8 @@ trait InstructionGenerators extends Instructions {
     genMap1,
     genMap2Match,
     genMap2Cross,
+    genMap2CrossLeft,
+    genMap2CrossRight,
     
     genReduce,
     
@@ -38,6 +40,8 @@ trait InstructionGenerators extends Instructions {
     
     genFilterMatch,
     genFilterCross,
+    genFilterCrossLeft,
+    genFilterCrossRight,
     
     genDup,
     genSwap,
@@ -56,6 +60,8 @@ trait InstructionGenerators extends Instructions {
   private lazy val genMap1 = genUnaryOp map Map1
   private lazy val genMap2Match = genBinaryOp map Map2Match
   private lazy val genMap2Cross = genBinaryOp map Map2Cross
+  private lazy val genMap2CrossLeft = genBinaryOp map Map2CrossLeft
+  private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   
   private lazy val genReduce = genReduction map Reduce
   
@@ -79,6 +85,14 @@ trait InstructionGenerators extends Instructions {
     pred <- genPredicate
     optPred <- oneOf(Some(pred), None)
   } yield FilterCross(depth, optPred)
+  
+  private lazy val genFilterCrossLeft = genFilterCross map {
+    case FilterCross(depth, pred) => FilterCrossLeft(depth, pred)
+  }
+  
+  private lazy val genFilterCrossRight = genFilterCross map {
+    case FilterCross(depth, pred) => FilterCrossRight(depth, pred)
+  }
   
   private lazy val genDup = Dup
   private lazy val genSwap = arbitrary[Int] map Swap
