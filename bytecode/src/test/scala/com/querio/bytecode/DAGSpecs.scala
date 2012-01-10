@@ -138,7 +138,7 @@ object DAGSpecs extends Specification with DAG {
     "parse a filter with null predicate" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch(0, None)))
-      result mustEqual Right(Filter(line, false, None, Root(line, PushFalse), Root(line, PushTrue)))
+      result mustEqual Right(Filter(line, None, None, Root(line, PushFalse), Root(line, PushTrue)))
     }
     
     "parse a filter with a non-null predicate" in {
@@ -146,18 +146,18 @@ object DAGSpecs extends Specification with DAG {
       
       "simple range" >> {
         val result = decorate(Vector(line, PushNum("12"), PushNum("42"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Range)))))
-        result mustEqual Right(Filter(line, false, Some(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42"))))), Root(line, PushFalse), Root(line, PushTrue)))
+        result mustEqual Right(Filter(line, None, Some(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42"))))), Root(line, PushFalse), Root(line, PushTrue)))
       }
       
       "complemented range" >> {
         val result = decorate(Vector(line, PushNum("12"), PushNum("42"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Range, Comp)))))
-        result mustEqual Right(Filter(line, false, Some(Complementation(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42")))))), Root(line, PushFalse), Root(line, PushTrue)))
+        result mustEqual Right(Filter(line, None, Some(Complementation(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42")))))), Root(line, PushFalse), Root(line, PushTrue)))
       }
       
       "range with addend" >> {
         val result = decorate(Vector(line, PushNum("42"), PushNum("10"), PushNum("12"), PushFalse, PushTrue, FilterMatch(3, Some(Vector(Add, Range)))))
         result mustEqual Right(
-          Filter(line, false, Some(
+          Filter(line, None, Some(
             Contiguous(
               ValueOperand(Root(line, PushNum("42"))),
               BinaryOperand(
@@ -170,7 +170,7 @@ object DAGSpecs extends Specification with DAG {
       "range with negation" >> {
         val result = decorate(Vector(line, PushNum("42"), PushNum("12"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Neg, Range)))))
         result mustEqual Right(
-          Filter(line, false, Some(
+          Filter(line, None, Some(
             Contiguous(
               ValueOperand(Root(line, PushNum("42"))),
               UnaryOperand(
@@ -182,7 +182,7 @@ object DAGSpecs extends Specification with DAG {
       "range with object selector" >> {
         val result = decorate(Vector(line, PushNum("42"), PushString("foo"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(DerefObject, Range)))))
         result mustEqual Right(
-          Filter(line, false, Some(
+          Filter(line, None, Some(
             Contiguous(
               ValueOperand(Root(line, PushNum("42"))),
               PropertyOperand(Root(line, PushString("foo"))))),
@@ -192,7 +192,7 @@ object DAGSpecs extends Specification with DAG {
       "range with array selector" >> {
         val result = decorate(Vector(line, PushNum("42"), PushNum("12"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(DerefArray, Range)))))
         result mustEqual Right(
-          Filter(line, false, Some(
+          Filter(line, None, Some(
             Contiguous(
               ValueOperand(Root(line, PushNum("42"))),
               IndexOperand(Root(line, PushNum("12"))))),
@@ -202,12 +202,30 @@ object DAGSpecs extends Specification with DAG {
       // TODO more complicated stuff requires swap and dup
     }
     
+    "parse a filter_cross" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross(0, None)))
+      result mustEqual Right(Filter(line, Some(CrossNeutral), None, Root(line, PushTrue), Root(line, PushFalse)))
+    }
+    
+    "parse a filter_crossl" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft(0, None)))
+      result mustEqual Right(Filter(line, Some(CrossLeft), None, Root(line, PushTrue), Root(line, PushFalse)))
+    }
+    
+    "parse a filter_crossr" in {
+      val line = Line(0, "")
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight(0, None)))
+      result mustEqual Right(Filter(line, Some(CrossRight), None, Root(line, PushTrue), Root(line, PushFalse)))
+    }
+    
     "continue processing beyond a filter" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch(0, None), Map1(Neg)))
       result mustEqual Right(
         Operate(line, Neg,
-          Filter(line, false, None,
+          Filter(line, None, None,
             Root(line, PushFalse),
             Root(line, PushTrue))))
     }

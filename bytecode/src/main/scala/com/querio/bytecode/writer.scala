@@ -60,6 +60,8 @@ trait BytecodeWriter extends Writer with Version {
       val pred = instr match {
         case FilterMatch(_, Some(pred)) => writePredicate(pred, buffer)
         case FilterCross(_, Some(pred)) => writePredicate(pred, buffer)
+        case FilterCrossLeft(_, Some(pred)) => writePredicate(pred, buffer)
+        case FilterCrossRight(_, Some(pred)) => writePredicate(pred, buffer)
         
         case FilterMatch(_, None) => 0
         case FilterCross(_, None) => 0
@@ -143,7 +145,9 @@ trait BytecodeWriter extends Writer with Version {
       val (opcode, pad, arg) = stream.head match {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
         case Map2Match(op) => (0x01, 0.toShort, binaryOpNum(op))
-        case Map2Cross(op) => (0x06, 0.toShort, binaryOpNum(op))
+        case Map2Cross(op) => (0x02, 0.toShort, binaryOpNum(op))
+        case Map2CrossLeft(op) => (0x04, 0.toShort, binaryOpNum(op))
+        case Map2CrossRight(op) => (0x06, 0.toShort, binaryOpNum(op))
         
         case Reduce(red) => (0x08, 0.toShort, reductionNum(red))
         
@@ -155,9 +159,13 @@ trait BytecodeWriter extends Writer with Version {
         
         case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
         case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))
+        case i @ FilterCrossLeft(depth, Some(_)) => (0x17, depth, table(i))
+        case i @ FilterCrossRight(depth, Some(_)) => (0x18, depth, table(i))
         
         case FilterMatch(depth, None) => (0x14, depth, 0)
         case FilterCross(depth, None) => (0x16, depth, 0)
+        case FilterCrossLeft(depth, None) => (0x17, depth, 0)
+        case FilterCrossRight(depth, None) => (0x18, depth, 0)
         
         case Split => (0x1A, 0.toShort, 0)
         case Merge => (0x1B, 0.toShort, 0)
@@ -255,6 +263,8 @@ trait BytecodeWriter extends Writer with Version {
     instructions.collect({
       case i @ FilterMatch(_, Some(_)) => i -> currentInt()
       case i @ FilterCross(_, Some(_)) => i -> currentInt()
+      case i @ FilterCrossLeft(_, Some(_)) => i -> currentInt()
+      case i @ FilterCrossRight(_, Some(_)) => i -> currentInt()
       
       case i: Swap => i -> currentInt()
       

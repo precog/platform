@@ -29,6 +29,8 @@ trait Instructions {
       case Map1(_) => (1, 1)
       case Map2Match(_) => (2, 1)
       case Map2Cross(_) => (2, 1)
+      case Map2CrossLeft(_) => (2, 1)
+      case Map2CrossRight(_) => (2, 1)
         
       case Reduce(_) => (1, 1)
       
@@ -40,9 +42,13 @@ trait Instructions {
       
       case FilterMatch(depth, Some(_)) => (2 + depth, 1)
       case FilterCross(depth, Some(_)) => (2 + depth, 1)
+      case FilterCrossLeft(depth, Some(_)) => (2 + depth, 1)
+      case FilterCrossRight(depth, Some(_)) => (2 + depth, 1)
       
       case FilterMatch(_, None) => (2, 1)
       case FilterCross(_, None) => (2, 1)
+      case FilterCrossLeft(_, None) => (2, 1)
+      case FilterCrossRight(_, None) => (2, 1)
       
       case Split => (1, 1)
       case Merge => (1, 1)
@@ -86,6 +92,8 @@ trait Instructions {
     case class Map1(op: UnaryOperation) extends Instruction
     case class Map2Match(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2Cross(op: BinaryOperation) extends Instruction with JoinInstr
+    case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
+    case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: Reduction) extends Instruction
     
@@ -100,6 +108,8 @@ trait Instructions {
     
     case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
     case class FilterCross(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
+    case class FilterCrossLeft(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
+    case class FilterCrossRight(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
     
     case object Dup extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
