@@ -281,6 +281,10 @@ trait AST extends Phases {
       def provenance = _provenance()
       private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
       
+      private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
+      def constrainingExpr = _constrainingExpr()
+      private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
+      
       private[quirrel] final lazy val _errors: SetAtom[Error] =
         if (this eq root) new SetAtom[Error] else root._errors
       

@@ -7,9 +7,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   import ast._
   
   override def checkProvenance(expr: Expr) = {
-    def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]]): Set[Error] = expr match {
+    def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): Set[Error] = expr match {
       case expr @ Let(_, _, params, left, right) => {
-        val leftErrors = loop(left, relations)
+        val leftErrors = loop(left, relations, constraints)
         
         if (!params.isEmpty && left.provenance != NullProvenance) {
           val assumptions = expr.criticalConditions map {
@@ -32,20 +32,22 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           expr.requiredParams = 0
         }
         
-        val rightErrors = loop(right, relations)
+        val rightErrors = loop(right, relations, constraints)
         expr.provenance = right.provenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         leftErrors ++ rightErrors
       }
       
       case New(_, child) => {
-        val back = loop(child, relations)
+        val back = loop(child, relations, constraints)
         expr.provenance = DynamicProvenance(expr.nodeId)
+        expr.constrainingExpr = constraints get expr.provenance
         back
       }
       
       case Relate(_, from, to, in) => {
-        val back = loop(from, relations) ++ loop(to, relations)
+        val back = loop(from, relations, constraints) ++ loop(to, relations, constraints)
         
         val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
           expr.provenance = NullProvenance
@@ -63,7 +65,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val relations2 = relations.updated(from.provenance, fromExisting + to.provenance)
           val relations3 = relations2.updated(to.provenance, toExisting + from.provenance)
           
-          val back = loop(in, relations3)
+          val constraints2 = if (from.provenance != NullProvenance)
+            constraints + (from.provenance -> from)
+          else
+            constraints
+          
+          val constraints3 = if (to.provenance != NullProvenance)
+            constraints2 + (to.provenance -> to)
+          else
+            constraints2
+          
+          val back = loop(in, relations3, constraints3)
           val possibilities = in.provenance.possibilities
           
           if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
@@ -74,17 +86,20 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back
         }
         
+        expr.constrainingExpr = constraints get expr.provenance
+        
         back ++ recursive
       }
       
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => {
         expr.provenance = ValueProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         Set()
       }
       
       case ObjectDef(_, props) => {
         val exprs = props map { case (_, e) => e }
-        val errorSets = exprs map { loop(_, relations) }
+        val errorSets = exprs map { loop(_, relations, constraints) }
         val provenances = exprs map { _.provenance }
         val back = errorSets.fold(Set()) { _ ++ _ }
         
@@ -93,6 +108,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -101,7 +117,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case ArrayDef(_, exprs) => {
-        val errorSets = exprs map { loop(_, relations) }
+        val errorSets = exprs map { loop(_, relations, constraints) }
         val provenances = exprs map { _.provenance }
         val back = errorSets.fold(Set()) { _ ++ _ }
         
@@ -110,6 +126,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -118,15 +135,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Descent(_, child, _) => {
-        val back = loop(child, relations)
+        val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
         back
       }
       
       case Deref(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -135,7 +154,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case d @ Dispatch(_, _, exprs) => {
-        val errorSets = exprs map { loop(_, relations) }
+        val errorSets = exprs map { loop(_, relations, constraints) }
         val back = errorSets.fold(Set()) { _ ++ _ }
         
         lazy val pathParam = exprs.headOption collect {
@@ -231,13 +250,15 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         expr.provenance = prov
+        expr.constrainingExpr = constraints get expr.provenance
         back ++ errors
       }
       
       case Operation(_, left, _, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -246,9 +267,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Add(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -257,9 +279,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Sub(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -268,9 +291,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Mul(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -279,9 +303,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Div(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -290,9 +315,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Lt(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -301,9 +327,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case LtEq(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -312,9 +339,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Gt(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -323,9 +351,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case GtEq(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -334,9 +363,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Eq(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -345,9 +375,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case NotEq(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -356,9 +387,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case And(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -367,9 +399,10 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Or(_, left, right) => {
-        val back = loop(left, relations) ++ loop(right, relations)
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -378,25 +411,28 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
       
       case Comp(_, child) => {
-        val back = loop(child, relations)
+        val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
         back
       }
       
       case Neg(_, child) => {
-        val back = loop(child, relations)
+        val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
         back
       }
       
       case Paren(_, child) => {
-        val back = loop(child, relations)
+        val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
         back
-      }                                    
-    }                                                                           
-                                                                                      
-    loop(expr, Map())
+      }
+    }
+    
+    loop(expr, Map(), Map())
   }
   
   private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
