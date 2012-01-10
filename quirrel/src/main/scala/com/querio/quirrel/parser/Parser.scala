@@ -49,6 +49,7 @@ trait Parser extends RegexParsers with Filters with AST {
       handleSuccesses(successes)
   }
   
+  // TODO these functions need to be privatized
   def handleSuccesses(forest: Stream[Expr]): Expr = {
     val root = if ((forest lengthCompare 1) > 0)
       throw new AssertionError("Fatal error: ambiguous parse results: " + forest.mkString(", "))
@@ -202,7 +203,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   // %%
   
-  def buildDeepRelate(loc: LineStream, relations: Vector[Expr], e: Expr): Expr = {
+  private def buildDeepRelate(loc: LineStream, relations: Vector[Expr], e: Expr): Expr = {
     val builders = relations zip (relations drop 1) map {
       case (e1, e2) => { e3: Expr => Relate(loc, e1, e2, e3) }
     }
@@ -210,7 +211,7 @@ trait Parser extends RegexParsers with Filters with AST {
     builders.foldRight(e) { _(_) }
   }
   
-  def canonicalizeStr(str: String): String = {
+  private def canonicalizeStr(str: String): String = {
     val (back, _) = str.foldLeft(("", false)) {
       case ((acc, false), '\\') => (acc, true)
       case ((acc, false), c) => (acc + c, false)
@@ -227,7 +228,7 @@ trait Parser extends RegexParsers with Filters with AST {
     back.substring(1, back.length - 1)
   }
   
-  def canonicalizePath(str: String): String = str substring 1
+  private def canonicalizePath(str: String): String = str substring 1
   
   case class ParseException(failures: Set[Failure]) extends RuntimeException {
     def mkString = {
