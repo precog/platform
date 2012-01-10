@@ -29,6 +29,8 @@ import blueeyes.persistence.mongo.MongoCollection
 import blueeyes.persistence.mongo.Database
 import blueeyes.util.Clock
 
+import scalaz.NonEmptyList
+
 import com.reportgrid.analytics.TokenManager
 import com.reportgrid.api.Server
 import com.reportgrid.api.blueeyes.ReportGrid
@@ -83,16 +85,16 @@ object IngestServer extends BlueEyesServer with IngestService {
     props.put("zk.connect", zookeeperHosts)
     props.put("serializer.class", "com.querio.ingest.api.IngestMessageCodec")
     
-    val messageSenderMap = Map() + (MailboxAddress(0L) -> new KafkaMessageSender(topicId, props))
-    
-    val defaultAddresses = List(MailboxAddress(0))
+    val defaultAddresses = NonEmptyList(MailboxAddress(0))
+
+    val routeTable = new ConstantRouteTable(defaultAddresses)
+    val messaging = new SimpleKafkaMessaging(topicId, props)
 
     val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
     val producerId = qz.acquireProducerId
     qz.close
-    new DefaultEventStore(producerId,
-                          new ConstantEventRouter(defaultAddresses),
-                          new MappedMessageSenders(messageSenderMap))
+
+    new EventStore(new EventRouter(routeTable, messaging), producerId)
   }
 
   val clock = Clock.System

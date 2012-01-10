@@ -17,39 +17,41 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.ingest.api
+package com.reportgrid.storage
+package shard 
 
-import java.nio.ByteBuffer
-
-import org.specs2.ScalaCheck
-import org.specs2.mutable._
-
-import org.scalacheck._
-import org.scalacheck.Gen._
-
-import com.querio.ingest.util.ArbitraryIngestMessage
+import blueeyes.json.JsonAST._
 
 import com.reportgrid.common._
 
-object EventMessageSerializationSpec extends Specification with ScalaCheck with ArbitraryIngestMessage {
-  
-  "Event message serialization " should {
+trait RoutingTable {
+  def route(event: Set[(QualifiedSelector, JValue)]): Set[(ProjectionDescriptor, Seq[JValue])]
+}
 
-    implicit val arbRandomIngestMessage = Arbitrary(genRandomIngestMessage)
-
-    "maintain event content" in { check { (in: IngestMessage) => 
-      val buf = ByteBuffer.allocate(1024 * 1024)
-      val ser = IngestMessageSerialization
-
-      ser.write(buf, in)
-
-      buf.flip
-
-      val out = ser.readMessage(buf)
-
-      out.toOption must beSome like {
-        case Some(o) => o.sort must_== in.sort
-      }
-    }}
+object RoutingTable {
+  def unpack(e: Event): Set[Option[(BoundMetadata, JValue)]] = {
+    e.content.map {
+      case (sel, (jval, meta)) => 
+        extract(jval).map { tnv => (BoundMetadata(QualifiedSelector(e.path, sel, tnv._1), meta), tnv._2) }
+    }
   }
+
+  implicit val lengthEncoder: LengthEncoder = null
+  
+  def extract(jval: JValue): Option[(PrimitiveType, JValue)] = ValueType.forValue(jval).map((_, jval))
+}
+
+class SingleColumnProjectionRoutingTable extends RoutingTable {
+  def route(event: Set[(QualifiedSelector, JValue)]) = 
+    event.map { t =>
+      (ProjectionDescriptor(List(t._1), Set()), List(t._2))
+    }
+}
+
+trait ProjectionStorage {
+  def store(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue])
+}
+
+trait MetadataStorage {
+  def update(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]])
 }

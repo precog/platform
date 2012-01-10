@@ -20,6 +20,8 @@
 package com.reportgrid.storage
 package leveldb
 
+import com.reportgrid.common._ 
+
 import org.iq80.leveldb._
 import java.math.BigDecimal
 import java.util.Comparator
@@ -30,18 +32,18 @@ trait ColumnComparator extends Comparator[Array[Byte]] {
 }
 
 object ColumnComparator {
-  def apply(t: ColumnType): ColumnComparator = t match {
-    case ColumnType.Long    => new LongComparator
-    case ColumnType.Double  => new DoubleComparator
-    case ColumnType.Boolean => new BooleanComparator
-    case ColumnType.Null    => AlwaysEqualComparator
-    case ColumnType.Nothing => AlwaysEqualComparator
+  def apply(t: PrimitiveType): ColumnComparator = t match {
+    case ValueType.Long    => new LongComparator
+    case ValueType.Double  => new DoubleComparator
+    case ValueType.Boolean => new BooleanComparator
+    case ValueType.Null    => AlwaysEqualComparator
+    case ValueType.Nothing => AlwaysEqualComparator
 
-    case ColumnType.String(width) => 
+    case ValueType.String(width) => 
       width.map(w => new StringComparator(_ => w))
       .getOrElse(new StringComparator(_.take(4).as[Int]))
 
-    case ColumnType.BigDecimal(width) => 
+    case ValueType.BigDecimal(width) => 
       width.map(w => sys.error("Fixed-length BigDecimal format not yet supported."))
       .getOrElse(new BigDecimalComparator(_.take(4).as[Int]))
   }
@@ -146,15 +148,14 @@ object ProjectionComparator {
   val Boolean = new BooleanProjectionComparator
   val String = new StringProjectionComparator
 
-  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_.columnType) match {
-    case ColumnType.Long :: Nil           => ProjectionComparator.Long
-    case ColumnType.Double :: Nil         => ProjectionComparator.Double
-    case ColumnType.Boolean :: Nil        => ProjectionComparator.Boolean
-    case ColumnType.BigDecimal(_) :: Nil  => ProjectionComparator.BigDecimal
-    case ColumnType.String(_) :: Nil      => ProjectionComparator.String
+  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_.valueType) match {
+    case ValueType.Long :: Nil           => ProjectionComparator.Long
+    case ValueType.Double :: Nil         => ProjectionComparator.Double
+    case ValueType.Boolean :: Nil        => ProjectionComparator.Boolean
+    case ValueType.BigDecimal(_) :: Nil  => ProjectionComparator.BigDecimal
+    case ValueType.String(_) :: Nil      => ProjectionComparator.String
     case types => new MultiColumnComparator(types.map(ColumnComparator(_)): _*)
   }
 }
-
 
 // vim: set ts=4 sw=4 et:

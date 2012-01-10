@@ -47,6 +47,8 @@ import blueeyes.json.xschema.Extractor._
 
 import com.querio.ingest.util.ArbitraryIngestMessage
 
+import com.reportgrid.common._
+
 trait IngestMessageReceivers {
   def find(address: MailboxAddress): List[IngestMessageReceiver]
 }

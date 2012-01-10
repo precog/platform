@@ -133,6 +133,11 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
               } ~ 
               dataPath("vfs") {
                 post(new TrackingService(state.eventStore, state.storageReporting, clock, true)).audited("track")
+              } ~ 
+              path("/echo") {
+                dataPath("vfs") {
+                  get(new EchoServiceHandler()).audited("echo")
+                }
               }
             }
           }

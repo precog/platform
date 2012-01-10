@@ -12,3 +12,4 @@ client-libraries
 scalaz
 .idea*/
 .ensime
+*~
