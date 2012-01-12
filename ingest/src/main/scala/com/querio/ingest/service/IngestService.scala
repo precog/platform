@@ -59,7 +59,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
-  implicit val timeout = akka.actor.Actor.Timeout(Long.MaxValue) //for now
+  implicit val timeout = akka.util.Timeout(Long.MaxValue) //for now
 
   def eventStoreFactory(configMap: ConfigMap): EventStore
 

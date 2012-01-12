@@ -73,7 +73,7 @@ object LevelDBProjection {
                    else baseDir.success[Throwable]
 
     val comparatorV = for {
-      bd <- baseDirV.toValidationNel
+      bd <- baseDirV.toValidationNel[Throwable, File]
       c <- restoreComparator(bd).toValidationNel.
            orElse(comparator.toSuccess(new RuntimeException("No database comparator was provided."): Throwable).flatMap(saveComparator(bd, _)).toValidationNel)
     } yield c

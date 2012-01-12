@@ -2,8 +2,6 @@ package com.reportgrid.storage
 
 import com.reportgrid.analytics.Path
 
-import com.querio.ingest.api._
-
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._

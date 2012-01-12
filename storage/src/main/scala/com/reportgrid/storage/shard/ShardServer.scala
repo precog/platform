@@ -5,7 +5,9 @@ import kafka._
 import leveldb._
 import Bijection._
 
+import akka.actor.Props
 import akka.actor.Actor
+import akka.actor.ActorSystem
 import akka.actor.ActorRef
 
 import blueeyes.json.JsonAST._
@@ -48,7 +50,9 @@ class ShardServer {
     val routingTable = new SingleColumnProjectionRoutingTable
     val metadataActor = ShardMetadata.dummyShardMetadataActor  
 
-    val router = Actor.actorOf(new RoutingActor(baseDir, routingTable, metadataActor))
+    val system = ActorSystem("Shard Actor System")
+
+    val router = system.actorOf(Props(new RoutingActor(baseDir, routingTable, metadataActor)))
     
     val consumer = new KafkaConsumer(props, router)
 

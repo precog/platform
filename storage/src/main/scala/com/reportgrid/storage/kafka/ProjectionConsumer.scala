@@ -8,7 +8,10 @@ import Bijection._
 import com.reportgrid.common._
 
 import akka.actor.Actor
+import akka.actor.Props
 import akka.actor.ActorRef
+import akka.util.Timeout
+import akka.util.duration._
 
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
@@ -114,6 +117,8 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
   // -- Augment the route action with value based metadata
   // -- Send route action
 
+  private implicit val timeout: Timeout = 5 seconds
+
   def receive = {
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
@@ -136,7 +141,7 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
       } {
         val comparator = ProjectionComparator.forProjection(descriptor)
         val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-          LevelDBProjection(dirFor(descriptor), Some(comparator)).map(p => Actor.actorOf(new ProjectionActor(p, descriptor)))
+          LevelDBProjection(dirFor(descriptor), Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
         }
 
         actor match {
