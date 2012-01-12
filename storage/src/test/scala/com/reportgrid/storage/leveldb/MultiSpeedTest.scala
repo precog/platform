@@ -3,8 +3,11 @@ package com.reportgrid.storage.leveldb
 import Bijection._
 
 import org.scalacheck.Arbitrary
-import akka.actor.Actor
+import akka.util.Timeout
+import akka.util.duration._
+import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import akka.dispatch.Future
+import akka.dispatch.Await
 import Actor._
 
 import java.io.File
@@ -26,7 +29,7 @@ object MultiSpeedTest {
     }
 
     // We can wait up to 5 minutes
-    implicit val actorTimeout = Timeout(300000)
+    implicit val actorTimeout: Timeout = 5 minutes
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
@@ -39,11 +42,13 @@ object MultiSpeedTest {
       def receive = {
         case Insert(id,v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]).map(_ => count += 1).unsafePerformIO
 
-        case KillMeNow => column.close.map(_ => self.tryReply(ShutdownComplete(name, count))).map(_ => self.stop()).unsafePerformIO
+        case KillMeNow => column.close.map(_ => sender ? (ShutdownComplete(name, count))).map(_ => self ! PoisonPill).unsafePerformIO
       }
     }
 
-    val actors = (1 to actorCount).map { actorId => actorOf(new DBActor("speed" + actorId, basedir)).start }.toArray
+    implicit val actorSystem = ActorSystem("SpeedTest")
+
+    val actors = (1 to actorCount).map { actorId => actorSystem.actorOf(Props(new DBActor("speed" + actorId, basedir))) }.toArray
 
     // Create some random values to insert
     val r = new java.util.Random(seed)
@@ -59,7 +64,8 @@ object MultiSpeedTest {
     }
 
     val results : List[Future[Any]] = actors.map{ a => a ? KillMeNow  }.toList
-    Future.sequence(results, 300000).get
+    
+    Await.result(Future.sequence(results), 30 seconds)
 
     val duration = System.currentTimeMillis - startTime
 
