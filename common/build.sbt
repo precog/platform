@@ -19,5 +19,6 @@ resolvers ++= Seq(
   "Scala-Tools Snapshots" at      "http://scala-tools.org/repo-snapshots/",
   "Akka Repository" at            "http://akka.io/repository/",
   "Nexus Scala Tools" at          "http://nexus.scala-tools.org/content/repositories/releases",
-  "Maven Repo 1" at               "http://repo1.maven.org/maven2/"
+  "Maven Repo 1" at               "http://repo1.maven.org/maven2/",
+  "Guiceyfruit" at                "http://guiceyfruit.googlecode.com/svn/repo/releases/"
 )
