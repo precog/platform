@@ -1,5 +1,8 @@
-package com.querio.bytecode
+package com.querio
+package daze
 package util
+
+import bytecode._
 
 trait DAGPrinter extends DAG {
   import instructions._
