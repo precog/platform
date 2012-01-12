@@ -43,8 +43,7 @@ object EmitterSpecs extends Specification
     with ScalaCheck
     with Compiler
     with Emitter
-    with RawErrors
-    with bytecode.util.DAGPrinter {
+    with RawErrors {
 
   import instructions._
 
@@ -55,12 +54,6 @@ object EmitterSpecs extends Specification
 
   def testEmitLine(v: String)(head: Vector[Instruction], streams: Vector[Instruction]*) =
     compileEmit(v) must beOneOf((head +: streams): _*)
-
-  def testEmitShow(v: String)(head: Vector[Instruction], streams: Vector[Instruction]*) = {
-    decorate(compileEmit(v)) must beLike {
-      case Right(d) => println(showDAG(d)); ok
-    }
-  }
 
   "emitter" should {
     "emit literal string" in {

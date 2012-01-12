@@ -17,9 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.bytecode
+package com.querio
+package daze
 
 import org.specs2.mutable._
+import bytecode._
 
 object DAGSpecs extends Specification with DAG {
   import instructions._

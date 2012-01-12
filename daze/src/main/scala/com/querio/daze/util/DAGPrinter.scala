@@ -17,8 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.bytecode
+package com.querio
+package daze
 package util
+
+import bytecode._
 
 trait DAGPrinter extends DAG {
   import instructions._
