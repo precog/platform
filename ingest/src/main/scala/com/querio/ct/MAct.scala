@@ -44,7 +44,9 @@ object SAct extends SActs {
 }
 
 /** Monoid Action */
-trait MAct[A, -B] extends Zero[A] with SAct[A, B] 
+trait MAct[A, -B] extends SAct[A, B] {
+  val zero: A
+}
 
 trait MActs {
   implicit def m2mact[A](implicit monoid: Monoid[A]): MAct[A, A] = new MAct[A, A] {
@@ -59,11 +61,11 @@ trait Actions[M[_], A] {
   def value: M[A]
 
   def asuml[B](implicit fold: Foldable[M], mact: MAct[B, A]): B = {
-    fold.foldLeft(value, mact.zero, mact.append(_: B, _: A))
+    fold.foldLeft(value, mact.zero)(mact.append(_: B, _: A))
   }
 
   def asumr[B](implicit fold: Foldable[M], mact: MAct[B, A]): B = {
-    fold.foldRight(value, mact.zero, mact.xappend _)
+    fold.foldRight(value, mact.zero)(mact.xappend _)
   }
 }
 

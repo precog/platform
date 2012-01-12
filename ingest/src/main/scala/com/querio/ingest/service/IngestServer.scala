@@ -45,7 +45,7 @@ import com.querio.ingest.util.QuerioZookeeper
 object IngestServer extends BlueEyesServer with IngestService {
 
   def mongoFactory(configMap: ConfigMap): Mongo = {
-    new blueeyes.persistence.mongo.RealMongo(configMap)
+    blueeyes.persistence.mongo.RealMongo(configMap)
   }
 
   def storageReporting(config: ConfigMap) = {

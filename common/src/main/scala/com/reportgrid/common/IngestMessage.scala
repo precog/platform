@@ -147,7 +147,7 @@ object IngestMessageSerialization {
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
     if(magic != magicByte) {
-      failure("Invaild message bad magic byte.")
+      Failure("Invaild message bad magic byte.")
     } else {
       val msgType = buffer.get()
       val stop    = buffer.get()
@@ -155,7 +155,7 @@ object IngestMessageSerialization {
       (stop, msgType) match {
         case (stop, flag) if stop == stopByte && flag == jsonEventFlag => parseEvent(buffer)
         case (stop, flag) if stop == stopByte && flag == jsonSyncFlag  => parseSync(buffer)
-        case _                                                         => failure("Unrecognized message type")
+        case _                                                         => Failure("Unrecognized message type")
       }
     }
   }

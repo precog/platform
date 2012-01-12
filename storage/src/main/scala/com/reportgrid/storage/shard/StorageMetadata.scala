@@ -32,6 +32,8 @@ import akka.actor._
 import akka.actor.Actor._
 import akka.routing._
 import akka.dispatch.Future
+import akka.util.Timeout
+import akka.util.duration._
 
 import scala.collection.mutable.{Map => MMap, ListBuffer}
 
@@ -47,6 +49,8 @@ trait StorageMetadata {
 }
 
 class ShardMetadata(actor: ActorRef) extends StorageMetadata {
+
+  implicit val serviceTimeout: Timeout = 2 seconds 
 
   def checkpoints: Future[Map[Int, Int]] = {
     actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
@@ -70,8 +74,10 @@ object ShardMetadata {
   def dummyShardMetadata = {
     new ShardMetadata(dummyShardMetadataActor)
   }
+  
+  def actorSystem = ActorSystem("test actor system")
 
-  def dummyShardMetadataActor = actorOf(new ShardMetadataActor(dummyProjections, dummyCheckpoints)).start
+  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints)))
 
   def dummyProjections = {
     MMap[ProjectionDescriptor, Seq[MMap[MetadataType, Metadata]]](
@@ -107,16 +113,16 @@ class ShardMetadataActor(projections: MMap[ProjectionDescriptor, Seq[MMap[Metada
   def receive = {
    
     case ExpectedEventActions(producerId, eventId, expected) => 
-      self.reply(setExpectation(producerId, eventId, expected))
+      sender ! setExpectation(producerId, eventId, expected)
     
     case UpdateMetadata(producerId, eventId, desc, values, metadata) => 
-      self.reply(update(producerId, eventId, desc, values, metadata))
+      sender ! update(producerId, eventId, desc, values, metadata)
     
-    case FindMetadata(path, selector)   => self.reply(find(path, selector))
+    case FindMetadata(path, selector)   => sender ! find(path, selector)
     
-    case GetCheckpoints                 => self.reply(checkpoints.toMap)
+    case GetCheckpoints                 => sender ! checkpoints.toMap
     
-    case SyncMetadata                   => self.reply(sync)
+    case SyncMetadata                   => sender ! sync
   
   }
 

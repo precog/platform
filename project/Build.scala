@@ -56,7 +56,7 @@ object PlatformBuild extends Build {
   
   lazy val daze = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn bytecode // (bytecode, storage)
   
-  val commonSettings = nexusSettings ++ Seq(libraryDependencies ++= blueeyesDeps.libDeps )
+  val commonSettings = nexusSettings ++ Seq(libraryDependencies ++= blueeyesDeps.libDeps)
   lazy val common = blueeyesDeps.addDeps(Project(id = "common", base = file("common")).settings(commonSettings: _*))
 
   val storageSettings = nexusSettings ++ Seq(libraryDependencies ++= scalaz.libDeps)
