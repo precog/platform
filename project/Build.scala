@@ -49,7 +49,7 @@ object PlatformBuild extends Build {
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )
 
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode, daze, ingest)
+  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode, daze) //, ingest)
   
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings: _*) dependsOn util
   lazy val quirrel = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings: _*) dependsOn (bytecode, util)
