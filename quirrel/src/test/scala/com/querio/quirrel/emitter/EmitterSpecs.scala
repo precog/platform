@@ -313,6 +313,7 @@ object EmitterSpecs extends Specification
           PushString("/clicks"),
           LoadLocal(Het),
           Dup,
+          Swap(1),
           Map2Match(DerefArray)))
     }
 
@@ -322,6 +323,7 @@ object EmitterSpecs extends Specification
           PushString("foo"),
           LoadLocal(Het),
           Dup,
+          Swap(1),
           FilterMatch(0, None)))
     }
 
@@ -331,6 +333,7 @@ object EmitterSpecs extends Specification
           PushString("/foo"),
           LoadLocal(Het),
           Dup,
+          Swap(1),
           PushString("id"),
           Map2Cross(DerefObject),
           PushNum("2"),
@@ -344,6 +347,7 @@ object EmitterSpecs extends Specification
           PushString("foo"),
           LoadLocal(Het),
           Dup,
+          Swap(1),
           Map2Match(Add)))
     }
 
@@ -430,6 +434,7 @@ object EmitterSpecs extends Specification
           PushString("/clicks"),
           LoadLocal(Het),
           Dup,
+          Swap(1),
           PushString("userId"),
           Map2Cross(DerefObject),
           PushString("foo"),
@@ -471,6 +476,7 @@ object EmitterSpecs extends Specification
           LoadLocal(Het),
           Dup,
           Dup,
+          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
           PushNum("0"),
@@ -496,6 +502,7 @@ object EmitterSpecs extends Specification
           Dup,
           Dup,
           Dup,
+          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
           PushNum("0"),
@@ -545,6 +552,7 @@ object EmitterSpecs extends Specification
           Dup,
           Dup,
           Dup,
+          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
           PushNum("0"),
@@ -595,6 +603,7 @@ object EmitterSpecs extends Specification
           LoadLocal(Het),
           Dup,
           Dup,
+          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
           Swap(1),
@@ -644,6 +653,7 @@ object EmitterSpecs extends Specification
           LoadLocal(Het),
           Dup,
           Dup,
+          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
           PushNum("0"),
