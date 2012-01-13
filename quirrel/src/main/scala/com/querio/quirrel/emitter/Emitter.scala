@@ -168,7 +168,7 @@ trait Emitter extends AST
     }
     
     def emitConstraints(expr: Expr): EmitterState = {
-      val optState = for (const <- expr.constrainingExpr if const != expr) yield {
+      val optState = for (const <- expr.constrainingExpr if (const equalsIgnoreLoc expr)) yield {
         if (expr.children exists { _.constrainingExpr == Some(const) })
           None
         else
