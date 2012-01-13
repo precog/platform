@@ -256,11 +256,16 @@ trait AST extends Phases {
       }
     }
     
+    val constraintStr = e.constrainingExpr map { e =>
+      "\n" + indent + "constraining-expr: @" + e.nodeId
+    } getOrElse ""
+    
     indent + "nodeId: " + e.nodeId + "\n" +
       indent + "line: " + e.loc.lineNum + "\n" +
       indent + "col: " + e.loc.colNum + "\n" +
       back + "\n" +
-      indent + "provenance: " + e.provenance.toString
+      indent + "provenance: " + e.provenance.toString +
+      constraintStr
   }
   
   protected def bindRoot(root: Expr, e: Expr) {
