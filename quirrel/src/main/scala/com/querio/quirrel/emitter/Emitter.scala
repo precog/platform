@@ -152,10 +152,16 @@ trait Emitter extends AST
       val finalStackSize  = stackSizes(e.bytecode.length) + 1 // Add the DUP
 
       // Save the value by pushing it to the tail of the stack:
-      val saveSwaps    = if (insertStackSize == 1) Vector.empty else (1 to insertStackSize).reverse.map(Swap.apply)
+      val saveSwaps = if (insertStackSize == 1)
+        Vector()
+      else
+        (1 to insertStackSize).reverse map Swap
 
       // Restore the value by pulling it forward:
-      val restoreSwaps = if (insertIdx == e.bytecode.length) Vector.empty else (1 until finalStackSize).map(Swap.apply)
+      val restoreSwaps = if (finalStackSize == 1)
+        Vector()
+      else
+        (1 until finalStackSize) map Swap
 
       (insertInstrAt(Dup +: saveSwaps, insertIdx) >> 
       insertInstrAt(restoreSwaps, e.bytecode.length + 1 + saveSwaps.length)).apply(e)
