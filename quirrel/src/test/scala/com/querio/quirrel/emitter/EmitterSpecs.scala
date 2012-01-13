@@ -883,9 +883,8 @@ object EmitterSpecs extends Specification
             Merge))
       }
       
-      /*
       "first-conversion.qrl" >> {
-        testEmitShow("""
+        testEmit("""
           | firstConversionAfterEachImpression('userId) :=
           |   conversions' := dataset(//conversions)
           |   impressions' := dataset(//impressions)
@@ -894,9 +893,9 @@ object EmitterSpecs extends Specification
           |   impressions := impressions' where impressions'.userId = 'userId
           | 
           |   greaterConversions('time) :=
-          |     impressionTimes := impressions where impressions.time = 'time
+          |     impressionTimes := impressions.time where impressions.time = 'time
           |     conversionTimes :=
-          |       conversions where conversions.time = min(conversions where conversions.time > 'time).time
+          |       conversions.time where conversions.time = min(conversions where conversions.time > 'time)
           |     
           |     conversionTimes :: impressionTimes
           |       { impression: impressions, nextConversion: conversions }
@@ -905,9 +904,11 @@ object EmitterSpecs extends Specification
           | 
           | firstConversionAfterEachImpression
           """)(
+          Vector()
         )
-      }
+      }.pendingUntilFixed
 
+      /*
       "histogram.qrl" >> {
         val input = """
           | clicks := dataset(//clicks)
