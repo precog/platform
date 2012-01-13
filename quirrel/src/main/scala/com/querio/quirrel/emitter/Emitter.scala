@@ -141,11 +141,18 @@ trait Emitter extends AST
       (insertInstrAt(Dup +: saveSwaps, insertIdx) >> 
       insertInstrAt(restoreSwaps, e.bytecode.length + 1 + saveSwaps.length)).apply(e)
     }
-  }
-
-  def emit(expr: Expr): Vector[Instruction] = {
-    import Emission._
-
+    
+    def emitConstraints(expr: Expr): EmitterState = {
+      val optState = for (const <- expr.constrainingExpr if const != expr) yield {
+        if (expr.children exists { _.constrainingExpr == Some(const) })
+          None
+        else
+          Some(emitExpr(const) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch(0, None)))
+      }
+      
+      optState flatMap identity getOrElse mzero[EmitterState]
+    }
+    
     def emitCrossOrMatchState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance)
         (ifCross: => Instruction, ifMatch: => Instruction): EmitterState = {
       val itx = leftProv.possibilities.intersect(rightProv.possibilities).filter(p => p != ValueProvenance && p != NullProvenance)
@@ -436,10 +443,13 @@ trait Emitter extends AST
           emitExpr(child) >> emitInstr(Map1(Neg))
         
         case ast.Paren(loc, child) => 
-          StateT.stateT[Id, Unit, Emission](Unit)
-      })
+          mzero[EmitterState]
+      }) >> emitConstraints(expr)
     }
+  }
 
+  def emit(expr: Expr): Vector[Instruction] = {
+    import Emission._
     emitExpr(expr).exec(Emission.empty).bytecode
   }
 }
