@@ -43,11 +43,11 @@ class EventSerialization {
   }
 
   def dataRepresentation(content: Set[(JPath, (JValue, Set[Metadata]))]): JValue = {
-    content.foldLeft[JValue](JObject(Nil)){ (acc, v) => acc.set(v._1, v._2._1) }
+    JValue.unflatten( content.map( t => (t._1, t._2._1) ).toList )
   }
 
   def metadataRepresentation(content: Set[(JPath, (JValue, Set[Metadata]))]): JValue = {
-    content.foldLeft[JValue](JObject(Nil)){ (acc, v) => acc.set(v._1, v._2._2.serialize) }
+    JValue.unflatten( content.map( t => (t._1, t._2._2.serialize)).toList )
   }
 
   implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {

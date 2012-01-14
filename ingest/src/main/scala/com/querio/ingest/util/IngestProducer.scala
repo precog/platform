@@ -35,6 +35,7 @@ import akka.util.duration._
 
 import blueeyes.json.JsonAST._
 
+import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.http.HttpResponse
@@ -121,7 +122,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
     val f: Future[HttpResponse[JValue]] = client.path(base)
                                                 .query("tokenId", tokens.head)
-                                                .contentType(application/json)
+                                                .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path)(Event.dataRepresentation(event.content))
     Await.ready(f, 10 seconds) 
     f.value match {
