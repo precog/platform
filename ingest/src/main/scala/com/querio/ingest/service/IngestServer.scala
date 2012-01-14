@@ -22,7 +22,6 @@ import  service._
 import  external._
 
 import blueeyes.BlueEyesServer
-import blueeyes.concurrent.Future
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo.Mongo
 import blueeyes.persistence.mongo.MongoCollection

@@ -21,12 +21,12 @@ package com.querio.ingest.service
 
 import blueeyes._
 import blueeyes.bkka._
-import blueeyes.concurrent.Future
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
 import blueeyes.core.http._
 import blueeyes.core.http.MimeTypes.{application, json}
 import blueeyes.core.service._
 import blueeyes.core.service.RestPathPattern._
+import blueeyes.health.metrics.{eternity}
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.{JPath, JsonParser, JPathField}
@@ -39,6 +39,8 @@ import blueeyes.persistence.cache.{Stage, ExpirationPolicy, CacheSettings}
 import blueeyes.util.{Clock, ClockSystem, PartialFunctionCombinators, InstantOrdering}
 import scala.math.Ordered._
 import HttpStatusCodes.{BadRequest, Unauthorized, Forbidden}
+
+import akka.dispatch.Future
 
 import net.lag.configgy.{Configgy, ConfigMap}
 
@@ -55,6 +57,7 @@ import scala.collection.immutable.IndexedSeq
 
 import scalaz.Monoid
 import scalaz.Validation
+import scalaz.ValidationNEL
 import scalaz.Success
 import scalaz.Failure
 import scalaz.NonEmptyList
@@ -93,9 +96,9 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   val clock: Clock
 
   val analyticsService = this.service("ingest", "1.0") {
-    requestLogging {
+    requestLogging(timeout) {
     logging { logger =>
-      healthMonitor { monitor => context =>
+      healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
 
@@ -109,7 +112,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
           val eventStore = eventStoreFactory(config.configMap("eventStore"))
 
-          Future.sync(IngestState(
+          Future(IngestState(
             indexMongo,
             tokenMgr,
             eventStore,
@@ -143,7 +146,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           }
         } ->
         shutdown { state => 
-          Future.sync( 
+          Future( 
             Option(
               Stoppable(
                 state.indexMongo, Nil

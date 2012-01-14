@@ -38,13 +38,13 @@ object PlatformBuild extends Build {
   )
 
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
-    resolvers ++= Seq("ReportGrid repo"          at   "http://nexus.reportgrid.com/content/repositories/releases",
-                      "ReportGrid repo (public)" at   "http://nexus.reportgrid.com/content/repositories/public-releases",
-                      "ReportGrid snapshot repo"          at   "http://nexus.reportgrid.com/content/repositories/snapshots",
-                      "ReportGrid snapshot repo (public)" at   "http://nexus.reportgrid.com/content/repositories/public-snapshots",
-                      "Scala Tools" at "http://scala-tools.org/repo-releases/",
-                      "Scala-Tools Snapshots" at  "http://scala-tools.org/repo-snapshots/",
-                      "Guiceyfruit" at "http://guiceyfruit.googlecode.com/svn/repo/releases/"),
+    resolvers ++= Seq("ReportGrid repo"                   at "http://nexus.reportgrid.com/content/repositories/releases",
+                      "ReportGrid repo (public)"          at "http://nexus.reportgrid.com/content/repositories/public-releases",
+                      "ReportGrid snapshot repo"          at "http://nexus.reportgrid.com/content/repositories/snapshots",
+                      "ReportGrid snapshot repo (public)" at "http://nexus.reportgrid.com/content/repositories/public-snapshots",
+                      "Scala Tools"                       at "http://scala-tools.org/repo-releases/",
+                      "Scala-Tools Snapshots"             at "http://scala-tools.org/repo-snapshots/",
+                      "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/"),
 
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
   )

@@ -20,13 +20,14 @@
 package com.querio.ingest.service
 package external
 
-import blueeyes.concurrent.Future
 import blueeyes.core.data.{ByteChunk, Bijection, BijectionsChunkJson}
 import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json.JsonAST._
 import rosetta.json.blueeyes._
+
+import akka.dispatch.Future
 
 import java.net.InetAddress
 import java.util.Date

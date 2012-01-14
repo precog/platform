@@ -22,7 +22,6 @@ package ingest.service
 package service
 
 import blueeyes._
-import blueeyes.concurrent.Future
 import blueeyes.core.service._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
@@ -31,6 +30,9 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.util.Clock
+
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
 import org.joda.time.DateTime
 import com.weiglewilczek.slf4s.Logger
@@ -41,7 +43,8 @@ import scalaz.{Validation, Success, Failure}
 import com.reportgrid.analytics._
 
 object TokenService extends HttpRequestHandlerCombinators {
-  def apply(tokenManager: TokenStorage, clock: Clock, logger: Logger): HttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] = {
+
+  def apply(tokenManager: TokenStorage, clock: Clock, logger: Logger)(implicit dispatcher: MessageDispatcher): HttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] = {
     path(/?) {
       get { 
         (request: HttpRequest[Future[JValue]]) => (token: Token) => {
@@ -60,14 +63,14 @@ object TokenService extends HttpRequestHandlerCombinators {
               val limits      = (content \ "limits").deserialize(Limits.limitsExtractor(parent.limits))
 
               if (expires < clock.now()) {
-                Future.sync(HttpResponse[JValue](BadRequest, content = Some("Your are attempting to create an expired token. Such a token will not be usable.")))
+                Future(HttpResponse[JValue](BadRequest, content = Some("Your are attempting to create an expired token. Such a token will not be usable.")))
               } else tokenManager.issueNew(parent, path, permissions, expires, limits) map {
                 case Success(newToken) => HttpResponse[JValue](content = Some(newToken.tokenId.serialize))
                 case Failure(message) => throw new HttpException(BadRequest, message)
               }
             }
           } getOrElse {
-            Future.sync(HttpResponse[JValue](BadRequest, content = Some("New token must be contained in POST content")))
+            Future(HttpResponse[JValue](BadRequest, content = Some("New token must be contained in POST content")))
           }
         }
       }
@@ -90,7 +93,7 @@ object TokenService extends HttpRequestHandlerCombinators {
                   HttpResponse[JValue](content = sanitized.map(_.serialize))
                 }
               } getOrElse {
-                Future.sync(HttpResponse[JValue](Forbidden))
+                Future(HttpResponse[JValue](Forbidden))
               }
             } else {
               tokenManager.getDescendant(token, request.parameters('descendantTokenId)).map { 
@@ -107,11 +110,11 @@ object TokenService extends HttpRequestHandlerCombinators {
               _ map { descendant =>
                 tokenManager.deleteDescendant(token, descendant.tokenId) map { _ =>
                   HttpResponse[JValue](content = None)
-                } ifCanceled { error => 
-                  error.foreach(logger.warn("An error occurred deleting the token: " + request.parameters('descendantTokenId), _))
+                } onFailure { 
+                  case ex => logger.warn("An error occurred deleting the token: " + request.parameters('descendantTokenId), ex)
                 } 
               } getOrElse {
-                Future.sync {
+                Future {
                   HttpResponse[JValue](
                     HttpStatus(BadRequest, "No token with id " + request.parameters('descendantTokenId) + " could be found."), 
                     content = None)
@@ -125,7 +128,7 @@ object TokenService extends HttpRequestHandlerCombinators {
   }
 }
 
-class TokenRequiredService[A, B](tokenManager: TokenManager, val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B) 
+class TokenRequiredService[A, B](tokenManager: TokenManager, val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
 extends DelegatingService[A, Future[B], A, Token => Future[B]] {
   val service = (request: HttpRequest[A]) => {
     request.parameters.get('tokenId) match {
@@ -134,8 +137,8 @@ extends DelegatingService[A, Future[B], A, Token => Future[B]] {
       case Some(tokenId) =>
         delegate.service(request) map { (f: Token => Future[B]) =>
           tokenManager.lookup(tokenId) flatMap { 
-            case None =>                           Future.sync(err(BadRequest,   "The specified token does not exist"))
-            case Some(token) if (token.expired) => Future.sync(err(Unauthorized, "The specified token has expired"))
+            case None =>                           Future(err(BadRequest,   "The specified token does not exist"))
+            case Some(token) if (token.expired) => Future(err(Unauthorized, "The specified token has expired"))
 
             case Some(token) => f(token)
           }

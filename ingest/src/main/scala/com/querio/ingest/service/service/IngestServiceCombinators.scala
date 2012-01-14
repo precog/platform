@@ -21,19 +21,21 @@ package com.querio.ingest.service
 package service
 
 import blueeyes._
-import blueeyes.concurrent.Future
 import blueeyes.core.http._
 import blueeyes.core.service._
 import blueeyes.json._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.DefaultSerialization._
 
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
+
 import com.reportgrid.analytics._
 
 trait IngestServiceCombinators extends HttpRequestHandlerCombinators {
   implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
 
-  def token[A, B](tokenManager: TokenManager)(service: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B) = {
+  def token[A, B](tokenManager: TokenManager)(service: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
     new TokenRequiredService[A, B](tokenManager, service)
   }
 

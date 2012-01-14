@@ -32,7 +32,7 @@ libraryDependencies ++= Seq(
   "edu.uwm.cs" %% "gll-combinators" % "1.5-SNAPSHOT",
   "org.scalaz" %% "scalaz-core" % "7.0-SNAPSHOT",
   "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.7-SNAPSHOT" % "test" withSources)
+  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources)
   
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
