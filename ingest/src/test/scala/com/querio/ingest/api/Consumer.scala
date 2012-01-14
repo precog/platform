@@ -12,6 +12,8 @@ import com.querio.ingest.util.ArbitraryIngestMessage
 
 import com.reportgrid.common._
 
+import blueeyes.json.JsonAST._
+
 object EventMessageSerializationSpec extends Specification with ScalaCheck with ArbitraryIngestMessage {
   
   "Event message serialization " should {
