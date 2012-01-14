@@ -11,7 +11,7 @@ package object ct {
 
   implicit def pf[A](a: A): PF[A] = new PF(a)
   implicit def SortedMapSemigroup[K, V](implicit ss: Semigroup[V]): Semigroup[SortedMap[K, V]] = new Semigroup[SortedMap[K, V]] {
-    def append(m1: SortedMap[K, V], m2: SortedMap[K, V]) = {
+    def append(m1: SortedMap[K, V], m2: => SortedMap[K, V]) = {
       // semigroups are not commutative, so order may matter. 
       val (from, to, semigroup) = {
         if (m1.size > m2.size) (m2, m1, ss.append(_: V, _: V))

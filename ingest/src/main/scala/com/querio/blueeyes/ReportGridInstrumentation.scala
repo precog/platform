@@ -6,7 +6,6 @@ import _root_.blueeyes.util._
 import _root_.blueeyes.core.http._
 import _root_.blueeyes.core.http.HttpHeaders._
 import _root_.blueeyes.core.service._
-import _root_.blueeyes.concurrent.Future
 import _root_.blueeyes.json.JsonAST._
 import _root_.blueeyes.json.xschema.DefaultSerialization._
 import com.reportgrid.analytics.Token
@@ -16,9 +15,15 @@ import rosetta.json.blueeyes._
 import org.joda.time.Duration
 import org.joda.time.Instant
 
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
+
 import scalaz.Scalaz._
 
 trait ReportGridInstrumentation {
+
+  implicit def defaultFutureDispatch: MessageDispatcher
+
   val ReportGridUserAgent = "ReportGrid Introspection Agent / 1.0"
 
   def bucketCounts(i: Long) = if (i / 25000 > 0) (i / 10000) * 10000
@@ -42,7 +47,7 @@ trait ReportGridInstrumentation {
         def audited(name: String): HttpService[A, B] = {
           val auditService = record(client, clock, service) {
             (req: HttpRequest[A], resp: B, start: Instant, end: Instant) => {
-              req.parameters.get('tokenId).map(tokenManager.lookup).getOrElse(Future.sync(None)) map { 
+              req.parameters.get('tokenId).map(tokenManager.lookup).getOrElse(Future(None)) map { 
                 token => Trackable(
                   path = "/" + token.map(_.accountTokenId).getOrElse("anonymous") + "/latencies",
                   name = "request",
@@ -73,8 +78,8 @@ trait ReportGridInstrumentation {
         val start = clock.instant
         delegate.service(req) map { resp =>
           val end = clock.instant
-          f(req, resp, start, end) deliverTo { 
-            (trackable: Trackable[JValue]) => client.track(trackable.copy(headers = trackable.headers ++ Map(`User-Agent`.name -> ReportGridUserAgent)))
+          f(req, resp, start, end) onSuccess { 
+            case trackable => client.track(trackable.copy(headers = trackable.headers ++ Map(`User-Agent`.name -> ReportGridUserAgent)))
           }
 
           resp

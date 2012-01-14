@@ -9,7 +9,10 @@ import com.reportgrid.common._
 import com.querio.ingest.api._
 import com.querio.ingest.service._
 
-import blueeyes.concurrent.Future
+import akka.actor.ActorSystem
+import akka.dispatch.Future
+import akka.dispatch.Await
+import akka.util.duration._
 
 import blueeyes.json.JsonAST._
 
@@ -101,9 +104,11 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
                                                 .query("tokenId", tokens.head)
                                                 .contentType(application/json)
                                                 .post[JValue](event.path)(Event.dataRepresentation(event.content))
-    while(!f.isDone) {}
-    if(f.isCanceled) {
-      println("Error tracking data: " + f.error)
+    Await.ready(f, 10 seconds) 
+    f.value match {
+      case Some(Right(_)) => ()
+      case Some(Left(ex)) => println("Error tracking data." + ex)
+      case _              => println("Error tracking data. (Timeout most likely?)")
     }
   }
 
@@ -117,6 +122,8 @@ object DirectIngestProducer {
 }
 
 class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
+
+  implicit val actorSystem = ActorSystem()
 
   lazy val testTopic = config.getProperty("topicId", "test-topic-1")
   lazy val zookeeperHosts = config.getProperty("zookeeperHosts", "127.0.0.1:2181")
@@ -150,6 +157,6 @@ zookeeperHosts - comma delimeted list of zookeeper hosts (default: 127.0.0.1:218
   """
 
   override def close() {
-    store.close.await
+    Await.result(store.close, 10 seconds)
   }
 }

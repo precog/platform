@@ -2,8 +2,6 @@ package com.querio.ingest.service
 package service
 
 import blueeyes._
-import blueeyes.concurrent.Future
-import blueeyes.concurrent.FutureImplicits
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
@@ -12,6 +10,9 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.persistence.cache._
 import blueeyes.util.Clock
+
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
 import IngestService._
 import com.reportgrid.api.ReportGridTrackingClient
@@ -86,13 +87,13 @@ object StorageMetrics {
   }
 }
 
-class TrackingService(eventStore: EventStore, storageReporting: StorageReporting, clock: Clock, autoTimestamp: Boolean)
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging with FutureImplicits {
+class TrackingService(eventStore: EventStore, storageReporting: StorageReporting, clock: Clock, autoTimestamp: Boolean)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success{ (t: Token, p: Path) =>
       request.content.map { _.flatMap { event  => 
-        eventStore.save(Event.fromJValue(p.toString, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK)).toBlueEyes
-      }}.getOrElse(Future.sync(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
+        eventStore.save(Event.fromJValue(p.toString, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK))
+      }}.getOrElse(Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
     }
   }
 
@@ -117,10 +118,10 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
   ))
 }
 
-class EchoServiceHandler
-extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging with FutureImplicits {
+class EchoServiceHandler(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
-    Success{ (t: Token, p: Path) => Future.sync(HttpResponse[JValue](OK, content=Some(JString("Testing 123.")))) }
+    Success{ (t: Token, p: Path) => Future(HttpResponse[JValue](OK, content=Some(JString("Testing 123.")))) }
   }
 
   val metadata = Some(DescriptionMetadata(

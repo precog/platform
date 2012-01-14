@@ -10,7 +10,8 @@ import java.util.Properties
 import scalaz._
 import scalaz.Scalaz._
 
-import akka.dispatch.{Future, Futures}
+import akka.dispatch.{Future, Futures, Promise}
+import akka.dispatch.MessageDispatcher
 import akka.dispatch.DefaultCompletableFuture
 
 import blueeyes.json.JPath
@@ -33,48 +34,10 @@ import com.querio.ingest.util.ArbitraryJValue
 // - add sync behavior
 
 object FutureHelper {
-  def singleSuccess[T](futures: Seq[Future[T]], timeout: Long = Long.MaxValue): Future[T] = new FirstResultFuture(futures, timeout)
-  
-  class FirstResultFuture[T](futures: Seq[Future[T]], timeout: Long = Long.MaxValue) extends DefaultCompletableFuture[T](timeout) {
-
-    val counter = new AtomicInteger(futures.size)
-
-    def failIfLastChild(t: Throwable) {
-      val current = counter.decrementAndGet()
-      if (current <= 0 && mayComplete) {
-        complete(Left(t))
-      }
-    }
-
-    def mayComplete(): Boolean = mayComplete(counter.get)
-
-    def mayComplete(cur: Int): Boolean = {
-      if(cur == -1) false
-      else counter.compareAndSet(cur, -1) || mayComplete(counter.get)
-    }
-
-    val childResult: PartialFunction[T, Unit] = {
-      case t if mayComplete => complete(Right(t))
-    }
-
-    val childException: PartialFunction[Throwable, Unit] = {
-      case t => failIfLastChild(t)
-    }
-
-    val childTimeout: PartialFunction[Future[T], Unit] = {
-      case f => failIfLastChild(new RuntimeException("Akka future timed out."))
-    }
-
-    for (f <- futures) {
-      f.onResult(childResult)
-      f.onException(childException)
-      f.onTimeout(childTimeout)
-    }
-  }
+  def singleSuccess[T](futures: Seq[Future[T]])(implicit dispatcher: MessageDispatcher): Future[Option[T]] = Future.find(futures){ _ => true }
 }
 
-
-class EventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0) {
+class EventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) {
   
   private val nextEventId = new AtomicInteger(firstEventId)
   
@@ -93,20 +56,20 @@ trait Messaging {
 }
 
 class EventRouter(routeTable: RouteTable, messaging: Messaging) {
-  def route(msg: EventMessage): Future[Unit] = {
-    FutureHelper.singleSuccess( routeTable.routeTo(msg.event).map { messaging.send(_, msg) }.list )
+  def route(msg: EventMessage)(implicit dispatcher: MessageDispatcher): Future[Option[Unit]] = {
+    FutureHelper.singleSuccess( routeTable.routeTo(msg.event).map { messaging.send(_, msg) }.list ).map{ _.map{ _ => () }}
   }
-  def close(): Future[Unit] = {
-    Futures.sequence(List(routeTable.close, messaging.close), Long.MaxValue).map(_ => ())
+  def close()(implicit dispatcher: MessageDispatcher): Future[Unit] = {
+    Future.sequence(List(routeTable.close, messaging.close)).map(_ => ())
   }
 }
 
-class ConstantRouteTable(addresses: NonEmptyList[MailboxAddress]) extends RouteTable {
+class ConstantRouteTable(addresses: NonEmptyList[MailboxAddress])(implicit dispather: MessageDispatcher) extends RouteTable {
   def routeTo(event: Event): NonEmptyList[MailboxAddress] = addresses
   def close() = Future(())
 }
 
-class EchoMessaging extends Messaging {
+class EchoMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
   def send(address: MailboxAddress, msg: EventMessage): Future[Unit] = {
     Future(println("Sending: " + msg + " to " + address))
   }
@@ -114,7 +77,7 @@ class EchoMessaging extends Messaging {
   def close() = Future(())
 }
 
-class CollectingMessaging extends Messaging {
+class CollectingMessaging(implicit dispatcher: MessageDispatcher) extends Messaging {
 
   val events = ListBuffer[IngestMessage]()
 
@@ -126,7 +89,7 @@ class CollectingMessaging extends Messaging {
   def close() = Future(())
 }
 
-class SimpleKafkaMessaging(topic: String, config: Properties) extends Messaging {
+class SimpleKafkaMessaging(topic: String, config: Properties)(implicit dispatcher: MessageDispatcher) extends Messaging {
  
   val producer = new Producer[String, IngestMessage](new ProducerConfig(config))
 

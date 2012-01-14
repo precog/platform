@@ -23,7 +23,7 @@ libraryDependencies ++= Seq(
   "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.1-SNAPSHOT",
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT",
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9",
-  "org.specs2"                  %% "specs2"             % "1.7-SNAPSHOT"   % "test"
+  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test"
 )
 
 resolvers ++= Seq(

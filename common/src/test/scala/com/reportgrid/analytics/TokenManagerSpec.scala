@@ -1,12 +1,20 @@
 package com.reportgrid.analytics
 
 import blueeyes.concurrent.test._
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+
+import akka.util.Timeout
+import akka.util.Duration
 
 import org.specs2.mutable.Specification
 import scalaz.Success
 
 class TokenManagerSpec extends Specification with FutureMatchers {
+  
+  implicit val dispatcher = AkkaDefaults.defaultFutureDispatch
+  implicit val timeout: Timeout = Duration(30, "seconds")
+
   val mongo = new MockMongo()
   val tokenManager = new TokenManager(mongo.database("test"), "tokens", "deleted_tokens")
 

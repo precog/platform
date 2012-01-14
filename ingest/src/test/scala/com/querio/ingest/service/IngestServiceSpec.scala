@@ -6,7 +6,6 @@ import blueeyes.core.data._
 import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service.test.BlueEyesServiceSpecification
-import blueeyes.concurrent.Future
 import blueeyes.concurrent.test._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -18,6 +17,10 @@ import blueeyes.persistence.mongo.{Mongo, RealMongo, MockMongo, MongoCollection,
 import blueeyes.util.metrics.Duration._
 import blueeyes.util.Clock
 import MimeTypes._
+
+import akka.dispatch.Future
+import akka.dispatch.Await
+import akka.util.Duration
 
 import org.joda.time._
 import net.lag.configgy.ConfigMap
@@ -44,7 +47,7 @@ import rosetta.json.blueeyes._
 
 import com.querio.ingest.api._
 
-case class PastClock(duration: Duration) extends Clock {
+case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
   def instant() = now().toInstant
   def nanoTime = sys.error("nanotime not available in the past")
@@ -85,7 +88,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override val configuration = "services{ingest{v1{" + requestLoggingData + mongoConfigFileData + "}}}"
 
-  override def mongoFactory(config: ConfigMap): Mongo = new RealMongo(config)
+  override def mongoFactory(config: ConfigMap): Mongo = RealMongo(config)
   //override def mongoFactory(config: ConfigMap): Mongo = new MockMongo()
 
   def auditClient(config: ConfigMap) = external.NoopTrackingClient
@@ -108,7 +111,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
           case _        => sys.error("Only one http method expected")
         }
         val chunkContent = content.map(StringToChunk(_))
-        service.apply(HttpRequest(httpMethod, url, Map(), headers, chunkContent)).map(_.content.map(ChunkToString).getOrElse("")).toAkka.get
+        Await.result(service.apply(HttpRequest(httpMethod, url, Map(), headers, chunkContent)).map(_.content.map(ChunkToString).getOrElse("")), Duration(10, "seconds"))
       }
     }
 
@@ -137,8 +140,8 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).
                                      query("tokenId", TestToken.tokenId)
 
-  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, toDuration(1000L).milliseconds)
-  val shortFutureTimeouts = FutureTimeouts(5, toDuration(50L).milliseconds)
+  override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
+  val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
