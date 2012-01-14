@@ -39,10 +39,10 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka"           %  "akka-actor"         % "2.0-M1",
   "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
   "org.apache"                  %% "kafka-core"         % "0.7.5",
-  "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.1-SNAPSHOT",
-  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT",
+  "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.1-SNAPSHOT" changing(),
+  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT" changing(),
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9",
-  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test"
+  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test" changing()
 )
 
 resolvers ++= Seq(
