@@ -81,6 +81,14 @@ object EmitterSpecs extends Specification
           PushNum("23.23123")))
     }
 
+    "emit cross-join of two withed datasets with value provenance" in {
+      testEmit("5 with 2")(
+        Vector(
+          PushNum("5"),
+          PushNum("2"),
+          Map2Cross(JoinObject)))
+    }
+
     "emit cross-addition of two added datasets with value provenance" in {
       testEmit("5 + 2")(
         Vector(
