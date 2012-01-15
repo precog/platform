@@ -1,4 +1,5 @@
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
+package leveldb
 
 import java.io.File
 import java.nio.ByteBuffer
@@ -10,6 +11,7 @@ import org.specs2.mutable.{BeforeAfter,Specification}
 import org.specs2.specification.Scope
 import Bijection._
 
+import scalaz.IdT
 import scalaz.syntax.traverse._ 
 import scalaz.std.list._ 
 import scalaz.effect.IO 
@@ -55,40 +57,67 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
     "Properly persist and restore values" in new columnSetup {
       val size = 1000
       val seed = 42l
+      val testRange = Interval(Some(size / 4l),Some(size / 2l))
       val db = LevelDBProjection(dataDir, Some(ProjectionComparator.Long))
       db.isSuccess must_== true
       db.map { c =>
+        import IdT._
+
         // Setup our PRNG
         val r = new java.util.Random(seed)
     
         // Create a set of values to insert based on the size
         val values = Array.fill(size)(r.nextLong)
-    
+        val pairs  = values.zipWithIndex
+        val ids    = pairs.map(_._2)
+
         logger.info("Inserting %d values".format(size))
     
         // Insert values, syncing every 10%
-        val inserts = values.grouped(size / 10).toList.map { a =>
+        val inserts = pairs.grouped(size / 10).toList.map { a =>
           val (first, last) = a.splitAt(a.length - 1)
           for { 
-            _ <- first.toList.map(v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]))).sequence[IO, Unit]
-            _ <- IO { logger.info("  Syncing insert")} 
-            _ <- last.toList.map(v => c.insert(v, ByteBuffer.wrap(v.as[Array[Byte]]), true)).sequence[IO, Unit]
+            _ <- first.toList.map { case (v, id) => c.insert(id, v.as[ByteBuffer]) }.sequence[IO, Unit]
+            _ <- IO { logger.info("  Syncing insert") }
+            _ <- last.toList.map  { case (v, id) => c.insert(id, v.as[ByteBuffer], true) }.sequence[IO, Unit]
           } yield ()
         }
 
-        def report(vals: List[Long]) = IO {
-          logger.info("Read " + vals.size + " distinct values")
-      
-          vals.forall {
-            v => values.contains(v)
-          } must_== true
+        def reportAllPairs(vals: List[(Long,ByteBuffer)]) = IO {
+          vals.forall { v => pairs.contains((v._2.as[Long], v._1)) } must_== true
         }
 
+        def reportValues(vals: List[ByteBuffer]) = IO {
+          vals.forall { v => values.contains(v.as[Long]) } must_== true
+        }
+
+        def reportIds(vals: List[Long]) = IO {
+          vals.forall { v => ids.contains(v) } must_== true
+        }
+
+        def reportRangePairs(vals: List[(Long,ByteBuffer)]) = IO {
+          val toCompare = testRange match {
+            case Interval(Some(low), Some(high)) => pairs.filter { case (v,i) => i >= low && i < high }
+          }
+
+          vals.forall { v => toCompare.contains((v._2.as[Long], v._1)) } must_== true
+        }
+
+        
         val runTest = for {
-          _       <- inserts.sequence[IO, Unit]
-          allVals <- (fold[Unit, Long, IO, List[Long]](Nil)((a, e) => e :: a) >>== c.getAllIds) apply (_ => IO(Nil))
-          _       <- report(allVals)
-          _       <- c.close
+          _         <- inserts.sequence[IO, Unit]
+          allPairs  <- (fold[Unit, (Long, ByteBuffer), ({ type λ[α] = IdT[IO, α] })#λ, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllPairs[Unit].apply[IdT, List[(Long,ByteBuffer)]]).run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
+          pairRange <- (fold[Unit, (Long, ByteBuffer), ({ type λ[α] = IdT[IO, α] })#λ, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
+                        c.getPairsByIdRange[Unit](testRange).apply[IdT, List[(Long,ByteBuffer)]]).run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
+          allValues <- (fold[Unit, ByteBuffer, ({ type λ[α] = IdT[IO, α] })#λ, List[ByteBuffer]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllValues[Unit].apply[IdT, List[ByteBuffer]]).run(_ => idTMonadTrans.liftM[IO, List[ByteBuffer]](IO(Nil))).value
+          allIds    <- (fold[Unit, Long, ({ type λ[α] = IdT[IO, α] })#λ, List[Long]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllIds[Unit].apply[IdT, List[Long]]).run(_ => idTMonadTrans.liftM[IO, List[Long]](IO(Nil))).value
+          _         <- reportAllPairs(allPairs)
+          _         <- reportValues(allValues)
+          _         <- reportIds(allIds)
+          _         <- c.close
         } yield {
           logger.info("Test complete, shutting down")
         }
