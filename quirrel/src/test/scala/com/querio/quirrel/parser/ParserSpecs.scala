@@ -275,9 +275,17 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       parse("false(1, 2, 3)") must throwA[ParseException]
     }
     
-    "accept an infix operation" in {
-      parse("1 where 2") must beLike {
-        case Operation(_, NumLit(_, "1"), "where", NumLit(_, "2")) => ok
+    "accept an infix operation" >> {
+      "where" >> {
+        parse("1 where 2") must beLike {
+          case Operation(_, NumLit(_, "1"), "where", NumLit(_, "2")) => ok
+        }
+      }
+      
+      "with" >> {
+        parse("1 with 2") must beLike {
+          case Operation(_, NumLit(_, "1"), "with", NumLit(_, "2")) => ok
+        }
       }
     }
     
