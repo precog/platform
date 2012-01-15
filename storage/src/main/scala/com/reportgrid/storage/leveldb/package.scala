@@ -28,7 +28,7 @@ import java.nio.ByteBuffer
 
 import scala.collection.generic.CanBuildFrom
 
-import leveldb.Bijection._
+import Bijection._
 
 import com.reportgrid.common._
 

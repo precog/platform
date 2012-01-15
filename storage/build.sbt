@@ -46,12 +46,7 @@ libraryDependencies ++= Seq(
 )
 
 resolvers ++= Seq(
-  "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository",
-  "Typesafe Repository" at        "http://repo.typesafe.com/typesafe/releases/",
-  "Scala-Tools Releases" at       "http://scala-tools.org/repo-releases/",
-  "Scala-Tools Snapshots" at      "http://scala-tools.org/repo-snapshots/",
-  "Nexus Scala Tools" at          "http://nexus.scala-tools.org/content/repositories/releases",
-  "Maven Repo 1" at               "http://repo1.maven.org/maven2/"
+  "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository"
 )
 
 ivyXML :=

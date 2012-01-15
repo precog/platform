@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
+package leveldb
 
 import scala.math.Ordering
 

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
 
 sealed trait Unapply[A, B] {
   def unapply(b: B): A

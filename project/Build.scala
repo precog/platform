@@ -42,6 +42,7 @@ object PlatformBuild extends Build {
                       "ReportGrid repo (public)"          at "http://nexus.reportgrid.com/content/repositories/public-releases",
                       "ReportGrid snapshot repo"          at "http://nexus.reportgrid.com/content/repositories/snapshots",
                       "ReportGrid snapshot repo (public)" at "http://nexus.reportgrid.com/content/repositories/public-snapshots",
+                      "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
                       "Scala Tools"                       at "http://scala-tools.org/repo-releases/",
                       "Scala-Tools Snapshots"             at "http://scala-tools.org/repo-snapshots/",
                       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/"),
