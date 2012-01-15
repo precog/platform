@@ -398,10 +398,13 @@ trait Emitter extends AST
           }
         
         case ast.Operation(loc, left, op, right) => 
-          // WHERE clause -- to be refactored (!)
+          // to be refactored (!)
           op match {
             case "where" => 
               emitFilter(left, right, 0, None)
+            
+            case "with" =>
+              emitMap(left, right, JoinObject)
 
             case _ => notImpl(expr)
           }
