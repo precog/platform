@@ -23,13 +23,14 @@ trait Sync[A] {
 trait Projection {
   def insert(id : Long, v : ByteBuffer, shouldSync: Boolean = false): IO[Unit]
 
-  def getAllIds[F[_] : MonadIO, A] : EnumeratorT[Unit, Long, F, A]
-  def getIdsInRange[F[_] : MonadIO, A](range : Interval[Long]): EnumeratorT[Unit, Long, F, A]
-  def getIdsForValue[F[_] : MonadIO, A](v : ByteBuffer): EnumeratorT[Unit, Long, F, A]
-  def getIdsByValueRange[F[_] : MonadIO, A](range : Interval[ByteBuffer]): EnumeratorT[Unit, Long, F, A]
+  def getAllPairs[X] : EnumeratorP[X, (Long,ByteBuffer), IO]
+  def getPairsByIdRange[X](range: Interval[Long]): EnumeratorP[X, (Long,ByteBuffer), IO]
+  def getPairForId[X](id: Long): EnumeratorP[X, (Long,ByteBuffer), IO]
 
-  def getAllValues[F[_] : MonadIO, A] : EnumeratorT[Unit, ByteBuffer, F, A]
-  def getValuesInRange[F[_]: MonadIO, A](range: Interval[ByteBuffer]): EnumeratorT[Unit, ByteBuffer, F, A]
-  def getValueForId[F[_]: MonadIO, A](id: Long): EnumeratorT[Unit, ByteBuffer, F, A]
-  def getValuesByIdRange[F[_]: MonadIO, A](range: Interval[Long]): EnumeratorT[Unit, ByteBuffer, F, A]
+  def getAllIds[X] : EnumeratorP[X, Long, IO]
+  def getIdsInRange[X](range : Interval[Long]): EnumeratorP[X, Long, IO]
+
+  def getAllValues[X] : EnumeratorP[X, ByteBuffer, IO]
+  def getValuesByIdRange[X](range: Interval[Long]): EnumeratorP[X, ByteBuffer, IO]
+  def getValueForId[X](id: Long): EnumeratorP[X, ByteBuffer, IO]
 }
