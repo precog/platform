@@ -91,7 +91,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
     | id ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }
-    | expr ~ opId ~ expr       ^# Operation
+    | expr ~ operations ~ expr ^# Operation
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
     | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
@@ -145,8 +145,6 @@ trait Parser extends RegexParsers with Filters with AST {
   
   lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
-  lazy val opId = "where"
-  
   lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
   lazy val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
@@ -162,9 +160,9 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
   
-  lazy val keywords = "new|true|false|where".r
+  lazy val keywords = "new|true|false|where|with".r
   
-  lazy val operations = "where".r
+  lazy val operations = "where|with".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-[^)])*-\))+""".r
   override val skipWhitespace = true
@@ -299,7 +297,7 @@ trait Parser extends RegexParsers with Filters with AST {
     // %%
     
     private lazy val op = (
-        opId
+        operations
       | "+"
       | "-"
       | "*"
