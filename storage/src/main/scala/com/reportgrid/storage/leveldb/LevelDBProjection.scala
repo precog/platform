@@ -189,34 +189,6 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
   def getValueForId[F[_]: MonadIO, A](id: Long): EnumeratorT[Unit, ByteBuffer, F, A] =
     getValuesByIdRange(Interval(Some(id), Some(id)))
 
-  private def traverseIdRange[F[_] : MonadIO, A, B](range : Interval[Long], f : (Long,ByteBuffer) => B) : EnumeratorT[Unit, B, F, A] = { 
-    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, B, F, A] = { s => 
-      val _done = iterateeT(close >> s.pointI.value)
-
-      s.fold(
-        cont = k => if (iter.hasNext) {
-          val n = iter.next
-          val id = n.getKey.as[Long]
-          range.end match {
-            case Some(end) if end <= id => _done
-            case _ => k(elInput(f(id,ByteBuffer.wrap(n.getValue)))) >>== enumerator(iter, close)
-          }
-        } else _done,
-        done = (_, _) => _done,
-        err = _ => _done
-      )
-    }
-    
-    val iter = idIndexFile.iterator
-    range.start match {
-      case Some(id) => iter.seek(id.as[Array[Byte]])
-      case None => iter.seekToFirst()
-    }
-
-    enumerator(iter, IO(iter.close).liftIO[F])
-  }
-
-
   /**
    * Retrieve all IDs for the given value
    */
@@ -314,6 +286,33 @@ class LevelDBProjection private (baseDir : File, comparator: DBComparator) exten
         iter.seek(valIndexBytes)
       case None => iter.seekToFirst()
     }
+    enumerator(iter, IO(iter.close).liftIO[F])
+  }
+
+  private def traverseIdRange[F[_] : MonadIO, A, B](range : Interval[Long], f : (Long,ByteBuffer) => B) : EnumeratorT[Unit, B, F, A] = { 
+    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, B, F, A] = { s => 
+      val _done = iterateeT(close >> s.pointI.value)
+
+      s.fold(
+        cont = k => if (iter.hasNext) {
+          val n = iter.next
+          val id = n.getKey.as[Long]
+          range.end match {
+            case Some(end) if end <= id => _done
+            case _ => k(elInput(f(id,ByteBuffer.wrap(n.getValue)))) >>== enumerator(iter, close)
+          }
+        } else _done,
+        done = (_, _) => _done,
+        err = _ => _done
+      )
+    }
+    
+    val iter = idIndexFile.iterator
+    range.start match {
+      case Some(id) => iter.seek(id.as[Array[Byte]])
+      case None => iter.seekToFirst()
+    }
+
     enumerator(iter, IO(iter.close).liftIO[F])
   }
 }
