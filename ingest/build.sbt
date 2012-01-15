@@ -19,14 +19,6 @@ libraryDependencies ++= Seq(
       "org.specs2"                %% "specs2"             % "1.8-SNAPSHOT"  % "test" changing()
 )
 
-resolvers ++= Seq(
-  "Scala-Tools Releases" at       "http://scala-tools.org/repo-releases/",
-  "Scala-Tools Snapshots" at      "http://scala-tools.org/repo-snapshots/",
-  "Akka Repository" at            "http://akka.io/repository/",
-  "Nexus Scala Tools" at          "http://nexus.scala-tools.org/content/repositories/releases",
-  "Maven Repo 1" at               "http://repo1.maven.org/maven2/"
-)
-
 ivyXML :=
   <dependencies>
     <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
