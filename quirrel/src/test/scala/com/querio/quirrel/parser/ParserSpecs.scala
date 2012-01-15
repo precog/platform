@@ -60,6 +60,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
+    "accept a relate expression with more than two constraint sets" in {
+      parse("1 :: 2 :: 3 :: 4 5") must beLike {
+        case Relate(_, NumLit(_, "1"), NumLit(_, "2"),
+          Relate(_, NumLit(_, "2"), NumLit(_, "3"),
+            Relate(_, NumLit(_, "3"), NumLit(_, "4"), NumLit(_, "5")))) => ok
+      }
+    }
+    
     "accept a variable" in {
       parse("x") must beLike { case Dispatch(_, "x", Vector()) => ok }
       parse("cafe_Babe__42_") must beLike { case Dispatch(_, "cafe_Babe__42_", Vector()) => ok }
