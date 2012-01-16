@@ -13,3 +13,4 @@ scalaz
 .idea*/
 .ensime
 *~
+quirrel/examples
