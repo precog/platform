@@ -177,7 +177,7 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('or <)
     & ('op <)
     & ('where <)
-    & ('relate >)
+    & ('relate <>)
   )
   
   // %%
