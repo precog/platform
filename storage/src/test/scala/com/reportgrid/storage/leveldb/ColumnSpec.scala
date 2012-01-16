@@ -103,26 +103,27 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
           vals.forall { v => toCompare.contains((v._2.as[Long], v._1)) } must_== true
         }
 
-        
+        type IDIO[α] = IdT[IO, α]
+
         val runTest = for {
-          _         <- inserts.sequence[IO, Unit]
-          allPairs  <- (fold[Unit, (Long, ByteBuffer), ({ type λ[α] = IdT[IO, α] })#λ, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
-                        c.getAllPairs[Unit].apply[IdT, List[(Long,ByteBuffer)]]).run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
-          pairRange <- (fold[Unit, (Long, ByteBuffer), ({ type λ[α] = IdT[IO, α] })#λ, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
-                        c.getPairsByIdRange[Unit](testRange).apply[IdT, List[(Long,ByteBuffer)]]).run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
-          allValues <- (fold[Unit, ByteBuffer, ({ type λ[α] = IdT[IO, α] })#λ, List[ByteBuffer]](Nil)((a, e) => e :: a) >>== 
-                        c.getAllValues[Unit].apply[IdT, List[ByteBuffer]]).run(_ => idTMonadTrans.liftM[IO, List[ByteBuffer]](IO(Nil))).value
-          allIds    <- (fold[Unit, Long, ({ type λ[α] = IdT[IO, α] })#λ, List[Long]](Nil)((a, e) => e :: a) >>== 
-                        c.getAllIds[Unit].apply[IdT, List[Long]]).run(_ => idTMonadTrans.liftM[IO, List[Long]](IO(Nil))).value
-          _         <- reportAllPairs(allPairs)
-          _         <- reportValues(allValues)
-          _         <- reportIds(allIds)
-          _         <- c.close
+          _         <- idTMonadTrans.liftM[IO, List[Unit]](inserts.sequence[IO, Unit])
+          allPairs  <- (fold[Unit, (Long, ByteBuffer), IDIO, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllPairs[Unit].apply[IdT, List[(Long,ByteBuffer)]]).run(x => sys.error("allPairs: " + x.toString)) //.run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
+          pairRange <- (fold[Unit, (Long, ByteBuffer), IDIO, List[(Long,ByteBuffer)]](Nil)((a, e) => e :: a) >>== 
+                        c.getPairsByIdRange[Unit](testRange).apply[IdT, List[(Long,ByteBuffer)]]).run(x => sys.error("pairRange: " + x.toString)) //.run(_ => idTMonadTrans.liftM[IO, List[(Long,ByteBuffer)]](IO(Nil))).value
+          allValues <- (fold[Unit, ByteBuffer, IDIO, List[ByteBuffer]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllValues[Unit].apply[IdT, List[ByteBuffer]]).run(x => sys.error("allValues: " + x.toString)) //.run(_ => idTMonadTrans.liftM[IO, List[ByteBuffer]](IO(Nil))).value
+          allIds    <- (fold[Unit, Long, IDIO, List[Long]](Nil)((a, e) => e :: a) >>== 
+                        c.getAllIds[Unit].apply[IdT, List[Long]]).run(x => sys.error("allIds: " + x.toString)) //_ => idTMonadTrans.liftM[IO, List[Long]](IO(Nil))).value
+          _         <- idTMonadTrans.liftM(reportAllPairs(allPairs))
+          _         <- idTMonadTrans.liftM(reportValues(allValues))
+          _         <- idTMonadTrans.liftM(reportIds(allIds))
+          _         <- idTMonadTrans.liftM(c.close)
         } yield {
           logger.info("Test complete, shutting down")
         }
 
-        runTest.unsafePerformIO
+        runTest.run.unsafePerformIO
       }
     }
   }
