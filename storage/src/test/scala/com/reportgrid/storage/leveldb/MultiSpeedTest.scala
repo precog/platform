@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
+package leveldb
 
 import Bijection._
 
@@ -32,6 +33,8 @@ import Actor._
 import java.io.File
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+
+import org.scalacheck.Arbitrary
 
 object MultiSpeedTest {
   case class Insert(id : Long, value : BigDecimal)

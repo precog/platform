@@ -49,6 +49,7 @@ libraryDependencies ++= Seq(
   //"org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   % "optional" changing(),  
 )
 
+
 resolvers ++= Seq(
   "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository"
 )

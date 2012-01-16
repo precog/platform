@@ -17,12 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage.leveldb
+package com.reportgrid.storage
 
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import Bijection._
+import leveldb._
 
 class BijectionSpec extends Specification with ScalaCheck {
   // Disable the T => Descriptable conversion because that enables a conflictin "as" def

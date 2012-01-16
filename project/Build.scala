@@ -38,7 +38,13 @@ object PlatformBuild extends Build {
                       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
                       "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/"),
 
-    credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials")
+    credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials"),
+
+    publishTo <<= (version) { version: String =>
+      val nexus = "http://nexus.reportgrid.com/content/repositories/"
+      if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at nexus+"snapshots/") 
+      else                                   Some("releases"  at nexus+"releases/")
+    }
   )
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode, daze, ingest)
