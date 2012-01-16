@@ -801,7 +801,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "specification examples" >> {
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         file.getName >> {
-          parse(LineStream(Source.fromFile(file))) must not(throwA[ParseException])
+          parse(LineStream(Source.fromFile(file))) must not(throwA[Throwable])
         }
       }
     }
