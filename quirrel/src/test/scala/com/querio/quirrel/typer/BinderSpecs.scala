@@ -25,6 +25,9 @@ import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import parser._
 
+import java.io.File
+import scala.io.Source
+
 object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder {
   import ast._
   
@@ -618,5 +621,21 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
+  }
+  
+  val exampleDir = new File("quirrel/examples")
+  
+  if (exampleDir.exists) {
+    "specification examples" >> {
+      for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
+        file.getName >> {
+          val result = parse(LineStream(Source.fromFile(file)))
+          bindNames(result)
+          result.errors must beEmpty
+        }
+      }
+    }
+  } else {
+    "specification examples" >> skipped
   }
 }

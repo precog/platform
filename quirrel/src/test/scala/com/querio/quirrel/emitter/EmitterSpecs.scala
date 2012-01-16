@@ -27,6 +27,10 @@ import org.scalacheck.Prop
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
 
+import java.io.File
+import scala.io.Source
+import edu.uwm.cs.gll.LineStream
+
 import typer._
 
 import scalaz.Success
@@ -983,5 +987,20 @@ object EmitterSpecs extends Specification
         parse(input) must not(throwA[ParseException])
       }*/
     }
+  }
+  
+  val exampleDir = new File("quirrel/examples")
+  
+  if (exampleDir.exists) {
+    "specification examples" >> {
+      for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
+        file.getName >> {
+          val result = compile(LineStream(Source.fromFile(file)))
+          emit(result) must not(beEmpty)
+        }
+      }
+    }
+  } else {
+    "specification examples" >> skipped
   }
 }
