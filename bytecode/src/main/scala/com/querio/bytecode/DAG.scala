@@ -6,6 +6,13 @@ trait DAG extends Instructions {
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
     import dag._
     
+    def adjustSplits(roots: List[DepGraph], delta: Int): List[DepGraph] = {
+      roots map {
+        case SplitRoot(loc, depth) => SplitRoot(loc, depth + delta)
+        case x => x
+      }
+    }
+    
     def loopPred(instr: Instruction, roots: List[Either[RangeOperand, IndexRange]], pred: Vector[PredicateInstr]): Either[StackError, IndexRange] = {
       def processOperandBin(op: BinaryOperation with PredicateOp) = {
         val eitherRoots = roots match {
@@ -156,7 +163,7 @@ trait DAG extends Instructions {
         
         case instructions.Split => {
           roots match {
-            case hd :: tl => loop(loc, SplitRoot(loc) :: tl, OpenSplit(loc, roots) :: splits, stream.tail)
+            case hd :: tl => loop(loc, SplitRoot(loc, 0) :: adjustSplits(tl, 1), OpenSplit(loc, roots) :: splits, stream.tail)
             case _ => Left(StackUnderflow(instructions.Split))
           }
         }
@@ -176,7 +183,7 @@ trait DAG extends Instructions {
           }
           
           eitherTails.right flatMap {
-            case (roots2, splits2) => loop(loc, roots2, splits2, stream.tail)
+            case (roots2, splits2) => loop(loc, adjustSplits(roots2, -1), splits2, stream.tail)
           }
         }
         
@@ -265,7 +272,7 @@ trait DAG extends Instructions {
   }
   
   object dag {
-    case class SplitRoot(loc: Line) extends DepGraph
+    case class SplitRoot(loc: Line, depth: Int) extends DepGraph
     case class Root(loc: Line, instr: RootInstr) extends DepGraph
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph
