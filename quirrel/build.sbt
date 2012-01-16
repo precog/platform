@@ -23,7 +23,7 @@ initialCommands in console := """
   | import parser._
   | import typer._
   |
-  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with LineErrors {}
+  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with Emitter with LineErrors {}
   | 
   | trait StubPhases extends Phases with RawErrors {
   |   def bindNames(tree: Expr) = Set()
