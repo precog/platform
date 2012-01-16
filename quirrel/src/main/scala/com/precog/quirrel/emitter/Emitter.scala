@@ -68,7 +68,7 @@ trait Emitter extends AST
 
   private object Emission {
     def empty = new Emission()
-
+    
     def insertInstrAt(is: Seq[Instruction], _idx: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e => 
       val idx = if (_idx < 0) (e.bytecode.length + 1 + _idx) else _idx
 
@@ -95,13 +95,15 @@ trait Emitter extends AST
       }
     }
 
-    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: => EmitterState): EmitterState = {
+    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: EmitterState): EmitterState = {
       applyTicVars(let, values) >> f >> unapplyTicVars(let)
     }
 
     def emitOrDup(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      if (e.marks.contains(markType)) emitDup(markType)(e) 
-      else emitAndMark(markType)(f)(e)
+      if (e.marks.contains(markType))
+        emitDup(markType)(e) 
+      else
+        emitAndMark(markType)(f)(e)
     }
 
     def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -124,7 +126,7 @@ trait Emitter extends AST
     }
 
     private def applyTicVars(let: ast.Let, values: Seq[(String, EmitterState)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(ticVars = e.ticVars + (let -> values)))
+      ((), e.copy(ticVars = e.ticVars + (let -> values)))     // TODO should be a stack (for multiple dispatches to the same cf)
     }
 
     private def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -132,11 +134,11 @@ trait Emitter extends AST
     }
 
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
-    private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    private def emitAndMark(markType: MarkType)(f: EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
         case (_, e) =>
           val mark = Mark(e.bytecode.length)
-
+        
           ((), e.copy(marks = e.marks + (markType -> mark)))
       }
     }
@@ -169,11 +171,12 @@ trait Emitter extends AST
     }
     
     def emitConstraints(expr: Expr): EmitterState = {
-      val optState = for (const <- expr.constrainingExpr if (const equalsIgnoreLoc expr)) yield {
+      val optState = for (const <- expr.constrainingExpr if !(const equalsIgnoreLoc expr)) yield {
         if (expr.children exists { _.constrainingExpr == Some(const) })
           None
-        else
+        else {
           Some(emitExpr(const) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch(0, None)))
+        }
       }
       
       optState flatMap identity getOrElse mzero[EmitterState]
