@@ -801,7 +801,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "specification examples" >> {
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         file.getName >> {
-          parse(LineStream(Source.fromFile(file))) must not(throwA[ParseException])
+          parse(LineStream(Source.fromFile(file))) must not(throwA[Throwable])
         }
       }
     }
@@ -813,6 +813,21 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "associate paired consecutive parentheses" in {
       parse("a := b := c (d) (e)") must beLike {
         case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "c", Vector()), Paren(_, Dispatch(_, "d", Vector()))), Paren(_, Dispatch(_, "e", Vector()))) => ok
+      }
+    }
+    
+    "disambiguate one-argument function within n-ary relation" in {
+      val input = """
+        | a ::
+        |   b :: c
+        |     d := f
+        |     (1)
+        |   2""".stripMargin
+        
+      parse(input) must beLike {
+        case Relate(_, Dispatch(_, "a", Vector()), Dispatch(_, "b", Vector()),
+          Relate(_, Dispatch(_, "b", Vector()), Dispatch(_, "c", Vector()),
+            Let(_, "d", Vector(), Dispatch(_, "f", Vector(NumLit(_, "1"))), NumLit(_, "2")))) => ok
       }
     }
   }
