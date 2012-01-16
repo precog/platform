@@ -25,8 +25,8 @@ trait DAGPrinter extends DAG {
   import dag._
   
   def showDAG(root: DepGraph): String = {
-    def loop(root: DepGraph, split: Option[String]): String = root match {
-      case SplitRoot(_) => split match {
+    def loop(root: DepGraph, split: List[String]): String = root match {
+      case SplitRoot(_, depth) => split.lift(depth) match {
         case Some(str) => "{%s}".format(str)
         case None => "<error>"
       }
@@ -73,10 +73,10 @@ trait DAGPrinter extends DAG {
       
       case dag.Filter(_, _, _, target, boolean) => "(%s where %s)".format(loop(target, split), loop(boolean, split))
       
-      case dag.Split(_, parent, child) => loop(child, Some(loop(parent, split)))
+      case dag.Split(_, parent, child) => loop(child, loop(parent, split) :: split)
     }
     
-    loop(root, None)
+    loop(root, Nil)
   }
   
   private def showReduction(red: Reduction) = red match {

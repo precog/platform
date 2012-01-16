@@ -70,13 +70,13 @@ object DAGSpecs extends Specification with DAG {
     "parse a single-level split" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, instructions.Split, PushFalse, VUnion, Merge))
-      result mustEqual Right(dag.Split(line, Root(line, PushTrue), Join(line, VUnion, SplitRoot(line), Root(line, PushFalse))))
+      result mustEqual Right(dag.Split(line, Root(line, PushTrue), Join(line, VUnion, SplitRoot(line, 0), Root(line, PushFalse))))
     }
     
     "parse a bi-level split" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, instructions.Split, instructions.Split, PushFalse, VUnion, Merge, Merge))
-      result mustEqual Right(dag.Split(line, Root(line, PushTrue), dag.Split(line, SplitRoot(line), Join(line, VUnion, SplitRoot(line), Root(line, PushFalse)))))
+      result mustEqual Right(dag.Split(line, Root(line, PushTrue), dag.Split(line, SplitRoot(line, 0), Join(line, VUnion, SplitRoot(line, 0), Root(line, PushFalse)))))
     }
     
     "accept split which reduces the stack" in {
@@ -94,7 +94,7 @@ object DAGSpecs extends Specification with DAG {
           Root(line, PushFalse),
           Join(line, Map2Match(Add),
             Root(line, PushTrue),
-            SplitRoot(line))))
+            SplitRoot(line, 0))))
     }
     
     "recognize a join instruction" in {
