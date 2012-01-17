@@ -37,12 +37,18 @@ libraryDependencies ++= Seq(
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
-  | import com.querio.quirrel._
+  | import com.querio._
+  | 
+  | import bytecode._
+  | import quirrel._
+  | 
   | import emitter._
   | import parser._
   | import typer._
   |
-  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with Emitter with LineErrors {}
+  | import bytecode.util._
+  |
+  | val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with Emitter with DAG with DAGPrinter with LineErrors {}
   | 
   | trait StubPhases extends Phases with RawErrors {
   |   def bindNames(tree: Expr) = Set()
