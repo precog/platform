@@ -208,7 +208,7 @@ trait Emitter extends AST
           emitExpr(right)
 
         case ast.New(loc, child) => 
-          mzero[EmitterState]
+          emitExpr(child) >> emitInstr(Map1(New))
         
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
           emitExpr(in)
