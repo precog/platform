@@ -209,6 +209,13 @@ object EmitterSpecs extends Specification
           Map2Cross(Add),
           Map1(Neg)))
     }
+    
+    "emit and mark new expression" in {
+      testEmit("new 5")(
+        Vector(
+          PushNum("5"),
+          Map1(New)))
+    }
 
     "emit wrap object for object with single field having constant value" in {
       testEmit("{foo: 1}")(
