@@ -92,6 +92,8 @@ trait BytecodeWriter extends Writer with Version {
       case Comp => 0x40
       case Neg => 0x41
       
+      case New => 0x60
+      
       case WrapArray => 0x61
     }
     

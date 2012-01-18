@@ -130,7 +130,7 @@ trait InstructionGenerators extends Instructions {
   private lazy val genPushObject = PushObject
   private lazy val genPushArray = PushArray
   
-  private lazy val genUnaryOp = oneOf(Comp, Neg, WrapArray)
+  private lazy val genUnaryOp = oneOf(Comp, New, Neg, WrapArray)
   
   private lazy val genBinaryOp = oneOf(
     Add,

@@ -72,6 +72,7 @@ trait BytecodeReader extends Reader {
       lazy val unOp = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
+        case 0x60 => Some(New)
         
         case 0x61 => Some(WrapArray)
         
