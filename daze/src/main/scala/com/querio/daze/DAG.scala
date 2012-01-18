@@ -338,6 +338,15 @@ trait DAG extends Instructions {
       lazy val provenance = (target.provenance ++ boolean.provenance).distinct
     }
     
+    case class Sort(parent: DepGraph, index: Int) extends DepGraph {
+      val loc = parent.loc
+      
+      lazy val provenance = {
+        val (left, right) = parent.provenance splitAt index
+        left.last +: (left.init ++ right)
+      }
+    }
+    
     
     sealed trait CrossType
     
