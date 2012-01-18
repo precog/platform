@@ -293,21 +293,50 @@ trait DAG extends Instructions {
   
   sealed trait DepGraph {
     val loc: Line
+    
+    def provenance: Vector[Provenance]
   }
   
+  sealed trait Provenance
+  
+  case class StaticProvenance(path: String) extends Provenance
+  case class DynamicProvenance(id: Int) extends Provenance
+  
   object dag {
-    case class SplitRoot(loc: Line, depth: Int) extends DepGraph
-    case class Root(loc: Line, instr: RootInstr) extends DepGraph
+    case class SplitRoot(loc: Line, depth: Int) extends DepGraph {
+      val provenance = Vector()
+    }
     
-    case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph
+    case class Root(loc: Line, instr: RootInstr) extends DepGraph {
+      lazy val provenance = Vector()
+    }
     
-    case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph
-    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph
+    case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
+      lazy val provenance = parent match {
+        case Root(_, PushString(path)) => Vector(StaticProvenance(path))
+        case _ => Vector(DynamicProvenance(System.identityHashCode(this)))
+      }
+    }
     
-    case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph
+    case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
+      lazy val provenance = parent.provenance
+    }
     
-    case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph
-    case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph
+    case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
+      lazy val provenance = Vector()
+    }
+    
+    case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
+      lazy val provenance = child.provenance
+    }
+    
+    case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val provenance = (left.provenance ++ right.provenance).distinct
+    }
+    
+    case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
+      lazy val provenance = (target.provenance ++ boolean.provenance).distinct
+    }
     
     
     sealed trait CrossType
