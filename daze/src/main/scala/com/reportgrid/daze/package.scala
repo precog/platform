@@ -1,5 +1,7 @@
 package com.querio
 
+import com.reportgrid.common.json._
+
 package object daze {
   type Identity = Long
   type Identities = Vector[Identity]

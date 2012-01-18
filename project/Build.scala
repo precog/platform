@@ -36,7 +36,7 @@ object PlatformBuild extends Build {
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings: _*) dependsOn util
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings: _*) dependsOn (bytecode, util)
   
-  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn bytecode // (bytecode, storage)
+  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode) // (bytecode, storage)
   
   lazy val storage  = Project(id = "storage", base = file("storage")).settings(nexusSettings : _*).dependsOn(common)
   
