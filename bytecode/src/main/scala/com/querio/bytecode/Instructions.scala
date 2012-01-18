@@ -151,6 +151,7 @@ trait Instructions {
     case object Or extends BinaryOperation with PredicateInstr
     case object And extends BinaryOperation with PredicateInstr
     
+    case object New extends UnaryOperation
     case object Comp extends UnaryOperation with PredicateInstr
     case object Neg extends UnaryOperation with PredicateInstr with PredicateOp
     
