@@ -227,4 +227,17 @@ trait StringValueStatsSerialization {
 
 object StringValueStats extends MetadataType with StringValueStatsSerialization with Function3[Long, String, String, StringValueStats]
 
-// vim: set ts=4 sw=4 et:
+sealed trait SortBy
+
+case object ById extends SortBy
+case object ByValue extends SortBy
+
+sealed trait SortOrder
+
+case object AscendingOrder extends SortOrder
+case object DescendingOrder extends SortOrder
+
+case class ColumnSorting(sortDescription: (SortBy, SortOrder)) extends Metadata {
+  def merge(other: Metadata) = sys.error("todo")
+}
+
