@@ -163,6 +163,15 @@ trait DAG extends Instructions {
       }
       
       val tail = stream.headOption map {
+        case instr @ Map1(instructions.New) => {
+          val eitherRoots = roots match {
+            case hd :: tl => Right(New(loc, hd) :: tl)
+            case _ => Left(StackUnderflow(instr))
+          }
+          
+          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        }
+        
         case instr @ Map1(op) => {
           val eitherRoots = roots match {
             case hd :: tl => Right(Operate(loc, op, hd) :: tl)
@@ -309,6 +318,10 @@ trait DAG extends Instructions {
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
       lazy val provenance = Vector()
+    }
+    
+    case class New(loc: Line, parent: DepGraph) extends DepGraph {
+      lazy val provenance = Vector(DynamicProvenance(System.identityHashCode(this)))
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
