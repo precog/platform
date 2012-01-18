@@ -331,11 +331,18 @@ trait DAG extends Instructions {
     }
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = (left.provenance ++ right.provenance).distinct
+      lazy val provenance = instr match {
+        case _: Map2CrossRight => (right.provenance ++ left.provenance).distinct
+        
+        case _ => (left.provenance ++ right.provenance).distinct
+      }
     }
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
-      lazy val provenance = (target.provenance ++ boolean.provenance).distinct
+      lazy val provenance = cross match {
+        case Some(CrossRight) => (boolean.provenance ++ target.provenance).distinct
+        case _ => (target.provenance ++ boolean.provenance).distinct
+      }
     }
     
     case class Sort(parent: DepGraph, index: Int) extends DepGraph {
