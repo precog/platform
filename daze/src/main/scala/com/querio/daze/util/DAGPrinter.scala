@@ -22,6 +22,8 @@ trait DAGPrinter extends DAG {
       case Root(_, PushObject) => "{}"
       case Root(_, PushArray) => "[]"
       
+      case dag.New(_, parent) => loop(parent, split)
+      
       case dag.LoadLocal(_, _, Root(_, PushString(path)), _) => path
       case dag.LoadLocal(_, _, _, _) => "<load>"
       

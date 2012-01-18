@@ -35,6 +35,10 @@ object DAGSpecs extends Specification with DAG {
       }
     }
     
+    "recognize a new instruction" in {
+      decorate(Vector(Line(0, ""), PushNum("5"), Map1(instructions.New))) mustEqual Right(dag.New(Line(0, ""), Root(Line(0, ""), PushNum("5"))))
+    }
+    
     "parse out load_local" in {
       val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal(Het)))
       result mustEqual Right(dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/foo")), Het))
