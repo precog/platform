@@ -17,19 +17,22 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "util"
+package com.reportgrid.util
 
-organization := "com.querio"
+sealed trait Unapply[A, B] {
+  def unapply(b: B): A
+}
 
-version := "0.1.0"
+trait Bijection[A, B] extends Function1[A, B] with Unapply[A, B] 
 
-scalaVersion := "2.9.1"
+sealed class Biject[A](a: A) {
+  def as[B](implicit f: Either[Bijection[A, B], Bijection[B, A]]): B = f.fold(_ apply a, _ unapply a)
+}
 
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
+trait Bijections {
+  implicit def biject[A](a: A): Biject[A] = new Biject(a)
+  implicit def forwardEither[A, B](implicit a: Bijection[A,B]): Either[Bijection[A,B], Bijection[B,A]] = Left(a)
+  implicit def reverseEither[A, B](implicit b: Bijection[B,A]): Either[Bijection[A,B], Bijection[B,A]] = Right(b)
+}
 
-libraryDependencies ++= Seq(
-  "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT"                changing(),
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources() changing())
-  
-logBuffered := false       // gives us incremental output from Specs2
+object Bijection extends Bijections 

@@ -34,6 +34,7 @@ import blueeyes.json.xschema.Extractor._
 import scalaz._
 import Scalaz._
 
+//TODO: This should be (Path, JValue, JValue)
 case class Event(path: String, content: Set[(JPath, (JValue, Set[Metadata]))]) 
 
 class EventSerialization {

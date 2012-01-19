@@ -1,0 +1,412 @@
+/*
+ *  ____    ____    _____    ____    ___     ____ 
+ * |  _ \  |  _ \  | ____|  / ___|  / _/    / ___|        Precog (R)
+ * | |_) | | |_) | |  _|   | |     | |  /| | |  _         Advanced Analytics Engine for NoSQL Data
+ * |  __/  |  _ <  | |___  | |___  |/ _| | | |_| |        Copyright (C) 2010 - 2013 SlamData, Inc.
+ * |_|     |_| \_\ |_____|  \____|   /__/   \____|        All Rights Reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms of the 
+ * GNU Affero General Public License as published by the Free Software Foundation, either version 
+ * 3 of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See 
+ * the GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License along with this 
+ * program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+package com.reportgrid.yggdrasil
+package leveldb
+
+import com.reportgrid.analytics.Path
+import com.reportgrid.common._ 
+import com.reportgrid.util._ 
+import com.reportgrid.util.Bijection._
+
+import org.iq80.leveldb._
+import org.fusesource.leveldbjni.JniDBFactory._
+import java.io._
+import java.nio.ByteBuffer
+import Bijection._
+
+import com.weiglewilczek.slf4s.Logger
+import scala.collection.JavaConverters._
+import scala.collection.Iterator
+import scala.io.Source
+
+import scalaz.{Ordering => _, Source => _, _}
+import scalaz.Scalaz._
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.iteratee.Input._
+import scalaz.syntax.plus._
+import scalaz.syntax.monad._
+import scalaz.syntax.applicativePlus._
+import scalaz.syntax.biFunctor
+import scalaz.Scalaz._
+import IterateeT._
+
+import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL._
+import blueeyes.json.JsonParser
+import blueeyes.json.xschema._
+import blueeyes.json.xschema.Extractor._
+import blueeyes.json.xschema.DefaultSerialization._
+
+object LevelDBProjection {
+  private final val comparatorMetadataFilename = "comparator"
+
+  def restoreComparator(baseDir: File) : Validation[Throwable, DBComparator] = {
+    val comparatorMetadata = new File(baseDir, comparatorMetadataFilename)
+
+    for {
+      source          <- Validation.fromTryCatch(Source.fromFile(comparatorMetadata, "UTF-8"))
+      line            <- source.getLines.toList.headOption.toSuccess(new RuntimeException("Comparator metadata file was empty."))
+      comparatorClass <- Validation.fromTryCatch(Class.forName(line.trim).asInstanceOf[Class[DBComparator]])
+      comparator      <- Validation.fromTryCatch(comparatorClass.newInstance)
+    } yield {
+      comparator
+    }
+  }
+
+  def saveComparator(baseDir: File, comparator: DBComparator) : Validation[Throwable, DBComparator] = {
+    Validation.fromTryCatch {
+      import java.io.{FileOutputStream,OutputStreamWriter}
+      val output = new OutputStreamWriter(new FileOutputStream(new File(baseDir, comparatorMetadataFilename)), "UTF-8")
+      try {
+        output.write(comparator.getClass.getName)
+      } finally {
+        output.close()
+      }
+      comparator
+    }
+  }
+
+  def apply(baseDir : File, descriptor: ProjectionDescriptor, comparator: Option[DBComparator] = None): ValidationNEL[Throwable, LevelDBProjection] = {
+    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
+                   else baseDir.success[Throwable]
+
+    val comparatorV = for {
+      bd <- baseDirV.toValidationNel[Throwable, File]
+      c  <- restoreComparator(bd).toValidationNel
+            .orElse(comparator.toSuccess(new RuntimeException("No database comparator was provided."))
+            .flatMap(saveComparator(bd, _)).toValidationNel)
+    } yield c
+
+    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, c, descriptor) }
+  }
+
+  val descriptorFile = "projection_descriptor.json"
+  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
+
+  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
+    import java.io._
+
+    val df = new File(baseDir, filename)
+
+    def read = 
+      if (df.exists) Some {
+        IO {
+          val reader = new FileReader(df)
+          try {
+            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
+          } finally {
+            reader.close
+          }
+        }
+      } else {
+        None
+      }
+
+    def sync(data: T) = IO {
+      Validation.fromTryCatch {
+        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
+        val writer = new FileWriter(tmpFile)
+        try {
+          compact(render(data.serialize(decomposer)), writer)
+        } finally {
+          writer.close
+        }
+        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
+        Success(())
+      }
+    }
+  }
+}
+
+class LevelDBProjection private (baseDir: File, comparator: DBComparator, descriptor: ProjectionDescriptor) { // extends Projection {
+  import LevelDBProjection._
+
+  val logger = Logger("col:" + baseDir)
+  logger.debug("Opening column index files")
+
+  private val createOptions = (new Options).createIfMissing(true)
+  private val idIndexFile: DB =  factory.open(new File(baseDir, "idIndex"), createOptions)
+  private lazy val valIndexFile: DB = {
+    sys.error("Value-based indexes have not been enabled.")
+     //factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
+  }
+
+  private final val syncOptions = (new WriteOptions).sync(true)
+
+  def close: IO[Unit] = IO {
+    logger.info("Closing column index files")
+    idIndexFile.close()
+    //valIndexFile.close()
+  }
+
+  def sync: IO[Unit] = IO { } 
+
+  def project(id: Identities, v: Array[Byte]): (Array[Byte], Array[Byte]) = {
+    // all of the identities must be included in the key; also, any values of columns that
+    // use by-value ordering must be included in tthe key. The ordering of columns in the
+    // descriptor prescribes sort preference by column. For a given column, if value orderin
+    // is specified 
+    /*
+    descriptor.columns.flatMap { 
+      case (col, idIndex) =>
+        c.metadata.collectFirst {
+          case ColumnSorting(ById, sortOrder) => columnOrdering(c), sortBy, sortOrder)
+        }
+    }
+    */
+    sys.error("todo")
+  }
+
+  def unproject(key: Array[Byte], value: Array[Byte]): (Identities, Array[Byte]) = {
+    sys.error("todo")
+  }
+
+  def insert(id : Identities, v : Array[Byte], shouldSync: Boolean = false): IO[Unit] = IO {
+    val (idBytes, valIndexBytes) = project(id, v)
+
+    // Have to rewind because columnKeys read data, advancing position
+    if (shouldSync) {
+      idIndexFile.put(idBytes, v, syncOptions)
+    } else {
+      idIndexFile.put(idBytes, v)
+    }
+  }
+
+  ///////////////////
+  // ID Traversals //
+  ///////////////////
+
+  def traverseIndex[X, E, F[_[_], _], A](f: (Identities, Array[Byte]) => E)(implicit t: MonadTrans[F])
+  : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
+    type FIO[α] = F[IO, α]
+    implicit val fm = t.apply[IO]
+    import fm.bindSyntax._
+
+    def enumerator(iter : DBIterator, close : F[IO, Unit]): EnumeratorT[X, E, FIO, A] = { 
+      (s : StepT[X, E, FIO, A]) => {
+        val _done = iterateeT[X, E, FIO, A](close >> s.pointI.value)
+
+        s.fold(
+          cont = k => if (iter.hasNext) {
+            val n = iter.next
+            k(elInput(f(n.getKey.as[Identities], n.getValue))) >>== enumerator(iter, close)
+          } else {
+            _done
+          },
+          done = (_, _) => _done,
+          err = _ => _done
+        )
+      }
+    }
+
+    val iter = idIndexFile.iterator
+    iter.seekToFirst()
+    enumerator(iter, t.liftM(IO(iter.close)))
+  }
+
+  def getAllPairs[X] : EnumeratorP[X, (Identities, Array[Byte]), IO] = new EnumeratorP[X, (Identities, Array[Byte]), IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, (Identities, Array[Byte]), F, A] {
+      (id, b) => (id, b)
+    }
+  }
+
+  def getAllIds[X] : EnumeratorP[X, Identities, IO] = new EnumeratorP[X, Identities, IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Identities, F, A] {
+      (id, b) => id
+    }
+  }
+
+  def getAllValues[X] = new EnumeratorP[X, Array[Byte], IO] { 
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Array[Byte], F, A] {
+      (id, b) => b
+    }
+  }
+
+  def traverseIndexRange[X, E, F[_[_],_], A](range: Interval[Identities])(f: (Identities, Array[Byte]) => E)(implicit t : MonadTrans[F]) 
+  : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
+    type FIO[α] = F[IO, α]
+    implicit val fm = t.apply[IO]
+    import fm.bindSyntax._
+
+    def enumerator(iter: DBIterator, close: F[IO, Unit]): EnumeratorT[X, E, FIO, A] = { 
+      (s : StepT[X, E, FIO, A]) => {
+        val _done = iterateeT[X, E, FIO, A](close >> s.pointI.value)
+
+        s.fold(
+          cont = k => if (iter.hasNext) {
+            val n = iter.next
+            val id = n.getKey.as[Identities]
+            range.end match {
+              case Some(end) if end <= id => _done
+              case _ => k(elInput(f(id, n.getValue))) >>== enumerator(iter, close)
+            }
+          } else _done,
+          done = (_, _) => _done,
+          err = _ => _done
+        )
+      }
+    }
+  
+    val iter = idIndexFile.iterator
+    range.start match {
+      case Some(id) => iter.seek(id.as[Array[Byte]])
+      case None => iter.seekToFirst()
+    }
+
+    enumerator(iter, t.liftM(IO(iter.close)))
+  }
+
+  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Array[Byte]), IO] = new EnumeratorP[X, (Identities, Array[Byte]), IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, (Identities, Array[Byte]), F, A](range) {
+      (id, b) => (id, b)
+    }
+  }
+
+  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Array[Byte]), IO] = 
+    getPairsByIdRange(Interval(Some(id), Some(id)))
+
+
+  /**
+   * Retrieve all IDs for IDs in the given range [start,end]
+   */  
+  def getIdsInRange[X](range : Interval[Identities]) = new EnumeratorP[X, Identities, IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Identities, F, A](range) {
+      (id, b) => id
+    }
+  }
+
+  /**
+   * Retrieve all values for IDs in the given range [start,end]
+   */  
+  def getValuesByIdRange[X](range: Interval[Identities]) = new EnumeratorP[X, Array[Byte], IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Array[Byte], F, A](range) {
+      (id, b) => b
+    }
+  }
+
+  def getValueForId[X](id: Identities): EnumeratorP[X, Array[Byte], IO] = 
+    getValuesByIdRange(Interval(Some(id), Some(id)))
+
+  //////////////////////
+  // Value Traversals //
+  //////////////////////
+
+//  /**
+//   * Retrieve all distinct values.
+//   */
+//  def getAllValues[F[_] : MonadIO, A] : EnumeratorT[Unit, Array[Byte], F, A] = {
+//    def valuePart(arr: Array[Byte]) = arr.take(arr.length - 8)
+//    def enumerator(iter : DBIterator, close : F[Unit]): EnumeratorT[Unit, Array[Byte], F, A] = { s =>
+//      s.fold(
+//        cont = k => if (iter.hasNext) {
+//          logger.trace("Processing next valIndex value")
+//          val valueKey = iter.next.getKey
+//          val value = valuePart(valueKey)
+//
+//          // advance the iterator until the next value to be taken from it is either the end of the iterator
+//          // or not equal to the current value (this operation gives 'distinct' semantics)
+//          while (iter.hasNext && comparator.compare(valueKey, iter.peekNext.getKey) == 0) {
+//            logger.trace("  advancing iterator on same value")
+//            iter.next
+//          }
+//
+//          k(elInput(value)) >>== enumerator(iter, close)
+//        } else {
+//          logger.trace("No more values")
+//          iterateeT(close >> s.pointI.value)
+//        }, 
+//        done = (_, _) => { logger.trace("Done with iteration"); iterateeT(close >> s.pointI.value) },
+//        err = _ => { logger.trace("Error on iteration"); iterateeT(close >> s.pointI.value) }
+//      )
+//    }
+//       
+//    val iter = valIndexFile.iterator 
+//    iter.seekToFirst()
+//    enumerator(iter, IO(iter.close).liftIO[F])
+//  }
+//
+//  /**
+//   * Retrieve all IDs for values in the given range [start,end]
+//   */
+//  def getIdsByValueRange[F[_] : MonadIO, A](range : Interval[Array[Byte]]): EnumeratorT[Unit, Identities, F, A] = {
+//    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Identities, F, A] = { s =>
+//      s.fold(
+//        cont = k => if (iter.hasNext) {
+//          val n = iter.next
+//          val (cv, ci) = n.getKey.splitAt(n.getKey.length - 8)
+//          range.end match {
+//            case Some(end) if comparator.compare(cv, end) >= 0 => iterateeT(close >> s.pointI.value)
+//            case _ => k(elInput(ci.as[Identities])) >>== enumerator(iter, close)
+//          }
+//        } else {
+//          iterateeT(close >> s.pointI.value)
+//        },
+//        done = (_, _) => iterateeT(close >> s.pointI.value),
+//        err = _ => iterateeT(close >> s.pointI.value)
+//      )
+//    }
+//
+//    val iter = valIndexFile.iterator
+//    range.start match {
+//      case Some(v) => iter.seek(columnKeys(0L, v)._2)
+//      case None    => iter.seekToFirst()
+//    }
+//
+//    enumerator(iter, IO(iter.close).liftIO[F])
+//  }
+//
+//  /**
+//   * Retrieve all IDs for the given value
+//   */
+//  def getIdsForValue[F[_] : MonadIO, A](v : Array[Byte]): EnumeratorT[Unit, Identities, F, A] = 
+//    getIdsByValueRange(Interval(Some(v), Some(v)))
+//
+//  /**
+//   * Retrieve all values in the given range [start,end]
+//   */
+//  def getValuesInRange[F[_] : MonadIO, A](range : Interval[Array[Byte]]): EnumeratorT[Unit, Array[Byte], F, A] = {
+//    def enumerator(iter: DBIterator, close: F[Unit]): EnumeratorT[Unit, Array[Byte], F, A] = { s =>
+//      s.fold(
+//        cont = k => if (iter.hasNext) {
+//          val n = iter.next
+//          val (cv,ci) = n.getKey.splitAt(n.getKey.length - 8)
+//          range.end match {
+//            case Some(end) if comparator.compare(cv, end) >= 0 => iterateeT(close >> s.pointI.value)
+//            case _ => k(elInput(cv)) >>== enumerator(iter, close)
+//          }
+//        } else {
+//          iterateeT(close >> s.pointI.value)
+//        },
+//        done = (_, _) => iterateeT(close >> s.pointI.value),
+//        err = _ => iterateeT(close >> s.pointI.value)
+//      )
+//    }
+//
+//    val iter = valIndexFile.iterator
+//    range.start match {
+//      case Some(v) => 
+//        val (_, valIndexBytes) = columnKeys(0L, v)
+//        iter.seek(valIndexBytes)
+//      case None => iter.seekToFirst()
+//    }
+//    enumerator(iter, IO(iter.close).liftIO[F])
+//  }
+}
