@@ -17,19 +17,22 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "util"
+package com.reportgrid
 
-organization := "com.querio"
+package object yggdrasil {
+  type Identity = Long
+  type Identities = Vector[Identity]
+  type SEvent = (Identities, SValue)
 
-version := "0.1.0"
+  implicit object IdentitiesOrdering extends Ordering[Identities] {
+    def compare(id1: Identities, id2: Identities) = {
+      (id1 zip id2).foldLeft(0) {
+        case (acc, (i1, i2)) => if (acc != 0) acc else implicitly[Ordering[Identity]].compare(i1, i2)
+      }
+    }
+  }
+}
 
-scalaVersion := "2.9.1"
 
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
 
-libraryDependencies ++= Seq(
-  "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT"                changing(),
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources() changing())
-  
-logBuffered := false       // gives us incremental output from Specs2
+// vim: set ts=4 sw=4 et:

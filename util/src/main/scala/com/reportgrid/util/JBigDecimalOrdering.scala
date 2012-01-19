@@ -17,19 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "util"
+package com.reportgrid.common
 
-organization := "com.querio"
+import scala.math.Ordering
 
-version := "0.1.0"
+import java.math._
 
-scalaVersion := "2.9.1"
-
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-libraryDependencies ++= Seq(
-  "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT"                changing(),
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources() changing())
-  
-logBuffered := false       // gives us incremental output from Specs2
+object JBigDecimalOrdering extends Ordering[BigDecimal] {
+  def compare(a : BigDecimal, b : BigDecimal) = a.compareTo(b)
+}

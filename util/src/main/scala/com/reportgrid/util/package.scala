@@ -17,19 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "util"
+package com.reportgrid
 
-organization := "com.querio"
+import scalaz.Order
+import java.util.Comparator
 
-version := "0.1.0"
+package object util {
+  class Order2JComparator[A](order: Order[A]) {
+    def toJavaComparator: Comparator[A] = new Comparator[A] {
+      def compare(a1: A, a2: A) = order.order(a1, a2).toInt
+    }
+  }
 
-scalaVersion := "2.9.1"
+  implicit def Order2JComparator[A](order: Order[A]): Order2JComparator[A] = new Order2JComparator(order)
+}
 
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
 
-libraryDependencies ++= Seq(
-  "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT"                changing(),
-  "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources() changing())
-  
-logBuffered := false       // gives us incremental output from Specs2
+// vim: set ts=4 sw=4 et:

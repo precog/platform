@@ -72,7 +72,7 @@ object Path extends PathSerialization {
 
   private def cleanPath(string: String): String = string.replaceAll("^/|/$", "").replaceAll("/+", "/")
 
-  implicit def apply(path: String): Path = new Path(cleanPath(path).split("/").filterNot(_.trim.isEmpty): _*)
+  def apply(path: String): Path = new Path(cleanPath(path).split("/").filterNot(_.trim.isEmpty): _*)
 
   def apply(elements: List[String]): Path = apply(elements.mkString("/"))
 

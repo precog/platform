@@ -62,7 +62,6 @@ trait MetadataSerialization {
 }
 
 object Metadata extends MetadataSerialization {
-  
   def toTypedMap(set: Set[Metadata]): MMap[MetadataType, Metadata] = {
     set.foldLeft(MMap[MetadataType, Metadata]()) ( (acc, el) => acc + (typeOf(el) -> el) ) 
   }
@@ -79,7 +78,7 @@ object Metadata extends MetadataSerialization {
   def valueStats(jval: JValue): Option[Metadata] = typedValueStats(jval).map( _._2 )
 
   def typedValueStats(jval: JValue): Option[(MetadataType, Metadata)] = jval match {
-    case JBool(b)     => Some((BooleanValueStats, BooleanValueStats(1, if(b) 1 else 0)))
+    case JBool(b)     => Some((BooleanValueStats, BooleanValueStats(2, if(b) 1 else 0)))
     case JInt(i)      => Some((BigDecimalValueStats, BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i))))
     case JDouble(d)   => Some((DoubleValueStats, DoubleValueStats(1, d, d)))
     case JString(s)   => Some((StringValueStats, StringValueStats(1, s, s)))
@@ -131,7 +130,6 @@ object Metadata extends MetadataSerialization {
       case _                                                                         => error("Invalid attempt to combine incompatible metadata")
     }
   }
-
 }
 
 case class Ownership(owners: Set[String]) extends Metadata {
@@ -156,24 +154,6 @@ trait OwnershipSerialization {
 
 object Ownership extends MetadataType with OwnershipSerialization with Function1[Set[String], Ownership]
 
-case class ProjectionMetadata(descriptor: ProjectionDescriptor) extends Metadata {
- def merge(other: Metadata) = None 
-}
-
-trait ProjectionMetadataSerialization {
-  implicit val ProjectionMetadataDecomposer: Decomposer[ProjectionMetadata] = new Decomposer[ProjectionMetadata] {
-    override def decompose(projection: ProjectionMetadata): JValue = {
-      JObject(JField("descriptor", projection.descriptor) :: Nil)
-    }
-  }
-
-  implicit val ProjectionMetadataExtractor: Extractor[ProjectionMetadata] = new Extractor[ProjectionMetadata] with ValidatedExtraction[ProjectionMetadata] {
-    override def validated(obj: JValue): Validation[Error, ProjectionMetadata] =
-      (obj \ "descriptor").validated[ProjectionDescriptor].map(ProjectionMetadata(_))
-  }
-}
-
-object ProjectionMetadata extends MetadataType with ProjectionMetadataSerialization with Function1[ProjectionDescriptor, ProjectionMetadata]
 
 case class BooleanValueStats(count: Long, trueCount: Long) extends Metadata {
   def falseCount: Long = count - trueCount
@@ -246,17 +226,12 @@ trait StringValueStatsSerialization {
 
 object StringValueStats extends MetadataType with StringValueStatsSerialization with Function3[Long, String, String, StringValueStats]
 
-sealed trait SortBy
-
-case object ById extends SortBy
-case object ByValue extends SortBy
-
+/** Sorting Metadata */
 sealed trait SortOrder
 
 case object AscendingOrder extends SortOrder
 case object DescendingOrder extends SortOrder
 
-case class ColumnSorting(sortDescription: (SortBy, SortOrder)) extends Metadata {
+case class ColumnSorting(sortOrder: SortOrder) extends Metadata {
   def merge(other: Metadata) = sys.error("todo")
 }
-
