@@ -345,7 +345,8 @@ trait DAG extends Instructions {
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = instr match {
-        case _: Map2CrossRight => (right.provenance ++ left.provenance).distinct
+        case _: Map2CrossRight => right.provenance ++ left.provenance
+        case _: Map2Cross | _: Map2CrossLeft => left.provenance ++ right.provenance
         
         case _ => (left.provenance ++ right.provenance).distinct
       }
@@ -353,17 +354,26 @@ trait DAG extends Instructions {
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
       lazy val provenance = cross match {
-        case Some(CrossRight) => (boolean.provenance ++ target.provenance).distinct
-        case _ => (target.provenance ++ boolean.provenance).distinct
+        case Some(CrossRight) => boolean.provenance ++ target.provenance
+        case Some(CrossLeft) | Some(CrossNeutral) => target.provenance ++ boolean.provenance
+        case None => (target.provenance ++ boolean.provenance).distinct
       }
     }
     
-    case class Sort(parent: DepGraph, index: Int) extends DepGraph {
+    case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
       val loc = parent.loc
       
       lazy val provenance = {
-        val (left, right) = parent.provenance splitAt index
-        left.last +: (left.init ++ right)
+        val (first, second) = parent.provenance.zipWithIndex partition {
+          case (_, i) => indexes contains i
+        }
+        
+        val prefix = first sortWith {
+          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
+        }
+        
+        val (back, _) = (prefix ++ second).unzip
+        back
       }
     }
     
