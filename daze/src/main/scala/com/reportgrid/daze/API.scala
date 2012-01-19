@@ -1,6 +1,6 @@
 package com.querio.daze
 
-import com.reportgrid.common.json._
+import com.reportgrid.yggdrasil._
 import com.reportgrid.analytics.Path
 import scalaz._
 import scalaz.effect._

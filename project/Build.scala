@@ -28,7 +28,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, storage, bytecode, daze, ingest)
+  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest)
   
   lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings : _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings: _*)
@@ -36,9 +36,9 @@ object PlatformBuild extends Build {
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings: _*) dependsOn util
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings: _*) dependsOn (bytecode, util)
   
-  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode) // (bytecode, storage)
+  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode) // (bytecode, yggdrasil)
   
-  lazy val storage  = Project(id = "storage", base = file("storage")).settings(nexusSettings : _*).dependsOn(common)
+  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings ++ Seq(libraryDependencies ++= clientLibDeps.libDeps)
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)

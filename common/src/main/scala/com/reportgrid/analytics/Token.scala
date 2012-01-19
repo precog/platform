@@ -33,7 +33,7 @@ case class Token(tokenId: String, parentTokenId: Option[String], accountTokenId:
   /** Issues a new token derived from this one. By default, the token will
    * have the same permissions, expiration date, and limit of this token.
    */
-  def issue(relativePath: Path = "/", permissions: Permissions = this.permissions, expires: DateTime = this.expires, limits: Limits = this.limits): Token = Token(
+  def issue(relativePath: Path = Path("/"), permissions: Permissions = this.permissions, expires: DateTime = this.expires, limits: Limits = this.limits): Token = Token(
     tokenId        = Token.newUUID(),
     parentTokenId  = Some(this.tokenId),
     accountTokenId = this.accountTokenId,
@@ -80,13 +80,13 @@ object Token extends TokenSerialization {
 
   val Never = new DateTime(java.lang.Long.MAX_VALUE, DateTimeZone.UTC)
 
-  lazy val Root = Token("8E680858-329C-4F31-BEE3-2AD15FB67EED", None, "8E680858-329C-4F31-BEE3-2AD15FB67EED", "/", Permissions(true, true, true, true), Never, Limits.None)
+  lazy val Root = Token("8E680858-329C-4F31-BEE3-2AD15FB67EED", None, "8E680858-329C-4F31-BEE3-2AD15FB67EED", Path("/"), Permissions(true, true, true, true), Never, Limits.None)
 
   lazy val Test = Token(
     tokenId        = "A3BC1539-E8A9-4207-BB41-3036EC2C6E6D",
     parentTokenId  = Some(Root.tokenId),
     accountTokenId = "A3BC1539-E8A9-4207-BB41-3036EC2C6E6D",
-    path           = "test-account-root",
+    path           = Path("test-account-root"),
     permissions    = Permissions(true, true, true, true),
     expires        = Never,
     limits         = Limits(order = 2, depth = 3, limit = 20, tags = 2)
