@@ -69,7 +69,7 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
     projectionDirMap.get(descriptor) match {
       case Some(dir) => dir
       case None => {
-        val newDir = new File(baseDir, toPath(descriptor.columns.map(_._1.qsel).toList) + projectionSuffix(descriptor))
+        val newDir = new File(baseDir, toPath(descriptor.columns.map(_.qsel).toList) + projectionSuffix(descriptor))
         LevelDBProjection.descriptorSync(newDir).sync(descriptor).unsafePerformIO.fold({ t => logger.error("Failed to sync descriptor: " + t) },
                                                                                        { _ => ()})
         projectionDirMap += (descriptor -> newDir)
@@ -162,7 +162,7 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
   def registerCheckpointExpectation(pid: Int, eid: Int, count: Int): Unit = metadataActor ! ExpectedEventActions(pid, eid, count)
 
   def extractMetadataFor(desc: ProjectionDescriptor, boundMetadata: Set[(ColumnDescriptor, JValue)]): Seq[Set[Metadata]] = 
-    desc.columns flatMap { case (c, _) => boundMetadata.exists(_._1 == c).option(c.metadata) } toSeq
+    desc.columns flatMap { c => boundMetadata.exists(_ == c).option(c.metadata) } toSeq
 }
 
 case class ProjectionInsert(id: Long, values: Seq[JValue])
@@ -171,7 +171,7 @@ case class ProjectionGet(idInterval : Interval[Identities], sender : ActorRef)
 
 trait ProjectionResults {
   val desc : ProjectionDescriptor
-  def enumerator[A] : EnumeratorT[Unit, Array[Byte], ({type l[a] = IdT[IO, a]})#l, A]
+  def enumerator[A] : EnumeratorT[Unit, Seq[CValue], ({type l[a] = IdT[IO, a]})#l, A]
 }
 
 class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
