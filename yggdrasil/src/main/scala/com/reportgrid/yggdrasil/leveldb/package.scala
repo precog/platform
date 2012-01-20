@@ -26,11 +26,12 @@ import com.reportgrid.util.Bijection._
 import blueeyes.json.JsonAST._
 import blueeyes.json.Printer._
 
-import java.math._
+import java.math.BigInteger
 import java.nio.ByteBuffer
 
 import scala.annotation.tailrec
 import scala.collection.generic.CanBuildFrom
+import scala.math.BigDecimal
 
 
 // TODO: optimize
@@ -90,8 +91,8 @@ package object leveldb {
   }
 
   implicit object bd2ab extends Bijection[BigDecimal, Array[Byte]] {
-    def apply(bd: BigDecimal) = bd.scale.as[Array[Byte]] ++ bd.unscaledValue.toByteArray
-    def unapply(ab: Array[Byte]) = new BigDecimal(new BigInteger(ab.drop(4)), ab.take(4).as[Int])
+    def apply(bd: BigDecimal) = bd.bigDecimal.scale.as[Array[Byte]] ++ bd.bigDecimal.unscaledValue.toByteArray
+    def unapply(ab: Array[Byte]) = new BigDecimal(new java.math.BigDecimal(new BigInteger(ab.drop(4)), ab.take(4).as[Int]))
   }
 
   implicit def l2ab[M[X] <: Traversable[X], T](implicit cbf: CanBuildFrom[Stream[T], T, M[T]], bij: Bijection[T, Array[Byte]]): Bijection[M[T], Array[Byte]] = new Bijection[M[T], Array[Byte]] {

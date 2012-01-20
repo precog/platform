@@ -25,7 +25,7 @@ import com.reportgrid.util._
 import Bijection._
 
 import org.iq80.leveldb._
-import java.math.BigDecimal
+import scala.math.BigDecimal
 import java.util.Comparator
 
 trait ColumnComparator extends Comparator[Array[Byte]] {
@@ -33,7 +33,7 @@ trait ColumnComparator extends Comparator[Array[Byte]] {
 }
 
 object ColumnComparator {
-  def apply(t: SType): ColumnComparator = t match {
+  def apply(t: ColumnType): ColumnComparator = t match {
     case SLong    => new LongComparator
     case SDouble  => new DoubleComparator
     case SBoolean => new BooleanComparator
@@ -89,7 +89,7 @@ class DoubleProjectionComparator extends DoubleComparator with ProjectionCompara
 
 class BigDecimalComparator(val width: Array[Byte] => Int) extends ColumnComparator {
   def compare(a : Array[Byte], b : Array[Byte]) = {
-    a.take(width(a)).as[BigDecimal].compareTo(b.take(width(b)).as[BigDecimal])
+    a.take(width(a)).as[BigDecimal].bigDecimal.compareTo(b.take(width(b)).as[BigDecimal].bigDecimal)
   }
 }
 
@@ -145,7 +145,7 @@ object ProjectionComparator {
   val Boolean = new BooleanProjectionComparator
   val String = new StringProjectionComparator
 
-  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_._1.qsel.valueType).toList match {
+  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_.qsel.valueType).toList match {
     case SLong :: Nil           => ProjectionComparator.Long
     case SDouble :: Nil         => ProjectionComparator.Double
     case SBoolean :: Nil        => ProjectionComparator.Boolean
