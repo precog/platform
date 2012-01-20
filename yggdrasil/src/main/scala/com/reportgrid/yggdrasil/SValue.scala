@@ -156,32 +156,25 @@ case object SArray extends SType with (Vector[SValue] => SValue) {
   def unapply(v: SValue): Option[Vector[SValue]] = v.mapArrayOr(Option.empty[Vector[SValue]])(Some(_))
 }
 
-object SString {
+object SString extends (String => SValue) {
   def unapply(v: SValue): Option[String] = v.mapStringOr(Option.empty[String])(Some(_))
+
+  def apply(v: String) = new SValue {
+    def fold[A](
+      obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
+      str:    String => A, bool:   Boolean => A,
+      long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
+      nul:    => A
+    ) = str(v)
+  }
 }
 
-case class SStringFixed(width: Int) extends SType with (String => SValue) {
+case class SStringFixed(width: Int) extends SType {
   def format = FixedWidth(width)  
-  def apply(v: String) = new SValue {
-    def fold[A](
-      obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
-      str:    String => A, bool:   Boolean => A,
-      long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
-      nul:    => A
-    ) = str(v)
-  }
 }
 
-case object SStringArbitrary extends SType with (String => SValue) {
+case object SStringArbitrary extends SType {
   def format = LengthEncoded  
-  def apply(v: String) = new SValue {
-    def fold[A](
-      obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
-      str:    String => A, bool:   Boolean => A,
-      long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
-      nul:    => A
-    ) = str(v)
-  }
 }
 
 case object SBoolean extends SType with (Boolean => SValue) {
@@ -247,8 +240,12 @@ case object SDouble extends SType with (Double => SValue) {
   def unapply(v: SValue): Option[Double] = v.mapDoubleOr(Option.empty[Double])(Some(_))
 }
 
-case object SDecimalArbitrary extends SType with (BigDecimal => SValue) {
+case object SDecimalArbitrary extends SType {
   def format = LengthEncoded  
+}
+
+object SDecimal extends (BigDecimal => SValue) {
+  def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
   def apply(v: BigDecimal) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -257,10 +254,6 @@ case object SDecimalArbitrary extends SType with (BigDecimal => SValue) {
       nul:    => A
     ) = num(v)
   }
-}
-
-object SDecimal {
-  def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
 }
 
 case object SNull extends SType with SValue {
