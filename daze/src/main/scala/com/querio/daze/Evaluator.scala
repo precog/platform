@@ -20,7 +20,7 @@
 package com.querio
 package daze
 
-import scalaz._
+import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.traverse._
@@ -34,6 +34,17 @@ import com.reportgrid.util._
 trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
   import instructions._
   import dag._
+
+  private implicit object IdentitiesOrder extends Order[SEvent] {
+    def order(e1: SEvent, e2: SEvent) = {
+      val (ids1, _) = e1
+      val (ids2, _) = e2
+      ids1.zip(ids2).foldLeft[Ordering](Ordering.EQ) {
+        case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
+        case (acc, _) => acc
+      }
+    }
+  }
   
   def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
     def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] = graph match {
@@ -88,31 +99,29 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case dag.Reduce(_, red, parent) => {
-        //val enum = loop(parent, roots).enum
+        val enum = loop(parent, roots).enum
 
-        //val reducedEnumP: EnumeratorP[X, SEvent, IO] = new EnumeratorP[X, SEvent, IO] {
-        //  override def apply[F[_[_], _], A](implicit mt: MonadTrans[F]) = (step: StepT[X, SEvent, ({type λ[α] = F[IO, α] })#λ, A]) => {
-        //    type FIO[α] = F[IO, α]
-        //    type EnumeratorM[α] = EnumeratorT[X, SEvent, FIO, α]
-        //    implicit val FMonad: Monad[FIO] = mt[IO]
+        val reducedEnumP: EnumeratorP[X, SEvent, IO] = new EnumeratorP[X, SEvent, IO] {
+          override def apply[F[_[_], _], A](implicit mt: MonadTrans[F]) = (step: StepT[X, SEvent, ({type λ[α] = F[IO, α] })#λ, A]) => {
+            type FIO[α] = F[IO, α]
+            type EnumeratorM[α] = EnumeratorT[X, SEvent, FIO, α]
+            implicit val FMonad: Monad[FIO] = mt[IO]
 
-        //    for {
-        //      opt <- reductionIter[X, F](red) >>== enum[F, Option[SValue]]
-        //      a   <- step.pointI >>== (opt.map(sv => EnumeratorT.point[X, SEvent, FIO, A](Vector(), sv)).getOrElse(PlusEmpty[EnumeratorM].empty[A]))
-        //    } yield a
-        //  }
-        //}
+            for {
+              opt <- reductionIter[X, F](red) >>== enum[F, Option[SValue]]
+              a   <- step.pointI >>== (opt.map(sv => EnumeratorT.point[X, SEvent, FIO, A](Vector(), sv)).getOrElse(PlusEmpty[EnumeratorM].empty[A]))
+            } yield a
+          }
+        }
 
-        //DatasetEnum[X, SEvent, IO](reducedEnumP)
-
-        sys.error(""): DatasetEnum[X, SEvent, IO]
+        DatasetEnum[X, SEvent, IO](reducedEnumP)
       }
       
       case dag.Split(_, parent, child) => {
         val splitEnum = loop(parent, roots)
         
         ops.flatMap(splitEnum) {
-          case (_, sv) => loop(child, ops.point((Vector(), sv)) :: roots)
+          case (_, sv) => loop(child, ops.point[X, IO]((Vector(), sv)) :: roots)
         }
       }
       
@@ -134,7 +143,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
             else
               ids1 ++ ids2
             
-            binaryOp(op)(sv1, sv2)
+            binaryOp(op)(sv1, sv2) map { sv => (ids, sv) }
           }
         }
       }
@@ -144,10 +153,10 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         val booleanEnum = loop(boolean, roots)
         
         val (pairs, distinct) = cross match {
-          case None => (ops.join(leftEnum, rightEnum), true)
-          case Some(CrossNeutral) => (ops.crossLeft(leftEnum, rightEnum), op, false)
-          case Some(CrossLeft) => (ops.crossLeft(leftEnum, rightEnum), op, false)
-          case Some(CrossRight) => (ops.crossRight(leftEnum, rightEnum), op, false)
+          case None => (ops.join(targetEnum, booleanEnum), true)
+          case Some(CrossNeutral) => (ops.crossLeft(targetEnum, booleanEnum), false)
+          case Some(CrossLeft) => (ops.crossLeft(targetEnum, booleanEnum), false)
+          case Some(CrossRight) => (ops.crossRight(targetEnum, booleanEnum), false)
         }
         
         ops.mapOpt(pairs) {
@@ -171,7 +180,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     loop(orderCrosses(graph), Nil)
   }
   
-  //private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SEvent, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = sys.error("no reductions implemented yet...")
+  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SEvent, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = sys.error("no reductions implemented yet...")
   
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
     import Function._
@@ -252,7 +261,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           if (i < 0 || i >= arr.length) {
             None
           } else {
-            val (left, right) = arr sliceAt i
+            val (left, right) = arr splitAt i
             Some(SArray(left.init ++ Vector(right.head, left.last) ++ left.tail))
           }
         }
