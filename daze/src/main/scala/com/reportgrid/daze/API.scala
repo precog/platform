@@ -2,7 +2,7 @@ package com.querio.daze
 
 import com.reportgrid.yggdrasil._
 import com.reportgrid.analytics.Path
-import scalaz._
+import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 
@@ -27,15 +27,15 @@ trait StorageEngineAPI extends StorageEngineInsertAPI with StorageEngineQueryAPI
 trait DatasetEnumInstances {
   def cogroup[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F]
 
-  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, SEvent, F]
+  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F]
 
-  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, SEvent, F]
+  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F]
 
   def join[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, (SEvent, SEvent), F]
 
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
 
-  def sort[X, F[_]: Monad](enum: DatasetEnum[X, SEvent, F], identityIndex: Int): DatasetEnum[X, SEvent, F]
+  def sort[X, F[_]: Monad](enum: DatasetEnum[X, SEvent, F], identityIndices: Vector[Int]): DatasetEnum[X, SEvent, F]
   
   def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F]
 
