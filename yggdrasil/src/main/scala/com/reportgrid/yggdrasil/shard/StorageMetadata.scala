@@ -185,14 +185,15 @@ class ShardMetadataActor(projections: MMap[ProjectionDescriptor, Seq[MMap[Metada
     def matchingColumns(projs: MMap[ProjectionDescriptor, Seq[MetadataMap]])  =
       projs.toSeq flatMap { 
         case (descriptor, metadata) =>
-          descriptor.columns.map(_._1) zip metadata filter { 
+          descriptor.columns zip metadata filter { 
             case (ColumnDescriptor(qsel, _), _) => matchingColumn(qsel)
           }
       }
       
-    def convertMetadata(columns: Seq[(QualifiedSelector, MetadataMap)]): Map[SType, MetadataMap] = {
-      columns.foldLeft(Map[SType, MetadataMap]()) { (acc, t) => 
-        acc + (t._1.valueType -> acc.get(t._1.valueType).map(_ |+| t._2).getOrElse(t._2))
+    def convertMetadata(columns: Seq[(QualifiedSelector, MetadataMap)]): Map[ColumnType, MetadataMap] = {
+      columns.foldLeft(Map.empty[ColumnType, MetadataMap]) { 
+        case (acc, (qsel, mmap)) => 
+          acc + (qsel.valueType -> acc.get(qsel.valueType).map(_ |+| mmap).getOrElse(mmap))
       }
     }
 

@@ -44,7 +44,7 @@ case object ById extends SortBy
 case object ByValue extends SortBy
 case object ByValueThenId extends SortBy
 
-case class QualifiedSelector(path: Path, selector: JPath, valueType: SType) 
+case class QualifiedSelector(path: Path, selector: JPath, valueType: ColumnType) 
 
 trait QualifiedSelectorSerialization {
   implicit val QualifiedSelectorDecomposer : Decomposer[QualifiedSelector] = new Decomposer[QualifiedSelector] {
@@ -59,12 +59,12 @@ trait QualifiedSelectorSerialization {
     override def validated(obj : JValue) : Validation[Error,QualifiedSelector] = 
       ((obj \ "path").validated[Path] |@|
        (obj \ "selector").validated[JPath] |@|
-       (obj \ "valueType").validated[SType]).apply(QualifiedSelector(_,_,_))
+       (obj \ "valueType").validated[ColumnType]).apply(QualifiedSelector(_,_,_))
   }
 }
 
 object QualifiedSelector extends QualifiedSelectorSerialization 
-with ((Path, JPath, SType) => QualifiedSelector)
+with ((Path, JPath, ColumnType) => QualifiedSelector)
 
 
 case class ColumnDescriptor(qsel: QualifiedSelector, metadata: Set[Metadata]) 
@@ -90,7 +90,16 @@ object ColumnDescriptor extends ColumnDescriptorSerialization
 /** 
  * The descriptor for a projection 
  */
-case class ProjectionDescriptor private (identiies: Int, columns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)])
+case class ProjectionDescriptor private (identiies: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) {
+  lazy val columns = indexedColumns.map(_._1).toList 
+}
+
+trait ByteProjection {
+  def descriptor: ProjectionDescriptor
+
+  def project(id: Identities, v: Seq[CValue]): (Array[Byte], Array[Byte]) 
+  def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E
+}
 
 trait ProjectionDescriptorSerialization {
   implicit val ProjectionDescriptorDecomposer : Decomposer[ProjectionDescriptor] = new Decomposer[ProjectionDescriptor] {

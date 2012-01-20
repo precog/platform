@@ -73,44 +73,69 @@ trait SValue {
     fold(d, d, d, d, d, d, f, a)
   }
 
-  def mapNullOr[A](a: => A): A = {
+  def mapNullOr[A](a: => A)(ifNull: => A): A = {
     val d = (_: Any) => a
-    fold(d, d, d, d, d, d, d, a)
+    fold(d, d, d, d, d, d, d, ifNull)
   }
 }
 
-sealed trait StorageFormat 
+trait SValueInstances {
+  implicit def equal: Equal[SValue] = new Equal[SValue] {
+    def equal(sv1: SValue, sv2: SValue) = {
+      (sv1 eq sv2) || sv1.fold(
+        obj    = v => sv2.mapObjectOr(false)(_ == v),
+        arr    = v => sv2.mapArrayOr(false)(_ == v),
+        str    = v => sv2.mapStringOr(false)(_ == v),
+        bool   = v => sv2.mapBooleanOr(false)(_ == v),
+        long   = v => sv2.mapLongOr(false)(_ == v),
+        double = v => sv2.mapDoubleOr(false)(_ == v),
+        num    = v => sv2.mapBigDecimalOr(false)(_ == v),
+        nul    = sv2.mapNullOr(false)(true)
+      )
+    }
+  }
+}
 
-case object CompositeFormat extends StorageFormat 
-case object LengthEncoded extends StorageFormat 
-case class  FixedWidth(width: Int) extends StorageFormat 
+object SValue extends SValueInstances
 
-sealed trait SType { 
+sealed trait SType 
+
+sealed trait StorageFormat {
+  def min(i: Int): Int
+}
+
+case object LengthEncoded extends StorageFormat {
+  def min(i: Int) = i
+}
+
+case class  FixedWidth(width: Int) extends StorageFormat {
+  def min(i: Int) = width min i
+}
+
+sealed trait ColumnType { self: SType =>
   def format: StorageFormat 
 }
 
-trait STypeSerialization {
-  def nameOf(c: SType): String = c match {
-    case SObject                => "Object"
-    case SEmptyObject           => "SEmptyObject"
-    case SArray                 => "Array"
-    case SEmptyArray            => "EmptyArray"
+trait ColumnTypeSerialization {
+  def nameOf(c: ColumnType): String = c match {
     case SStringFixed(width)    => "String("+width+")"
     case SStringArbitrary       => "String"
     case SBoolean               => "Boolean"
+    case SInt                   => "Int"
     case SLong                  => "Long"
+    case SFloat                 => "Float"
     case SDouble                => "Double"
     case SDecimalArbitrary      => "Decimal"
     case SNull                  => "Null"
+    case SEmptyObject           => "SEmptyObject"
+    case SEmptyArray            => "EmptyArray"
   } 
 
-  def fromName(n: String): Option[SType] = {
+  def fromName(n: String): Option[ColumnType] = {
     val FixedStringR = """String\(\d+\)""".r
     n match {
       case FixedStringR(w)      => Some(SStringFixed(w.toInt))
-      case "Object"      => Some(SObject)
       case "EmptyObject" => Some(SEmptyObject)
-      case "Array"       => Some(SArray)
       case "EmptyArray"  => Some(SEmptyArray)
       case "String"      => Some(SStringArbitrary)
       case "Boolean"     => Some(SBoolean)
@@ -122,12 +147,12 @@ trait STypeSerialization {
     }
   }
     
-  implicit val PrimtitiveTypeDecomposer : Decomposer[SType] = new Decomposer[SType] {
-    def decompose(ctype : SType) : JValue = JString(nameOf(ctype))
+  implicit val PrimtitiveTypeDecomposer : Decomposer[ColumnType] = new Decomposer[ColumnType] {
+    def decompose(ctype : ColumnType) : JValue = JString(nameOf(ctype))
   }
 
-  implicit val STypeExtractor : Extractor[SType] = new Extractor[SType] with ValidatedExtraction[SType] {
-    override def validated(obj : JValue) : Validation[Error,SType] = 
+  implicit val STypeExtractor : Extractor[ColumnType] = new Extractor[ColumnType] with ValidatedExtraction[ColumnType] {
+    override def validated(obj : JValue) : Validation[Error,ColumnType] = 
       obj.validated[String].map( fromName _ ) match {
         case Success(Some(t)) => Success(t)
         case Success(None)    => Failure(Invalid("Unknown type."))
@@ -136,8 +161,8 @@ trait STypeSerialization {
   }
 }
 
-object SType extends STypeSerialization {
-  def forValue(jval: JValue): Option[SType] = jval match {
+object ColumnType extends ColumnTypeSerialization {
+  def forValue(jval: JValue): Option[ColumnType] = jval match {
     case JBool(_)   => Some(SBoolean)
     case JInt(_)    => Some(SDecimalArbitrary)
     case JDouble(_) => Some(SDouble)
@@ -148,7 +173,6 @@ object SType extends STypeSerialization {
 }
 
 case object SObject extends SType with (Map[String, SValue] => SValue) {
-  def format = CompositeFormat
   def apply(f: Map[String, SValue]) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -162,7 +186,6 @@ case object SObject extends SType with (Map[String, SValue] => SValue) {
 }
 
 case object SArray extends SType with (Vector[SValue] => SValue) {
-  def format = CompositeFormat
   def apply(v: Vector[SValue]) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -188,15 +211,15 @@ object SString extends (String => SValue) {
   }
 }
 
-case class SStringFixed(width: Int) extends SType {
+case class SStringFixed(width: Int) extends SType with ColumnType {
   def format = FixedWidth(width)  
 }
 
-case object SStringArbitrary extends SType {
+case object SStringArbitrary extends SType with ColumnType {
   def format = LengthEncoded  
 }
 
-case object SBoolean extends SType with (Boolean => SValue) {
+case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def format = FixedWidth(1)
   def apply(v: Boolean) = new SValue {
     def fold[A](
@@ -209,7 +232,7 @@ case object SBoolean extends SType with (Boolean => SValue) {
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
 }
 
-case object SInt extends SType with (Int => SValue) {
+case object SInt extends SType with ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
   def apply(v: Int) = new SValue {
     def fold[A](
@@ -221,7 +244,7 @@ case object SInt extends SType with (Int => SValue) {
   }
 }
 
-case object SLong extends SType with (Long => SValue) {
+case object SLong extends SType with ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
   def apply(v: Long) = new SValue {
     def fold[A](
@@ -234,7 +257,7 @@ case object SLong extends SType with (Long => SValue) {
   def unapply(v: SValue): Option[Long] = v.mapLongOr(Option.empty[Long])(Some(_))
 }
 
-case object SFloat extends SType with (Float => SValue) {
+case object SFloat extends SType with ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
   def apply(v: Float) = new SValue {
     def fold[A](
@@ -246,7 +269,7 @@ case object SFloat extends SType with (Float => SValue) {
   }
 }
 
-case object SDouble extends SType with (Double => SValue) {
+case object SDouble extends SType with ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
   def apply(v: Double) = new SValue {
     def fold[A](
@@ -259,7 +282,7 @@ case object SDouble extends SType with (Double => SValue) {
   def unapply(v: SValue): Option[Double] = v.mapDoubleOr(Option.empty[Double])(Some(_))
 }
 
-case object SDecimalArbitrary extends SType {
+case object SDecimalArbitrary extends SType with ColumnType {
   def format = LengthEncoded  
 }
 
@@ -275,8 +298,8 @@ object SDecimal extends (BigDecimal => SValue) {
   }
 }
 
-case object SNull extends SType with SValue {
-  def format = FixedWidth(1)
+case object SNull extends SType with ColumnType with SValue {
+  def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
@@ -285,8 +308,8 @@ case object SNull extends SType with SValue {
   ) = nul
 }
 
-case object SEmptyObject extends SType with SValue {
-  def format = FixedWidth(1)
+case object SEmptyObject extends SType with ColumnType with SValue {
+  def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
@@ -295,8 +318,8 @@ case object SEmptyObject extends SType with SValue {
   ) = obj(Map.empty)
 }
 
-case object SEmptyArray extends SType with SValue {
-  def format = FixedWidth(1)
+case object SEmptyArray extends SType with ColumnType with SValue {
+  def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
