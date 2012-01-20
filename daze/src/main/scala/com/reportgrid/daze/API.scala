@@ -43,12 +43,17 @@ trait DatasetEnumInstances {
 
   def point[X, F[_]: Monad](value: SEvent): DatasetEnum[X, SEvent, F]
 
-  def lift(value: SValue): SEvent
+  def liftM[X, E, F[_]: Monad](value: F[E]): DatasetEnum[X, E, F]
 
   def flatMap[X, E1, E2,  F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F]
+  
+  def mapOpt[X, E1, E2,  F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => Option[E2]): DatasetEnum[X, E2, F]
+
+  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F]
 }
 
 trait OperationsAPI {
+  def query: StorageEngineQueryAPI
   def ops: DatasetEnumInstances
 }
 
