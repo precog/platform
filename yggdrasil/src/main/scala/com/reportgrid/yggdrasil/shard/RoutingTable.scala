@@ -15,12 +15,12 @@ object RoutingTable {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 
-          case (stype, metadata) => (ColumnDescriptor(QualifiedSelector(Path(e.path), sel, stype), meta), metadata) 
+          case (ctype, metadata) => (ColumnDescriptor(QualifiedSelector(Path(e.path), sel, ctype), meta), metadata) 
         }
     }
   }
 
-  def extract(jval: JValue): Option[(SType, JValue)] = SType.forValue(jval).map((_, jval))
+  def extract(jval: JValue): Option[(ColumnType, JValue)] = ColumnType.forValue(jval).map((_, jval))
 }
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {

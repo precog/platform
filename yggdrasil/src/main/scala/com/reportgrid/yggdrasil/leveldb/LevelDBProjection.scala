@@ -9,6 +9,7 @@ import com.reportgrid.util.Bijection._
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import java.io._
+import java.nio.Buffer
 import java.nio.ByteBuffer
 import Bijection._
 
@@ -76,7 +77,7 @@ object LevelDBProjection {
             .flatMap(saveComparator(bd, _)).toValidationNel)
     } yield c
 
-    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, c, descriptor) }
+    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, descriptor, c) }
   }
 
   val descriptorFile = "projection_descriptor.json"
@@ -117,7 +118,7 @@ object LevelDBProjection {
   }
 }
 
-class LevelDBProjection private (baseDir: File, comparator: DBComparator, descriptor: ProjectionDescriptor) { // extends Projection {
+class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor, comparator: DBComparator) extends LevelDBByteProjection { // extends Projection {
   import LevelDBProjection._
 
   val logger = Logger("col:" + baseDir)
@@ -140,34 +141,23 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
 
   def sync: IO[Unit] = IO { } 
 
-  def project(id: Identities, v: Array[Byte]): (Array[Byte], Array[Byte]) = {
-    // all of the identities must be included in the key; also, any values of columns that
-    // use by-value ordering must be included in tthe key. The ordering of columns in the
-    // descriptor prescribes sort preference by column. For a given column, if value orderin
-    // is specified 
-    /*
-    descriptor.columns.flatMap { 
-      case (col, idIndex) =>
-        c.metadata.collectFirst {
-          case ColumnSorting(ById, sortOrder) => columnOrdering(c), sortBy, sortOrder)
-        }
-    }
-    */
-    sys.error("todo")
+  def valueOffsets(values: Array[Byte]): List[Int] = {
+    val buf = ByteBuffer.wrap(values)
+    val positions = descriptor.columns.map(_.qsel.valueType.format).foldLeft(List(0)) {
+      case (v :: vx, FixedWidth(w))  => (v + w) :: v :: vx
+      case (v :: vx, LengthEncoded)  => (v + buf.getInt(v)) :: v :: vx
+    } 
+
+    positions.tail.reverse
   }
 
-  def unproject(key: Array[Byte], value: Array[Byte]): (Identities, Array[Byte]) = {
-    sys.error("todo")
-  }
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
+    val (idBytes, valueBytes) = project(id, v)
 
-  def insert(id : Identities, v : Array[Byte], shouldSync: Boolean = false): IO[Unit] = IO {
-    val (idBytes, valIndexBytes) = project(id, v)
-
-    // Have to rewind because columnKeys read data, advancing position
     if (shouldSync) {
-      idIndexFile.put(idBytes, v, syncOptions)
+      idIndexFile.put(idBytes, valueBytes, syncOptions)
     } else {
-      idIndexFile.put(idBytes, v)
+      idIndexFile.put(idBytes, valueBytes)
     }
   }
 
@@ -175,7 +165,7 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
   // ID Traversals //
   ///////////////////
 
-  def traverseIndex[X, E, F[_[_], _], A](f: (Identities, Array[Byte]) => E)(implicit t: MonadTrans[F])
+  def traverseIndex[X, E, F[_[_], _], A](f: (Identities, Seq[CValue]) => E)(implicit t: MonadTrans[F])
   : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
     type FIO[α] = F[IO, α]
     implicit val fm = t.apply[IO]
@@ -188,7 +178,7 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
         s.fold(
           cont = k => if (iter.hasNext) {
             val n = iter.next
-            k(elInput(f(n.getKey.as[Identities], n.getValue))) >>== enumerator(iter, close)
+            k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== enumerator(iter, close)
           } else {
             _done
           },
@@ -203,8 +193,8 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
     enumerator(iter, t.liftM(IO(iter.close)))
   }
 
-  def getAllPairs[X] : EnumeratorP[X, (Identities, Array[Byte]), IO] = new EnumeratorP[X, (Identities, Array[Byte]), IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, (Identities, Array[Byte]), F, A] {
+  def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, (Identities, Seq[CValue]), F, A] {
       (id, b) => (id, b)
     }
   }
@@ -215,13 +205,13 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
     }
   }
 
-  def getAllValues[X] = new EnumeratorP[X, Array[Byte], IO] { 
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Array[Byte], F, A] {
+  def getAllValues[X] = new EnumeratorP[X, Seq[CValue], IO] { 
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Seq[CValue], F, A] {
       (id, b) => b
     }
   }
 
-  def traverseIndexRange[X, E, F[_[_],_], A](range: Interval[Identities])(f: (Identities, Array[Byte]) => E)(implicit t : MonadTrans[F]) 
+  def traverseIndexRange[X, E, F[_[_],_], A](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit t : MonadTrans[F]) 
   : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
     type FIO[α] = F[IO, α]
     implicit val fm = t.apply[IO]
@@ -237,7 +227,7 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
             val id = n.getKey.as[Identities]
             range.end match {
               case Some(end) if end <= id => _done
-              case _ => k(elInput(f(id, n.getValue))) >>== enumerator(iter, close)
+              case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== enumerator(iter, close)
             }
           } else _done,
           done = (_, _) => _done,
@@ -255,13 +245,13 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
     enumerator(iter, t.liftM(IO(iter.close)))
   }
 
-  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Array[Byte]), IO] = new EnumeratorP[X, (Identities, Array[Byte]), IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, (Identities, Array[Byte]), F, A](range) {
+  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, (Identities, Seq[CValue]), F, A](range) {
       (id, b) => (id, b)
     }
   }
 
-  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Array[Byte]), IO] = 
+  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO] = 
     getPairsByIdRange(Interval(Some(id), Some(id)))
 
 
@@ -277,13 +267,13 @@ class LevelDBProjection private (baseDir: File, comparator: DBComparator, descri
   /**
    * Retrieve all values for IDs in the given range [start,end]
    */  
-  def getValuesByIdRange[X](range: Interval[Identities]) = new EnumeratorP[X, Array[Byte], IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Array[Byte], F, A](range) {
+  def getValuesByIdRange[X](range: Interval[Identities]) = new EnumeratorP[X, Seq[CValue], IO] {
+    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Seq[CValue], F, A](range) {
       (id, b) => b
     }
   }
 
-  def getValueForId[X](id: Identities): EnumeratorP[X, Array[Byte], IO] = 
+  def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO] = 
     getValuesByIdRange(Interval(Some(id), Some(id)))
 
   //////////////////////
