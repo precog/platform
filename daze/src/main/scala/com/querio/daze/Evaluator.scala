@@ -109,7 +109,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
 
             for {
               opt <- reductionIter[X, F](red) >>== enum[F, Option[SValue]]
-              a   <- step.pointI >>== (opt.map(sv => EnumeratorT.point[X, SEvent, FIO, A](Vector(), sv)).getOrElse(PlusEmpty[EnumeratorM].empty[A]))
+              a   <- step.pointI >>== (opt.map(sv => EnumeratorT.enumOne[X, SEvent, FIO, A](Vector(), sv)).getOrElse(PlusEmpty[EnumeratorM].empty[A]))
             } yield a
           }
         }
@@ -121,7 +121,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         val splitEnum = loop(parent, roots)
         
         ops.flatMap(splitEnum) {
-          case (_, sv) => loop(child, ops.point[X, IO]((Vector(), sv)) :: roots)
+          case (_, sv) => loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots)
         }
       }
       
