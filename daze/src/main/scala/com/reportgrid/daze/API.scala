@@ -26,7 +26,7 @@ import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 
-import EnumeratorP._
+import Iteratee._
 
 //case class IdentitySource(sources: Set[ProjectionDescriptor])
 case class EventMatcher(order: Order[SEvent], merge: (Vector[Identity], Vector[Identity]) => Vector[Identity])
@@ -71,15 +71,15 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
+  def empty[X, E, G[_]: Monad]: DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans, A] = {
+      def apply[F[_[_], _]: MonadTrans, A]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ, A] = {
         type FG[α] = F[G, α]
-        Empty[({ type λ[α] = EnumeratorT[X, E, FG, α]].empty[A]
+        implicit val FMonad = MonadTrans[F].apply[G]
+        EnumeratorT.enumeratorTPlusEmpty[X, E, FG].empty[A]
       }
     }
   )
-
 
   def point[X, E, G[_]: Monad](value: E): DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
@@ -87,7 +87,15 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def liftM[X, E, F[_]: Monad](value: F[E]): DatasetEnum[X, E, F]
+  def liftM[X, E, G[_]: Monad](value: G[E]): DatasetEnum[X, E, G] = DatasetEnum(
+    new EnumeratorP[X, E, G] {
+      def apply[F[_[_], _]: MonadTrans, A]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ, A] = {
+        type FG[a] = F[G, a]
+        implicit val FMonad = MonadTrans[F].apply[G]
+        (step: StepT[X, E, FG, A]) => iterateeT[X, E, FG, A](FMonad.bind(MonadTrans[F].liftM(value)) { e => step.mapCont(f => f(elInput(e))).value })
+      }
+    }
+  )
 
   def flatMap[X, E1, E2,  F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F]
   
