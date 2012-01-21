@@ -71,9 +71,15 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def filter[X, F[_]: Monad](enum: DatasetEnum[X, (SEvent, SEvent), F])(pred: (SValue, SValue) => Option[SValue]): DatasetEnum[X, SEvent, F] 
+  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, G] {
+      def apply[F[_[_], _]: MonadTrans, A] = {
+        type FG[α] = F[G, α]
+        Empty[({ type λ[α] = EnumeratorT[X, E, FG, α]].empty[A]
+      }
+    }
+  )
 
-  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F]
 
   def point[X, E, G[_]: Monad](value: E): DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
