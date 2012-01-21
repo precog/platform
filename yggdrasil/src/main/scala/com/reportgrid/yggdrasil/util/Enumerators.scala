@@ -50,9 +50,8 @@ trait Enumerators {
 
         def consumeToDisk(contf: Input[E] => IterateeT[X, E, FIO, A]): IterateeT[X, E, FIO, A] = {
           // build a new LevelDBProjection
-          
 
-          sys.error("todo")
+          sys.error("Disk-based sorts not yet supported.")
         }
 
         (_: StepT[X, E, FIO, A]) mapCont { contf => consume(0, contf) }
@@ -60,5 +59,7 @@ trait Enumerators {
     }
   }
 }
+
+object Enumerators extends Enumerators
 
 // vim: set ts=4 sw=4 et:
