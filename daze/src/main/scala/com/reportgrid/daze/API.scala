@@ -42,7 +42,7 @@ trait DatasetEnumFunctions {
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
     DatasetEnum(mergeE[X, SEvent, F].apply(enum1.enum, enum2.enum))
 
-  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F], identityIndices: Vector[Int])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
+  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
   
   def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = DatasetEnum(
     enum.enum.mapE[E2] {
@@ -56,7 +56,7 @@ trait DatasetEnumFunctions {
     new EnumeratorP[X, E, G] {
       def apply[F[_[_], _]: MonadTrans, A] = {
         type FG[α] = F[G, α]
-        Empty[({ type λ[α] = EnumeratorT[X, E, FG, α]].empty[A]
+        Empty[({ type λ[α] = EnumeratorT[X, E, FG, α] })#λ].empty[A]
       }
     }
   )
