@@ -12,8 +12,8 @@ import blueeyes.util.Clock
 import scalaz.NonEmptyList
 
 import com.reportgrid.analytics.TokenManager
-import com.reportgrid.api.Server
-import com.reportgrid.api.blueeyes.ReportGrid
+//import com.reportgrid.api.Server
+//import com.reportgrid.api.blueeyes.ReportGrid
 
 import java.util.Properties
 import java.util.Date
@@ -33,18 +33,18 @@ object IngestServer extends BlueEyesServer with IngestService {
       throw new IllegalStateException("storageReporting.tokenId must be specified in application config file. Service cannot start.")
     }
 
-    val environment = config.getString("environment", "dev") match {
-      case "production" => Server.Production
-      case "dev"        => Server.Dev
-      case _            => Server.Local
-    }
+//    val environment = config.getString("environment", "dev") match {
+//      case "production" => Server.Production
+//      case "dev"        => Server.Dev
+//      case _            => Server.Local
+//    }
 
     //new ReportGridStorageReporting(token, ReportGrid(token, environment))
     new NullStorageReporting(token)
   }
 
-  def auditClient(config: ConfigMap) = {
-    NoopTrackingClient
+  //def auditClient(config: ConfigMap) = {
+    //NoopTrackingClient
     //val auditToken = config.configMap("audit.token")
     //val environment = config.getString("environment", "production") match {
     //  case "production" => Server.Production
@@ -52,7 +52,7 @@ object IngestServer extends BlueEyesServer with IngestService {
     //}
 
     //ReportGrid(auditToken, environment)
-  }
+  //}
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
     new TokenManager(database, tokensCollection, deletedTokensCollection)
@@ -71,6 +71,7 @@ object IngestServer extends BlueEyesServer with IngestService {
     val messaging = new SimpleKafkaMessaging(topicId, props)
 
     val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
+    qz.setup
     val producerId = qz.acquireProducerId
     qz.close
 
