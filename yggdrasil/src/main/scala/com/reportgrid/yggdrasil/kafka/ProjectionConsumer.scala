@@ -171,7 +171,7 @@ case class ProjectionGet(idInterval : Interval[Identities], sender : ActorRef)
 
 trait ProjectionResults {
   val desc : ProjectionDescriptor
-  def enumerator[A] : EnumeratorT[Unit, Seq[CValue], ({type l[a] = IdT[IO, a]})#l, A]
+  def enumerator : EnumeratorT[Unit, Seq[CValue], ({type l[a] = IdT[IO, a]})#l]
 }
 
 class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
@@ -188,7 +188,7 @@ class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescr
     case ProjectionGet(interval, sender) =>
       sender ! new ProjectionResults {
         val desc = descriptor
-        def enumerator[A] = projection.getValuesByIdRange[Unit](interval).apply[IdT, A]
+        def enumerator = projection.getValuesByIdRange[Unit](interval).apply[IdT]
       }
   }
 }
