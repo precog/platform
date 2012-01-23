@@ -184,20 +184,19 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   // ID Traversals //
   ///////////////////
 
-  def traverseIndex[X, E, F[_[_], _], A](f: (Identities, Seq[CValue]) => E)(implicit t: MonadTrans[F])
-  : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
+  def traverseIndex[X, E, F[_[_], _]](f: (Identities, Seq[CValue]) => E)(implicit t: MonadTrans[F]): EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l] = {
     type FIO[α] = F[IO, α]
     implicit val fm = t.apply[IO]
     import fm.bindSyntax._
 
-    def enumerator(iter : DBIterator, close : F[IO, Unit]): EnumeratorT[X, E, FIO, A] = { 
-      (s : StepT[X, E, FIO, A]) => {
+    def enumerator(iter : DBIterator, close : F[IO, Unit]): EnumeratorT[X, E, FIO] = new EnumeratorT[X, E, FIO] { 
+      def apply[A] = (s : StepT[X, E, FIO, A]) => {
         val _done = iterateeT[X, E, FIO, A](close >> s.pointI.value)
 
         s.fold(
           cont = k => if (iter.hasNext) {
             val n = iter.next
-            k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== enumerator(iter, close)
+            k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== apply[A]
           } else {
             _done
           },
@@ -213,32 +212,31 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   }
 
   def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, (Identities, Seq[CValue]), F, A] {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndex[X, (Identities, Seq[CValue]), F] {
       (id, b) => (id, b)
     }
   }
 
   def getAllIds[X] : EnumeratorP[X, Identities, IO] = new EnumeratorP[X, Identities, IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Identities, F, A] {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndex[X, Identities, F] {
       (id, b) => id
     }
   }
 
   def getAllValues[X] = new EnumeratorP[X, Seq[CValue], IO] { 
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndex[X, Seq[CValue], F, A] {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndex[X, Seq[CValue], F] {
       (id, b) => b
     }
   }
 
-  def traverseIndexRange[X, E, F[_[_],_], A](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit t : MonadTrans[F]) 
-  : EnumeratorT[X, E, ({type l[a] = F[IO, a]})#l, A] = {
+  def traverseIndexRange[X, E, F[_[_],_]](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit t : MonadTrans[F]): EnumeratorT[X, E, ({type λ[α] = F[IO, α]})#λ] = {
     type FIO[α] = F[IO, α]
     implicit val fm = t.apply[IO]
     import fm.bindSyntax._
 
-    def enumerator(iter: DBIterator, close: F[IO, Unit]): EnumeratorT[X, E, FIO, A] = { 
-      (s : StepT[X, E, FIO, A]) => {
-        val _done = iterateeT[X, E, FIO, A](close >> s.pointI.value)
+    def enumerator(iter: DBIterator, close: FIO[Unit]): EnumeratorT[X, E, FIO] = new EnumeratorT[X, E, FIO] { 
+      def apply[A] = (s: StepT[X, E, FIO, A]) => {
+        @inline def _done = iterateeT[X, E, FIO, A](close >> s.pointI.value)
 
         s.fold(
           cont = k => if (iter.hasNext) {
@@ -246,7 +244,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
             val id = n.getKey.as[Identities]
             range.end match {
               case Some(end) if end <= id => _done
-              case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== enumerator(iter, close)
+              case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== apply[A]
             }
           } else _done,
           done = (_, _) => _done,
@@ -265,7 +263,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   }
 
   def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, (Identities, Seq[CValue]), F, A](range) {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndexRange[X, (Identities, Seq[CValue]), F](range) {
       (id, b) => (id, b)
     }
   }
@@ -278,7 +276,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
    * Retrieve all IDs for IDs in the given range [start,end]
    */  
   def getIdsInRange[X](range : Interval[Identities]) = new EnumeratorP[X, Identities, IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Identities, F, A](range) {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndexRange[X, Identities, F](range) {
       (id, b) => id
     }
   }
@@ -287,7 +285,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
    * Retrieve all values for IDs in the given range [start,end]
    */  
   def getValuesByIdRange[X](range: Interval[Identities]) = new EnumeratorP[X, Seq[CValue], IO] {
-    def apply[F[_[_], _], A](implicit t: MonadTrans[F]) = traverseIndexRange[X, Seq[CValue], F, A](range) {
+    def apply[F[_[_], _]](implicit t: MonadTrans[F]) = traverseIndexRange[X, Seq[CValue], F](range) {
       (id, b) => b
     }
   }
