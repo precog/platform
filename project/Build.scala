@@ -59,7 +59,7 @@ object PlatformBuild extends Build {
   
   lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   
-  val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings ++ Seq(libraryDependencies ++= clientLibDeps.libDeps)
+  val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings //++ Seq(libraryDependencies ++= clientLibDeps.libDeps)
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)
 }
 

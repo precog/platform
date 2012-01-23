@@ -68,14 +68,14 @@ import com.querio.ct._
 import com.querio.ct.Mult._
 import com.querio.ct.Mult.MDouble._
 
-import com.querio.instrumentation.blueeyes.ReportGridInstrumentation
-import com.reportgrid.api.ReportGridTrackingClient
+//import com.querio.instrumentation.blueeyes.ReportGridInstrumentation
+//import com.reportgrid.api.ReportGridTrackingClient
 import com.querio.ingest.service.service._
 import com.querio.ingest.service._
 
-case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting, auditClient: ReportGridTrackingClient[JValue])
+case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with ReportGridInstrumentation {
+trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -87,7 +87,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   def mongoFactory(configMap: ConfigMap): Mongo
 
-  def auditClient(configMap: ConfigMap): ReportGridTrackingClient[JValue] 
+  //def auditClient(configMap: ConfigMap): ReportGridTrackingClient[JValue] 
 
   def storageReporting(configMap: ConfigMap): StorageReporting
 
@@ -116,13 +116,13 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
             indexMongo,
             tokenMgr,
             eventStore,
-            storageReporting(config.configMap("storageReporting")),
-            auditClient(config.configMap("audit"))))
+            storageReporting(config.configMap("storageReporting"))
+            ))
         } ->
         request { (state: IngestState) =>
 
-          val audit = auditor(state.auditClient, clock, state.tokenManager)
-          import audit._
+          //val audit = auditor(state.auditClient, clock, state.tokenManager)
+          //import audit._
 
           jsonp[ByteChunk] {
             token(state.tokenManager) {
@@ -131,15 +131,15 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
                */
               path("/store") {
                 dataPath("vfs") {
-                  post(new TrackingService(state.eventStore, state.storageReporting, clock, false)).audited("store")
+                  post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, false))//.audited("store")
                 }
               } ~ 
               dataPath("vfs") {
-                post(new TrackingService(state.eventStore, state.storageReporting, clock, true)).audited("track")
+                post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, true))//.audited("track")
               } ~ 
               path("/echo") {
                 dataPath("vfs") {
-                  get(new EchoServiceHandler()).audited("echo")
+                  get(new EchoServiceHandler())//.audited("echo")
                 }
               }
             }
