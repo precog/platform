@@ -19,6 +19,8 @@
  */
 package com.reportgrid.storage.shard
 
+import com.reportgrid.yggdrasil.shard.CheckpointMetadata
+
 import org.specs2.mutable.Specification
 
 import scalaz.{Success, Failure}

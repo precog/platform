@@ -34,7 +34,6 @@ import scalaz.syntax.bind._
 import Iteratee._
 
 trait Enumerators {
-
   def sort[X, E <: AnyRef, A](bufferSize: Int, workDir: File, projectionDescriptor: ProjectionDescriptor)(unsorted: EnumeratorP[X, E, IO])(implicit order: Order[E], b: Bijection[E, (Array[Byte], Array[Byte])], cm: ClassManifest[E]): EnumeratorP[X, E, IO] = 
     new EnumeratorP[X, E, IO] {
       def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E, ({type l[α] = F[IO,α]})#l] = {

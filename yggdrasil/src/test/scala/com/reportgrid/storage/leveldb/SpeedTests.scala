@@ -20,7 +20,9 @@
 package com.reportgrid.storage
 package leveldb
 
-import Bijection._
+import com.reportgrid.util.Bijection
+import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
+import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
 
 import org.scalacheck.Arbitrary
 
@@ -39,7 +41,7 @@ object SpeedTests {
       }
     }
 
-    val column = LevelDBProjection(new File("/tmp/speed"), Some(ProjectionComparator.BigDecimal)) ||| {
+    val column = LevelDBProjection(new File("/tmp/speed"), sys.error("todo") /*ProjectionComparator.BigDecimal*/) ||| {
       errors => for (err <- errors.list) err.printStackTrace
                 sys.error("Errors prevented creation of a LevelDB projection.")
     }
@@ -65,7 +67,7 @@ object SpeedTests {
       }
 
       time("writes") {
-        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(id, value.as[Array[Byte]].as[ByteBuffer])) } unsafePerformIO
+        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(Vector(id), sys.error("todo") /*value.as[Array[Byte]].as[ByteBuffer]*/)) } unsafePerformIO
       }
     }
 

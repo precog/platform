@@ -17,13 +17,14 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage
+package com.reportgrid.yggdrasil
 
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import Bijection._
 import leveldb._
+import com.reportgrid.util.Bijection
+import Bijection._
 
 class BijectionSpec extends Specification with ScalaCheck {
   // Disable the T => Descriptable conversion because that enables a conflictin "as" def
@@ -57,8 +58,7 @@ class BijectionSpec extends Specification with ScalaCheck {
       }
 
       check { (v : BigDecimal) => 
-        val underlying = v.bigDecimal
-        underlying.as[Array[Byte]].as[java.math.BigDecimal] must_== underlying
+        v.as[Array[Byte]].as[BigDecimal] must_== v
       }
     }
 
