@@ -90,24 +90,32 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case dag.Reduce(_, red, parent) => {
-        val enum = loop(parent, roots).enum
+        val enum = loop(parent, roots)
+        
+        val mapped = ops.map(enum) {
+          case (_, sv) => sv
+        }
+        
+        val enumP = mapped.enum
 
-        val reducedEnumP: EnumeratorP[X, SEvent, IO] = new EnumeratorP[X, SEvent, IO] {
-          def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, SEvent, ({type λ[α] = F[IO, α] })#λ] = {
+        val reducedEnumP: EnumeratorP[X, SValue, IO] = new EnumeratorP[X, SValue, IO] {
+          def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, SValue, ({type λ[α] = F[IO, α] })#λ] = {
             type FIO[α] = F[IO, α]
             implicit val FMonad: Monad[FIO] = MonadTrans[F].apply[IO]
 
-            new EnumeratorT[X, SEvent, FIO] {
-              def apply[A] = (step: StepT[X, SEvent, FIO, A]) => 
+            new EnumeratorT[X, SValue, FIO] {
+              def apply[A] = (step: StepT[X, SValue, FIO, A]) => 
                 for {
-                  opt <- reductionIter[X, F](red) &= enum[F]
-                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SEvent, FIO](Vector(), sv)).getOrElse(Monoid[EnumeratorT[X, SEvent, FIO]].zero))
+                  opt <- reductionIter[X, F](red) &= enumP[F]
+                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, FIO](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, FIO]].zero))
                 } yield a
             }
           }
         }
 
-        DatasetEnum[X, SEvent, IO](reducedEnumP)
+        val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumP)
+        
+        ops.map(reducedDS) { sv => (Vector(), sv) }
       }
       
       case dag.Split(_, parent, child) => {
@@ -231,11 +239,51 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     def isDefinedAt(a: A) = f(a).isDefined
   }
   
-  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = {
-    fold[X, SValue, F, Option[SValue]](Some(SDecimal(0)): Option[SValue]) {
-      case (None, SDecimal(d)) => Some(d)
-      case (Some(d1), SDecimal(d2)) => Some(d1 + d2)
-      case (acc, _) => acc
+  // TODO mode, median and stdDev
+  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = red match {
+    case Count => {
+      fold[X, SValue, F, Option[SValue]](Some(SDecimal(0))) {
+        case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
+      }
+    }
+    
+    case Mean => {
+      val itr = fold[X, SValue, F, Option[(BigDecimal, BigDecimal)]](None) {
+        case (None, SDecimal(v)) => Some((1, v))
+        case (Some((count, acc)), SDecimal(v)) => Some((count + 1, (acc + v) / (count + 1)))
+        case (acc, _) => acc
+      }
+      
+      itr map {
+        case Some((_, v)) => Some(SDecimal(v))
+        case None => None
+      }
+    }
+    
+    case Max => {
+      fold[X, SValue, F, Option[SValue]](None) {
+        case (None, SDecimal(v)) => Some(SDecimal(v))
+        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
+        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
+        case (acc, _) => acc
+      }
+    }
+    
+    case Min => {
+      fold[X, SValue, F, Option[SValue]](None) {
+        case (None, SDecimal(v)) => Some(SDecimal(v))
+        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
+        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
+        case (acc, _) => acc
+      }
+    }
+    
+    case Sum => {
+      fold[X, SValue, F, Option[SValue]](None) {
+        case (None, sv @ SDecimal(_)) => Some(sv)
+        case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
+        case (acc, _) => acc
+      }
     }
   }
 
