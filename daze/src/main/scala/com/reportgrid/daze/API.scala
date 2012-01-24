@@ -81,9 +81,16 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def flatMap[X, E1, E2,  F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F]
+  def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G]
   
-  def mapOpt[X, E1, E2,  F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => Option[E2]): DatasetEnum[X, E2, F]
+  def collect[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, G] = DatasetEnum(
+    new EnumeratorP[X, E2, G] {
+      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = {
+        implicit val FMonad = MonadTrans[F].apply[G]
+        enum.enum[F].collect(pf)
+      }
+    }
+  )
 }
 
 trait OperationalDatasetEnumFunctions {
