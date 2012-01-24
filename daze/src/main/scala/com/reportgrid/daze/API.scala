@@ -93,10 +93,7 @@ trait DatasetEnumFunctions {
   )
 }
 
-trait OperationalDatasetEnumFunctions {
-  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F], identityIndices: Vector[Int])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
-    sys.error("todo")
-    //DatasetEnum(Enumerators.sort(enum.enum))
+trait OperationalDatasetEnumFunctions extends DatasetEnumFunctions {
 }
 
 trait OperationsAPI {
