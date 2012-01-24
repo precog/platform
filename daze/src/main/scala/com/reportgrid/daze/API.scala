@@ -1,4 +1,5 @@
-package com.querio.daze
+package com.querio
+package daze
 
 import com.reportgrid.yggdrasil._
 import com.reportgrid.yggdrasil.util.Enumerators
@@ -81,7 +82,14 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G]
+  def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G] = DatasetEnum(
+    new EnumeratorP[X, E2, G] {
+      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = {
+        implicit val FMonad = MonadTrans[F].apply[G]
+        enum.enum[F].flatMap(e => f(e).enum[F])
+      }
+    }
+  )
   
   def collect[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, G] = DatasetEnum(
     new EnumeratorP[X, E2, G] {
@@ -91,12 +99,6 @@ trait DatasetEnumFunctions {
       }
     }
   )
-}
-
-trait OperationalDatasetEnumFunctions {
-  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F], identityIndices: Vector[Int])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
-    sys.error("todo")
-    //DatasetEnum(Enumerators.sort(enum.enum))
 }
 
 trait OperationsAPI {
