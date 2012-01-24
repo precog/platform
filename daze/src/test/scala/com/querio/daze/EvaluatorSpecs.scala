@@ -18,10 +18,11 @@ object EvaluatorSpecs extends Specification with Evaluator {
       
       result must haveSize(1)
       
-      val (_, sv) = result.head
-      sv must beLike {
-        case SDecimal(d) => d mustEqual 42
+      val result2 = result collect {
+        case SDecimal(d) => d.toInt
       }
+      
+      result2 must contain(42)
     }
   }
   
@@ -58,7 +59,7 @@ object EvaluatorSpecs extends Specification with Evaluator {
       (Vector(id), wrapSValue(value))
     
     private def wrapSValue(value: JValue): SValue = new SValue {
-      def fold(
+      def fold[A](
           obj: Map[String, SValue] => A,
           arr: Vector[SValue] => A,
           str: String => A,
@@ -91,17 +92,17 @@ object EvaluatorSpecs extends Specification with Evaluator {
     }
   }
   
-  private def consumeEval(graph: DepGraph): Vector[SEvent] =
+  private def consumeEval(graph: DepGraph): Set[SEvent] =
     (consume >>== eval(graph).enum) run { err => sys.error("O NOES!!!") }
   
   // apparently, this doesn't *really* exist in Scalaz
-  private def consume: IterV[A, Vector[A]] = {
-    def step(acc: Vector[A])(in: Input[A]): IterV[A, Vector[A]] = {
-      in(el = { e => Cont(step(acc :+ e)) },
+  private def consume: IterV[A, Set[A]] = {
+    def step(acc: Set[A])(in: Input[A]): IterV[A, Set[A]] = {
+      in(el = { e => Cont(step(acc + e)) },
          empty = Cont(step(acc)),
          eof = Done(acc, EOF.apply))
     }
     
-    Cont(step(Vector()))
+    Cont(step(Set()))
   }
 }
