@@ -231,9 +231,14 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     def isDefinedAt(a: A) = f(a).isDefined
   }
   
-  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SEvent, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] =
-    sys.error("no reductions implemented yet...")
-  
+  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = {
+    fold[X, SValue, F, Option[SValue]](Some(SDecimal(0)): Option[SValue]) {
+      case (None, SDecimal(d)) => Some(d)
+      case (Some(d1), SDecimal(d2)) => Some(d1 + d2)
+      case (acc, _) => acc
+    }
+  }
+
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
     import Function._
     
