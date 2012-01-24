@@ -56,7 +56,7 @@ class RoutingTableSpec extends Specification {
       val expected : Set[ProjectionDescriptor] = sys.error("todo")//Set( (ProjectionDescriptor(event.map( _._1 ), Set()), event.map( _._2 )) )
 
       actions must_== expected 
-    }
+    }.pendingUntilFixed
 
     "project an event with n properties to n projection actions" in {
       val rt = new SingleColumnProjectionRoutingTable 
@@ -76,6 +76,6 @@ class RoutingTableSpec extends Specification {
         //                  (ProjectionDescriptor(List(qss(1)), Set()), List(vals(1))) )
 
       actions must_== expected 
-    }
+    }.pendingUntilFixed
   }
 }
