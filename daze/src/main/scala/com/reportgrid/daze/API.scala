@@ -61,38 +61,41 @@ trait DatasetEnumFunctions {
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
     DatasetEnum(mergeE[X, SEvent, F].apply(enum1.enum, enum2.enum))
 
-  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F], identityIndices: Vector[Int])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
+  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
   
-  def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = DatasetEnum(
-    enum.enum.mapE[E2] {
-      new ForallM[({ type λ[β[_], α] = EnumerateeT[X, E1, E2, β, α] })#λ] {
-        def apply[FF[_]: Monad, A] = EnumerateeT.map[X, E1, E2, FF, A](f)
+  def map[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => E2): DatasetEnum[X, E2, G] = DatasetEnum(
+    new EnumeratorP[X, E2, G] {
+      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = new EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] {
+        def apply[A] = enum.enum[F].map(f)(MonadTrans[F].apply[G]).apply[A]
       }
     }
   )
 
   def empty[X, E, G[_]: Monad]: DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans, A]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ, A] = {
-        type FG[α] = F[G, α]
+      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] = {
+        type FG[a] = F[G, a]
         implicit val FMonad = MonadTrans[F].apply[G]
-        EnumeratorT.enumeratorTPlusEmpty[X, E, FG].empty[A]
+        Monoid[EnumeratorT[X, E, FG]].zero
       }
     }
   )
 
   def point[X, E, G[_]: Monad](value: E): DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans, A] = EnumeratorT.enumOne[X, E, ({ type λ[α] = F[G, α] })#λ, A](value)(MonadTrans[F].apply[G])
+      def apply[F[_[_], _]: MonadTrans] = EnumeratorT.enumOne[X, E, ({ type λ[α] = F[G, α] })#λ](value)(MonadTrans[F].apply[G])
     }
   )
 
   def liftM[X, E, G[_]: Monad](value: G[E]): DatasetEnum[X, E, G] = DatasetEnum(
     new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans, A]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ, A] = {
+      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] = new EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] {
         type FG[a] = F[G, a]
         implicit val FMonad = MonadTrans[F].apply[G]
-        (step: StepT[X, E, FG, A]) => iterateeT[X, E, FG, A](FMonad.bind(MonadTrans[F].liftM(value)) { e => step.mapCont(f => f(elInput(e))).value })
+
+        def apply[A] = { (step: StepT[X, E, FG, A]) => 
+          iterateeT[X, E, FG, A](FMonad.bind(MonadTrans[F].liftM(value)) { e => step.mapCont(f => f(elInput(e))).value })
+        }
       }
     }
   )
