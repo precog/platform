@@ -20,14 +20,31 @@
 package com.querio
 package daze
 
+import blueeyes.json._
+
+import com.reportgrid.analytics.Path
+import com.reportgrid.yggdrasil._
+import com.reportgrid.util._
+
 import org.specs2.mutable._
 
+import scalaz._
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.std.set._
+
 object EvaluatorSpecs extends Specification with Evaluator {
+  import JsonAST._
   import Function._
-  import IterV._
+  import IterateeT._
   
   import dag._
   import instructions._
+
+  override val ops: DatasetEnumFunctions = new OperationalDatasetEnumFunctions {
+    def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G] = sys.error("")
+    def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] = sys.error("")
+  }
   
   "bytecode evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -53,9 +70,9 @@ object EvaluatorSpecs extends Specification with Evaluator {
       DatasetEnum(readJSON[X](path))
     
     private def readJSON[X](path: Path) = {
-      val src = Source.fromInputStream(Class getResourceAsStream path.elements.mkString("/", "/", ".json"))
+      val src = scala.io.Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
       val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
-      Iteratee.enumPStream[X](stream)
+      Iteratee.enumPStream[X, SEvent, IO](stream)
     }
     
     private def scaleId(path: Path)(seed: Int): Long = {
@@ -100,9 +117,11 @@ object EvaluatorSpecs extends Specification with Evaluator {
         
         case JString(s) => str(s)
         
-        case JBoolean(b) => bool(b)
+        case JBool(b) => bool(b)
         
-        case JNum(d) => num(d)
+        case JInt(i) => long(i.toLong)      // TODO I hate my life
+        
+        case JDouble(d) => double(d)
         
         case JNull => nul
         
@@ -111,17 +130,6 @@ object EvaluatorSpecs extends Specification with Evaluator {
     }
   }
   
-  private def consumeEval(graph: DepGraph): Set[SEvent] =
-    (consume >>== eval(graph).enum) run { err => sys.error("O NOES!!!") }
-  
-  // apparently, this doesn't *really* exist in Scalaz
-  private def consume: IterV[A, Set[A]] = {
-    def step(acc: Set[A])(in: Input[A]): IterV[A, Set[A]] = {
-      in(el = { e => Cont(step(acc + e)) },
-         empty = Cont(step(acc)),
-         eof = Done(acc, EOF.apply))
-    }
-    
-    Cont(step(Set()))
-  }
+  private def consumeEval(graph: DepGraph): Set[SEvent] = 
+    (((consume[Unit, SEvent, ({ type λ[α] = IdT[IO, α] })#λ, Set] &= eval(graph).enum[IdT]) run { err => sys.error("O NOES!!!") }) run) unsafePerformIO
 }
