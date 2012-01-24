@@ -151,16 +151,18 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           case Map2CrossRight(op) => (ops.crossRight(leftEnum, rightEnum), op, false)
         }
         
-        ops.collect(pairs) { unlift {
-          case ((ids1, sv1), (ids2, sv2)) => {
-            val ids = if (distinct)
-                        (ids1 ++ ids2).distinct
-                      else
-                        ids1 ++ ids2
-            
-            binaryOp(op)(sv1, sv2) map { sv => (ids, sv) }
+        ops.collect(pairs) {
+          unlift {
+            case ((ids1, sv1), (ids2, sv2)) => {
+              val ids = if (distinct)
+                (ids1 ++ ids2).distinct
+              else
+                ids1 ++ ids2
+              
+              binaryOp(op)(sv1, sv2) map { sv => (ids, sv) }
+            }
           }
-        } }
+        }
       }
       
       case Filter(_, cross, _, target, boolean) => {
@@ -177,13 +179,14 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         }
         
         ops.collect(pairs) {
-          case ((ids1, sv), (ids2, SBoolean(true))) => 
+          case ((ids1, sv), (ids2, SBoolean(true))) => {
             val ids = if (distinct)
               (ids1 ++ ids2).distinct
             else
               ids1 ++ ids2
             
             (ids, sv)
+          }
         }
       }
       
