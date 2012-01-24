@@ -36,7 +36,7 @@ object EvaluatorSpecs extends Specification with Evaluator {
       result must haveSize(1)
       
       val result2 = result collect {
-        case SDecimal(d) => d.toInt
+        case (_, SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42)
