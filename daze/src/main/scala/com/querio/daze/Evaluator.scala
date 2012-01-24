@@ -49,18 +49,16 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case Operate(_, Comp, parent) => {
         val enum = loop(parent, roots)
         
-        ops.mapOpt(enum) {
-          case (id, SBoolean(b)) => Some((id, SBoolean(!b)))
-          case _ => None
+        ops.collect(enum) {
+          case (id, SBoolean(b)) => (id, SBoolean(!b))
         }
       }
       
       case Operate(_, Neg, parent) => {
         val enum = loop(parent, roots)
         
-        ops.mapOpt(enum) {
-          case (id, SDecimal(d)) => Some((id, SDecimal(-d)))
-          case _ => None
+        ops.collect(enum) {
+          case (id, SDecimal(d)) => (id, SDecimal(-d))
         }
       }
       
@@ -110,10 +108,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         val rightEnum = ops.sort(loop(right, roots))
         
         // TODO we're relying on the fact that we *don't* need to preserve sane identities!
-        ops.mapOpt(ops.cogroup(leftEnum, rightEnum)) {
-          case Left3(sev) => Some(sev) filter const(instr == VUnion)
-          case Middle3((sev1, _)) => Some(sev1)
-          case Right3(sev) => Some(sev) filter const(instr == VUnion)
+        // Throwing away the right one is probably broken unless your ordering respects both
+        // objects and identities
+        ops.collect(ops.cogroup(leftEnum, rightEnum)) {
+          case Left3(sev)  if instr == VUnion => sev
+          case Middle3((sev1, _))             => sev1
+          case Right3(sev) if instr == VUnion => sev
         }
       }
       
@@ -132,16 +132,16 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           case Map2CrossRight(op) => (ops.crossRight(leftEnum, rightEnum), op, false)
         }
         
-        ops.mapOpt(pairs) {
+        ops.collect(pairs) { unlift {
           case ((ids1, sv1), (ids2, sv2)) => {
             val ids = if (distinct)
-              (ids1 ++ ids2).distinct
-            else
-              ids1 ++ ids2
+                        (ids1 ++ ids2).distinct
+                      else
+                        ids1 ++ ids2
             
             binaryOp(op)(sv1, sv2) map { sv => (ids, sv) }
           }
-        }
+        } }
       }
       
       case Filter(_, cross, _, target, boolean) => {
@@ -157,17 +157,14 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           case Some(CrossRight) => (ops.crossRight(targetEnum, booleanEnum), false)
         }
         
-        ops.mapOpt(pairs) {
-          case ((ids1, sv), (ids2, SBoolean(true))) => {
+        ops.collect(pairs) {
+          case ((ids1, sv), (ids2, SBoolean(true))) => 
             val ids = if (distinct)
               (ids1 ++ ids2).distinct
             else
               ids1 ++ ids2
             
-            Some((ids, sv))
-          }
-          
-          case _ => None
+            (ids, sv)
         }
       }
       
@@ -205,6 +202,11 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     }
     
     loop(orderCrosses(graph), Nil)
+  }
+
+  private def unlift[A, B](f: A => Option[B]): PartialFunction[A, B] = new PartialFunction[A, B] {
+    def apply(a: A) = f(a).get
+    def isDefinedAt(a: A) = f(a).isDefined
   }
   
   private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SEvent, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] =
