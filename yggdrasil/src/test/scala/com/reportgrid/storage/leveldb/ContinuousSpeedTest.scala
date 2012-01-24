@@ -1,7 +1,9 @@
 package com.reportgrid.storage
 package leveldb
 
-import Bijection._
+import com.reportgrid.util.Bijection
+import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
+import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
 
 import org.iq80.leveldb._
 import org.scalacheck.Arbitrary
@@ -56,7 +58,7 @@ object ContinuousSpeedTest {
           override def run {
             while (true) {
               queue.take match {
-                case Insert(id, v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]);
+                case Insert(id, v) => column.insert(Vector(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/);
                 case Flush => barrier.await()
               }
             }
@@ -84,16 +86,15 @@ object ContinuousSpeedTest {
     }
 
     def column(n: String, comparator: DBComparator): LevelDBProjection = {
-      LevelDBProjection(new File(basedir, n), Some(comparator)) ||| { errors =>
+      LevelDBProjection(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { errors =>
         errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
       }
     }
-
+/*
     (dataType.toLowerCase match {
-      case "long"    => new TestHarness[Long](n => column(n, ProjectionComparator.Long), r.nextLong)
-      case "decimal" => new TestHarness[BigDecimal](n => column(n, ProjectionComparator.BigDecimal), BigDecimal.valueOf(r.nextDouble))
-    }).run()
+      case "long"    => sys.error("todo") //new TestHarness[Long](n => column(n, ProjectionComparator.Long), r.nextLong)
+      case "decimal" => sys.error("todo") // new TestHarness[BigDecimal](n => column(n, ProjectionComparator.BigDecimal), BigDecimal.valueOf(r.nextDouble))
+    }).run() */
   }
 }
-
 // vim: set ts=4 sw=4 et:
