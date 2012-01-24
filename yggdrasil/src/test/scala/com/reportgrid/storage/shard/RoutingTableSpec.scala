@@ -20,9 +20,11 @@
 package com.reportgrid.storage.shard
 
 import com.reportgrid.common._
-import com.reportgrid.common.json._
 
 import com.reportgrid.analytics.Path
+
+import com.reportgrid.yggdrasil.shard.SingleColumnProjectionRoutingTable
+import com.reportgrid.yggdrasil.QualifiedSelector
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath

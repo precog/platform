@@ -20,7 +20,9 @@
 package com.reportgrid.storage
 package leveldb
 
-import Bijection._
+import com.reportgrid.util.Bijection
+import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
+import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
 
 import org.scalacheck.Arbitrary
 import akka.util.Timeout
@@ -55,14 +57,14 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
-      private val column = LevelDBProjection(new File(basedir, name), Some(ProjectionComparator.BigDecimal)) ||| {
+      private val column = LevelDBProjection(new File(basedir, name), sys.error("todo") /*Some(ProjectionComparator.BigDecimal)*/) ||| {
         errors => errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
       }
 
       private var count = 0
       
       def receive = {
-        case Insert(id,v) => column.insert(id, v.as[Array[Byte]].as[ByteBuffer]).map(_ => count += 1).unsafePerformIO
+        case Insert(id,v) => column.insert(Vector(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/).map(_ => count += 1).unsafePerformIO
 
         case KillMeNow => column.close.map(_ => sender ? (ShutdownComplete(name, count))).map(_ => self ! PoisonPill).unsafePerformIO
       }
