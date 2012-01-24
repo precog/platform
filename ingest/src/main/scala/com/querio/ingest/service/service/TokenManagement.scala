@@ -64,7 +64,7 @@ object TokenService extends HttpRequestHandlerCombinators {
 
               if (expires < clock.now()) {
                 Future(HttpResponse[JValue](BadRequest, content = Some("Your are attempting to create an expired token. Such a token will not be usable.")))
-              } else tokenManager.issueNew(parent, path, permissions, expires, limits) map {
+              } else tokenManager.issueNew(parent, Path(path), permissions, expires, limits) map {
                 case Success(newToken) => HttpResponse[JValue](content = Some(newToken.tokenId.serialize))
                 case Failure(message) => throw new HttpException(BadRequest, message)
               }
