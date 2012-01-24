@@ -17,14 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage.shard
+package com.reportgrid.yggdrasil
+package shard
 
 import com.reportgrid.common._
 
 import com.reportgrid.analytics.Path
-
-import com.reportgrid.yggdrasil.shard.SingleColumnProjectionRoutingTable
-import com.reportgrid.yggdrasil.QualifiedSelector
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
@@ -50,12 +48,12 @@ class RoutingTableSpec extends Specification {
       val rt = new SingleColumnProjectionRoutingTable 
 
       val event: List[(QualifiedSelector, JValue)] = List(
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector"),SJLong), JString("Test"))
+        (QualifiedSelector(Path("/a/b/"),JPath(".selector"), SLong), JString("Test"))
       )
 
       val actions = rt.route(event.toSet)
 
-      val expected = Set( (ProjectionDescriptor(event.map( _._1 ), Set()), event.map( _._2 )) )
+      val expected : Set[ProjectionDescriptor] = sys.error("todo")//Set( (ProjectionDescriptor(event.map( _._1 ), Set()), event.map( _._2 )) )
 
       actions must_== expected 
     }
@@ -64,8 +62,8 @@ class RoutingTableSpec extends Specification {
       val rt = new SingleColumnProjectionRoutingTable 
 
       val event: List[(QualifiedSelector, JValue)] = List(
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector"),SJLong), JString("Test")),
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector.foo"),SJLong), JInt(1))
+        (QualifiedSelector(Path("/a/b/"),JPath(".selector"), SLong), JString("Test")),
+        (QualifiedSelector(Path("/a/b/"),JPath(".selector.foo"), SLong), JInt(1))
       )
 
       val actions = rt.route(event.toSet)
@@ -73,8 +71,9 @@ class RoutingTableSpec extends Specification {
       val qss = event.map( _._1 )
       val vals = event.map( _._2 )
 
-      val expected = Set( (ProjectionDescriptor(List(qss(0)), Set()), List(vals(0))),
-                          (ProjectionDescriptor(List(qss(1)), Set()), List(vals(1))) )
+      val expected : Set[ProjectionDescriptor] = sys.error("todo")
+        //Set( (ProjectionDescriptor(List(qss(0)), Set()), List(vals(0))),
+        //                  (ProjectionDescriptor(List(qss(1)), Set()), List(vals(1))) )
 
       actions must_== expected 
     }
