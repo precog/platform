@@ -322,12 +322,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case DerefObject => {
-        case (SString(key), SObject(obj)) => obj get key
+        case (SObject(obj), SString(key)) => obj get key
         case _ => None
       }
       
       case DerefArray => {
-        case (SDecimal(index), SArray(arr)) if index.isValidInt =>
+        case (SArray(arr), SDecimal(index)) if index.isValidInt =>
           arr.lift(index.toInt)
         
         case _ => None
