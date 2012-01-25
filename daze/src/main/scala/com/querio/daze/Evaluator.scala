@@ -289,7 +289,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case JoinArray => untupled((coerceArrays _) andThen { _ flatMap (joinArray _).tupled map SArray })
       
       case ArraySwap => {
-        case (SDecimal(index), SArray(arr)) if index.isValidInt => {
+        case (SArray(arr), SDecimal(index)) if index.isValidInt => {
           val i = index.toInt - 1
           if (i < 0 || i >= arr.length) {
             None
