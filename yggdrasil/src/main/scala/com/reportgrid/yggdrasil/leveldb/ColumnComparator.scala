@@ -126,7 +126,7 @@ object ProjectionComparator {
   val Boolean = new BooleanProjectionComparator
   val String = new StringProjectionComparator
 
-  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_.qsel.valueType).toList match {
+  def forProjection(p: ProjectionDescriptor): DBComparator = p.columns.map(_.valueType).toList match {
     case SLong :: Nil           => ProjectionComparator.Long
     case SDouble :: Nil         => ProjectionComparator.Double
     case SBoolean :: Nil        => ProjectionComparator.Boolean

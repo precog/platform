@@ -12,7 +12,6 @@ import scalaz.Scalaz._
 
 import akka.dispatch.{Future, Futures, Promise}
 import akka.dispatch.MessageDispatcher
-import akka.dispatch.DefaultCompletableFuture
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
