@@ -48,6 +48,8 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
+import scala.collection._
+
 import scalaz._
 import scalaz.syntax.std.booleanV._
 import scalaz.syntax.std.optionV._
@@ -57,11 +59,11 @@ import scalaz.iteratee.EnumeratorT
 
 case object Stop
 
-class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: ActorRef) extends Actor with Logging {
+class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor, File], routingTable: RoutingTable, metadataActor: ActorRef) extends Actor with Logging {
   def syncDescriptors : IO[List[Validation[Throwable,Unit]]] = {
     projectionActors.keys.foldLeft(IO(List[Validation[Throwable,Unit]]())) { 
       case (io,descriptor) => {
-        projectionDirMap.get(descriptor).map { dir =>
+        descriptors.get(descriptor).map { dir =>
           io.flatMap { a => LevelDBProjection.descriptorSync(dir).sync(descriptor).map(_ :: a) }
         } getOrElse {
           io.map(a => (new RuntimeException("Could not locate directory for " + descriptor) : Throwable).fail[Unit] :: a)
@@ -70,28 +72,14 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
     }
   }
 
-  def restoreDescriptors : Map[ProjectionDescriptor,File] = {
-    def walk(dir : File, map : Map[ProjectionDescriptor,File]) : Map[ProjectionDescriptor,File] = {
-      val updatedMap = LevelDBProjection.descriptorSync(dir).read match {
-        case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
-                                                   { pd => map + (pd -> dir) })
-        case None      => map
-      }
-
-      dir.listFiles.foldLeft(updatedMap) { case (m, f) => if (f.isDirectory) walk(f, m) else m }
-    }
-
-    walk(baseDir, Map())
-  }
-
   def dirFor(descriptor : ProjectionDescriptor) : File = {
-    projectionDirMap.get(descriptor) match {
+    descriptors.get(descriptor) match {
       case Some(dir) => dir
       case None => {
-        val newDir = new File(baseDir, toPath(descriptor.columns.map(_.qsel).toList) + projectionSuffix(descriptor))
+        val newDir = new File(baseDir, toPath(descriptor.columns) + projectionSuffix(descriptor))
         LevelDBProjection.descriptorSync(newDir).sync(descriptor).unsafePerformIO.fold({ t => logger.error("Failed to sync descriptor: " + t) },
                                                                                        { _ => ()})
-        projectionDirMap += (descriptor -> newDir)
+        descriptors += (descriptor -> newDir)
         newDir
       }
     }
@@ -100,7 +88,7 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
   private val pathDelimeter = "//"
   private val partDelimeter = "-"
 
-  def toPath(columns: Seq[QualifiedSelector]): String = {
+  def toPath(columns: Seq[ColumnDescriptor]): String = {
     columns.map( s => sanitize(s.path.toString)).mkString(pathDelimeter) + pathDelimeter +
     columns.map( s => sanitize(s.selector.toString) + partDelimeter + sanitize(s.valueType.toString)).mkString(partDelimeter)
   }
@@ -111,14 +99,12 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
 
   def sanitize(s: String) = whitespace.replaceAllIn(s, "_") 
       
-  var projectionDirMap : Map[ProjectionDescriptor,File] = restoreDescriptors
-
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
       expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
       evict = { 
         (descriptor, actor) => {
-          val sync = LevelDBProjection.descriptorSync(projectionDirMap(descriptor))
+          val sync = LevelDBProjection.descriptorSync(descriptors(descriptor))
           sync.sync(descriptor).map(_ => actor ! Stop).unsafePerformIO
         }
       }
@@ -143,14 +129,13 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
 
     case em @ EventMessage(pid, eid, ev @ Event(_, data)) =>
       val unpacked = RoutingTable.unpack(ev)
-      val boundMetadata = unpacked filter { 
+      val qualifiedSelectors = unpacked filter { 
         case Some(_) => true
         case _       => false
       } map { 
         case Some(x) => x
         case _       => sys.error("Theoretically unreachable code")
       }
-      val qualifiedSelectors = boundMetadata.map( t => (t._1.qsel, t._2) )
       val projectionUpdates = routingTable.route(qualifiedSelectors)
 
       registerCheckpointExpectation(pid, eid, projectionUpdates.size)
@@ -169,7 +154,8 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
             projectionActors.putIfAbsent(descriptor, actor)
             val fut = actor ? ProjectionInsert(em.uid, values)
             fut.onComplete { _ => 
-              metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, boundMetadata))
+            sys.error("todo")
+              //metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, boundMetadata))
             }
 
           case Failure(errors) => 
@@ -180,8 +166,8 @@ class RoutingActor(baseDir: File, routingTable: RoutingTable, metadataActor: Act
 
   def registerCheckpointExpectation(pid: Int, eid: Int, count: Int): Unit = metadataActor ! ExpectedEventActions(pid, eid, count)
 
-  def extractMetadataFor(desc: ProjectionDescriptor, boundMetadata: Set[(ColumnDescriptor, JValue)]): Seq[Set[Metadata]] = 
-    desc.columns flatMap { c => boundMetadata.exists(_ == c).option(c.metadata) } toSeq
+//  def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue)]): Seq[Set[Metadata]] = 
+//    desc.columns flatMap { c => metadata.exists(_ == c).option(c.metadata) } toSeq
 }
 
 case class ProjectionInsert(id: Long, values: Seq[JValue])

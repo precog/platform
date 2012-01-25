@@ -26,10 +26,10 @@ import java.nio.ByteBuffer
 private[leveldb] class LevelDBBuffer(length: Int) {
   private final val buf = ByteBuffer.allocate(length)
   def writeIdentity(id: Identity): Unit = buf.putLong(id)
-  def writeValue(col: ColumnDescriptor, v: CValue) = v.fold[Unit](
+  def writeValue(colDesc: ColumnDescriptor, v: CValue) = v.fold[Unit](
     str     = s => {
       val sbytes = s.getBytes("UTF-8")
-      col.qsel.valueType.format match {
+      colDesc.valueType.format match {
         case FixedWidth(w) => buf.put(sbytes, 0, w)
         case LengthEncoded => buf.putInt(sbytes.length).put(sbytes)
       }
@@ -44,7 +44,7 @@ private[leveldb] class LevelDBBuffer(length: Int) {
       buf.putInt(dbytes.length).put(dbytes)
     },
     emptyObj = (), emptyArr = (), 
-    nul = col.qsel.valueType match {
+    nul = colDesc.valueType match {
       case SStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
       case SStringArbitrary       => buf.putInt(0)
       case SBoolean               => buf.put(0xFF)
@@ -64,7 +64,7 @@ trait LevelDBByteProjection extends ByteProjection {
   private val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
-    lazy val valueWidths = descriptor.columns.map(_.qsel.valueType.format) zip cvalues map {
+    lazy val valueWidths = descriptor.columns.map(_.valueType.format) zip cvalues map {
       case (FixedWidth(w), sv) => w
       case (LengthEncoded, sv) => 
         sv.fold[Int](

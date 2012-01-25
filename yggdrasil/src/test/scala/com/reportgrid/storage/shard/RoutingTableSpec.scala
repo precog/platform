@@ -37,7 +37,7 @@ class RoutingTableSpec extends Specification {
     "project an empty event to an empty set of projection actions" in {
       val rt = new SingleColumnProjectionRoutingTable 
 
-      val event: Set[(QualifiedSelector, JValue)] = Set.empty
+      val event: Set[(ColumnDescriptor, JValue)] = Set.empty
 
       val actions = rt.route(event)
 
@@ -47,8 +47,8 @@ class RoutingTableSpec extends Specification {
     "project an event with one property to a single projection action" in {
       val rt = new SingleColumnProjectionRoutingTable 
 
-      val event: List[(QualifiedSelector, JValue)] = List(
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector"), SLong), JString("Test"))
+      val event: List[(ColumnDescriptor, JValue)] = List(
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong), JString("Test"))
       )
 
       val actions = rt.route(event.toSet)
@@ -61,9 +61,9 @@ class RoutingTableSpec extends Specification {
     "project an event with n properties to n projection actions" in {
       val rt = new SingleColumnProjectionRoutingTable 
 
-      val event: List[(QualifiedSelector, JValue)] = List(
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector"), SLong), JString("Test")),
-        (QualifiedSelector(Path("/a/b/"),JPath(".selector.foo"), SLong), JInt(1))
+      val event: List[(ColumnDescriptor, JValue)] = List(
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong), JString("Test")),
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong), JInt(1))
       )
 
       val actions = rt.route(event.toSet)

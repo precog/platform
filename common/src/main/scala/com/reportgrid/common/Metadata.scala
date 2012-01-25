@@ -39,6 +39,44 @@ import Scalaz._
 
 sealed trait MetadataType
 
+trait MetadataTypeSerialization {
+  implicit val MetadataTypeDecomposer: Decomposer[MetadataType] = new Decomposer[MetadataType] {
+    override def decompose(metadataType: MetadataType): JValue = JString(MetadataType.toName(metadataType))
+  }
+
+  implicit val MetadataTypeExtractor: Extractor[MetadataType] = new Extractor[MetadataType] with ValidatedExtraction[MetadataType] {
+    override def validated(obj: JValue): Validation[Error, MetadataType] = obj match {
+      case JString(n) => MetadataType.fromName(n) match {
+        case Some(mt) => Success(mt)
+        case None     => Failure(Invalid("Unknown metadata type: " + n))
+      }
+      case _          => Failure(Invalid("Unexpected json value for metadata type.: " + obj))
+    }
+  }
+
+}
+
+object MetadataType extends MetadataTypeSerialization {
+  def toName(metadataType: MetadataType): String = metadataType match {
+    case Ownership => "Ownership"
+    case BooleanValueStats => "BooleanValueStats"
+    case LongValueStats => "LongValueStats"
+    case DoubleValueStats => "DoubleValueStats"
+    case BigDecimalValueStats => "BigDecimalValueStats"
+    case StringValueStats => "StringValueStats"
+  }
+
+  def fromName(name: String): Option[MetadataType] = name match {
+    case "Ownership" => Option(Ownership)
+    case "BooleanValueStats" => Option(BooleanValueStats)
+    case "LongValueStats" => Option(LongValueStats)
+    case "DoubleValueStats" => Option(DoubleValueStats)
+    case "BigDecimalValueStats" => Option(BigDecimalValueStats)
+    case "StringValueStats" => Option(StringValueStats)
+    case _ => None
+  }
+}
+
 sealed abstract trait Metadata {
   def merge(other: Metadata): Option[Metadata]
 }
