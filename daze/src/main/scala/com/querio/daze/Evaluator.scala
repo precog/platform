@@ -309,12 +309,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       
       case ArraySwap => {
         case (SArray(arr), SDecimal(index)) if index.isValidInt => {
-          val i = index.toInt - 1
-          if (i < 0 || i >= arr.length) {
+          val i = index.toInt
+          if (i <= 0 || i >= arr.length) {
             None
           } else {
             val (left, right) = arr splitAt i
-            Some(SArray(left.init ++ Vector(right.head, left.last) ++ left.tail))
+            Some(SArray(left.init ++ Vector(right.head, left.last) ++ right.tail))
           }
         }
         
