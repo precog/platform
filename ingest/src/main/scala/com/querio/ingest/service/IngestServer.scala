@@ -1,6 +1,5 @@
 package com.querio.ingest.service
 import  service._
-import  external._
 
 import blueeyes.BlueEyesServer
 import blueeyes.json.JsonAST._
@@ -12,8 +11,6 @@ import blueeyes.util.Clock
 import scalaz.NonEmptyList
 
 import com.reportgrid.analytics.TokenManager
-//import com.reportgrid.api.Server
-//import com.reportgrid.api.blueeyes.ReportGrid
 
 import java.util.Properties
 import java.util.Date

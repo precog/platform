@@ -26,7 +26,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import com.querio.ingest.util.ArbitraryIngestMessage
+import com.reportgrid.common.util.ArbitraryIngestMessage
 
 import com.reportgrid.common._
 

@@ -62,10 +62,10 @@ import scalaz.iteratee.EnumeratorT
 class ShardServer {
   def run(config: ShardServerConfig): Unit = {
     
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef =  sys.error("todo") //ShardMetadata.dummyShardMetadataActor  
-
     val system = ActorSystem("Shard Actor System")
+    
+    val routingTable = new SingleColumnProjectionRoutingTable
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, ShardMetadata.dummyCheckpoints)))
 
     val router = system.actorOf(Props(new RoutingActor(config.baseDir, config.descriptors, routingTable, metadataActor)))
     
@@ -119,6 +119,7 @@ object ShardServerConfig extends Logging {
 
     def loadMap(baseDir: File) = {
       IOUtils.walkSubdirs(baseDir).map{ _.foldLeft( mutable.Map[ProjectionDescriptor, File]() ){ (map, dir) =>
+        println("loading: " + dir)
         LevelDBProjection.descriptorSync(dir).read match {
           case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
                                                      { pd => map + (pd -> dir) })
@@ -211,14 +212,53 @@ object ShardServer {
   def loadConfig(filename: String) = ShardServerConfig.fromFile { new File(filename) }
 }
 
-object ShardUtil {
-  def write(descriptors: Map[ProjectionDescriptor, File]): IO[Unit] = IO {
+object ShardDemoUtil {
+
+  def main(args: Array[String]) {
+    writeDummyShardMetadata
+    val props = new Properties
+    props.setProperty("querio.storage.root", "/tmp/test/")
+    bootstrapTest(props).unsafePerformIO.map( t => println(t.descriptors + "|" + t.metadata) )
+  }
+
+  def bootstrapTest(properties: Properties): IO[Validation[Error, ShardServerConfig]] =
+    ShardServerConfig.fromProperties(properties)
+
+  def writeDummyShardMetadata() {
+    val md = ShardMetadata.dummyProjections
+   
+    val rawEntries = 0.until(md.size) zip md.toSeq
+
+    val descriptors = rawEntries.foldLeft( Map[ProjectionDescriptor, File]() ) {
+      case (acc, (idx, (pd, md))) => acc + (pd -> new File("/tmp/test/desc"+idx))
+    }
+
+    val metadata = rawEntries.foldLeft( Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]() ) {
+      case (acc, (idx, (pd, md))) => acc + (pd -> md)
+    }
+
+    writeAll(descriptors, metadata).unsafePerformIO
+  }
+
+  def writeAll(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] = 
+    writeDescriptors(descriptors) unsafeZip writeMetadata(descriptors, metadata) map { _ => () }
+
+  def writeDescriptors(descriptors: Map[ProjectionDescriptor, File]): IO[Unit] = 
     descriptors.map {
       case (pd, f) => {
         if(!f.exists) f.mkdirs
         IOUtils.writeToFile(Printer.pretty(Printer.render(pd.serialize)), new File(f, "projection_descriptor.json"))
       }
-    }.toList.sequence[IO,Unit].map{ _ => () }
-  }
+    }.toList.sequence[IO,Unit].map { _ => () }
+
+  def writeMetadata(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] =
+    metadata.map {
+      case (pd, md) => {
+        descriptors.get(pd).map { f =>
+          if(!f.exists) f.mkdirs
+          IOUtils.writeToFile(Printer.pretty(Printer.render(md.map( _.toSeq ).serialize)), new File(f, "projection_metadata.json"))
+        }.getOrElse(IO { () })
+      }
+    }.toList.sequence[IO,Unit].map { _ => () }
 }
 // vim: set ts=4 sw=4 et:

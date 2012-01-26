@@ -2,10 +2,12 @@ package com.querio.ingest.util
 
 import scala.collection.mutable.ListBuffer
 
+
 import java.util.Properties
 import java.io.{File, FileReader}
 
 import com.reportgrid.common._
+import com.reportgrid.common.util.RealisticIngestMessage
 import com.querio.ingest.api._
 import com.querio.ingest.service._
 
@@ -104,7 +106,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
     val f: Future[HttpResponse[JValue]] = client.path(base)
                                                 .query("tokenId", tokens.head)
                                                 .contentType(application/MimeTypes.json)
-                                                .post[JValue](event.path)(Event.dataRepresentation(event.content))
+                                                .post[JValue](event.path.toString)(Event.dataRepresentation(event.content))
     Await.ready(f, 10 seconds) 
     f.value match {
       case Some(Right(_)) => ()
