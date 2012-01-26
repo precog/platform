@@ -25,7 +25,9 @@ import java.util.Comparator
 package object util {
   class Order2JComparator[A](order: Order[A]) {
     def toJavaComparator: Comparator[A] = new Comparator[A] {
-      def compare(a1: A, a2: A) = order.order(a1, a2).toInt
+      def compare(a1: A, a2: A) = {
+        order.order(a1, a2).toInt
+      }
     }
   }
 
