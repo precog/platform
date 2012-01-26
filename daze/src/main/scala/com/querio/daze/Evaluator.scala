@@ -234,12 +234,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case Mean => {
         val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal)]](None) {
           case (None, SDecimal(v)) => Some((1, v))
-          case (Some((count, acc)), SDecimal(v)) => Some((count + 1, (acc + v) / (count + 1)))
+          case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
           case (acc, _) => acc
         }
         
         itr map {
-          case Some((_, v)) => Some(SDecimal(v))
+          case Some((c, v)) => Some(SDecimal(v / c))
           case None => None
         }
       }
