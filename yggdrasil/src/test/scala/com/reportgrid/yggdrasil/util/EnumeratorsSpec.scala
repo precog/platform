@@ -20,18 +20,18 @@ import Iteratee._
 class EnumeratorsSpec extends Specification with ThrownMessages with Logging {
   "sort" should {
     "sort values" in {
-      implicit val bij: Bijection[String, (Array[Byte], Array[Byte])] = null
-      val enumP: EnumeratorP[Unit, String, IO] = new EnumeratorP[Unit, String, IO] {
-        def apply[F[_[_], _]: MonadTrans]: EnumeratorT[Unit, String, ({type λ[α] = F[IO, α]})#λ] = {
+      implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(identity[String]))
+      val enumP: EnumeratorP[Unit, SEvent, IO] = new EnumeratorP[Unit, SEvent, IO] {
+        def apply[F[_[_], _]: MonadTrans]: EnumeratorT[Unit, SEvent, ({type λ[α] = F[IO, α]})#λ] = {
           type FIO[α] = F[IO, α]
           implicit val MF = MonadTrans[F].apply[IO]
-          enumStream[Unit, String, FIO](Stream("2", "3", "1"))
+          enumStream[Unit, SEvent, FIO](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
         }
       }
 
       type IdIO[α] = IdT[IO, α]
-      (consume[Unit, String, IdIO, List] &= (Enumerators.sort(enumP, 5, null, null).apply[IdT]))
-      .run(_ => sys.error("...")).run.unsafePerformIO must_== List("1", "2", "3")
+      (consume[Unit, SEvent, IdIO, List] &= (Enumerators.sort(enumP, 5, null, null).apply[IdT]))
+      .run(_ => sys.error("...")).run.unsafePerformIO.map(_._2.mapStringOr("wrong")(identity[String])) must_== List("1", "2", "3")
     }
   }
 }
