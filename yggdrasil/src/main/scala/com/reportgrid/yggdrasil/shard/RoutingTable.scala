@@ -34,7 +34,7 @@ object RoutingTable {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 
-          case (ctype, metadata) => (ColumnDescriptor(Path(e.path), sel, ctype), metadata) 
+          case (ctype, metadata) => (ColumnDescriptor(e.path, sel, ctype), metadata) 
         }
     }
   }

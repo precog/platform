@@ -31,11 +31,13 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
+import com.reportgrid.analytics._
+
 import scalaz._
 import Scalaz._
 
 //TODO: This should be (Path, JValue, JValue)
-case class Event(path: String, content: Set[(JPath, (JValue, Set[Metadata]))]) 
+case class Event(path: Path, content: Set[(JPath, (JValue, Set[Metadata]))]) 
 
 class EventSerialization {
 
@@ -77,14 +79,14 @@ class EventSerialization {
 
   implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
     override def validated(obj: JValue): Validation[Error, Event] = 
-      ((obj \ "path").validated[String] |@|
+      ((obj \ "path").validated[Path] |@|
         ((obj \ "metadata").validated[JValue] |@|
          (obj \ "data").validated[JValue]).apply(representationsToContent(_, _))).apply(Event(_, _))
   }  
 }
 
 object Event extends EventSerialization {
-  def fromJValue(path: String, data: JValue, ownerToken: String): Event = {
+  def fromJValue(path: Path, data: JValue, ownerToken: String): Event = {
     def assignOwnership(properties: Set[(JPath, JValue)]): Set[(JPath, (JValue, Set[Metadata]))] = properties.map { 
       (t: (JPath, JValue)) => { (t._1, (t._2, Set(Ownership(Set(ownerToken))))) }: (JPath, (JValue, Set[Metadata]))
     }

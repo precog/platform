@@ -134,7 +134,7 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success{ (t: Token, p: Path) =>
       request.content.map { _.flatMap { event  => 
-        eventStore.save(Event.fromJValue(p.toString, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK))
+        eventStore.save(Event.fromJValue(p, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK))
       }}.getOrElse(Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
     }
   }
