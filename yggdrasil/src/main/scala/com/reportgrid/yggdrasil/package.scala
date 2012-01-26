@@ -5,6 +5,10 @@ package object yggdrasil {
   type Identities = Vector[Identity]
   type SEvent = (Identities, SValue)
 
+  object SEvent {
+    def apply(id: Identities, sv: SValue): SEvent = (id, sv)
+  }
+
   implicit object IdentitiesOrdering extends Ordering[Identities] {
     def compare(id1: Identities, id2: Identities) = {
       (id1 zip id2).foldLeft(0) {

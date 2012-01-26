@@ -32,8 +32,8 @@ import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 
 import com.reportgrid.analytics._
-import com.reportgrid.api.{ReportGridConfig, ReportGridClient, HttpClient, Server} 
-import com.reportgrid.api.blueeyes.ReportGrid
+//import com.reportgrid.api.{ReportGridConfig, ReportGridClient, HttpClient, Server} 
+//import com.reportgrid.api.blueeyes.ReportGrid
 import com.querio.ct._
 import com.querio.ct.Mult._
 import com.querio.ct.Mult.MDouble._
@@ -43,7 +43,7 @@ import BijectionsChunkJson._
 import BijectionsChunkString._
 import BijectionsChunkFutureJson._
 
-import rosetta.json.blueeyes._
+//import rosetta.json.blueeyes._
 
 import com.querio.ingest.api._
 
@@ -91,7 +91,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   override def mongoFactory(config: ConfigMap): Mongo = RealMongo(config)
   //override def mongoFactory(config: ConfigMap): Mongo = new MockMongo()
 
-  def auditClient(config: ConfigMap) = external.NoopTrackingClient
+  //def auditClient(config: ConfigMap) = external.NoopTrackingClient
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = {
     val mgr = new TokenManager(database, tokensCollection, deletedTokensCollection) 
@@ -101,28 +101,9 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   }
 
   def storageReporting(config: ConfigMap) = {
-    val testServer = Server("/")
+    //val testServer = Server("/")
 
-    val testHttpClient = new HttpClient[String] {
-      def request(method: String, url: String, content: Option[String], headers: Map[String, String] = Map.empty[String, String]): String = {
-        val httpMethods = HttpMethods.parseHttpMethods(method)
-        val httpMethod = httpMethods match {
-          case m :: Nil => m
-          case _        => sys.error("Only one http method expected")
-        }
-        val chunkContent = content.map(StringToChunk(_))
-        Await.result(service.apply(HttpRequest(httpMethod, url, Map(), headers, chunkContent)).map(_.content.map(ChunkToString).getOrElse("")), Duration(10, "seconds"))
-      }
-    }
-
-    val clientConfig = new ReportGridConfig(
-      TrackingToken.tokenId,
-      testServer,
-      testHttpClient
-    )
-    val testClient = new ReportGridClient(clientConfig)
-
-    new ReportGridStorageReporting(TrackingToken.tokenId, testClient) 
+    new ReportGridStorageReporting(TrackingToken.tokenId) 
   }
 
   val messaging = new CollectingMessaging
