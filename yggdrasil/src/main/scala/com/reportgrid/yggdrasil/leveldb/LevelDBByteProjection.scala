@@ -24,6 +24,7 @@ import com.reportgrid.util.Bijection._
 import java.nio.ByteBuffer
 
 private[leveldb] class LevelDBBuffer(length: Int) {
+    //println("length = " + length)
   private final val buf = ByteBuffer.allocate(length)
   def writeIdentity(id: Identity): Unit = buf.putLong(id)
   def writeValue(col: ColumnDescriptor, v: CValue) = v.fold[Unit](
@@ -75,6 +76,7 @@ trait LevelDBByteProjection extends ByteProjection {
           emptyObj = incompatible(()), emptyArr = incompatible(()), nul = incompatible(())
         )
     }
+    //println("valueWidths = " + valueWidths)
 
     val (usedIdentities, usedValues, indexWidth) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int], 0)) { 
       case ((ids, values, width), (col, ById)) => 
@@ -88,9 +90,10 @@ trait LevelDBByteProjection extends ByteProjection {
         val valueIndex = descriptor.columns.indexOf(col)
         (ids + descriptor.indexedColumns(col), values + valueIndex, width + valueWidths(valueIndex) + 8)
     }
+    //println("(usedIdentities, usedValues, indexWidth) = " + (usedIdentities, usedValues, indexWidth))
 
     // all of the identities must be included in the key; also, any values of columns that
-    // use by-value ordering must be included in tthe key. 
+    // use by-value ordering must be included in the key. 
     val indexBuffer = new LevelDBBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
     descriptor.sorting.foreach {
       case (col, ById)          => indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
@@ -102,11 +105,13 @@ trait LevelDBByteProjection extends ByteProjection {
 
     identities.zipWithIndex.foreach {
       case (id, i) => if (!usedIdentities.contains(i)) indexBuffer.writeIdentity(id)
+      case _ =>
     }
 
     val valuesBuffer = new LevelDBBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
     (cvalues zip descriptor.columns).zipWithIndex.foreach {
       case ((v, col), i) if !usedValues.contains(i) => valuesBuffer.writeValue(col, v)
+      case _ => 
     }
 
     (indexBuffer.toArray, valuesBuffer.toArray)
