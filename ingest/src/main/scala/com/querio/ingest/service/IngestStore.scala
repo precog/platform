@@ -22,7 +22,7 @@ import kafka.producer._
 
 import com.reportgrid.common._
 import com.querio.ingest.api._
-import com.querio.ingest.util.ArbitraryJValue
+import com.reportgrid.common.util.ArbitraryJValue
 
 // todo
 //

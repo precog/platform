@@ -13,5 +13,6 @@ libraryDependencies ++= Seq(
   "com.reportgrid"            %% "blueeyes-json"      % "0.6.0-SNAPSHOT" changing(),
   "com.reportgrid"            %% "blueeyes-core"      % "0.6.0-SNAPSHOT" changing(),
   "com.reportgrid"            %% "blueeyes-mongo"     % "0.6.0-SNAPSHOT" changing(),
+  "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
   "org.specs2"                %% "specs2"             % "1.8-SNAPSHOT"  % "test" changing()
 )
