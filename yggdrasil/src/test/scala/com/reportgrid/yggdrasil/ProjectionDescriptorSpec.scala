@@ -28,6 +28,7 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import com.reportgrid.analytics.Path
+import com.reportgrid.common._
 
 import scala.collection.immutable.ListMap
 
@@ -36,9 +37,9 @@ import scalaz._
 class ProjectionDescriptorSpec extends Specification {
 
   val descriptors = List(
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), SStringArbitrary),
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), SStringArbitrary),
-    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong))
+    ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), SStringArbitrary, Ownership(Set())),
+    ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), SStringArbitrary, Ownership(Set())),
+    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong, Ownership(Set())))
 
   val indexes = List(0, 0, 1)
 

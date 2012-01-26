@@ -30,6 +30,8 @@ import blueeyes.json.JPath
 import org.specs2.mutable._
 import org.specs2.matcher.{Matcher, MatchResult, Expectable}
 
+import scala.collection.immutable.ListMap
+
 class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
@@ -48,7 +50,7 @@ class RoutingTableSpec extends Specification {
       val rt = new SingleColumnProjectionRoutingTable 
 
       val event: List[(ColumnDescriptor, JValue)] = List(
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong), JString("Test"))
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set())), JString("Test"))
       )
 
       val actions = rt.route(event.toSet)
@@ -62,8 +64,8 @@ class RoutingTableSpec extends Specification {
       val rt = new SingleColumnProjectionRoutingTable 
 
       val event: List[(ColumnDescriptor, JValue)] = List(
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong), JString("Test")),
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong), JInt(1))
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set())), JString("Test")),
+        (ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Ownership(Set())), JInt(1))
       )
 
       val actions = rt.route(event.toSet)
@@ -72,8 +74,8 @@ class RoutingTableSpec extends Specification {
       val vals = event.map( _._2 )
 
       val expected : Set[ProjectionDescriptor] = sys.error("todo")
-        //Set( (ProjectionDescriptor(List(qss(0)), Set()), List(vals(0))),
-        //                  (ProjectionDescriptor(List(qss(1)), Set()), List(vals(1))) )
+        Set( (ProjectionDescriptor(ListMap() + (qss(0) -> 0), List() :+ (qss(0) -> ById) ), List(vals(0))),
+             (ProjectionDescriptor(ListMap() + (qss(1) -> 0), List() :+ (qss(0) -> ById) ), List(vals(1))) )
 
       actions must_== expected 
     }.pendingUntilFixed

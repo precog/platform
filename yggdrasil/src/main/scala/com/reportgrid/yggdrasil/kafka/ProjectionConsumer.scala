@@ -21,6 +21,7 @@ package com.reportgrid.yggdrasil
 package kafka
 
 import com.reportgrid.util._
+import com.reportgrid.common.util.FixMe._
 import leveldb._
 import shard._
 import Bijection._
@@ -76,7 +77,10 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
     descriptors.get(descriptor) match {
       case Some(dir) => dir
       case None => {
-        val newDir = new File(baseDir, toPath(descriptor.columns) + projectionSuffix(descriptor))
+        val newDir = File.createTempFile("col", "", baseDir)
+        newDir.delete
+        newDir.mkdirs
+        logger.debug(newDir.toString)
         LevelDBProjection.descriptorSync(newDir).sync(descriptor).unsafePerformIO.fold({ t => logger.error("Failed to sync descriptor: " + t) },
                                                                                        { _ => ()})
         descriptors += (descriptor -> newDir)
@@ -145,8 +149,7 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
       } {
         val comparator = ProjectionComparator.forProjection(descriptor)
         val actor: ValidationNEL[Throwable, ActorRef] = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-          sys.error("todo")
-          //LevelDBProjection(dirFor(descriptor), Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
+          LevelDBProjection(dirFor(descriptor), descriptor, Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
         }
 
         actor match {
@@ -154,7 +157,7 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
             projectionActors.putIfAbsent(descriptor, actor)
             val fut = actor ? ProjectionInsert(em.uid, values)
             fut.onComplete { _ => 
-            sys.error("todo")
+              fixme("Ignoring metadata update for now, but need to come back.")
               //metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, boundMetadata))
             }
 
@@ -180,15 +183,43 @@ trait ProjectionResults {
 }
 
 class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
-  //implicit val bijection: Bijection[Seq[JValue], Array[Byte]] = projectionBijection2(descriptor)
+
+  def asCValue(jval: JValue): CValue = jval match { 
+    case JString(s) => new CValue {
+        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
+                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = str(s) 
+      }
+     
+    case JInt(i) => new CValue {
+        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
+                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = num(BigDecimal(i))
+      }
+                  
+    case JDouble(d) => new CValue {
+        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
+                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = double(d) 
+      }
+
+    case JBool(b) => new CValue {
+        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
+                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = bool(b) 
+      }
+      
+    case JNull => new CValue {
+        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
+                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = nul 
+      }
+    
+    case x       => sys.error("JValue type not yet supported: " + x.getClass.getName )
+  
+  }
 
   def receive = {
     case Stop => //close the db
       projection.close.unsafePerformIO
 
     case ProjectionInsert(id, values) => 
-      sys.error("todo")
-      //projection.insert(id, values.as[Array[Byte]]).unsafePerformIO
+      projection.insert(Vector(id), values.map(asCValue)).unsafePerformIO
 
     case ProjectionGet(interval, sender) =>
       sender ! new ProjectionResults {

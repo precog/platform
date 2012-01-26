@@ -72,14 +72,15 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType) 
+case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, ownership: Ownership) 
 
 trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
     def decompose(selector : ColumnDescriptor) : JValue = JObject (
       List(JField("path", selector.path.serialize),
            JField("selector", selector.selector.serialize),
-           JField("valueType", selector.valueType.serialize))
+           JField("valueType", selector.valueType.serialize),
+           JField("ownership", selector.ownership.serialize))
     )
   }
 
@@ -87,12 +88,13 @@ trait ColumnDescriptorSerialization {
     override def validated(obj : JValue) : Validation[Error,ColumnDescriptor] = 
       ((obj \ "path").validated[Path] |@|
        (obj \ "selector").validated[JPath] |@|
-       (obj \ "valueType").validated[ColumnType]).apply(ColumnDescriptor(_,_,_))
+       (obj \ "valueType").validated[ColumnType] |@|
+       (obj \ "ownership").validated[Ownership]).apply(ColumnDescriptor(_,_,_,_))
   }
 }
 
 object ColumnDescriptor extends ColumnDescriptorSerialization 
-with ((Path, JPath, ColumnType) => ColumnDescriptor)
+with ((Path, JPath, ColumnType, Ownership) => ColumnDescriptor)
 
 /** 
  * The descriptor for a projection 

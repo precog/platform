@@ -106,17 +106,17 @@ object ShardMetadata {
   def dummyProjections = {
     mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]](
       projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
       projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
       projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong))) -> List(mutable.Map(),mutable.Map(),mutable.Map()))
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()))
   }
  
   def projectionHelper(cds: Seq[ColumnDescriptor]): ProjectionDescriptor = {
@@ -211,7 +211,7 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
  
   def findSelectors(path: Path): Seq[JPath] = {
     projections.toSeq flatMap {
-      case (descriptor, _) => descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _) if path == cpath => cselector }
+      case (descriptor, _) => descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
     }
   }
 
