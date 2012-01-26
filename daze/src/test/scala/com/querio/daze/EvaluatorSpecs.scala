@@ -33,7 +33,7 @@ import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.set._
 
-object EvaluatorSpecs extends Specification with Evaluator {
+object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperationsAPI with DefaultYggConfig {
   import JsonAST._
   import Function._
   import IterateeT._
@@ -41,11 +41,6 @@ object EvaluatorSpecs extends Specification with Evaluator {
   import dag._
   import instructions._
 
-  override val ops: DatasetEnumFunctions = new OperationalDatasetEnumFunctions {
-    def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G] = sys.error("")
-    def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] = sys.error("")
-  }
-  
   "bytecode evaluator" should {
     "evaluate simple two-value multiplication" in {
       val line = Line(0, "")

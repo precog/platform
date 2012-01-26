@@ -126,13 +126,13 @@ trait OperationsAPI {
   def ops: DatasetEnumFunctions
 }
 
-trait LevelDBConfiguration {
+trait YggConfig {
   def workDir: File
   def sortBufferSize: Int
 }
 
-trait LevelDBOperationsAPI extends OperationsAPI {
-  def config: LevelDBConfiguration
+trait YggdrasilOperationsAPI extends OperationsAPI {
+  def config: YggConfig
 
   def ops = new DatasetEnumFunctions {
     def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
@@ -141,8 +141,8 @@ trait LevelDBOperationsAPI extends OperationsAPI {
   }
 }
 
-trait DefaultLevelDBConfiguration {
-  def config = new LevelDBConfiguration {
+trait DefaultYggConfig {
+  def config = new YggConfig {
     def workDir = {
       val tempFile = File.createTempFile("leveldb_tmp", "workdir")
       tempFile.delete //todo: validated
