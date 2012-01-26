@@ -240,49 +240,53 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
   }
   
   // TODO mode, median and stdDev
-  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = red match {
-    case Count => {
-      fold[X, SValue, F, Option[SValue]](Some(SDecimal(0))) {
-        case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
-      }
-    }
-    
-    case Mean => {
-      val itr = fold[X, SValue, F, Option[(BigDecimal, BigDecimal)]](None) {
-        case (None, SDecimal(v)) => Some((1, v))
-        case (Some((count, acc)), SDecimal(v)) => Some((count + 1, (acc + v) / (count + 1)))
-        case (acc, _) => acc
+  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = {
+    type FIO[α] = F[IO, α]
+    implicit val FMonad = MonadTrans[F].apply[IO]
+    red match {
+      case Count => {
+        fold[X, SValue, FIO, Option[SValue]](Some(SDecimal(0))) {
+          case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
+        }
       }
       
-      itr map {
-        case Some((_, v)) => Some(SDecimal(v))
-        case None => None
+      case Mean => {
+        val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal)]](None) {
+          case (None, SDecimal(v)) => Some((1, v))
+          case (Some((count, acc)), SDecimal(v)) => Some((count + 1, (acc + v) / (count + 1)))
+          case (acc, _) => acc
+        }
+        
+        itr map {
+          case Some((_, v)) => Some(SDecimal(v))
+          case None => None
+        }
       }
-    }
-    
-    case Max => {
-      fold[X, SValue, F, Option[SValue]](None) {
-        case (None, SDecimal(v)) => Some(SDecimal(v))
-        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
-        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
-        case (acc, _) => acc
+      
+      case Max => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, SDecimal(v)) => Some(SDecimal(v))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
+          case (acc, _) => acc
+        }
       }
-    }
-    
-    case Min => {
-      fold[X, SValue, F, Option[SValue]](None) {
-        case (None, SDecimal(v)) => Some(SDecimal(v))
-        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
-        case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
-        case (acc, _) => acc
+      
+      case Min => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, SDecimal(v)) => Some(SDecimal(v))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
+          case (acc, _) => acc
+        }
       }
-    }
-    
-    case Sum => {
-      fold[X, SValue, F, Option[SValue]](None) {
-        case (None, sv @ SDecimal(_)) => Some(sv)
-        case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
-        case (acc, _) => acc
+      
+      case Sum => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, sv @ SDecimal(_)) => Some(sv)
+          case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
+          case (acc, _) => acc
+        }
       }
     }
   }
