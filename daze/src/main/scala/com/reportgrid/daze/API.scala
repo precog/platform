@@ -23,6 +23,7 @@ package daze
 import com.reportgrid.yggdrasil._
 import com.reportgrid.yggdrasil.util.Enumerators
 import com.reportgrid.analytics.Path
+import java.io.File
 import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
@@ -32,7 +33,7 @@ import Iteratee._
 //case class IdentitySource(sources: Set[ProjectionDescriptor])
 case class EventMatcher(order: Order[SEvent], merge: (Vector[Identity], Vector[Identity]) => Vector[Identity])
 
-case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F]) //, identityDerivation: Vector[IdentitySource]) 
+case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Option[ProjectionDescriptor] = None) //, identityDerivation: Vector[IdentitySource]) 
 
 // QualifiedSelector(path: String, sel: JPath, valueType: EType)
 trait StorageEngineInsertAPI
@@ -62,7 +63,7 @@ trait DatasetEnumFunctions {
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
     DatasetEnum(mergeE[X, SEvent, F].apply(enum1.enum, enum2.enum))
 
-  def sort[X, F[_]](enum: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F]
+  def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] 
   
   def map[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => E2): DatasetEnum[X, E2, G] = DatasetEnum(
     new EnumeratorP[X, E2, G] {
@@ -125,3 +126,30 @@ trait OperationsAPI {
   def ops: DatasetEnumFunctions
 }
 
+trait LevelDBConfiguration {
+  def workDir: File
+  def sortBufferSize: Int
+}
+
+trait LevelDBOperationsAPI extends OperationsAPI {
+  def config: LevelDBConfiguration
+
+  def ops = new DatasetEnumFunctions {
+    def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
+      DatasetEnum(Enumerators.sort[X](enum.enum, config.sortBufferSize, config.workDir, enum.descriptor))
+    }
+  }
+}
+
+trait DefaultLevelDBConfiguration {
+  def config = new LevelDBConfiguration {
+    def workDir = {
+      val tempFile = File.createTempFile("leveldb_tmp", "workdir")
+      tempFile.delete //todo: validated
+      tempFile.mkdir //todo: validated
+      tempFile
+    }
+
+    def sortBufferSize = 10000
+  }
+}
