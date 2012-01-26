@@ -1200,11 +1200,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(5)
-      }.pendingUntilFixed
+      }
       
       "mean" >> {
         val line = Line(0, "")
@@ -1217,11 +1217,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(29)
-      }.pendingUntilFixed
+      }
       
       "median" >> {
         val line = Line(0, "")
@@ -1234,7 +1234,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -1251,7 +1251,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1268,16 +1268,16 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77)
-      }.pendingUntilFixed
+      }
       
       "min" >> {
         val line = Line(0, "")
         
-        val input = dag.Reduce(line, Max,
+        val input = dag.Reduce(line, Min,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
         val result = consumeEval(input)
@@ -1285,11 +1285,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
-      }.pendingUntilFixed
+      }
       
       "standard deviation" >> {
         val line = Line(0, "")
@@ -1302,7 +1302,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toDouble
+          case (Vector(), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(30.83018)
@@ -1311,7 +1311,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
       "sum" >> {
         val line = Line(0, "")
         
-        val input = dag.Reduce(line, Max,
+        val input = dag.Reduce(line, Sum,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
         val result = consumeEval(input)
@@ -1319,11 +1319,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(145)
-      }.pendingUntilFixed
+      }
     }
     
     "reduce heterogeneous sets" >> {
@@ -1338,11 +1338,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
-        result2 must contain(5)
-      }.pendingUntilFixed
+        result2 must contain(10)
+      }
       
       "mean" >> {
         val line = Line(0, "")
@@ -1355,11 +1355,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(29)
-      }.pendingUntilFixed
+      }
       
       "median" >> {
         val line = Line(0, "")
@@ -1372,7 +1372,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -1389,7 +1389,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1406,16 +1406,16 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77)
-      }.pendingUntilFixed
+      }
       
       "min" >> {
         val line = Line(0, "")
         
-        val input = dag.Reduce(line, Max,
+        val input = dag.Reduce(line, Min,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
         val result = consumeEval(input)
@@ -1423,11 +1423,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
-      }.pendingUntilFixed
+      }
       
       "standard deviation" >> {
         val line = Line(0, "")
@@ -1440,7 +1440,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toDouble
+          case (Vector(), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(30.83018)
@@ -1449,7 +1449,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
       "sum" >> {
         val line = Line(0, "")
         
-        val input = dag.Reduce(line, Max,
+        val input = dag.Reduce(line, Sum,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
         val result = consumeEval(input)
@@ -1457,11 +1457,11 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (Vector(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(145)
-      }.pendingUntilFixed
+      }
     }
   }
 
