@@ -29,7 +29,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
   def buildMetadata(sample: List[Event]): mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]] = {
     def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
       case Event(path, selectors) => selectors.map {
-        case (selector, (value, metadata)) => ColumnDescriptor(path, selector, typeOf(value))
+        case (selector, (value, metadata)) => ColumnDescriptor(path, selector, typeOf(value), Ownership(Set()))
       }
     } }.map{ cd => ProjectionDescriptor( ListMap() + (cd -> 0), List[(ColumnDescriptor, SortBy)]() :+ (cd, ById)).toOption.get } 
 
@@ -70,7 +70,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       def extractType(selector: JPath, content: Set[(JPath, (JValue, Set[Metadata]))]): ColumnType = {
         content.find( _._1 == selector).flatMap[ColumnType]( t => ColumnType.forValue(t._2._1) ).getOrElse(SNull)
       }
-      val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.content))
+      val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.content), Ownership(Set()))
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
     }
 

@@ -13,6 +13,7 @@ import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
 import com.reportgrid.analytics._
+import com.reportgrid.common.util.FixMe._
 
 import scalaz._
 import Scalaz._
@@ -69,16 +70,15 @@ class EventSerialization {
 object Event extends EventSerialization {
   def fromJValue(path: Path, data: JValue, ownerToken: String): Event = {
     def assignOwnership(properties: Set[(JPath, JValue)]): Set[(JPath, (JValue, Set[Metadata]))] = properties.map { 
-      (t: (JPath, JValue)) => { (t._1, (t._2, Set(Ownership(Set(ownerToken))))) }: (JPath, (JValue, Set[Metadata]))
+      fixme("Null ownership being attributed at this point in time")
+      (t: (JPath, JValue)) => { (t._1, (t._2, Set())) }: (JPath, (JValue, Set[Metadata]))
     }
     Event(path, assignOwnership(simpleFlatten(data).toSet))
   }
 
   def extractOwners(event: Event): Set[String] = {
-    val result: Set[Set[String]] = event.content.flatMap(_._2._2.map {
-      case Ownership(l) => l
-    })
-    result.flatten.toSet[String]
+    println("Ownership being ignored until fixed")
+    Set.empty
   }
 }
 

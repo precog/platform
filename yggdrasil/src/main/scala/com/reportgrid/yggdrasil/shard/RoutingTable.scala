@@ -6,6 +6,8 @@ import com.reportgrid.common._
 
 import blueeyes.json.JsonAST._
 
+import scala.collection.immutable.ListMap
+
 trait RoutingTable {
   def route(event: Set[(ColumnDescriptor, JValue)]): Set[(ProjectionDescriptor, Seq[JValue])]
 }
@@ -15,7 +17,7 @@ object RoutingTable {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 
-          case (ctype, metadata) => (ColumnDescriptor(e.path, sel, ctype), metadata) 
+          case (ctype, metadata) => (ColumnDescriptor(e.path, sel, ctype, Ownership(Set())), metadata) 
         }
     }
   }
@@ -24,12 +26,16 @@ object RoutingTable {
 }
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
-  def route(event: Set[(ColumnDescriptor, JValue)]) = 
+  def route(event: Set[(ColumnDescriptor, JValue)]) = {
+    
+    def toProjectionDescriptor(colDesc: ColumnDescriptor) = 
+      ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc -> ById) ).toOption.get
+
     event.map {
-      case (selector, jvalue) => 
-        sys.error("todo")
-        //(ProjectionDescriptor(List(selector), Set()), List(jvalue))
+      case (colDesc, jvalue) => 
+        (toProjectionDescriptor(colDesc), List(jvalue))
     }
+  }
 }
 
 trait ProjectionStorage {

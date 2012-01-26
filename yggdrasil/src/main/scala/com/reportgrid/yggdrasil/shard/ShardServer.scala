@@ -12,6 +12,16 @@ import akka.actor.Props
 import akka.actor.Actor
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
+import akka.actor.PoisonPill
+import akka.dispatch.Await
+import akka.dispatch.Future
+import akka.dispatch.Promise
+import akka.util.Timeout
+import akka.util.duration._
+import akka.util.Duration
+import akka.actor.Terminated
+import akka.actor.ReceiveTimeout
+import akka.actor.ActorTimeoutException
 
 import blueeyes.util._
 import blueeyes.json.Printer
@@ -33,6 +43,12 @@ import java.io.PrintWriter
 import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
+
+import org.scalacheck.Gen._
+
+import com.reportgrid.common._
+import com.reportgrid.common.Event
+import com.reportgrid.common.util.RealisticIngestMessage
 
 import scala.collection._
 import scala.annotation.tailrec
@@ -77,7 +93,80 @@ class ShardServer {
     println("Shard Server started...")
    
   }
+}
 
+object ShardLoader extends RealisticIngestMessage {
+
+  def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
+    if (target.isTerminated) {
+      Promise.successful(true)
+    } else {
+      val result = Promise[Boolean]()
+      system.actorOf(Props(new Actor {
+        // Terminated will be received when target has been stopped
+        context watch target
+        target ! PoisonPill
+        // ReceiveTimeout will be received if nothing else is received within the timeout
+        context setReceiveTimeout timeout
+
+        def receive = {
+          case Terminated(a) if a == target ⇒
+            result success true
+            context stop self
+          case ReceiveTimeout ⇒
+            result failure new ActorTimeoutException(
+              "Failed to stop [%s] within [%s]".format(target.path, context.receiveTimeout))
+            context stop self
+        }
+      }))
+      result
+    }
+  }
+
+  def main(args: Array[String]) {
+    if(args.length < 2) sys.error("Must provide path and number of events to generate.")
+    val base = new File(args(0))
+    val count = args(1).toInt
+    
+    val events = containerOfN[List, Event](1, genEvent).sample.get
+
+    load(base, events, count)
+
+    
+  }
+
+  def load(baseDir: File, events: List[Event], count: Int) {
+    baseDir.mkdirs
+
+    println("Paths: " + events(0).content.size)
+
+    val system = ActorSystem("shard_loader")
+
+    implicit val dispatcher = system.dispatcher
+
+    val routingTable = new SingleColumnProjectionRoutingTable
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), ShardMetadata.dummyCheckpoints)))
+
+    val router = system.actorOf(Props(new RoutingActor(baseDir, mutable.Map(), routingTable, metadataActor)))
+    
+    implicit val timeout: Timeout = 30 seconds 
+   
+    val finalEvents = 0.until(count).map(_ => events).flatten
+
+    finalEvents.zipWithIndex.foreach {
+      case (ev, idx) => router ! EventMessage(0, idx, ev) 
+    }
+
+    println("Initiating shutdown")
+
+    Await.result(Future.sequence(gracefulStop(router, 300 seconds)(system) :: gracefulStop(metadataActor, 300 seconds)(system) :: Nil), 300 seconds)
+    
+    println("Actors stopped")
+    
+    println("Insert total: " + finalEvents.size)
+
+    system.shutdown
+  }
 }
 
 class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
@@ -92,6 +181,7 @@ class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
     val rawEventsTopic = props.getProperty("querio.storage.topic.raw", "raw")
 
     val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
+
 
     for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
       router ! IngestMessageSerialization.readMessage(message.buffer) 
@@ -215,9 +305,9 @@ object ShardServer {
 object ShardDemoUtil {
 
   def main(args: Array[String]) {
-    writeDummyShardMetadata
+    val default = if(args.length > 0) args(0) else "/tmp/test/"
     val props = new Properties
-    props.setProperty("querio.storage.root", "/tmp/test/")
+    props.setProperty("querio.storage.root", default)
     bootstrapTest(props).unsafePerformIO.map( t => println(t.descriptors + "|" + t.metadata) )
   }
 
@@ -261,4 +351,5 @@ object ShardDemoUtil {
       }
     }.toList.sequence[IO,Unit].map { _ => () }
 }
+
 // vim: set ts=4 sw=4 et:

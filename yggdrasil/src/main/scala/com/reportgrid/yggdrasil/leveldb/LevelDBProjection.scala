@@ -118,7 +118,7 @@ object LevelDBProjection {
   }
 }
 
-class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor, comparator: DBComparator) extends LevelDBByteProjection { // extends Projection {
+class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor, comparator: DBComparator) extends LevelDBByteProjection {
   import LevelDBProjection._
 
   val logger = Logger("col:" + baseDir)

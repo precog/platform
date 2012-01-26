@@ -25,9 +25,11 @@ libraryDependencies ++= Seq(
   "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT"                changing(),
   "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT"                changing(),
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9"            % "test",
-  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test"     changing()
-  //"org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   % "optional" changing(),
-  //"org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   % "optional" changing(),  
+  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test"     changing(),
+  // shady I know, but that's how I roll...
+  if(System.getProperty("os.name") == "Max OS X") {
+  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   % "optional" changing() } else {
+  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   % "optional" changing() } 
 )
 
 resolvers ++= Seq(

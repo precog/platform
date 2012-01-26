@@ -5,7 +5,13 @@ import com.reportgrid.util.Bijection._
 import java.nio.ByteBuffer
 
 private[leveldb] class LevelDBBuffer(length: Int) {
-    //println("length = " + length)
+  
+  //println("length = " + length)
+
+  val trueByte: Byte = 0x01
+  val falseByte: Byte = 0x00
+  val nullByte: Byte = 0xff.toByte
+  
   private final val buf = ByteBuffer.allocate(length)
   def writeIdentity(id: Identity): Unit = buf.putLong(id)
   def writeValue(colDesc: ColumnDescriptor, v: CValue) = v.fold[Unit](
@@ -16,7 +22,7 @@ private[leveldb] class LevelDBBuffer(length: Int) {
         case LengthEncoded => buf.putInt(sbytes.length).put(sbytes)
       }
     },
-    bool    = b => buf.put(if (b) 0x01 else 0x00), 
+    bool    = b => buf.put(if (b) trueByte else falseByte), 
     int     = i => buf.putInt(i), 
     long    = l => buf.putLong(l),
     float   = f => buf.putFloat(f), 
@@ -29,7 +35,7 @@ private[leveldb] class LevelDBBuffer(length: Int) {
     nul = colDesc.valueType match {
       case SStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
       case SStringArbitrary       => buf.putInt(0)
-      case SBoolean               => buf.put(0xFF)
+      case SBoolean               => buf.put(nullByte)
       case SInt                   => buf.putInt(Int.MaxValue)
       case SLong                  => buf.putLong(Long.MaxValue)
       case SFloat                 => buf.putFloat(Float.MaxValue)
