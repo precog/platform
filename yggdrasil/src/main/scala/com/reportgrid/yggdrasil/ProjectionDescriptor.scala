@@ -71,7 +71,7 @@ object ColumnDescriptor extends ColumnDescriptorSerialization
 /** 
  * The descriptor for a projection 
  */
-case class ProjectionDescriptor private (identiies: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) {
+case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) {
   lazy val columns = indexedColumns.map(_._1).toList 
 }
 
