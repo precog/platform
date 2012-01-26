@@ -90,24 +90,32 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case dag.Reduce(_, red, parent) => {
-        val enum = loop(parent, roots).enum
+        val enum = loop(parent, roots)
+        
+        val mapped = ops.map(enum) {
+          case (_, sv) => sv
+        }
+        
+        val enumP = mapped.enum
 
-        val reducedEnumP: EnumeratorP[X, SEvent, IO] = new EnumeratorP[X, SEvent, IO] {
-          def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, SEvent, ({type λ[α] = F[IO, α] })#λ] = {
+        val reducedEnumP: EnumeratorP[X, SValue, IO] = new EnumeratorP[X, SValue, IO] {
+          def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, SValue, ({type λ[α] = F[IO, α] })#λ] = {
             type FIO[α] = F[IO, α]
             implicit val FMonad: Monad[FIO] = MonadTrans[F].apply[IO]
 
-            new EnumeratorT[X, SEvent, FIO] {
-              def apply[A] = (step: StepT[X, SEvent, FIO, A]) => 
+            new EnumeratorT[X, SValue, FIO] {
+              def apply[A] = (step: StepT[X, SValue, FIO, A]) => 
                 for {
-                  opt <- reductionIter[X, F](red) &= enum[F]
-                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SEvent, FIO](Vector(), sv)).getOrElse(Monoid[EnumeratorT[X, SEvent, FIO]].zero))
+                  opt <- reductionIter[X, F](red) &= enumP[F]
+                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, FIO](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, FIO]].zero))
                 } yield a
             }
           }
         }
 
-        DatasetEnum[X, SEvent, IO](reducedEnumP)
+        val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumP)
+        
+        ops.map(reducedDS) { sv => (Vector(), sv) }
       }
       
       case dag.Split(_, parent, child) => {
@@ -116,7 +124,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         val splitEnum = loop(parent, roots)
         
         ops.flatMap(splitEnum) {
-          case (_, sv) => loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots)
+          case sev => loop(child, ops.point[X, SEvent, IO](sev) :: roots)
         }
       }
       
@@ -231,9 +239,58 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     def isDefinedAt(a: A) = f(a).isDefined
   }
   
-  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SEvent, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] =
-    sys.error("no reductions implemented yet...")
-  
+  // TODO mode, median and stdDev
+  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = {
+    type FIO[α] = F[IO, α]
+    implicit val FMonad = MonadTrans[F].apply[IO]
+    red match {
+      case Count => {
+        fold[X, SValue, FIO, Option[SValue]](Some(SDecimal(0))) {
+          case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
+        }
+      }
+      
+      case Mean => {
+        val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal)]](None) {
+          case (None, SDecimal(v)) => Some((1, v))
+          case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
+          case (acc, _) => acc
+        }
+        
+        itr map {
+          case Some((c, v)) => Some(SDecimal(v / c))
+          case None => None
+        }
+      }
+      
+      case Max => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, SDecimal(v)) => Some(SDecimal(v))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
+          case (acc, _) => acc
+        }
+      }
+      
+      case Min => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, SDecimal(v)) => Some(SDecimal(v))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
+          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
+          case (acc, _) => acc
+        }
+      }
+      
+      case Sum => {
+        fold[X, SValue, FIO, Option[SValue]](None) {
+          case (None, sv @ SDecimal(_)) => Some(sv)
+          case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
+          case (acc, _) => acc
+        }
+      }
+    }
+  }
+
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
     import Function._
     
@@ -308,13 +365,13 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case JoinArray => untupled((coerceArrays _) andThen { _ flatMap (joinArray _).tupled map SArray })
       
       case ArraySwap => {
-        case (SDecimal(index), SArray(arr)) if index.isValidInt => {
-          val i = index.toInt - 1
-          if (i < 0 || i >= arr.length) {
+        case (SArray(arr), SDecimal(index)) if index.isValidInt => {
+          val i = index.toInt
+          if (i <= 0 || i >= arr.length) {
             None
           } else {
             val (left, right) = arr splitAt i
-            Some(SArray(left.init ++ Vector(right.head, left.last) ++ left.tail))
+            Some(SArray(left.init ++ Vector(right.head, left.last) ++ right.tail))
           }
         }
         
@@ -322,12 +379,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case DerefObject => {
-        case (SString(key), SObject(obj)) => obj get key
+        case (SObject(obj), SString(key)) => obj get key
         case _ => None
       }
       
       case DerefArray => {
-        case (SDecimal(index), SArray(arr)) if index.isValidInt =>
+        case (SArray(arr), SDecimal(index)) if index.isValidInt =>
           arr.lift(index.toInt)
         
         case _ => None

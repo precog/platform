@@ -26,7 +26,7 @@ import com.reportgrid.common._
 import blueeyes.json.JsonAST._
 
 trait RoutingTable {
-  def route(event: Set[(QualifiedSelector, JValue)]): Set[(ProjectionDescriptor, Seq[JValue])]
+  def route(event: Set[(ColumnDescriptor, JValue)]): Set[(ProjectionDescriptor, Seq[JValue])]
 }
 
 object RoutingTable {
@@ -34,7 +34,7 @@ object RoutingTable {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 
-          case (ctype, metadata) => (ColumnDescriptor(QualifiedSelector(Path(e.path), sel, ctype), meta), metadata) 
+          case (ctype, metadata) => (ColumnDescriptor(e.path, sel, ctype), metadata) 
         }
     }
   }
@@ -43,7 +43,7 @@ object RoutingTable {
 }
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
-  def route(event: Set[(QualifiedSelector, JValue)]) = 
+  def route(event: Set[(ColumnDescriptor, JValue)]) = 
     event.map {
       case (selector, jvalue) => 
         sys.error("todo")

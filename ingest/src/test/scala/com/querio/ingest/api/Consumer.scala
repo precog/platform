@@ -27,7 +27,7 @@ import org.specs2.mutable._
 import org.scalacheck._
 import org.scalacheck.Gen._
 
-import com.querio.ingest.util.ArbitraryIngestMessage
+import com.reportgrid.common.util.ArbitraryIngestMessage
 
 import com.reportgrid.common._
 

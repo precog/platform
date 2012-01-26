@@ -31,7 +31,6 @@ import scalaz.Scalaz._
 
 import akka.dispatch.{Future, Futures, Promise}
 import akka.dispatch.MessageDispatcher
-import akka.dispatch.DefaultCompletableFuture
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
@@ -42,7 +41,7 @@ import kafka.producer._
 
 import com.reportgrid.common._
 import com.querio.ingest.api._
-import com.querio.ingest.util.ArbitraryJValue
+import com.reportgrid.common.util.ArbitraryJValue
 
 // todo
 //

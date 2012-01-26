@@ -310,10 +310,11 @@ trait DAG extends Instructions {
   
   case class StaticProvenance(path: String) extends Provenance
   case class DynamicProvenance(id: Int) extends Provenance
+  case class SplitProvenance(depth: Int) extends Provenance
   
   object dag {
     case class SplitRoot(loc: Line, depth: Int) extends DepGraph {
-      val provenance = Vector()
+      lazy val provenance = Vector(SplitProvenance(depth))
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
@@ -340,7 +341,13 @@ trait DAG extends Instructions {
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
-      lazy val provenance = child.provenance
+      lazy val provenance = {
+        child.provenance flatMap {
+          case SplitProvenance(0) => parent.provenance
+          case SplitProvenance(i) => Vector(SplitProvenance(i - 1))
+          case p => Vector(p)
+        }
+      }
     }
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {

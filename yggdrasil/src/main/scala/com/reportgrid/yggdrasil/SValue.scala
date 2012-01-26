@@ -77,6 +77,44 @@ trait SValue {
     val d = (_: Any) => a
     fold(d, d, d, d, d, d, d, ifNull)
   }
+
+  abstract override def equals(obj: Any) = obj match {
+    case sv: SValue => fold(
+        obj  = o => sv.mapObjectOr(false)(_ == o),
+        arr  = a => sv.mapArrayOr(false)(_ == a),
+        str  = s => sv.mapStringOr(false)(_ == s),
+        bool = b => sv.mapBooleanOr(false)(_ == b),
+        long = l => sv.mapLongOr(false)(_ == l),
+        double = d => sv.mapDoubleOr(false)(_ == d),
+        num  = n => sv.mapBigDecimalOr(false)(_ == n),
+        nul  = sv.mapNullOr(false)(true)
+      )
+    case _ => false 
+  }
+
+  abstract override def hashCode = 
+    fold(
+      obj  = o => o.hashCode,
+      arr  = a => a.hashCode,
+      str  = s => s.hashCode,
+      bool = b => b.hashCode,
+      long = l => l.hashCode,
+      double = d => d.hashCode,
+      num  = n => n.hashCode,
+      nul  = 0x00
+    )
+
+  abstract override def toString = 
+    fold(
+      obj  = o => "SObject(" + o + ")",
+      arr  = a => "SArray(" + a + ")",
+      str  = s => "SString(" + s + ")",
+      bool = b => "SBool(" + b + ")",
+      long = l => "SLong(" + l + ")",
+      double = d => "SDouble(" + d + ")",
+      num  = n => "SNumeric(" + n + ")",
+      nul  = "SNull"
+    )
 }
 
 trait SValueInstances {
