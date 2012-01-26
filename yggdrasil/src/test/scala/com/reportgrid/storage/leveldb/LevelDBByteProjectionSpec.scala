@@ -12,7 +12,6 @@ import com.reportgrid.yggdrasil.SortBy
 import com.reportgrid.yggdrasil.ById
 import com.reportgrid.yggdrasil.ByValue
 import com.reportgrid.yggdrasil.ByValueThenId
-import com.reportgrid.yggdrasil.QualifiedSelector
 import com.reportgrid.yggdrasil.ColumnType
 import com.reportgrid.yggdrasil.SInt
 import com.reportgrid.yggdrasil.SValue
@@ -51,10 +50,8 @@ class LevelDBByteProjectionSpec extends Specification {
       val selector: JPath = JPath("jpath")
       val valueType: ColumnType = SInt 
 
-      val qsel: QualifiedSelector = QualifiedSelector(path, selector, valueType)
-      val metadata: Set[Metadata] = Set()
+      val listmap0: ColumnDescriptor = ColumnDescriptor(path, selector, valueType)
 
-      val listmap0: ColumnDescriptor = ColumnDescriptor(qsel, metadata)
       val int0: Int = 0 //must be 0 so that identity indexes are 0-based
       //val int1: Int = 1
 
