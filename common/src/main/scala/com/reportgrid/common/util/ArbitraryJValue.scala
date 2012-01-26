@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.ingest.util
+package com.reportgrid.common.util
 
 import blueeyes.json.JsonAST
 import org.scalacheck._

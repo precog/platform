@@ -33,6 +33,7 @@ import akka.actor._
 import akka.actor.Actor._
 import akka.routing._
 import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 import akka.util.duration._
 
@@ -44,20 +45,39 @@ import scalaz._
 import scalaz.Scalaz._
 
 trait StorageMetadata {
-  def find(path: Path, selector: JPath): Future[Map[SType, Set[Metadata]]]
+ 
+  type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
 
-  def findByType(path: Path, selector: JPath, valueType: SType): Future[Option[Set[Metadata]]] = 
-    find(path, selector).map(_.get(valueType))
+  implicit val dispatcher: MessageDispatcher
+
+  def findSelectors(path: Path): Future[Seq[JPath]]
+
+  def findProjections(path: Path): Future[Map[ProjectionDescriptor, ColumnMetadata]] = {
+    findSelectors(path).flatMap { selectors => 
+      Future.traverse( selectors )( findProjections(path, _) ) map { _.reduce(_ ++ _) }
+    }
+  }
+
+  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
+
+  def findProjections(path: Path, selector: JPath, valueType: SType): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
+    findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
+
+  def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
+    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
+  }
 
 }
 
-class ShardMetadata(actor: ActorRef) extends StorageMetadata {
+class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) extends StorageMetadata {
 
-  implicit val serviceTimeout: Timeout = 2 seconds 
-  
-  def find(path: Path, selector: JPath): Future[Map[SType, Set[Metadata]]] = {
-    actor ? FindMetadata(path, selector) map { _.asInstanceOf[Map[SType, Set[Metadata]]] }
-  }
+  implicit val dispatcher = messageDispatcher
+
+  implicit val serviceTimeout: Timeout = 2 seconds
+ 
+  def findSelectors(path: Path) = Future[Seq[JPath]] { List() }
+
+  def findProjections(path: Path, selector: JPath) = Future[Map[ProjectionDescriptor, ColumnMetadata]] { Map() }
 
   def checkpoints: Future[Map[Int, Int]] = {
     actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
@@ -76,7 +96,7 @@ object ShardMetadata {
   def shardMetadata(filename: String) = dummyShardMetadata
 
   def dummyShardMetadata = {
-    new ShardMetadata(dummyShardMetadataActor)
+    new ShardMetadata(dummyShardMetadataActor, actorSystem.dispatcher)
   }
   
   def actorSystem = ActorSystem("test actor system")
@@ -129,12 +149,14 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
     
     case UpdateMetadata(producerId, eventId, desc, values, metadata) => 
       sender ! update(producerId, eventId, desc, values, metadata)
+   
+    case FindSelectors(path)             => sender ! findSelectors(path)
+
+    case FindDescriptors(path, selector) => sender ! findDescriptors(path, selector)
     
-    case FindMetadata(path, selector)   => sender ! find(path, selector)
+    case GetCheckpoints                  => sender ! checkpoints.toMap
     
-    case GetCheckpoints                 => sender ! checkpoints.toMap
-    
-    case SyncMetadata                   => sender ! sync
+    case SyncMetadata                    => sender ! sync
   
   }
 
@@ -186,28 +208,23 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
 
     projections.put(desc, applyMetadata(desc, values, metadata))
   }
-  
-  def find(path: Path, selector: JPath): Map[SType, Set[Metadata]] = {
-
-    def matchingColumn(cd: ColumnDescriptor) = cd.path == path && cd.selector == selector
-
-    def matchingColumns(projs: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]])  =
-      projs.toSeq flatMap { 
-        case (descriptor, metadata) =>
-          descriptor.columns zip metadata filter { 
-            case (colDesc, _) => matchingColumn(colDesc)
-          }
-      }
-      
-    def convertMetadata(columns: Seq[(ColumnDescriptor, MetadataMap)]): Map[ColumnType, MetadataMap] = {
-      columns.foldLeft(Map.empty[ColumnType, MetadataMap]) { 
-        case (acc, (colDesc, mmap)) => 
-          acc + (colDesc.valueType -> acc.get(colDesc.valueType).map(_ |+| mmap).getOrElse(mmap))
-      }
+ 
+  def findSelectors(path: Path): Seq[JPath] = {
+    projections.toSeq flatMap {
+      case (descriptor, _) => descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _) if path == cpath => cselector }
     }
+  }
 
-    //matchingColumns _ andThen convertMetadata _ apply projections mapValues { _.values.toSet }
-    sys.error("todo")
+  def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
+    
+    def matches(path: Path, selector: JPath)(col: ColumnDescriptor) = col.path == path && col.selector == selector
+
+    projections.filter {
+      case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
+      case _               => false
+    }.map {
+      case (descriptor, metadata) => (descriptor, Map( (descriptor.columns zip metadata): _*))
+    }
   }  
 
   def sync = {
@@ -217,10 +234,14 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
 
 sealed trait ShardMetadataAction
 
-case object GetCheckpoints extends ShardMetadataAction
 case class ExpectedEventActions(producerId: Int, eventId: Int, count: Int) extends ShardMetadataAction
 
+case class FindSelectors(path: Path) extends ShardMetadataAction
+case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
+
 case class UpdateMetadata(producerId: Int, eventId: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
-case class FindMetadata(path: Path, selector: JPath) extends ShardMetadataAction
 case object SyncMetadata extends ShardMetadataAction
+
+case object GetCheckpoints extends ShardMetadataAction
+
 
