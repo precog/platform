@@ -1205,7 +1205,7 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
       }
       
       result2 must contain(55, 13, 119, 25)
-    }.pendingUntilFixed
+    }
     
     "reduce homogeneous sets" >> {
       "count" >> {
