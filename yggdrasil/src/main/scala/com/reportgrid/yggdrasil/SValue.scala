@@ -134,7 +134,25 @@ trait SValueInstances {
   }
 }
 
-object SValue extends SValueInstances
+object SValue extends SValueInstances {
+  def asJSON(sv: SValue): String = sv.fold(
+    obj = { obj =>
+      val contents = obj mapValues asJSON map {
+        case (key, value) => "\"%s\":%s".format(key, value)
+      }
+      
+      "{%s}".format(contents)
+    },
+    arr = { arr =>
+      arr map asJSON mkString ("[", ",", "]")
+    },
+    str = { str => "\"%s\"".format(str) },     // TODO escaping
+    bool = { b => b.toString },
+    long = { i => i.toString },
+    double = { d => d.toString },
+    num = { d => d.toString },
+    nul = "null")
+}
 
 sealed trait SType 
 
