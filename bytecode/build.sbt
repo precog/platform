@@ -11,7 +11,7 @@ resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.or
 libraryDependencies ++= Seq(
   "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources,
   "org.scalaz" %% "scalaz-core" % "7.0-SNAPSHOT" changing(),
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" withSources() changing())
+  "org.specs2" %% "specs2" % "1.7" % "test" withSources())
 
 logBuffered := false
 
