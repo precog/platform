@@ -303,14 +303,8 @@ trait DAG extends Instructions {
   sealed trait DepGraph {
     val loc: Line
     
-    def provenance: Vector[Provenance]
+    def provenance: Vector[dag.Provenance]
   }
-  
-  sealed trait Provenance
-  
-  case class StaticProvenance(path: String) extends Provenance
-  case class DynamicProvenance(id: Int) extends Provenance
-  case class SplitProvenance(depth: Int) extends Provenance
   
   object dag {
     case class SplitRoot(loc: Line, depth: Int) extends DepGraph {
@@ -410,6 +404,12 @@ trait DAG extends Instructions {
     
     case class BinaryOperand(left: RangeOperand, op: BinaryOperation with PredicateOp, right: RangeOperand) extends RangeOperand
     case class UnaryOperand(op: UnaryOperation with PredicateOp, child: RangeOperand) extends RangeOperand
+  
+    sealed trait Provenance
+    
+    case class StaticProvenance(path: String) extends Provenance
+    case class DynamicProvenance(id: Int) extends Provenance
+    case class SplitProvenance(depth: Int) extends Provenance
   }
   
   
