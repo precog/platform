@@ -30,7 +30,7 @@ resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.or
 scalacOptions ++= Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
-  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test",
+  "org.specs2" %% "specs2" % "1.7" % "test",
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
   
 logBuffered := false       // gives us incremental output from Specs2
