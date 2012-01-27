@@ -281,6 +281,19 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         }
       }
       
+      case StdDev => {
+        val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal, BigDecimal)]](None) {
+          case (None, SDecimal(v)) => Some((1, v, v * v))
+          case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
+          case (acc, _) => acc
+        }
+        
+        itr map {
+          case Some((count, sum, sumsq)) => Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
+          case None => None
+        }
+      }
+      
       case Sum => {
         fold[X, SValue, FIO, Option[SValue]](None) {
           case (None, sv @ SDecimal(_)) => Some(sv)
@@ -289,6 +302,29 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         }
       }
     }
+  }
+  
+  /**
+   * Newton's approximation to some number of iterations (by default: 50).
+   * Ported from a Java example found here: http://www.java2s.com/Code/Java/Language-Basics/DemonstrationofhighprecisionarithmeticwiththeBigDoubleclass.htm
+   */
+  private[this] def sqrt(d: BigDecimal, k: Int = 50): BigDecimal = {
+    lazy val approx = {   // could do this with a self map, but it would be much slower
+      def gen(x: BigDecimal): Stream[BigDecimal] = {
+        val x2 = (d + x * x) / (x * 2)
+        
+        lazy val tail = if (x2 == x)
+          Stream.empty
+        else
+          gen(x2)
+        
+        x2 #:: tail
+      }
+      
+      gen(d / 3)
+    }
+    
+    approx take k last
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
