@@ -81,7 +81,7 @@ case class CString(value: String) extends CValue {
 }
 
 
-case class CBool(value: Boolean) extends CValue {
+case class CBoolean(value: Boolean) extends CValue {
   def fold[A](
     str:    String => A,
     bool:   Boolean => A,

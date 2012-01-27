@@ -23,14 +23,16 @@ package leveldb
 import com.reportgrid.util.Bijection._
 import java.nio.ByteBuffer
 
-private[leveldb] class LevelDBWriteBuffer(length: Int) {
+trait BufferConstants {
+    val trueByte: Byte = 0x01
+    val falseByte: Byte = 0x00
+    val nullByte: Byte = 0xff.toByte
+}
+
+private[leveldb] class LevelDBWriteBuffer(length: Int) extends BufferConstants {
   
   //println("length = " + length)
 
-  val trueByte: Byte = 0x01
-  val falseByte: Byte = 0x00
-  val nullByte: Byte = 0xff.toByte
-  
   private final val buf = ByteBuffer.allocate(length)
   def writeIdentity(id: Identity): Unit = buf.putLong(id)
   def writeValue(colDesc: ColumnDescriptor, v: CValue) = v.fold[Unit](
@@ -63,38 +65,57 @@ private[leveldb] class LevelDBWriteBuffer(length: Int) {
       case _                      => ()
     }
   )
-
+  
   def toArray: Array[Byte] = buf.array
 }
 
-private[leveldb] class LevelDBReadBuffer(arr: Array[Byte]) {
+private[leveldb] class LevelDBReadBuffer(arr: Array[Byte]) extends BufferConstants {
 
   private final val buf = ByteBuffer.wrap(arr)
 
   def readIdentity(): Long = buf.getLong
 
   def readValue(valueType: ColumnType): CValue = {
-    sys.error("todo")
-//    colDesc.valueType match {
-//      case SStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
-//      case SStringArbitrary       => buf.putInt(0)
-//      case SBoolean               => buf.put(nullByte)
-//      case SInt                   => buf.putInt(Int.MaxValue)
-//      case SLong                  => buf.putLong(Long.MaxValue)
-//      case SFloat                 => buf.putFloat(Float.MaxValue)
-//      case SDouble                => buf.putDouble(Double.MaxValue)
-//      case SDecimalArbitrary      => buf.putInt(0)
-//      case _                      => ()
-//    }
-  }
+    valueType match {
+      case SStringFixed(width)    => {
+          val sstringbuffer: Array[Byte] = new Array(width)
+          buf.get(sstringbuffer)
+          CString(new String(sstringbuffer, "UTF-8"))
+      }
+      case SStringArbitrary       => {
+          val length: Int = buf.getInt
+          val sstringarb: Array[Byte] = new Array(length)
+          buf.get(sstringarb)
+          CString(new String(sstringarb, "UTF-8"))
+      }
+      case SBoolean               => buf.get match {
+          case b if b == trueByte => CBoolean(true)
+          case b if b == falseByte => CBoolean(false)
+          case _ => sys.error("Boolean byte value was not true or false")
+      }
+      case SInt                   => CInt(buf.getInt)
+      case SLong                  => CLong(buf.getLong)
+      case SFloat                 => CFloat(buf.getFloat)
+      case SDouble                => CDouble(buf.getDouble)
+      case SDecimalArbitrary      => {
+          val length: Int = buf.getInt
+          val sdecimalarb: Array[Byte] = new Array(length)
+          buf.get(sdecimalarb)
+          CNum(sdecimalarb.as[BigDecimal])
 
+
+      }
+      case _                      => sys.error("unhandled ColumnType; need to implement")
+    }
+  }
+    
+    
 }
 
 trait LevelDBByteProjection extends ByteProjection {
   private val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
-  def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
-    lazy val valueWidths = descriptor.columns.map(_.valueType.format) zip cvalues map {
+  def listWidths(cvalues: Seq[CValue]): List[Int] = descriptor.columns.map(_.valueType.format) zip cvalues map {
       case (FixedWidth(w), sv) => w
       case (LengthEncoded, sv) => 
         sv.fold[Int](
@@ -105,9 +126,9 @@ trait LevelDBByteProjection extends ByteProjection {
           emptyObj = incompatible(()), emptyArr = incompatible(()), nul = incompatible(())
         )
     }
-    //println("valueWidths = " + valueWidths)
 
-    val (usedIdentities, usedValues, indexWidth) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int], 0)) { 
+  def allocateWidth(valueWidths: Seq[Int]): (Set[Int], Set[Int], Int) = 
+    descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int], 0)) { 
       case ((ids, values, width), (col, ById)) => 
         (ids + descriptor.indexedColumns(col), values, width + 8)
 
@@ -119,7 +140,12 @@ trait LevelDBByteProjection extends ByteProjection {
         val valueIndex = descriptor.columns.indexOf(col)
         (ids + descriptor.indexedColumns(col), values + valueIndex, width + valueWidths(valueIndex) + 8)
     }
-    //println("(usedIdentities, usedValues, indexWidth) = " + (usedIdentities, usedValues, indexWidth))
+
+  def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
+
+    lazy val valueWidths = listWidths(cvalues)
+    val (usedIdentities, usedValues, indexWidth) = allocateWidth(valueWidths) 
+    
 
     // all of the identities must be included in the key; also, any values of columns that
     // use by-value ordering must be included in the key. 
@@ -146,11 +172,13 @@ trait LevelDBByteProjection extends ByteProjection {
     (indexBuffer.toArray, valuesBuffer.toArray)
   }
 
+  type ElementFormat = LevelDBReadBuffer => CValue
+  def eFormat(t: ColumnType): ElementFormat = _.readValue(t)
+
+
   def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {
 
-    type ElementFormat = LevelDBReadBuffer => CValue
-
-    def eFormat(t: ColumnType): ElementFormat = _.readValue(t)
+    
     
     def indexFormat: List[ElementFormat] = {
 
