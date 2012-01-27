@@ -643,7 +643,7 @@ object EvaluatorSpecs extends Specification
         case (Vector(_), SDecimal(d)) => d.toInt
       }
       
-      result2 must contain(36, 12, 115, -165, 12)
+      result2 must contain(36, 12, 115, -165)
     }
     
     "evaluate matched binary numeric operation dropping undefined result" in {
