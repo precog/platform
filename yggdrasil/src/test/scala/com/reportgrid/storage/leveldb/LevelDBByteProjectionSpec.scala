@@ -43,14 +43,15 @@ class LevelDBByteProjectionSpec extends Specification {
       val cv1 = CInt(5)
       val testValues: Seq[CValue] = Seq(cv1)
 
-      val path: Path = Path("path")
-      val selector: JPath = JPath("jpath")
-      val valueType: ColumnType = SInt 
+      val path0: Path = Path("path")
+      val selector0: JPath = JPath("jpath")
+      val valueType0: ColumnType = SInt 
 
-      val listmap0: ColumnDescriptor = ColumnDescriptor(path, selector, valueType, Ownership(Set()))
+      val listmap0: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueType0, Ownership(Set()))
+      //val listmap1: ColumnDescriptor = ColumnDescriptor(path0, selector1, valueType1, Ownership(Set()))
 
       val int0: Int = 0 //must be 0 so that identity indexes are 0-based
-      //val int1: Int = 1
+      val int1: Int = 1
 
       val columns: ListMap[ColumnDescriptor, Int] = ListMap(listmap0 -> int0)
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((listmap0, ByValue))
