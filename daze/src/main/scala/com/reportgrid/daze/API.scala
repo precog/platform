@@ -188,7 +188,7 @@ trait DefaultYggConfig {
       tempFile
     }
 
-    def sortBufferSize = 10000
+    def sortBufferSize = 100000
   }
 }
 
