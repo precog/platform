@@ -152,9 +152,9 @@ trait LevelDBByteProjection extends ByteProjection {
     val indexBuffer = new LevelDBWriteBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
     descriptor.sorting.foreach {
       case (col, ById)          => indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
-      case (col, ByValue)       => indexBuffer.writeValue(col, cvalues(descriptor.indexedColumns(col)))
+      case (col, ByValue)       => indexBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col)))        
       case (col, ByValueThenId) =>
-        indexBuffer.writeValue(col, cvalues(descriptor.indexedColumns(col)))
+        indexBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col))) 
         indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
     }
 
