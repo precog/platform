@@ -57,6 +57,7 @@ import scalaz.syntax.std.optionV._
 import scalaz.syntax.validation._
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
+import scalaz.MonadPartialOrder._
 
 case object Stop
 
@@ -179,7 +180,7 @@ case class ProjectionGet(idInterval : Interval[Identities], sender : ActorRef)
 
 trait ProjectionResults {
   val desc : ProjectionDescriptor
-  def enumerator : EnumeratorT[Unit, Seq[CValue], ({type l[a] = IdT[IO, a]})#l]
+  def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
 }
 
 class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
@@ -224,7 +225,7 @@ class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescr
     case ProjectionGet(interval, sender) =>
       sender ! new ProjectionResults {
         val desc = descriptor
-        def enumerator = projection.getValuesByIdRange[Unit](interval).apply[IdT]
+        def enumerator = projection.getValuesByIdRange[Unit](interval).apply[IO]
       }
   }
 }

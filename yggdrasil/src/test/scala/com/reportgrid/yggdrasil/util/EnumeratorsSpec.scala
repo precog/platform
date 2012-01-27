@@ -35,22 +35,21 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import scalaz.std.string._
 import Iteratee._
+import MonadPartialOrder._
 
 class EnumeratorsSpec extends Specification with ThrownMessages with Logging {
   "sort" should {
     "sort values" in {
-      implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(identity[String]))
+      implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
       val enumP: EnumeratorP[Unit, SEvent, IO] = new EnumeratorP[Unit, SEvent, IO] {
-        def apply[F[_[_], _]: MonadTrans]: EnumeratorT[Unit, SEvent, ({type λ[α] = F[IO, α]})#λ] = {
-          type FIO[α] = F[IO, α]
-          implicit val MF = MonadTrans[F].apply[IO]
-          enumStream[Unit, SEvent, FIO](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
+        def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[Unit, SEvent, F] = {
+          import MO._
+          enumStream[Unit, SEvent, F](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
         }
       }
 
-      type IdIO[α] = IdT[IO, α]
-      (consume[Unit, SEvent, IdIO, List] &= (Enumerators.sort(enumP, 5, null, null).apply[IdT]))
-      .run(_ => sys.error("...")).run.unsafePerformIO.map(_._2.mapStringOr("wrong")(identity[String])) must_== List("1", "2", "3")
+      (consume[Unit, SEvent, IO, List] &= (Enumerators.sort(enumP, 5, null, null).apply[IO]))
+      .run(_ => sys.error("...")).unsafePerformIO.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
     }
   }
 }
