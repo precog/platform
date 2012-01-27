@@ -1,17 +1,23 @@
-package com.querio.quirrel
+package com.querio
+package pandora
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
+
 import jline.{ANSIBuffer, ConsoleReader, Terminal}
-import emitter._
-import parser._
-import typer._
+
+import daze._
+
+import quirrel.emitter._
+import quirrel.parser._
+import quirrel.typer._
 
 trait REPL extends Parser
     with Binder
     with TreeShaker
     with ProvenanceChecker
     with CriticalConditionSolver
-    with LineErrors {
+    with LineErrors
+    with Evaluator {
   
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
   val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
@@ -145,7 +151,7 @@ trait REPL extends Parser
   case object Quit extends Command
 }
 
-object Console extends App {
+object REPL extends App {
   val repl = new REPL {}
   repl.run()
 }

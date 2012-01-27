@@ -9,7 +9,6 @@ scalaVersion := "2.9.1"
 resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
 
 libraryDependencies ++= Seq(
-  "jline" % "jline" % "0.9.9",
   "edu.uwm.cs" %% "gll-combinators" % "1.5-SNAPSHOT" changing(),
   "org.scalaz" %% "scalaz-core" % "7.0-SNAPSHOT" changing(),
   "org.scala-tools.testing" %% "scalacheck" % "1.9" % "test" withSources() changing(),
