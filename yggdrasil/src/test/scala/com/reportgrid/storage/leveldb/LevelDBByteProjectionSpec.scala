@@ -40,7 +40,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val index0: Int = 0 //must be 0 so that identity indexes are 0-based
       val index1: Int = 1
 
-      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt1 -> index0, colDesInt2 -> index1)
+      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt1 -> index0, colDesInt2 -> index0)
       val sortingA: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt1, ByValue),(colDesInt2, ByValue))
       //val sortingB: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ById))
       //val sortingC: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValueThenId)) 
@@ -55,10 +55,17 @@ class LevelDBByteProjectionSpec extends Specification {
 
       
 
-      val expectedKey: Array[Byte] = Array(0, 0, 0, 5,0,0,0,6,0, 0, 0, 0,0,0,0,1,0,0,0,0,0,0,0,2) 
+      val expectedKey: Array[Byte] = Array(0, 0, 0, 5,0,0,0,6,0, 0, 0, 0,0,0,0,1)  
       val expectedValue: Array[Byte] = Array()
       byteProjection.project(testIdentity, testValues)._1 must_== expectedKey
       byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
+
+
+      //val expectedValueWidths = List(4,4)
+      //byteProjection.listWidths(testValues) must_== expectedValueWidths
+
+      //val expectedAllocateWidth = (Set(), Set(0,0), 8)
+      //byteProjection.allocateWidth(expectedValueWidths) must_== expectedAllocateWidth
 
     }
   }
