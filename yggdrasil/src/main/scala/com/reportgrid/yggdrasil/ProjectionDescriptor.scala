@@ -77,6 +77,8 @@ trait ColumnDescriptorSerialization {
 object ColumnDescriptor extends ColumnDescriptorSerialization 
 with ((Path, JPath, ColumnType, Ownership) => ColumnDescriptor)
 
+
+
 /** 
  * The descriptor for a projection 
  */
