@@ -35,11 +35,23 @@ trait DatasetEnumFunctions {
   def cogroup[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
     DatasetEnum(cogroupE[X, SEvent, F].apply(enum1.enum, enum2.enum))
 
-  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] =
-    DatasetEnum(crossE(enum1.enum, enum2.enum))
+  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = DatasetEnum(
+    new EnumeratorP[X, (SEvent, SEvent), F] {
+      def apply[G[_]](implicit MO: G |>=| F) = {
+        import MO._
+        cross(enum1.enum[G], enum2.enum[G])
+      }
+    }
+  )
 
-  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] =
-    DatasetEnum(crossE(enum2.enum, enum1.enum))
+  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = DatasetEnum(
+    new EnumeratorP[X, (SEvent, SEvent), F] {
+      def apply[G[_]](implicit MO: G |>=| F) = {
+        import MO._
+        cross(enum2.enum[G], enum1.enum[G])
+      }
+    }
+  )
 
   def join[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, (SEvent, SEvent), F] =
     DatasetEnum(matchE[X, SEvent, F].apply(enum1.enum, enum2.enum))
@@ -49,57 +61,60 @@ trait DatasetEnumFunctions {
 
   def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] 
   
-  def map[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => E2): DatasetEnum[X, E2, G] = DatasetEnum(
-    new EnumeratorP[X, E2, G] {
-      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = new EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] {
-        def apply[A] = enum.enum[F].map(f)(MonadTrans[F].apply[G]).apply[A]
+  def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = new EnumeratorT[X, E2, G] {
+        import MO._
+        def apply[A] = enum.enum[G].map(f).apply[A]
       }
     }
   )
 
-  def empty[X, E, G[_]: Monad]: DatasetEnum[X, E, G] = DatasetEnum(
-    new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] = {
-        type FG[a] = F[G, a]
-        implicit val FMonad = MonadTrans[F].apply[G]
-        Monoid[EnumeratorT[X, E, FG]].zero
+  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+        import MO._
+        Monoid[EnumeratorT[X, E, G]].zero
       }
     }
   )
 
-  def point[X, E, G[_]: Monad](value: E): DatasetEnum[X, E, G] = DatasetEnum(
-    new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans] = EnumeratorT.enumOne[X, E, ({ type λ[α] = F[G, α] })#λ](value)(MonadTrans[F].apply[G])
+  def point[X, E, F[_]: Monad](value: E): DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+        import MO._
+        EnumeratorT.enumOne[X, E, G](value)
+      }
     }
   )
 
-  def liftM[X, E, G[_]: Monad](value: G[E]): DatasetEnum[X, E, G] = DatasetEnum(
-    new EnumeratorP[X, E, G] {
-      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] = new EnumeratorT[X, E, ({ type λ[α] = F[G, α] })#λ] {
-        type FG[a] = F[G, a]
-        implicit val FMonad = MonadTrans[F].apply[G]
+  def liftM[X, E, F[_]: Monad](value: F[E]): DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = new EnumeratorT[X, E, G] {
+        import MO._
+        import MO.MG.bindSyntax._
 
-        def apply[A] = { (step: StepT[X, E, FG, A]) => 
-          iterateeT[X, E, FG, A](FMonad.bind(MonadTrans[F].liftM(value)) { e => step.mapCont(f => f(elInput(e))).value })
+        def apply[A] = { (step: StepT[X, E, G, A]) => 
+          iterateeT[X, E, G, A](MO.promote(value) >>= { e => step.mapCont(f => f(elInput(e))).value })
         }
       }
     }
   )
 
-  def flatMap[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(f: E1 => DatasetEnum[X, E2, G]): DatasetEnum[X, E2, G] = DatasetEnum(
-    new EnumeratorP[X, E2, G] {
-      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = {
-        implicit val FMonad = MonadTrans[F].apply[G]
-        enum.enum[F].flatMap(e => f(e).enum[F])
+  def flatMap[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
+        import MO._
+        enum.enum[G].flatMap(e => f(e).enum[G])
       }
     }
   )
   
-  def collect[X, E1, E2, G[_]: Monad](enum: DatasetEnum[X, E1, G])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, G] = DatasetEnum(
-    new EnumeratorP[X, E2, G] {
-      def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, E2, ({ type λ[α] = F[G, α] })#λ] = {
-        implicit val FMonad = MonadTrans[F].apply[G]
-        enum.enum[F].collect(pf)
+  def collect[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
+        import MO._
+        enum.enum[G].collect(pf)
       }
     }
   )
@@ -216,5 +231,5 @@ trait StubQueryAPI extends OperationsAPI with Evaluator {
   }
   
   protected def consumeEval(graph: DepGraph): Set[SEvent] = 
-    (((consume[Unit, SEvent, ({ type λ[α] = IdT[IO, α] })#λ, Set] &= eval(graph).enum[IdT]) run { err => sys.error("O NOES!!!") }) run) unsafePerformIO
+    ((consume[Unit, SEvent, IO, Set] &= eval(graph).enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO
 }
