@@ -1,23 +1,28 @@
 package com.querio
 package pandora
 
+import com.reportgrid.yggdrasil.SValue
+
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
 import jline.{ANSIBuffer, ConsoleReader, Terminal}
 
 import daze._
 
+import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-trait REPL extends Parser
-    with Binder
+trait REPL extends LineErrors
+    with Parser
     with TreeShaker
     with ProvenanceChecker
-    with CriticalConditionSolver
-    with LineErrors
-    with Evaluator {
+    with Emitter
+    with Evaluator
+    with YggdrasilOperationsAPI
+    with DefaultYggConfig
+    with StubQueryAPI {
   
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
   val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
@@ -27,7 +32,7 @@ trait REPL extends Parser
     
     val reader = new ConsoleReader
     
-    def compile(oldTree: Expr): Boolean = {
+    def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
       val tree = shakeTree(oldTree)
@@ -47,20 +52,39 @@ trait REPL extends Parser
         println(strs mkString "\n")
       }
       
-      allErrors filterNot isWarning isEmpty
+      if (allErrors filterNot isWarning isEmpty)
+        Some(tree)
+      else
+        None
     }
     
     def handle(c: Command) = c match {
       case Eval(tree) => {
-        compile(tree)
-        true     // TODO
+        val optTree = compile(tree)
+        
+        for (tree <- optTree) {
+          val bytecode = emit(tree)
+          val eitherGraph = decorate(bytecode)
+          
+          // TODO decoration errors
+          
+          for (graph <- eitherGraph.right) {
+            val result = consumeEval(graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+            
+            println()
+            println(new ANSIBuffer().cyan(result).getAnsiBuffer)
+          }
+        }
+        
+        true
       }
       
       case PrintTree(tree) => {
         println()
         
-        if (compile(tree)) {
-          println(prettyPrint(shakeTree(tree)))
+        val optTree = compile(tree)
+        for (tree <- optTree) {
+          println(prettyPrint(tree))
         }
         
         true
@@ -104,7 +128,7 @@ trait REPL extends Parser
     }
     
     println("Welcome to Quirrel version 0.0.0.")
-    println("Type in expressions to have them evaluated (TODO test environment?).")
+    println("Type in expressions to have them evaluated.")
     println("All expressions must be followed by a single blank line.")
     println("Type in :help for more information.")
     println()
@@ -151,7 +175,7 @@ trait REPL extends Parser
   case object Quit extends Command
 }
 
-object REPL extends App {
+object Console extends App {
   val repl = new REPL {}
   repl.run()
 }
