@@ -1,43 +1,21 @@
+package com.reportgrid.yggdrasil
+package leveldb
+
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 
 import scala.collection.immutable.ListMap
 
-import com.reportgrid.yggdrasil.CValue
-import com.reportgrid.yggdrasil.leveldb.LevelDBByteProjection
-import com.reportgrid.yggdrasil.ProjectionDescriptor
-import com.reportgrid.yggdrasil.ColumnDescriptor
-import com.reportgrid.yggdrasil.SortBy
-import com.reportgrid.yggdrasil.ById
-import com.reportgrid.yggdrasil.ByValue
-import com.reportgrid.yggdrasil.ByValueThenId
-import com.reportgrid.yggdrasil.ColumnType
-import com.reportgrid.yggdrasil.SInt
-import com.reportgrid.yggdrasil.SValue
-import com.reportgrid.common.Metadata
+import com.reportgrid.yggdrasil._
+
+import com.reportgrid.common._
+
 import com.reportgrid.analytics.Path
 
 import blueeyes.json.JPath
 
 import scalaz._
-
-
-case class CInt(value: Int) extends CValue {
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = int(value)
-}
-
 
 class LevelDBByteProjectionSpec extends Specification {
   "a byte projection" should {
@@ -50,7 +28,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val selector: JPath = JPath("jpath")
       val valueType: ColumnType = SInt 
 
-      val listmap0: ColumnDescriptor = ColumnDescriptor(path, selector, valueType)
+      val listmap0: ColumnDescriptor = ColumnDescriptor(path, selector, valueType, Ownership(Set()))
 
       val int0: Int = 0 //must be 0 so that identity indexes are 0-based
       //val int1: Int = 1

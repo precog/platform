@@ -4,7 +4,7 @@ package leveldb
 import com.reportgrid.util.Bijection._
 import java.nio.ByteBuffer
 
-private[leveldb] class LevelDBBuffer(length: Int) {
+private[leveldb] class LevelDBWriteBuffer(length: Int) {
   
   //println("length = " + length)
 
@@ -48,6 +48,29 @@ private[leveldb] class LevelDBBuffer(length: Int) {
   def toArray: Array[Byte] = buf.array
 }
 
+private[leveldb] class LevelDBReadBuffer(arr: Array[Byte]) {
+
+  private final val buf = ByteBuffer.wrap(arr)
+
+  def readIdentity(): Long = buf.getLong
+
+  def readValue(colDesc: ColumnDescriptor): CValue = {
+    sys.error("todo")
+//    colDesc.valueType match {
+//      case SStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
+//      case SStringArbitrary       => buf.putInt(0)
+//      case SBoolean               => buf.put(nullByte)
+//      case SInt                   => buf.putInt(Int.MaxValue)
+//      case SLong                  => buf.putLong(Long.MaxValue)
+//      case SFloat                 => buf.putFloat(Float.MaxValue)
+//      case SDouble                => buf.putDouble(Double.MaxValue)
+//      case SDecimalArbitrary      => buf.putInt(0)
+//      case _                      => ()
+//    }
+  }
+
+}
+
 trait LevelDBByteProjection extends ByteProjection {
   private val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
@@ -81,7 +104,7 @@ trait LevelDBByteProjection extends ByteProjection {
 
     // all of the identities must be included in the key; also, any values of columns that
     // use by-value ordering must be included in the key. 
-    val indexBuffer = new LevelDBBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
+    val indexBuffer = new LevelDBWriteBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
     descriptor.sorting.foreach {
       case (col, ById)          => indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
       case (col, ByValue)       => indexBuffer.writeValue(col, cvalues(descriptor.indexedColumns(col)))
@@ -95,7 +118,7 @@ trait LevelDBByteProjection extends ByteProjection {
       case _ =>
     }
 
-    val valuesBuffer = new LevelDBBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
+    val valuesBuffer = new LevelDBWriteBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
     (cvalues zip descriptor.columns).zipWithIndex.foreach {
       case ((v, col), i) if !usedValues.contains(i) => valuesBuffer.writeValue(col, v)
       case _ => 
