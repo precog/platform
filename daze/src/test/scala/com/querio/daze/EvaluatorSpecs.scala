@@ -1305,8 +1305,8 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
           case (Vector(), SDecimal(d)) => d.toDouble
         }
         
-        result2 must contain(30.83018)
-      }.pendingUntilFixed
+        result2 must contain(27.575351312358652)
+      }
       
       "sum" >> {
         val line = Line(0, "")
@@ -1443,8 +1443,8 @@ object EvaluatorSpecs extends Specification with Evaluator with YggdrasilOperati
           case (Vector(), SDecimal(d)) => d.toDouble
         }
         
-        result2 must contain(30.83018)
-      }.pendingUntilFixed
+        result2 must contain(27.575351312358652)
+      }
       
       "sum" >> {
         val line = Line(0, "")
