@@ -80,15 +80,13 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         val enumP = mapped.enum
 
         val reducedEnumP: EnumeratorP[X, SValue, IO] = new EnumeratorP[X, SValue, IO] {
-          def apply[F[_[_], _]: MonadTrans]: EnumeratorT[X, SValue, ({type λ[α] = F[IO, α] })#λ] = {
-            type FIO[α] = F[IO, α]
-            implicit val FMonad: Monad[FIO] = MonadTrans[F].apply[IO]
-
-            new EnumeratorT[X, SValue, FIO] {
-              def apply[A] = (step: StepT[X, SValue, FIO, A]) => 
+          def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, SValue, G] = {
+            import MO._
+            new EnumeratorT[X, SValue, G] {
+              def apply[A] = (step: StepT[X, SValue, G, A]) => 
                 for {
-                  opt <- reductionIter[X, F](red) &= enumP[F]
-                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, FIO](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, FIO]].zero))
+                  opt <- reductionIter[X, G](red) &= enumP[G]
+                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, G](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, G]].zero))
                 } yield a
             }
           }
@@ -221,18 +219,17 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
   }
   
   // TODO mode, median and stdDev
-  private def reductionIter[X, F[_[_], _]: MonadTrans](red: Reduction): IterateeT[X, SValue, ({ type λ[α] = F[IO, α] })#λ, Option[SValue]] = {
-    type FIO[α] = F[IO, α]
-    implicit val FMonad = MonadTrans[F].apply[IO]
+  private def reductionIter[X, G[_]](red: Reduction)(implicit MO: G |>=| IO): IterateeT[X, SValue, G, Option[SValue]] = {
+    import MO._
     red match {
       case Count => {
-        fold[X, SValue, FIO, Option[SValue]](Some(SDecimal(0))) {
+        fold[X, SValue, G, Option[SValue]](Some(SDecimal(0))) {
           case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
         }
       }
       
       case Mean => {
-        val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal)]](None) {
+        val itr = fold[X, SValue, G, Option[(BigDecimal, BigDecimal)]](None) {
           case (None, SDecimal(v)) => Some((1, v))
           case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
           case (acc, _) => acc
@@ -245,7 +242,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case Max => {
-        fold[X, SValue, FIO, Option[SValue]](None) {
+        fold[X, SValue, G, Option[SValue]](None) {
           case (None, SDecimal(v)) => Some(SDecimal(v))
           case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
           case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
@@ -254,7 +251,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case Min => {
-        fold[X, SValue, FIO, Option[SValue]](None) {
+        fold[X, SValue, G, Option[SValue]](None) {
           case (None, SDecimal(v)) => Some(SDecimal(v))
           case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
           case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
@@ -263,7 +260,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case StdDev => {
-        val itr = fold[X, SValue, FIO, Option[(BigDecimal, BigDecimal, BigDecimal)]](None) {
+        val itr = fold[X, SValue, G, Option[(BigDecimal, BigDecimal, BigDecimal)]](None) {
           case (None, SDecimal(v)) => Some((1, v, v * v))
           case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
           case (acc, _) => acc
@@ -276,7 +273,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case Sum => {
-        fold[X, SValue, FIO, Option[SValue]](None) {
+        fold[X, SValue, G, Option[SValue]](None) {
           case (None, sv @ SDecimal(_)) => Some(sv)
           case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
           case (acc, _) => acc
