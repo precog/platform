@@ -331,6 +331,74 @@ trait AST extends Phases {
       def tree: Tree[Expr] = Tree.node(this, subForest)
       
       def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
+        case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
+          (id1 == id2) &&
+            (params1 == params2) &&
+            (left1 equalsIgnoreLoc left2) &&
+            (right1 equalsIgnoreLoc right2)
+
+        case (New(_, child1), New(_, child2)) =>
+          child1 equalsIgnoreLoc child2
+
+        case (Relate(_, from1, to1, in1), Relate(_, from2, to2, in2)) =>
+          (from1 equalsIgnoreLoc from2) &&
+            (to1 equalsIgnoreLoc to2) &&
+            (in1 equalsIgnoreLoc in2)
+
+        case (TicVar(_, id1), TicVar(_, id2)) =>
+          id1 == id2
+
+
+        case (StrLit(_, value1), StrLit(_, value2)) =>
+          value1 == value2
+
+        case (NumLit(_, value1), NumLit(_, value2)) =>
+          value1 == value2
+
+        case (BoolLit(_, value1), BoolLit(_, value2)) =>
+          value1 == value2
+
+        case (ObjectDef(_, props1), ObjectDef(_, props2)) => {      // TODO ordering
+          val sizing = props1.length == props2.length
+          val contents = props1 zip props2 forall {
+            case ((key1, value1), (key2, value2)) =>
+              (key1 == key2) && (value1 equalsIgnoreLoc value2)
+          }
+
+          sizing && contents
+        }
+
+        case (ArrayDef(_, values1), ArrayDef(_, values2)) => {
+          val sizing = values1.length == values2.length
+          val contents = values1 zip values2 forall {
+            case (e1, e2) => e1 equalsIgnoreLoc e2
+          }
+
+          sizing && contents
+        }
+
+        case (Descent(_, child1, property1), Descent(_, child2, property2)) =>
+          (child1 equalsIgnoreLoc child2) && (property1 == property2)
+
+        case (Deref(_, left1, right1), Deref(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+
+        case (Dispatch(_, name1, actuals1), Dispatch(_, name2, actuals2)) => {
+          val naming = name1 == name2
+          val sizing = actuals1.length == actuals2.length
+          val contents = actuals1 zip actuals2 forall {
+            case (e1, e2) => e1 equalsIgnoreLoc e2
+          }
+
+          naming && sizing && contents
+        }
+
+        case (Operation(_, left1, op1, right1), Operation(_, left2, op2, right2)) => {
+          (left1 equalsIgnoreLoc left2) &&
+            (op1 == op2) &&
+            (right1 equalsIgnoreLoc right2)
+        }
+
         case (Add(_, left1, right1), Add(_, left2, right2)) =>
           (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
         
@@ -343,12 +411,118 @@ trait AST extends Phases {
         case (Div(_, left1, right1), Div(_, left2, right2)) =>
           (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
         
+        case (Lt(_, left1, right1), Lt(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (LtEq(_, left1, right1), LtEq(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Gt(_, left1, right1), Gt(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (GtEq(_, left1, right1), GtEq(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Eq(_, left1, right1), Eq(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (NotEq(_, left1, right1), NotEq(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (And(_, left1, right1), And(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Or(_, left1, right1), Or(_, left2, right2)) =>
+          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+        
+        case (Comp(_, child1), Comp(_, child2)) => child1 equalsIgnoreLoc child2
+
         case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
+
         case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
         
-        case (TicVar(_, id1), TicVar(_, id2)) => id1 == id2
-        
         case _ => false
+      }
+
+      def hashCodeIgnoreLoc: Int = this match {
+        case Let(_, id, params, left, right) =>
+          id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc 
+
+        case New(_, child) => child.hashCodeIgnoreLoc * 23
+
+        case Relate(_, from, to, in) =>
+          from.hashCodeIgnoreLoc + to.hashCodeIgnoreLoc + in.hashCodeIgnoreLoc
+
+        case TicVar(_, id) => id.hashCode
+
+        case StrLit(_, value) => value.hashCode
+
+        case NumLit(_, value) => value.hashCode
+
+        case BoolLit(_, value) => value.hashCode
+
+        case ObjectDef(_, props) => {
+          props map {
+            case (key, value) => key.hashCode + value.hashCodeIgnoreLoc
+          } sum
+        }
+
+        case ArrayDef(_, values) =>
+          values map { _.hashCodeIgnoreLoc } sum
+
+        case Descent(_, child, property) =>
+          child.hashCodeIgnoreLoc + property.hashCode
+
+        case Deref(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Dispatch(_, name, actuals) =>
+          name.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
+
+        case Operation(_, left, op, right) =>
+          left.hashCodeIgnoreLoc + op.hashCode + right.hashCodeIgnoreLoc
+
+        case Add(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Sub(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Mul(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Div(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Lt(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case LtEq(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Gt(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case GtEq(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Eq(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case NotEq(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case And(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Or(_, left, right) =>
+          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+        case Comp(_, child) => child.hashCodeIgnoreLoc * 13
+
+        case Neg(_, child) => child.hashCodeIgnoreLoc * 7
+
+        case Paren(_, child) => child.hashCodeIgnoreLoc * 29
       }
       
       protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
