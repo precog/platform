@@ -56,11 +56,43 @@ object ProvenanceSpecs extends Specification
       }
     }
     
+    "preserve provenance through let for unquantified function" in {
+      val input = """
+        | interactions := dataset(//interactions)
+        | bounds('it) :=
+        |   interactions.time where interactions = 'it
+        | init := bounds
+        | init + bounds""".stripMargin
+        
+      val tree = compile(input)
+      
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }
+    
     "identify new as dynamic" in {
       val tree = compile("new 1")
       tree.provenance must beLike {
         case DynamicProvenance(_) => ok
       }
+      tree.errors must beEmpty
+    }
+    
+    "identify new of unquantified function as distinct from the function" in {
+      val input = """
+        | histogram('a) :=
+        |   'a + count(dataset(//foo) where dataset(//foo) = 'a)
+        | 
+        | histogram' := new histogram
+        | 
+        | histogram'""".stripMargin
+      
+      val tree @ Let(_, _, _, _, Let(_, _, _, New(_, target), result)) = compile(input)
+      
+      target.provenance must beLike { case DynamicProvenance(_) => ok }
+      result.provenance must beLike { case DynamicProvenance(_) => ok }
+      target.provenance mustNotEqual result.provenance
+      
       tree.errors must beEmpty
     }
     
@@ -421,10 +453,10 @@ object ProvenanceSpecs extends Specification
       }
     }
     
-    "identify dispatch to an unquantified value function by the values it takes on" in {
+    "identify dispatch to an unquantified value function as dynamic" in {
       {
         val tree = compile("histogram('a) := 'a + count(dataset(//foo) where dataset(//foo) = 'a) histogram")
-        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
       
@@ -439,7 +471,7 @@ object ProvenanceSpecs extends Specification
           | histogram""".stripMargin
         
         val tree = compile(input)
-        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
       
@@ -482,6 +514,12 @@ object ProvenanceSpecs extends Specification
       tree.provenance must beLike {
         case DynamicProvenance(_) => ok
       }
+      tree.errors must beEmpty
+    }
+
+    "identify dispatch to unquantified function with a consistent dynamic provenance" in {
+      val tree = compile("histogram('a) := 'a + count(dataset(//foo) where dataset(//foo) = 'a) histogram + histogram")   // if not consistent, binary op will fail
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     

@@ -20,10 +20,15 @@
 package com.querio.quirrel
 package typer
 
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
 trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
   import Function._
   import Utils._
   import ast._
+
+  private val currentId = new AtomicInteger(0)
+  private val commonIds = new AtomicReference[Map[ExprWrapper, Int]](Map())
   
   override def checkProvenance(expr: Expr) = {
     def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): Set[Error] = expr match {
@@ -60,7 +65,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       
       case New(_, child) => {
         val back = loop(child, relations, constraints)
-        expr.provenance = DynamicProvenance(expr.nodeId)
+        expr.provenance = DynamicProvenance(currentId.incrementAndGet())
         expr.constrainingExpr = constraints get expr.provenance
         back
       }
@@ -98,7 +103,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val possibilities = in.provenance.possibilities
           
           if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
-            expr.provenance = DynamicProvenance(System.identityHashCode(expr))
+            expr.provenance = DynamicProvenance(currentId.incrementAndGet())
           else
             expr.provenance = in.provenance
           
@@ -183,7 +188,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val (prov, errors) = d.binding match {
           case BuiltIn(BuiltIns.Load.name, arity) => {
             if (exprs.length == arity)
-              (pathParam map StaticProvenance getOrElse DynamicProvenance(System.identityHashCode(pathParam)), Set())
+              (pathParam map StaticProvenance getOrElse DynamicProvenance(provenanceId(expr)), Set())
             else
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
@@ -252,7 +257,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                         case NullProvenance =>
                           (NullProvenance, Set(Error(expr, FunctionArgsInapplicable)))
                         
-                        case _ => (resultProv, Set())
+                        case _ if e.params.length == exprs.length => (resultProv, Set())
+                        
+                        case _ if e.params.length != exprs.length => (DynamicProvenance(provenanceId(expr)), Set())
+
+                        case _ => sys.error("scalac, please be smarter")
                       }
                     }
                   }
@@ -468,7 +477,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val possibilities = in.provenance.possibilities
       
       if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
-        DynamicProvenance(System.identityHashCode(body))
+        DynamicProvenance(provenanceId(body))
       else
         computeResultProvenance(in, relations3, varAssumptions)
     }
@@ -511,7 +520,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         d.provenance
       } else {
         d.binding match {
-          case UserDef(e) => {
+          case UserDef(e) if e.params.length == actuals.length => {
             val varAssumptions2 = e.assumptions ++ Map(e.params zip provenances: _*) map {
               case (id, prov) => ((id, e), prov)
             }
@@ -680,14 +689,29 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (ValueProvenance, p) => p
     case (p, ValueProvenance) => p
     
-    case pair => DynamicProvenance(System.identityHashCode(pair))
+    case pair => DynamicProvenance(currentId.incrementAndGet())
   }
   
   private def flattenForest(forest: Set[ConditionTree]): Set[Expr] = forest flatMap {
     case Condition(expr) => Set(expr)
     case Reduction(_, forest) => flattenForest(forest)
   }
-  
+
+  private def provenanceId(expr: Expr): Int = {
+    val wrapper = ExprWrapper(expr)
+
+    def loop(id: Int): Int = {
+      val orig = commonIds.get()
+      if (orig contains wrapper)
+        orig(wrapper)
+      else if (commonIds.compareAndSet(orig, orig + (wrapper -> id)))
+        id
+      else
+        loop(id)
+    }
+    
+    loop(currentId.incrementAndGet())
+  }
   
   sealed trait Provenance {
     def &(that: Provenance) = (this, that) match {
@@ -720,5 +744,15 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   
   case object NullProvenance extends Provenance {
     override val toString = "<null>"
+  }
+
+
+  private case class ExprWrapper(expr: Expr) {
+    override def equals(a: Any): Boolean = a match {
+      case ExprWrapper(expr2) => expr equalsIgnoreLoc expr2
+      case _ => false
+    }
+
+    override def hashCode = expr.hashCodeIgnoreLoc
   }
 }
