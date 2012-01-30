@@ -60,7 +60,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val index4: Int = 4
       val index5: Int = 5
   
-
+      //start of first test
       val columns: ListMap[ColumnDescriptor, Int] = 
         ListMap(colDesLong -> index0, colDesBoolean -> index0, colDesFloat -> index0)
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesLong, ById),(colDesBoolean, ById),(colDesFloat, ByValueThenId))
@@ -79,7 +79,7 @@ class LevelDBByteProjectionSpec extends Specification {
       byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
 
 
-
+      //start of second test
       val columns2: ListMap[ColumnDescriptor, Int] = 
         ListMap(colDesInt -> index0, colDesDouble -> index1, colDesBoolean -> index1)
       val sorting2: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesDouble, ByValueThenId),(colDesBoolean, ById))
