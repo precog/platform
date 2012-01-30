@@ -105,6 +105,12 @@ trait Solver extends parser.AST {
     }
     
     val result = leftRight flatMap {
+      case (loc, left, right) if predicate.isDefinedAt(left) && predicate(left) =>
+        Some(right)
+      
+      case (loc, left, right) if predicate.isDefinedAt(right) && predicate(right) =>
+        Some(left)
+      
       case (loc, left, right) => {
         // try both addition and multiplication groups
         lazy val sub = Sub(loc, left, right)
