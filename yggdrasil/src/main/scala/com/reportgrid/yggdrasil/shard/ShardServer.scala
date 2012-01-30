@@ -43,7 +43,7 @@ import akka.actor.ReceiveTimeout
 import akka.actor.ActorTimeoutException
 
 import blueeyes.util._
-import blueeyes.json.Printer
+import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
@@ -81,6 +81,14 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.semigroup._
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.iteratee.Input._
+import scalaz.syntax.plus._
+import scalaz.syntax.monad._
+import scalaz.syntax.applicativePlus._
+import scalaz.syntax.biFunctor
+import scalaz.Scalaz._
 
 // On startup
 // - load config/metadata from filesystem 
@@ -98,11 +106,13 @@ class ShardServer {
   def run(config: ShardServerConfig): Unit = {
     
     val system = ActorSystem("Shard Actor System")
+
+    val dbLayout = new DBLayout(config.baseDir, config.descriptors) 
     
     val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, ShardMetadata.dummyCheckpoints)))
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints, dbLayout.metadataIO, dbLayout.checkpointIO)))
 
-    val router = system.actorOf(Props(new RoutingActor(config.baseDir, config.descriptors, routingTable, metadataActor)))
+    val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
     
     val consumer = new KafkaConsumer(config.properties, router)
 
@@ -111,6 +121,48 @@ class ShardServer {
 
     println("Shard Server started...")
    
+  }
+}
+
+class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, File]) { 
+
+  val descriptorName = "projection_descriptor.json"
+  val metadataName = "projection_metadata.json"
+  val checkpointName = "checkpoints.json"
+
+  def newRandomDir(parent: File): File = {
+    val newDir = File.createTempFile("col", "", parent)
+    newDir.delete
+    newDir.mkdirs
+    newDir
+  }
+
+  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
+
+  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
+    descriptorDirs.get(descriptor) match {
+      case Some(x) => x
+      case None    => {
+        val newDir = newDescriptorDir(descriptor, baseDir)
+        descriptorDirs.put(descriptor, newDir)
+        newDir
+      }
+    }
+  }
+
+  val descriptorIO = (descriptor: ProjectionDescriptor) =>
+    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
+    }.map(_ => ())
+
+  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
+    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
+    }.map(_ => ())
+  }
+
+  val checkpointIO = (checkpoints: Checkpoints) => {
+    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(baseDir, checkpointName)).map(_ => ())
   }
 }
 
@@ -138,14 +190,18 @@ class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
   }
 }
 
-class ShardServerConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]])
+class ShardServerConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
 
 object ShardServerConfig extends Logging {
   def fromFile(propsFile: File): IO[Validation[Error, ShardServerConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
   
   def fromProperties(props: Properties): IO[Validation[Error, ShardServerConfig]] = {
     val baseDir = extractBaseDir { props }
-    loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { new ShardServerConfig(props, baseDir, desc, _) } } }
+    loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+      case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardServerConfig(props, baseDir, t._1, t._2, _)) }
+      case Failure(e) => IO { Failure(e) }
+    }}
+   
   }
 
   def extractBaseDir(props: Properties): File = new File(props.getProperty("querio.storage.root", "."))
@@ -155,7 +211,7 @@ object ShardServerConfig extends Logging {
     def loadMap(baseDir: File) = {
       IOUtils.walkSubdirs(baseDir).map{ _.foldLeft( mutable.Map[ProjectionDescriptor, File]() ){ (map, dir) =>
         println("loading: " + dir)
-        LevelDBProjection.descriptorSync(dir).read match {
+        read(dir) match {
           case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
                                                      { pd => map + (pd -> dir) })
           case None      => map
@@ -163,6 +219,22 @@ object ShardServerConfig extends Logging {
       }}
     }
 
+    def read(baseDir: File): Option[IO[Validation[String, ProjectionDescriptor]]] = {
+      val df = new File(baseDir, "projection_descriptor.json")
+
+      if (df.exists) Some {
+        IO {
+          val reader = new FileReader(df)
+          try {
+            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
+          } finally {
+            reader.close
+          }
+        }
+      } else {
+        None
+      }
+    }
     loadMap(baseDir)
   }
 
@@ -188,6 +260,14 @@ object ShardServerConfig extends Logging {
     }
 
     readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
+  }
+
+  def loadCheckpoints(baseDir: File): IO[Validation[Error, mutable.Map[Int, Int]]] = {
+    import JsonParser._
+    val checkpointFile = new File(baseDir, "checkpoints.json")
+    IOUtils.readFileToString(checkpointFile).map { content =>
+      parse(content.getOrElse("")).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
+    }
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
@@ -228,8 +308,20 @@ object IOUtils {
 
   def writeToFile(s: String, f: File): IO[Unit] = IO {
     val writer = new PrintWriter(new PrintWriter(f))
-    writer.println(s)
-    writer.close
+    try {
+      writer.println(s)
+    } finally { 
+      writer.close
+    }
+  }
+
+  def safeWriteToFile(s: String, f: File): IO[Validation[Throwable, Unit]] = IO {
+    Validation.fromTryCatch {
+      val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
+      writeToFile(s, tmpFile).unsafePerformIO
+      tmpFile.renameTo(f) // TODO: This is only atomic on POSIX systems
+      Success(())
+    }
   }
 
 }

@@ -19,17 +19,11 @@
  */
 package com.reportgrid.yggdrasil
 
-import com.reportgrid.common._
+import scalaz.effect.IO
 
-import scalaz.effect._
-import scala.collection.mutable
+import java.io.File
 
-package object shard {
-  
-  type MetadataMap = mutable.Map[MetadataType, Metadata]
-  type Checkpoints = mutable.Map[Int, Int]
-  
-  type MetadataIO = (ProjectionDescriptor, Seq[MetadataMap]) => IO[Unit]
-  type CheckpointIO = Checkpoints => IO[Unit]
-
+package object kafka {
+  type ProjectionDescriptorIO = ProjectionDescriptor => IO[Unit] 
+  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
 }

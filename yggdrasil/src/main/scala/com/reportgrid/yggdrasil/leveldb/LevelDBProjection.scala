@@ -114,42 +114,42 @@ object LevelDBProjection {
     (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, descriptor, c) }
   }
 
-  val descriptorFile = "projection_descriptor.json"
-  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
+//  val descriptorFile = "projection_descriptor.json"
+//  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
 
-  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
-    import java.io._
-
-    val df = new File(baseDir, filename)
-
-    def read = 
-      if (df.exists) Some {
-        IO {
-          val reader = new FileReader(df)
-          try {
-            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
-          } finally {
-            reader.close
-          }
-        }
-      } else {
-        None
-      }
-
-    def sync(data: T) = IO {
-      Validation.fromTryCatch {
-        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
-        val writer = new FileWriter(tmpFile)
-        try {
-          compact(render(data.serialize(decomposer)), writer)
-        } finally {
-          writer.close
-        }
-        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
-        Success(())
-      }
-    }
-  }
+//  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
+//    import java.io._
+//
+//    val df = new File(baseDir, filename)
+//
+//    def read = 
+//      if (df.exists) Some {
+//        IO {
+//          val reader = new FileReader(df)
+//          try {
+//            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
+//          } finally {
+//            reader.close
+//          }
+//        }
+//      } else {
+//        None
+//      }
+//
+//    def sync(data: T) = IO {
+//      Validation.fromTryCatch {
+//        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
+//        val writer = new FileWriter(tmpFile)
+//        try {
+//          compact(render(data.serialize(decomposer)), writer)
+//        } finally {
+//          writer.close
+//        }
+//        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
+//        Success(())
+//      }
+//    }
+//  }
 }
 
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor, comparator: DBComparator) extends LevelDBByteProjection {

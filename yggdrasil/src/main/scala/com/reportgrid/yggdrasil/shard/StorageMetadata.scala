@@ -104,7 +104,18 @@ object ShardMetadata {
   
   def actorSystem = ActorSystem("test actor system")
 
-  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints)))
+  def echoMetadataIO(descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) = IO {
+    println("Saving metadata entry")
+    println(descriptor)
+    println(metadata)
+  }
+
+  def echoCheckpointIO(checkpoints: Checkpoints) = IO {
+    println("Saving checkpoints")
+    println(checkpoints) 
+  }
+
+  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints, echoMetadataIO _, echoCheckpointIO _)))
 
   def dummyProjections = {
     mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]](
@@ -138,7 +149,7 @@ object ShardMetadata {
   }
 }
 
-class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int], metadataIO: MetadataIO = echoMetadataIO, checkpointIO: CheckpointIO = echoCheckpointIO) extends Actor {
+class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int], metadataIO: MetadataIO, checkpointIO: CheckpointIO) extends Actor {
 
   private val expectedEventActions = mutable.Map[(Int, Int), Int]()
  
