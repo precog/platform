@@ -108,35 +108,50 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-  def allocateWidth(valueWidths: Seq[Int]): (Set[Int], Set[Int], Int) = 
-    descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int], 0)) { 
-      case ((ids, values, width), (col, ById)) => 
-        (ids + descriptor.indexedColumns(col), values, width + 8)
+  def allocateWidth(valueWidths: Seq[Int]): (Int) = 
+    descriptor.sorting.foldLeft(0) { 
+      case (width, (col, ById)) => 
+        (width + 8)
 
-      case ((ids, values, width), (col, ByValue)) => 
+      case (width, (col, ByValue)) => 
         val valueIndex = descriptor.columns.indexOf(col)
-        (ids, values + valueIndex, width + valueWidths(valueIndex))
+        (width + valueWidths(valueIndex))
 
-      case ((ids, values, width), (col, ByValueThenId)) => 
+      case (width, (col, ByValueThenId)) => 
         val valueIndex = descriptor.columns.indexOf(col)
-        (ids + descriptor.indexedColumns(col), values + valueIndex, width + valueWidths(valueIndex) + 8)
+        (width + valueWidths(valueIndex) + 8)
     }
+
+    val (usedIdentities, usedValues): (Set[Int], Set[Int]) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int])) { 
+      case ((ids, values), (col, ById)) => 
+        (ids + descriptor.indexedColumns(col), values)
+      case ((ids, values), (col, ByValue)) => 
+        val valueIndex = descriptor.columns.indexOf(col)
+        (ids, values + valueIndex)
+      case ((ids, values), (col, ByValueThenId)) => 
+        val valueIndex = descriptor.columns.indexOf(col)
+        (ids + descriptor.indexedColumns(col), values + valueIndex)
+    }
+    
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
 
     lazy val valueWidths = listWidths(cvalues)
-    val (usedIdentities, usedValues, indexWidth) = allocateWidth(valueWidths) 
-    
+    val indexWidth = allocateWidth(valueWidths) 
 
     // all of the identities must be included in the key; also, any values of columns that
-    // use by-value ordering must be included in the key. 
+    // use by-value ordering must be included in the key.
     val indexBuffer = new LevelDBWriteBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
     descriptor.sorting.foreach {
-      case (col, ById)          => indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
+      case (col, ById)          =>
+        //checks that the identity has not been written already
+        if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col))
+          indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
       case (col, ByValue)       => indexBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col)))        
       case (col, ByValueThenId) =>
-        indexBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col))) 
-        indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
+        indexBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col)))
+        if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col))
+          indexBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
     }
 
     identities.zipWithIndex.foreach {
@@ -145,7 +160,7 @@ trait LevelDBByteProjection extends ByteProjection {
     }
 
     val valuesBuffer = new LevelDBWriteBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
-    (cvalues zip descriptor.columns).zipWithIndex.foreach { //by zip we lose the extra cvalues not in bijection with descriptor - is this correcty?
+    (cvalues zip descriptor.columns).zipWithIndex.foreach { //by zip we lose the extra cvalues not in bijection with descriptor - is this correct?
       case ((v, col), i) if !usedValues.contains(i) => valuesBuffer.writeValue(col, v)
       case _ => 
     }
