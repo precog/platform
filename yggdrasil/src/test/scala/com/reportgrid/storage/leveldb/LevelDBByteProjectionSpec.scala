@@ -21,6 +21,7 @@ class LevelDBByteProjectionSpec extends Specification {
   "a byte projection" should {
     "project to the expected key format" in {
       val testIdentity: Vector[Long] = Vector(1L)
+      val testIdentity2: Vector[Long] = Vector(1L, 2L)
       val cvInt = CInt(4)
       val cvLong = CLong(5)
       val cvString = CString("string")
@@ -29,6 +30,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val cvDouble = CDouble(7)
       val cvNum = CNum(8)
       val testValues: Seq[CValue] = Seq(cvLong, cvBoolean, cvFloat)
+      val testValues2: Seq[CValue] = Seq(cvInt, cvDouble, cvBoolean)
 
       val path0: Path = Path("path0")
       val selector0: JPath = JPath("key0")
@@ -70,19 +72,31 @@ class LevelDBByteProjectionSpec extends Specification {
       }
 
       val byteProjection = byteProjectionV ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) } 
-
-      
+ 
       val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1,64,-64,0,0)
       val expectedValue: Array[Byte] = Array(0,0,0,0,0,0,0,5,1)
       byteProjection.project(testIdentity, testValues)._1 must_== expectedKey
       byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
 
 
-      //val expectedValueWidths = List(4,4)
-      //byteProjection.listWidths(testValues) must_== expectedValueWidths
 
-      //val expectedAllocateWidth = (Set(), Set(0,1), 8)
-      //byteProjection.allocateWidth(expectedValueWidths) must_== expectedAllocateWidth
+      val columns2: ListMap[ColumnDescriptor, Int] = 
+        ListMap(colDesInt -> index0, colDesDouble -> index1, colDesBoolean -> index1)
+      val sorting2: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesDouble, ByValueThenId),(colDesBoolean, ById))
+
+      val byteProjectionV2 = ProjectionDescriptor(columns2, sorting2) map { d => 
+        new LevelDBByteProjection {
+          val descriptor: ProjectionDescriptor = d
+        }
+      }
+
+      val byteProjection2 = byteProjectionV2 ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) } 
+ 
+      val expectedKey2: Array[Byte] = Array(0,0,0,4,64,28,0,0,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,0,1)
+      val expectedValue2: Array[Byte] = Array(1)
+      byteProjection2.project(testIdentity2, testValues2)._1 must_== expectedKey2
+      byteProjection2.project(testIdentity2, testValues2)._2 must_== expectedValue2
+
 
     }
   }
