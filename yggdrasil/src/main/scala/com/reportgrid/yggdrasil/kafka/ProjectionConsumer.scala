@@ -42,57 +42,13 @@ import scalaz.MonadPartialOrder._
 
 case object Stop
 
-class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor, File], routingTable: RoutingTable, metadataActor: ActorRef) extends Actor with Logging {
-  def syncDescriptors : IO[List[Validation[Throwable,Unit]]] = {
-    projectionActors.keys.foldLeft(IO(List[Validation[Throwable,Unit]]())) { 
-      case (io,descriptor) => {
-        descriptors.get(descriptor).map { dir =>
-          io.flatMap { a => LevelDBProjection.descriptorSync(dir).sync(descriptor).map(_ :: a) }
-        } getOrElse {
-          io.map(a => (new RuntimeException("Could not locate directory for " + descriptor) : Throwable).fail[Unit] :: a)
-        }
-      }
-    }
-  }
+class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO) extends Actor with Logging {
 
-  def dirFor(descriptor : ProjectionDescriptor) : File = {
-    descriptors.get(descriptor) match {
-      case Some(dir) => dir
-      case None => {
-        val newDir = File.createTempFile("col", "", baseDir)
-        newDir.delete
-        newDir.mkdirs
-        logger.debug(newDir.toString)
-        LevelDBProjection.descriptorSync(newDir).sync(descriptor).unsafePerformIO.fold({ t => logger.error("Failed to sync descriptor: " + t) },
-                                                                                       { _ => ()})
-        descriptors += (descriptor -> newDir)
-        newDir
-      }
-    }
-  }
-
-  private val pathDelimeter = "//"
-  private val partDelimeter = "-"
-
-  def toPath(columns: Seq[ColumnDescriptor]): String = {
-    columns.map( s => sanitize(s.path.toString)).mkString(pathDelimeter) + pathDelimeter +
-    columns.map( s => sanitize(s.selector.toString) + partDelimeter + sanitize(s.valueType.toString)).mkString(partDelimeter)
-  }
-
-  def projectionSuffix(descriptor: ProjectionDescriptor): String = ""
-
-  private val whitespace = "//W".r
-
-  def sanitize(s: String) = whitespace.replaceAllIn(s, "_") 
-      
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
       expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
       evict = { 
-        (descriptor, actor) => {
-          val sync = LevelDBProjection.descriptorSync(descriptors(descriptor))
-          sync.sync(descriptor).map(_ => actor ! Stop).unsafePerformIO
-        }
+        (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
       }
     )
   )
@@ -110,6 +66,10 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
 
   private implicit val timeout: Timeout = 5 seconds
 
+  def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
+    descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
+  }
+
   def receive = {
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
@@ -124,8 +84,9 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
         (descriptor, values) <- projectionUpdates 
       } {
         val comparator = ProjectionComparator.forProjection(descriptor)
+        val dataDir = descriptorLocator(descriptor).unsafePerformIO
         val actor: ValidationNEL[Throwable, ActorRef] = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-          LevelDBProjection(dirFor(descriptor), descriptor, Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
+          LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor, Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
         }
 
         actor match {

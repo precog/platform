@@ -84,10 +84,12 @@ object ShardLoader extends RealisticIngestMessage {
 
     implicit val dispatcher = system.dispatcher
 
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), ShardMetadata.dummyCheckpoints)))
+    val dbLayout = new DBLayout(baseDir, mutable.Map())
 
-    val router = system.actorOf(Props(new RoutingActor(baseDir, mutable.Map(), routingTable, metadataActor)))
+    val routingTable = new SingleColumnProjectionRoutingTable
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), mutable.Map(), dbLayout.metadataIO, dbLayout.checkpointIO)))
+
+    val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
     
     implicit val timeout: Timeout = 30 seconds 
    
