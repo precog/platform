@@ -73,6 +73,15 @@ case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Optio
     }
   )
 
+  def zipWithIndex: DatasetEnum[X, (E, Long), F] = DatasetEnum(
+    new EnumeratorP[X, (E, Long), F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, (E, Long), G] = {
+        import MO._
+        enum[G].zipWithIndex
+      }
+    }
+  )
+
   def :*[E2](enum2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = DatasetEnum(
     new EnumeratorP[X, (E, E2), F] {
       def apply[G[_]](implicit MO: G |>=| F) = {
