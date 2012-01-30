@@ -123,7 +123,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         
         val splitEnum = loop(parent, roots)
         
-        val result = splitEnum flatMap {
+        val result = ops.sort(splitEnum).uniq flatMap {
           case (_, sv) => loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots)
         }
         
