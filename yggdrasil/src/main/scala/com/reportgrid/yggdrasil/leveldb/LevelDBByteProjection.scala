@@ -164,7 +164,7 @@ trait LevelDBByteProjection extends ByteProjection {
     }
 
     val valuesBuffer = new LevelDBWriteBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
-    (cvalues zip descriptor.columns).zipWithIndex.foreach {
+    (cvalues zip descriptor.columns).zipWithIndex.foreach { //by zip we lose the extra cvalues not in bijection with descriptor - is this correcty?
       case ((v, col), i) if !usedValues.contains(i) => valuesBuffer.writeValue(col, v)
       case _ => 
     }

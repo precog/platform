@@ -41,10 +41,11 @@ class LevelDBByteProjectionSpec extends Specification {
     "project to the expected key format" in {
       val testIdentity: Vector[Long] = Vector(1L)
       val cvInt5 = CInt(5)
-      val cvInt6 = CInt(6) 
-      val cvFloat = CFloat(77)
+      val cvInt6 = CInt(6)
+      val cvInt7 = CInt(7)
+      val cvFloat = CFloat(7)
       val cvBoolean = CBoolean(true)
-      val testValues: Seq[CValue] = Seq(cvInt5, cvInt6)
+      val testValues: Seq[CValue] = Seq(cvInt5)
 
       val path0: Path = Path("path0")
       val selector0: JPath = JPath("key0")
@@ -54,17 +55,18 @@ class LevelDBByteProjectionSpec extends Specification {
 
       val colDesInt1: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeInt, Ownership(Set()))
       val colDesInt2: ColumnDescriptor = ColumnDescriptor(path0, selector1, valueTypeInt, Ownership(Set()))
-      //val colDesFloat: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeFloat, Ownership(Set()))
+      val colDesFloat: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeFloat, Ownership(Set()))
 
       val index0: Int = 0 //must be 0 so that identity indexes are 0-based
       val index1: Int = 1
 
-      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt1 -> index0, colDesInt2 -> index0)
-      val sortingA: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt1, ByValue),(colDesInt2, ByValue))
-      //val sortingB: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ById))
+      val columns1: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt1 -> index0, colDesInt2 -> index0, colDesFloat -> index1)
+      val columns2: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt1 -> index0)
+      //val sortingA: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt1, ByValue),(colDesInt2, ByValue),(colDesFloat, ByValue))
+      val sortingB: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt1, ById)) //if we only have one columndescriptor in listmap then should both values be written?
       //val sortingC: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValueThenId)) 
 
-      val byteProjectionV = ProjectionDescriptor(columns, sortingA) map { d => 
+      val byteProjectionV = ProjectionDescriptor(columns2, sortingB) map { d => 
         new LevelDBByteProjection {
           val descriptor: ProjectionDescriptor = d
         }
@@ -74,8 +76,9 @@ class LevelDBByteProjectionSpec extends Specification {
 
       
 
-      val expectedKey: Array[Byte] = Array(0, 0, 0, 5,0,0,0,6,0, 0, 0, 0,0,0,0,1)  
-      val expectedValue: Array[Byte] = Array()
+      //val expectedKey: Array[Byte] = Array(0,0,0,5,0,0,0,6,64,-32,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2)  
+      val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1)
+      val expectedValue: Array[Byte] = Array(0,0,0,5)
       byteProjection.project(testIdentity, testValues)._1 must_== expectedKey
       byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
 
@@ -83,7 +86,7 @@ class LevelDBByteProjectionSpec extends Specification {
       //val expectedValueWidths = List(4,4)
       //byteProjection.listWidths(testValues) must_== expectedValueWidths
 
-      //val expectedAllocateWidth = (Set(), Set(0,0), 8)
+      //val expectedAllocateWidth = (Set(), Set(0,1), 8)
       //byteProjection.allocateWidth(expectedValueWidths) must_== expectedAllocateWidth
 
     }
