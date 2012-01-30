@@ -10,7 +10,7 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
-import akka.actor._
+import akka.actor.{IO => _, _}
 import akka.actor.Actor._
 import akka.routing._
 import akka.dispatch.Future
@@ -23,7 +23,10 @@ import scala.collection.immutable.ListMap
 import scala.collection.immutable.Set
 
 import scalaz._
+import scalaz.syntax
+import scalaz.effect._
 import scalaz.Scalaz._
+
 
 trait StorageMetadata {
  
@@ -116,10 +119,7 @@ object ShardMetadata {
   }
 }
 
-
-class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], checkpoints: mutable.Map[Int, Int]) extends Actor {
- 
-  type MetadataMap = mutable.Map[MetadataType, Metadata] 
+class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int], metadataIO: MetadataIO = echoMetadataIO, checkpointIO: CheckpointIO = echoCheckpointIO) extends Actor {
 
   private val expectedEventActions = mutable.Map[(Int, Int), Int]()
  
@@ -184,7 +184,7 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
     def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
       desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
     }
-    
+   
     updateExpectation(producerId, eventId, recordCheckpoint _)
 
     projections.put(desc, applyMetadata(desc, values, metadata))
@@ -209,8 +209,11 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
   }  
 
   def sync = {
-
+    metadataIO(projections) flatMap { _ => checkpointIO(checkpoints) } unsafePerformIO
   }
+
+  def metadataIO(projections: Map[ProjectionDescriptor, Seq[MetadataMap]]): IO[Unit] =
+    projections.map{ t => metadataIO(t._1, t._2) }.toList.sequence[IO, Unit].map{ _ => Unit}
 }
 
 sealed trait ShardMetadataAction

@@ -13,11 +13,11 @@ trait RoutingTable {
 }
 
 object RoutingTable {
-  def unpack(e: Event): Set[Option[(ColumnDescriptor, JValue)]] = {
+  def unpack(e: Event): Set[Option[(ColumnDescriptor, JValue, Set[Metadata])]] = {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 
-          case (ctype, metadata) => (ColumnDescriptor(e.path, sel, ctype, Ownership(Set())), metadata) 
+          case (ctype, data) => (ColumnDescriptor(e.path, sel, ctype, Ownership(Set())), data, meta) 
         }
     }
   }

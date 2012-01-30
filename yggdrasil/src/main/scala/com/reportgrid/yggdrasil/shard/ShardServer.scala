@@ -1,4 +1,4 @@
-package com.reportgrid.yggdrasil
+package com.reportgrid.yggdrasil 
 package shard 
 
 import com.reportgrid.analytics.Path
@@ -92,80 +92,6 @@ class ShardServer {
 
     println("Shard Server started...")
    
-  }
-}
-
-object ShardLoader extends RealisticIngestMessage {
-
-  def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
-    if (target.isTerminated) {
-      Promise.successful(true)
-    } else {
-      val result = Promise[Boolean]()
-      system.actorOf(Props(new Actor {
-        // Terminated will be received when target has been stopped
-        context watch target
-        target ! PoisonPill
-        // ReceiveTimeout will be received if nothing else is received within the timeout
-        context setReceiveTimeout timeout
-
-        def receive = {
-          case Terminated(a) if a == target ⇒
-            result success true
-            context stop self
-          case ReceiveTimeout ⇒
-            result failure new ActorTimeoutException(
-              "Failed to stop [%s] within [%s]".format(target.path, context.receiveTimeout))
-            context stop self
-        }
-      }))
-      result
-    }
-  }
-
-  def main(args: Array[String]) {
-    if(args.length < 2) sys.error("Must provide path and number of events to generate.")
-    val base = new File(args(0))
-    val count = args(1).toInt
-    
-    val events = containerOfN[List, Event](1, genEvent).sample.get
-
-    load(base, events, count)
-
-    
-  }
-
-  def load(baseDir: File, events: List[Event], count: Int) {
-    baseDir.mkdirs
-
-    println("Paths: " + events(0).content.size)
-
-    val system = ActorSystem("shard_loader")
-
-    implicit val dispatcher = system.dispatcher
-
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), ShardMetadata.dummyCheckpoints)))
-
-    val router = system.actorOf(Props(new RoutingActor(baseDir, mutable.Map(), routingTable, metadataActor)))
-    
-    implicit val timeout: Timeout = 30 seconds 
-   
-    val finalEvents = 0.until(count).map(_ => events).flatten
-
-    finalEvents.zipWithIndex.foreach {
-      case (ev, idx) => router ! EventMessage(0, idx, ev) 
-    }
-
-    println("Initiating shutdown")
-
-    Await.result(Future.sequence(gracefulStop(router, 300 seconds)(system) :: gracefulStop(metadataActor, 300 seconds)(system) :: Nil), 300 seconds)
-    
-    println("Actors stopped")
-    
-    println("Insert total: " + finalEvents.size)
-
-    system.shutdown
   }
 }
 
@@ -300,56 +226,6 @@ object ShardServer {
   }
 
   def loadConfig(filename: String) = ShardServerConfig.fromFile { new File(filename) }
-}
-
-object ShardDemoUtil {
-
-  def main(args: Array[String]) {
-    val default = if(args.length > 0) args(0) else "/tmp/test/"
-    val props = new Properties
-    props.setProperty("querio.storage.root", default)
-    bootstrapTest(props).unsafePerformIO.map( t => println(t.descriptors + "|" + t.metadata) )
-  }
-
-  def bootstrapTest(properties: Properties): IO[Validation[Error, ShardServerConfig]] =
-    ShardServerConfig.fromProperties(properties)
-
-  def writeDummyShardMetadata() {
-    val md = ShardMetadata.dummyProjections
-   
-    val rawEntries = 0.until(md.size) zip md.toSeq
-
-    val descriptors = rawEntries.foldLeft( Map[ProjectionDescriptor, File]() ) {
-      case (acc, (idx, (pd, md))) => acc + (pd -> new File("/tmp/test/desc"+idx))
-    }
-
-    val metadata = rawEntries.foldLeft( Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]() ) {
-      case (acc, (idx, (pd, md))) => acc + (pd -> md)
-    }
-
-    writeAll(descriptors, metadata).unsafePerformIO
-  }
-
-  def writeAll(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] = 
-    writeDescriptors(descriptors) unsafeZip writeMetadata(descriptors, metadata) map { _ => () }
-
-  def writeDescriptors(descriptors: Map[ProjectionDescriptor, File]): IO[Unit] = 
-    descriptors.map {
-      case (pd, f) => {
-        if(!f.exists) f.mkdirs
-        IOUtils.writeToFile(Printer.pretty(Printer.render(pd.serialize)), new File(f, "projection_descriptor.json"))
-      }
-    }.toList.sequence[IO,Unit].map { _ => () }
-
-  def writeMetadata(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] =
-    metadata.map {
-      case (pd, md) => {
-        descriptors.get(pd).map { f =>
-          if(!f.exists) f.mkdirs
-          IOUtils.writeToFile(Printer.pretty(Printer.render(md.map( _.toSeq ).serialize)), new File(f, "projection_metadata.json"))
-        }.getOrElse(IO { () })
-      }
-    }.toList.sequence[IO,Unit].map { _ => () }
 }
 
 // vim: set ts=4 sw=4 et:
