@@ -93,8 +93,8 @@ class LevelDBByteProjectionSpec extends Specification {
       
       val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1)
       val expectedValue: Array[Byte] = Array(0,0,0,0,0,0,0,5,1)
-      byteProjection.project(testIdentity, testValues)._1 must_== sys.error("todo")//expectedKey
-      byteProjection.project(testIdentity, testValues)._2 must_== sys.error("todo")//expectedValue
+      byteProjection.project(testIdentity, testValues)._1 must_== expectedKey
+      byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
 
 
       //val expectedValueWidths = List(4,4)

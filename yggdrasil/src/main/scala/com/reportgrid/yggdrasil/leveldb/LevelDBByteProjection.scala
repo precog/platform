@@ -129,8 +129,9 @@ trait LevelDBByteProjection extends ByteProjection {
 
   def allocateWidth(valueWidths: Seq[Int]): (Int) = 
     descriptor.sorting.foldLeft(0) { 
-      case (width, (col, ById)) => 
-        (width + 8)
+      case (width, (col, ById)) =>
+        if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + 8)
+        else width
 
       case (width, (col, ByValue)) => 
         val valueIndex = descriptor.columns.indexOf(col)
@@ -141,23 +142,25 @@ trait LevelDBByteProjection extends ByteProjection {
         (width + valueWidths(valueIndex) + 8)
     }
 
-    val (usedIdentities, usedValues): (Set[Int], Set[Int]) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int])) { 
-      case ((ids, values), (col, ById)) => 
-        (ids + descriptor.indexedColumns(col), values)
-      case ((ids, values), (col, ByValue)) => 
-        val valueIndex = descriptor.columns.indexOf(col)
-        (ids, values + valueIndex)
-      case ((ids, values), (col, ByValueThenId)) => 
-        val valueIndex = descriptor.columns.indexOf(col)
-        (ids + descriptor.indexedColumns(col), values + valueIndex)
-    }
-    
-
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
 
     lazy val valueWidths = listWidths(cvalues)
     val indexWidth = allocateWidth(valueWidths) 
 
+    val (usedIdentities, usedValues): (Set[Int], Set[Int]) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int])) { 
+      case ((ids, values), (col, ById)) => 
+        (ids + descriptor.indexedColumns(col), values)
+
+      case ((ids, values), (col, ByValue)) => 
+        val valueIndex = descriptor.columns.indexOf(col)
+        (ids, values + valueIndex)
+
+      case ((ids, values), (col, ByValueThenId)) => 
+        val valueIndex = descriptor.columns.indexOf(col)
+        (ids + descriptor.indexedColumns(col), values + valueIndex)
+    }
+
+    
     // all of the identities must be included in the key; also, any values of columns that
     // use by-value ordering must be included in the key.
     val indexBuffer = new LevelDBWriteBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
