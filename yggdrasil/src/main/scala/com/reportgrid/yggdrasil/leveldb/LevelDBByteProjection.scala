@@ -120,7 +120,9 @@ trait LevelDBByteProjection extends ByteProjection {
 
       case (width, (col, ByValueThenId)) => 
         val valueIndex = descriptor.columns.indexOf(col)
-        (width + valueWidths(valueIndex) + 8)
+        if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + valueWidths(valueIndex) + 8)
+        else (width + valueWidths(valueIndex))
+
     }
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {

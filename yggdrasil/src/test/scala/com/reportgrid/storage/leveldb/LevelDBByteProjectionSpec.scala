@@ -28,7 +28,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val cvFloat = CFloat(6)
       val cvDouble = CDouble(7)
       val cvNum = CNum(8)
-      val testValues: Seq[CValue] = Seq(cvLong, cvBoolean/*, cvFloat*/)
+      val testValues: Seq[CValue] = Seq(cvLong, cvBoolean, cvFloat)
 
       val path0: Path = Path("path0")
       val selector0: JPath = JPath("key0")
@@ -60,8 +60,8 @@ class LevelDBByteProjectionSpec extends Specification {
   
 
       val columns: ListMap[ColumnDescriptor, Int] = 
-        ListMap(colDesLong -> index0, colDesBoolean -> index0/*, colDesFloat -> index0*/)
-      val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesLong, ById),(colDesBoolean, ById)/*,(colDesFloat, ByValueThenId)*/)
+        ListMap(colDesLong -> index0, colDesBoolean -> index0, colDesFloat -> index0)
+      val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesLong, ById),(colDesBoolean, ById),(colDesFloat, ByValueThenId))
 
       val byteProjectionV = ProjectionDescriptor(columns, sorting) map { d => 
         new LevelDBByteProjection {
@@ -72,7 +72,7 @@ class LevelDBByteProjectionSpec extends Specification {
       val byteProjection = byteProjectionV ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) } 
 
       
-      val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1)
+      val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1,64,-64,0,0)
       val expectedValue: Array[Byte] = Array(0,0,0,0,0,0,0,5,1)
       byteProjection.project(testIdentity, testValues)._1 must_== expectedKey
       byteProjection.project(testIdentity, testValues)._2 must_== expectedValue
