@@ -1214,24 +1214,26 @@ object EvaluatorSpecs extends Specification
       
       result must haveSize(9)
       
-      // result foreach {
-        // case (Vector(_), SObject(obj)) => {
-          // obj must haveKey("user")
-          // obj must haveKey("num")
-          // 
-          // obj("user") must beLike {
-            // case SString(str) => {
-              // str must beOneOf("daniel", "kris", "derek", "nick", "john",
-                // "alissa", "franco", "matthew", "jason")
-            // }
-          // }
-          // val SString(user) = obj("user")
-            // 
-          // obj("num") must beLike {
-            // case SDecimal(d) => d mustEqual Expected(user)
-          // }
-        // }
-      // }
+      result foreach {
+        case (Vector(_), SObject(obj)) => {
+          obj must haveKey("user")
+          obj must haveKey("num")
+          
+          obj("user") must beLike {
+            case SString(str) => {
+              str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                "alissa", "franco", "matthew", "jason")
+            }
+          }
+          val SString(user) = obj("user")
+            
+          obj("num") must beLike {
+            case SDecimal(d) => d mustEqual Expected(user)
+          }
+        }
+        
+        case p => failure("'%s' does not match the expected pattern".format(p))
+      }
     }
     
     "reduce homogeneous sets" >> {
