@@ -17,7 +17,76 @@ import Iteratee._
 //case class IdentitySource(sources: Set[ProjectionDescriptor])
 case class EventMatcher(order: Order[SEvent], merge: (Vector[Identity], Vector[Identity]) => Vector[Identity])
 
-case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Option[ProjectionDescriptor] = None) //, identityDerivation: Vector[IdentitySource]) 
+case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Option[ProjectionDescriptor] = None) { //, identityDerivation: Vector[IdentitySource]) 
+  def map[E2](f: E => E2): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = new EnumeratorT[X, E2, G] {
+        import MO._
+        def apply[A] = enum[G].map(f).apply[A]
+      }
+    }
+  )
+
+  def flatMap[E2](f: E => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
+        import MO._
+        enum[G].flatMap(e => f(e).enum[G])
+      }
+    }
+  )
+  
+  def collect[E2](pf: PartialFunction[E, E2]): DatasetEnum[X, E2, F] = DatasetEnum(
+    new EnumeratorP[X, E2, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
+        import MO._
+        enum[G].collect(pf)
+      }
+    }
+  )
+
+  def uniq(implicit ord: Order[E]): DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+        import MO._
+        enum[G].uniq
+      }
+    }
+  )
+
+  def zipWithIndex: DatasetEnum[X, (E, Long), F] = DatasetEnum(
+    new EnumeratorP[X, (E, Long), F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, (E, Long), G] = {
+        import MO._
+        enum[G].zipWithIndex
+      }
+    }
+  )
+
+  def :*[E2](enum2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = DatasetEnum(
+    new EnumeratorP[X, (E, E2), F] {
+      def apply[G[_]](implicit MO: G |>=| F) = {
+        import MO._
+        cross(enum[G], enum2.enum[G])
+      }
+    }
+  )
+
+  def *:[E2](enum2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E2, E), F] = DatasetEnum(
+    new EnumeratorP[X, (E2, E), F] {
+      def apply[G[_]](implicit MO: G |>=| F) = {
+        import MO._
+        cross(enum2.enum[G], enum[G])
+      }
+    }
+  )
+
+  def join(enum2: DatasetEnum[X, E, F])(implicit order: Order[E], m: Monad[F]): DatasetEnum[X, (E, E), F] =
+    DatasetEnum(matchE[X, E, F].apply(enum, enum2.enum))
+
+  def merge(enum2: DatasetEnum[X, E, F])(implicit order: Order[E], monad: Monad[F]): DatasetEnum[X, E, F] =
+    DatasetEnum(mergeE[X, E, F].apply(enum, enum2.enum))
+}
 
 // QualifiedSelector(path: String, sel: JPath, valueType: EType)
 trait StorageEngineInsertAPI
@@ -35,41 +104,20 @@ trait DatasetEnumFunctions {
   def cogroup[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
     DatasetEnum(cogroupE[X, SEvent, F].apply(enum1.enum, enum2.enum))
 
-  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = DatasetEnum(
-    new EnumeratorP[X, (SEvent, SEvent), F] {
-      def apply[G[_]](implicit MO: G |>=| F) = {
-        import MO._
-        cross(enum1.enum[G], enum2.enum[G])
-      }
-    }
-  )
+  def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
+    enum1 :* enum2
 
-  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = DatasetEnum(
-    new EnumeratorP[X, (SEvent, SEvent), F] {
-      def apply[G[_]](implicit MO: G |>=| F) = {
-        import MO._
-        cross(enum2.enum[G], enum1.enum[G])
-      }
-    }
-  )
+  def crossRight[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
+    enum1 *: enum2
 
   def join[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, (SEvent, SEvent), F] =
-    DatasetEnum(matchE[X, SEvent, F].apply(enum1.enum, enum2.enum))
+    enum1 join enum2
 
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
-    DatasetEnum(mergeE[X, SEvent, F].apply(enum1.enum, enum2.enum))
+    enum1 merge enum2
 
   def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] 
   
-  def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = DatasetEnum(
-    new EnumeratorP[X, E2, F] {
-      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = new EnumeratorT[X, E2, G] {
-        import MO._
-        def apply[A] = enum.enum[G].map(f).apply[A]
-      }
-    }
-  )
-
   def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
     new EnumeratorP[X, E, F] {
       def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
@@ -101,23 +149,14 @@ trait DatasetEnumFunctions {
     }
   )
 
-  def flatMap[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = DatasetEnum(
-    new EnumeratorP[X, E2, F] {
-      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
-        import MO._
-        enum.enum[G].flatMap(e => f(e).enum[G])
-      }
-    }
-  )
-  
-  def collect[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, F] = DatasetEnum(
-    new EnumeratorP[X, E2, F] {
-      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
-        import MO._
-        enum.enum[G].collect(pf)
-      }
-    }
-  )
+  def map[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = 
+    enum.map(f)
+
+  def flatMap[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = 
+    enum.flatMap(f)
+     
+  def collect[X, E1, E2, F[_]: Monad](enum: DatasetEnum[X, E1, F])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, F] = 
+    enum.collect(pf)
 }
 
 trait OperationsAPI {
