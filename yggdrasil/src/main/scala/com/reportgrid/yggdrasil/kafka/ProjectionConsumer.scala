@@ -41,6 +41,8 @@ import blueeyes.persistence.cache.ExpirationPolicy
 
 import com.weiglewilczek.slf4s._
 
+import scala.collection.mutable
+
 import _root_.kafka.consumer._
 
 import java.io.File
@@ -48,8 +50,6 @@ import java.io.FileInputStream
 import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
-
-import scala.collection._
 
 import scalaz._
 import scalaz.syntax.std.booleanV._
@@ -134,14 +134,8 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
 
     case em @ EventMessage(pid, eid, ev @ Event(_, data)) =>
       val unpacked = RoutingTable.unpack(ev)
-      val qualifiedSelectors = unpacked filter { 
-        case Some(_) => true
-        case _       => false
-      } map { 
-        case Some(x) => x
-        case _       => sys.error("Theoretically unreachable code")
-      }
-      val projectionUpdates = routingTable.route(qualifiedSelectors)
+      val qualifiedSelectors = unpacked collect { case Some(x) => x }
+      val projectionUpdates = routingTable.route(qualifiedSelectors.map(x => (x._1, x._2)))
 
       registerCheckpointExpectation(pid, eid, projectionUpdates.size)
 
@@ -158,20 +152,19 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
             projectionActors.putIfAbsent(descriptor, actor)
             val fut = actor ? ProjectionInsert(em.uid, values)
             fut.onComplete { _ => 
-              fixme("Ignoring metadata update for now, but need to come back.")
-              //metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, boundMetadata))
+              metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, qualifiedSelectors))
             }
 
           case Failure(errors) => 
             for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
         }
-      }
+     }
   }
 
   def registerCheckpointExpectation(pid: Int, eid: Int, count: Int): Unit = metadataActor ! ExpectedEventActions(pid, eid, count)
 
-//  def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue)]): Seq[Set[Metadata]] = 
-//    desc.columns flatMap { c => metadata.exists(_ == c).option(c.metadata) } toSeq
+  def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue, Set[Metadata])]): Seq[Set[Metadata]] = 
+    desc.columns flatMap { c => metadata.find(_._1 == c).map( _._3 ) } toSeq
 }
 
 case class ProjectionInsert(id: Long, values: Seq[JValue])
@@ -200,6 +193,7 @@ class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescr
 
     case ProjectionInsert(id, values) => 
       projection.insert(Vector(id), values.map(asCValue)).unsafePerformIO
+      sender ! ()
 
     case ProjectionGet(interval, sender) =>
       sender ! new ProjectionResults {
