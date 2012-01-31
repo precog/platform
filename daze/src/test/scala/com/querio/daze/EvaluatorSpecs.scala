@@ -1179,6 +1179,63 @@ object EvaluatorSpecs extends Specification
       result2 must contain(55, 13, 119, 25)
     }
     
+    "evaluate a histogram function" in {
+      val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 18,
+        "john" -> 14, "alissa" -> 7, "franco" -> 14, "matthew" -> 10, "jason" -> 13)
+      
+      val line = Line(0, "")
+      
+      /*
+       * clicks := dataset(//clicks)
+       * histogram('user) :=
+       *   { user: 'user, num: count(clicks where clicks.user = 'user) }
+       * histogram
+       */
+      val input = dag.Split(line,
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          Root(line, PushString("user"))),
+        Join(line, Map2Cross(JoinObject),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("user")),
+            SplitRoot(line, 0)),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("num")),
+            dag.Reduce(line, Count,
+              Filter(line, None, None,
+                dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                Join(line, Map2Cross(Eq),
+                  Join(line, Map2Cross(DerefObject),
+                    dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                    Root(line, PushString("user"))),
+                  SplitRoot(line, 0)))))))
+                  
+      val result = consumeEval(input)
+      
+      result must haveSize(9)
+      
+      result foreach {
+        case (Vector(_), SObject(obj)) => {
+          obj must haveKey("user")
+          obj must haveKey("num")
+          
+          obj("user") must beLike {
+            case SString(str) => {
+              str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                "alissa", "franco", "matthew", "jason")
+            }
+          }
+          val SString(user) = obj("user")
+            
+          obj("num") must beLike {
+            case SDecimal(d) => d mustEqual Expected(user)
+          }
+        }
+        
+        case p => failure("'%s' does not match the expected pattern".format(p))
+      }
+    }
+    
     "reduce homogeneous sets" >> {
       "count" >> {
         val line = Line(0, "")

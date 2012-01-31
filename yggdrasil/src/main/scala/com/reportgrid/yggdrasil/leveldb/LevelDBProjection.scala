@@ -37,6 +37,21 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
+object LevelDBProjectionComparator {
+  def apply(_descriptor: ProjectionDescriptor) = new DBComparator {
+    val projection: ByteProjection = new LevelDBByteProjection {
+      val descriptor = _descriptor
+    }
+
+    def name = _descriptor.serialize
+    def compare(k1: Array[Byte], k2: Array[Byte]) = projection.keyOrder.order(k1, k2).toInt
+
+    // default implementations
+    def findShortestSeparator(start: Array[Byte], limit: Array[Byte]) = start
+    def findShortSuccessor(key: Array[Byte]) = key
+  }
+}
+
 object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 

@@ -795,20 +795,6 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
   
-  val exampleDir = new File("quirrel/examples")
-  
-  if (exampleDir.exists) {
-    "specification examples" >> {
-      for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
-        file.getName >> {
-          parse(LineStream(Source.fromFile(file))) must not(throwA[Throwable])
-        }
-      }
-    }
-  } else {
-    "specification examples" >> skipped
-  }
-  
   "global ambiguity resolution" should {
     "associate paired consecutive parentheses" in {
       parse("a := b := c (d) (e)") must beLike {
@@ -830,5 +816,31 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
             Let(_, "d", Vector(), Dispatch(_, "f", Vector(NumLit(_, "1"))), NumLit(_, "2")))) => ok
       }
     }
+    
+    "consume string literals non-greedily" >> {
+      "valid" >> {
+        parse("""{ user: "daniel", last: "spiewak" }""") must beLike {
+          case ObjectDef(_, Vector(("user", StrLit(_, "daniel")), ("last", StrLit(_, "spiewak")))) => ok
+        }
+      }
+      
+      "invalid" >> {
+        parse("""{ user: "daniel", igly boio" }""") must throwA[ParseException]
+      }
+    }
+  }
+  
+  val exampleDir = new File("quirrel/examples")
+  
+  if (exampleDir.exists) {
+    "specification examples" >> {
+      for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
+        file.getName >> {
+          parse(LineStream(Source.fromFile(file))) must not(throwA[Throwable])
+        }
+      }
+    }
+  } else {
+    "specification examples" >> skipped
   }
 }
