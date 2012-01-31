@@ -124,7 +124,7 @@ object ShardLoader extends RealisticIngestMessage {
 
     val to = 300 seconds
 
-    Await.result(gracefulStop(router, to)(system) flatMap { _ =>  metadataActor ? FlushMetadata } flatMap { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) } flatMap { _ => gracefulStop(metadataActor, to)(system)} flatMap { _ => gracefulStop(metadataSerializationActor, to)(system) }, to) 
+    Await.result(gracefulStop(router, to)(system) flatMap { _ =>  metadataActor ? FlushMetadata(metadataSerializationActor) } flatMap { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) } flatMap { _ => gracefulStop(metadataActor, to)(system)} flatMap { _ => gracefulStop(metadataSerializationActor, to)(system) }, to) 
 
     println("Actors stopped")
     
