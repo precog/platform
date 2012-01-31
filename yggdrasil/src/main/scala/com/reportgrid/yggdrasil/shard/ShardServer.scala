@@ -35,6 +35,7 @@ import akka.actor.PoisonPill
 import akka.dispatch.Await
 import akka.dispatch.Future
 import akka.dispatch.Promise
+import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 import akka.util.Duration
@@ -114,8 +115,6 @@ object ShardServer extends Logging {
     props.load(new FileReader(filename))
     props
   }
-  
-
 }
 
 trait StorageShardModule {
@@ -212,7 +211,6 @@ object ShardConfig extends Logging {
       case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
       case Failure(e) => IO { Failure(e) }
     }}
-   
   }
 
   def extractBaseDir(props: Properties): File = new File(props.getProperty("querio.storage.root", "."))

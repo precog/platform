@@ -31,9 +31,11 @@ import com.reportgrid.common._
 import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.ActorRef
+import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
@@ -61,7 +63,27 @@ import scalaz.MonadPartialOrder._
 
 case object Stop
 
+case class ProjectionActorRequest(descriptor: ProjectionDescriptor)
+
+object RoutingActor {
+  private val pathDelimeter = "//"
+  private val partDelimeter = "-"
+
+  def toPath(columns: Seq[ColumnDescriptor]): String = {
+    columns.map( s => sanitize(s.path.toString)).mkString(pathDelimeter) + pathDelimeter +
+    columns.map( s => sanitize(s.selector.toString) + partDelimeter + sanitize(s.valueType.toString)).mkString(partDelimeter)
+  }
+
+  def projectionSuffix(descriptor: ProjectionDescriptor): String = ""
+
+  private val whitespace = "//W".r
+  def sanitize(s: String) = whitespace.replaceAllIn(s, "_") 
+
+  private implicit val timeout: Timeout = 5 seconds
+}
+
 class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO) extends Actor with Logging {
+  import RoutingActor._
 
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
@@ -83,7 +105,14 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
   // -- Augment the route action with value based metadata
   // -- Send route action
 
-  private implicit val timeout: Timeout = 5 seconds
+  private def projectionActor(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, ActorRef] = {
+    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
+      LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
+    }
+
+    actor.foreach(projectionActors.putIfAbsent(descriptor, _))
+    actor
+  }
 
   def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
     descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
@@ -93,33 +122,26 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
     case em @ EventMessage(eventId, ev @ Event(_, data)) =>
-      val unpacked = RoutingTable.unpack(ev)
-      val qualifiedSelectors = unpacked collect { case Some(x) => x }
-      val projectionUpdates = routingTable.route(qualifiedSelectors.map(x => (x._1, x._2)))
+      val eventData = RoutingTable.unpack(ev).flatten
+      val projectionUpdates = routingTable.route(eventData map { case (a, b, c) => (a, b) })
 
       registerCheckpointExpectation(eventId, projectionUpdates.size)
 
-      for {
-        (descriptor, values) <- projectionUpdates 
-      } {
-        val comparator = ProjectionComparator.forProjection(descriptor)
-        val dataDir = descriptorLocator(descriptor).unsafePerformIO
-        val actor: ValidationNEL[Throwable, ActorRef] = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-          LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor, Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
-        }
-
-        actor match {
+      for ((descriptor, values) <- projectionUpdates) {
+        projectionActor(descriptor) match {
           case Success(actor) =>
-            projectionActors.putIfAbsent(descriptor, actor)
             val fut = actor ? ProjectionInsert(eventId.uid, values)
             fut.onComplete { _ => 
-              metadataActor ! UpdateMetadata(eventId, descriptor, values, extractMetadataFor(descriptor, qualifiedSelectors))
+              metadataActor ! UpdateMetadata(eventId, descriptor, values, extractMetadataFor(descriptor, eventData))
             }
 
           case Failure(errors) => 
             for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
         }
-     }
+      }
+
+    case ProjectionActorRequest(descriptor) =>
+      sender ! projectionActor(descriptor)
   }
 
   def registerCheckpointExpectation(eventId: EventId, count: Int): Unit = metadataActor ! ExpectedEventActions(eventId, count)
@@ -127,41 +149,3 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
   def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue, Set[Metadata])]): Seq[Set[Metadata]] = 
     desc.columns flatMap { c => metadata.find(_._1 == c).map( _._3 ) } toSeq
 }
-
-case class ProjectionInsert(id: Long, values: Seq[JValue])
-
-case class ProjectionGet(idInterval : Interval[Identities], sender : ActorRef)
-
-trait ProjectionResults {
-  val desc : ProjectionDescriptor
-  def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
-}
-
-class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
-
-  def asCValue(jval: JValue): CValue = jval match { 
-    case JString(s) => CString(s)
-    case JInt(i) => CNum(BigDecimal(i))
-    case JDouble(d) => CDouble(d)
-    case JBool(b) => CBoolean(b)
-    case JNull => CNull
-    case x       => sys.error("JValue type not yet supported: " + x.getClass.getName )
-  }
-
-  def receive = {
-    case Stop => //close the db
-      projection.close.unsafePerformIO
-
-    case ProjectionInsert(id, values) => 
-      projection.insert(Vector(id), values.map(asCValue)).unsafePerformIO
-      sender ! ()
-
-    case ProjectionGet(interval, sender) =>
-      sender ! new ProjectionResults {
-        val desc = descriptor
-        def enumerator = projection.getValuesByIdRange[Unit](interval).apply[IO]
-      }
-  }
-}
-
-// vim: set ts=4 sw=4 et:

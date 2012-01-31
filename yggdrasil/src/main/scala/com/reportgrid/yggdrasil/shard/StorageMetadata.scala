@@ -31,6 +31,7 @@ import blueeyes.json.xschema.DefaultSerialization._
 
 import akka.actor.{IO => _, _}
 import akka.actor.Actor._
+import akka.pattern.ask
 import akka.routing._
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
@@ -46,10 +47,12 @@ import scalaz.syntax
 import scalaz.effect._
 import scalaz.Scalaz._
 
+object StorageMetadata {
+  type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
+}
 
 trait StorageMetadata {
- 
-  type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
+  import StorageMetadata._
 
   implicit val dispatcher: MessageDispatcher
 
@@ -69,10 +72,10 @@ trait StorageMetadata {
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
   }
-
 }
 
 class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) extends StorageMetadata {
+  import StorageMetadata._
 
   implicit val dispatcher = messageDispatcher
 
