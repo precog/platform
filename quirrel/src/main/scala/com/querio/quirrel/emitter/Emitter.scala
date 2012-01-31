@@ -47,6 +47,7 @@ trait Emitter extends AST
   private sealed trait MarkType
   private case class MarkExpr(expr: Expr) extends MarkType
   private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
+  private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
 
   private case class Emission private (
     bytecode: Vector[Instruction] = Vector.empty,
@@ -386,7 +387,7 @@ trait Emitter extends AST
                 case 0 =>
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
-                case n =>
+                case n => emitOrDup(MarkDispatch(let, actuals)) {
                   setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
                     if (actuals.length == n) {
                       emitExpr(left)
@@ -410,6 +411,7 @@ trait Emitter extends AST
                       }
                     } 
                   }
+                }
               }
 
             case NullBinding => 
