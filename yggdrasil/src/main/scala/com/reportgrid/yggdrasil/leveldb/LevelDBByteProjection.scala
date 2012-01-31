@@ -24,6 +24,9 @@ import com.reportgrid.util.Bijection._
 import java.nio.ByteBuffer
 import scalaz.Order
 import scalaz.Ordering
+import scalaz.syntax.biFunctor._
+import scalaz.std.AllInstances._
+
 import scala.collection.immutable.ListSet
 import scala.annotation.tailrec
 
@@ -76,7 +79,7 @@ trait LevelDBByteProjection extends ByteProjection {
 
   private val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
-  def listWidths(cvalues: Seq[CValue]): List[Int] = 
+  private def listWidths(cvalues: Seq[CValue]): List[Int] = 
     descriptor.columns.map(_.valueType.format) zip cvalues map {
       case (FixedWidth(w), sv) => w
       case (LengthEncoded, sv) => 
@@ -89,7 +92,7 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-  def allocateWidth(valueWidths: Seq[Int]): (Int) = 
+  private def allocateWidth(valueWidths: Seq[Int]): (Int) = 
     descriptor.sorting.foldLeft(0) { 
       case (width, (col, ById)) =>
         if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + 8)
@@ -245,7 +248,19 @@ trait LevelDBByteProjection extends ByteProjection {
 
   def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
     def order(k1: Array[Byte], k2: Array[Byte]) = {
-      Ordering.EQ  
+      val (_, elements1) = keyParsers.foldRight((new LevelDBReadBuffer(k1), List.empty[Either[Long, CValue]])) {
+        case (f, (buf, acc)) => (buf, f.bimap(_(buf), _(buf)) :: acc)
+      }
+
+      val (_, elements2) = keyParsers.foldRight((new LevelDBReadBuffer(k2), List.empty[Either[Long, CValue]])) {
+        case (f, (buf, acc)) => (buf, f.bimap(_(buf), _(buf)) :: acc)
+      }
+
+      (elements1 zip elements2).foldLeft[Ordering](Ordering.EQ) {
+        case (Ordering.EQ, (Left(e1),  Left(e2)))  => Order[Long].order(e1, e2)
+        case (Ordering.EQ, (Right(e1), Right(e2))) => Order[CValue].order(e1, e2)
+        case (other, _) => other
+      }
     }
   }
 

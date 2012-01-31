@@ -186,33 +186,12 @@ trait ProjectionResults {
 class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
 
   def asCValue(jval: JValue): CValue = jval match { 
-    case JString(s) => new CValue {
-        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
-                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = str(s) 
-      }
-     
-    case JInt(i) => new CValue {
-        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
-                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = num(BigDecimal(i))
-      }
-                  
-    case JDouble(d) => new CValue {
-        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
-                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = double(d) 
-      }
-
-    case JBool(b) => new CValue {
-        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
-                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = bool(b) 
-      }
-      
-    case JNull => new CValue {
-        def fold[A](str: String => A, bool: Boolean => A, int: Int => A, long: Long => A, float: Float => A, 
-                    double: Double => A, num: BigDecimal => A, emptyObj: => A, emptyArr: => A, nul: => A) = nul 
-      }
-    
+    case JString(s) => CString(s)
+    case JInt(i) => CNum(BigDecimal(i))
+    case JDouble(d) => CDouble(d)
+    case JBool(b) => CBoolean(b)
+    case JNull => CNull
     case x       => sys.error("JValue type not yet supported: " + x.getClass.getName )
-  
   }
 
   def receive = {
