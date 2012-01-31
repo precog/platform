@@ -106,7 +106,7 @@ object ShardLoader extends RealisticIngestMessage {
     val dbLayout = new DBLayout(baseDir, mutable.Map())
 
     val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), mutable.Map(), dbLayout.metadataIO, dbLayout.checkpointIO)))
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), mutable.Map())))
 
     val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
     
@@ -120,7 +120,11 @@ object ShardLoader extends RealisticIngestMessage {
 
     println("Initiating shutdown")
 
-    Await.result(gracefulStop(router, 300 seconds)(system) flatMap { _ =>  metadataActor ! FlushMetadata; gracefulStop(metadataActor, 300 seconds)(system)}, 300 seconds) 
+    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)))
+
+    val to = 300 seconds
+
+    Await.result(gracefulStop(router, to)(system) flatMap { _ =>  metadataActor ? FlushMetadata } flatMap { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) } flatMap { _ => gracefulStop(metadataActor, to)(system)} flatMap { _ => gracefulStop(metadataSerializationActor, to)(system) }, to) 
 
     println("Actors stopped")
     

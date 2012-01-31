@@ -104,18 +104,7 @@ object ShardMetadata {
   
   def actorSystem = ActorSystem("test actor system")
 
-  def echoMetadataIO(descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) = IO {
-    println("Saving metadata entry")
-    println(descriptor)
-    println(metadata)
-  }
-
-  def echoCheckpointIO(checkpoints: Checkpoints) = IO {
-    println("Saving checkpoints")
-    println(checkpoints) 
-  }
-
-  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints, echoMetadataIO _, echoCheckpointIO _)))
+  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints)))
 
   def dummyProjections = {
     mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]](
@@ -149,7 +138,7 @@ object ShardMetadata {
   }
 }
 
-class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int], metadataIO: MetadataIO, checkpointIO: CheckpointIO) extends Actor {
+class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int]) extends Actor {
 
   private val expectedEventActions = mutable.Map[EventId, Int]()
  
@@ -161,13 +150,15 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
     case UpdateMetadata(eventId, desc, values, metadata) => 
       sender ! update(eventId, desc, values, metadata)
    
-    case FindSelectors(path)             => sender ! findSelectors(path)
+    case FindSelectors(path)                  => sender ! findSelectors(path)
 
-    case FindDescriptors(path, selector) => sender ! findDescriptors(path, selector)
+    case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
     
-    case GetCheckpoints                  => sender ! checkpoints.toMap
+    case GetCheckpoints                       => sender ! checkpoints.toMap
     
-    case FlushMetadata                    => sender ! flush 
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections.clone))
+    
+    case FlushCheckpoints(serializationActor) => sender ! (serializationActor ! SaveCheckpoints(checkpoints.clone)) 
   
   }
 
@@ -239,13 +230,6 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
       case (descriptor, metadata) => (descriptor, Map( (descriptor.columns zip metadata): _*))
     }
   }  
-
-  def flush = {
-    Future(metadataIO(projections.clone) flatMap { _ => checkpointIO(checkpoints.clone) } unsafePerformIO, this.dispatcher) 
-  }
-
-  def metadataIO(projections: Map[ProjectionDescriptor, Seq[MetadataMap]]): IO[Unit] =
-    projections.map{ t => metadataIO(t._1, t._2) }.toList.sequence[IO, Unit].map{ _ => Unit}
 }
 
 sealed trait ShardMetadataAction
@@ -256,8 +240,22 @@ case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
 case class UpdateMetadata(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
-case object FlushMetadata extends ShardMetadataAction
+case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
+case class FlushCheckpoints(serializationActor: ActorRef) extends ShardMetadataAction
 
 case object GetCheckpoints extends ShardMetadataAction
 
+class MetadataSerializationActor(metadataIO: MetadataIO, checkpointIO: CheckpointIO) extends Actor {
+  def receive = {
+    case SaveMetadata(metadata) =>  sender ! metadata.toList.map {
+        case (pd, md) => metadataIO(pd, md)
+      }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
 
+    case SaveCheckpoints(checkpoints) => sender ! checkpointIO(checkpoints).unsafePerformIO
+  }
+}
+
+sealed trait MetadataSerializationAction
+
+case class SaveMetadata(metadata: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]) extends MetadataSerializationAction
+case class SaveCheckpoints(metadata: mutable.Map[Int, Int]) extends MetadataSerializationAction

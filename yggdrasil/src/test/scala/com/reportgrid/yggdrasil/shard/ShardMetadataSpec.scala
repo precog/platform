@@ -99,7 +99,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, ShardMetadata.dummyCheckpoints, ShardMetadata.echoMetadataIO, ShardMetadata.echoCheckpointIO)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, ShardMetadata.dummyCheckpoints)))
 
       val fut = actor ? FindSelectors(events(0).path)
 
@@ -114,7 +114,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, ShardMetadata.dummyCheckpoints, ShardMetadata.echoMetadataIO, ShardMetadata.echoCheckpointIO)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, ShardMetadata.dummyCheckpoints)))
 
       val fut = actor ? FindDescriptors(events(0).path, events(0).content.head._1)
 
