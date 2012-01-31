@@ -96,59 +96,59 @@ trait Parser extends RegexParsers with Filters with AST {
     | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
   ) filter (precedence & associativity)
   
-  lazy val formals: Parser[Vector[String]] = (
+  private lazy val formals: Parser[Vector[String]] = (
       formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
     | ticId                 ^^ { Vector(_) }
   )
   
-  lazy val relations: Parser[Vector[Expr]] = (
+  private lazy val relations: Parser[Vector[Expr]] = (
       relations ~ "::" ~ expr ^^ { (es, _, e) => es :+ e }
     | expr ~ "::" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
   )
   
-  lazy val actuals: Parser[Vector[Expr]] = (
+  private lazy val actuals: Parser[Vector[Expr]] = (
       actuals ~ "," ~ expr ^^ { (es, _, e) => es :+ e }
     | expr                 ^^ { Vector(_) }
   )
   
-  lazy val nullableActuals = (
+  private lazy val nullableActuals = (
       actuals
     | ""      ^^^ Vector[Expr]()
   )
   
-  lazy val properties: Parser[Vector[(String, Expr)]] = (
+  private lazy val properties: Parser[Vector[(String, Expr)]] = (
       properties ~ "," ~ property ^^ { (ps, _, p) => ps :+ p }
     | property                    ^^ { Vector(_) }
     | ""                          ^^^ Vector()
   )
   
-  lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
+  private lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
   
-  lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
+  private lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
   
-  lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
+  private lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
-  lazy val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
+  private lazy val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
   
-  lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
+  private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
   
-  lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr
+  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr
   
-  lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
-  lazy val boolLiteral: Parser[Boolean] = (
+  private lazy val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true
     | "false" ^^^ false
   )
   
-  lazy val keywords = "new|true|false|where|with".r
+  private lazy val keywords = "new|true|false|where|with".r
   
-  lazy val operations = "where|with".r
+  private lazy val operations = "where|with".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
   
-  val precedence = 
+  private val precedence = 
     prec('descent, 'deref,
       'comp, 'neg,
       'mul, 'div,
@@ -162,7 +162,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'relate,
       'let)
       
-  val associativity = (
+  private val associativity = (
       ('mul <)
     & ('div <)
     & ('add <)
@@ -181,7 +181,7 @@ trait Parser extends RegexParsers with Filters with AST {
     & (arrayDefDeref _)
   )
   
-  def arrayDefDeref(n: Node): Boolean = n match {
+  private def arrayDefDeref(n: Node): Boolean = n match {
     case n: UnaryNode if n.label == 'deref =>
       n.child.label != 'array
     
@@ -236,7 +236,7 @@ trait Parser extends RegexParsers with Filters with AST {
       strLiteral -> "string", regex(numLiteral) -> "number", boolLiteral -> "boolean",
       op -> "operator")
       
-    def reduceFailures(failures: Set[Failure]) = {
+    private def reduceFailures(failures: Set[Failure]) = {
       val expectedPowerSet = failures map { _.data } collect {
         case ExpectedLiteral(expect, _) =>
           Parsers.keySet filter { _.first contains expect.head } map Parsers
