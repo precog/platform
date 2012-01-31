@@ -122,7 +122,7 @@ object SValue extends SValueInstances {
         case (key, value) => "\"%s\":%s".format(key, value)
       }
       
-      "{%s}".format(contents)
+      "{%s}".format(contents mkString ",")
     },
     arr = { arr =>
       arr map asJSON mkString ("[", ",", "]")
