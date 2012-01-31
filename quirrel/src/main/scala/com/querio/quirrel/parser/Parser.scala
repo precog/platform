@@ -145,7 +145,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   lazy val operations = "where|with".r
   
-  override val whitespace = """([;\s]+|--.*|\(-([^\-]|-[^)])*-\))+""".r
+  override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
   
   val precedence = 
