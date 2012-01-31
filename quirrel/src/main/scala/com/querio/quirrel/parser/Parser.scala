@@ -29,7 +29,7 @@ import edu.uwm.cs.gll.RegexUtils
 import edu.uwm.cs.gll.Result
 import edu.uwm.cs.gll.Success
 import edu.uwm.cs.gll.UnexpectedEndOfStream
-import edu.uwm.cs.gll.ast.Filters
+import edu.uwm.cs.gll.ast.{UnaryNode, Filters, Node}
 import edu.uwm.cs.util.ComplementarySet
 import edu.uwm.cs.util.UniversalCharSet
 
@@ -197,7 +197,15 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('op <)
     & ('where <)
     & ('relate <>)
+    & (arrayDefDeref _)
   )
+  
+  def arrayDefDeref(n: Node): Boolean = n match {
+    case n: UnaryNode if n.label == 'deref =>
+      n.child.label != 'array
+    
+    case _ => true
+  }
   
   // %%
   
