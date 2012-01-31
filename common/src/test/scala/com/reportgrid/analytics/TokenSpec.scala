@@ -7,7 +7,7 @@ class TokenSpec extends Specification {
     tokenId        = "C7A18C95-3619-415B-A89B-4CE47693E4CC",
     parentTokenId  = Some(Token.Root.tokenId),
     accountTokenId = "C7A18C95-3619-415B-A89B-4CE47693E4CC",
-    path           = "unittest",
+    path           = Path("unittest"),
     permissions    = Permissions(true, true, true, true),
     expires        = Token.Never,
     limits         = Limits(order = 2, depth = 5, limit = 20, tags = 2, rollup = 2)
@@ -19,7 +19,7 @@ class TokenSpec extends Specification {
     }
 
     "correctly limit path visibility" in {
-      val child = TestToken.issue(relativePath = "/child")
+      val child = TestToken.issue(relativePath = Path("/child"))
       (child.relativeTo(TestToken).path must_== Path("child")) and 
       (child.relativeTo(Token.Root).path must_== Path("unittest/child"))
     }

@@ -13,4 +13,7 @@ package object shard {
   type MetadataIO = (ProjectionDescriptor, Seq[MetadataMap]) => IO[Unit]
   type CheckpointIO = Checkpoints => IO[Unit]
 
+  type ProducerId = Int
+  type SequenceId = Int
+
 }
