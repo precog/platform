@@ -90,55 +90,116 @@ import scalaz.syntax.applicativePlus._
 import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 
-object ShardServer { 
+class ShardServer(val storageShardConfig: Properties) extends StorageShardModule 
+
+object ShardServer extends Logging { 
 
   def main(args: Array[String]) {
+    val shardServer = new ShardServer(readProperties(args(0)))
+    logger.info("Shard server - Starting")
+    Await.result(shardServer.storageShard.start, 300 seconds)
+    logger.info("Shard server - Started")
+
+    Runtime.getRuntime.addShutdownHook(new Thread() {
+      override def run() { 
+        logger.info("Shard server - Stopping")
+        Await.result(shardServer.storageShard.stop, 300 seconds) 
+        logger.info("Shard server - Stopped")
+      }
+    })
+  }
+
+  def readProperties(filename: String) = {
     val props = new Properties
-    props.load(new FileReader(args(0)))
-    start(props)
-
-    // need to register shutdown hooks and implement
-    // stop behavior
+    props.load(new FileReader(filename))
+    props
   }
+  
 
-  def start(props: Properties) {
-    ShardConfig.fromProperties(props).unsafePerformIO match {
-      case Success(config) => internalStart(config)
-      case Failure(e) => sys.error("Error loading shard config: " + e)
-    }
-  }
-
-  def internalStart(config: ShardConfig): Unit = {
-    val system = ActorSystem("storage_shard")
-
-    val dbLayout = new DBLayout(config.baseDir, config.descriptors) 
-    
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)))
-
-    val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
-    
-    val consumer = new KafkaConsumer(config.properties, router)
-
-    val consumerThread = new Thread(consumer)
-    consumerThread.start
-
-    println("Shard Server started...")
-  }
 }
 
 trait StorageShardModule {
 
   def storageShardConfig: Properties
 
-  def storageShard: StorageShard
+  lazy val storageShard: StorageShard = {
+    ShardConfig.fromProperties(storageShardConfig).unsafePerformIO match {
+      case Success(config) => new FilesystemBootstrapStorageShard(config)
+      case Failure(e) => sys.error("Error loading shard config: " + e)
+    }
+  }
 }
 
 trait StorageShard {
   def start: Future[Unit]
-
   def stop: Future[Unit]
+  
+  def router: ActorRef
 }
+
+class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard {
+  
+  lazy val system = ActorSystem("storage_shard")
+  lazy implicit val dispatcher = system.dispatcher
+  lazy val dbLayout = new DBLayout(config.baseDir, config.descriptors)
+
+  lazy val routingTable = new SingleColumnProjectionRoutingTable
+
+  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)), "metadata")
+
+  lazy val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
+
+  lazy val consumer = new KafkaConsumer(config.properties, router)
+
+  def start: Future[Unit] = Future {
+    if(config.properties.getProperty("querio.kafka.enable", "false").trim.toLowerCase == "true") {
+      val consumerThread = new Thread(consumer)
+      consumerThread.start
+    }
+  }
+
+  def stop: Future[Unit] = {
+    
+    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)), "metadata_serializer")
+
+    val duration = 300 seconds
+    implicit val timeout: Timeout = duration 
+
+    gracefulStop(router, duration)(system) flatMap
+      { _ => metadataActor ? FlushMetadata(metadataSerializationActor) }  flatMap
+      { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) }  flatMap
+      { _ => gracefulStop(metadataActor, duration)(system) }  flatMap
+      { _ => gracefulStop(metadataSerializationActor, duration)(system) } map
+      { _ => system.shutdown }
+  }
+  
+  def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
+    if (target.isTerminated) {
+      Promise.successful(true)
+    } else {
+      val result = Promise[Boolean]()
+      system.actorOf(Props(new Actor {
+        // Terminated will be received when target has been stopped
+        context watch target
+        target ! PoisonPill
+        // ReceiveTimeout will be received if nothing else is received within the timeout
+        context setReceiveTimeout timeout
+
+        def receive = {
+          case Terminated(a) if a == target ⇒
+            result success true
+            context stop self
+          case ReceiveTimeout ⇒
+            result failure new ActorTimeoutException(
+              "Failed to stop [%s] within [%s]".format(target.path, context.receiveTimeout))
+            context stop self
+        }
+      }))
+      result
+    }
+  }
+}
+
 
 class ShardConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
 
@@ -203,10 +264,13 @@ object ShardConfig extends Logging {
     def readSingle(dir: File): IO[Validation[Error, MetadataSeq]] = {
       import JsonParser._
       val metadataFile = new File(dir, "projection_metadata.json")
-      IOUtils.readFileToString(metadataFile).map { content => 
-        val validatedTuples = parse(content.getOrElse("")).validated[List[List[(MetadataType, Metadata)]]]
-        validatedTuples.map( _.map( mutable.Map(_: _*)))
-      }
+      IOUtils.readFileToString(metadataFile).map { _ match {
+        case None    => Success(List(mutable.Map[MetadataType, Metadata]()))
+        case Some(c) => {
+          val validatedTuples = parse(c).validated[List[List[(MetadataType, Metadata)]]]
+          validatedTuples.map( _.map( mutable.Map(_: _*)))
+        }
+      }}
     }
 
     readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
@@ -215,9 +279,10 @@ object ShardConfig extends Logging {
   def loadCheckpoints(baseDir: File): IO[Validation[Error, mutable.Map[Int, Int]]] = {
     import JsonParser._
     val checkpointFile = new File(baseDir, "checkpoints.json")
-    IOUtils.readFileToString(checkpointFile).map { content =>
-      parse(content.getOrElse("")).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
-    }
+    IOUtils.readFileToString(checkpointFile).map { _ match { 
+      case None    => Success(mutable.Map[Int, Int]())
+      case Some(c) => parse(c).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
+    }}
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {

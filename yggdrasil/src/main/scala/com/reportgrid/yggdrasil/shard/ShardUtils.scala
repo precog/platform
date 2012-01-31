@@ -56,81 +56,48 @@ import scalaz.syntax.semigroup._
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 
-object ShardLoader extends RealisticIngestMessage {
+import com.weiglewilczek.slf4s._
 
-  def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
-    if (target.isTerminated) {
-      Promise.successful(true)
-    } else {
-      val result = Promise[Boolean]()
-      system.actorOf(Props(new Actor {
-        // Terminated will be received when target has been stopped
-        context watch target
-        target ! PoisonPill
-        // ReceiveTimeout will be received if nothing else is received within the timeout
-        context setReceiveTimeout timeout
-
-        def receive = {
-          case Terminated(a) if a == target ⇒
-            result success true
-            context stop self
-          case ReceiveTimeout ⇒
-            result failure new ActorTimeoutException(
-              "Failed to stop [%s] within [%s]".format(target.path, context.receiveTimeout))
-            context stop self
-        }
-      }))
-      result
-    }
-  }
-
-  def main(args: Array[String]) {
-    if(args.length < 2) sys.error("Must provide path and number of events to generate.")
-    val base = new File(args(0))
-    val count = args(1).toInt
+class ShardLoader(val storageShardConfig: Properties) extends StorageShardModule with RealisticIngestMessage {
+  def insert(count: Int, variety: Int) {
+    val events = containerOfN[List, Event](variety, genEvent).sample.get
     
-    val events = containerOfN[List, Event](1, genEvent).sample.get
-
-    load(base, events, count)
-  }
-
-  def load(baseDir: File, events: List[Event], count: Int) {
-    baseDir.mkdirs
-
-    println("Paths: " + events(0).content.size)
-
-    val system = ActorSystem("shard_loader")
-
-    implicit val dispatcher = system.dispatcher
-
-    val dbLayout = new DBLayout(baseDir, mutable.Map())
-
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), mutable.Map())))
-
-    val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
-    
-    implicit val timeout: Timeout = 30 seconds 
-   
     val finalEvents = 0.until(count).map(_ => events).flatten
 
     finalEvents.zipWithIndex.foreach {
-      case (ev, idx) => router ! EventMessage(0, idx, ev) 
+      case (ev, idx) => storageShard.router ! EventMessage(0, idx, ev) 
     }
-
-    println("Initiating shutdown")
-
-    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)))
-
-    val to = 300 seconds
-
-    Await.result(gracefulStop(router, to)(system) flatMap { _ =>  metadataActor ? FlushMetadata(metadataSerializationActor) } flatMap { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) } flatMap { _ => gracefulStop(metadataActor, to)(system)} flatMap { _ => gracefulStop(metadataSerializationActor, to)(system) }, to) 
-
-    println("Actors stopped")
     
     println("Insert total: " + finalEvents.size)
+  }
+}
 
-    system.shutdown
+object ShardLoader extends Logging {
+
+  def main(args: Array[String]) {
+
+    val props = new Properties
+    props.setProperty("querio.storage.root", args(0))
+
+    val shardLoader = new ShardLoader(props)
+    logger.info("Shard server - Starting")
+    Await.result(shardLoader.storageShard.start, 300 seconds)
+    logger.info("Shard server - Started")
+
+    val insert = args(1).toInt
+    val variety = args(2).toInt
+
+    shardLoader.insert(insert, variety)
+    
+    logger.info("Shard server - Stopping")
+    Await.result(shardLoader.storageShard.stop, 300 seconds) 
+    logger.info("Shard server - Stopped")
+  }
+
+  def readProperties(filename: String) = {
+    val props = new Properties
+    props.load(new FileReader(filename))
+    props
   }
 }
 
