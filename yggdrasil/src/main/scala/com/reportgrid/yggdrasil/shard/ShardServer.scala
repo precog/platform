@@ -110,7 +110,6 @@ class ShardServer {
     consumerThread.start
 
     println("Shard Server started...")
-   
   }
 }
 
@@ -150,8 +149,6 @@ object ShardLoader extends RealisticIngestMessage {
     val events = containerOfN[List, Event](1, genEvent).sample.get
 
     load(base, events, count)
-
-    
   }
 
   def load(baseDir: File, events: List[Event], count: Int) {
