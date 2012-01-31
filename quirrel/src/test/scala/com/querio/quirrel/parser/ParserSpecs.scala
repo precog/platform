@@ -718,6 +718,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
         case NumLit(_, "1") => ok
       }
     }
+    
+    "greedily terminate comment blocks" in {
+      parse("(-a--)-)42") must throwA[ParseException]
+    }
   }
   
   "composed expression parsing" should {
