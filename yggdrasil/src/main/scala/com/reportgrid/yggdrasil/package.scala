@@ -21,7 +21,7 @@ package com.reportgrid
 
 package object yggdrasil {
   type Identity = Long
-  type Identities = Vector[Identity]
+  type Identities = Seq[Identity]
   type SEvent = (Identities, SValue)
 
   object SEvent {
