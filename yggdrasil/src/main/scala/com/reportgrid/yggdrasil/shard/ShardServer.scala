@@ -95,7 +95,7 @@ object ShardServer {
     val dbLayout = new DBLayout(config.baseDir, config.descriptors) 
     
     val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints, dbLayout.metadataIO, dbLayout.checkpointIO)))
+    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)))
 
     val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)))
     
