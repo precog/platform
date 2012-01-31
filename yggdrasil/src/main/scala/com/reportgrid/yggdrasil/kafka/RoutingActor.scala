@@ -12,9 +12,11 @@ import com.reportgrid.common._
 import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.ActorRef
+import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
@@ -42,7 +44,40 @@ import scalaz.MonadPartialOrder._
 
 case object Stop
 
+case class ProjectionActorRequest(descriptor: ProjectionDescriptor)
+
+object RoutingActor {
+  private val pathDelimeter = "//"
+  private val partDelimeter = "-"
+
+  def toPath(columns: Seq[ColumnDescriptor]): String = {
+    columns.map( s => sanitize(s.path.toString)).mkString(pathDelimeter) + pathDelimeter +
+    columns.map( s => sanitize(s.selector.toString) + partDelimeter + sanitize(s.valueType.toString)).mkString(partDelimeter)
+  }
+
+  def projectionSuffix(descriptor: ProjectionDescriptor): String = ""
+
+  private val whitespace = "//W".r
+  def sanitize(s: String) = whitespace.replaceAllIn(s, "_") 
+
+  private implicit val timeout: Timeout = 5 seconds
+}
+
 class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor, File], routingTable: RoutingTable, metadataActor: ActorRef) extends Actor with Logging {
+  import RoutingActor._
+
+  val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
+    CacheSettings(
+      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
+      evict = { 
+        (descriptor, actor) => {
+          val sync = LevelDBProjection.descriptorSync(descriptors(descriptor))
+          sync.sync(descriptor).map(_ => actor ! Stop).unsafePerformIO
+        }
+      }
+    )
+  )
+
   def syncDescriptors : IO[List[Validation[Throwable,Unit]]] = {
     projectionActors.keys.foldLeft(IO(List[Validation[Throwable,Unit]]())) { 
       case (io,descriptor) => {
@@ -71,32 +106,6 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
     }
   }
 
-  private val pathDelimeter = "//"
-  private val partDelimeter = "-"
-
-  def toPath(columns: Seq[ColumnDescriptor]): String = {
-    columns.map( s => sanitize(s.path.toString)).mkString(pathDelimeter) + pathDelimeter +
-    columns.map( s => sanitize(s.selector.toString) + partDelimeter + sanitize(s.valueType.toString)).mkString(partDelimeter)
-  }
-
-  def projectionSuffix(descriptor: ProjectionDescriptor): String = ""
-
-  private val whitespace = "//W".r
-
-  def sanitize(s: String) = whitespace.replaceAllIn(s, "_") 
-      
-  val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
-    CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
-      evict = { 
-        (descriptor, actor) => {
-          val sync = LevelDBProjection.descriptorSync(descriptors(descriptor))
-          sync.sync(descriptor).map(_ => actor ! Stop).unsafePerformIO
-        }
-      }
-    )
-  )
-
   // Event processing
   // 
   // - break event into route actions (note it is possible for some data not to be routed and other data to be routed to multiple locations)
@@ -108,35 +117,26 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
   // -- Augment the route action with value based metadata
   // -- Send route action
 
-  private implicit val timeout: Timeout = 5 seconds
+  private def projectionActor(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, ActorRef] = {
+    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
+      LevelDBProjection(dirFor(descriptor), descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
+    }
+
+    actor.foreach(projectionActors.putIfAbsent(descriptor, _))
+    actor
+  }
 
   def receive = {
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
     case em @ EventMessage(pid, eid, ev @ Event(_, data)) =>
-      val unpacked = RoutingTable.unpack(ev)
-      val qualifiedSelectors = unpacked filter { 
-        case Some(_) => true
-        case _       => false
-      } map { 
-        case Some(x) => x
-        case _       => sys.error("Theoretically unreachable code")
-      }
-      val projectionUpdates = routingTable.route(qualifiedSelectors)
+      val projectionUpdates = routingTable.route(RoutingTable.unpack(ev).flatten)
 
       registerCheckpointExpectation(pid, eid, projectionUpdates.size)
 
-      for {
-        (descriptor, values) <- projectionUpdates 
-      } {
-        val comparator = ProjectionComparator.forProjection(descriptor)
-        val actor: ValidationNEL[Throwable, ActorRef] = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-          LevelDBProjection(dirFor(descriptor), descriptor, Some(comparator)).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
-        }
-
-        actor match {
+      for ((descriptor, values) <- projectionUpdates) {
+        projectionActor(descriptor) match {
           case Success(actor) =>
-            projectionActors.putIfAbsent(descriptor, actor)
             val fut = actor ? ProjectionInsert(em.uid, values)
             fut.onComplete { _ => 
               fixme("Ignoring metadata update for now, but need to come back.")
@@ -147,47 +147,15 @@ class RoutingActor(baseDir: File, descriptors: mutable.Map[ProjectionDescriptor,
             for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
         }
       }
+
+    case ProjectionActorRequest(descriptor) =>
+      sender ! projectionActor(descriptor)
   }
 
   def registerCheckpointExpectation(pid: Int, eid: Int, count: Int): Unit = metadataActor ! ExpectedEventActions(pid, eid, count)
 
 //  def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue)]): Seq[Set[Metadata]] = 
 //    desc.columns flatMap { c => metadata.exists(_ == c).option(c.metadata) } toSeq
-}
-
-case class ProjectionInsert(id: Long, values: Seq[JValue])
-
-case class ProjectionGet(idInterval : Interval[Identities], sender : ActorRef)
-
-trait ProjectionResults {
-  val desc : ProjectionDescriptor
-  def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
-}
-
-class ProjectionActor(projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
-
-  def asCValue(jval: JValue): CValue = jval match { 
-    case JString(s) => CString(s)
-    case JInt(i) => CNum(BigDecimal(i))
-    case JDouble(d) => CDouble(d)
-    case JBool(b) => CBoolean(b)
-    case JNull => CNull
-    case x       => sys.error("JValue type not yet supported: " + x.getClass.getName )
-  }
-
-  def receive = {
-    case Stop => //close the db
-      projection.close.unsafePerformIO
-
-    case ProjectionInsert(id, values) => 
-      projection.insert(Vector(id), values.map(asCValue)).unsafePerformIO
-
-    case ProjectionGet(interval, sender) =>
-      sender ! new ProjectionResults {
-        val desc = descriptor
-        def enumerator = projection.getValuesByIdRange[Unit](interval).apply[IO]
-      }
-  }
 }
 
 // vim: set ts=4 sw=4 et:
