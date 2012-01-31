@@ -21,19 +21,15 @@ trait Sync[A] {
   def sync(a: A): IO[Validation[Throwable,Unit]]
 }
 
-/*
 trait Projection {
-  def insert(ids : Long, v : ByteBuffer, shouldSync: Boolean = false): IO[Unit]
+  def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO]
+  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO]
+  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO]
 
-  def getAllPairs[X] : EnumeratorP[X, (Long,ByteBuffer), IO]
-  def getPairsByIdRange[X](range: Interval[Long]): EnumeratorP[X, (Long,ByteBuffer), IO]
-  def getPairForId[X](id: Long): EnumeratorP[X, (Long,ByteBuffer), IO]
+  def getAllIds[X] : EnumeratorP[X, Identities, IO] 
+  def getIdsInRange[X](range : Interval[Identities]) : EnumeratorP[X, Identities, IO] 
 
-  def getAllIds[X] : EnumeratorP[X, Long, IO]
-  def getIdsInRange[X](range : Interval[Long]): EnumeratorP[X, Long, IO]
-
-  def getAllValues[X] : EnumeratorP[X, ByteBuffer, IO]
-  def getValuesByIdRange[X](range: Interval[Long]): EnumeratorP[X, ByteBuffer, IO]
-  def getValueForId[X](id: Long): EnumeratorP[X, ByteBuffer, IO]
+  def getAllValues[X] : EnumeratorP[X, Seq[CValue], IO] 
+  def getValuesByIdRange[X](range: Interval[Identities]) : EnumeratorP[X, Seq[CValue], IO]
+  def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO] 
 }
-*/

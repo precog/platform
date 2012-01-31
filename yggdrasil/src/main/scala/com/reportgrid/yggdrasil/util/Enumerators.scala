@@ -5,6 +5,7 @@ import com.reportgrid.util._
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.Comparator
+import scala.annotation.tailrec
 import scala.collection.mutable.ArrayBuffer
 
 import scalaz._

@@ -55,44 +55,11 @@ object LevelDBProjectionComparator {
 object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 
-  def restoreComparator(baseDir: File) : Validation[Throwable, DBComparator] = {
-    val comparatorMetadata = new File(baseDir, comparatorMetadataFilename)
-
-    for {
-      source          <- Validation.fromTryCatch(Source.fromFile(comparatorMetadata, "UTF-8"))
-      line            <- source.getLines.toList.headOption.toSuccess(new RuntimeException("Comparator metadata file was empty."))
-      comparatorClass <- Validation.fromTryCatch(Class.forName(line.trim).asInstanceOf[Class[DBComparator]])
-      comparator      <- Validation.fromTryCatch(comparatorClass.newInstance)
-    } yield {
-      comparator
-    }
-  }
-
-  def saveComparator(baseDir: File, comparator: DBComparator) : Validation[Throwable, DBComparator] = {
-    Validation.fromTryCatch {
-      import java.io.{FileOutputStream,OutputStreamWriter}
-      val output = new OutputStreamWriter(new FileOutputStream(new File(baseDir, comparatorMetadataFilename)), "UTF-8")
-      try {
-        output.write(comparator.getClass.getName)
-      } finally {
-        output.close()
-      }
-      comparator
-    }
-  }
-
-  def apply(baseDir : File, descriptor: ProjectionDescriptor, comparator: Option[DBComparator] = None): ValidationNEL[Throwable, LevelDBProjection] = {
+  def apply(baseDir : File, descriptor: ProjectionDescriptor): ValidationNEL[Throwable, LevelDBProjection] = {
     val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
                    else baseDir.success[Throwable]
 
-    val comparatorV = for {
-      bd <- baseDirV.toValidationNel[Throwable, File]
-      c  <- restoreComparator(bd).toValidationNel
-            .orElse(comparator.toSuccess(new RuntimeException("No database comparator was provided."))
-            .flatMap(saveComparator(bd, _)).toValidationNel)
-    } yield c
-
-    (baseDirV.toValidationNel |@| comparatorV) { (bd, c) => new LevelDBProjection(bd, descriptor, c) }
+    baseDirV.toValidationNel map { (bd: File) => new LevelDBProjection(bd, descriptor) }
   }
 
 //  val descriptorFile = "projection_descriptor.json"
@@ -133,14 +100,14 @@ object LevelDBProjection {
 //  }
 }
 
-class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor, comparator: DBComparator) extends LevelDBByteProjection {
+class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
   import LevelDBProjection._
 
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
 
   private val createOptions = (new Options).createIfMissing(true)
-  private val idIndexFile: DB =  factory.open(new File(baseDir, "idIndex"), createOptions)
+  private val idIndexFile: DB =  factory.open(new File(baseDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
   private lazy val valIndexFile: DB = {
     sys.error("Value-based indexes have not been enabled.")
      //factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
@@ -221,6 +188,13 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   def getAllValues[X] = new EnumeratorP[X, Seq[CValue], IO] { 
     def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Seq[CValue], F] {
       (id, b) => b
+    }
+  }
+
+  def getColumnValues[X](col: ColumnDescriptor): EnumeratorP[X, (Identities, CValue), IO] = new EnumeratorP[X, (Identities, CValue), IO] {
+    val columnIndex = descriptor.columns.indexOf(col)
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
+      (id, b) => (id, b(columnIndex))
     }
   }
 
