@@ -92,12 +92,12 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
   def receive = {
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
-    case em @ EventMessage(pid, eid, ev @ Event(_, data)) =>
+    case em @ EventMessage(eventId, ev @ Event(_, data)) =>
       val unpacked = RoutingTable.unpack(ev)
       val qualifiedSelectors = unpacked collect { case Some(x) => x }
       val projectionUpdates = routingTable.route(qualifiedSelectors.map(x => (x._1, x._2)))
 
-      registerCheckpointExpectation(pid, eid, projectionUpdates.size)
+      registerCheckpointExpectation(eventId, projectionUpdates.size)
 
       for {
         (descriptor, values) <- projectionUpdates 
@@ -111,9 +111,9 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
         actor match {
           case Success(actor) =>
             projectionActors.putIfAbsent(descriptor, actor)
-            val fut = actor ? ProjectionInsert(em.uid, values)
+            val fut = actor ? ProjectionInsert(eventId.uid, values)
             fut.onComplete { _ => 
-              metadataActor ! UpdateMetadata(pid, eid, descriptor, values, extractMetadataFor(descriptor, qualifiedSelectors))
+              metadataActor ! UpdateMetadata(eventId, descriptor, values, extractMetadataFor(descriptor, qualifiedSelectors))
             }
 
           case Failure(errors) => 
@@ -122,7 +122,7 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
      }
   }
 
-  def registerCheckpointExpectation(pid: Int, eid: Int, count: Int): Unit = metadataActor ! ExpectedEventActions(pid, eid, count)
+  def registerCheckpointExpectation(eventId: EventId, count: Int): Unit = metadataActor ! ExpectedEventActions(eventId, count)
 
   def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue, Set[Metadata])]): Seq[Set[Metadata]] = 
     desc.columns flatMap { c => metadata.find(_._1 == c).map( _._3 ) } toSeq

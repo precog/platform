@@ -90,22 +90,26 @@ import scalaz.syntax.applicativePlus._
 import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 
-// On startup
-// - load config/metadata from filesystem 
-// -- collect Map[ProjectionDescriptor, File]
-// -- walk Map[ProjectionDescriptor, File] 
-// - repair/rebuild if necessary (leave as a todo)
-// - create/start various actors
-// - wait for shutdown hook
-// - shutdown
-// -- request all actors shutdown
-// -- wait for all actors to shutdown
-// -- exit
+object ShardServer { 
 
-class ShardServer {
-  def run(config: ShardServerConfig): Unit = {
-    
-    val system = ActorSystem("Shard Actor System")
+  def main(args: Array[String]) {
+    val props = new Properties
+    props.load(new FileReader(args(0)))
+    start(props)
+
+    // need to register shutdown hooks and implement
+    // stop behavior
+  }
+
+  def start(props: Properties) {
+    ShardConfig.fromProperties(props).unsafePerformIO match {
+      case Success(config) => internalStart(config)
+      case Failure(e) => sys.error("Error loading shard config: " + e)
+    }
+  }
+
+  def internalStart(config: ShardConfig): Unit = {
+    val system = ActorSystem("storage_shard")
 
     val dbLayout = new DBLayout(config.baseDir, config.descriptors) 
     
@@ -120,85 +124,31 @@ class ShardServer {
     consumerThread.start
 
     println("Shard Server started...")
-   
   }
 }
 
-class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, File]) { 
+trait StorageShardModule {
 
-  val descriptorName = "projection_descriptor.json"
-  val metadataName = "projection_metadata.json"
-  val checkpointName = "checkpoints.json"
+  def storageShardConfig: Properties
 
-  def newRandomDir(parent: File): File = {
-    val newDir = File.createTempFile("col", "", parent)
-    newDir.delete
-    newDir.mkdirs
-    newDir
-  }
-
-  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
-
-  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
-    descriptorDirs.get(descriptor) match {
-      case Some(x) => x
-      case None    => {
-        val newDir = newDescriptorDir(descriptor, baseDir)
-        descriptorDirs.put(descriptor, newDir)
-        newDir
-      }
-    }
-  }
-
-  val descriptorIO = (descriptor: ProjectionDescriptor) =>
-    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
-    }.map(_ => ())
-
-  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
-    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
-    }.map(_ => ())
-  }
-
-  val checkpointIO = (checkpoints: Checkpoints) => {
-    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(baseDir, checkpointName)).map(_ => ())
-  }
+  def storageShard: StorageShard
 }
 
-class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
-  private lazy val consumer = initConsumer
+trait StorageShard {
+  def start: Future[Unit]
 
-  def initConsumer = {
-    val config = new ConsumerConfig(props)
-    Consumer.create(config)
-  }
-
-  def run {
-    val rawEventsTopic = props.getProperty("querio.storage.topic.raw", "raw")
-
-    val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
-
-
-    for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
-      router ! IngestMessageSerialization.readMessage(message.buffer) 
-    }
-  }
-
-  def requestStop {
-    consumer.shutdown
-  }
+  def stop: Future[Unit]
 }
 
-class ShardServerConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
+class ShardConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
 
-object ShardServerConfig extends Logging {
-  def fromFile(propsFile: File): IO[Validation[Error, ShardServerConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
+object ShardConfig extends Logging {
+  def fromFile(propsFile: File): IO[Validation[Error, ShardConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
   
-  def fromProperties(props: Properties): IO[Validation[Error, ShardServerConfig]] = {
+  def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
     val baseDir = extractBaseDir { props }
     loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-      case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardServerConfig(props, baseDir, t._1, t._2, _)) }
+      case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
       case Failure(e) => IO { Failure(e) }
     }}
    
@@ -279,6 +229,72 @@ object ShardServerConfig extends Logging {
   }
 }
 
+class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
+  private lazy val consumer = initConsumer
+
+  def initConsumer = {
+    val config = new ConsumerConfig(props)
+    Consumer.create(config)
+  }
+
+  def run {
+    val rawEventsTopic = props.getProperty("querio.storage.topic.raw", "raw")
+
+    val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
+
+
+    for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
+      router ! IngestMessageSerialization.readMessage(message.buffer) 
+    }
+  }
+
+  def requestStop {
+    consumer.shutdown
+  }
+}
+
+class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, File]) { 
+
+  val descriptorName = "projection_descriptor.json"
+  val metadataName = "projection_metadata.json"
+  val checkpointName = "checkpoints.json"
+
+  def newRandomDir(parent: File): File = {
+    val newDir = File.createTempFile("col", "", parent)
+    newDir.delete
+    newDir.mkdirs
+    newDir
+  }
+
+  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
+
+  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
+    descriptorDirs.get(descriptor) match {
+      case Some(x) => x
+      case None    => {
+        val newDir = newDescriptorDir(descriptor, baseDir)
+        descriptorDirs.put(descriptor, newDir)
+        newDir
+      }
+    }
+  }
+
+  val descriptorIO = (descriptor: ProjectionDescriptor) =>
+    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
+    }.map(_ => ())
+
+  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
+    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
+    }.map(_ => ())
+  }
+
+  val checkpointIO = (checkpoints: Checkpoints) => {
+    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(baseDir, checkpointName)).map(_ => ())
+  }
+}
+
 object IOUtils {
 
   val dotDirs = "." :: ".." :: Nil
@@ -324,19 +340,6 @@ object IOUtils {
     }
   }
 
-}
-
-object ShardServer {
-  def main(args: Array[String]) = loadConfig { args(0) } map { runServerOrDie } unsafePerformIO
-
-  def runServerOrDie(validation: Validation[Error, ShardServerConfig]) {
-    validation match {
-      case Success(config) => new ShardServer run config
-      case Failure(e)      => println("Error loading server config: " + e)
-    }
-  }
-
-  def loadConfig(filename: String) = ShardServerConfig.fromFile { new File(filename) }
 }
 
 // vim: set ts=4 sw=4 et:

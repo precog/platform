@@ -120,7 +120,7 @@ object ShardLoader extends RealisticIngestMessage {
 
     println("Initiating shutdown")
 
-    Await.result(gracefulStop(router, 300 seconds)(system) flatMap { _ =>  metadataActor ! SyncMetadata; gracefulStop(metadataActor, 300 seconds)(system)}, 300 seconds) 
+    Await.result(gracefulStop(router, 300 seconds)(system) flatMap { _ =>  metadataActor ! FlushMetadata; gracefulStop(metadataActor, 300 seconds)(system)}, 300 seconds) 
 
     println("Actors stopped")
     
@@ -139,8 +139,8 @@ object ShardDemoUtil {
     bootstrapTest(props).unsafePerformIO.map( t => println(t.descriptors + "|" + t.metadata) )
   }
 
-  def bootstrapTest(properties: Properties): IO[Validation[Error, ShardServerConfig]] =
-    ShardServerConfig.fromProperties(properties)
+  def bootstrapTest(properties: Properties): IO[Validation[Error, ShardConfig]] =
+    ShardConfig.fromProperties(properties)
 
   def writeDummyShardMetadata() {
     val md = ShardMetadata.dummyProjections

@@ -72,6 +72,23 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
+case class Ownership(owners: Set[String])
+
+trait OwnershipSerialization {
+  implicit val OwnershipDecomposer: Decomposer[Ownership] = new Decomposer[Ownership] {
+    override def decompose(ownership: Ownership): JValue = {
+      JObject(JField("ownership", JArray(ownership.owners.map(JString(_)).toList)) :: Nil)
+    }
+  }
+
+  implicit val OwnershipExtractor: Extractor[Ownership] = new Extractor[Ownership] with ValidatedExtraction[Ownership] {
+    override def validated(obj: JValue): Validation[Error, Ownership] =
+      (obj \ "ownership").validated[Set[String]].map(Ownership(_))
+  }
+}
+
+object Ownership extends OwnershipSerialization 
+
 case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, ownership: Ownership) 
 
 trait ColumnDescriptorSerialization {
