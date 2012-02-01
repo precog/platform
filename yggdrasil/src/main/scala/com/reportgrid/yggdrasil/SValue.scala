@@ -19,6 +19,7 @@
  */
 package com.reportgrid.yggdrasil
 
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
@@ -78,6 +79,33 @@ trait SValue {
     fold(d, d, d, d, d, d, d, ifNull)
   }
 
+  def set(selector: JPath, cv: CValue): Option[SValue] = {
+    selector.nodes match {
+      case JPathField(name) :: Nil => mapObjectOr(Option.empty[SValue])  { o => Some(SObject(o + (name -> cv.toSValue))) }
+      case JPathField(name) :: xs  => mapObjectOr(Option.empty[SValue])  { o => 
+                                                          val child = xs.head match { 
+                                                            case JPathField(_)  => SObject(Map())
+                                                            case JPathIndex(_) => SArray(Vector.empty[SValue])
+                                                          }
+
+                                                          o.getOrElse(name, child).set(JPath(xs), cv)
+                                                          .map(sv => (SObject(o + (name -> sv)))) 
+                                                        }
+
+      case JPathIndex(i) :: Nil => mapArrayOr(Option.empty[SValue]) { a => Some(SArray(a.padTo(i, SNull).updated(i, cv.toSValue))) }
+      case JPathIndex(i) :: xs  => mapArrayOr(Option.empty[SValue]) { a => 
+                                                      val child = xs.head match { 
+                                                        case JPathField(_)  => SObject(Map())
+                                                        case JPathIndex(_) => SArray(Vector.empty[SValue])
+                                                      }
+
+                                                      a.lift(i).getOrElse(child).set(JPath(xs), cv)
+                                                      .map(sv => SArray(a.padTo(i + 1, SNull).updated(i, sv))) 
+                                                    }
+      case Nil => Some(cv.toSValue)
+    }
+  }
+
   abstract override def equals(obj: Any) = obj match {
     case sv: SValue => fold(
         obj  = o => sv.mapObjectOr(false)(_ == o),
@@ -135,6 +163,14 @@ trait SValueInstances {
 }
 
 object SValue extends SValueInstances {
+  def apply(selector: JPath, cv: CValue) = {
+    selector.nodes match {
+      case JPathField(_) :: xs => SObject(Map()).set(selector, cv)
+      case JPathIndex(_) :: xs => SArray(Vector.empty[SValue]).set(selector, cv)
+      case Nil => cv.toSValue
+    }
+  }
+
   def asJSON(sv: SValue): String = sv.fold(
     obj = { obj =>
       val contents = obj mapValues asJSON map {

@@ -20,6 +20,10 @@
 package com.reportgrid
 
 package object common {
+  
+  type ProducerId = Int
+  type SequenceId = Int
+
 }
 
 

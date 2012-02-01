@@ -37,14 +37,9 @@ import com.reportgrid.common.util.FixMe._
 import scalaz._
 import Scalaz._
 
-//TODO: This should be (Path, JValue, JValue)
 case class Event(path: Path, content: Set[(JPath, (JValue, Set[Metadata]))]) 
 
 class EventSerialization {
-
-  def simpleFlatten(jvalue: JValue): Set[(JPath, JValue)] = {
-    jvalue.flattenWithPath.toSet
-  }
 
   def dataRepresentation(content: Set[(JPath, (JValue, Set[Metadata]))]): JValue = {
     JValue.unflatten( content.map( t => (t._1, t._2._1) ).toList )
@@ -75,7 +70,7 @@ class EventSerialization {
       (path, (value, metadata))
     }
    
-    simpleFlatten(data).map { t => attachMetadata(t._1, t._2, extractMetadataForPath(t._1, allMetadata)) } 
+    data.flattenWithPath.toSet[(JPath, JValue)].map { t => attachMetadata(t._1, t._2, extractMetadataForPath(t._1, allMetadata)) } 
   }
 
   implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
@@ -92,7 +87,7 @@ object Event extends EventSerialization {
       fixme("Null ownership being attributed at this point in time")
       (t: (JPath, JValue)) => { (t._1, (t._2, Set())) }: (JPath, (JValue, Set[Metadata]))
     }
-    Event(path, assignOwnership(simpleFlatten(data).toSet))
+    Event(path, assignOwnership(data.flattenWithPath.toSet))
   }
 
   def extractOwners(event: Event): Set[String] = {

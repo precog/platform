@@ -40,7 +40,7 @@ class IngestMessageSerialization {
   implicit val IngestMessageDecomposer: Decomposer[IngestMessage] = new Decomposer[IngestMessage] {
     override def decompose(ingestMessage: IngestMessage): JValue = ingestMessage match {
       case sm @ SyncMessage(_, _, _)  => SyncMessage.SyncMessageDecomposer.apply(sm)
-      case em @ EventMessage(_, _, _) => EventMessage.EventMessageDecomposer.apply(em)
+      case em @ EventMessage(_, _) => EventMessage.EventMessageDecomposer.apply(em)
     }
   }
 }
@@ -71,28 +71,35 @@ object SyncMessage extends SyncMessageSerialization {
   def finish = SyncMessage(_: Int, Int.MaxValue, _: List[Int])
 }
 
-case class EventMessage(producerId: Int, eventId: Int, event: Event) extends IngestMessage {
-  val uid = (producerId.toLong << 32) | (eventId.toLong & 0xFFFFFFFFL)
+case class EventId(producerId: ProducerId, sequenceId: SequenceId) {
+  val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
 }
+
+case class EventMessage(eventId: EventId, event: Event) extends IngestMessage
 
 trait EventMessageSerialization {
   implicit val EventMessageDecomposer: Decomposer[EventMessage] = new Decomposer[EventMessage] {
     override def decompose(eventMessage: EventMessage): JValue = JObject(
       List(
-        JField("producerId", eventMessage.producerId.serialize),
-        JField("eventId", eventMessage.eventId.serialize),
+        JField("producerId", eventMessage.eventId.producerId.serialize),
+        JField("eventId", eventMessage.eventId.sequenceId.serialize),
         JField("event", eventMessage.event.serialize)))
   }
 
   implicit val EventMessageExtractor: Extractor[EventMessage] = new Extractor[EventMessage] with ValidatedExtraction[EventMessage] {
     override def validated(obj: JValue): Validation[Error, EventMessage] =
-      ((obj \ "producerId").validated[Int] |@|
+      ((obj \ "producerId" ).validated[Int] |@|
         (obj \ "eventId").validated[Int] |@|
         (obj \ "event").validated[Event]).apply(EventMessage(_, _, _))
   }
 }
 
-object EventMessage extends EventMessageSerialization
+object EventMessage extends EventMessageSerialization {
+
+  def apply(producerId: ProducerId, sequenceId: SequenceId, event: Event): EventMessage = {
+    EventMessage(EventId(producerId, sequenceId), event)
+  }
+}
 
 object IngestMessageSerialization {
   private val stopByte: Byte = 0x00
@@ -118,7 +125,7 @@ object IngestMessageSerialization {
   def write(buffer: ByteBuffer, msg: IngestMessage) {
     (msg match {
       case SyncMessage(_, _, _)     => writeSync _
-      case EventMessage(_, _, _)    => writeEvent _
+      case EventMessage(_, _)    => writeEvent _
     })(msg)(buffer)
   }
   

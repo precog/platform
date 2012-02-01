@@ -17,25 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.reportgrid.storage
-package leveldb
+package com.reportgrid.yggdrasil
 
-import com.reportgrid.util.Bijection
-import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
+import scalaz.effect.IO
 
 import java.io.File
-import java.math.BigDecimal
-import java.nio.ByteBuffer
 
-object SimpleTest {
-  def main (argv : Array[String]) {
-    val c = LevelDBProjection(new File("/tmp/test"), sys.error("todo") /* Some(ProjectionComparator.BigDecimal)*/) ||| {
-      errors => for (err <- errors.list) err.printStackTrace
-                sys.error("Errors prevented creation of LevelDBProjection")
-    }
-
-    c.insert(Vector(12364534l), sys.error("todo") /*new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer]*/)
-  }
+package object kafka {
+  type ProjectionDescriptorIO = ProjectionDescriptor => IO[Unit] 
+  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
 }
-
-// vim: set ts=4 sw=4 et:

@@ -39,7 +39,6 @@ import scalaz.iteratee.Iteratee._
 
 import com.weiglewilczek.slf4s.Logging
 
-import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
 import com.reportgrid.util.Interval
 
 class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging {

@@ -770,9 +770,36 @@ object EmitterSpecs extends Specification
           Map2Cross(Div),
           Merge))
     }
-  }
-
-  "emitter" should {
+    
+    "emit dup for merge results" in {
+      val input = """
+        | clicks := dataset(//clicks)
+        | f('c) := count(clicks where clicks = 'c)
+        | f.a + f.b""".stripMargin
+        
+      testEmit(input)(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Dup,
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Split,
+          Map2Cross(Eq),
+          FilterMatch(0, None),
+          Reduce(Count),
+          Merge,
+          Dup,
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Map2Match(Add)))
+    }
+    
     "emit code for examples" in {
       "deviant-durations.qrl" >> {
         // TODO: Verify match/cross for tic variable solution fragmentsA

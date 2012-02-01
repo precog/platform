@@ -75,17 +75,38 @@ object MetadataType extends MetadataTypeSerialization {
   }
 }
 
-sealed abstract trait Metadata
+sealed abstract trait Metadata {
+  def metadataType: MetadataType
+
+  def merge(that: Metadata): Option[Metadata]
+}
 
 trait MetadataSerialization {
   implicit val MetadataDecomposer: Decomposer[Metadata] = new Decomposer[Metadata] {
-    override def decompose(metadata: Metadata): JValue = JNothing
+    override def decompose(metadata: Metadata): JValue = {
+      val value = metadata match {
+        case bv @ BooleanValueStats(_,_)       => bv.serialize(BooleanValueStats.BooleanValueStatsDecomposer)
+        case lv @ LongValueStats(_,_,_)        => lv.serialize(LongValueStats.LongValueStatsDecomposer)
+        case dv @ DoubleValueStats(_,_,_)      => dv.serialize(DoubleValueStats.DoubleValueStatsDecomposer) 
+        case bdv @ BigDecimalValueStats(_,_,_) => bdv.serialize(BigDecimalValueStats.BigDecimalValueStatsDecomposer)
+        case sv @ StringValueStats(_,_,_)      => sv.serialize(StringValueStats.StringValueStatsDecomposer)
+      }
+
+      JObject(List(JField(MetadataType.toName(metadata.metadataType), value)))
+    }
   }
 
   implicit val MetadataExtractor: Extractor[Metadata] = new Extractor[Metadata] with ValidatedExtraction[Metadata] {
+   
     override def validated(obj: JValue): Validation[Error, Metadata] = obj match {
-      case metadata @ JObject(JField(key, _) :: Nil) => key match {
-        case _           => Failure(Invalid("Unknown metadata type: " + key))
+      case metadata @ JObject(JField(key, value) :: Nil) => {
+        MetadataType.fromName(key).map {
+          case BooleanValueStats     => value.validated[BooleanValueStats] 
+          case LongValueStats        => value.validated[LongValueStats] 
+          case DoubleValueStats      => value.validated[DoubleValueStats] 
+          case BigDecimalValueStats  => value.validated[BigDecimalValueStats] 
+          case StringValueStats      => value.validated[StringValueStats] 
+        } getOrElse { Failure(Invalid("Unknown metadata type: " + key)) }
       }
       case _                                         => Failure(Invalid("Invalid metadata entry: " + obj))
     }
@@ -94,15 +115,7 @@ trait MetadataSerialization {
 
 object Metadata extends MetadataSerialization {
   def toTypedMap(set: Set[Metadata]): mutable.Map[MetadataType, Metadata] = {
-    set.foldLeft(mutable.Map[MetadataType, Metadata]()) ( (acc, el) => acc + (typeOf(el) -> el) ) 
-  }
-
-  def typeOf(metadata: Metadata): MetadataType = metadata match {
-    case BooleanValueStats(_, _)       => BooleanValueStats
-    case LongValueStats(_, _, _)       => LongValueStats
-    case DoubleValueStats(_, _, _)     => DoubleValueStats
-    case BigDecimalValueStats(_, _, _) => BigDecimalValueStats
-    case StringValueStats(_, _, _)     => StringValueStats
+    set.foldLeft(mutable.Map[MetadataType, Metadata]()) ( (acc, el) => acc + (el.metadataType -> el) ) 
   }
 
   def valueStats(jval: JValue): Option[Metadata] = typedValueStats(jval).map( _._2 )
@@ -115,34 +128,6 @@ object Metadata extends MetadataSerialization {
     case _            => None
   }
 
-  implicit val OwnershipSemigroup = new Semigroup[Ownership] {
-    def append(o1: Ownership, o2: => Ownership) = Ownership(o1.owners ++ o2.owners) 
-  }
-
-  implicit val BooleanValueStatsSemigroup = new Semigroup[BooleanValueStats] {
-    def append(bv1: BooleanValueStats, bv2: => BooleanValueStats) = BooleanValueStats(bv1.count + bv2.count, bv1.trueCount + bv2.trueCount)
-  }
-
-  implicit val LongValueStatsSemigroup = new Semigroup[LongValueStats] {
-    def append(lv1: LongValueStats, lv2: => LongValueStats) = 
-      LongValueStats(lv1.count + lv2.count, Ordering[Long].min(lv1.min, lv2.min), Ordering[Long].max(lv1.max, lv2.max))
-  }
-
-  implicit val DoubleValueStatsSemigroup = new Semigroup[DoubleValueStats] {
-    def append(lv1: DoubleValueStats, lv2: => DoubleValueStats) = 
-      DoubleValueStats(lv1.count + lv2.count, Ordering[Double].min(lv1.min, lv2.min), Ordering[Double].max(lv1.max, lv2.max))
-  }
-  
-  implicit val BigDecimalValueStatsSemigroup = new Semigroup[BigDecimalValueStats] {
-    def append(lv1: BigDecimalValueStats, lv2: => BigDecimalValueStats) = 
-      BigDecimalValueStats(lv1.count + lv2.count, Ordering[BigDecimal].min(lv1.min, lv2.min), Ordering[BigDecimal].max(lv1.max, lv2.max))
-  }
-  
-  implicit val StringValueStatsSemigroup = new Semigroup[StringValueStats] {
-    def append(lv1: StringValueStats, lv2: => StringValueStats) = 
-      StringValueStats(lv1.count + lv2.count, Ordering[String].min(lv1.min, lv2.min), Ordering[String].max(lv1.max, lv2.max))
-  }
-  
   implicit val MetadataSemigroup = new Semigroup[mutable.Map[MetadataType, Metadata]] {
     def append(m1: mutable.Map[MetadataType, Metadata], m2: => mutable.Map[MetadataType, Metadata]) =
       m1.foldLeft(m2) { (acc, t) =>
@@ -150,74 +135,163 @@ object Metadata extends MetadataSerialization {
         acc + (mtype -> acc.get(mtype).map( combineMetadata(_,meta) ).getOrElse(meta))
       }
 
-    def combineMetadata(m1: Metadata, m2: Metadata) = (m1, m2) match {
-      case (bv1 @ BooleanValueStats(_, _), bv2 @ BooleanValueStats(_, _))            => bv1 |+| bv2
-      case (lv1 @ LongValueStats(_,_,_), lv2 @ LongValueStats(_,_,_))                => lv1 |+| lv2
-      case (dv1 @ DoubleValueStats(_,_,_), dv2 @ DoubleValueStats(_,_,_))            => dv1 |+| dv2
-      case (bdv1 @ BigDecimalValueStats(_,_,_), bdv2 @ BigDecimalValueStats(_,_,_))  => bdv1 |+| bdv2
-      case (sv1 @ StringValueStats(_,_,_), sv2 @ StringValueStats(_,_,_))            => sv1 |+| sv2
-      case _                                                                         => error("Invalid attempt to combine incompatible metadata")
-    }
+    def combineMetadata(m1: Metadata, m2: Metadata) = m1.merge(m2).getOrElse(sys.error("Invalid attempt to combine incompatible metadata"))
   }
 }
 
-case class Ownership(owners: Set[String])
-
-trait OwnershipSerialization {
-  implicit val OwnershipDecomposer: Decomposer[Ownership] = new Decomposer[Ownership] {
-    override def decompose(ownership: Ownership): JValue = {
-      JObject(JField("ownership", JArray(ownership.owners.map(JString(_)).toList)) :: Nil)
-    }
-  }
-
-  implicit val OwnershipExtractor: Extractor[Ownership] = new Extractor[Ownership] with ValidatedExtraction[Ownership] {
-    override def validated(obj: JValue): Validation[Error, Ownership] =
-      (obj \ "ownership").validated[Set[String]].map(Ownership(_))
-  }
+sealed trait MetadataStats extends Metadata {
+  def count: Long
 }
 
-object Ownership extends OwnershipSerialization 
-
-case class BooleanValueStats(count: Long, trueCount: Long) extends Metadata {
+case class BooleanValueStats(count: Long, trueCount: Long) extends MetadataStats {
   def falseCount: Long = count - trueCount
   def probability: Double = trueCount.toDouble / count
+
+  def metadataType = BooleanValueStats
+
+  def merge(that: Metadata) = that match {
+    case BooleanValueStats(count, trueCount) => Some(BooleanValueStats(this.count + count, this.trueCount + trueCount))
+    case _                                   => None
+  }
 }
 
 trait BooleanValueStatsSerialization {
+  implicit val BooleanValueStatsDecomposer: Decomposer[BooleanValueStats] = new Decomposer[BooleanValueStats] {
+    override def decompose(metadata: BooleanValueStats): JValue = JObject(List(
+      JField("count", metadata.count),
+      JField("trueCount", metadata.trueCount)
+    ))
+  }
 
+  implicit val BooleanValueStatsExtractor: Extractor[BooleanValueStats] = new Extractor[BooleanValueStats] with ValidatedExtraction[BooleanValueStats] {
+    override def validated(obj: JValue): Validation[Error, BooleanValueStats] = 
+      ((obj \ "count").validated[Long] |@|
+       (obj \ "trueCount").validated[Long]).apply(BooleanValueStats(_, _))
+  }
 }
 
-object BooleanValueStats extends MetadataType with BooleanValueStatsSerialization with Function2[Long, Long, BooleanValueStats]
+object BooleanValueStats extends MetadataType with BooleanValueStatsSerialization
 
-case class LongValueStats(count: Long, min: Long, max: Long) extends Metadata
+case class LongValueStats(count: Long, min: Long, max: Long) extends MetadataStats {
+
+  def metadataType = LongValueStats
+
+  def merge(that: Metadata) = that match {
+    case LongValueStats(count, min, max) => Some(LongValueStats(this.count + count, this.min.min(min), this.max.max(max)))
+    case _                               => None
+  }
+
+}
 
 trait LongValueStatsSerialization {
+  implicit val LongValueStatsDecomposer: Decomposer[LongValueStats] = new Decomposer[LongValueStats] {
+    override def decompose(metadata: LongValueStats): JValue = JObject(List(
+      JField("count", metadata.count),
+      JField("min", metadata.min),
+      JField("max", metadata.max)
+    ))
+  }
 
+  implicit val LongValueStatsExtractor: Extractor[LongValueStats] = new Extractor[LongValueStats] with ValidatedExtraction[LongValueStats] {
+    override def validated(obj: JValue): Validation[Error, LongValueStats] = 
+      ((obj \ "count").validated[Long] |@|
+       (obj \ "min").validated[Long] |@|
+       (obj \ "max").validated[Long]).apply(LongValueStats(_, _, _))
+  }
 }
 
-object LongValueStats extends MetadataType with LongValueStatsSerialization with Function3[Long, Long, Long, LongValueStats]
+object LongValueStats extends MetadataType with LongValueStatsSerialization
 
-case class DoubleValueStats(count: Long, min: Double, max: Double) extends Metadata 
+
+case class DoubleValueStats(count: Long, min: Double, max: Double) extends MetadataStats {
+
+  def metadataType = DoubleValueStats
+  
+  def merge(that: Metadata) = that match {
+    case DoubleValueStats(count, min, max) => Some(DoubleValueStats(this.count + count, this.min min min, this.max max max))
+    case _                                 => None
+  }
+}
 
 trait DoubleValueStatsSerialization {
+  implicit val DoubleValueStatsDecomposer: Decomposer[DoubleValueStats] = new Decomposer[DoubleValueStats] {
+    override def decompose(metadata: DoubleValueStats): JValue = JObject(List(
+      JField("count", metadata.count),
+      JField("min", metadata.min),
+      JField("max", metadata.max)
+    ))
+  }
 
+  implicit val DoubleValueStatsExtractor: Extractor[DoubleValueStats] = new Extractor[DoubleValueStats] with ValidatedExtraction[DoubleValueStats] {
+    override def validated(obj: JValue): Validation[Error, DoubleValueStats] = 
+      ((obj \ "count").validated[Long] |@|
+       (obj \ "min").validated[Double] |@|
+       (obj \ "max").validated[Double]).apply(DoubleValueStats(_, _, _))
+  }
 }
 
-object DoubleValueStats extends MetadataType with DoubleValueStatsSerialization with Function3[Long, Double, Double, DoubleValueStats]
+object DoubleValueStats extends MetadataType with DoubleValueStatsSerialization
 
-case class BigDecimalValueStats(count: Long, min: BigDecimal, max: BigDecimal) extends Metadata 
+
+case class BigDecimalValueStats(count: Long, min: BigDecimal, max: BigDecimal) extends MetadataStats {
+
+  def metadataType = BigDecimalValueStats 
+  
+  def merge(that: Metadata) = that match {
+    case BigDecimalValueStats(count, min, max) => Some(BigDecimalValueStats(this.count + count, this.min min min, this.max max max))
+    case _                                 => None
+  }
+
+}
 
 trait BigDecimalValueStatsSerialization {
+  implicit val BigDecimalValueStatsDecomposer: Decomposer[BigDecimalValueStats] = new Decomposer[BigDecimalValueStats] {
+    override def decompose(metadata: BigDecimalValueStats): JValue = JObject(List(
+      JField("count", metadata.count),
+      JField("min", metadata.min),
+      JField("max", metadata.max)
+    ))
+  }
 
+  implicit val BigDecimalValueStatsExtractor: Extractor[BigDecimalValueStats] = new Extractor[BigDecimalValueStats] with ValidatedExtraction[BigDecimalValueStats] {
+    override def validated(obj: JValue): Validation[Error, BigDecimalValueStats] = 
+      ((obj \ "count").validated[Long] |@|
+       (obj \ "min").validated[BigDecimal] |@|
+       (obj \ "max").validated[BigDecimal]).apply(BigDecimalValueStats(_, _, _))
+  }
 }
 
-object BigDecimalValueStats extends MetadataType with BigDecimalValueStatsSerialization with Function3[Long, BigDecimal, BigDecimal, BigDecimalValueStats]
+object BigDecimalValueStats extends MetadataType with BigDecimalValueStatsSerialization
 
-case class StringValueStats(count: Long, min: String, max: String) extends Metadata
+
+case class StringValueStats(count: Long, min: String, max: String) extends MetadataStats {
+
+  def metadataType = StringValueStats 
+  
+  def merge(that: Metadata) = that match {
+    case StringValueStats(count, min, max) => Some(StringValueStats(this.count + count, 
+                                                                    Order[String].min(this.min, min), 
+                                                                    Order[String].max(this.max, max)))
+    case _                                 => None
+  }
+
+}
 
 trait StringValueStatsSerialization {
+  implicit val StringValueStatsDecomposer: Decomposer[StringValueStats] = new Decomposer[StringValueStats] {
+    override def decompose(metadata: StringValueStats): JValue = JObject(List(
+      JField("count", metadata.count),
+      JField("min", metadata.min),
+      JField("max", metadata.max)
+    ))
+  }
 
+  implicit val StringValueStatsExtractor: Extractor[StringValueStats] = new Extractor[StringValueStats] with ValidatedExtraction[StringValueStats] {
+    override def validated(obj: JValue): Validation[Error, StringValueStats] = 
+      ((obj \ "count").validated[Long] |@|
+       (obj \ "min").validated[String] |@|
+       (obj \ "max").validated[String]).apply(StringValueStats(_, _, _))
+  }
 }
 
-object StringValueStats extends MetadataType with StringValueStatsSerialization with Function3[Long, String, String, StringValueStats]
-
+object StringValueStats extends MetadataType with StringValueStatsSerialization

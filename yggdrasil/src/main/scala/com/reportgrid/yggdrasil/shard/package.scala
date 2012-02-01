@@ -17,23 +17,22 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio.quirrel
-package parser
+package com.reportgrid.yggdrasil
 
-import edu.uwm.cs.gll.Failure
-import edu.uwm.cs.gll.LineStream
+import com.reportgrid.common._
 
-case class ParseException(failures: Set[Failure]) extends RuntimeException {
-  private val Pattern = "  error:%%d: %s%n    %%s%n    %%s%n"
+import scalaz.effect._
+import scala.collection.mutable
+
+package object shard {
   
-  def mkString = {
-    
-    
-    val errors = for (Failure(msg, tail) <- failures) yield {
-      val partial = Pattern format msg
-      tail formatError partial
-    }
-    
-    errors.mkString("\n")
-  }
+  type MetadataMap = mutable.Map[MetadataType, Metadata]
+  type Checkpoints = mutable.Map[Int, Int]
+  
+  type MetadataIO = (ProjectionDescriptor, Seq[MetadataMap]) => IO[Unit]
+  type CheckpointIO = Checkpoints => IO[Unit]
+
+  type ProducerId = Int
+  type SequenceId = Int
+
 }

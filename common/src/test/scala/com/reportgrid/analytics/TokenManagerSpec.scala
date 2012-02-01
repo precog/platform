@@ -47,17 +47,17 @@ class TokenManagerSpec extends Specification with FutureMatchers {
     }
 
     "support token creation" in {
-      tokenManager.issueNew(Token.Test, "/testchild/", Token.Test.permissions, Token.Test.expires, Token.Test.limits) must whenDelivered {
+      tokenManager.issueNew(Token.Test, Path("/testchild/"), Token.Test.permissions, Token.Test.expires, Token.Test.limits) must whenDelivered {
         beLike {
           case Success(token) =>  (token.permissions must_== Token.Test.permissions) and
                                   (token.limits must_== Token.Test.limits) and
-                                  (token.path must_== (Token.Test.path / "testchild"))
+                                  (token.path must_== (Token.Test.path / Path("testchild")))
         }
       }
     }
 
     "retrieve undeleted tokens" in {
-      val exchange = tokenManager.issueNew(Token.Test, "/testchild/", Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
+      val exchange = tokenManager.issueNew(Token.Test, Path("/testchild/"), Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
         case Success(token) => tokenManager.lookup(token.tokenId)
       }
 
@@ -67,7 +67,7 @@ class TokenManagerSpec extends Specification with FutureMatchers {
     }
 
     "support token deletion" in {
-      val exchange = tokenManager.issueNew(Token.Test, "/testchild/", Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
+      val exchange = tokenManager.issueNew(Token.Test, Path("/testchild/"), Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
         case Success(token) => tokenManager.deleteDescendant(Token.Test, token.tokenId) flatMap {
           case _ => tokenManager.lookup(token.tokenId)
         }
@@ -79,7 +79,7 @@ class TokenManagerSpec extends Specification with FutureMatchers {
     }
 
     "retrieve deleted tokens from the deleted tokens collection" in {
-      val exchange = tokenManager.issueNew(Token.Test, "/testchild/", Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
+      val exchange = tokenManager.issueNew(Token.Test, Path("/testchild/"), Token.Test.permissions, Token.Test.expires, Token.Test.limits) flatMap {
         case Success(token) => tokenManager.deleteDescendant(Token.Test, token.tokenId) flatMap {
           case _ => tokenManager.findDeleted(token.tokenId)
         }

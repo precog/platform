@@ -718,6 +718,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
         case NumLit(_, "1") => ok
       }
     }
+    
+    "greedily terminate comment blocks" in {
+      parse("(-a--)-)42") must throwA[ParseException]
+    }
   }
   
   "composed expression parsing" should {
@@ -845,6 +849,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       
       "invalid" >> {
         parse("""{ user: "daniel", igly boio" }""") must throwA[ParseException]
+      }
+    }
+    
+    "correctly disambiguate chained array dereferences" in {
+      parse("a := b [c] [d]") must beLike {
+        case Let(_, "a", Vector(),
+          Deref(_, Dispatch(_, "b", Vector()), Dispatch(_, "c", Vector())),
+          ArrayDef(_, Vector(Dispatch(_, "d", Vector())))) => ok
       }
     }
   }
