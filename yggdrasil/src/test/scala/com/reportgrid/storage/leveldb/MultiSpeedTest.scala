@@ -2,7 +2,6 @@ package com.reportgrid.storage
 package leveldb
 
 import com.reportgrid.util.Bijection
-import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
 import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
 
 import org.scalacheck.Arbitrary
@@ -11,6 +10,7 @@ import akka.util.duration._
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import akka.dispatch.Future
 import akka.dispatch.Await
+import akka.pattern.ask
 import Actor._
 
 import java.io.File

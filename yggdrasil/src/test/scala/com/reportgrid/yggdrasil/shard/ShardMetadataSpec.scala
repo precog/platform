@@ -19,6 +19,7 @@ import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
 import akka.actor._
+import akka.pattern.ask
 import akka.util._
 import akka.util.duration._
 import akka.dispatch._

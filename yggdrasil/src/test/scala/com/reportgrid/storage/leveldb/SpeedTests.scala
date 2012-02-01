@@ -2,7 +2,6 @@ package com.reportgrid.storage
 package leveldb
 
 import com.reportgrid.util.Bijection
-import com.reportgrid.yggdrasil.leveldb.ProjectionComparator
 import com.reportgrid.yggdrasil.leveldb.LevelDBProjection
 
 import org.scalacheck.Arbitrary
