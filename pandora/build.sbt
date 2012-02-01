@@ -29,6 +29,7 @@ scalacOptions ++= Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
   "jline" % "jline" % "0.9.9",
+  "org.sonatype.jline" % "jline" % "2.5",
   "org.specs2" %% "specs2" % "1.7" % "test",
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
   
