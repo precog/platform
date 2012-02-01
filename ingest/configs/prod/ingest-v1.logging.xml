@@ -32,7 +32,7 @@
 
   <logger name="blueeyes.core.http" level="trace" />
 
-  <logger name="com.reportgrid.ingest.service.service.TrackingService" level="debug" additivity="false">
+  <logger name="com.querio.ingest.service.service.TrackingService" level="debug" additivity="false">
     <appender-ref ref="EVENTLOG" />
   </logger>
 

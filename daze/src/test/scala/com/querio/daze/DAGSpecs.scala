@@ -1,4 +1,4 @@
-package com.querio
+package com.precog
 package daze
 
 import org.specs2.mutable._

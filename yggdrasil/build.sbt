@@ -4,7 +4,7 @@ name := "yggdrasil"
 
 version := "0.0.1-SNAPSHOT"
 
-organization := "com.reportgrid"
+organization := "com.precog"
 
 scalaVersion := "2.9.1"
 

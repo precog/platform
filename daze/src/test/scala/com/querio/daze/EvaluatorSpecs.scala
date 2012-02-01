@@ -1,7 +1,7 @@
-package com.querio
+package com.precog
 package daze
 
-import com.reportgrid.yggdrasil._
+import com.precog.yggdrasil._
 import org.specs2.mutable._
 
 object EvaluatorSpecs extends Specification
