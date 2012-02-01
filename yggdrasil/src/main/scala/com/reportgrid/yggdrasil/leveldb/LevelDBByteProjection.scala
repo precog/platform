@@ -107,7 +107,7 @@ trait LevelDBByteProjection extends ByteProjection {
         if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + valueWidths(valueIndex) + 8)
         else (width + valueWidths(valueIndex))
     }
-  }
+  
 
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {

@@ -59,11 +59,11 @@ object LevelDBByteProjectionSpec {
 
   val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeStringFixed, Ownership(Set()))
   val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeStringArbitrary, Ownership(Set()))
-  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeBoolean, Ownership(Set()))
-  val colDesInt: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeInt, Ownership(Set()))
-  val colDesLong: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeLong, Ownership(Set()))
-  val colDesFloat: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeFloat, Ownership(Set()))
-  val colDesDouble: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeDouble, Ownership(Set()))
+  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), valueTypeBoolean, Ownership(Set()))
+  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), valueTypeInt, Ownership(Set()))
+  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), valueTypeLong, Ownership(Set()))
+  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), valueTypeFloat, Ownership(Set()))
+  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), valueTypeDouble, Ownership(Set()))
   val colDesDecimal: ColumnDescriptor = ColumnDescriptor(path0, selector0, valueTypeDecimal, Ownership(Set()))
 
   def byteProjectionInstance(columns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = { 
