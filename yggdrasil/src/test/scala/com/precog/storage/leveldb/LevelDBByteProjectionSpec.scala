@@ -95,8 +95,20 @@ class LevelDBByteProjectionSpec extends Specification {
       val expectedValue: Array[Byte] = Array()
       byteProjection.project(Vector(1L), Seq(cvInt))._1 must_== expectedKey
       byteProjection.project(Vector(1L), Seq(cvInt))._2 must_== expectedValue
-
     }
+/*
+    "project to the expected key format to test unproject" in {
+      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt -> 0, colDesLong -> 0)
+      val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesLong, ByValueThenId)) 
+      val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
+
+      val expectedKey: Array[Byte] = Array(0,0,0,4,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,1)
+      val expectedValue: Array[Byte] = Array()
+      byteProjection.project(Vector(1L), Seq(cvInt, cvLong))._1 must_== expectedKey
+      byteProjection.project(Vector(1L), Seq(cvInt, cvLong))._2 must_== expectedValue
+    }
+*/
+
   }
 
   "when applied to the project function, the unproject function" should {
@@ -109,15 +121,15 @@ class LevelDBByteProjectionSpec extends Specification {
       byteProjection.unproject(byteProjection.project(Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat))._1, byteProjection.project(Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat))._2)(functionf) must_== (Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
     }
 
+/*
+    "return the arguments of the project function another" in {
+      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt -> 0, colDesLong -> 0)
+      val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesLong, ByValueThenId)) 
+      val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
 
-//    "return the arguments of the project function another" in {
-//      val columns: ListMap[ColumnDescriptor, Int] = ListMap(colDesInt -> 0, colDesLong -> 0/*, colDesBoolean -> 1, colDesFloat -> 2, colDesDouble -> 2*/)
-//      val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesLong, ByValueThenId)/*, (colDesBoolean, ById), (colDesFloat, ByValue), (colDesDouble, ById)*/) 
-//      val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
-//
-//      byteProjection.unproject(byteProjection.project(Vector(1L), Seq(cvInt, cvLong/*, cvBoolean, cvFloat, cvDouble*/))._1, byteProjection.project(Vector(1L), Seq(cvInt, cvLong/*, cvBoolean, cvFloat, cvDouble*/))._2)(functionf) must_== (Vector(1L), Seq(cvInt, cvLong/*, cvBoolean, cvFloat, cvDouble*/))
-//    }
-
+      byteProjection.unproject(byteProjection.project(Vector(1L), Seq(cvInt, cvLong))._1, byteProjection.project(Vector(1L), Seq(cvInt, cvLong))._2)(functionf) must_== (Vector(1L), Seq(cvInt, cvLong))
+    }
+*/
     
   }
 
