@@ -1,4 +1,4 @@
-package com.reportgrid.yggdrasil
+package com.reportgrid.yggdrasil 
 package shard 
 
 import com.reportgrid.analytics.Path
@@ -16,6 +16,7 @@ import akka.actor.PoisonPill
 import akka.dispatch.Await
 import akka.dispatch.Future
 import akka.dispatch.Promise
+import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
 import akka.util.Duration
@@ -24,7 +25,7 @@ import akka.actor.ReceiveTimeout
 import akka.actor.ActorTimeoutException
 
 import blueeyes.util._
-import blueeyes.json.Printer
+import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
@@ -62,41 +63,96 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.semigroup._
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.iteratee.Input._
+import scalaz.syntax.plus._
+import scalaz.syntax.monad._
+import scalaz.syntax.applicativePlus._
+import scalaz.syntax.biFunctor
+import scalaz.Scalaz._
 
-// On startup
-// - load config/metadata from filesystem 
-// -- collect Map[ProjectionDescriptor, File]
-// -- walk Map[ProjectionDescriptor, File] 
-// - repair/rebuild if necessary (leave as a todo)
-// - create/start various actors
-// - wait for shutdown hook
-// - shutdown
-// -- request all actors shutdown
-// -- wait for all actors to shutdown
-// -- exit
+class ShardServer(val storageShardConfig: Properties) extends StorageShardModule 
 
-class ShardServer {
-  def run(config: ShardServerConfig): Unit = {
-    
-    val system = ActorSystem("Shard Actor System")
-    
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, ShardMetadata.dummyCheckpoints)))
+object ShardServer extends Logging { 
 
-    val router = system.actorOf(Props(new RoutingActor(config.baseDir, config.descriptors, routingTable, metadataActor)))
-    
-    val consumer = new KafkaConsumer(config.properties, router)
+  def main(args: Array[String]) {
+    val shardServer = new ShardServer(readProperties(args(0)))
+    logger.info("Shard server - Starting")
+    Await.result(shardServer.storageShard.start, 300 seconds)
+    logger.info("Shard server - Started")
 
-    val consumerThread = new Thread(consumer)
-    consumerThread.start
+    Runtime.getRuntime.addShutdownHook(new Thread() {
+      override def run() { 
+        logger.info("Shard server - Stopping")
+        Await.result(shardServer.storageShard.stop, 300 seconds) 
+        logger.info("Shard server - Stopped")
+      }
+    })
+  }
 
-    println("Shard Server started...")
-   
+  def readProperties(filename: String) = {
+    val props = new Properties
+    props.load(new FileReader(filename))
+    props
   }
 }
 
-object ShardLoader extends RealisticIngestMessage {
+trait StorageShardModule {
 
+  def storageShardConfig: Properties
+
+  lazy val storageShard: StorageShard = {
+    ShardConfig.fromProperties(storageShardConfig).unsafePerformIO match {
+      case Success(config) => new FilesystemBootstrapStorageShard(config)
+      case Failure(e) => sys.error("Error loading shard config: " + e)
+    }
+  }
+}
+
+trait StorageShard {
+  def start: Future[Unit]
+  def stop: Future[Unit]
+  
+  def router: ActorRef
+}
+
+class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard {
+  
+  lazy val system = ActorSystem("storage_shard")
+  lazy implicit val dispatcher = system.dispatcher
+  lazy val dbLayout = new DBLayout(config.baseDir, config.descriptors)
+
+  lazy val routingTable = new SingleColumnProjectionRoutingTable
+
+  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)), "metadata")
+
+  lazy val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
+
+  lazy val consumer = new KafkaConsumer(config.properties, router)
+
+  def start: Future[Unit] = Future {
+    if(config.properties.getProperty("querio.kafka.enable", "false").trim.toLowerCase == "true") {
+      val consumerThread = new Thread(consumer)
+      consumerThread.start
+    }
+  }
+
+  def stop: Future[Unit] = {
+    
+    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)), "metadata_serializer")
+
+    val duration = 300 seconds
+    implicit val timeout: Timeout = duration 
+
+    gracefulStop(router, duration)(system) flatMap
+      { _ => metadataActor ? FlushMetadata(metadataSerializationActor) }  flatMap
+      { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) }  flatMap
+      { _ => gracefulStop(metadataActor, duration)(system) }  flatMap
+      { _ => gracefulStop(metadataSerializationActor, duration)(system) } map
+      { _ => system.shutdown }
+  }
+  
   def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
     if (target.isTerminated) {
       Promise.successful(true)
@@ -122,50 +178,98 @@ object ShardLoader extends RealisticIngestMessage {
       result
     }
   }
+}
 
-  def main(args: Array[String]) {
-    if(args.length < 2) sys.error("Must provide path and number of events to generate.")
-    val base = new File(args(0))
-    val count = args(1).toInt
-    
-    val events = containerOfN[List, Event](1, genEvent).sample.get
 
-    load(base, events, count)
+class ShardConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
 
-    
+object ShardConfig extends Logging {
+  def fromFile(propsFile: File): IO[Validation[Error, ShardConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
+  
+  def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
+    val baseDir = extractBaseDir { props }
+    loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+      case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
+      case Failure(e) => IO { Failure(e) }
+    }}
   }
 
-  def load(baseDir: File, events: List[Event], count: Int) {
-    baseDir.mkdirs
+  def extractBaseDir(props: Properties): File = new File(props.getProperty("querio.storage.root", "."))
 
-    println("Paths: " + events(0).content.size)
+  def loadDescriptors(baseDir: File): IO[mutable.Map[ProjectionDescriptor, File]] = {
 
-    val system = ActorSystem("shard_loader")
-
-    implicit val dispatcher = system.dispatcher
-
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(mutable.Map(), ShardMetadata.dummyCheckpoints)))
-
-    val router = system.actorOf(Props(new RoutingActor(baseDir, mutable.Map(), routingTable, metadataActor)))
-    
-    implicit val timeout: Timeout = 30 seconds 
-   
-    val finalEvents = 0.until(count).map(_ => events).flatten
-
-    finalEvents.zipWithIndex.foreach {
-      case (ev, idx) => router ! EventMessage(0, idx, ev) 
+    def loadMap(baseDir: File) = {
+      IOUtils.walkSubdirs(baseDir).map{ _.foldLeft( mutable.Map[ProjectionDescriptor, File]() ){ (map, dir) =>
+        println("loading: " + dir)
+        read(dir) match {
+          case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
+                                                     { pd => map + (pd -> dir) })
+          case None      => map
+        }
+      }}
     }
 
-    println("Initiating shutdown")
+    def read(baseDir: File): Option[IO[Validation[String, ProjectionDescriptor]]] = {
+      val df = new File(baseDir, "projection_descriptor.json")
 
-    Await.result(Future.sequence(gracefulStop(router, 300 seconds)(system) :: gracefulStop(metadataActor, 300 seconds)(system) :: Nil), 300 seconds)
-    
-    println("Actors stopped")
-    
-    println("Insert total: " + finalEvents.size)
+      if (df.exists) Some {
+        IO {
+          val reader = new FileReader(df)
+          try {
+            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
+          } finally {
+            reader.close
+          }
+        }
+      } else {
+        None
+      }
+    }
+    loadMap(baseDir)
+  }
 
-    system.shutdown
+  type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
+  
+  def loadMetadata(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
+
+    type MetadataTuple = (ProjectionDescriptor, MetadataSeq)
+
+    def readAll(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[MetadataTuple]]] = {
+      val validatedEntries = descriptors.toList.map{ case (d, f) => readSingle(f) map { _.map((d, _)) } }.sequence[IO, Validation[Error, (ProjectionDescriptor, MetadataSeq)]]
+
+      validatedEntries.map(flattenValidations)
+    }
+
+    def readSingle(dir: File): IO[Validation[Error, MetadataSeq]] = {
+      import JsonParser._
+      val metadataFile = new File(dir, "projection_metadata.json")
+      IOUtils.readFileToString(metadataFile).map { _ match {
+        case None    => Success(List(mutable.Map[MetadataType, Metadata]()))
+        case Some(c) => {
+          val validatedTuples = parse(c).validated[List[List[(MetadataType, Metadata)]]]
+          validatedTuples.map( _.map( mutable.Map(_: _*)))
+        }
+      }}
+    }
+
+    readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
+  }
+
+  def loadCheckpoints(baseDir: File): IO[Validation[Error, mutable.Map[Int, Int]]] = {
+    import JsonParser._
+    val checkpointFile = new File(baseDir, "checkpoints.json")
+    IOUtils.readFileToString(checkpointFile).map { _ match { 
+      case None    => Success(mutable.Map[Int, Int]())
+      case Some(c) => parse(c).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
+    }}
+  }
+
+  def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
+    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { (acc, el) => (acc, el) match {
+      case (Success(ms), Success(m)) => Success(ms :+ m)
+      case (Failure(e1), Failure(e2)) => Failure(e1 |+| e2)
+      case (_          , Failure(e)) => Failure(e)
+    }}
   }
 }
 
@@ -193,64 +297,45 @@ class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
   }
 }
 
-class ShardServerConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]])
+class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, File]) { 
 
-object ShardServerConfig extends Logging {
-  def fromFile(propsFile: File): IO[Validation[Error, ShardServerConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
-  
-  def fromProperties(props: Properties): IO[Validation[Error, ShardServerConfig]] = {
-    val baseDir = extractBaseDir { props }
-    loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { new ShardServerConfig(props, baseDir, desc, _) } } }
+  val descriptorName = "projection_descriptor.json"
+  val metadataName = "projection_metadata.json"
+  val checkpointName = "checkpoints.json"
+
+  def newRandomDir(parent: File): File = {
+    val newDir = File.createTempFile("col", "", parent)
+    newDir.delete
+    newDir.mkdirs
+    newDir
   }
 
-  def extractBaseDir(props: Properties): File = new File(props.getProperty("querio.storage.root", "."))
+  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
 
-  def loadDescriptors(baseDir: File): IO[mutable.Map[ProjectionDescriptor, File]] = {
-
-    def loadMap(baseDir: File) = {
-      IOUtils.walkSubdirs(baseDir).map{ _.foldLeft( mutable.Map[ProjectionDescriptor, File]() ){ (map, dir) =>
-        println("loading: " + dir)
-        LevelDBProjection.descriptorSync(dir).read match {
-          case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
-                                                     { pd => map + (pd -> dir) })
-          case None      => map
-        }
-      }}
-    }
-
-    loadMap(baseDir)
-  }
-
-  type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
-  
-  def loadMetadata(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
-
-    type MetadataTuple = (ProjectionDescriptor, MetadataSeq)
-
-    def readAll(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[MetadataTuple]]] = {
-      val validatedEntries = descriptors.toList.map{ case (d, f) => readSingle(f) map { _.map((d, _)) } }.sequence[IO, Validation[Error, (ProjectionDescriptor, MetadataSeq)]]
-
-      validatedEntries.map(flattenValidations)
-    }
-
-    def readSingle(dir: File): IO[Validation[Error, MetadataSeq]] = {
-      import JsonParser._
-      val metadataFile = new File(dir, "projection_metadata.json")
-      IOUtils.readFileToString(metadataFile).map { content => 
-        val validatedTuples = parse(content.getOrElse("")).validated[List[List[(MetadataType, Metadata)]]]
-        validatedTuples.map( _.map( mutable.Map(_: _*)))
+  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
+    descriptorDirs.get(descriptor) match {
+      case Some(x) => x
+      case None    => {
+        val newDir = newDescriptorDir(descriptor, baseDir)
+        descriptorDirs.put(descriptor, newDir)
+        newDir
       }
     }
-
-    readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
   }
 
-  def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
-    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { (acc, el) => (acc, el) match {
-      case (Success(ms), Success(m)) => Success(ms :+ m)
-      case (Failure(e1), Failure(e2)) => Failure(e1 |+| e2)
-      case (_          , Failure(e)) => Failure(e)
-    }}
+  val descriptorIO = (descriptor: ProjectionDescriptor) =>
+    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
+    }.map(_ => ())
+
+  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
+    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
+    }.map(_ => ())
+  }
+
+  val checkpointIO = (checkpoints: Checkpoints) => {
+    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(baseDir, checkpointName)).map(_ => ())
   }
 }
 
@@ -283,73 +368,22 @@ object IOUtils {
 
   def writeToFile(s: String, f: File): IO[Unit] = IO {
     val writer = new PrintWriter(new PrintWriter(f))
-    writer.println(s)
-    writer.close
-  }
-
-}
-
-object ShardServer {
-  def main(args: Array[String]) = loadConfig { args(0) } map { runServerOrDie } unsafePerformIO
-
-  def runServerOrDie(validation: Validation[Error, ShardServerConfig]) {
-    validation match {
-      case Success(config) => new ShardServer run config
-      case Failure(e)      => println("Error loading server config: " + e)
+    try {
+      writer.println(s)
+    } finally { 
+      writer.close
     }
   }
 
-  def loadConfig(filename: String) = ShardServerConfig.fromFile { new File(filename) }
-}
-
-object ShardDemoUtil {
-
-  def main(args: Array[String]) {
-    val default = if(args.length > 0) args(0) else "/tmp/test/"
-    val props = new Properties
-    props.setProperty("querio.storage.root", default)
-    bootstrapTest(props).unsafePerformIO.map( t => println(t.descriptors + "|" + t.metadata) )
+  def safeWriteToFile(s: String, f: File): IO[Validation[Throwable, Unit]] = IO {
+    Validation.fromTryCatch {
+      val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
+      writeToFile(s, tmpFile).unsafePerformIO
+      tmpFile.renameTo(f) // TODO: This is only atomic on POSIX systems
+      Success(())
+    }
   }
 
-  def bootstrapTest(properties: Properties): IO[Validation[Error, ShardServerConfig]] =
-    ShardServerConfig.fromProperties(properties)
-
-  def writeDummyShardMetadata() {
-    val md = ShardMetadata.dummyProjections
-   
-    val rawEntries = 0.until(md.size) zip md.toSeq
-
-    val descriptors = rawEntries.foldLeft( Map[ProjectionDescriptor, File]() ) {
-      case (acc, (idx, (pd, md))) => acc + (pd -> new File("/tmp/test/desc"+idx))
-    }
-
-    val metadata = rawEntries.foldLeft( Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]() ) {
-      case (acc, (idx, (pd, md))) => acc + (pd -> md)
-    }
-
-    writeAll(descriptors, metadata).unsafePerformIO
-  }
-
-  def writeAll(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] = 
-    writeDescriptors(descriptors) unsafeZip writeMetadata(descriptors, metadata) map { _ => () }
-
-  def writeDescriptors(descriptors: Map[ProjectionDescriptor, File]): IO[Unit] = 
-    descriptors.map {
-      case (pd, f) => {
-        if(!f.exists) f.mkdirs
-        IOUtils.writeToFile(Printer.pretty(Printer.render(pd.serialize)), new File(f, "projection_descriptor.json"))
-      }
-    }.toList.sequence[IO,Unit].map { _ => () }
-
-  def writeMetadata(descriptors: Map[ProjectionDescriptor, File], metadata: Map[ProjectionDescriptor,Seq[Map[MetadataType, Metadata]]]): IO[Unit] =
-    metadata.map {
-      case (pd, md) => {
-        descriptors.get(pd).map { f =>
-          if(!f.exists) f.mkdirs
-          IOUtils.writeToFile(Printer.pretty(Printer.render(md.map( _.toSeq ).serialize)), new File(f, "projection_metadata.json"))
-        }.getOrElse(IO { () })
-      }
-    }.toList.sequence[IO,Unit].map { _ => () }
 }
 
 // vim: set ts=4 sw=4 et:

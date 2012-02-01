@@ -53,6 +53,23 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
+case class Ownership(owners: Set[String])
+
+trait OwnershipSerialization {
+  implicit val OwnershipDecomposer: Decomposer[Ownership] = new Decomposer[Ownership] {
+    override def decompose(ownership: Ownership): JValue = {
+      JObject(JField("ownership", JArray(ownership.owners.map(JString(_)).toList)) :: Nil)
+    }
+  }
+
+  implicit val OwnershipExtractor: Extractor[Ownership] = new Extractor[Ownership] with ValidatedExtraction[Ownership] {
+    override def validated(obj: JValue): Validation[Error, Ownership] =
+      (obj \ "ownership").validated[Set[String]].map(Ownership(_))
+  }
+}
+
+object Ownership extends OwnershipSerialization 
+
 case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, ownership: Ownership) 
 
 trait ColumnDescriptorSerialization {
@@ -84,6 +101,11 @@ with ((Path, JPath, ColumnType, Ownership) => ColumnDescriptor)
  */
 case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) {
   lazy val columns = indexedColumns.map(_._1).toList 
+  lazy val selectors = columns.map(_.selector).toSet
+
+  def columnAt(selector: JPath) = columns.find(_.selector == selector)
+
+  def satisfies(col: ColumnDescriptor) = columns.contains(col)
 }
 
 trait ProjectionDescriptorSerialization {
@@ -154,7 +176,11 @@ object ProjectionDescriptor extends ProjectionDescriptorSerialization {
       case _ => None
     }
 
+
     identities.toSuccess("Column identity indexes must be 0-based and must be sequential when sorted")
+    .ensure("A projection may not store values of multiple types for the same selector") { _ =>   
+      columns.keys.groupBy(c => (c.path, c.selector)).values.forall(_.size == 1)
+    }
     .map(new ProjectionDescriptor(_, columns, sorting))
   }
 }

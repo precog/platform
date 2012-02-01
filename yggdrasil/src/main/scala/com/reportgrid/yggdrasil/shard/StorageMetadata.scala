@@ -10,8 +10,9 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
-import akka.actor._
+import akka.actor.{IO => _, _}
 import akka.actor.Actor._
+import akka.pattern.ask
 import akka.routing._
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
@@ -23,11 +24,16 @@ import scala.collection.immutable.ListMap
 import scala.collection.immutable.Set
 
 import scalaz._
+import scalaz.syntax
+import scalaz.effect._
 import scalaz.Scalaz._
 
-trait StorageMetadata {
- 
+object StorageMetadata {
   type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
+}
+
+trait StorageMetadata {
+  import StorageMetadata._
 
   implicit val dispatcher: MessageDispatcher
 
@@ -47,10 +53,10 @@ trait StorageMetadata {
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
   }
-
 }
 
 class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) extends StorageMetadata {
+  import StorageMetadata._
 
   implicit val dispatcher = messageDispatcher
 
@@ -64,8 +70,8 @@ class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) exten
     actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
   }
 
-  def update(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
-    actor ? UpdateMetadata(pid, eid, desc, values, metadata) map { _.asInstanceOf[Unit] } 
+  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
+    actor ? UpdateMetadata(eventId, desc, values, metadata) map { _.asInstanceOf[Unit] } 
   }
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
@@ -116,57 +122,58 @@ object ShardMetadata {
   }
 }
 
+class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int]) extends Actor {
 
-class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], checkpoints: mutable.Map[Int, Int]) extends Actor {
- 
-  type MetadataMap = mutable.Map[MetadataType, Metadata] 
-
-  private val expectedEventActions = mutable.Map[(Int, Int), Int]()
+  private val expectedEventActions = mutable.Map[EventId, Int]()
  
   def receive = {
    
-    case ExpectedEventActions(producerId, eventId, expected) => 
-      sender ! setExpectation(producerId, eventId, expected)
+    case ExpectedEventActions(eventId, expected) => 
+      sender ! setExpectation(eventId, expected)
     
-    case UpdateMetadata(producerId, eventId, desc, values, metadata) => 
-      sender ! update(producerId, eventId, desc, values, metadata)
+    case UpdateMetadata(eventId, desc, values, metadata) => 
+      sender ! update(eventId, desc, values, metadata)
    
-    case FindSelectors(path)             => sender ! findSelectors(path)
+    case FindSelectors(path)                  => sender ! findSelectors(path)
 
-    case FindDescriptors(path, selector) => sender ! findDescriptors(path, selector)
+    case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
     
-    case GetCheckpoints                  => sender ! checkpoints.toMap
+    case GetCheckpoints                       => sender ! checkpoints.toMap
     
-    case SyncMetadata                    => sender ! sync
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections.clone))
+    
+    case FlushCheckpoints(serializationActor) => sender ! (serializationActor ! SaveCheckpoints(checkpoints.clone)) 
   
   }
 
-  def setExpectation(producerId: Int, eventId: Int, expected: Int) = {
-    expectedEventActions.put((producerId, eventId), expected)
+  def setExpectation(eventId: EventId, expected: Int) = {
+    expectedEventActions.put(eventId, expected)
   }
- 
-  def update(producerId: Int, eventId: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Unit = {
-    def updateExpectation(producerId: Int, eventId: Int, ifSatisfied: (Int, Int) => Unit) = {
-      decrementExpectation(producerId, eventId) match {
-        case Some(0) => ifSatisfied(producerId, eventId)
+
+  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Unit = {
+    def updateExpectation(eventId: EventId, ifSatisfied: (EventId) => Unit) = {
+      decrementExpectation(eventId) match {
+        case Some(0) => ifSatisfied(eventId)
         case _       => ()
       }
     }
     
-    def decrementExpectation(producerId: Int, eventId: Int): Option[Int] = {
-      val key = (producerId, eventId)
-      val update = expectedEventActions.get(key).map( _ - 1 )
+    def decrementExpectation(eventId: EventId): Option[Int] = {
+      val update = expectedEventActions.get(eventId).map( _ - 1 )
       update.foreach {
-        case x if x > 0  => expectedEventActions.put(key, x)
-        case x if x <= 0 => expectedEventActions.remove(key)
+        case x if x > 0  => expectedEventActions.put(eventId, x)
+        case x if x <= 0 => expectedEventActions.remove(eventId)
       }
       update
     }
     
-   
-    def recordCheckpoint(producerId: Int, eventId: Int) {
-      val newVal = checkpoints.get(producerId).map{ cur => if(cur < eventId) eventId else cur }.getOrElse(eventId)
-      checkpoints.put(producerId, newVal)
+    def recordCheckpoint(eventId: EventId) {
+      eventId match {
+        case EventId(pid, sid) => {
+          val newVal = checkpoints.get(pid).map{ cur => if(cur < sid) sid else cur }.getOrElse(sid)
+          checkpoints.put(pid, newVal)
+        }
+      }
     }
 
     def applyMetadata(desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Seq[MetadataMap] = {
@@ -184,8 +191,8 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
     def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
       desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
     }
-    
-    updateExpectation(producerId, eventId, recordCheckpoint _)
+   
+    updateExpectation(eventId, recordCheckpoint _)
 
     projections.put(desc, applyMetadata(desc, values, metadata))
   }
@@ -207,22 +214,32 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[muta
       case (descriptor, metadata) => (descriptor, Map( (descriptor.columns zip metadata): _*))
     }
   }  
-
-  def sync = {
-
-  }
 }
 
 sealed trait ShardMetadataAction
 
-case class ExpectedEventActions(producerId: Int, eventId: Int, count: Int) extends ShardMetadataAction
+case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetadataAction
 
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(producerId: Int, eventId: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
-case object SyncMetadata extends ShardMetadataAction
+case class UpdateMetadata(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
+case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
+case class FlushCheckpoints(serializationActor: ActorRef) extends ShardMetadataAction
 
 case object GetCheckpoints extends ShardMetadataAction
 
+class MetadataSerializationActor(metadataIO: MetadataIO, checkpointIO: CheckpointIO) extends Actor {
+  def receive = {
+    case SaveMetadata(metadata) =>  sender ! metadata.toList.map {
+        case (pd, md) => metadataIO(pd, md)
+      }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
 
+    case SaveCheckpoints(checkpoints) => sender ! checkpointIO(checkpoints).unsafePerformIO
+  }
+}
+
+sealed trait MetadataSerializationAction
+
+case class SaveMetadata(metadata: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]) extends MetadataSerializationAction
+case class SaveCheckpoints(metadata: mutable.Map[Int, Int]) extends MetadataSerializationAction
