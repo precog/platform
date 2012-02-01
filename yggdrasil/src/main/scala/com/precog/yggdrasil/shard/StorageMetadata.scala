@@ -106,50 +106,11 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
   }
 
   def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Unit = {
-    def updateExpectation(eventId: EventId, ifSatisfied: (EventId) => Unit) = {
-      decrementExpectation(eventId) match {
-        case Some(0) => ifSatisfied(eventId)
-        case _       => ()
-      }
-    }
-    
-    def decrementExpectation(eventId: EventId): Option[Int] = {
-      val update = expectedEventActions.get(eventId).map( _ - 1 )
-      update.foreach {
-        case x if x > 0  => expectedEventActions.put(eventId, x)
-        case x if x <= 0 => expectedEventActions.remove(eventId)
-      }
-      update
-    }
-    
-    def recordCheckpoint(eventId: EventId) {
-      eventId match {
-        case EventId(pid, sid) => {
-          val newVal = checkpoints.get(pid).map{ cur => if(cur < sid) sid else cur }.getOrElse(sid)
-          checkpoints.put(pid, newVal)
-        }
-      }
-    }
-
-    def applyMetadata(desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Seq[MetadataMap] = {
-      addValueMetadata(values) _ andThen combineMetadata(metadata) _ apply projections.get(desc).getOrElse(initMetadata(desc))
-    }
-
-    def addValueMetadata(values: Seq[JValue])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
-      values zip metadata map { t => Metadata.typedValueStats(t._1).map( t._2 + _ ).getOrElse(t._2) }
-    }
-
-    def combineMetadata(user: Seq[Set[Metadata]])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
-      user zip metadata map { t => Metadata.toTypedMap(t._1) |+| t._2 }
-    }
-
-    def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
-      desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
-    }
+    import MetadataUpdateHelper._ 
    
-    updateExpectation(eventId, recordCheckpoint _)
+    updateExpectation(eventId, recordCheckpoint(checkpoints) _, expectedEventActions)
 
-    projections.put(desc, applyMetadata(desc, values, metadata))
+    projections.put(desc, applyMetadata(desc, values, metadata, projections))
   }
  
   def findSelectors(path: Path): Seq[JPath] = {
@@ -169,6 +130,49 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
       case (descriptor, metadata) => (descriptor, Map( (descriptor.columns zip metadata): _*))
     }
   }  
+}
+
+object MetadataUpdateHelper {
+ def updateExpectation(eventId: EventId, ifSatisfied: (EventId) => Unit, expectedEventActions: mutable.Map[EventId, Int]) = {
+    decrementExpectation(eventId, expectedEventActions) match {
+      case Some(0) => ifSatisfied(eventId)
+      case _       => ()
+    }
+  }
+  
+  def decrementExpectation(eventId: EventId, expectedEventActions: mutable.Map[EventId, Int]): Option[Int] = {
+    val update = expectedEventActions.get(eventId).map( _ - 1 )
+    update.foreach {
+      case x if x > 0  => expectedEventActions.put(eventId, x)
+      case x if x <= 0 => expectedEventActions.remove(eventId)
+    }
+    update
+  }
+
+  def recordCheckpoint(checkpoints: mutable.Map[Int, Int])(eventId: EventId) {
+    eventId match {
+      case EventId(pid, sid) => {
+        val newVal = checkpoints.get(pid).map{ cur => if(cur < sid) sid else cur }.getOrElse(sid)
+        checkpoints.put(pid, newVal)
+      }
+    }
+  }
+
+  def applyMetadata(desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]], projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]): Seq[MetadataMap] = {
+    combineMetadata(projections.get(desc).getOrElse(initMetadata(desc)))(addValueMetadata(values)(metadata map { Metadata.toTypedMap }))
+  }
+
+  def addValueMetadata(values: Seq[JValue])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
+    values zip metadata map { t => Metadata.valueStats(t._1).map( vs => t._2 + (vs.metadataType -> vs) ).getOrElse(t._2) }
+  }
+
+  def combineMetadata(user: Seq[MetadataMap])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
+    user zip metadata map { t => t._1 |+| t._2 }
+  }
+
+  def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
+    desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
+  }
 }
 
 sealed trait ShardMetadataAction
