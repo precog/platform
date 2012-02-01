@@ -14,16 +14,20 @@ import akka.util.Duration
 import java.io._
 import java.util.Properties
 
+import com.precog.analytics.Path
+
 import com.precog.common._
 import com.precog.common.util.RealisticIngestMessage
 import com.precog.yggdrasil.kafka._
 
 import blueeyes.json.Printer
+import blueeyes.json.JPath
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import scala.collection.mutable
+import scala.collection.immutable.ListMap
 
 import org.scalacheck.Gen._
 
@@ -95,7 +99,7 @@ object ShardDemoUtil {
     ShardConfig.fromProperties(properties)
 
   def writeDummyShardMetadata() {
-    val md = ShardMetadata.dummyProjections
+    val md = DummyMetadata.dummyProjections
    
     val rawEntries = 0.until(md.size) zip md.toSeq
 
@@ -132,3 +136,45 @@ object ShardDemoUtil {
     }.toList.sequence[IO,Unit].map { _ => () }
 }
 
+object DummyMetadata {
+  def shardMetadata(filename: String) = dummyShardMetadata
+
+  def dummyShardMetadata = {
+    new ShardMetadata(dummyShardMetadataActor, actorSystem.dispatcher)
+  }
+  
+  def actorSystem = ActorSystem("test actor system")
+
+  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints)))
+
+  def dummyProjections = {
+    mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]](
+      projectionHelper(List(
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
+      projectionHelper(List(
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
+      projectionHelper(List(
+        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
+        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()))
+  }
+ 
+  def projectionHelper(cds: Seq[ColumnDescriptor]): ProjectionDescriptor = {
+    val columns = cds.foldLeft(ListMap[ColumnDescriptor, Int]()) { (acc, el) =>
+      acc + (el -> 0)
+    }
+    val sort = List( (cds(0), ById) ) 
+    ProjectionDescriptor(columns, sort) match {
+      case Success(pd) => pd
+      case _           => sys.error("Bang, bang on the door")
+    }
+  }
+
+  def dummyCheckpoints = {
+    mutable.Map() += (1 -> 100) += (2 -> 101) += (3 -> 1000)
+  }
+}

@@ -115,6 +115,7 @@ trait StorageShard {
   def stop: Future[Unit]
   
   def router: ActorRef
+  def metadata: StorageMetadata 
 }
 
 class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard {
@@ -126,6 +127,8 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
   lazy val routingTable = new SingleColumnProjectionRoutingTable
 
   lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)), "metadata")
+
+  lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor, dispatcher) 
 
   lazy val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
 

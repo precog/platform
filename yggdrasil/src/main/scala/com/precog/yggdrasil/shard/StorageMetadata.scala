@@ -60,15 +60,14 @@ class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) exten
 
   implicit val dispatcher = messageDispatcher
 
-  implicit val serviceTimeout: Timeout = 2 seconds
+  implicit val serviceTimeout: Timeout = 10 seconds
  
-  def findSelectors(path: Path) = Future[Seq[JPath]] { List() }
+  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
 
-  def findProjections(path: Path, selector: JPath) = Future[Map[ProjectionDescriptor, ColumnMetadata]] { Map() }
+  def findProjections(path: Path, selector: JPath) = 
+    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
 
-  def checkpoints: Future[Map[Int, Int]] = {
-    actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
-  }
+  def checkpoints: Future[Map[Int, Int]] = actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
 
   def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
     actor ? UpdateMetadata(eventId, desc, values, metadata) map { _.asInstanceOf[Unit] } 
@@ -76,50 +75,6 @@ class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) exten
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
 
-}
-
-
-object ShardMetadata {
-  def shardMetadata(filename: String) = dummyShardMetadata
-
-  def dummyShardMetadata = {
-    new ShardMetadata(dummyShardMetadataActor, actorSystem.dispatcher)
-  }
-  
-  def actorSystem = ActorSystem("test actor system")
-
-  def dummyShardMetadataActor = actorSystem.actorOf(Props(new ShardMetadataActor(dummyProjections, dummyCheckpoints)))
-
-  def dummyProjections = {
-    mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]](
-      projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
-      projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()),
-      projectionHelper(List(
-        ColumnDescriptor(Path("/test/path/"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/one"), JPath(".selector"), SLong, Ownership(Set())),
-        ColumnDescriptor(Path("/test/path/"), JPath(".notSelector"), SLong, Ownership(Set())))) -> List(mutable.Map(),mutable.Map(),mutable.Map()))
-  }
- 
-  def projectionHelper(cds: Seq[ColumnDescriptor]): ProjectionDescriptor = {
-    val columns = cds.foldLeft(ListMap[ColumnDescriptor, Int]()) { (acc, el) =>
-      acc + (el -> 0)
-    }
-    val sort = List( (cds(0), ById) ) 
-    ProjectionDescriptor(columns, sort) match {
-      case Success(pd) => pd
-      case _           => sys.error("Bang, bang on the door")
-    }
-  }
-
-  def dummyCheckpoints = {
-    mutable.Map() += (1 -> 100) += (2 -> 101) += (3 -> 1000)
-  }
 }
 
 class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int]) extends Actor {
