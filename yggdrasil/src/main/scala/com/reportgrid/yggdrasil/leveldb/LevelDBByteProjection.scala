@@ -70,7 +70,7 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-  def allocateWidth(valueWidths: Seq[Int]): (Int) = 
+  def allocateWidth(valueWidths: Seq[Int]): (Int) = {
     descriptor.sorting.foldLeft(0) { 
       case (width, (col, ById)) =>
         if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + 8)
@@ -85,6 +85,7 @@ trait LevelDBByteProjection extends ByteProjection {
         if (descriptor.indexedColumns.map(_._2).toList.indexOf(descriptor.indexedColumns(col)) == descriptor.columns.indexOf(col)) (width + valueWidths(valueIndex) + 8)
         else (width + valueWidths(valueIndex))
     }
+  }
 
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
@@ -187,18 +188,31 @@ trait LevelDBByteProjection extends ByteProjection {
     }
   }
 
-  private lazy val valueParsers: List[ValueRead] = 
+  private lazy val valueParsers: List[ValueRead] = {
     descriptor.columns filter { col => 
-      !(descriptor.sorting exists { case (`col`, sortBy) => sortBy == ByValue || sortBy == ByValueThenId })
+      !(descriptor.sorting exists { 
+        case (`col`, sortBy)  => sortBy == ByValue || sortBy == ByValueThenId
+        case _                => false
+      })
     } map { col => 
       (_: RBuf).readValue(col.valueType)
     }
+  }
 
-  private lazy val mergeDirectives: List[Boolean] = 
-    descriptor.columns.map(c => descriptor.sorting exists { case (`c`, sortBy) => sortBy == ByValue || sortBy == ByValueThenId })
+  private lazy val mergeDirectives: List[Boolean] = {
+    descriptor.columns.map(c => descriptor.sorting exists { 
+      case (`c`, sortBy)  => sortBy == ByValue || sortBy == ByValueThenId 
+      case _              => false
+    }) 
+  }
 
-  private def mergeValues(keyMembers: List[CValue], valueMembers: List[CValue]): List[CValue] = {
+
+  private def mergeValues(keyMembers: List[CValue], valueMembers: List[CValue]): List[CValue] = {  
     @tailrec def merge(mergeDirectives: List[Boolean], keyMembers: List[CValue], valueMembers: List[CValue], result: List[CValue]): List[CValue] = {
+      //println(keyMembers)
+      //println(valueMembers)
+      //println(mergeDirectives)
+      //println(result)
       mergeDirectives match {
         case true  :: ms => merge(ms, keyMembers.tail, valueMembers, keyMembers.head :: result)
         case false :: ms => merge(ms, keyMembers, valueMembers.tail, valueMembers.head :: result)
@@ -206,23 +220,27 @@ trait LevelDBByteProjection extends ByteProjection {
       }
     }
 
-    merge(mergeDirectives, keyMembers, valueMembers, Nil)
+    merge(mergeDirectives.reverse, keyMembers, valueMembers, Nil)
   }
+
 
   def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {
-    val (_, (identities, valuesInKey)) = keyParsers.foldRight((new LevelDBReadBuffer(keyBytes), (List.empty[Long], List.empty[CValue]))) {
-      case (Left(f),  (buf, (ids, values))) => (buf, (f(buf) :: ids, values))
-      case (Right(f), (buf, (ids, values))) => (buf, (ids, f(buf) :: values))
+    val (_, (identities, valuesInKey)) = keyParsers.foldLeft((new LevelDBReadBuffer(keyBytes), (List.empty[Long], List.empty[CValue]))) {
+      case ((buf, (ids, values)), Left(f)) => (buf, (f(buf) :: ids, values))
+      case ((buf, (ids, values)), Right(f)) => (buf, (ids, f(buf) :: values))
     }
 
-    val (_, valueMembers) = valueParsers.foldRight((new LevelDBReadBuffer(valueBytes), List.empty[CValue])) {
-      case (f, (buf, acc)) => (buf, f(buf) :: acc)
-    } 
+    val (_, valueMembers) = valueParsers.foldLeft((new LevelDBReadBuffer(valueBytes), List.empty[CValue])) {
+      case ((buf, acc), f) => (buf, f(buf) :: acc)
+    }
 
     val values = mergeValues(valuesInKey, valueMembers)
+   
     
-    f(identities, values)
+    f(identities.reverse, values)
   }
+
+
 
   def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
     def order(k1: Array[Byte], k2: Array[Byte]) = {
