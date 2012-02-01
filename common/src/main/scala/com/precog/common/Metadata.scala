@@ -118,15 +118,21 @@ object Metadata extends MetadataSerialization {
     set.foldLeft(mutable.Map[MetadataType, Metadata]()) ( (acc, el) => acc + (el.metadataType -> el) ) 
   }
 
-  def valueStats(jval: JValue): Option[Metadata] = typedValueStats(jval).map( _._2 )
-
-  def typedValueStats(jval: JValue): Option[(MetadataType, Metadata)] = jval match {
-    case JBool(b)     => Some((BooleanValueStats, BooleanValueStats(2, if(b) 1 else 0)))
-    case JInt(i)      => Some((BigDecimalValueStats, BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i))))
-    case JDouble(d)   => Some((DoubleValueStats, DoubleValueStats(1, d, d)))
-    case JString(s)   => Some((StringValueStats, StringValueStats(1, s, s)))
+  def valueStats(jval: JValue): Option[Metadata] = jval match {
+    case JBool(b)     => Some(BooleanValueStats(1, if(b) 1 else 0))
+    case JInt(i)      => Some(BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i)))
+    case JDouble(d)   => Some(DoubleValueStats(1, d, d))
+    case JString(s)   => Some(StringValueStats(1, s, s))
     case _            => None
   }
+  
+//  def typedValueStats(jval: JValue): Option[(MetadataType, Metadata)] = jval match {
+//    case JBool(b)     => Some((BooleanValueStats, BooleanValueStats(1, if(b) 1 else 0)))
+//    case JInt(i)      => Some((BigDecimalValueStats, BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i))))
+//    case JDouble(d)   => Some((DoubleValueStats, DoubleValueStats(1, d, d)))
+//    case JString(s)   => Some((StringValueStats, StringValueStats(1, s, s)))
+//    case _            => None
+//  }
 
   implicit val MetadataSemigroup = new Semigroup[mutable.Map[MetadataType, Metadata]] {
     def append(m1: mutable.Map[MetadataType, Metadata], m2: => mutable.Map[MetadataType, Metadata]) =
