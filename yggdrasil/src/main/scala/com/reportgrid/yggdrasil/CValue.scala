@@ -36,6 +36,19 @@ trait CValue {
     emptyArr: => A,
     nul:      => A
   ): A
+
+  def toSValue: SValue = fold[SValue](
+    str  = SString(_),
+    bool = SBoolean(_), 
+    int  = SInt(_),
+    long = SLong(_),
+    float  = SFloat(_),
+    double = SDouble(_),
+    num    = SDecimal(_),
+    emptyObj = SObject(Map()),
+    emptyArr = SArray(Vector.empty[SValue]),
+    nul      = SNull
+  )
 }
 
 object CValue {
