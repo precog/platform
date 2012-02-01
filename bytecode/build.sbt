@@ -19,7 +19,7 @@
  */
 name := "bytecode"
 
-organization := "com.querio"
+organization := "com.precog"
 
 version := "0.1.0"
 
@@ -37,7 +37,7 @@ logBuffered := false
 publishArtifact in packageDoc := false
 
 initialCommands in console := """
-  | import com.querio.bytecode._
+  | import com.precog.bytecode._
   | import java.nio.ByteBuffer
   | 
   | val cake = new BytecodeReader with BytecodeWriter with DAG with util.DAGPrinter

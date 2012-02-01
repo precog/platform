@@ -35,7 +35,7 @@ libraryDependencies ++= Seq(
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
-  | import com.querio._
+  | import com.precog._
   |
   | import daze._
   | import daze.util._

@@ -21,7 +21,7 @@ name := "ingest"
 
 version := "1.2.1-SNAPSHOT"
 
-organization := "com.querio"
+organization := "com.precog"
 
 scalaVersion := "2.9.1"
 
@@ -45,4 +45,4 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-mainClass := Some("com.querio.ingest.service.IngestServer")
+mainClass := Some("com.precog.ingest.service.IngestServer")

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.querio
+package com.precog
 package daze
 
 import org.specs2.mutable._

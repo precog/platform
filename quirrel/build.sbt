@@ -19,7 +19,7 @@
  */
 name := "quirrel"
 
-organization := "com.querio"
+organization := "com.precog"
 
 version := "0.1.0"
 
@@ -36,7 +36,7 @@ libraryDependencies ++= Seq(
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
-  | import com.querio.quirrel._
+  | import com.precog.quirrel._
   | import emitter._
   | import parser._
   | import typer._

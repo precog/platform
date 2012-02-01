@@ -21,7 +21,7 @@ name := "common"
 
 version := "1.2.1-SNAPSHOT"
 
-organization := "com.querio"
+organization := "com.precog"
 
 scalaVersion := "2.9.1"
 

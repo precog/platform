@@ -19,7 +19,7 @@
  */
 name := "util"
 
-organization := "com.querio"
+organization := "com.precog"
 
 version := "0.1.0"
 
