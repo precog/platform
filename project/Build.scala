@@ -23,10 +23,6 @@ import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
 
 object PlatformBuild extends Build {
-  val clientLibDeps = com.samskivert.condep.Depends(
-    ("client-libraries", null, "com.reportgrid"                  %% "scala-client" % "0.3.1")
-  )
-
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
     resolvers ++= Seq("ReportGrid repo"                   at "http://nexus.reportgrid.com/content/repositories/releases",
                       "ReportGrid repo (public)"          at "http://nexus.reportgrid.com/content/repositories/public-releases",
@@ -61,7 +57,7 @@ object PlatformBuild extends Build {
   
   lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   
-  val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings //++ Seq(libraryDependencies ++= clientLibDeps.libDeps)
+  val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)
 }
 
