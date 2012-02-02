@@ -73,7 +73,7 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-  private def allocateWidth(valueWidths: Seq[Int]): (Int) = 
+  private def allocateWidth(valueWidths: Seq[Int]): (Int) =  
     descriptor.sorting.foldLeft(0) { 
       case (width, (col, ById)) =>
         (width + 8)
@@ -85,11 +85,9 @@ trait LevelDBByteProjection extends ByteProjection {
         val valueIndex = descriptor.columns.indexOf(col)
         (width + valueWidths(valueIndex) + 8)
     }
-  
 
 
   def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
-
     lazy val valueWidths = listWidths(cvalues)
     val indexWidth = allocateWidth(valueWidths) 
 

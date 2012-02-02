@@ -41,7 +41,6 @@ initialCommands in console := """
   |                  with Compiler
   |                  with Emitter
   |                  with Evaluator
-  |                  with YggdrasilOperationsAPI
   |                  with DefaultYggConfig
   |                  with StubQueryAPI
   |                  with DAGPrinter

@@ -1,6 +1,9 @@
 package com.precog
 package daze
 
+import akka.dispatch.Await
+import akka.util.duration._
+
 import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
@@ -41,7 +44,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         implicit val order = identitiesOrder(parent.provenance.length)
         
         val result = loop(parent, roots) flatMap {
-          case (_, SString(str)) => query.fullProjection(Path(str))
+          case (_, SString(str)) => Await.result(query.fullProjection[X](Path(str)), 10 seconds)
           case _ => ops.empty[X, SEvent, IO]
         }
         

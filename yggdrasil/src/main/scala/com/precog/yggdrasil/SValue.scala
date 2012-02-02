@@ -144,10 +144,10 @@ trait SValueInstances {
 }
 
 object SValue extends SValueInstances {
-  def apply(selector: JPath, cv: CValue) = {
+  def apply(selector: JPath, cv: CValue): SValue = {
     selector.nodes match {
-      case JPathField(_) :: xs => SObject(Map()).set(selector, cv)
-      case JPathIndex(_) :: xs => SArray(Vector.empty[SValue]).set(selector, cv)
+      case JPathField(_) :: xs => SObject(Map()).set(selector, cv).get
+      case JPathIndex(_) :: xs => SArray(Vector.empty[SValue]).set(selector, cv).get
       case Nil => cv.toSValue
     }
   }
