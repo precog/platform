@@ -12,7 +12,7 @@ case class EventData(identity: Identity, event: Set[ColumnData])
 
 case class ColumnData(descriptor: ColumnDescriptor, cvalue: CValue, metadata: Set[Metadata])
 
-case class ProjectionData(descriptor: ProjectionDescriptor, identities: Identities, values: Seq[CValue])
+case class ProjectionData(descriptor: ProjectionDescriptor, identities: Identities, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 
 trait RoutingTable {
   def route(eventData: EventData): Set[ProjectionData]
@@ -23,26 +23,29 @@ trait RoutingTable {
     route(convertEventMessage(msg))
   }
 
-  def convertEventMessage(msg: EventMessage): EventData
-}
-
-object RoutingTable {
+  def convertEventMessage(msg: EventMessage): EventData = EventData(msg.eventId.uid, unpack(msg.event))
+  
   def unpack(e: Event): Set[ColumnData] = {
-    e.content.map {
-      case (sel, (jval, meta)) => 
-        extract(jval).map { 
-          case (ctype, data) => (ColumnDescriptor(e.path, sel, ctype, Ownership(Set())), data, meta) 
-        }
-    }
+    e.data.flattenWithPath.flatMap {
+      case (sel, jval) => extract(jval).map{
+        case (ctype, cval) => 
+          val colDesc = ColumnDescriptor(e.path, sel, ctype, Ownership(Set(e.tokenId)))
+          val metadata: Set[Metadata] = e.metadata.get(sel).getOrElse(Set.empty).map(x => x)
+          ColumnData(colDesc, cval, metadata)
+      }
+    }.toSet
   }
-  def extract(jval: JValue): Option[(ColumnType, JValue)] = ColumnType.forValue(jval).map((_, jval))
+ 
+  def extract(jval: JValue): Option[(ColumnType, CValue)] = ColumnType.forValue(jval).map((_, convert(jval)))
+  
+  def convert(jval: JValue): CValue = sys.error("todo")
 }
 
 trait SingleColumnProjectionRoutingTable extends RoutingTable {
 
-  def route(eventData: EventData) = {
+  def route(eventData: EventData) = eventData match {
     case EventData(identity, event) => event.map {
-      case ColumnData(colDesc, cValue, metadata) => ProjectionData(toProjectionDescriptor(colDesc), List(identity), List(cValue))
+      case ColumnData(colDesc, cValue, metadata) => ProjectionData(toProjectionDescriptor(colDesc), List(identity), List(cValue), List(metadata))
     }
   }
   
