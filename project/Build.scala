@@ -34,7 +34,7 @@ object PlatformBuild extends Build {
   
   lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode, yggdrasil % "compile->compile;test->test", util)
   
-  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(nexusSettings : _*) dependsOn (quirrel, daze)
+  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(nexusSettings : _*) dependsOn (quirrel, daze, yggdrasil)
   
   lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   

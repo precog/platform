@@ -78,7 +78,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   val analyticsService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
-    logging { logger =>
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
@@ -112,15 +111,15 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
                */
               path("/store") {
                 dataPath("vfs") {
-                  post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, false))//.audited("store")
+                  post(new TrackingService(state.eventStore, state.storageReporting, clock, false))
                 }
               } ~ 
               dataPath("vfs") {
-                post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, true))//.audited("track")
+                post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
               } ~ 
               path("/echo") {
                 dataPath("vfs") {
-                  get(new EchoServiceHandler())//.audited("echo")
+                  get(new EchoServiceHandler())
                 }
               }
             }
@@ -137,7 +136,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         }
       }
     }
-  }}
+  }
 }
 
 object IngestService extends HttpRequestHandlerCombinators with PartialFunctionCombinators {
