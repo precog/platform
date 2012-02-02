@@ -120,12 +120,10 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
   def send(event: Event) {
 
-    val tokens = Event.extractOwners(event)
-
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", tokens.head)
+                                                .query("tokenId", event.tokenId)
                                                 .contentType(application/MimeTypes.json)
-                                                .post[JValue](event.path.toString)(Event.dataRepresentation(event.content))
+                                                .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 
     f.value match {
       case Some(Right(_)) => ()

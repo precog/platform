@@ -46,9 +46,9 @@ class MetadataUpdateHelperSpec extends Specification {
 
     "add initial metadata for the first value inserted" in {
       val projections = emptyProjections
-      val value = JInt(10)
+      val value = CInt(10)
    
-      val valueStats = Metadata.valueStats(value).get
+      val valueStats = MetadataUpdateHelper.valueStats(value).get
       val expectedMetadata = List(mutable.Map[MetadataType, Metadata]((valueStats.metadataType, valueStats)))
       
       val result = MetadataUpdateHelper.applyMetadata(descriptor1, List(value), List(Set()), projections) 
@@ -57,18 +57,18 @@ class MetadataUpdateHelperSpec extends Specification {
     }
 
     "update existing metadata for values other than the first inserted" in {
-      val initialValue = JInt(10)
+      val initialValue = CInt(10)
    
-      val initialValueStats = Metadata.valueStats(initialValue).get
+      val initialValueStats = MetadataUpdateHelper.valueStats(initialValue).get
       val initialMetadata = List(mutable.Map[MetadataType, Metadata]((initialValueStats.metadataType, initialValueStats)))
       
       val projections = emptyProjections
       
       projections += (descriptor1 -> initialMetadata)
 
-      val value = JInt(20)
+      val value = CInt(20)
    
-      val valueStats = Metadata.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
+      val valueStats = MetadataUpdateHelper.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
       val expectedMetadata = List(mutable.Map[MetadataType, Metadata]((valueStats.metadataType, valueStats)))
      
       val result = MetadataUpdateHelper.applyMetadata(descriptor1, List(value), List(Set()), projections) 
@@ -77,13 +77,13 @@ class MetadataUpdateHelperSpec extends Specification {
     }
 
     "metadata is correctly combined" in {
-      val firstValue = JInt(10)
-      val firstValueStats = Metadata.valueStats(firstValue).get
+      val firstValue = CInt(10)
+      val firstValueStats = MetadataUpdateHelper.valueStats(firstValue).get
       val firstMetadata = List(mutable.Map[MetadataType, Metadata]((firstValueStats.metadataType, firstValueStats)))
 
-      val secondValue = JInt(20)
+      val secondValue = CInt(20)
    
-      val secondValueStats = Metadata.valueStats(secondValue).get
+      val secondValueStats = MetadataUpdateHelper.valueStats(secondValue).get
       val secondMetadata = List(mutable.Map[MetadataType, Metadata]((secondValueStats.metadataType, secondValueStats)))
 
       val result = MetadataUpdateHelper.combineMetadata(secondMetadata)(firstMetadata) 
