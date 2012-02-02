@@ -147,7 +147,7 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
   lazy implicit val dispatcher = system.dispatcher
   lazy val dbLayout = new DBLayout(config.baseDir, config.descriptors)
 
-  lazy val routingTable = new SingleColumnProjectionRoutingTable
+  lazy val routingTable = SingleColumnProjectionRoutingTable 
 
   lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(config.metadata, config.checkpoints)), "metadata")
 
