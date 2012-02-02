@@ -9,11 +9,11 @@ import blueeyes.json.JsonAST._
 import scala.collection.immutable.ListMap
 
 trait RoutingTable {
-  def route(event: Set[(ColumnDescriptor, JValue)]): Set[(ProjectionDescriptor, Seq[JValue])]
+  def route(event: Set[(ColumnDescriptor, CValue)]): Set[(ProjectionDescriptor, Seq[CValue])]
 }
 
 object RoutingTable {
-  def unpack(e: Event): Set[Option[(ColumnDescriptor, JValue, Set[Metadata])]] = {
+  def unpack(e: Event): Set[(ColumnDescriptor, CValue, Set[Metadata])] = {
     e.content.map {
       case (sel, (jval, meta)) => 
         extract(jval).map { 

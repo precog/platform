@@ -241,6 +241,8 @@ object ColumnType extends ColumnTypeSerialization {
     case JDouble(_) => Some(SDouble)
     case JString(_) => Some(SStringArbitrary)
     case JNull      => Some(SNull)
+    case JArray(Nil) => Some(SEmptyArray)
+    case JObject(Nil) => Some(SEmptyObject)
     case _          => None
   }
 }
