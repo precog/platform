@@ -193,14 +193,19 @@ object MetadataUpdateHelper {
     desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
   }
 
- def valueStats(cval: CValue): Option[Metadata] = cval match {
-//   case JBool(b)     => Some(BooleanValueStats(1, if(b) 1 else 0))
-//   case JInt(i)      => Some(BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i)))
-//   case JDouble(d)   => Some(DoubleValueStats(1, d, d))
-//   case JString(s)   => Some(StringValueStats(1, s, s))
-   case _            => sys.error("todo") 
- }
-}
+ def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
+   str = (s: String)      => Some(StringValueStats(1, s, s)),
+   bool = (b: Boolean)    => Some(BooleanValueStats(1, if(b) 1 else 0)),
+   int = (i: Int)         => Some(LongValueStats(1, i, i)),
+   long = (l: Long)       => Some(LongValueStats(1, l, l)),
+   float = (f: Float)     => Some(DoubleValueStats(1, f, f)),
+   double = (d: Double)   => Some(DoubleValueStats(1, d, d)),
+   num = (bd: BigDecimal) => Some(BigDecimalValueStats(1, bd, bd)),
+   emptyObj = None,
+   emptyArr = None,
+   nul = None)
+ 
+}   
 
 sealed trait ShardMetadataAction
 
