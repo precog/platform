@@ -22,6 +22,8 @@ package daze
 
 import bytecode._
 
+import com.precog.util.Identity
+
 trait DAG extends Instructions {
   import instructions._
   
@@ -316,13 +318,13 @@ trait DAG extends Instructions {
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(System.identityHashCode(this)))
+      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
       lazy val provenance = parent match {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
-        case _ => Vector(DynamicProvenance(System.identityHashCode(this)))
+        case _ => Vector(DynamicProvenance(Identity.nextInt()))
       }
     }
     
@@ -335,7 +337,7 @@ trait DAG extends Instructions {
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(System.identityHashCode(this)))
+      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
     }
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
