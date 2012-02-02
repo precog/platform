@@ -122,18 +122,17 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
   def receive = {
     case SyncMessage(producerId, syncId, eventIds) => //TODO
 
-    case em @ EventMessage(eventId, ev @ Event(_, data)) =>
-      val eventData = RoutingTable.unpack(ev).flatten
-      val projectionUpdates = routingTable.route(eventData map { case (a, b, c) => (a, b) })
+    case em @ EventMessage(eventId, _) =>
+      val projectionUpdates = routingTable.route(em)
 
       registerCheckpointExpectation(eventId, projectionUpdates.size)
 
-      for ((descriptor, values) <- projectionUpdates) {
+      for (ProjectionData(descriptor, identities, values, metadata) <- projectionUpdates) {
         projectionActor(descriptor) match {
           case Success(actor) =>
-            val fut = actor ? ProjectionInsert(eventId.uid, values)
+            val fut = actor ? ProjectionInsert(identities, values)
             fut.onComplete { _ => 
-              metadataActor ! UpdateMetadata(eventId, descriptor, values, extractMetadataFor(descriptor, eventData))
+              metadataActor ! UpdateMetadata(eventId, descriptor, values, metadata)
             }
 
           case Failure(errors) => 

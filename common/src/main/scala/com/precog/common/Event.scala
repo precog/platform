@@ -37,63 +37,31 @@ import com.precog.common.util.FixMe._
 import scalaz._
 import Scalaz._
 
-case class ValueMetadata(ownership: Ownership, metadata: Set[UserMetadata])
-case class Event(path: Path, value: JValue, valueMetadata: Map[JPath, ValueMetadata]) 
+case class Event(path: Path, tokenId: String, data: JValue, metadata: Map[JPath, Set[UserMetadata]]) 
 
 class EventSerialization {
-
-  def dataRepresentation(content: Set[EventFragment]): JValue = {
-    JValue.unflatten( content.map( t => (t._1, t._2._1) ).toList )
-  }
-
-  def metadataRepresentation(content: Set[EventFragment]): JValue = {
-    JValue.unflatten( content.map( t => (t._1, t._2._2.serialize)).toList )
-  }
 
   implicit val EventDecomposer: Decomposer[Event] = new Decomposer[Event] {
     override def decompose(event: Event): JValue = JObject(
       List(
         JField("path", event.path.serialize),
-        JField("metadata", metadataRepresentation(event.content)),
-        JField("data", dataRepresentation(event.content))))
-  }
-
-  def representationsToContent(allMetadata: JValue, data: JValue): Set[EventFragment] = {
-    
-    def extractMetadataForPath(path: JPath, allMetadata: JValue): Set[Metadata] = {
-      allMetadata(path) match {
-        case JNothing => Set()
-        case jv       => jv.validated[Set[Metadata]].fold(e => Set(), v => v)
-      }
-    }
-
-    def attachMetadata(path: JPath, value: JValue, metadata: Set[Metadata]): EventFragment = {
-      (path, (value, metadata))
-    }
-   
-    data.flattenWithPath.toSet[(JPath, JValue)].map { t => attachMetadata(t._1, t._2, extractMetadataForPath(t._1, allMetadata)) } 
+        JField("tokenId", event.tokenId.serialize),
+        JField("data", event.data),
+        JField("metadata", event.metadata.serialize)))
   }
 
   implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
     override def validated(obj: JValue): Validation[Error, Event] = 
       ((obj \ "path").validated[Path] |@|
-        ((obj \ "metadata").validated[JValue] |@|
-         (obj \ "data").validated[JValue]).apply(representationsToContent(_, _))).apply(Event(_, _))
+       (obj \ "tokenId").validated[String] |@|
+       (obj \ "metadata").validated[Map[JPath, Set[UserMetadata]]]).apply(Event(_,_,obj \ "value",_))
   }  
+
 }
 
 object Event extends EventSerialization {
   def fromJValue(path: Path, data: JValue, ownerToken: String): Event = {
-    def assignOwnership(properties: Set[(JPath, JValue)]): Set[EventFragment] = properties.map { 
-      fixme("Null ownership being attributed at this point in time")
-      (t: (JPath, JValue)) => { (t._1, (t._2, Set())) }: (JPath, (JValue, Set[Metadata]))
-    }
-    Event(path, assignOwnership(data.flattenWithPath.toSet))
-  }
-
-  def extractOwners(event: Event): Set[String] = {
-    println("Ownership being ignored until fixed")
-    Set.empty
+    Event(path, ownerToken, data, Map[JPath, Set[UserMetadata]]())
   }
 }
 
