@@ -205,40 +205,43 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         }
       }
       
-      case Sort(parent, indexes) => {
-        implicit val order: Order[SEvent] = new Order[SEvent] {
-          def order(e1: SEvent, e2: SEvent): Ordering = {
-            val (ids1, _) = e1
-            val (ids2, _) = e2
-            
-            val left = indexes map ids1
-            val right = indexes map ids2
-            
-            (left zip right).foldLeft[Ordering](Ordering.EQ) {
-              case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
-              case (acc, _) => acc
-            }
-          }
-        }
+      case Sort(parent, indexes) => 
+        sortByIdentities(loop(parent, roots), indexes)
+    }
+    
+    loop(orderCrosses(graph), Nil)
+  }
+
+  def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int]): DatasetEnum[X, SEvent, IO] = {
+    implicit val order: Order[SEvent] = new Order[SEvent] {
+      def order(e1: SEvent, e2: SEvent): Ordering = {
+        val (ids1, _) = e1
+        val (ids2, _) = e2
         
-        ops.sort(loop(parent, roots)) map {
-          case (ids, sv) => {
-            val (first, second) = ids.zipWithIndex partition {
-              case (_, i) => indexes contains i
-            }
+        val left = indexes map ids1
+        val right = indexes map ids2
         
-            val prefix = first sortWith {
-              case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
-            }
-            
-            val (back, _) = (prefix ++ second).unzip
-            (back, sv)
-          }
+        (left zip right).foldLeft[Ordering](Ordering.EQ) {
+          case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
+          case (acc, _) => acc
         }
       }
     }
     
-    loop(orderCrosses(graph), Nil)
+    ops.sort(enum) map {
+      case (ids, sv) => {
+        val (first, second) = ids.zipWithIndex partition {
+          case (_, i) => indexes contains i
+        }
+    
+        val prefix = first sortWith {
+          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
+        }
+        
+        val (back, _) = (prefix ++ second).unzip
+        (back, sv)
+      }
+    }
   }
 
   private def unlift[A, B](f: A => Option[B]): PartialFunction[A, B] = new PartialFunction[A, B] {

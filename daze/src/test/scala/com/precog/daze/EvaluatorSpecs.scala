@@ -23,6 +23,11 @@ package daze
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.std.list._
+import Iteratee._
+
 object EvaluatorSpecs extends Specification
     with Evaluator
     with OperationsAPI
@@ -1306,6 +1311,7 @@ object EvaluatorSpecs extends Specification
           obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
         }
       }
+    }
     
     "reduce homogeneous sets" >> {
       "count" >> {
@@ -1581,6 +1587,41 @@ object EvaluatorSpecs extends Specification
         
         result2 must contain(145)
       }
+    }
+  }
+
+  "sortByIdentities" should {
+    def consumeToList(enum: DatasetEnum[Unit, SEvent, IO]): List[SEvent] =
+      (consume[Unit, SEvent, IO, List] &= enum.enum[IO]).run(_ => sys.error("")).unsafePerformIO
+
+    "order the numbers set by specified identities" in {
+      val numbers = {
+        val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+        base.zipWithIndex map {
+          case ((_, sv), id) => (Vector(id): Identities, sv)
+        }
+      }
+      val max = 5
+
+      val enum = numbers.zipWithIndex map {
+        case ((ids, sv), i) => (ids :+ (5 - i), sv)
+      }
+
+      val sorted = sortByIdentities(enum, Vector(0))
+      val sorted2 = sortByIdentities(enum, Vector(1))
+      val sorted3 = sortByIdentities(enum, Vector(1, 0))
+
+      consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
+         (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
+         (Vector(3, 2), SDecimal(1)), (Vector(4, 1), SDecimal(13)))
+
+      consumeToList(sorted2) mustEqual List((Vector(1, 4), SDecimal(13)),
+         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
+
+      consumeToList(sorted3) mustEqual List((Vector(1, 4), SDecimal(13)),
+         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
     }
   }
 }
