@@ -152,7 +152,8 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       // TODO IUnion and IIntersect
       
       case Join(_, instr, left, right) => {
-        implicit lazy val order = identitiesOrder(sharedPrefixLength(left, right))
+        lazy val length = sharedPrefixLength(left, right)
+        implicit lazy val order = identitiesOrder(length)
         
         val leftEnum = loop(left, roots)
         val rightEnum = loop(right, roots)
@@ -168,7 +169,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           unlift {
             case ((ids1, sv1), (ids2, sv2)) => {
               val ids = if (distinct)
-                (ids1 ++ ids2).distinct
+                (ids1 ++ (ids2 drop length))
               else
                 ids1 ++ ids2
               
@@ -179,7 +180,8 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
       
       case Filter(_, cross, _, target, boolean) => {
-        implicit lazy val order = identitiesOrder(sharedPrefixLength(target, boolean))
+        lazy val length = sharedPrefixLength(target, boolean)
+        implicit lazy val order = identitiesOrder(length)
         
         val targetEnum = loop(target, roots)
         val booleanEnum = loop(boolean, roots)
@@ -194,7 +196,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         pairs collect {
           case ((ids1, sv), (ids2, SBoolean(true))) => {
             val ids = if (distinct)
-              (ids1 ++ ids2).distinct
+              (ids1 ++ (ids2 drop length))
             else
               ids1 ++ ids2
             
