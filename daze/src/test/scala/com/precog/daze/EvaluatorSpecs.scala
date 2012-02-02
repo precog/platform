@@ -1257,6 +1257,57 @@ object EvaluatorSpecs extends Specification
       }
     }
     
+    "evaluate filter on the results of a histogram function" in {
+      val line = Line(0, "")
+      
+      /*
+       * clicks := dataset(//clicks)
+       * histogram('user) :=
+       *   { user: 'user, num: count(clicks where clicks.user = 'user) }
+       * histogram where histogram.num = 9
+       */
+       
+      val histogram = dag.Split(line,
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          Root(line, PushString("user"))),
+        Join(line, Map2Cross(JoinObject),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("user")),
+            SplitRoot(line, 0)),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("num")),
+            dag.Reduce(line, Count,
+              Filter(line, None, None,
+                dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                Join(line, Map2Cross(Eq),
+                  Join(line, Map2Cross(DerefObject),
+                    dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                    Root(line, PushString("user"))),
+                  SplitRoot(line, 0)))))))
+       
+      val input = Filter(line, None, None,
+        histogram,
+        Join(line, Map2Cross(Eq),
+          Join(line, Map2Cross(DerefObject),
+            histogram,
+            Root(line, PushString("num"))),
+          Root(line, PushNum("9"))))
+                  
+      val result = consumeEval(input)
+      
+      result must haveSize(1)
+      result.toList.head must beLike {
+        case (Vector(_), SObject(obj)) => {
+          obj must haveKey("user")
+          obj("user") must beLike { case SString("daniel") => ok }
+          
+          obj must haveKey("num")
+          obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
+        }
+      }
+    }
+    
     "reduce homogeneous sets" >> {
       "count" >> {
         val line = Line(0, "")
