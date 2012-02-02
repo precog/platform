@@ -27,11 +27,20 @@ import edu.uwm.cs.gll.{Failure, LineStream, Success}
 import jline.{ANSIBuffer, ConsoleReader, Terminal}
 
 import daze._
+import yggdrasil.shard._
+
+import akka.dispatch.Await
+import akka.util.Duration
+
+import java.util.Properties
+import java.net.URLClassLoader
 
 import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
+
+import scalaz.effect.IO
 
 trait REPL extends LineErrors
     with Parser
@@ -40,11 +49,12 @@ trait REPL extends LineErrors
     with Emitter
     with Evaluator
     with DefaultYggConfig
+    with StorageShardModule
     with StubQueryAPI {
-  
+ 
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
   val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
-  
+
   def run() {
     Terminal.setupTerminal().initializeTerminal()
     
@@ -143,15 +153,53 @@ trait REPL extends LineErrors
         }
       }
     }
+   
+    startShard.unsafePerformIO
     
     println("Welcome to Quirrel version 0.0.0.")
     println("Type in expressions to have them evaluated.")
     println("Press Ctrl-D on a new line to evaluate an expression.")
     println("Type in :help for more information.")
     println()
-    
+  
     loop()
+   
+    stopShard.unsafePerformIO
   }
+
+  def storageShardConfig() = {
+    val config = new Properties()
+  
+    // local storage root dir required for metadata and leveldb data
+    config.setProperty("precog.storage.root", "/tmp/repl_test_storage")
+   
+    // Insert a random selection of events (events per class, number of classes)
+    //config.setProperty("precog.test.load.dummy", "1000,10")
+    
+    // kafka ingest consumer configuration
+    config.setProperty("precog.kafka.enable", "true")
+    config.setProperty("precog.kafka.topic.raw", "test_topic_1")
+    config.setProperty("groupid","test_group_1")
+    
+    config.setProperty("zk.connect","127.0.0.1:2181")
+    config.setProperty("zk.connectiontimeout.ms","1000000")
+
+    config
+  }
+
+  def startShard(): IO[Unit] = 
+    storageShard.map{ shard =>
+      println()
+      Await.result(shard.start, Duration(300, "seconds"))
+      println()
+    }
+
+  def stopShard(): IO[Unit] =
+    storageShard.map{ shard =>
+      println()
+      Await.result(shard.stop, Duration(300, "seconds"))
+      println()
+    }
   
   def readNext(reader: ConsoleReader): String = {
     var input = reader.readLine(Prompt)
@@ -198,6 +246,7 @@ trait REPL extends LineErrors
 }
 
 object Console extends App {
+  println(System.out.println(System.getProperty("java.io.tmpdir")))
   val repl = new REPL {}
   repl.run()
 }

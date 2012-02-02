@@ -98,15 +98,11 @@ object ShardServer extends Logging {
   def main(args: Array[String]) {
     val shardServer = new ShardServer(readProperties(args(0)))
     val run = for (storageShard <- shardServer.storageShard) yield {
-      logger.info("Shard server - Starting")
       Await.result(storageShard.start, 300 seconds)
-      logger.info("Shard server - Started")
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() { 
-          logger.info("Shard server - Stopping")
           Await.result(storageShard.stop, 300 seconds) 
-          logger.info("Shard server - Stopped")
         }
       })
     }
@@ -141,7 +137,7 @@ trait StorageShard {
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
 }
 
-class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard {
+class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard with Logging {
   
   lazy val system = ActorSystem("storage_shard")
   lazy implicit val dispatcher = system.dispatcher
@@ -158,24 +154,76 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
   lazy val consumer = new KafkaConsumer(config.properties, router)
 
   def start: Future[Unit] = Future {
+    logger.info(lpre("Starting"))
+    
+    kafkaConsumer
+    testLoad
+    
+    logger.info(lpre("Started"))
+  }
+
+  def kafkaConsumer() {
     if(config.properties.getProperty("precog.kafka.enable", "false").trim.toLowerCase == "true") {
       val consumerThread = new Thread(consumer)
       consumerThread.start
     }
   }
 
+  def lpre(msg: String): String = "[Storage Shard] %s".format(msg)
+
+  def testLoad() {
+    def parse(s: String): Option[(Int, Int)] = {
+      if(s == null) None
+      else {
+        val parts = s.split(",")
+        if(parts.length != 2) None
+        else Some((parts(0).toInt, parts(1).toInt))
+      }
+    }
+
+    parse(config.properties.getProperty("precog.test.load.dummy")) foreach { 
+      case (count, variety) => {
+        println(lpre("Dummy data load (%d,%d)".format(count, variety)))
+        SimpleShardLoader.load(router, count, variety) 
+      }
+    }
+  }
+
   def stop: Future[Unit] = {
     val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)), "metadata_serializer")
 
-    val duration = 300 seconds
-    implicit val timeout: Timeout = duration 
+    val defaultSystem = system
+    val defaultTimeout = 300 seconds
+    implicit val timeout: Timeout = defaultTimeout
 
-    gracefulStop(router, duration)(system) flatMap
-      { _ => metadataActor ? FlushMetadata(metadataSerializationActor) }  flatMap
-      { _ => metadataActor ? FlushCheckpoints(metadataSerializationActor) }  flatMap
-      { _ => gracefulStop(metadataActor, duration)(system) }  flatMap
-      { _ => gracefulStop(metadataSerializationActor, duration)(system) } map
-      { _ => system.shutdown }
+    def actorStop(actor: ActorRef, timeout: Duration = defaultTimeout, system: ActorSystem = defaultSystem) = (_: Any) =>
+      gracefulStop(actor, timeout)(system)
+
+    def flushMetadata = (_: Any) => metadataActor ? FlushMetadata(metadataSerializationActor)
+    def flushCheckpoints = (_: Any) => metadataActor ? FlushCheckpoints(metadataSerializationActor)
+  
+    def li(m: String) = (_:Any) => logger.info(lpre(m))
+    def ld(m: String) = (_:Any) => logger.debug(lpre(m))
+    def le(m: String) = (_:Any) => logger.error(lpre(m))
+    def lee(m: String, t: Throwable) = (_:Any) => logger.error(lpre(m), t)
+    def rle(m: String): PartialFunction[Throwable, Unit] = { case t => lee(m, t)(()) }
+
+    Future { li("Stopping")(_) } map 
+      ld("Stopping kafka consumer") map
+      { _ => consumer.requestStop } recover rle("Error stopping kafka consumer") map
+      ld("Stopping routing actor") flatMap
+      actorStop(router) recover rle("Error stopping routing actor") map
+      ld("Flushing metadata") flatMap
+      flushMetadata recover rle("Error flushing metadata") map
+      ld("Flushing checkpoints") flatMap
+      flushCheckpoints recover rle("Error flushing checkpoints") map
+      ld("Stopping metadata actor") flatMap
+      actorStop(metadataActor) recover rle("Error stopping metadata actor") map
+      ld("Stopping flush actor") flatMap
+      actorStop(metadataSerializationActor) recover rle("Error stopping flush actor") map
+      ld("Stopping actor system") map
+      { _ => system.shutdown } recover rle("Error stopping actor system") map
+      li("Stopped")
   }
   
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
@@ -312,10 +360,9 @@ class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
   }
 
   def run {
-    val rawEventsTopic = props.getProperty("precog.storage.topic.raw", "raw")
+    val rawEventsTopic = props.getProperty("precog.kafka.topic.raw", "raw")
 
     val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
-
 
     for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
       router ! IngestMessageSerialization.readMessage(message.buffer) 
