@@ -1287,7 +1287,6 @@ object EvaluatorSpecs extends Specification
           obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
         }
       }
-    }
     
     "reduce homogeneous sets" >> {
       "count" >> {
