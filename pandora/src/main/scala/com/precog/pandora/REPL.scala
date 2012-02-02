@@ -99,12 +99,11 @@ trait REPL extends LineErrors
       }
       
       case PrintTree(tree) => {
-        println()
+        bindRoot(tree, tree)
+        val tree2 = shakeTree(tree)
         
-        val optTree = compile(tree)
-        for (tree <- optTree) {
-          println(prettyPrint(tree))
-        }
+        println()
+        println(prettyPrint(tree2))
         
         true
       }
@@ -148,21 +147,26 @@ trait REPL extends LineErrors
     
     println("Welcome to Quirrel version 0.0.0.")
     println("Type in expressions to have them evaluated.")
-    println("All expressions must be followed by a single blank line.")
+    println("Press Ctrl-D on a new line to evaluate an expression.")
     println("Type in :help for more information.")
     println()
     
     loop()
   }
   
-  def readNext(reader: ConsoleReader) = {
+  def readNext(reader: ConsoleReader): String = {
     var input = reader.readLine(Prompt)
-    var line = reader.readLine(Follow)
-    while (line.trim != "") {
-      input += '\n' + line
-      line = reader.readLine(Follow)
+    if (input == null) {
+      readNext(reader)
+    } else {
+      var line = reader.readLine(Follow)
+      while (line != null) {
+        input += '\n' + line
+        line = reader.readLine(Follow)
+      }
+      println()
+      input.trim
     }
-    input.trim
   }
   
   def printHelp() {
@@ -172,7 +176,7 @@ trait REPL extends LineErrors
         |<expr>        Evaluate the expression
         |:help         Print this help message
         |:quit         Exit the REPL
-        |:tree <expr>  Print the AST resulting from the parse phase (TODO subsequent phases)"""
+        |:tree <expr>  Print the AST for the expression"""
         
     println(str stripMargin '|')
   }
