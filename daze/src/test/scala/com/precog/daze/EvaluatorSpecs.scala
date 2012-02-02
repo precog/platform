@@ -1114,16 +1114,17 @@ object EvaluatorSpecs extends Specification
           
       val result = consumeEval(input)
       
-      // TODO recreate this by hand; I'm pretty sure it's wrong
-      result must haveSize(23)
+      result must haveSize(25)
       
       val result2 = result collect {
         case (Vector(_, _), SDecimal(d)) => d.toInt
       }
       
-      result2 must contain(-1470, 1806, 1176, 0, 1764, -780, 156, -24, -360, 144,
-        6006, 4851, 2695, 5929, -76, 2, -13, -41, 1, -832, 182, -13, -377)
-    }.pendingUntilFixed
+      result2 must haveSize(23)
+      
+      result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
+        2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
+    }
     
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
@@ -1136,16 +1137,17 @@ object EvaluatorSpecs extends Specification
           
       val result = consumeEval(input)
       
-      // TODO recreate this by hand; I'm pretty sure it's wrong
-      result must haveSize(21)
+      result must haveSize(25)
       
       val result2 = result collect {
         case (Vector(_, _), SDecimal(d)) => d.toInt
       }
       
+      result2 must haveSize(20)
+      
       result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
-        2695, 5005, 5852, 4928, -41, -11, -76, -12, -377, 13, -832, 156)
-    }.pendingUntilFixed
+        2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
+    }
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
