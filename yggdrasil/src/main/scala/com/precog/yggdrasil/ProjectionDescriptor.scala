@@ -122,7 +122,7 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
   lazy val columns = indexedColumns.map(_._1).toList 
   lazy val selectors = columns.map(_.selector).toSet
 
-  def columnAt(selector: JPath) = columns.find(_.selector == selector)
+  def columnAt(path: Path, selector: JPath) = columns.find(col => col.path == path && col.selector == selector)
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
 }

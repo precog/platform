@@ -49,6 +49,7 @@ import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 import IterateeT._
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
@@ -214,8 +215,8 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  def getColumnValues[X](col: ColumnDescriptor): EnumeratorP[X, (Identities, CValue), IO] = new EnumeratorP[X, (Identities, CValue), IO] {
-    val columnIndex = descriptor.columns.indexOf(col)
+  def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO] = new EnumeratorP[X, (Identities, CValue), IO] {
+    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && col.selector == selector)
     def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
       (id, b) => (id, b(columnIndex))
     }

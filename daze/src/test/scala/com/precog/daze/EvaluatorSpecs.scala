@@ -25,7 +25,7 @@ import org.specs2.mutable._
 
 object EvaluatorSpecs extends Specification
     with Evaluator
-    with YggdrasilOperationsAPI
+    with OperationsAPI
     with DefaultYggConfig
     with StubQueryAPI {
       

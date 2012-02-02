@@ -39,7 +39,6 @@ trait REPL extends LineErrors
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with YggdrasilOperationsAPI
     with DefaultYggConfig
     with StubQueryAPI {
   

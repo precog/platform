@@ -70,7 +70,7 @@ import com.precog.common._
 import com.precog.common.Event
 import com.precog.common.util.RealisticIngestMessage
 
-import scala.collection._
+import scala.collection.mutable
 import scala.annotation.tailrec
 
 import scalaz._
@@ -97,17 +97,21 @@ object ShardServer extends Logging {
 
   def main(args: Array[String]) {
     val shardServer = new ShardServer(readProperties(args(0)))
-    logger.info("Shard server - Starting")
-    Await.result(shardServer.storageShard.start, 300 seconds)
-    logger.info("Shard server - Started")
+    val run = for (storageShard <- shardServer.storageShard) yield {
+      logger.info("Shard server - Starting")
+      Await.result(storageShard.start, 300 seconds)
+      logger.info("Shard server - Started")
 
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() { 
-        logger.info("Shard server - Stopping")
-        Await.result(shardServer.storageShard.stop, 300 seconds) 
-        logger.info("Shard server - Stopped")
-      }
-    })
+      Runtime.getRuntime.addShutdownHook(new Thread() {
+        override def run() { 
+          logger.info("Shard server - Stopping")
+          Await.result(storageShard.stop, 300 seconds) 
+          logger.info("Shard server - Stopped")
+        }
+      })
+    }
+
+    run.unsafePerformIO
   }
 
   def readProperties(filename: String) = {
@@ -121,8 +125,8 @@ trait StorageShardModule {
 
   def storageShardConfig: Properties
 
-  lazy val storageShard: StorageShard = {
-    ShardConfig.fromProperties(storageShardConfig).unsafePerformIO match {
+  lazy val storageShard: IO[StorageShard] = {
+    ShardConfig.fromProperties(storageShardConfig) map {
       case Success(config) => new FilesystemBootstrapStorageShard(config)
       case Failure(e) => sys.error("Error loading shard config: " + e)
     }
@@ -132,9 +136,9 @@ trait StorageShardModule {
 trait StorageShard {
   def start: Future[Unit]
   def stop: Future[Unit]
-  
-  def router: ActorRef
+
   def metadata: StorageMetadata 
+  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
 }
 
 class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard {
@@ -149,7 +153,7 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
 
   lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor, dispatcher) 
 
-  lazy val router = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
+  lazy val router: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
 
   lazy val consumer = new KafkaConsumer(config.properties, router)
 
@@ -161,7 +165,6 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
   }
 
   def stop: Future[Unit] = {
-    
     val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)), "metadata_serializer")
 
     val duration = 300 seconds
@@ -175,6 +178,12 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
       { _ => system.shutdown }
   }
   
+  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
+    (router ? ProjectionActorRequest(descriptor)).mapTo[ValidationNEL[Throwable, ActorRef]] flatMap {
+      case Success(actorRef) => (actorRef ? ProjectionGet).mapTo[Projection]
+    }
+  }
+
   def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
     if (target.isTerminated) {
       Promise.successful(true)
@@ -203,14 +212,14 @@ class FilesystemBootstrapStorageShard(config: ShardConfig) extends StorageShard 
 }
 
 
-class ShardConfig(val properties: Properties, val baseDir: File, val descriptors: mutable.Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
+class ShardConfig(val properties: Properties, val baseDir: File, val descriptors: Map[ProjectionDescriptor, File], val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], val checkpoints: mutable.Map[Int, Int])
 
 object ShardConfig extends Logging {
   def fromFile(propsFile: File): IO[Validation[Error, ShardConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
   
   def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
     val baseDir = extractBaseDir { props }
-    loadDescriptors { baseDir } flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+    loadDescriptors(baseDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
       case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
       case Failure(e) => IO { Failure(e) }
     }}
@@ -218,45 +227,44 @@ object ShardConfig extends Logging {
 
   def extractBaseDir(props: Properties): File = new File(props.getProperty("precog.storage.root", "."))
 
-  def loadDescriptors(baseDir: File): IO[mutable.Map[ProjectionDescriptor, File]] = {
+  def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
 
-    def loadMap(baseDir: File) = {
-      IOUtils.walkSubdirs(baseDir).map{ _.foldLeft( mutable.Map[ProjectionDescriptor, File]() ){ (map, dir) =>
-        println("loading: " + dir)
-        read(dir) match {
-          case Some(dio) => dio.unsafePerformIO.fold({ t => logger.warn("Failed to restore %s: %s".format(dir, t)); map },
-                                                     { pd => map + (pd -> dir) })
-          case None      => map
-        }
-      }}
-    }
-
-    def read(baseDir: File): Option[IO[Validation[String, ProjectionDescriptor]]] = {
-      val df = new File(baseDir, "projection_descriptor.json")
-
-      if (df.exists) Some {
-        IO {
-          val reader = new FileReader(df)
-          try {
-            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
-          } finally {
-            reader.close
+    def loadMap(baseDir: File) = 
+      IOUtils.walkSubdirs(baseDir) flatMap { 
+        _.foldLeft( IO(Map.empty[ProjectionDescriptor, File]) ) { (acc, dir) =>
+          println("loading: " + dir)
+          read(dir) flatMap {
+            case Success(pd) => acc.map(_ + (pd -> dir))
+            case Failure(error) => 
+              logger.warn("Failed to restore %s: %s".format(dir, error))
+              acc
           }
         }
-      } else {
-        None
+      }
+
+    def read(baseDir: File): IO[Validation[String, ProjectionDescriptor]] = IO {
+      val df = new File(baseDir, "projection_descriptor.json")
+      if (!df.exists) Failure("Unable to find serialized projection descriptor in " + baseDir)
+      else {
+        val reader = new FileReader(df)
+        try {
+          { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
+        } finally {
+          reader.close
+        }
       }
     }
+
     loadMap(baseDir)
   }
 
   type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
   
-  def loadMetadata(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
+  def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
 
     type MetadataTuple = (ProjectionDescriptor, MetadataSeq)
 
-    def readAll(descriptors: mutable.Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[MetadataTuple]]] = {
+    def readAll(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[MetadataTuple]]] = {
       val validatedEntries = descriptors.toList.map{ case (d, f) => readSingle(f) map { _.map((d, _)) } }.sequence[IO, Validation[Error, (ProjectionDescriptor, MetadataSeq)]]
 
       validatedEntries.map(flattenValidations)
@@ -319,7 +327,8 @@ class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
   }
 }
 
-class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, File]) { 
+class DBLayout(baseDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
+  private var descriptorDirs = descriptorLocations
 
   val descriptorName = "projection_descriptor.json"
   val metadataName = "projection_metadata.json"
@@ -339,7 +348,7 @@ class DBLayout(baseDir: File, descriptorDirs: mutable.Map[ProjectionDescriptor, 
       case Some(x) => x
       case None    => {
         val newDir = newDescriptorDir(descriptor, baseDir)
-        descriptorDirs.put(descriptor, newDir)
+        descriptorDirs += (descriptor -> newDir)
         newDir
       }
     }

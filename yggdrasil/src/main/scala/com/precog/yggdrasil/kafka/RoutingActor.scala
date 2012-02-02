@@ -31,6 +31,7 @@ import com.precog.common._
 import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.ActorRef
+import akka.dispatch.Future
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._

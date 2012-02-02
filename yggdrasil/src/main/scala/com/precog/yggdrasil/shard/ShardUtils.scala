@@ -62,8 +62,9 @@ import scalaz.iteratee.EnumeratorT
 
 import com.weiglewilczek.slf4s._
 
-class ShardLoader(val storageShardConfig: Properties) extends StorageShardModule with RealisticIngestMessage {
-  def insert(count: Int, variety: Int) {
+/*
+class ShardLoader(val storagrShard: StorageShard) extends RealisticIngestMessage {
+  def insert(count: Int, variety: Int) = {
     val events = containerOfN[List, Event](variety, genEvent).sample.get
     
     val finalEvents = 0.until(count).map(_ => events).flatten
@@ -197,3 +198,4 @@ object DummyMetadata {
     mutable.Map() += (1 -> 100) += (2 -> 101) += (3 -> 1000)
   }
 }
+*/

@@ -44,6 +44,7 @@ trait Projection {
   def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO]
   def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO]
   def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO]
+  def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO]
 
   def getAllIds[X] : EnumeratorP[X, Identities, IO] 
   def getIdsInRange[X](range : Interval[Identities]) : EnumeratorP[X, Identities, IO] 

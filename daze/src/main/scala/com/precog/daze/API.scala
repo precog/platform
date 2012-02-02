@@ -21,13 +21,22 @@ package com.precog
 package daze
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.kafka._
+import com.precog.yggdrasil.leveldb._
+import com.precog.yggdrasil.shard._
 import com.precog.yggdrasil.util.Enumerators
 import com.precog.analytics.Path
+import StorageMetadata._
+
+import akka.dispatch.Future
+import akka.util.duration._
+import blueeyes.json.JPath
 import java.io.File
 import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.set._
+import scalaz.std.AllInstances._
 
 import Iteratee._
 
@@ -101,7 +110,7 @@ case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Optio
   )
 
   def join(enum2: DatasetEnum[X, E, F])(implicit order: Order[E], m: Monad[F]): DatasetEnum[X, (E, E), F] =
-    DatasetEnum(matchE[X, E, F].apply(enum, enum2.enum))
+    DatasetEnum(matchE[X, E, E, F].apply(enum, enum2.enum))
 
   def merge(enum2: DatasetEnum[X, E, F])(implicit order: Order[E], monad: Monad[F]): DatasetEnum[X, E, F] =
     DatasetEnum(mergeE[X, E, F].apply(enum, enum2.enum))
@@ -111,7 +120,7 @@ case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Optio
 trait StorageEngineInsertAPI
 
 trait StorageEngineQueryAPI {
-  def fullProjection[X](path: Path): DatasetEnum[X, SEvent, IO]
+  def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]]
 
   //def column(path: String, selector: JPath, valueType: EType): DatasetEnum[X, SEvent, IO]
   //def columnRange(interval: Interval[ByteBuffer])(path: String, selector: JPath, valueType: EType): DatasetEnum[X, (Seq[Long], ByteBuffer), IO]
@@ -121,7 +130,7 @@ trait StorageEngineAPI extends StorageEngineInsertAPI with StorageEngineQueryAPI
 
 trait DatasetEnumFunctions {
   def cogroup[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
-    DatasetEnum(cogroupE[X, SEvent, F].apply(enum1.enum, enum2.enum))
+    DatasetEnum(cogroupE[X, SEvent, SEvent, F].apply(enum1.enum, enum2.enum))
 
   def crossLeft[X, F[_]: Monad](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
     enum1 :* enum2
@@ -188,13 +197,20 @@ trait YggConfig {
   def sortBufferSize: Int
 }
 
-trait YggdrasilOperationsAPI extends OperationsAPI {
+trait YggdrasilOperationsAPI extends OperationsAPI { self =>
+  def asyncContext: akka.dispatch.ExecutionContext
+  def storage: StorageShard
   def config: YggConfig
 
-  def ops = new DatasetEnumFunctions {
+  object ops extends DatasetEnumFunctions {
     def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
       DatasetEnum(Enumerators.sort[X](enum.enum, config.sortBufferSize, config.workDir, enum.descriptor))
     }
+  }
+
+  object query extends LevelDBQueryAPI {
+    def asyncContext = self.asyncContext
+    def storage = self.storage
   }
 }
 
@@ -212,20 +228,30 @@ trait DefaultYggConfig {
 }
 
 // TODO decouple this from the evaluator specifics
-trait StubQueryAPI extends OperationsAPI with Evaluator {
+trait StubQueryAPI extends OperationsAPI with Evaluator with DefaultYggConfig {
   import blueeyes.json._
   import scala.io.Source
+  import akka.actor.ActorSystem
+  import akka.dispatch.ExecutionContext
   
   import JsonAST._
   import Function._
   import IterateeT._
   
+  implicit def actorExecutionContext = ExecutionContext.defaultExecutionContext(ActorSystem())
+
+  override object ops extends DatasetEnumFunctions {
+    def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
+      DatasetEnum(Enumerators.sort[X](enum.enum, config.sortBufferSize, config.workDir, enum.descriptor))
+    }
+  }
+
   override object query extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
     
-    def fullProjection[X](path: Path): DatasetEnum[X, SEvent, IO] =
-      DatasetEnum(readJSON[X](path))
+    def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] =
+      akka.dispatch.Promise.successful(DatasetEnum(readJSON[X](path)))
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))

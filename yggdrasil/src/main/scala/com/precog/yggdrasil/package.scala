@@ -23,6 +23,7 @@ package object yggdrasil {
   type Identity = Long
   type Identities = Seq[Identity]
   type SEvent = (Identities, SValue)
+  type SColumn = (Identities, CValue)
 
   object SEvent {
     def apply(id: Identities, sv: SValue): SEvent = (id, sv)
