@@ -75,11 +75,13 @@ object MetadataType extends MetadataTypeSerialization {
   }
 }
 
-sealed abstract trait Metadata {
+sealed trait Metadata {
   def metadataType: MetadataType
 
   def merge(that: Metadata): Option[Metadata]
 }
+
+sealed trait UserMetadata extends Metadata
 
 trait MetadataSerialization {
   implicit val MetadataDecomposer: Decomposer[Metadata] = new Decomposer[Metadata] {

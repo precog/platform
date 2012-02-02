@@ -37,15 +37,16 @@ import com.precog.common.util.FixMe._
 import scalaz._
 import Scalaz._
 
-case class Event(path: Path, content: Set[(JPath, (JValue, Set[Metadata]))]) 
+case class ValueMetadata(ownership: Ownership, metadata: Set[UserMetadata])
+case class Event(path: Path, value: JValue, valueMetadata: Map[JPath, ValueMetadata]) 
 
 class EventSerialization {
 
-  def dataRepresentation(content: Set[(JPath, (JValue, Set[Metadata]))]): JValue = {
+  def dataRepresentation(content: Set[EventFragment]): JValue = {
     JValue.unflatten( content.map( t => (t._1, t._2._1) ).toList )
   }
 
-  def metadataRepresentation(content: Set[(JPath, (JValue, Set[Metadata]))]): JValue = {
+  def metadataRepresentation(content: Set[EventFragment]): JValue = {
     JValue.unflatten( content.map( t => (t._1, t._2._2.serialize)).toList )
   }
 
@@ -57,7 +58,7 @@ class EventSerialization {
         JField("data", dataRepresentation(event.content))))
   }
 
-  def representationsToContent(allMetadata: JValue, data: JValue): Set[(JPath, (JValue, Set[Metadata]))] = {
+  def representationsToContent(allMetadata: JValue, data: JValue): Set[EventFragment] = {
     
     def extractMetadataForPath(path: JPath, allMetadata: JValue): Set[Metadata] = {
       allMetadata(path) match {
@@ -66,7 +67,7 @@ class EventSerialization {
       }
     }
 
-    def attachMetadata(path: JPath, value: JValue, metadata: Set[Metadata]): (JPath, (JValue, Set[Metadata])) = {
+    def attachMetadata(path: JPath, value: JValue, metadata: Set[Metadata]): EventFragment = {
       (path, (value, metadata))
     }
    
@@ -83,7 +84,7 @@ class EventSerialization {
 
 object Event extends EventSerialization {
   def fromJValue(path: Path, data: JValue, ownerToken: String): Event = {
-    def assignOwnership(properties: Set[(JPath, JValue)]): Set[(JPath, (JValue, Set[Metadata]))] = properties.map { 
+    def assignOwnership(properties: Set[(JPath, JValue)]): Set[EventFragment] = properties.map { 
       fixme("Null ownership being attributed at this point in time")
       (t: (JPath, JValue)) => { (t._1, (t._2, Set())) }: (JPath, (JValue, Set[Metadata]))
     }
