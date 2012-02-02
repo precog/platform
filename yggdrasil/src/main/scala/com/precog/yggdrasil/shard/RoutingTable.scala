@@ -25,9 +25,8 @@ object RoutingTable {
   def extract(jval: JValue): Option[(ColumnType, JValue)] = ColumnType.forValue(jval).map((_, jval))
 }
 
-class SingleColumnProjectionRoutingTable extends RoutingTable {
+trait SingleColumnProjectionRoutingTable extends RoutingTable {
   def route(event: Set[(ColumnDescriptor, JValue)]) = {
-    
     def toProjectionDescriptor(colDesc: ColumnDescriptor) = 
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc -> ById) ).toOption.get
 
@@ -37,6 +36,8 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
     }
   }
 }
+
+object SingleColumnProjectionRoutingTable extends SingleColumnProjectionRoutingTable { }
 
 trait ProjectionStorage {
   def store(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue])
