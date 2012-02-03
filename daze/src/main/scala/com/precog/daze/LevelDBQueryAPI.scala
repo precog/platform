@@ -79,12 +79,12 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
     }
   }
 
-  private def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
+  def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
     def combine(x: EnumeratorP[X, SEvent, IO], enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
       enumerators match {
         case (selector, column) :: xs => 
           combine(
-            cogroupE[X, SEvent, SColumn, IO].apply(x, column).map {
+            cogroupE[X, SEvent, SColumn, IO].apply(x, column).map(v => {println(v); v}).map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("cannot reassemble object")))
               case Right3((id, cv)) => (id, SValue(selector, cv))
