@@ -135,7 +135,7 @@ trait REPL extends LineErrors
       }
     }
    
-    startShard.unsafePerformIO
+    //startShard.unsafePerformIO
     
     println("Welcome to Quirrel version 0.0.0.")
     println("Type in expressions to have them evaluated.")
@@ -145,28 +145,10 @@ trait REPL extends LineErrors
   
     loop()
    
-    stopShard.unsafePerformIO
+    //stopShard.unsafePerformIO
   }
 
-  def storageShardConfig() = {
-    val config = new Properties()
-  
-    // local storage root dir required for metadata and leveldb data
-    config.setProperty("precog.storage.root", "/tmp/repl_test_storage")
-   
-    // Insert a random selection of events (events per class, number of classes)
-    //config.setProperty("precog.test.load.dummy", "1000,10")
-    
-    // kafka ingest consumer configuration
-    config.setProperty("precog.kafka.enable", "true")
-    config.setProperty("precog.kafka.topic.raw", "test_topic_1")
-    config.setProperty("groupid","test_group_1")
-    
-    config.setProperty("zk.connect","127.0.0.1:2181")
-    config.setProperty("zk.connectiontimeout.ms","1000000")
-
-    config
-  }
+  def storageShardConfig() = StorageShardModule.defaultProperties
 
   def startShard(): IO[Unit] = 
     storageShard.map{ shard =>
@@ -227,7 +209,6 @@ trait REPL extends LineErrors
 }
 
 object Console extends App {
-  println(System.out.println(System.getProperty("java.io.tmpdir")))
   val repl = new REPL {}
   repl.run()
 }

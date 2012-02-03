@@ -110,6 +110,29 @@ trait StorageShardModule {
   }
 }
 
+object StorageShardModule {
+  def defaultProperties = {
+    val props = new Properties()  
+     val config = new Properties() 
+     
+     // local storage root dir required for metadata and leveldb data 
+     config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
+     
+     // Insert a random selection of events (events per class, number of classes) 
+     //config.setProperty("precog.test.load.dummy", "1000,10") 
+      
+     // kafka ingest consumer configuration 
+     config.setProperty("precog.kafka.enable", "true") 
+     config.setProperty("precog.kafka.topic.raw", "test_topic_1") 
+     config.setProperty("groupid","test_group_1") 
+      
+     config.setProperty("zk.connect","127.0.0.1:2181") 
+     config.setProperty("zk.connectiontimeout.ms","1000000") 
+     
+     config 
+  }
+}
+
 trait StorageShard {
   def start: Future[Unit]
   def stop: Future[Unit]
@@ -332,21 +355,29 @@ object ShardConfig extends Logging {
   }
 }
 
-class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
+class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable with Logging {
   private lazy val consumer = initConsumer
 
   def initConsumer = {
+    //logger.debug("Initializing kafka consumer")
     val config = new ConsumerConfig(props)
-    Consumer.create(config)
+    val consumer = Consumer.create(config)
+    //logger.debug("Kafka consumer initialized")
+    consumer
   }
 
   def run {
     val rawEventsTopic = props.getProperty("precog.kafka.topic.raw", "raw")
 
+    //logger.debug("Starting consumption from kafka queue: " + rawEventsTopic)
+
     val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
 
     for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
-      router ! IngestMessageSerialization.readMessage(message.buffer) 
+      //logger.debug("Processing incoming kafka message")
+      val msg = IngestMessageSerialization.read(message.payload)
+      router ! msg 
+      //logger.debug("Serialized kafka message and sent to router")
     }
   }
 
