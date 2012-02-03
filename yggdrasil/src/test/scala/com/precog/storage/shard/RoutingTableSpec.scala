@@ -36,6 +36,9 @@ class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
 
+    def toProjDesc(colDescs: List[ColumnDescriptor]) = 
+      ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
+
     "project an empty event to an empty set of projection actions" in {
       val rt = SingleColumnProjectionRoutingTable 
 
@@ -51,10 +54,11 @@ class RoutingTableSpec extends Specification {
 
       val actions = rt.route(event)
 
-      val expected : Set[ProjectionDescriptor] = sys.error("todo")//Set( (ProjectionDescriptor(event.map( _._1 ), Set()), event.map( _._2 )) )
+      val expected : Set[ProjectionData] = 
+        Set(ProjectionData(toProjDesc(colDesc :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)))
 
       actions must_== expected 
-    }.pendingUntilFixed
+    }
 
     "project an event with n properties to n projection actions" in {
       val rt = SingleColumnProjectionRoutingTable 
@@ -67,9 +71,12 @@ class RoutingTableSpec extends Specification {
 
       val actions = rt.route(event)
 
-      val expected : Set[ProjectionDescriptor] = sys.error("todo")
+      val expected : Set[ProjectionData] = Set(
+          ProjectionData(toProjDesc(colDesc1 :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)),
+          ProjectionData(toProjDesc(colDesc2 :: Nil), Vector(event.identity),List[CValue](CInt(1)), List(Set.empty))
+      )
 
       actions must_== expected
-    }.pendingUntilFixed
+    }
   }
 }
