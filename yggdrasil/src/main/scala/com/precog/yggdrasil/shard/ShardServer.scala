@@ -110,6 +110,29 @@ trait StorageShardModule {
   }
 }
 
+object StorageShardModule {
+  def defaultProperties = {
+    val props = new Properties()  
+     val config = new Properties() 
+     
+     // local storage root dir required for metadata and leveldb data 
+     config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
+     
+     // Insert a random selection of events (events per class, number of classes) 
+     //config.setProperty("precog.test.load.dummy", "1000,10") 
+      
+     // kafka ingest consumer configuration 
+     config.setProperty("precog.kafka.enable", "true") 
+     config.setProperty("precog.kafka.topic.raw", "test_topic_1") 
+     config.setProperty("groupid","test_group_1") 
+      
+     config.setProperty("zk.connect","127.0.0.1:2181") 
+     config.setProperty("zk.connectiontimeout.ms","1000000") 
+     
+     config 
+  }
+}
+
 trait StorageShard {
   def start: Future[Unit]
   def stop: Future[Unit]
