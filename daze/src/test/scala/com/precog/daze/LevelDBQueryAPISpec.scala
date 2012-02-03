@@ -30,6 +30,7 @@ import blueeyes.json.JsonParser
 
 import com.precog.analytics._
 import com.precog.common._
+import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 import com.precog.yggdrasil.util._

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil.util
+package com.precog.common.util
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
