@@ -208,19 +208,24 @@ trait DefaultYggConfig {
   }
 }
 
-// TODO decouple this from the evaluator specifics
-trait StubQueryAPI extends OperationsAPI with Evaluator with DefaultYggConfig {
-  import blueeyes.json._
-  import scala.io.Source
+object StubQueryAPI {
   import akka.actor.ActorSystem
   import akka.dispatch.ExecutionContext
+
+  val actorSystem = ActorSystem()
+  implicit val actorExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+}
+
+// TODO decouple this from the evaluator specifics
+trait StubQueryAPI extends OperationsAPI with Evaluator with DefaultYggConfig {
+  import StubQueryAPI._
+  import blueeyes.json._
+  import scala.io.Source
   
   import JsonAST._
   import Function._
   import IterateeT._
   
-  implicit def actorExecutionContext = ExecutionContext.defaultExecutionContext(ActorSystem())
-
   override object ops extends DatasetEnumFunctions {
     def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
       DatasetEnum(Enumerators.sort[X](enum.enum, config.sortBufferSize, config.workDir, enum.descriptor))
