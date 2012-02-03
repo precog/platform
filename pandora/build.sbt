@@ -39,7 +39,7 @@ connectInput in run := true
 fork in run := true
 
 fork in console := true
-  
+
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 

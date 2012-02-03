@@ -21,12 +21,13 @@ package com.precog.ingest.util
 
 import scala.collection.mutable.ListBuffer
 
-
 import java.util.Properties
 import java.io.{File, FileReader}
 
+import com.precog.analytics.{Path, Token}
 import com.precog.common._
 import com.precog.common.util.RealisticIngestMessage
+import com.precog.common.util.DistributedSampleSet
 import com.precog.ingest.api._
 import com.precog.ingest.service._
 
@@ -60,9 +61,14 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
 
     val threads = 0.until(threadCount).map(_ => new Thread() {
       override def run() {
+        val sample = DistributedSampleSet(0)
+        val path = "/test/path/"
+        
+        def event = Event.fromJValue(Path(path), sample.next._1, Token.Root.tokenId)
+       
         0.until(messages).foreach { i =>
           if(i % 10 == 0) println("Sending: " + i)
-          send(genEvent.sample.get)
+          send(event)
           if(delay > 0) {
             Thread.sleep(delay)
         }
@@ -120,12 +126,10 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
 
   def send(event: Event) {
 
-    val tokens = Event.extractOwners(event)
-
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", tokens.head)
+                                                .query("tokenId", event.tokenId)
                                                 .contentType(application/MimeTypes.json)
-                                                .post[JValue](event.path.toString)(Event.dataRepresentation(event.content))
+                                                .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 
     f.value match {
       case Some(Right(_)) => ()

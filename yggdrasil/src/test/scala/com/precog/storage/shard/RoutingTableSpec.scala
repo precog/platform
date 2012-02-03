@@ -36,48 +36,47 @@ class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
 
+    def toProjDesc(colDescs: List[ColumnDescriptor]) = 
+      ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
+
     "project an empty event to an empty set of projection actions" in {
       val rt = SingleColumnProjectionRoutingTable 
 
-      val event: Set[(ColumnDescriptor, JValue)] = Set.empty
-
-      val actions = rt.route(event)
-
-      actions must_== Set.empty
+      rt.route(EventData(0, Set.empty)) must_== Set.empty
     }
 
     "project an event with one property to a single projection action" in {
       val rt = SingleColumnProjectionRoutingTable 
 
-      val event: List[(ColumnDescriptor, JValue)] = List(
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set())), JString("Test"))
-      )
+      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set()))
 
-      val actions = rt.route(event.toSet)
+      val event = EventData(0, Set(ColumnData(colDesc, CString("Test"), Set.empty)))
 
-      val expected : Set[ProjectionDescriptor] = sys.error("todo")//Set( (ProjectionDescriptor(event.map( _._1 ), Set()), event.map( _._2 )) )
+      val actions = rt.route(event)
+
+      val expected : Set[ProjectionData] = 
+        Set(ProjectionData(toProjDesc(colDesc :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)))
 
       actions must_== expected 
-    }.pendingUntilFixed
+    }
 
     "project an event with n properties to n projection actions" in {
       val rt = SingleColumnProjectionRoutingTable 
 
-      val event: List[(ColumnDescriptor, JValue)] = List(
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set())), JString("Test")),
-        (ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Ownership(Set())), JInt(1))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set()))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Ownership(Set()))
+
+      val event = EventData(0, Set(ColumnData(colDesc1, CString("Test"), Set.empty),
+                                   ColumnData(colDesc2, CInt(1), Set.empty)))
+
+      val actions = rt.route(event)
+
+      val expected : Set[ProjectionData] = Set(
+          ProjectionData(toProjDesc(colDesc1 :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)),
+          ProjectionData(toProjDesc(colDesc2 :: Nil), Vector(event.identity),List[CValue](CInt(1)), List(Set.empty))
       )
 
-      val actions = rt.route(event.toSet)
-
-      val qss = event.map( _._1 )
-      val vals = event.map( _._2 )
-
-      val expected : Set[ProjectionDescriptor] = sys.error("todo")
-        Set( (ProjectionDescriptor(ListMap() + (qss(0) -> 0), List() :+ (qss(0) -> ById) ), List(vals(0))),
-             (ProjectionDescriptor(ListMap() + (qss(1) -> 0), List() :+ (qss(0) -> ById) ), List(vals(1))) )
-
-      actions must_== expected 
-    }.pendingUntilFixed
+      actions must_== expected
+    }
   }
 }
