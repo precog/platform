@@ -332,21 +332,29 @@ object ShardConfig extends Logging {
   }
 }
 
-class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable {
+class KafkaConsumer(props: Properties, router: ActorRef) extends Runnable with Logging {
   private lazy val consumer = initConsumer
 
   def initConsumer = {
+    //logger.debug("Initializing kafka consumer")
     val config = new ConsumerConfig(props)
-    Consumer.create(config)
+    val consumer = Consumer.create(config)
+    //logger.debug("Kafka consumer initialized")
+    consumer
   }
 
   def run {
     val rawEventsTopic = props.getProperty("precog.kafka.topic.raw", "raw")
 
+    //logger.debug("Starting consumption from kafka queue: " + rawEventsTopic)
+
     val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
 
     for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
-      router ! IngestMessageSerialization.readMessage(message.buffer) 
+      //logger.debug("Processing incoming kafka message")
+      val msg = IngestMessageSerialization.read(message.payload)
+      router ! msg 
+      //logger.debug("Serialized kafka message and sent to router")
     }
   }
 

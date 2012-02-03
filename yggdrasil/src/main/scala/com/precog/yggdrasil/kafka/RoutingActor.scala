@@ -101,7 +101,7 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
   }
 
   def receive = {
-    case SyncMessage(producerId, syncId, eventIds) => //TODO
+    case SyncMessage(producerId, syncId, eventIds) => // TODO 
 
     case em @ EventMessage(eventId, _) =>
       val projectionUpdates = routingTable.route(em)
