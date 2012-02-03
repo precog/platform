@@ -49,6 +49,9 @@ import scalaz.Scalaz._
 
 object StorageMetadata {
   type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
+  object ColumnMetadata {
+    val Empty = Map.empty[ColumnDescriptor, Map[MetadataType, Metadata]]
+  }
 }
 
 trait StorageMetadata {

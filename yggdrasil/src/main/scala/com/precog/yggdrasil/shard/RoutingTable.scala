@@ -45,6 +45,17 @@ trait RoutingTable {
   def convertEventMessage(msg: EventMessage): EventData = EventData(msg.eventId.uid, unpack(msg.event))
   
   def unpack(e: Event): Set[ColumnData] = {
+    def extract(jval: JValue): Option[(ColumnType, CValue)] = ColumnType.forValue(jval).map((_, convert(jval)))
+    
+    def convert(jval: JValue): CValue = jval match {
+      case JString(s) => CString(s)
+      case JInt(i) => CNum(BigDecimal(i))
+      case JDouble(d) => CDouble(d)
+      case JBool(b) => CBoolean(b)
+      case JNull => CNull
+      case _ => sys.error("unpossible")
+    }
+
     e.data.flattenWithPath.flatMap {
       case (sel, jval) => extract(jval).map{
         case (ctype, cval) => 
@@ -54,10 +65,6 @@ trait RoutingTable {
       }
     }.toSet
   }
- 
-  def extract(jval: JValue): Option[(ColumnType, CValue)] = ColumnType.forValue(jval).map((_, convert(jval)))
-  
-  def convert(jval: JValue): CValue = sys.error("todo")
 }
 
 trait SingleColumnProjectionRoutingTable extends RoutingTable {
