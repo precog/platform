@@ -38,7 +38,7 @@ object AdSamples {
 }
 
 case class DistributedSampleSet(queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector()) extends SampleSet { self =>
-  lazy val queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
+  def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
 
   import AdSamples._
   def next = {

@@ -87,6 +87,16 @@ trait SValue {
     }
   }
 
+  def toJValue: JValue = fold(
+    obj = obj => JObject(obj.map({ case (k, v) => JField(k, v.toJValue) })(collection.breakOut)),
+    arr = arr => JArray(arr.map(_.toJValue)(collection.breakOut)),
+    str = JString(_),
+    bool = JBool(_),
+    long = JInt(_),
+    double = JDouble(_),
+    num = sys.error("fix JValue"),
+    nul = JNull)
+
   abstract override def equals(obj: Any) = obj match {
     case sv: SValue => fold(
         obj  = o => sv.mapObjectOr(false)(_ == o),
@@ -144,6 +154,17 @@ trait SValueInstances {
 }
 
 object SValue extends SValueInstances {
+  def fromJValue(jv: JValue): SValue = jv match {
+    case JObject(fields) => SObject(fields map { case JField(name, v) => (name, fromJValue(v)) } toMap)
+    case JArray(elements) => SArray(Vector(elements map fromJValue: _*))
+    case JInt(i) => SDecimal(BigDecimal(i))
+    case JDouble(d) => SDouble(d)
+    case JString(s) => SString(s)
+    case JBool(s) => SBoolean(s)
+    case JNull => SNull
+    case _ => sys.error("Fix JValue")
+  }
+
   def apply(selector: JPath, cv: CValue): SValue = {
     selector.nodes match {
       case JPathField(_) :: xs => SObject(Map()).set(selector, cv).get
