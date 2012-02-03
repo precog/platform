@@ -84,7 +84,7 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
       enumerators match {
         case (selector, column) :: xs => 
           combine(
-            cogroupE[X, SEvent, SColumn, IO].apply(x, column).map(v => {println(v); v}).map {
+            cogroupE[X, SEvent, SColumn, IO].apply(x.map(v => {println("e: " + v); v}), column.map(v => {println("c: " + v); v})).map(v => {println(v); v}).map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("cannot reassemble object")))
               case Right3((id, cv)) => (id, SValue(selector, cv))

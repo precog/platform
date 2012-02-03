@@ -28,14 +28,16 @@ class EventSerialization {
         JField("path", event.path.serialize),
         JField("tokenId", event.tokenId.serialize),
         JField("data", event.data),
-        JField("metadata", event.metadata.serialize)))
+        sys.error("todo")))
+        //JField("metadata", event.metadata.serialize)))
   }
 
   implicit val EventExtractor: Extractor[Event] = new Extractor[Event] with ValidatedExtraction[Event] {
     override def validated(obj: JValue): Validation[Error, Event] = 
-      ((obj \ "path").validated[Path] |@|
-       (obj \ "tokenId").validated[String] |@|
-       (obj \ "metadata").validated[Map[JPath, Set[UserMetadata]]]).apply(Event(_,_,obj \ "value",_))
+      sys.error("todo")
+      //((obj \ "path").validated[Path] |@|
+      // (obj \ "tokenId").validated[String] |@|
+      // (obj \ "metadata").validated[Map[JPath, Set[UserMetadata]]]).apply(Event(_,_,obj \ "value",_))
   }  
 
 }
