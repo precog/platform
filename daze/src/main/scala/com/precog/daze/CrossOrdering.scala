@@ -20,71 +20,71 @@
 package com.precog
 package daze
 
-import java.util.concurrent.ConcurrentHashMap
+import scala.collection.mutable
 
 trait CrossOrdering extends DAG {
   import instructions._
   import dag._
 
-  private[this] val memotable = new ConcurrentHashMap[DepGraph, DepGraph]
-  
   def orderCrosses(node: DepGraph): DepGraph = {
-    def inner(node: DepGraph): DepGraph = node match {
-      case node @ SplitRoot(_, _) => node
-      
-      case node @ Root(_, _) => node
-      
-      case dag.New(loc, parent) =>
-        dag.New(loc, orderCrosses(parent))
-      
-      case dag.LoadLocal(loc, range, parent, tpe) =>
-        dag.LoadLocal(loc, range, orderCrosses(parent), tpe)
-      
-      case Operate(loc, op, parent) =>
-        Operate(loc, op, orderCrosses(parent))
-      
-      case dag.Reduce(loc, red, parent) =>
-        dag.Reduce(loc, red, orderCrosses(parent))
-      
-      case dag.Split(loc, parent, child) =>
-        dag.Split(loc, orderCrosses(parent), orderCrosses(child))
-      
-      case Join(loc, instr: Map2Match, left, right) => {
-        val left2 = orderCrosses(left)
-        val right2 = orderCrosses(right)
+    val memotable = mutable.Map[DepGraph, DepGraph]()
+    
+    def memoized(node: DepGraph): DepGraph = {
+      def inner(node: DepGraph): DepGraph = node match {
+        case node @ SplitRoot(_, _) => node
         
-        val (leftIndexes, rightIndexes) = determineSort(left2, right2)
+        case node @ Root(_, _) => node
         
-        Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+        case dag.New(loc, parent) =>
+          dag.New(loc, memoized(parent))
+        
+        case dag.LoadLocal(loc, range, parent, tpe) =>
+          dag.LoadLocal(loc, range, memoized(parent), tpe)
+        
+        case Operate(loc, op, parent) =>
+          Operate(loc, op, memoized(parent))
+        
+        case dag.Reduce(loc, red, parent) =>
+          dag.Reduce(loc, red, memoized(parent))
+        
+        case dag.Split(loc, parent, child) =>
+          dag.Split(loc, memoized(parent), memoized(child))
+        
+        case Join(loc, instr: Map2Match, left, right) => {
+          val left2 = memoized(left)
+          val right2 = memoized(right)
+          
+          val (leftIndexes, rightIndexes) = determineSort(left2, right2)
+          
+          Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+        }
+        
+        case Join(loc, instr, left, right) =>
+          Join(loc, instr, memoized(left), memoized(right))
+        
+        case Filter(loc, None, range, target, boolean) => {
+          val target2 = memoized(target)
+          val boolean2 = memoized(boolean)
+          
+          val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
+          
+          Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+        }
+        
+        case Filter(loc, cross, range, target, boolean) =>
+          Filter(loc, cross, range, memoized(target), memoized(boolean))
+        
+        case Sort(parent, _) => memoized(parent)
       }
-      
-      case Join(loc, instr, left, right) =>
-        Join(loc, instr, orderCrosses(left), orderCrosses(right))
-      
-      case Filter(loc, None, range, target, boolean) => {
-        val target2 = orderCrosses(target)
-        val boolean2 = orderCrosses(boolean)
-        
-        val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
-        
-        Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
-      }
-      
-      case Filter(loc, cross, range, target, boolean) =>
-        Filter(loc, cross, range, orderCrosses(target), orderCrosses(boolean))
-      
-      case Sort(parent, _) => orderCrosses(parent)
-    }
-
-    Option(memotable.get(node)) getOrElse {
-      val result = inner(node)
-      val result2 = memotable.putIfAbsent(node, result)
-
-      if (result2 == null)
+  
+      memotable.get(node) getOrElse {
+        val result = inner(node)
+        memotable += (node -> result)
         result
-      else
-        result2
+      }
     }
+    
+    memoized(node)
   }
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
