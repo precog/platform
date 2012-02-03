@@ -41,7 +41,7 @@ import scalaz.iteratee.EnumeratorT
 import scalaz.MonadPartialOrder._
 
 
-case class ProjectionInsert(id: Long, values: Seq[JValue])
+case class ProjectionInsert(identities: Identities, values: Seq[CValue])
 
 case object ProjectionGet
 
@@ -64,8 +64,8 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     case Stop => //close the db
       projection.close.unsafePerformIO
 
-    case ProjectionInsert(id, values) => 
-      projection.insert(Vector(id), values.map(asCValue)).unsafePerformIO
+    case ProjectionInsert(identities, values) => 
+      projection.insert(identities, values).unsafePerformIO
 
     case ProjectionGet => 
       sender ! projection
