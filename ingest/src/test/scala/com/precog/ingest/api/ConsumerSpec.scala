@@ -33,6 +33,6 @@ object EventMessageSerializationSpec extends Specification with ScalaCheck with 
       out.toOption must beSome like {
         case Some(o) => o.sort must_== in.sort
       }
-    }}.pendingUntilFixed
+    }}
   }
 }
