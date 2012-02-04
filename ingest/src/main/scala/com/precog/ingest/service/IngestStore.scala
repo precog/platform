@@ -55,11 +55,18 @@ object FutureHelper {
   def singleSuccess[T](futures: Seq[Future[T]])(implicit dispatcher: MessageDispatcher): Future[Option[T]] = Future.find(futures){ _ => true }
 }
 
-class EventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) {
-  
+trait EventStore {
+  def save(event: Event): Future[Unit]
+}
+
+class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
   private val nextEventId = new AtomicInteger(firstEventId)
   
-  def save(event: Event) = router.route(EventMessage(producerId, nextEventId.incrementAndGet, event))
+  def save(event: Event) = {
+    val eventId = nextEventId.incrementAndGet
+    router.route(EventMessage(producerId, eventId, event)) map { _ => () }
+  }
+
   def close(): Future[Unit] = router.close
 }
 
@@ -77,6 +84,7 @@ class EventRouter(routeTable: RouteTable, messaging: Messaging) {
   def route(msg: EventMessage)(implicit dispatcher: MessageDispatcher): Future[Option[Unit]] = {
     FutureHelper.singleSuccess( routeTable.routeTo(msg.event).map { messaging.send(_, msg) }.list ).map{ _.map{ _ => () }}
   }
+
   def close()(implicit dispatcher: MessageDispatcher): Future[Unit] = {
     Future.sequence(List(routeTable.close, messaging.close)).map(_ => ())
   }

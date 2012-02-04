@@ -17,40 +17,54 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.daze
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.kafka._
-import com.precog.yggdrasil.leveldb._
 import com.precog.yggdrasil.shard._
-import com.precog.yggdrasil.util.Enumerators
-import com.precog.analytics.Path
-import StorageMetadata._
+import com.precog.yggdrasil.util._
 
-import akka.dispatch.Future
-import akka.util.duration._
-import blueeyes.json.JPath
 import java.io.File
-import scalaz.{Identity => _, _}
+
+import scalaz.Order
 import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.std.set._
-import scalaz.std.AllInstances._
 
-import Iteratee._
-
-trait StorageEngineInsertAPI 
-
-trait StorageEngineQueryAPI {
-  def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]]
-
-  //def column(path: String, selector: JPath, valueType: EType): DatasetEnum[X, SEvent, IO]
-  //def columnRange(interval: Interval[ByteBuffer])(path: String, selector: JPath, valueType: EType): DatasetEnum[X, (Seq[Long], ByteBuffer), IO]
+trait YggdrasilStorage {
+  def storage: StorageShard
 }
 
-trait OperationsAPI {
-  def query: StorageEngineQueryAPI
-  def ops: DatasetEnumOps
+trait YggdrasilOperationsAPI extends OperationsAPI { self: YggdrasilStorage =>
+  def asyncContext: akka.dispatch.ExecutionContext
+  def yggdrasilConfig: YggConfig
+
+  object ops extends DatasetEnumOps {
+    def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
+      DatasetEnum(Enumerators.sort[X](enum.enum, yggdrasilConfig.sortBufferSize, yggdrasilConfig.workDir, enum.descriptor))
+    }
+  }
+
+  object query extends LevelDBQueryAPI {
+    def asyncContext = self.asyncContext
+    def storage = self.storage
+  }
 }
 
+trait YggConfig {
+  def workDir: File
+  def sortBufferSize: Int
+}
+
+trait DefaultYggConfig {
+  def yggdrasilConfig = new YggConfig {
+    def workDir = {
+      val tempFile = File.createTempFile("leveldb_tmp", "workdir")
+      tempFile.delete //todo: validated
+      tempFile.mkdir //todo: validated
+      tempFile
+    }
+
+    def sortBufferSize = 100000
+  }
+}
+
+
+// vim: set ts=4 sw=4 et:

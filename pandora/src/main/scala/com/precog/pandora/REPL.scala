@@ -20,6 +20,8 @@
 package com.precog
 package pandora
 
+import akka.dispatch.Await
+import akka.util.Duration
 import com.precog.yggdrasil.SValue
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
@@ -28,22 +30,10 @@ import jline.{TerminalFactory, UnixTerminal}
 import jline.console.ConsoleReader
 
 import daze._
-import yggdrasil.shard._
-
-import akka.dispatch.Await
-import akka.util.Duration
-import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
-
-import java.util.Properties
-import java.net.URLClassLoader
-
 import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
-
-import scalaz.effect.IO
 
 trait REPL extends LineErrors
     with Parser
@@ -51,18 +41,11 @@ trait REPL extends LineErrors
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with DefaultYggConfig
-    with StorageShardModule
-    with YggdrasilOperationsAPI
-    with DatasetConsumers {
+    with DatasetConsumers 
+    with YggdrasilOperationsAPI { self: YggdrasilStorage =>
 
-  val actorSystem = ActorSystem()
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
- 
   val Prompt = "quirrel> "
   val Follow = "       | "
-
-  lazy val storage = storageShard.unsafePerformIO
 
   def run() {
     TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX).asInstanceOf[UnixTerminal].init()
@@ -169,15 +152,6 @@ trait REPL extends LineErrors
     loop()
     
     Await.result(storage.stop, Duration(120, "seconds"))
-
-    actorSystem.shutdown
-  }
-
-  def storageShardConfig() = {
-    val config = StorageShardModule.defaultProperties
-    config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
-    config.setProperty("precog.kafka.enable", "false")        // disable kafka consumer until we do an ingest test (requires zk and kafka) 
-    config
   }
 
   def readNext(reader: ConsoleReader): String = {
@@ -209,6 +183,9 @@ trait REPL extends LineErrors
   
   // %%
   
+  /*
+  lazy val prompt: Parser[Command] = sys.error("todo")
+  */
   lazy val prompt: Parser[Command] = (
       expr           ^^ { t => Eval(t) }
     | ":tree" ~ expr ^^ { (_, t) => PrintTree(t) }
@@ -225,6 +202,6 @@ trait REPL extends LineErrors
 }
 
 object Console extends App {
-  val repl = new REPL {}
+  object repl extends REPL with AkkaIngestServer with DefaultYggConfig
   repl.run()
 }

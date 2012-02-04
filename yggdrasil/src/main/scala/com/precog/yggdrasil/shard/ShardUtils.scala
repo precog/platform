@@ -62,8 +62,6 @@ import scalaz.iteratee.EnumeratorT
 
 import com.weiglewilczek.slf4s._
 
-class ShardLoader(val storageShardConfig: Properties) extends StorageShardModule
-
 object SimpleShardLoader extends RealisticIngestMessage with Logging {
   def load(router: ActorRef, count: Int, variety: Int) {
     val events = containerOfN[List, Event](variety, genEvent).sample.get
@@ -78,6 +76,7 @@ object SimpleShardLoader extends RealisticIngestMessage with Logging {
   }
 }
 
+/*
 object ShardLoader extends Logging {
 
   def main(args: Array[String]) {
@@ -203,3 +202,4 @@ object DummyMetadata {
     mutable.Map() += (1 -> 100) += (2 -> 101) += (3 -> 1000)
   }
 }
+*/

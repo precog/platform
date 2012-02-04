@@ -32,7 +32,7 @@ object EvaluatorSpecs extends Specification
     with Evaluator
     with OperationsAPI
     with DefaultYggConfig
-    with StubQueryAPI {
+    with StubOperationsAPI {
       
   import Function._
   

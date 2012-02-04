@@ -119,8 +119,6 @@ object WebappIngestProducer {
 }
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
-
-
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   val client = new HttpClientXLightWeb 
 
@@ -148,7 +146,6 @@ object DirectIngestProducer {
 }
 
 class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
-
   implicit val actorSystem = ActorSystem()
 
   lazy val testTopic = config.getProperty("topicId", "test-topic-1")
@@ -159,7 +156,7 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
     store.save(genEvent.sample.get)
   }
 
-  def kafkaStore(topic: String): EventStore = {
+  def kafkaStore(topic: String): KafkaEventStore = {
     val props = new Properties()
     props.put("zk.connect", zookeeperHosts) 
     props.put("serializer.class", "com.precog.ingest.api.IngestMessageCodec")
@@ -174,7 +171,7 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
     val producerId = qz.acquireProducerId
     qz.close
 
-    new EventStore(new EventRouter(routeTable, messaging), producerId)
+    new KafkaEventStore(new EventRouter(routeTable, messaging), producerId)
   }
   
   override def usageMessage = super.usageMessage + """

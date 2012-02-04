@@ -52,9 +52,9 @@ object PlatformBuild extends Build {
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings: _*) dependsOn (bytecode, util)
   
   lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode, yggdrasil % "compile->compile;test->test", util)
-
+  
   val pandoraSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings: _*) dependsOn (quirrel, daze, yggdrasil)
+  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings : _*) dependsOn (quirrel, daze, yggdrasil, ingest)
   
   lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   
