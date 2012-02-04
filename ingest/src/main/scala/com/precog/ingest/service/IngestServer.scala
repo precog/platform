@@ -1,5 +1,5 @@
-package com.precog.ingest.service
-import  service._
+package com.precog.ingest
+package service
 
 import blueeyes.BlueEyesServer
 import blueeyes.json.JsonAST._
@@ -19,8 +19,7 @@ import net.lag.configgy.ConfigMap
 import com.precog.ingest.api._
 import com.precog.ingest.util.QuerioZookeeper
 
-object IngestServer extends BlueEyesServer with IngestService {
-
+trait IngestServer extends BlueEyesServer with IngestService {
   def mongoFactory(configMap: ConfigMap): Mongo = {
     blueeyes.persistence.mongo.RealMongo(configMap)
   }
@@ -54,6 +53,10 @@ object IngestServer extends BlueEyesServer with IngestService {
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
     new TokenManager(database, tokensCollection, deletedTokensCollection)
 
+  val clock = Clock.System
+}
+
+trait KafkaIngestServer extends IngestServer {
   def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
     val topicId = eventConfig.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
     val zookeeperHosts = eventConfig.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
@@ -72,10 +75,10 @@ object IngestServer extends BlueEyesServer with IngestService {
     val producerId = qz.acquireProducerId
     qz.close
 
-    new EventStore(new EventRouter(routeTable, messaging), producerId)
+    new KafkaEventStore(new EventRouter(routeTable, messaging), producerId)
   }
-
-  val clock = Clock.System
 }
+
+object IngestServer extends KafkaIngestServer
 
 // vim: set ts=4 sw=4 et:

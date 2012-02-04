@@ -1,4 +1,4 @@
-package com.precog.ingest.service
+package com.precog.ingest
 package service
 
 import blueeyes._
@@ -113,10 +113,18 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
 class TrackingService(eventStore: EventStore, storageReporting: StorageReporting, clock: Clock, autoTimestamp: Boolean)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success{ (t: Token, p: Path) =>
-      request.content.map { _.flatMap { event  => 
-        eventStore.save(Event.fromJValue(p, event, t.accountTokenId)).map(_ => HttpResponse[JValue](OK))
-      }}.getOrElse(Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data.")))))
+    Success { (t: Token, p: Path) =>
+      request.content map { futureContent =>
+        for {
+          event <- futureContent
+          _ <- eventStore.save(Event.fromJValue(p, event, t.accountTokenId))
+        } yield {
+          // could return the eventId to the user?
+          HttpResponse[JValue](OK)
+        }
+      } getOrElse {
+        Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data."))))
+      }
     }
   }
 

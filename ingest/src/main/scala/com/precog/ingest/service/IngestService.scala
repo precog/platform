@@ -140,9 +140,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 }
 
 object IngestService extends HttpRequestHandlerCombinators with PartialFunctionCombinators {
-
-  type Endo[A] = A => A
-
   def parsePathInt(name: String) = 
     ((err: NumberFormatException) => DispatchError(BadRequest, "Illegal value for path parameter " + name + ": " + err.getMessage)) <-: (_: String).parseInt
 
@@ -152,5 +149,4 @@ object IngestService extends HttpRequestHandlerCombinators with PartialFunctionC
   }
 
   def vtry[A](value: => A): Validation[Throwable, A] = try { value.success } catch { case ex => ex.fail[A] }
-
 }
