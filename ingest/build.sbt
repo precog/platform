@@ -42,6 +42,7 @@ ivyXML :=
       <exclude org="com.sun.jdmk"/>
       <exclude org="com.sun.jmx"/>
       <exclude org="javax.jms"/>
+      <exclude org="jline"/>
     </dependency>
   </dependencies>
 

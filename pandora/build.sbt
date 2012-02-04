@@ -66,3 +66,5 @@ initialCommands in console := """
   |                  with LineErrors {}""".stripMargin
   
 logBuffered := false       // gives us incremental output from Specs2
+
+mainClass := Some("com.precog.pandora.Console")
