@@ -44,7 +44,8 @@ trait REPL extends LineErrors
     with Emitter
     with Evaluator
     with DatasetConsumers 
-    with YggdrasilOperationsAPI { self: YggdrasilStorage =>
+    with YggdrasilOperationsAPI
+    with YggdrasilStorage {
 
   val Prompt = "quirrel> "
   val Follow = "       | "
