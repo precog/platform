@@ -194,7 +194,12 @@ object StubQueryAPI {
 }
 
 // TODO decouple this from the evaluator specifics
-trait StubQueryAPI extends OperationsAPI with Evaluator with DefaultYggConfig {
+trait DatasetConsumers extends Evaluator {
+  protected def consumeEval(graph: DepGraph): Set[SEvent] = 
+    ((consume[Unit, SEvent, IO, Set] &= eval(graph).enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO
+}
+
+trait StubQueryAPI extends OperationsAPI with DatasetConsumers with DefaultYggConfig {
   import StubQueryAPI._
   import blueeyes.json._
   import scala.io.Source
@@ -276,7 +281,4 @@ trait StubQueryAPI extends OperationsAPI with Evaluator with DefaultYggConfig {
       }
     }
   }
-  
-  protected def consumeEval(graph: DepGraph): Set[SEvent] = 
-    ((consume[Unit, SEvent, IO, Set] &= eval(graph).enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO
 }

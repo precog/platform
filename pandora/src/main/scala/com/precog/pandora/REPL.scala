@@ -31,6 +31,8 @@ import yggdrasil.shard._
 
 import akka.dispatch.Await
 import akka.util.Duration
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
 
 import java.util.Properties
 import java.net.URLClassLoader
@@ -50,10 +52,16 @@ trait REPL extends LineErrors
     with Evaluator
     with DefaultYggConfig
     with StorageShardModule
-    with StubQueryAPI {
+    with YggdrasilOperationsAPI
+    with DatasetConsumers {
+
+  val actorSystem = ActorSystem()
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
  
   val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
   val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
+  
+  lazy val storage = storageShard.unsafePerformIO
 
   def run() {
     Terminal.setupTerminal().initializeTerminal()
@@ -154,38 +162,23 @@ trait REPL extends LineErrors
       }
     }
    
-    def loopWithShard() = {
-      storageShard.map { shard =>
-        println()
-        Await.result(shard.start, Duration(10, "seconds"))
-        println()
+    Await.result(storage.start, Duration(10, "seconds"))
 
-        println("Welcome to Quirrel version 0.0.0.")
-        println("Type in expressions to have them evaluated.")
-        println("Press Ctrl-D on a new line to evaluate an expression.")
-        println("Type in :help for more information.")
-        println()
-      
-        loop()
-        
-        println()
-        Await.result(shard.stop, Duration(10, "seconds"))
-        println()
-      }
-    }
-
-    loopWithShard.unsafePerformIO
+    println("Welcome to Quirrel version 0.0.0.")
+    println("Type in expressions to have them evaluated.")
+    println("Press Ctrl-D on a new line to evaluate an expression.")
+    println("Type in :help for more information.")
+    println()
+  
+    loop()
+    
+    Await.result(storage.stop, Duration(10, "seconds"))
   }
 
   def storageShardConfig() = {
-
     val config = StorageShardModule.defaultProperties
-
     config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
-    
-    // disable kafka consumer until we do an ingest test (requires zk and kafka)
-    config.setProperty("precog.kafka.enable", "false") 
-    
+    config.setProperty("precog.kafka.enable", "false")        // disable kafka consumer until we do an ingest test (requires zk and kafka) 
     config
   }
 
