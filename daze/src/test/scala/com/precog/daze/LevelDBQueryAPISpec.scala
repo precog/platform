@@ -23,6 +23,7 @@ package daze
 import akka.actor._
 import akka.dispatch._
 import akka.util.Timeout
+import akka.util.duration._
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
@@ -49,9 +50,10 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
   implicit val actorSystem: ActorSystem = ActorSystem()
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
+  val dataPath = Path("/test")
   def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
 
-  case class DummyProjection(data: Map[Identities, Seq[CValue]]) extends Projection {
+  case class DummyProjection(descriptor: ProjectionDescriptor, data: Map[Identities, Seq[CValue]]) extends Projection {
     def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
     def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
@@ -59,22 +61,13 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
     }
 
     def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
-    def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
-    def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO] = sys.error("not needed")
-
-    def getAllIds[X] : EnumeratorP[X, Identities, IO]  = sys.error("not needed")
-    def getIdsInRange[X](range : Interval[Identities]) : EnumeratorP[X, Identities, IO]  = sys.error("not needed")
-
-    def getAllValues[X] : EnumeratorP[X, Seq[CValue], IO]  = sys.error("not needed")
-    def getValuesByIdRange[X](range: Interval[Identities]) : EnumeratorP[X, Seq[CValue], IO] = sys.error("not needed")
-    def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO]  = sys.error("not needed")
   }
 
   val (sampleData, _) = DistributedSampleSet.sample(1, 0)
   val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
-    case (acc, (jv, i)) => routingTable.route(EventMessage(EventId(0, i), Event(Path("/"), "", jv, Map()))).foldLeft(acc) {
+    case (acc, (jv, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jv, Map()))).foldLeft(acc) {
       case (acc, ProjectionData(descriptor, identities, values, _)) =>
-        acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(Map())) + ((identities, values))))
+        acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, Map())) + ((identities, values))))
     }
   }
 
@@ -95,7 +88,7 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
   }
 
   "combine" should {
-    "correctly restore objects from their component parts" in {
+    "restore objects from their component parts" in {
       val projectionData = projections map { 
         case (pd, p) => ((pd.columns(0).selector, p.getAllPairs[Unit] map { case (ids, vs) =>  (ids, vs(0)) })) 
       } toList
@@ -103,6 +96,14 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
       val enum = combine(projectionData) map { case (ids, sv) => sv }
       
       (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
+    }
+  }
+
+  "fullProjection" should {
+    "return all of the objects inserted into projections" in {
+      val enum = Await.result(fullProjection[Unit](dataPath), intToDurationInt(30).seconds) map { case (ids, sv) => sv }
+      
+      (consume[Unit, SValue, IO, List] &= enum.enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
     }
   }
 }

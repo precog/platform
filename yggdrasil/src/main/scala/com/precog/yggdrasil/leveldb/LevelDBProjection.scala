@@ -203,25 +203,6 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  def getAllIds[X] : EnumeratorP[X, Identities, IO] = new EnumeratorP[X, Identities, IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Identities, F] {
-      (id, b) => id
-    }
-  }
-
-  def getAllValues[X] = new EnumeratorP[X, Seq[CValue], IO] { 
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Seq[CValue], F] {
-      (id, b) => b
-    }
-  }
-
-  def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO] = new EnumeratorP[X, (Identities, CValue), IO] {
-    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && col.selector == selector)
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
-      (id, b) => (id, b(columnIndex))
-    }
-  }
-
   def traverseIndexRange[X, E, F[_]](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit MO : F |>=| IO): EnumeratorT[X, E, F] = {
     import MO._
     import MO.MG.bindSyntax._
@@ -259,31 +240,6 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       (id, b) => (id, b)
     }
   }
-
-  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO] = 
-    getPairsByIdRange(Interval(Some(id), Some(id)))
-
-
-  /**
-   * Retrieve all IDs for IDs in the given range [start,end]
-   */  
-  def getIdsInRange[X](range : Interval[Identities]) = new EnumeratorP[X, Identities, IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndexRange[X, Identities, F](range) {
-      (id, b) => id
-    }
-  }
-
-  /**
-   * Retrieve all values for IDs in the given range [start,end]
-   */  
-  def getValuesByIdRange[X](range: Interval[Identities]) = new EnumeratorP[X, Seq[CValue], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndexRange[X, Seq[CValue], F](range) {
-      (id, b) => b
-    }
-  }
-
-  def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO] = 
-    getValuesByIdRange(Interval(Some(id), Some(id)))
 
   //////////////////////
   // Value Traversals //
