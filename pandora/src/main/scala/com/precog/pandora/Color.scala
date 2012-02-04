@@ -25,6 +25,7 @@ class Color(val enabled: Boolean) {
   val RedForeground = "\u001B[31m"
   val GreenForeground = "\u001B[33m"
   val YellowForeground = "\u001B[33m"
+  val BlueForeground = "\u001B[34m"
   val CyanForeground = "\u001B[36m"
   
   val Reset = "\u001B[0m"
@@ -34,6 +35,7 @@ class Color(val enabled: Boolean) {
   def red(str: String) = format(RedForeground, str)
   def green(str: String) = format(GreenForeground, str)
   def yellow(str: String) = format(YellowForeground, str)
+  def blue(str: String) = format(BlueForeground, str)
   def cyan(str: String) = format(CyanForeground, str)
   
   private def format(escape: String, str: String) =
