@@ -154,35 +154,41 @@ trait REPL extends LineErrors
       }
     }
    
-    //startShard.unsafePerformIO
-    
-    println("Welcome to Quirrel version 0.0.0.")
-    println("Type in expressions to have them evaluated.")
-    println("Press Ctrl-D on a new line to evaluate an expression.")
-    println("Type in :help for more information.")
-    println()
-  
-    loop()
-   
-    //stopShard.unsafePerformIO
+    def loopWithShard() = {
+      storageShard.map { shard =>
+        println()
+        Await.result(shard.start, Duration(10, "seconds"))
+        println()
+
+        println("Welcome to Quirrel version 0.0.0.")
+        println("Type in expressions to have them evaluated.")
+        println("Press Ctrl-D on a new line to evaluate an expression.")
+        println("Type in :help for more information.")
+        println()
+      
+        loop()
+        
+        println()
+        Await.result(shard.stop, Duration(10, "seconds"))
+        println()
+      }
+    }
+
+    loopWithShard.unsafePerformIO
   }
 
-  def storageShardConfig() = StorageShardModule.defaultProperties
+  def storageShardConfig() = {
 
-  def startShard(): IO[Unit] = 
-    storageShard.map{ shard =>
-      println()
-      Await.result(shard.start, Duration(300, "seconds"))
-      println()
-    }
+    val config = StorageShardModule.defaultProperties
 
-  def stopShard(): IO[Unit] =
-    storageShard.map{ shard =>
-      println()
-      Await.result(shard.stop, Duration(300, "seconds"))
-      println()
-    }
-  
+    config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
+    
+    // disable kafka consumer until we do an ingest test (requires zk and kafka)
+    config.setProperty("precog.kafka.enable", "false") 
+    
+    config
+  }
+
   def readNext(reader: ConsoleReader): String = {
     var input = reader.readLine(Prompt)
     if (input == null) {
