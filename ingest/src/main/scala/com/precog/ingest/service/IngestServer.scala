@@ -27,16 +27,11 @@ import blueeyes.persistence.mongo.MongoCollection
 import blueeyes.persistence.mongo.Database
 import blueeyes.util.Clock
 
-import scalaz.NonEmptyList
-
 import com.precog.analytics.TokenManager
 
-import java.util.Properties
-import java.util.Date
 import net.lag.configgy.ConfigMap
 
 import com.precog.ingest.api._
-import com.precog.ingest.util.QuerioZookeeper
 
 trait IngestServer extends BlueEyesServer with IngestService {
   def mongoFactory(configMap: ConfigMap): Mongo = {
@@ -74,30 +69,3 @@ trait IngestServer extends BlueEyesServer with IngestService {
 
   val clock = Clock.System
 }
-
-trait KafkaIngestServer extends IngestServer {
-  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
-    val topicId = eventConfig.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
-    val zookeeperHosts = eventConfig.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
-    
-    val props = new Properties()
-    props.put("zk.connect", zookeeperHosts)
-    props.put("serializer.class", "com.precog.ingest.api.IngestMessageCodec")
-    
-    val defaultAddresses = NonEmptyList(MailboxAddress(0))
-
-    val routeTable = new ConstantRouteTable(defaultAddresses)
-    val messaging = new SimpleKafkaMessaging(topicId, props)
-
-    val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
-    qz.setup
-    val producerId = qz.acquireProducerId
-    qz.close
-
-    new KafkaEventStore(new EventRouter(routeTable, messaging), producerId)
-  }
-}
-
-object KafkaIngestServer extends KafkaIngestServer
-
-// vim: set ts=4 sw=4 et:
