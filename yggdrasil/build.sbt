@@ -26,8 +26,8 @@ libraryDependencies ++= Seq(
   "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT"                changing(),
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9"            % "test",
   "org.specs2"                  %% "specs2"             % "1.7"   % "test",
-  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   % "optional" changing(),
-  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   % "optional" changing() 
+  "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   changing(),
+  "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   changing() 
 )
 
 
@@ -42,6 +42,7 @@ ivyXML :=
       <exclude org="com.sun.jdmk"/>
       <exclude org="com.sun.jmx"/>
       <exclude org="javax.jms"/>
+      <exclude org="jline"/>
     </dependency>
   </dependencies>
 

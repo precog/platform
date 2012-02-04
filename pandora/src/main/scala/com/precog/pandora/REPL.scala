@@ -5,7 +5,8 @@ import com.precog.yggdrasil.SValue
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
-import jline.{ANSIBuffer, ConsoleReader, Terminal}
+import jline.{TerminalFactory, UnixTerminal}
+import jline.console.ConsoleReader
 
 import daze._
 import yggdrasil.shard._
@@ -39,13 +40,13 @@ trait REPL extends LineErrors
   val actorSystem = ActorSystem()
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
  
-  val Prompt = new ANSIBuffer().bold("quirrel> ").getAnsiBuffer
-  val Follow = new ANSIBuffer().bold("       | ").getAnsiBuffer
-  
+  val Prompt = "quirrel> "
+  val Follow = "       | "
+
   lazy val storage = storageShard.unsafePerformIO
 
   def run() {
-    Terminal.setupTerminal().initializeTerminal()
+    TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX).asInstanceOf[UnixTerminal].init()
     
     val reader = new ConsoleReader
     
@@ -57,12 +58,7 @@ trait REPL extends LineErrors
       val allErrors = tree.errors ++ phaseErrors
       
       val strs = for (error <- allErrors) yield {
-        val buffer = new ANSIBuffer
-        
-        if (isWarning(error))
-          buffer.yellow(showError(error)).getAnsiBuffer
-        else
-          buffer.red(showError(error)).getAnsiBuffer
+        showError(error) 
       }
       
       if (!tree.errors.isEmpty || !phaseErrors.isEmpty) {
@@ -89,7 +85,7 @@ trait REPL extends LineErrors
             val result = consumeEval(graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
             
             println()
-            println(new ANSIBuffer().cyan(result).getAnsiBuffer)
+            println(result)
           }
         }
         
@@ -125,7 +121,7 @@ trait REPL extends LineErrors
         } catch {
           case pe: ParseException => {
             println()
-            println(new ANSIBuffer().red(pe.mkString).getAnsiBuffer)
+            println(pe.mkString)
           }
         }
         println()
@@ -143,7 +139,7 @@ trait REPL extends LineErrors
       }
     }
    
-    Await.result(storage.start, Duration(10, "seconds"))
+    Await.result(storage.start, Duration(120, "seconds"))
 
     println("Welcome to Quirrel version 0.0.0.")
     println("Type in expressions to have them evaluated.")
@@ -153,7 +149,9 @@ trait REPL extends LineErrors
   
     loop()
     
-    Await.result(storage.stop, Duration(10, "seconds"))
+    Await.result(storage.stop, Duration(120, "seconds"))
+
+    actorSystem.shutdown
   }
 
   def storageShardConfig() = {
