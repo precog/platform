@@ -17,6 +17,7 @@ import quirrel.parser._
 import quirrel.typer._
 
 import java.io.PrintStream
+import net.lag.configgy.Configgy
 
 trait REPL extends LineErrors
     with Parser
@@ -127,8 +128,7 @@ trait REPL extends LineErrors
         }
       }
     }
-   
-    Await.result(storage.start, Duration(120, "seconds"))
+  
 
     out.println("Welcome to Quirrel version 0.0.0.")
     out.println("Type in expressions to have them evaluated.")
@@ -137,8 +137,6 @@ trait REPL extends LineErrors
     out.println()
   
     loop()
-    
-    Await.result(storage.stop, Duration(120, "seconds"))
   }
 
   def readNext(reader: ConsoleReader, color: Color): String = {
@@ -170,9 +168,6 @@ trait REPL extends LineErrors
   
   // %%
   
-  /*
-  lazy val prompt: Parser[Command] = sys.error("todo")
-  */
   lazy val prompt: Parser[Command] = (
       expr           ^^ { t => Eval(t) }
     | ":tree" ~ expr ^^ { (_, t) => PrintTree(t) }
@@ -188,7 +183,31 @@ trait REPL extends LineErrors
   case object Quit extends Command
 }
 
-object Console extends App {
-  object repl extends REPL with AkkaIngestServer with DefaultYggConfig
-  repl.run()
+object Console {
+  def main(args: Array[String]) {
+    Configgy.configureFromResource("default_ingest.conf")
+
+    object repl extends REPL with AkkaIngestServer with DefaultYggConfig {
+      
+      val controlTimeout = Duration(120, "seconds")
+
+      def startup {
+        // start ingest server
+        Await.result(start, controlTimeout)
+        // start storage shard 
+        Await.result(storage.start, controlTimeout)
+      }
+
+      def shutdown {
+        // stop storaget shard
+        Await.result(storage.stop, controlTimeout)
+        // stop ingest server
+        Await.result(stop, controlTimeout)
+      }
+    }
+    
+    repl.startup
+    repl.run
+    repl.shutdown
+  }
 }
