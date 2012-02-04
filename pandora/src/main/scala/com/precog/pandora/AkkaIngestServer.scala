@@ -35,7 +35,7 @@ import scalaz.NonEmptyList
 import scalaz.effect.IO
 
 trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
-  val actorSystem = ActorSystem("Pandora REPL")
+  val actorSystem = ActorSystem("akka_ingest_server")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
  
   def storageShardConfig() = {
