@@ -7,7 +7,7 @@ import com.precog.yggdrasil.SValue
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
-import jline.{TerminalFactory, UnixTerminal}
+import jline.TerminalFactory
 import jline.console.ConsoleReader
 
 import daze._
@@ -15,6 +15,8 @@ import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
+
+import java.io.PrintStream
 
 trait REPL extends LineErrors
     with Parser
@@ -29,9 +31,14 @@ trait REPL extends LineErrors
   val Follow = "       | "
 
   def run() {
-    TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX).asInstanceOf[UnixTerminal].init()
+    val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
+    terminal.init()
+    
+    val color = new Color(true)       // TODO   
     
     val reader = new ConsoleReader
+    // val out = new PrintWriter(reader.getTerminal.wrapOutIfNeeded(System.out))
+    val out = System.out
     
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
@@ -40,12 +47,10 @@ trait REPL extends LineErrors
       val phaseErrors = runPhasesInSequence(tree)
       val allErrors = tree.errors ++ phaseErrors
       
-      val strs = for (error <- allErrors) yield {
-        showError(error) 
-      }
+      val strs = for (error <- allErrors) yield showError(error)
       
       if (!tree.errors.isEmpty || !phaseErrors.isEmpty) {
-        println(strs mkString "\n")
+        out.println(color.red(strs mkString "\n"))
       }
       
       if (allErrors filterNot isWarning isEmpty)
@@ -67,8 +72,8 @@ trait REPL extends LineErrors
           for (graph <- eitherGraph.right) {
             val result = consumeEval(graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
             
-            println()
-            println(result)
+            out.println()
+            out.println(color.cyan(result))
           }
         }
         
@@ -79,14 +84,14 @@ trait REPL extends LineErrors
         bindRoot(tree, tree)
         val tree2 = shakeTree(tree)
         
-        println()
-        println(prettyPrint(tree2))
+        out.println()
+        out.println(prettyPrint(tree2))
         
         true
       }
       
       case Help => { 
-        printHelp()
+        printHelp(out)
         true
       }
         
@@ -94,7 +99,7 @@ trait REPL extends LineErrors
     }
     
     def loop() {
-      val results = prompt(readNext(reader))
+      val results = prompt(readNext(reader, color))
       val successes = results collect { case Success(tree, _) => tree }
       val failures = results collect { case f: Failure => f }
       
@@ -103,8 +108,8 @@ trait REPL extends LineErrors
           handleFailures(failures)
         } catch {
           case pe: ParseException => {
-            println()
-            println(pe.mkString)
+            out.println()
+            out.println(pe.mkString)
           }
         }
         println()
@@ -116,7 +121,7 @@ trait REPL extends LineErrors
           successes.head
         
         if (handle(command)) {
-          println()
+          out.println()
           loop()
         }
       }
@@ -124,33 +129,33 @@ trait REPL extends LineErrors
    
     Await.result(storage.start, Duration(120, "seconds"))
 
-    println("Welcome to Quirrel version 0.0.0.")
-    println("Type in expressions to have them evaluated.")
-    println("Press Ctrl-D on a new line to evaluate an expression.")
-    println("Type in :help for more information.")
-    println()
+    out.println("Welcome to Quirrel version 0.0.0.")
+    out.println("Type in expressions to have them evaluated.")
+    out.println("Press Ctrl-D on a new line to evaluate an expression.")
+    out.println("Type in :help for more information.")
+    out.println()
   
     loop()
     
     Await.result(storage.stop, Duration(120, "seconds"))
   }
 
-  def readNext(reader: ConsoleReader): String = {
-    var input = reader.readLine(Prompt)
+  def readNext(reader: ConsoleReader, color: Color): String = {
+    var input = reader.readLine(color.bold(Prompt))
     if (input == null) {
-      readNext(reader)
+      readNext(reader, color)
     } else {
-      var line = reader.readLine(Follow)
+      var line = reader.readLine(color.bold(Follow))
       while (line != null) {
         input += '\n' + line
-        line = reader.readLine(Follow)
+        line = reader.readLine(color.bold(Follow))
       }
       println()
       input.trim
     }
   }
   
-  def printHelp() {
+  def printHelp(out: PrintStream) {
     val str = 
       """Note: command abbreviations are not yet supported!
         |
@@ -159,7 +164,7 @@ trait REPL extends LineErrors
         |:quit         Exit the REPL
         |:tree <expr>  Print the AST for the expression"""
         
-    println(str stripMargin '|')
+    out.println(str stripMargin '|')
   }
   
   // %%
