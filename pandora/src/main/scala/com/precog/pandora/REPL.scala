@@ -110,7 +110,7 @@ trait REPL extends LineErrors
         } catch {
           case pe: ParseException => {
             out.println()
-            out.println(pe.mkString)
+            out.println(color.red(pe.mkString))
           }
         }
         println()
@@ -142,14 +142,14 @@ trait REPL extends LineErrors
   }
 
   def readNext(reader: ConsoleReader, color: Color): String = {
-    var input = reader.readLine(color.bold(Prompt))
+    var input = reader.readLine(color.blue(Prompt))
     if (input == null) {
       readNext(reader, color)
     } else {
-      var line = reader.readLine(color.bold(Follow))
+      var line = reader.readLine(color.blue(Follow))
       while (line != null) {
         input += '\n' + line
-        line = reader.readLine(color.bold(Follow))
+        line = reader.readLine(color.blue(Follow))
       }
       println()
       input.trim
