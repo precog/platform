@@ -68,7 +68,17 @@ trait CrossOrdering extends DAG {
           
           val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
           
-          Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+          val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          
+          if (targetPrefix && booleanPrefix)
+            Filter(loc, None, range, target2, boolean2)
+          else if (targetPrefix && !booleanPrefix)
+            Filter(loc, None, range, target2, Sort(boolean2, booleanIndexes))
+          else if (!targetPrefix && booleanPrefix)
+            Filter(loc, None, range, Sort(target2, targetIndexes), boolean2)
+          else  
+            Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
         }
         
         case Filter(loc, cross, range, target, boolean) =>
