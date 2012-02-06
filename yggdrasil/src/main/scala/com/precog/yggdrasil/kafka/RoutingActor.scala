@@ -120,6 +120,7 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
             for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
         }
       }
+      sender ! ()
 
     case ProjectionActorRequest(descriptor) =>
       sender ! projectionActor(descriptor)
