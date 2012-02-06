@@ -4,6 +4,7 @@ package daze
 import bytecode._
 
 import com.precog.util.Identity
+import com.precog.yggdrasil._
 
 import scala.collection.mutable
 
@@ -322,6 +323,8 @@ trait DAG extends Instructions {
     
     def provenance: Vector[dag.Provenance]
     
+    def value: Option[SValue] = None
+    
     def isSingleton: Boolean
   }
   
@@ -335,11 +338,22 @@ trait DAG extends Instructions {
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
       lazy val provenance = Vector()
       
+      override lazy val value = Some(instr match {
+        case PushString(str) => SString(str)
+        case PushNum(num) => SDecimal(BigDecimal(num))
+        case PushTrue => SBoolean(true)
+        case PushFalse => SBoolean(false)
+        case PushObject => SObject(Map())
+        case PushArray => SArray(Vector())
+      })
+      
       val isSingleton = true
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      
+      override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
     }
@@ -353,6 +367,7 @@ trait DAG extends Instructions {
       val isSingleton = false
     }
     
+    // TODO propagate AOT value computation
     case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
       lazy val provenance = parent.provenance
       
@@ -371,6 +386,7 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton && child.isSingleton
     }
     
+    // TODO propagate AOT value computation
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = instr match {
         case _: Map2CrossRight => right.provenance ++ left.provenance

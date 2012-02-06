@@ -14,6 +14,8 @@ case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Optio
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum map f)
 
+  def foldLeft[A](a: A)(f: (A, E) => A): DatasetEnum[X, A, F] = null
+
   def flatMap[E2](f: E => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum.flatMap(e => f(e).enum))
   
