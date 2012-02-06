@@ -444,6 +444,8 @@ trait DAG extends Instructions {
       }
       
       lazy val isSingleton = parent.isSingleton
+      
+      lazy val memoId = Identity.nextInt()
     }
     
     

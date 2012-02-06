@@ -62,7 +62,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
               case _ => ops.empty[X, SEvent, IO]
             }
             
-            Right(ops.sort(result))
+            Right(ops.sort(result, None))
           }
         }
       }
@@ -127,12 +127,12 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         
         val splitEnum = maybeRealize(loop(parent, roots))
         
-        val result = ops.sort(splitEnum).uniq flatMap {
+        val result = ops.sort(splitEnum, None).uniq flatMap {
           case (_, sv) =>
             maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
         }
         
-        val back: DatasetEnum[X, SEvent, IO] = ops.sort(result).uniq.zipWithIndex map {
+        val back: DatasetEnum[X, SEvent, IO] = ops.sort(result, None).uniq.zipWithIndex map {
           case ((_, sv), id) => (Vector(id), sv)
         }
         
@@ -142,8 +142,8 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case Join(_, instr @ (VUnion | VIntersect), left, right) => {
         implicit val sortOfValueOrder = ValuesOrder
         
-        val leftEnum = ops.sort(maybeRealize(loop(left, roots)))
-        val rightEnum = ops.sort(maybeRealize(loop(right, roots)))
+        val leftEnum = ops.sort(maybeRealize(loop(left, roots)), None)
+        val rightEnum = ops.sort(maybeRealize(loop(right, roots)), None)
         
         // TODO we're relying on the fact that we *don't* need to preserve sane identities!
         val back = ops.cogroup(leftEnum, rightEnum) collect {
@@ -276,8 +276,8 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
         Right(back)
       }
       
-      case Sort(parent, indexes) => 
-        loop(parent, roots).right map { enum => sortByIdentities(enum, indexes) }
+      case s @ Sort(parent, indexes) => 
+        loop(parent, roots).right map { enum => sortByIdentities(enum, indexes, s.memoId) }
     }
     
     maybeRealize(loop(orderCrosses(graph), Nil))
@@ -286,7 +286,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
   private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
     (result.left map { mask => Await.result(mask.realize, 10 seconds) }).fold(identity, identity)
   
-  protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int]): DatasetEnum[X, SEvent, IO] = {
+  protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int): DatasetEnum[X, SEvent, IO] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {
       def order(e1: SEvent, e2: SEvent): Ordering = {
         val (ids1, _) = e1
@@ -302,7 +302,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
     }
     
-    ops.sort(enum) map {
+    ops.sort(enum, Some(memoId)) map {
       case (ids, sv) => {
         val (first, second) = ids.zipWithIndex partition {
           case (_, i) => indexes contains i

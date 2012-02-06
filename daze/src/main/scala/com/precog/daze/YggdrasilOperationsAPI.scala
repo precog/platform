@@ -37,7 +37,7 @@ trait YggdrasilOperationsAPI extends OperationsAPI { self: YggdrasilStorage =>
   def yggdrasilConfig: YggConfig
 
   object ops extends DatasetEnumOps {
-    def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
+    def sort[X](enum: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
       DatasetEnum(Enumerators.sort[X](enum.enum, yggdrasilConfig.sortBufferSize, yggdrasilConfig.workDir, enum.descriptor))
     }
   }
