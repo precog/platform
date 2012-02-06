@@ -58,6 +58,8 @@ trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with Default
     def sort[X](enum: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
       DatasetEnum(Enumerators.sort[X](enum.enum, yggdrasilConfig.sortBufferSize, yggdrasilConfig.workDir, enum.descriptor))
     }
+    
+    def memoize[X](enum: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO] = enum      // TODO
   }
 
   override object query extends StorageEngineQueryAPI {

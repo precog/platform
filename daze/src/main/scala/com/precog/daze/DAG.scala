@@ -448,6 +448,15 @@ trait DAG extends Instructions {
       lazy val memoId = Identity.nextInt()
     }
     
+    case class Memoize(parent: DepGraph) extends DepGraph {
+      val loc = parent.loc
+      
+      lazy val provenance = parent.provenance
+      lazy val isSingleton = parent.isSingleton
+      
+      lazy val memoId = Identity.nextInt()
+    }
+    
     
     sealed trait CrossType
     
