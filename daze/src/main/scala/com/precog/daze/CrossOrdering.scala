@@ -40,6 +40,15 @@ trait CrossOrdering extends DAG {
           Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
         }
         
+        case Join(loc, Map2Cross(op), left, right) => {
+          if (right.isSingleton)
+            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
+          else if (left.isSingleton)
+            Join(loc, Map2CrossRight(op), memoized(left), memoized(right))
+          else
+            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
+        }
+        
         case Join(loc, instr, left, right) =>
           Join(loc, instr, memoized(left), memoized(right))
         
