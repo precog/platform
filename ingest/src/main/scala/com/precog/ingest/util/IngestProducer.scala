@@ -127,7 +127,7 @@ object DirectIngestProducer {
 }
 
 class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
-  implicit val actorSystem = ActorSystem()
+  implicit val actorSystem = ActorSystem("direct_ingest")
 
   lazy val testTopic = config.getProperty("topicId", "test-topic-1")
   lazy val zookeeperHosts = config.getProperty("zookeeperHosts", "127.0.0.1:2181")
@@ -162,5 +162,6 @@ zookeeperHosts - comma delimeted list of zookeeper hosts (default: 127.0.0.1:218
 
   override def close() {
     Await.result(store.close, 10 seconds)
+    actorSystem.shutdown
   }
 }
