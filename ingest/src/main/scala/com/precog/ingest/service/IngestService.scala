@@ -81,7 +81,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
-  implicit val timeout = akka.util.Timeout(Long.MaxValue) //for now
+  implicit val timeout = akka.util.Timeout(120000) //for now
 
   def eventStoreFactory(configMap: ConfigMap): EventStore
 
@@ -147,9 +147,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         shutdown { state => 
           Future( 
             Option(
-              Stoppable(
-                state.indexMongo, Nil
-              )
+              Stoppable(state.tokenManager.database, Stoppable(state.indexMongo) :: Nil)
             )
           )
         }

@@ -41,7 +41,7 @@ object StubOperationsAPI {
   import akka.actor.ActorSystem
   import akka.dispatch.ExecutionContext
 
-  val actorSystem = ActorSystem()
+  val actorSystem = ActorSystem("stub_operations_api")
   implicit val actorExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 }
 
