@@ -39,13 +39,14 @@ class ProjectionDescriptorSpec extends Specification {
   val descriptors = List(
     ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), SStringArbitrary, Ownership(Set())),
     ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), SStringArbitrary, Ownership(Set())),
-    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong, Ownership(Set())))
+    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong, Ownership(Set()))
+  )
 
   val indexes = List(0, 0, 1)
 
   val columns = descriptors.zip(indexes).foldLeft(ListMap[ColumnDescriptor, Int]()){ (acc, el) => acc + el }
 
-  val sorting = Seq((descriptors(0), ById), (descriptors(1), ByValue), (descriptors(0), ByValue))
+  val sorting = Seq((descriptors(0), ById), (descriptors(1), ByValue), (descriptors(2), ByValue))
 
   val pdValidation = ProjectionDescriptor(columns, sorting)
 
