@@ -17,7 +17,7 @@ import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
+import blueeyes.bkka.AkkaDefaults
 
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
@@ -25,6 +25,8 @@ import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.service.HttpClient
 import blueeyes.core.service.engines.HttpClientXLightWeb
+
+import blueeyes.json.JsonAST._
 
 import scalaz.NonEmptyList
 
@@ -120,6 +122,8 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   override def usageMessage = super.usageMessage + """
 serviceUrl - base url for web application (default: http://localhost:30050/vfs/)
   """
+
+  override def close(): Unit = AkkaDefaults.actorSystem.shutdown
 }
 
 object DirectIngestProducer {
