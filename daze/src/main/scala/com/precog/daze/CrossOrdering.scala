@@ -56,7 +56,17 @@ trait CrossOrdering extends DAG {
           
           val (leftIndexes, rightIndexes) = determineSort(left2, right2)
           
-          Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+          val leftPrefix = leftIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          
+          if (leftPrefix && rightPrefix)
+            Join(loc, instr, left2, right2)
+          else if (leftPrefix && !rightPrefix)
+            Join(loc, instr, left2, Sort(right2, rightIndexes))
+          else if (!leftPrefix && rightPrefix)
+            Join(loc, instr, Sort(left2, leftIndexes), right2)
+          else
+            Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
         }
         
         case Join(loc, Map2Cross(op), left, right) => {
