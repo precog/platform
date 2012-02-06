@@ -33,6 +33,18 @@ object CrossOrderingSpecs extends Specification with CrossOrdering {
       }
     }
     
+    "refrain from sorting when sets are already aligned" in {
+      val line = Line(0, "")
+      
+      val left = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
+      val right = Root(line, PushNum("42"))
+      
+      val input = Join(line, Map2Match(Or), Join(line, Map2Cross(Eq), left, right), left)
+      val expected = Join(line, Map2Match(Or), Join(line, Map2CrossLeft(Eq), left, right), left)
+      
+      orderCrosses(input) mustEqual expected
+    }
+    
     "insert index 0 sorts on dynamic matching filter" in {
       val line = Line(0, "")
       val split = dag.Split(line, Root(line, PushNum("42")), Root(line, PushNum("24")))
