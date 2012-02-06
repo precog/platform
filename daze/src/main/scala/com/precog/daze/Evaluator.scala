@@ -259,6 +259,9 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       
       case s @ Sort(parent, indexes) => 
         loop(parent, roots).right map { enum => sortByIdentities(enum, indexes, s.memoId) }
+      
+      case m @ Memoize(parent) =>
+        loop(parent, roots).right map { enum => ops.memoize(enum, m.memoId) }
     }
     
     maybeRealize(loop(orderCrosses(graph), Nil))

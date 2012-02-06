@@ -85,6 +85,8 @@ trait CrossOrdering extends DAG {
           Filter(loc, cross, range, memoized(target), memoized(boolean))
         
         case Sort(parent, _) => memoized(parent)
+        
+        case Memoize(parent) => Memoize(memoized(parent))
       }
   
       memotable.get(node) getOrElse {
