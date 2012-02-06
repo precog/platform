@@ -340,19 +340,27 @@ trait DAG extends Instructions {
     val loc: Line
     
     def provenance: Vector[dag.Provenance]
+    
+    def isSingleton: Boolean
   }
   
   object dag {
     case class SplitRoot(loc: Line, depth: Int) extends DepGraph {
       val provenance = Vector()
+      
+      val isSingleton = true
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
       lazy val provenance = Vector()
+      
+      val isSingleton = true
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      
+      lazy val isSingleton = parent.isSingleton
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
@@ -360,18 +368,26 @@ trait DAG extends Instructions {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
         case _ => Vector(DynamicProvenance(Identity.nextInt()))
       }
+      
+      val isSingleton = false
     }
     
     case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
       lazy val provenance = parent.provenance
+      
+      lazy val isSingleton = parent.isSingleton
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector()
+      
+      val isSingleton = true
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      
+      lazy val isSingleton = parent.isSingleton && child.isSingleton
     }
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
@@ -381,6 +397,8 @@ trait DAG extends Instructions {
         
         case _ => (left.provenance ++ right.provenance).distinct
       }
+      
+      lazy val isSingleton = left.isSingleton && right.isSingleton
     }
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
@@ -389,6 +407,8 @@ trait DAG extends Instructions {
         case Some(CrossLeft) | Some(CrossNeutral) => target.provenance ++ boolean.provenance
         case None => (target.provenance ++ boolean.provenance).distinct
       }
+      
+      lazy val isSingleton = target.isSingleton
     }
     
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
@@ -406,6 +426,8 @@ trait DAG extends Instructions {
         val (back, _) = (prefix ++ second).unzip
         back
       }
+      
+      lazy val isSingleton = parent.isSingleton
     }
     
     

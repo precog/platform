@@ -26,6 +26,32 @@ object CrossOrderingSpecs extends Specification with CrossOrdering {
   import dag._
   
   "cross ordering" should {
+    "order in the appropriate direction when one side is singleton" >> {
+      "left" >> {
+        val line = Line(0, "")
+        
+        val left = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
+        val right = Root(line, PushNum("42"))
+        
+        val input = Join(line, Map2Cross(Eq), left, right)
+        val expected = Join(line, Map2CrossLeft(Eq), left, right)
+        
+        orderCrosses(input) mustEqual expected
+      }
+      
+      "right" >> {
+        val line = Line(0, "")
+        
+        val left = Root(line, PushNum("42"))
+        val right = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
+        
+        val input = Join(line, Map2Cross(Eq), left, right)
+        val expected = Join(line, Map2CrossRight(Eq), left, right)
+        
+        orderCrosses(input) mustEqual expected
+      }
+    }
+    
     "insert index 0 sorts on dynamic matching filter" in {
       val line = Line(0, "")
       val split = dag.Split(line, Root(line, PushNum("42")), Root(line, PushNum("24")))
@@ -43,7 +69,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering {
 
       val expected = Filter(line, None, None,
         Sort(left, Vector(0)),
-        Sort(right, Vector(0)))
+        Sort(Join(line, Map2CrossLeft(Eq), split, Root(line, PushNum("9"))), Vector(0)))
 
       orderCrosses(input) mustEqual expected
     }
