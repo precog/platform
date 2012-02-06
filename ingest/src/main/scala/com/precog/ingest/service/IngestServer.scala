@@ -35,7 +35,8 @@ import com.precog.ingest.api._
 
 trait IngestServer extends BlueEyesServer with IngestService {
   def mongoFactory(configMap: ConfigMap): Mongo = {
-    blueeyes.persistence.mongo.RealMongo(configMap)
+    new blueeyes.persistence.mongo.MockMongo()
+    //blueeyes.persistence.mongo.RealMongo(configMap)
   }
 
   def storageReporting(config: ConfigMap) = {

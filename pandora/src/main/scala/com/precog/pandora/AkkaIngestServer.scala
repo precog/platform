@@ -39,6 +39,7 @@ import akka.dispatch.Await
 import akka.pattern.ask
 import akka.util.Duration
 
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.BlueEyesServer
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo.Mongo
@@ -59,7 +60,7 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
  
   def storageShardConfig() = {
     val config = new Properties()
-    config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
+    config.setProperty("precog.storage.root", "./data") 
     config
   }
 
@@ -80,13 +81,16 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
       private val idSource = new java.util.concurrent.atomic.AtomicInteger(0)
 
       def save(event: Event): Future[Unit] = {
-        (storage.routingActor ? EventMessage(0, idSource.incrementAndGet, event)).mapTo[Unit]
+        val seqId = idSource.incrementAndGet
+        (storage.routingActor ? EventMessage(0, seqId, event)).mapTo[Unit]
       }
     }
   }
 
   abstract override def stop = super.stop map { _ =>
     actorSystem.shutdown
+  } map { _ =>
+    AkkaDefaults.actorSystem.shutdown
   }
 }
 

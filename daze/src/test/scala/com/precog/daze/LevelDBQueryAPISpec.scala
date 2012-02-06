@@ -49,7 +49,7 @@ import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
-  implicit val actorSystem: ActorSystem = ActorSystem()
+  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   val dataPath = Path("/test")
