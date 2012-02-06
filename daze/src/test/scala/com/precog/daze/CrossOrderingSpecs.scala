@@ -52,7 +52,7 @@ object CrossOrderingSpecs extends Specification with CrossOrdering {
       }
     }
     
-    "refrain from sorting when sets are already aligned" in {
+    "refrain from sorting when sets are already aligned in match" in {
       val line = Line(0, "")
       
       val left = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
@@ -64,25 +64,15 @@ object CrossOrderingSpecs extends Specification with CrossOrdering {
       orderCrosses(input) mustEqual expected
     }
     
-    "insert index 0 sorts on dynamic matching filter" in {
+    "refrain from sorting when sets are already aligned in filter" in {
       val line = Line(0, "")
-      val split = dag.Split(line, Root(line, PushNum("42")), Root(line, PushNum("24")))
-
-      val left = split
-      val right = Join(line, Map2Cross(Eq), split, Root(line, PushNum("9")))
-
-      val input = Filter(line, None, None, left, right)
-
-      left.provenance must beLike { case Vector(DynamicProvenance(_)) => ok }
-      val num = left.provenance.head.asInstanceOf[DynamicProvenance].id
-
-      right.provenance mustEqual Vector(DynamicProvenance(num))
-      input.provenance mustEqual Vector(DynamicProvenance(num))
-
-      val expected = Filter(line, None, None,
-        Sort(left, Vector(0)),
-        Sort(Join(line, Map2CrossLeft(Eq), split, Root(line, PushNum("9"))), Vector(0)))
-
+      
+      val left = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
+      val right = Root(line, PushNum("42"))
+      
+      val input = Filter(line, None, None, Join(line, Map2Cross(Eq), left, right), left)
+      val expected = Filter(line, None, None, Join(line, Map2CrossLeft(Eq), left, right), left)
+      
       orderCrosses(input) mustEqual expected
     }
   }
