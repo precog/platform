@@ -52,6 +52,8 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
       enumerator: EnumeratorP[X, SEvent, IO]  <- assemble(path, sources)
     } yield DatasetEnum(enumerator)
   }
+  
+  def mask(path: Path): DatasetMask = null
 
   def assemble[X](path: Path, sources: Seq[(JPath, scala.collection.Map[ProjectionDescriptor, ColumnMetadata])]): Future[EnumeratorP[X, SEvent, IO]] = {
     // determine the projections from which to retrieve data
