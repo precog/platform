@@ -106,6 +106,7 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
   def columnAt(path: Path, selector: JPath) = columns.find(col => col.path == path && col.selector == selector)
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
+
 }
 
 trait ProjectionDescriptorSerialization {
@@ -168,22 +169,40 @@ trait ProjectionDescriptorSerialization {
 }
 
 object ProjectionDescriptor extends ProjectionDescriptorSerialization {
-  def apply(columns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): Validation[String, ProjectionDescriptor] = {
-    val identities = columns.values.toSeq.sorted.foldLeft(Option(0)) {
+  def apply(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): Validation[String, ProjectionDescriptor] = {
+    val identities = indexedColumns.values.toSeq.sorted.foldLeft(Option(0)) {
       // test that identities are 0-based and sequential
       case (Some(cur), next) if cur == next => Some(cur + 1)
       case (Some(cur), next) if cur >  next => Some(cur)
       case _ => None
     }
 
-
     identities.toSuccess("Column identity indexes must be 0-based and must be sequential when sorted")
     .ensure("A projection may not store values of multiple types for the same selector") { _ =>   
-      columns.keys.groupBy(c => (c.path, c.selector)).values.forall(_.size == 1)
+      indexedColumns.keys.groupBy(c => (c.path, c.selector)).values.forall(_.size == 1)
     }
-    .map(new ProjectionDescriptor(_, columns, sorting))
+
+    .ensure("Each identity in a projection may not by shared by column descriptors which sort ById or ByValueThenId more than once") { _ =>
+      def sortByIndices(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = {
+        indexedColumns.keys.foldLeft(Map.empty: Map[Int, List[SortBy]]) {
+          case (indexMap, col) => 
+            val sortingMap = sorting.toMap
+            if (indexMap.contains(indexedColumns(col))) indexMap + ((indexedColumns(col), indexMap(indexedColumns(col)) :+ sortingMap(col))) 
+            else indexMap + ((indexedColumns(col), List(sortingMap(col))))
+        }
+      }
+
+      indexedColumns.values.toSet.forall(id => 
+        (sortByIndices(indexedColumns, sorting)(id).count(a => a == ById || a == ByValueThenId) < 2)
+      )
+    }
+
+    .map(new ProjectionDescriptor(_, indexedColumns, sorting))
   }
 }
+
+
+
 
 trait ByteProjection {
   def descriptor: ProjectionDescriptor
