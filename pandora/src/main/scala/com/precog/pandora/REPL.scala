@@ -222,6 +222,8 @@ object Console {
         Await.result(storage.stop, controlTimeout)
         // stop ingest server
         Await.result(stop, controlTimeout)
+
+        actorSystem.shutdown
       }
     }
     
