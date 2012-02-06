@@ -3,16 +3,52 @@ package daze
 
 import bytecode._
 
+import com.precog.util.Identity
+
+import scala.collection.mutable
+
 trait DAG extends Instructions {
   import instructions._
   
   def decorate(stream: Vector[Instruction]): Either[StackError, DepGraph] = {
     import dag._
     
-    def adjustSplits(roots: List[DepGraph], delta: Int): List[DepGraph] = {
-      roots map {
+    val adjustMemotable = mutable.Map[(Int, DepGraph), DepGraph]()
+    
+    def adjustSplits(delta: Int)(root: DepGraph): DepGraph = {
+      def inner(root: DepGraph): DepGraph = root match {
         case SplitRoot(loc, depth) => SplitRoot(loc, depth + delta)
-        case x => x
+        
+        case r: Root => r
+        
+        case New(loc, parent) => New(loc, adjustSplits(delta)(parent))
+        
+        case LoadLocal(loc, range, parent, tpe) =>
+          LoadLocal(loc, range, adjustSplits(delta)(parent), tpe)
+        
+        case Operate(loc, op, parent) =>
+          Operate(loc, op, adjustSplits(delta)(parent))
+        
+        case Reduce(loc, red, parent) =>
+          Reduce(loc, red, adjustSplits(delta)(parent))
+        
+        case Split(loc, parent, child) =>
+          Split(loc, adjustSplits(delta)(parent), adjustSplits(delta)(child))
+        
+        case Join(loc, instr, left, right) =>
+          Join(loc, instr, adjustSplits(delta)(left), adjustSplits(delta)(right))
+        
+        case Filter(loc, cross, range, target, boolean) =>
+          Filter(loc, cross, range, adjustSplits(delta)(target), adjustSplits(delta)(boolean))
+        
+        case Sort(parent, indexes) =>
+          Sort(adjustSplits(delta)(parent), indexes)
+      }
+      
+      adjustMemotable get (delta, root) getOrElse {
+        val result = inner(root)
+        adjustMemotable += ((delta, root) -> result)
+        result
       }
     }
     
@@ -175,7 +211,7 @@ trait DAG extends Instructions {
         
         case instructions.Split => {
           roots match {
-            case hd :: tl => loop(loc, SplitRoot(loc, 0) :: adjustSplits(tl, 1), OpenSplit(loc, roots) :: splits, stream.tail)
+            case hd :: tl => loop(loc, SplitRoot(loc, 0) :: (tl map adjustSplits(1)), OpenSplit(loc, roots) :: splits, stream.tail)
             case _ => Left(StackUnderflow(instructions.Split))
           }
         }
@@ -184,7 +220,7 @@ trait DAG extends Instructions {
           val eitherTails = (roots, splits) match {
             case (child :: rootsTail, OpenSplit(loc2, parent :: roots2) :: splitsTail) => {
               if (roots2.tails contains rootsTail)
-                Right((Split(loc2, parent, child) :: rootsTail, splitsTail))
+                Right((Split(loc2, parent, child) :: (rootsTail map adjustSplits(-1)), splitsTail))
               else
                 Left(MergeWithUnmatchedTails)
             }
@@ -195,7 +231,7 @@ trait DAG extends Instructions {
           }
           
           eitherTails.right flatMap {
-            case (roots2, splits2) => loop(loc, adjustSplits(roots2, -1), splits2, stream.tail)
+            case (roots2, splits2) => loop(loc, roots2, splits2, stream.tail)
           }
         }
         
@@ -297,13 +333,13 @@ trait DAG extends Instructions {
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(System.identityHashCode(this)))
+      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
       lazy val provenance = parent match {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
-        case _ => Vector(DynamicProvenance(System.identityHashCode(this)))
+        case _ => Vector(DynamicProvenance(Identity.nextInt()))
       }
     }
     
@@ -316,7 +352,7 @@ trait DAG extends Instructions {
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(System.identityHashCode(this)))
+      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
     }
     
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {

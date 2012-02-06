@@ -29,10 +29,10 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
  
   def buildMetadata(sample: List[Event]): mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]] = {
     def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
-      case Event(path, selectors) => selectors.map {
-        case (selector, (value, metadata)) => ColumnDescriptor(path, selector, typeOf(value), Ownership(Set()))
+      case Event(path, tokenId, data, _) => data.flattenWithPath.map {
+        case (sel, value) => ColumnDescriptor(path, sel, typeOf(value), Ownership(Set(tokenId)))
       }
-    } }.map{ cd => ProjectionDescriptor( ListMap() + (cd -> 0), List[(ColumnDescriptor, SortBy)]() :+ (cd, ById)).toOption.get } 
+    } }.map{ cd => ProjectionDescriptor( ListMap() + (cd -> 0), List[(ColumnDescriptor, SortBy)]() :+ (cd, ById)).toOption.get }.toSet
 
     def typeOf(jvalue: JValue): ColumnType = {
       ColumnType.forValue(jvalue).getOrElse(SNull)
@@ -54,24 +54,24 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
    
     def extractSelectorsFor(path: Path)(events: List[Event]): Set[JPath] = {
       events.flatMap {
-        case Event(epath, contents) if epath == path => contents.map(_._1).toList
-        case _                                       => List.empty
+        case Event(epath, token, data, metadata) if epath == path => data.flattenWithPath.map(_._1) 
+        case _                                                    => List.empty
       }.toSet
     }
 
     def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): mutable.Map[ProjectionDescriptor, mutable.Map[ColumnDescriptor, mutable.Map[MetadataType, Metadata]]] = {
       def convertColDesc(cd: ColumnDescriptor) = mutable.Map[ColumnDescriptor, mutable.Map[MetadataType, Metadata]]() + (cd -> mutable.Map[MetadataType, Metadata]())
       mutable.Map(events.flatMap {
-        case e @ Event(epath, content) if epath == path && content.exists(_._1 == selector) => List(toProjectionDescriptor(e, selector))
+        case e @ Event(epath, token, data, metadata) if epath == path && data.flattenWithPath.exists(_._1 == selector) => List(toProjectionDescriptor(e, selector))
         case _                                                                              => List.empty
       }.map{ pd => (pd, convertColDesc(pd.columns.head)) }: _*)
     }
 
     def toProjectionDescriptor(e: Event, selector: JPath) = {
-      def extractType(selector: JPath, content: Set[(JPath, (JValue, Set[Metadata]))]): ColumnType = {
-        content.find( _._1 == selector).flatMap[ColumnType]( t => ColumnType.forValue(t._2._1) ).getOrElse(SNull)
+      def extractType(selector: JPath, data: JValue): ColumnType = {
+        data.flattenWithPath.find( _._1 == selector).flatMap[ColumnType]( t => ColumnType.forValue(t._2) ).getOrElse(SNull)
       }
-      val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.content), Ownership(Set()))
+      val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.data), Ownership(Set(e.tokenId)))
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
     }
 
@@ -98,10 +98,10 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val system = ActorSystem("metadata_test_system")
       val actor = system.actorOf(Props(new ShardMetadataActor(metadata, mutable.Map[Int, Int]())))
 
-      val fut = actor ? FindDescriptors(events(0).path, events(0).content.head._1)
+      val fut = actor ? FindDescriptors(events(0).path, events(0).data.flattenWithPath.head._1)
 
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]]]
-      val expected = extractMetadataFor(events(0).path, events(0).content.head._1)(events)
+      val expected = extractMetadataFor(events(0).path, events(0).data.flattenWithPath.head._1)(events)
      
       result must_== expected
     }

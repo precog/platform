@@ -109,13 +109,11 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   val messaging = new CollectingMessaging
 
   def eventStoreFactory(configMap: ConfigMap): EventStore = {
-    
     val defaultAddresses = NonEmptyList(MailboxAddress(0))
 
     val routeTable = new ConstantRouteTable(defaultAddresses)
 
-    new EventStore(new EventRouter(routeTable, messaging), 0)
-    
+    new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
   lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).

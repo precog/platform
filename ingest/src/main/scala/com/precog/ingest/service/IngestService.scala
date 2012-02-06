@@ -62,7 +62,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
-  implicit val timeout = akka.util.Timeout(Long.MaxValue) //for now
+  implicit val timeout = akka.util.Timeout(120000) //for now
 
   def eventStoreFactory(configMap: ConfigMap): EventStore
 
@@ -78,7 +78,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   val analyticsService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
-    logging { logger =>
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
@@ -112,15 +111,15 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
                */
               path("/store") {
                 dataPath("vfs") {
-                  post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, false))//.audited("store")
+                  post(new TrackingService(state.eventStore, state.storageReporting, clock, false))
                 }
               } ~ 
               dataPath("vfs") {
-                post(new MinimalTrackingService1(state.eventStore, state.storageReporting, clock, true))//.audited("track")
+                post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
               } ~ 
               path("/echo") {
                 dataPath("vfs") {
-                  get(new EchoServiceHandler())//.audited("echo")
+                  get(new EchoServiceHandler())
                 }
               }
             }
@@ -129,21 +128,16 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         shutdown { state => 
           Future( 
             Option(
-              Stoppable(
-                state.indexMongo, Nil
-              )
+              Stoppable(state.tokenManager.database, Stoppable(state.indexMongo) :: Nil)
             )
           )
         }
       }
     }
-  }}
+  }
 }
 
 object IngestService extends HttpRequestHandlerCombinators with PartialFunctionCombinators {
-
-  type Endo[A] = A => A
-
   def parsePathInt(name: String) = 
     ((err: NumberFormatException) => DispatchError(BadRequest, "Illegal value for path parameter " + name + ": " + err.getMessage)) <-: (_: String).parseInt
 
@@ -153,5 +147,4 @@ object IngestService extends HttpRequestHandlerCombinators with PartialFunctionC
   }
 
   def vtry[A](value: => A): Validation[Throwable, A] = try { value.success } catch { case ex => ex.fail[A] }
-
 }

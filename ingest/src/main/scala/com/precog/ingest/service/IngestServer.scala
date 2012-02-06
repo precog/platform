@@ -1,5 +1,5 @@
-package com.precog.ingest.service
-import  service._
+package com.precog.ingest
+package service
 
 import blueeyes.BlueEyesServer
 import blueeyes.json.JsonAST._
@@ -8,21 +8,16 @@ import blueeyes.persistence.mongo.MongoCollection
 import blueeyes.persistence.mongo.Database
 import blueeyes.util.Clock
 
-import scalaz.NonEmptyList
-
 import com.precog.analytics.TokenManager
 
-import java.util.Properties
-import java.util.Date
 import net.lag.configgy.ConfigMap
 
 import com.precog.ingest.api._
-import com.precog.ingest.util.QuerioZookeeper
 
-object IngestServer extends BlueEyesServer with IngestService {
-
+trait IngestServer extends BlueEyesServer with IngestService {
   def mongoFactory(configMap: ConfigMap): Mongo = {
-    blueeyes.persistence.mongo.RealMongo(configMap)
+    new blueeyes.persistence.mongo.MockMongo()
+    //blueeyes.persistence.mongo.RealMongo(configMap)
   }
 
   def storageReporting(config: ConfigMap) = {
@@ -54,28 +49,5 @@ object IngestServer extends BlueEyesServer with IngestService {
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
     new TokenManager(database, tokensCollection, deletedTokensCollection)
 
-  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
-    val topicId = eventConfig.getString("topicId").getOrElse(sys.error("Invalid configuration eventStore.topicId required"))
-    val zookeeperHosts = eventConfig.getString("zookeeperHosts").getOrElse(sys.error("Invalid configuration eventStore.zookeeperHosts required"))
-    
-    val props = new Properties()
-    props.put("zk.connect", zookeeperHosts)
-    props.put("serializer.class", "com.precog.ingest.api.IngestMessageCodec")
-    
-    val defaultAddresses = NonEmptyList(MailboxAddress(0))
-
-    val routeTable = new ConstantRouteTable(defaultAddresses)
-    val messaging = new SimpleKafkaMessaging(topicId, props)
-
-    val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
-    qz.setup
-    val producerId = qz.acquireProducerId
-    qz.close
-
-    new EventStore(new EventRouter(routeTable, messaging), producerId)
-  }
-
   val clock = Clock.System
 }
-
-// vim: set ts=4 sw=4 et:

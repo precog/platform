@@ -1,0 +1,125 @@
+package com.precog.yggdrasil
+package shard
+
+import com.precog.common._
+import com.precog.yggdrasil.util.IOUtils
+
+import blueeyes.json.JsonAST._
+import blueeyes.json.JsonParser
+import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.Extractor
+import blueeyes.json.xschema.Extractor._
+
+import java.io._
+import java.util.Properties
+
+import com.weiglewilczek.slf4s.Logging
+import scala.collection.mutable
+
+import scalaz._
+import scalaz.std.AllInstances._
+import scalaz.syntax.biFunctor._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.traverse._
+import scalaz.effect.IO
+
+
+class ShardConfig(
+  val properties: Properties, 
+  val baseDir: File, 
+  val descriptors: Map[ProjectionDescriptor, File], 
+  val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], 
+  val checkpoints: mutable.Map[Int, Int])
+
+
+object ShardConfig extends Logging {
+  type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
+  
+  def fromFile(propsFile: File): IO[Validation[Error, ShardConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
+  
+  def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
+    val baseDir = extractBaseDir { props }
+    if(!baseDir.exists && !baseDir.mkdirs) {
+      IO { Failure(Invalid("Unable to create data directory: " + baseDir)) }
+    } else {
+      loadDescriptors(baseDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+        case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
+        case Failure(e) => IO { Failure(e) }
+      }}
+    }
+  }
+
+  def extractBaseDir(props: Properties): File = new File(props.getProperty("precog.storage.root", "./test_data/"))
+
+  def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
+    def loadMap(baseDir: File) = 
+      IOUtils.walkSubdirs(baseDir) flatMap { 
+        _.foldLeft( IO(Map.empty[ProjectionDescriptor, File]) ) { (acc, dir) =>
+          logger.debug("loading: " + dir)
+          read(dir) flatMap {
+            case Success(pd) => acc.map(_ + (pd -> dir))
+            case Failure(error) => 
+              logger.warn("Failed to restore %s: %s".format(dir, error))
+              acc
+          }
+        }
+      }
+
+    def read(baseDir: File): IO[Validation[String, ProjectionDescriptor]] = IO {
+      val df = new File(baseDir, "projection_descriptor.json")
+      if (!df.exists) Failure("Unable to find serialized projection descriptor in " + baseDir)
+      else {
+        val reader = new FileReader(df)
+        try {
+          { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
+        } finally {
+          reader.close
+        }
+      }
+    }
+
+    loadMap(baseDir)
+  }
+
+  def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
+    def readAll(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[(ProjectionDescriptor, MetadataSeq)]]] = {
+      val validatedEntries = descriptors.toList.map{ case (d, f) => readSingle(f) map { _.map((d, _)) } }.sequence[IO, Validation[Error, (ProjectionDescriptor, MetadataSeq)]]
+
+      validatedEntries.map(flattenValidations)
+    }
+
+    def readSingle(dir: File): IO[Validation[Error, MetadataSeq]] = {
+      import JsonParser._
+      val metadataFile = new File(dir, "projection_metadata.json")
+      IOUtils.readFileToString(metadataFile).map { _ match {
+        case None    => Success(List(mutable.Map[MetadataType, Metadata]()))
+        case Some(c) => {
+          val validatedTuples = parse(c).validated[List[List[(MetadataType, Metadata)]]]
+          validatedTuples.map( _.map( mutable.Map(_: _*)))
+        }
+      }}
+    }
+
+    readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
+  }
+
+  def loadCheckpoints(baseDir: File): IO[Validation[Error, mutable.Map[Int, Int]]] = {
+    import JsonParser._
+    val checkpointFile = new File(baseDir, "checkpoints.json")
+    IOUtils.readFileToString(checkpointFile).map { _ match { 
+      case None    => Success(mutable.Map[Int, Int]())
+      case Some(c) => parse(c).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
+    }}
+  }
+
+  def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
+    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { (acc, el) => (acc, el) match {
+      case (Success(ms), Success(m)) => Success(ms :+ m)
+      case (Failure(e1), Failure(e2)) => Failure(e1 |+| e2)
+      case (_          , Failure(e)) => Failure(e)
+    }}
+  }
+}
+
+
+// vim: set ts=4 sw=4 et:

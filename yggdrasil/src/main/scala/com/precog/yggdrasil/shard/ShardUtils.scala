@@ -43,41 +43,45 @@ import scalaz.iteratee.EnumeratorT
 
 import com.weiglewilczek.slf4s._
 
-/*
-class ShardLoader(val storagrShard: StorageShard) extends RealisticIngestMessage {
-  def insert(count: Int, variety: Int) = {
+object SimpleShardLoader extends RealisticIngestMessage with Logging {
+  def load(router: ActorRef, count: Int, variety: Int) {
     val events = containerOfN[List, Event](variety, genEvent).sample.get
     
     val finalEvents = 0.until(count).map(_ => events).flatten
 
     finalEvents.zipWithIndex.foreach {
-      case (ev, idx) => storageShard.router ! EventMessage(0, idx, ev) 
+      case (ev, idx) => router ! EventMessage(0, idx, ev) 
     }
     
-    println("Insert total: " + finalEvents.size)
+    println("[Shard Loader] Insert total: " + finalEvents.size)
   }
 }
 
+/*
 object ShardLoader extends Logging {
 
   def main(args: Array[String]) {
 
-    val props = new Properties
-    props.setProperty("precog.storage.root", args(0))
-
-    val shardLoader = new ShardLoader(props)
-    logger.info("Shard server - Starting")
-    Await.result(shardLoader.storageShard.start, 300 seconds)
-    logger.info("Shard server - Started")
-
     val insert = args(1).toInt
     val variety = args(2).toInt
-
-    shardLoader.insert(insert, variety)
     
-    logger.info("Shard server - Stopping")
-    Await.result(shardLoader.storageShard.stop, 300 seconds) 
-    logger.info("Shard server - Stopped")
+    val props = new Properties
+    props.setProperty("precog.storage.root", args(0))
+    props.setProperty("precog.test.load.dummy", "%d,%d".format(insert, variety))
+
+    val shardLoader = new ShardLoader(props)
+    
+    val run = for(storageShard <- shardLoader.storageShard) yield {
+      Await.result(storageShard.start, 300 seconds)
+      
+      Runtime.getRuntime.addShutdownHook(new Thread() {
+        override def run() { 
+          Await.result(storageShard.stop, 300 seconds) 
+        }
+      })
+    }
+
+    run.unsafePerformIO
   }
 
   def readProperties(filename: String) = {

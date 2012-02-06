@@ -22,15 +22,34 @@ trait Sync[A] {
 }
 
 trait Projection {
+  def descriptor: ProjectionDescriptor
+
   def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO]
+
+  def getAllIds[X] : EnumeratorP[X, Identities, IO] = getAllPairs map { case (id, _) => id }
+  def getAllValues[X] : EnumeratorP[X, Seq[CValue], IO] = getAllPairs map { case (_, b) => b }
+  def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO] = {
+    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && col.selector == selector)
+    getAllPairs map { case (id, b) => (id, b(columnIndex)) }
+  }
+
   def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO]
-  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO]
-  def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, (Identities, CValue), IO]
 
-  def getAllIds[X] : EnumeratorP[X, Identities, IO] 
-  def getIdsInRange[X](range : Interval[Identities]) : EnumeratorP[X, Identities, IO] 
+  /**
+   * Retrieve all IDs for IDs in the given range [start,end]
+   */  
+  def getIdsInRange[X](range : Interval[Identities]) : EnumeratorP[X, Identities, IO] =
+    getPairsByIdRange(range) map { case (id, _) => id }
 
-  def getAllValues[X] : EnumeratorP[X, Seq[CValue], IO] 
-  def getValuesByIdRange[X](range: Interval[Identities]) : EnumeratorP[X, Seq[CValue], IO]
-  def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO] 
+  /**
+   * Retrieve all values for IDs in the given range [start,end]
+   */  
+  def getValuesByIdRange[X](range: Interval[Identities]) : EnumeratorP[X, Seq[CValue], IO] =
+    getPairsByIdRange(range) map { case (_, b) => b }
+
+  def getPairForId[X](id: Identities): EnumeratorP[X, (Identities, Seq[CValue]), IO] = 
+    getPairsByIdRange(Interval(Some(id), Some(id)))
+
+  def getValueForId[X](id: Identities): EnumeratorP[X, Seq[CValue], IO] = 
+    getValuesByIdRange(Interval(Some(id), Some(id)))
 }

@@ -4,11 +4,16 @@ package daze
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.std.list._
+import Iteratee._
+
 object EvaluatorSpecs extends Specification
     with Evaluator
     with OperationsAPI
     with DefaultYggConfig
-    with StubQueryAPI {
+    with StubOperationsAPI {
       
   import Function._
   
@@ -1114,16 +1119,17 @@ object EvaluatorSpecs extends Specification
           
       val result = consumeEval(input)
       
-      // TODO recreate this by hand; I'm pretty sure it's wrong
-      result must haveSize(23)
+      result must haveSize(25)
       
       val result2 = result collect {
         case (Vector(_, _), SDecimal(d)) => d.toInt
       }
       
-      result2 must contain(-1470, 1806, 1176, 0, 1764, -780, 156, -24, -360, 144,
-        6006, 4851, 2695, 5929, -76, 2, -13, -41, 1, -832, 182, -13, -377)
-    }.pendingUntilFixed
+      result2 must haveSize(23)
+      
+      result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
+        2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
+    }
     
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
@@ -1136,16 +1142,17 @@ object EvaluatorSpecs extends Specification
           
       val result = consumeEval(input)
       
-      // TODO recreate this by hand; I'm pretty sure it's wrong
-      result must haveSize(21)
+      result must haveSize(25)
       
       val result2 = result collect {
         case (Vector(_, _), SDecimal(d)) => d.toInt
       }
       
+      result2 must haveSize(20)
+      
       result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
-        2695, 5005, 5852, 4928, -41, -11, -76, -12, -377, 13, -832, 156)
-    }.pendingUntilFixed
+        2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
+    }
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
@@ -1233,6 +1240,57 @@ object EvaluatorSpecs extends Specification
         }
         
         case p => failure("'%s' does not match the expected pattern".format(p))
+      }
+    }
+    
+    "evaluate filter on the results of a histogram function" in {
+      val line = Line(0, "")
+      
+      /*
+       * clicks := dataset(//clicks)
+       * histogram('user) :=
+       *   { user: 'user, num: count(clicks where clicks.user = 'user) }
+       * histogram where histogram.num = 9
+       */
+       
+      val histogram = dag.Split(line,
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          Root(line, PushString("user"))),
+        Join(line, Map2Cross(JoinObject),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("user")),
+            SplitRoot(line, 0)),
+          Join(line, Map2Cross(WrapObject),
+            Root(line, PushString("num")),
+            dag.Reduce(line, Count,
+              Filter(line, None, None,
+                dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                Join(line, Map2Cross(Eq),
+                  Join(line, Map2Cross(DerefObject),
+                    dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+                    Root(line, PushString("user"))),
+                  SplitRoot(line, 0)))))))
+       
+      val input = Filter(line, None, None,
+        histogram,
+        Join(line, Map2Cross(Eq),
+          Join(line, Map2Cross(DerefObject),
+            histogram,
+            Root(line, PushString("num"))),
+          Root(line, PushNum("9"))))
+                  
+      val result = consumeEval(input)
+      
+      result must haveSize(1)
+      result.toList.head must beLike {
+        case (Vector(_), SObject(obj)) => {
+          obj must haveKey("user")
+          obj("user") must beLike { case SString("daniel") => ok }
+          
+          obj must haveKey("num")
+          obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
+        }
       }
     }
     
@@ -1510,6 +1568,41 @@ object EvaluatorSpecs extends Specification
         
         result2 must contain(145)
       }
+    }
+  }
+
+  "sortByIdentities" should {
+    def consumeToList(enum: DatasetEnum[Unit, SEvent, IO]): List[SEvent] =
+      (consume[Unit, SEvent, IO, List] &= enum.enum[IO]).run(_ => sys.error("")).unsafePerformIO
+
+    "order the numbers set by specified identities" in {
+      val numbers = {
+        val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+        base.zipWithIndex map {
+          case ((_, sv), id) => (Vector(id): Identities, sv)
+        }
+      }
+      val max = 5
+
+      val enum = numbers.zipWithIndex map {
+        case ((ids, sv), i) => (ids :+ (5 - i), sv)
+      }
+
+      val sorted = sortByIdentities(enum, Vector(0))
+      val sorted2 = sortByIdentities(enum, Vector(1))
+      val sorted3 = sortByIdentities(enum, Vector(1, 0))
+
+      consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
+         (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
+         (Vector(3, 2), SDecimal(1)), (Vector(4, 1), SDecimal(13)))
+
+      consumeToList(sorted2) mustEqual List((Vector(1, 4), SDecimal(13)),
+         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
+
+      consumeToList(sorted3) mustEqual List((Vector(1, 4), SDecimal(13)),
+         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
     }
   }
 }

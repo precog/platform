@@ -46,7 +46,7 @@ trait TestTokenStorage {
 
   val tokenCache = new scala.collection.mutable.HashMap[String, Token]
   lazy val tokenManager = new TokenStorage {
-    val actorSystem = ActorSystem()
+    val actorSystem = ActorSystem("test_token_storage")
     implicit def dispatcher: MessageDispatcher = actorSystem.dispatcher
 
     tokenCache.put(Token.Root.tokenId, Token.Root)
