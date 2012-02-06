@@ -82,9 +82,7 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
 
       def save(event: Event): Future[Unit] = {
         val seqId = idSource.incrementAndGet
-        val em = EventMessage(0, seqId, event)
-        println("Inserting eventid: %d/%d %d".format(em.eventId.producerId, em.eventId.sequenceId, em.eventId.uid))
-        (storage.routingActor ? em).mapTo[Unit]
+        (storage.routingActor ? EventMessage(0, seqId, event)).mapTo[Unit]
       }
     }
   }
