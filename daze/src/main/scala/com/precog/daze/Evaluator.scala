@@ -15,7 +15,7 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
 
-trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI {
   import Function._
   
   import instructions._
@@ -260,11 +260,11 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       case s @ Sort(parent, indexes) => 
         loop(parent, roots).right map { enum => sortByIdentities(enum, indexes, s.memoId) }
       
-      case m @ Memoize(parent) =>
+      case m @ Memoize(parent, _) =>
         loop(parent, roots).right map { enum => ops.memoize(enum, m.memoId) }
     }
     
-    maybeRealize(loop(orderCrosses(graph), Nil))
+    maybeRealize(loop(memoize(orderCrosses(graph)), Nil))
   }
   
   private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
