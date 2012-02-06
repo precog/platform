@@ -25,6 +25,8 @@ import scalaz.iteratee._
 import scalaz.std.AllInstances._
 import Iteratee._
 
+import scala.collection.immutable.SortedMap
+import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
@@ -34,7 +36,16 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
   val dataPath = Path("/test")
   def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
 
-  case class DummyProjection(descriptor: ProjectionDescriptor, data: Map[Identities, Seq[CValue]]) extends Projection {
+  object IdentitiesOrdering extends scala.math.Ordering[Identities] {
+    override def compare(id1: Identities, id2: Identities) = {
+      (id1 zip id2).foldLeft(0) {
+        case (0, (id1, id2)) => id1 compare id2
+        case (other, _) => other
+      }
+    }
+  }
+
+  case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
     def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
     def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
@@ -44,11 +55,11 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
     def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
   }
 
-  val (sampleData, _) = DistributedSampleSet.sample(1, 0)
+  val (sampleData, _) = DistributedSampleSet.sample(5, 0)
   val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
     case (acc, (jv, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jv, Map()))).foldLeft(acc) {
       case (acc, ProjectionData(descriptor, identities, values, _)) =>
-        acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, Map())) + ((identities, values))))
+        acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
     }
   }
 
