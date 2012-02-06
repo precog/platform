@@ -49,6 +49,9 @@ import scalaz.Scalaz._
 
 object StorageMetadata {
   type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
+  object ColumnMetadata {
+    val Empty = Map.empty[ColumnDescriptor, Map[MetadataType, Metadata]]
+  }
 }
 
 trait StorageMetadata {
@@ -88,7 +91,7 @@ class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) exten
 
   def checkpoints: Future[Map[Int, Int]] = actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
 
-  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
+  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
     actor ? UpdateMetadata(eventId, desc, values, metadata) map { _.asInstanceOf[Unit] } 
   }
 
@@ -124,7 +127,7 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
     expectedEventActions.put(eventId, expected)
   }
 
-  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]): Unit = {
+  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): Unit = {
     import MetadataUpdateHelper._ 
    
     updateExpectation(eventId, recordCheckpoint(checkpoints) _, expectedEventActions)
@@ -177,12 +180,12 @@ object MetadataUpdateHelper {
     }
   }
 
-  def applyMetadata(desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]], projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]): Seq[MetadataMap] = {
+  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]): Seq[MetadataMap] = {
     combineMetadata(projections.get(desc).getOrElse(initMetadata(desc)))(addValueMetadata(values)(metadata map { Metadata.toTypedMap }))
   }
 
-  def addValueMetadata(values: Seq[JValue])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
-    values zip metadata map { t => Metadata.valueStats(t._1).map( vs => t._2 + (vs.metadataType -> vs) ).getOrElse(t._2) }
+  def addValueMetadata(values: Seq[CValue])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
+    values zip metadata map { t => valueStats(t._1).map( vs => t._2 + (vs.metadataType -> vs) ).getOrElse(t._2) }
   }
 
   def combineMetadata(user: Seq[MetadataMap])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
@@ -192,7 +195,20 @@ object MetadataUpdateHelper {
   def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
     desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
   }
-}
+
+ def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
+   str = (s: String)      => Some(StringValueStats(1, s, s)),
+   bool = (b: Boolean)    => Some(BooleanValueStats(1, if(b) 1 else 0)),
+   int = (i: Int)         => Some(LongValueStats(1, i, i)),
+   long = (l: Long)       => Some(LongValueStats(1, l, l)),
+   float = (f: Float)     => Some(DoubleValueStats(1, f, f)),
+   double = (d: Double)   => Some(DoubleValueStats(1, d, d)),
+   num = (bd: BigDecimal) => Some(BigDecimalValueStats(1, bd, bd)),
+   emptyObj = None,
+   emptyArr = None,
+   nul = None)
+ 
+}   
 
 sealed trait ShardMetadataAction
 
@@ -201,7 +217,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(eventId: EventId, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
+case class UpdateMetadata(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
 case class FlushCheckpoints(serializationActor: ActorRef) extends ShardMetadataAction
 

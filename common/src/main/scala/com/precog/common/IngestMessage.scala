@@ -154,7 +154,7 @@ object IngestMessageSerialization {
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
     if(magic != magicByte) {
-      Failure("Invaild message bad magic byte.")
+      Failure("Invaild message bad magic byte. Found [" + magic + "]")
     } else {
       val msgType = buffer.get()
       val stop    = buffer.get()

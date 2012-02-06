@@ -21,12 +21,13 @@ package com.precog.ingest.util
 
 import scala.collection.mutable.ListBuffer
 
-
 import java.util.Properties
 import java.io.{File, FileReader}
 
+import com.precog.analytics.{Path, Token}
 import com.precog.common._
 import com.precog.common.util.RealisticIngestMessage
+import com.precog.common.util.DistributedSampleSet
 import com.precog.ingest.api._
 import com.precog.ingest.service._
 
@@ -35,7 +36,7 @@ import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
 
-import blueeyes.json.JsonAST._
+import blueeyes.bkka.AkkaDefaults
 
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
@@ -43,6 +44,8 @@ import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.service.HttpClient
 import blueeyes.core.service.engines.HttpClientXLightWeb
+
+import blueeyes.json.JsonAST._
 
 import scalaz.NonEmptyList
 
@@ -60,9 +63,14 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
 
     val threads = 0.until(threadCount).map(_ => new Thread() {
       override def run() {
+        val sample = DistributedSampleSet(0)
+        val path = "/test/path/"
+        
+        def event = Event.fromJValue(Path(path), sample.next._1, Token.Root.tokenId)
+       
         0.until(messages).foreach { i =>
           if(i % 10 == 0) println("Sending: " + i)
-          send(genEvent.sample.get)
+          send(event)
           if(delay > 0) {
             Thread.sleep(delay)
         }
@@ -113,19 +121,15 @@ object WebappIngestProducer {
 }
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
-
-
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
   val client = new HttpClientXLightWeb 
 
   def send(event: Event) {
 
-    val tokens = Event.extractOwners(event)
-
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", tokens.head)
+                                                .query("tokenId", event.tokenId)
                                                 .contentType(application/MimeTypes.json)
-                                                .post[JValue](event.path.toString)(Event.dataRepresentation(event.content))
+                                                .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 
     f.value match {
       case Some(Right(_)) => ()
@@ -137,6 +141,8 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   override def usageMessage = super.usageMessage + """
 serviceUrl - base url for web application (default: http://localhost:30050/vfs/)
   """
+
+  override def close(): Unit = AkkaDefaults.actorSystem.shutdown
 }
 
 object DirectIngestProducer {
@@ -144,8 +150,7 @@ object DirectIngestProducer {
 }
 
 class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
-
-  implicit val actorSystem = ActorSystem()
+  implicit val actorSystem = ActorSystem("direct_ingest")
 
   lazy val testTopic = config.getProperty("topicId", "test-topic-1")
   lazy val zookeeperHosts = config.getProperty("zookeeperHosts", "127.0.0.1:2181")
@@ -155,7 +160,7 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
     store.save(genEvent.sample.get)
   }
 
-  def kafkaStore(topic: String): EventStore = {
+  def kafkaStore(topic: String): KafkaEventStore = {
     val props = new Properties()
     props.put("zk.connect", zookeeperHosts) 
     props.put("serializer.class", "com.precog.ingest.api.IngestMessageCodec")
@@ -170,7 +175,7 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
     val producerId = qz.acquireProducerId
     qz.close
 
-    new EventStore(new EventRouter(routeTable, messaging), producerId)
+    new KafkaEventStore(new EventRouter(routeTable, messaging), producerId)
   }
   
   override def usageMessage = super.usageMessage + """
@@ -180,5 +185,6 @@ zookeeperHosts - comma delimeted list of zookeeper hosts (default: 127.0.0.1:218
 
   override def close() {
     Await.result(store.close, 10 seconds)
+    actorSystem.shutdown
   }
 }

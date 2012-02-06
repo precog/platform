@@ -75,11 +75,25 @@ object MetadataType extends MetadataTypeSerialization {
   }
 }
 
-sealed abstract trait Metadata {
+sealed trait Metadata {
   def metadataType: MetadataType
 
   def merge(that: Metadata): Option[Metadata]
 }
+
+sealed trait UserMetadata extends Metadata
+
+trait UserMetadataSerialization {
+  implicit val UserMetadataDecomposer: Decomposer[UserMetadata] = new Decomposer[UserMetadata] {
+    override def decompose(metadata: UserMetadata): JValue = JNothing
+  }
+
+  implicit val UserMetadataExtractor: Extractor[UserMetadata] = new Extractor[UserMetadata] with ValidatedExtraction[UserMetadata] {
+    override def validated(obj: JValue): Validation[Error, UserMetadata] = Failure(Invalid("No known forms of user metadata")) 
+  }
+}
+
+object UserMetadata extends UserMetadataSerialization 
 
 trait MetadataSerialization {
   implicit val MetadataDecomposer: Decomposer[Metadata] = new Decomposer[Metadata] {
@@ -118,14 +132,6 @@ object Metadata extends MetadataSerialization {
     set.foldLeft(mutable.Map[MetadataType, Metadata]()) ( (acc, el) => acc + (el.metadataType -> el) ) 
   }
 
-  def valueStats(jval: JValue): Option[Metadata] = jval match {
-    case JBool(b)     => Some(BooleanValueStats(1, if(b) 1 else 0))
-    case JInt(i)      => Some(BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i)))
-    case JDouble(d)   => Some(DoubleValueStats(1, d, d))
-    case JString(s)   => Some(StringValueStats(1, s, s))
-    case _            => None
-  }
-  
 //  def typedValueStats(jval: JValue): Option[(MetadataType, Metadata)] = jval match {
 //    case JBool(b)     => Some((BooleanValueStats, BooleanValueStats(1, if(b) 1 else 0)))
 //    case JInt(i)      => Some((BigDecimalValueStats, BigDecimalValueStats(1, BigDecimal(i), BigDecimal(i))))

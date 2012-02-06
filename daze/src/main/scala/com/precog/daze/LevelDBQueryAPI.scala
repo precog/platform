@@ -19,6 +19,8 @@
  */
 package com.precog.daze
 
+import scala.annotation.tailrec
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.kafka._
 import com.precog.yggdrasil.leveldb._
@@ -98,23 +100,20 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
     }
   }
 
-  private def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
-    def combine(x: EnumeratorP[X, SEvent, IO], enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
+  def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
+    def combine(enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
       enumerators match {
         case (selector, column) :: xs => 
-          combine(
-            cogroupE[X, SEvent, SColumn, IO].apply(x, column).map {
-              case Left3(sevent) => sevent
-              case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("cannot reassemble object")))
-              case Right3((id, cv)) => (id, SValue(selector, cv))
-            },
-            xs
-          )
-        case Nil => x 
+          cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map {
+            case Left3(sevent) => sevent
+            case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
+            case Right3((id, cv)) => (id, SValue(selector, cv))
+          }
+        case Nil => EnumeratorP.empty[X, SEvent, IO]
       }
     }
 
-    combine(EnumeratorP.empty[X, SEvent, IO], enumerators)
+    combine(enumerators)
   }
 }
 // vim: set ts=4 sw=4 et:

@@ -17,33 +17,27 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "ingest"
+package com.precog.pandora
 
-version := "1.2.1-SNAPSHOT"
-
-organization := "com.precog"
-
-scalaVersion := "2.9.1"
-
-scalacOptions ++= Seq("-deprecation", "-unchecked")
-
-libraryDependencies ++= Seq(
-      "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 % "joda-time"           % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "6.0.2",
-      "ch.qos.logback"            % "logback-classic"     % "1.0.0",
-      "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-      "org.specs2"                %% "specs2"             % "1.7"  % "test"
-)
-
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
-
-mainClass := Some("com.precog.ingest.service.IngestServer")
+class Color(val enabled: Boolean) {
+  val Bold = "\u001B[1m"
+  
+  val RedForeground = "\u001B[31m"
+  val GreenForeground = "\u001B[33m"
+  val YellowForeground = "\u001B[33m"
+  val BlueForeground = "\u001B[34m"
+  val CyanForeground = "\u001B[36m"
+  
+  val Reset = "\u001B[0m"
+  
+  def bold(str: String) = format(Bold, str)
+  
+  def red(str: String) = format(RedForeground, str)
+  def green(str: String) = format(GreenForeground, str)
+  def yellow(str: String) = format(YellowForeground, str)
+  def blue(str: String) = format(BlueForeground, str)
+  def cyan(str: String) = format(CyanForeground, str)
+  
+  private def format(escape: String, str: String) =
+    "%s%s%s".format(escape, str, Reset)
+}

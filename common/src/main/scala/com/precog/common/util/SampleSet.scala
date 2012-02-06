@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil.util
+package com.precog.common.util
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
@@ -57,7 +57,7 @@ object AdSamples {
 }
 
 case class DistributedSampleSet(queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector()) extends SampleSet { self =>
-  lazy val queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
+  def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
 
   import AdSamples._
   def next = {

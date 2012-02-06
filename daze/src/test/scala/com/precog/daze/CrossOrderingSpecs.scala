@@ -17,33 +17,35 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "ingest"
+package com.precog.daze
 
-version := "1.2.1-SNAPSHOT"
+import org.specs2.mutable._
 
-organization := "com.precog"
+object CrossOrderingSpecs extends Specification with CrossOrdering {
+  import instructions._
+  import dag._
+  
+  "cross ordering" should {
+    "insert index 0 sorts on dynamic matching filter" in {
+      val line = Line(0, "")
+      val split = dag.Split(line, Root(line, PushNum("42")), Root(line, PushNum("24")))
 
-scalaVersion := "2.9.1"
+      val left = split
+      val right = Join(line, Map2Cross(Eq), split, Root(line, PushNum("9")))
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+      val input = Filter(line, None, None, left, right)
 
-libraryDependencies ++= Seq(
-      "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 % "joda-time"           % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "6.0.2",
-      "ch.qos.logback"            % "logback-classic"     % "1.0.0",
-      "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-      "org.specs2"                %% "specs2"             % "1.7"  % "test"
-)
+      left.provenance must beLike { case Vector(DynamicProvenance(_)) => ok }
+      val num = left.provenance.head.asInstanceOf[DynamicProvenance].id
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
+      right.provenance mustEqual Vector(DynamicProvenance(num))
+      input.provenance mustEqual Vector(DynamicProvenance(num))
 
-mainClass := Some("com.precog.ingest.service.IngestServer")
+      val expected = Filter(line, None, None,
+        Sort(left, Vector(0)),
+        Sort(right, Vector(0)))
+
+      orderCrosses(input) mustEqual expected
+    }
+  }
+}
