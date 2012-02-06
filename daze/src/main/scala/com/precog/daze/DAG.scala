@@ -448,7 +448,7 @@ trait DAG extends Instructions {
       lazy val memoId = Identity.nextInt()
     }
     
-    case class Memoize(parent: DepGraph) extends DepGraph {
+    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
       val loc = parent.loc
       
       lazy val provenance = parent.provenance

@@ -105,7 +105,7 @@ trait CrossOrdering extends DAG {
         
         case Sort(parent, _) => memoized(parent)
         
-        case Memoize(parent) => Memoize(memoized(parent))
+        case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }
   
       memotable.get(node) getOrElse {
