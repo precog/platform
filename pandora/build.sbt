@@ -21,7 +21,7 @@ name := "pandora"
 
 version := "0.0.1-SNAPSHOT"
 
-organization := "com.quirio"
+organization := "com.precog"
 
 scalaVersion := "2.9.1"
 
