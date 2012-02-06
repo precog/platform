@@ -60,7 +60,7 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
  
   def storageShardConfig() = {
     val config = new Properties()
-    config.setProperty("precog.storage.root", "/tmp/repl_test_storage") 
+    config.setProperty("precog.storage.root", "./data") 
     config
   }
 
