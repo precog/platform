@@ -41,7 +41,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
   import dag._
   
   def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
-    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): Either[DatasetMask, DatasetEnum[X, SEvent, IO]] = graph match {
+    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
       case SplitRoot(_, depth) => Right(roots(depth))
       
       case Root(_, instr) =>
@@ -283,8 +283,8 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     maybeRealize(loop(orderCrosses(graph), Nil))
   }
   
-  private def maybeRealize[X](result: Either[DatasetMask, DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
-    (result.left map { _.realize[X] }).fold(identity, identity)
+  private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
+    (result.left map { mask => Await.result(mask.realize, 10 seconds) }).fold(identity, identity)
   
   protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int]): DatasetEnum[X, SEvent, IO] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {

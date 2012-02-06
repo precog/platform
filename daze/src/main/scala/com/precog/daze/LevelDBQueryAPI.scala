@@ -43,6 +43,7 @@ import Iteratee._
 trait LevelDBQueryAPI extends StorageEngineQueryAPI {
   implicit def projectionRetrievalTimeout: akka.util.Timeout = 10 seconds
   implicit def asyncContext: akka.dispatch.ExecutionContext
+
   def storage: StorageShard
 
   def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] = {
@@ -52,8 +53,23 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
       enumerator: EnumeratorP[X, SEvent, IO]  <- assemble(path, sources)
     } yield DatasetEnum(enumerator)
   }
-  
-  def mask(path: Path): DatasetMask = null
+
+  private case class LevelDBDatasetMask[X](path: Path, selector: JPath, tpe: Option[SType]) extends DatasetMask[X] {
+    def derefObject(field: String): DatasetMask[X] = copy(selector = selector \ field)
+    def derefArray(index: Int): DatasetMask[X] = copy(selector = selector \ index)
+    def typed(tpe: SType): DatasetMask[X] = copy(tpe = Some(tpe))
+    lazy val realize: Future[DatasetEnum[X, SEvent, IO]] = {
+      for {
+        sources    <- tpe match {
+                        case Some(tpe) => storage.metadata.findProjections(path, selector, tpe)
+                        case None      => storage.metadata.findProjections(path, selector)
+                      }
+        enumerator: EnumeratorP[X, SEvent, IO] <- assemble(path, List((selector, sources)))
+      } yield DatasetEnum(enumerator)
+    }
+  }
+
+  def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, JPath.Identity, None) 
 
   def assemble[X](path: Path, sources: Seq[(JPath, scala.collection.Map[ProjectionDescriptor, ColumnMetadata])]): Future[EnumeratorP[X, SEvent, IO]] = {
     // determine the projections from which to retrieve data

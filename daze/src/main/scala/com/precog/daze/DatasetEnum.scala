@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import akka.dispatch.Future
+
 import com.precog.yggdrasil._
 import com.precog.analytics.Path
 
@@ -33,7 +35,21 @@ case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Optio
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum map f)
 
-  def foldLeft[A](a: A)(f: (A, E) => A): DatasetEnum[X, A, F] = null
+  def reduce(b: Option[E])(f: (Option[E], E) => Option[E]): DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+        import MO._
+        new EnumeratorT[X, E, G] {
+          def apply[A] = (step: StepT[X, E, G, A]) => {
+            for {
+              opt <- IterateeT.fold[X, E, G, Option[E]](b)(f) &= enum[G]
+              a   <- step.pointI &= (opt.map(v => EnumeratorT.enumOne[X, E, G](v)).getOrElse(Monoid[EnumeratorT[X, E, G]].zero))
+            } yield a
+          }
+        }
+      }
+    }
+  )
 
   def flatMap[E2](f: E => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum.flatMap(e => f(e).enum))

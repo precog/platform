@@ -67,7 +67,7 @@ trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with Default
     def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] =
       akka.dispatch.Promise.successful(DatasetEnum(readJSON[X](path)))
     
-    def mask(path: Path): DatasetMask = null
+    def mask[X](path: Path): DatasetMask[X] = null
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
