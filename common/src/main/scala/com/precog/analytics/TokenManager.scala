@@ -68,7 +68,7 @@ trait TokenStorage {
   protected def deleteToken(token: Token): Future[Token]
 }
 
-class TokenManager (database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection)(implicit timeout: Timeout, val dispatcher: MessageDispatcher) extends TokenStorage {
+class TokenManager (val database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection)(implicit timeout: Timeout, val dispatcher: MessageDispatcher) extends TokenStorage {
 
   //TODO: Add expiry settings.
   val tokenCache = Cache.concurrent[String, Token](CacheSettings(ExpirationPolicy(None, None, MILLISECONDS)))

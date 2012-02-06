@@ -39,19 +39,23 @@ object ShardConfig extends Logging {
   
   def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
     val baseDir = extractBaseDir { props }
-    loadDescriptors(baseDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-      case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
-      case Failure(e) => IO { Failure(e) }
-    }}
+    if(!baseDir.exists && !baseDir.mkdirs) {
+      IO { Failure(Invalid("Unable to create data directory: " + baseDir)) }
+    } else {
+      loadDescriptors(baseDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+        case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
+        case Failure(e) => IO { Failure(e) }
+      }}
+    }
   }
 
-  def extractBaseDir(props: Properties): File = new File(props.getProperty("precog.storage.root", "."))
+  def extractBaseDir(props: Properties): File = new File(props.getProperty("precog.storage.root", "./test_data/"))
 
   def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
     def loadMap(baseDir: File) = 
       IOUtils.walkSubdirs(baseDir) flatMap { 
         _.foldLeft( IO(Map.empty[ProjectionDescriptor, File]) ) { (acc, dir) =>
-          println("loading: " + dir)
+          logger.debug("loading: " + dir)
           read(dir) flatMap {
             case Success(pd) => acc.map(_ + (pd -> dir))
             case Failure(error) => 
