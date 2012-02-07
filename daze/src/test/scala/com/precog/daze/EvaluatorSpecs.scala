@@ -9,10 +9,16 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
+trait TestConfig {
+  val yggConfig = new YggConfig {
+    def config = org.streum.configrity.Configuration.parse("")
+  }
+}
+
 object EvaluatorSpecs extends Specification
     with Evaluator
     with OperationsAPI
-    with DefaultYggConfig
+    with TestConfig
     with StubOperationsAPI {
       
   import Function._

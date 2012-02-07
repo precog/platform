@@ -63,9 +63,11 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
     }
   }
 
-  val storage = new StorageShard {
-    def start = Future(())
-    def stop = Future(())
+  val storage = new YggShard {
+    def yggConfig = sys.error("Feature not implemented in test stub.")
+    def start = sys.error("Feature not implemented in test stub.")
+    def stop = sys.error("Feature not implemented in test stub.")
+    def store(em: EventMessage) = sys.error("Feature not implemented in test stub.")
     def metadata = new StorageMetadata {
       implicit val dispatcher = actorSystem.dispatcher
       def findSelectors(path: Path): Future[Seq[JPath]] = 
