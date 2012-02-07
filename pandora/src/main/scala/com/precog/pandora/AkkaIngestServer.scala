@@ -47,8 +47,9 @@ import blueeyes.persistence.mongo.MongoCollection
 import blueeyes.persistence.mongo.Database
 import blueeyes.util.Clock
 
-import java.util.Properties
-import java.util.Date
+import java.io.File
+import java.util.{Date, Properties}
+
 import net.lag.configgy.ConfigMap
 
 import scalaz.NonEmptyList
@@ -57,10 +58,12 @@ import scalaz.effect.IO
 trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
   val actorSystem = ActorSystem("akka_ingest_server")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  
+  def storageRoot: File
  
   def storageShardConfig() = {
     val config = new Properties()
-    config.setProperty("precog.storage.root", "./data") 
+    config.setProperty("precog.storage.root", storageRoot.getCanonicalPath) 
     config
   }
 
