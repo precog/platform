@@ -41,5 +41,7 @@ object PlatformBuild extends Build {
   
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)
+
+  val dist = TaskKey[Unit]("dist", "builds dist")
 }
 
