@@ -10,6 +10,7 @@ scalacOptions ++= Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
   "joda-time"                 % "joda-time"           % "1.6.2",
+  "org.streum"                %% "configrity"         % "0.9.0",
   "com.reportgrid"            %% "blueeyes-json"      % "0.6.0-SNAPSHOT" changing(),
   "com.reportgrid"            %% "blueeyes-core"      % "0.6.0-SNAPSHOT" changing(),
   "com.reportgrid"            %% "blueeyes-mongo"     % "0.6.0-SNAPSHOT" changing(),

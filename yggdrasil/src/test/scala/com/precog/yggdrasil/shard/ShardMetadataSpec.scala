@@ -100,7 +100,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
 
       val fut = actor ? FindDescriptors(events(0).path, events(0).data.flattenWithPath.head._1)
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]]]
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]]]
       val expected = extractMetadataFor(events(0).path, events(0).data.flattenWithPath.head._1)(events)
      
       result must_== expected
