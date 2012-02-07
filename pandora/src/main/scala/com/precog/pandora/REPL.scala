@@ -214,14 +214,14 @@ object Console extends App {
     
     lazy val storageRoot = new File(args.headOption getOrElse "./data/")
     
-    def startup {
+    def startup() {
       // start ingest server
       Await.result(start, controlTimeout)
       // start storage shard 
       Await.result(storage.start, controlTimeout)
     }
     
-    def shutdown {
+    def shutdown() {
       // stop storaget shard
       Await.result(storage.stop, controlTimeout)
       // stop ingest server
@@ -231,7 +231,7 @@ object Console extends App {
     }
   }
   
-  repl.startup
-  repl.run
-  repl.shutdown
+  repl.startup()
+  repl.run()
+  repl.shutdown()
 }
