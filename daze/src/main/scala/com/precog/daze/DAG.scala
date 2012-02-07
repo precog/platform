@@ -23,6 +23,7 @@ package daze
 import bytecode._
 
 import com.precog.util.Identity
+import com.precog.yggdrasil._
 
 import scala.collection.mutable
 
@@ -340,19 +341,40 @@ trait DAG extends Instructions {
     val loc: Line
     
     def provenance: Vector[dag.Provenance]
+    
+    def value: Option[SValue] = None
+    
+    def isSingleton: Boolean
   }
   
   object dag {
     case class SplitRoot(loc: Line, depth: Int) extends DepGraph {
       val provenance = Vector()
+      
+      val isSingleton = true
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
       lazy val provenance = Vector()
+      
+      override lazy val value = Some(instr match {
+        case PushString(str) => SString(str)
+        case PushNum(num) => SDecimal(BigDecimal(num))
+        case PushTrue => SBoolean(true)
+        case PushFalse => SBoolean(false)
+        case PushObject => SObject(Map())
+        case PushArray => SArray(Vector())
+      })
+      
+      val isSingleton = true
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      
+      override lazy val value = parent.value
+      
+      lazy val isSingleton = parent.isSingleton
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
@@ -360,20 +382,30 @@ trait DAG extends Instructions {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
         case _ => Vector(DynamicProvenance(Identity.nextInt()))
       }
+      
+      val isSingleton = false
     }
     
+    // TODO propagate AOT value computation
     case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
       lazy val provenance = parent.provenance
+      
+      lazy val isSingleton = parent.isSingleton
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector()
+      
+      val isSingleton = true
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      
+      lazy val isSingleton = parent.isSingleton && child.isSingleton
     }
     
+    // TODO propagate AOT value computation
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = instr match {
         case _: Map2CrossRight => right.provenance ++ left.provenance
@@ -381,6 +413,8 @@ trait DAG extends Instructions {
         
         case _ => (left.provenance ++ right.provenance).distinct
       }
+      
+      lazy val isSingleton = left.isSingleton && right.isSingleton
     }
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
@@ -389,6 +423,8 @@ trait DAG extends Instructions {
         case Some(CrossLeft) | Some(CrossNeutral) => target.provenance ++ boolean.provenance
         case None => (target.provenance ++ boolean.provenance).distinct
       }
+      
+      lazy val isSingleton = target.isSingleton
     }
     
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
@@ -406,6 +442,19 @@ trait DAG extends Instructions {
         val (back, _) = (prefix ++ second).unzip
         back
       }
+      
+      lazy val isSingleton = parent.isSingleton
+      
+      lazy val memoId = Identity.nextInt()
+    }
+    
+    case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
+      val loc = parent.loc
+      
+      lazy val provenance = parent.provenance
+      lazy val isSingleton = parent.isSingleton
+      
+      lazy val memoId = Identity.nextInt()
     }
     
     

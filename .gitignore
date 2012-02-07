@@ -14,3 +14,4 @@ scalaz
 .ensime
 *~
 quirrel/examples
+hs_err_pid*log

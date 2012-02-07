@@ -1607,9 +1607,9 @@ object EvaluatorSpecs extends Specification
         case ((ids, sv), i) => (ids :+ (5 - i), sv)
       }
 
-      val sorted = sortByIdentities(enum, Vector(0))
-      val sorted2 = sortByIdentities(enum, Vector(1))
-      val sorted3 = sortByIdentities(enum, Vector(1, 0))
+      val sorted = sortByIdentities(enum, Vector(0), 0)
+      val sorted2 = sortByIdentities(enum, Vector(1), 1)
+      val sorted3 = sortByIdentities(enum, Vector(1, 0), 2)
 
       consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
          (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),

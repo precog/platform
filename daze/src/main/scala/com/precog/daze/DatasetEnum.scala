@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import akka.dispatch.Future
+
 import com.precog.yggdrasil._
 import com.precog.analytics.Path
 
@@ -32,6 +34,22 @@ import Iteratee._
 case class DatasetEnum[X, E, F[_]](enum: EnumeratorP[X, E, F], descriptor: Option[ProjectionDescriptor] = None) {
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum map f)
+
+  def reduce(b: Option[E])(f: (Option[E], E) => Option[E]): DatasetEnum[X, E, F] = DatasetEnum(
+    new EnumeratorP[X, E, F] {
+      def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+        import MO._
+        new EnumeratorT[X, E, G] {
+          def apply[A] = (step: StepT[X, E, G, A]) => {
+            for {
+              opt <- IterateeT.fold[X, E, G, Option[E]](b)(f) &= enum[G]
+              a   <- step.pointI &= (opt.map(v => EnumeratorT.enumOne[X, E, G](v)).getOrElse(Monoid[EnumeratorT[X, E, G]].zero))
+            } yield a
+          }
+        }
+      }
+    }
+  )
 
   def flatMap[E2](f: E => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = 
     DatasetEnum(enum.flatMap(e => f(e).enum))
@@ -74,7 +92,9 @@ trait DatasetEnumOps {
   def merge[X, F[_]](enum1: DatasetEnum[X, SEvent, F], enum2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, SEvent, F] =
     enum1 merge enum2
 
-  def sort[X](enum: DatasetEnum[X, SEvent, IO])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] 
+  def sort[X](enum: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO]
+  
+  def memoize[X](enum: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO]
   
   def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
     new EnumeratorP[X, E, F] {

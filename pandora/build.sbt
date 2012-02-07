@@ -17,6 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
+import sbt._
+import Keys._
+import AssemblyKeys._
+import java.io.File
+
 name := "pandora"
 
 version := "0.0.1-SNAPSHOT"
@@ -44,9 +49,16 @@ run <<= inputTask { argTask =>
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
+      Seq("/tmp/pandora/data/") ++ 
       args
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
-  }
+    jline.Terminal.getTerminal.initializeTerminal()
+  } dependsOn extractData
+}
+
+extractData := streams map { s =>
+  s.log.info("Extracting LevelDB sample data...")     // doesn't actually print, because SBT is horrible
+  IO.copyDirectory(new File("pandora/dist/data/"), new File("/tmp/pandora/data/"), true, false)
 }
 
 initialCommands in console := """
@@ -77,3 +89,24 @@ initialCommands in console := """
 logBuffered := false       // gives us incremental output from Specs2
 
 mainClass := Some("com.precog.pandora.Console")
+
+dist <<= (version, streams, baseDirectory, target in assembly, jarName in assembly) map { 
+         (projectVersion: String, streams: TaskStreams, projectRoot: File, buildTarget: File, assemblyName: String) => {
+  val log = streams.log
+  val distStaticRoot = new File(projectRoot, "dist")
+  val distName = "pandist-%s".format(projectVersion)
+  val distTmp = new File(buildTarget, distName)
+  val distTarball = new File(buildTarget, distName + ".tar.gz")
+  val assemblyJar = new File(buildTarget, assemblyName)
+  val distTmpLib = new File(distTmp, "lib/") 
+  log.info("copy static dist contents")
+  List("cp", "-r", distStaticRoot.toString, distTmp.toString) ! log
+  log.info("copy assembly jar: %s".format(assemblyName)) 
+  distTmpLib.mkdirs
+  List("cp", assemblyJar.toString, distTmpLib.toString) ! log
+  log.info("create tarball")
+  List("tar", "-C", distTmp.getParent.toString, "-cvzf", distTarball.toString, distTmp.getName) ! log
+}}
+
+dist <<= dist.dependsOn(assembly)
+

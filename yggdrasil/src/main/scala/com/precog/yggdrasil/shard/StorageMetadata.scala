@@ -38,7 +38,7 @@ import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 import akka.util.duration._
 
-import scala.collection._
+import scala.collection.mutable
 import scala.collection.immutable.ListMap
 import scala.collection.immutable.Set
 
@@ -142,15 +142,10 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
   }
 
   def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
-    
-    def matches(path: Path, selector: JPath)(col: ColumnDescriptor) = col.path == path && col.selector == selector
+    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => col.path == path && col.selector == selector
 
-    projections.filter {
-      case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
-      case _               => false
-    }.map {
-      case (descriptor, metadata) => (descriptor, Map( (descriptor.columns zip metadata): _*))
-    }
+    for ((descriptor, metadata) <- projections.toMap if descriptor.columns.exists(matches(path, selector))) 
+    yield (descriptor, (descriptor.columns zip metadata.map(_.toMap)).toMap)
   }  
 }
 
