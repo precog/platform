@@ -50,7 +50,9 @@ run <<= inputTask { argTask =>
       Seq(mc getOrElse "com.precog.pandora.Console") ++
       Seq("pandora/dist/data/") ++ 
       args
-    Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
+    val back = Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
+    jline.Terminal.getTerminal.initializeTerminal()
+    back
   }
 }
 
