@@ -44,5 +44,6 @@ object PlatformBuild extends Build {
 
   val dist = TaskKey[Unit]("dist", "builds dist")
   val extractData = TaskKey[Unit]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
+  val extractLibs = TaskKey[Unit]("extract-libs", "Extracts the LevelDB native libraries used by the tests and the REPL")
 }
 
