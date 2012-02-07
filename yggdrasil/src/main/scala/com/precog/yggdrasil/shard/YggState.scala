@@ -43,32 +43,20 @@ import scalaz.syntax.traverse._
 import scalaz.effect.IO
 
 
-class ShardConfig(
-  val properties: Properties, 
-  val baseDir: File, 
-  val descriptors: Map[ProjectionDescriptor, File], 
-  val metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], 
-  val checkpoints: mutable.Map[Int, Int])
+case class YggState(
+  descriptors: Map[ProjectionDescriptor, File], 
+  metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], 
+  checkpoints: mutable.Map[Int, Int])
 
-
-object ShardConfig extends Logging {
+object YggState extends Logging {
   type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
-  
-  def fromFile(propsFile: File): IO[Validation[Error, ShardConfig]] = IOUtils.readPropertiesFile { propsFile } flatMap { fromProperties } 
-  
-  def fromProperties(props: Properties): IO[Validation[Error, ShardConfig]] = {
-    val baseDir = extractBaseDir { props }
-    if(!baseDir.exists && !baseDir.mkdirs) {
-      IO { Failure(Invalid("Unable to create data directory: " + baseDir)) }
-    } else {
-      loadDescriptors(baseDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-        case Success(t) => loadCheckpoints(baseDir) map { _.map( new ShardConfig(props, baseDir, t._1, t._2, _)) }
-        case Failure(e) => IO { Failure(e) }
-      }}
-    }
+ 
+  def restore(dataDir: File): IO[Validation[Error, YggState]] = {
+    loadDescriptors(dataDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
+      case Success((d,m)) => loadCheckpoints(dataDir) map { _.map( new YggState(d, m, _)) }
+      case Failure(e) => IO { Failure(e) }
+    }}
   }
-
-  def extractBaseDir(props: Properties): File = new File(props.getProperty("precog.storage.root", "./test_data/"))
 
   def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
     def loadMap(baseDir: File) = 

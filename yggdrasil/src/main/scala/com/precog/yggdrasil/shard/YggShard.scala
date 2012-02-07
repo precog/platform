@@ -93,62 +93,43 @@ import scalaz.syntax.applicativePlus._
 import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 
-
-trait StorageShard {
+trait YggShard {
   def start: Future[Unit]
   def stop: Future[Unit]
 
-  def metadata: StorageMetadata 
+  def store(msg: EventMessage): Future[Unit]
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
+
+  def metadata: StorageMetadata
+
+  def yggConfig: YggConfig
 }
 
-trait ShardLogging { this: Logging =>
-  def lpre(msg: String): String = "[Storage Shard] %s".format(msg)
-  def li(m: String) = (_:Any) => logger.info(lpre(m))
-  def ld(m: String) = (_:Any) => logger.debug(lpre(m))
-  def le(m: String) = (_:Any) => logger.error(lpre(m))
-  def lee(m: String, t: Throwable) = (_:Any) => logger.error(lpre(m), t)
-  def rle(m: String): PartialFunction[Throwable, Unit] = { case t => lee(m, t)(()) }
-}
+trait RealYggShard extends YggShard with Logging {
+  val pre = "[Yggdrasil Shard]"
 
-trait FilesystemBootstrapStorageShard extends StorageShard with Logging with ShardLogging {
-  def shardConfig: ShardConfig
+  def yggConfig: YggConfig
+  def yggState: YggState
 
   lazy implicit val system = ActorSystem("storage_shard")
   lazy implicit val executionContext = ExecutionContext.defaultExecutionContext
   lazy implicit val dispatcher = system.dispatcher
 
-  lazy val dbLayout = new DBLayout(shardConfig.baseDir, shardConfig.descriptors)
+  lazy val dbio = new DBIO(yggConfig.dataDir, yggState.descriptors)
 
   lazy val routingTable: RoutingTable = SingleColumnProjectionRoutingTable 
-  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbLayout.descriptorLocator, dbLayout.descriptorIO)), "router")
-  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(shardConfig.metadata, shardConfig.checkpoints)), "metadata")
+  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbio.descriptorLocator, dbio.descriptorIO)), "router")
+  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, yggState.checkpoints)), "metadata")
   lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor, dispatcher) 
 
-  def testLoad() {
-    def parse(s: String): Option[(Int, Int)] = {
-      if(s == null) None
-      else {
-        val parts = s.split(",")
-        if(parts.length != 2) None
-        else Some((parts(0).toInt, parts(1).toInt))
-      }
-    }
-
-    parse(shardConfig.properties.getProperty("precog.test.load.dummy")) foreach { 
-      case (count, variety) => {
-        println(lpre("Dummy data load (%d,%d)".format(count, variety)))
-        SimpleShardLoader.load(routingActor, count, variety) 
-      }
-    }
-  }
+  import logger._
 
   def start: Future[Unit] = {
-    Future(testLoad())
+    Future(())
   }
 
   def stop: Future[Unit] = {
-    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbLayout.metadataIO, dbLayout.checkpointIO)), "metadata_serializer")
+    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbio.metadataIO, dbio.checkpointIO)), "metadata_serializer")
 
     val defaultSystem = system
     val defaultTimeout = 300 seconds
@@ -159,25 +140,26 @@ trait FilesystemBootstrapStorageShard extends StorageShard with Logging with Sha
 
     def flushMetadata = (_: Any) => metadataActor ? FlushMetadata(metadataSerializationActor)
     def flushCheckpoints = (_: Any) => metadataActor ? FlushCheckpoints(metadataSerializationActor)
-  
-    Future { li("Stopping")(_) } map 
-      ld("Stopping routing actor") flatMap
-      actorStop(routingActor) recover rle("Error stopping routing actor") map
-      ld("Flushing metadata") flatMap
-      flushMetadata recover rle("Error flushing metadata") map
-      ld("Flushing checkpoints") flatMap
-      flushCheckpoints recover rle("Error flushing checkpoints") map
-      ld("Stopping metadata actor") flatMap
-      actorStop(metadataActor) recover rle("Error stopping metadata actor") map
-      ld("Stopping flush actor") flatMap
-      actorStop(metadataSerializationActor) recover rle("Error stopping flush actor") map
-      ld("Stopping actor system") map
-      { _ => system.shutdown } recover rle("Error stopping actor system") map
-      li("Stopped")
+
+    Future { info(pre + "Stopping")(_) } map { _ => 
+      debug(pre + "Stopping routing actor") } flatMap
+      actorStop(routingActor) recover { case e => error("Error stopping routing actor", e) } map { _ => 
+      debug(pre + "Flushing metadata") } flatMap
+      flushMetadata recover { case e => error("Error flushing metadata", e) } map { _ => 
+      debug(pre + "Flushing checkpoints") } flatMap
+      flushCheckpoints recover { case e => error("Error flushing checkpoints") } map { _ => 
+      debug(pre + "Stopping metadata actor") } flatMap
+      actorStop(metadataActor) recover { case e => ("Error stopping metadata actor") } map { _ => 
+      debug(pre + "Stopping flush actor") } flatMap
+      actorStop(metadataSerializationActor) recover { case e => error("Error stopping flush actor") } map { _ => 
+      debug(pre + "Stopping actor system") } map
+      { _ => system.shutdown } recover { case e => error("Error stopping actor system") } map { _ =>
+      info(pre + "Stopped") }
   }
 
-  def store(msg: EventMessage): IO[Unit] = IO {
-    routingActor ! msg
+  def store(msg: EventMessage): Future[Unit] = {
+    implicit val storeTimeout: Timeout = Duration(10, "seconds")
+    (routingActor ? msg) map { _ => () }
   }
   
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
@@ -213,7 +195,7 @@ trait FilesystemBootstrapStorageShard extends StorageShard with Logging with Sha
   }
 }
 
-class DBLayout(baseDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
+class DBIO(dataDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
   private var descriptorDirs = descriptorLocations
 
   val descriptorName = "projection_descriptor.json"
@@ -233,7 +215,7 @@ class DBLayout(baseDir: File, descriptorLocations: Map[ProjectionDescriptor, Fil
     descriptorDirs.get(descriptor) match {
       case Some(x) => x
       case None    => {
-        val newDir = newDescriptorDir(descriptor, baseDir)
+        val newDir = newDescriptorDir(descriptor, dataDir)
         descriptorDirs += (descriptor -> newDir)
         newDir
       }
@@ -252,6 +234,6 @@ class DBLayout(baseDir: File, descriptorLocations: Map[ProjectionDescriptor, Fil
   }
 
   val checkpointIO = (checkpoints: Checkpoints) => {
-    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(baseDir, checkpointName)).map(_ => ())
+    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(dataDir, checkpointName)).map(_ => ())
   }
 }

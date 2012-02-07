@@ -44,7 +44,7 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
   implicit def projectionRetrievalTimeout: akka.util.Timeout = 10 seconds
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  def storage: StorageShard
+  def storage: YggShard
 
   def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] = {
     for {

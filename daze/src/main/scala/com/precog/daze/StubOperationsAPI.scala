@@ -51,12 +51,14 @@ trait DatasetConsumers extends Evaluator {
     ((consume[Unit, SEvent, IO, Set] &= eval(graph).enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO
 }
 
-trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with DefaultYggConfig {
+trait StubOperationsAPI extends OperationsAPI with DatasetConsumers {
   import StubOperationsAPI._
+
+  def yggConfig: YggConfig
   
   override object ops extends DatasetEnumOps {
     def sort[X](enum: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
-      DatasetEnum(Enumerators.sort[X](enum.enum, yggdrasilConfig.sortBufferSize, yggdrasilConfig.workDir, enum.descriptor))
+      DatasetEnum(Enumerators.sort[X](enum.enum, yggConfig.sortBufferSize, yggConfig.newWorkDir, enum.descriptor))
     }
     
     def memoize[X](enum: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO] = enum      // TODO

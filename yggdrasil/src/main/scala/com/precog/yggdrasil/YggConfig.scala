@@ -17,22 +17,42 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "common"
+package com.precog
+package yggdrasil
 
-version := "1.2.1-SNAPSHOT"
+import org.streum.configrity._
 
-organization := "com.precog"
+import common.Config
 
-scalaVersion := "2.9.1"
+import java.io.File
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+trait YggConfig extends Config {
+  
+  private val localDefaults = Configuration.parse("""
+    precog {
+      storage {
+        root = ./data
+        sortBufferSize = 100000
+      }
+    }
+ """, io.BlockFormat)
 
-libraryDependencies ++= Seq(
-  "joda-time"                 % "joda-time"           % "1.6.2",
-  "org.streum"                %% "configrity"         % "0.9.0",
-  "com.reportgrid"            %% "blueeyes-json"      % "0.6.0-SNAPSHOT" changing(),
-  "com.reportgrid"            %% "blueeyes-core"      % "0.6.0-SNAPSHOT" changing(),
-  "com.reportgrid"            %% "blueeyes-mongo"     % "0.6.0-SNAPSHOT" changing(),
-  "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-  "org.specs2"                %% "specs2"             % "1.7"  % "test"
-)
+  lazy private val cfg = localDefaults ++ config 
+
+  lazy val rootDir = new File(cfg[String]("precog.storage.root"))
+  
+  lazy val dataDir = new File(rootDir, "data")
+  lazy val cacheDir = new File(rootDir, "cache")
+  lazy val scratchDir = new File(rootDir, "scratch")
+
+  def newWorkDir = {
+    if(!scratchDir.exists) scratchDir.mkdirs
+    val tempFile = File.createTempFile("ygg", "workdir", scratchDir)
+    tempFile.delete
+    tempFile.mkdir
+    tempFile
+  }
+
+  lazy val sortBufferSize: Int = cfg[Int]("precog.storage.sortBufferSize")
+
+}
