@@ -23,6 +23,7 @@ package shard
 import com.precog.common._
 import com.precog.yggdrasil.util.IOUtils
 
+import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema.DefaultSerialization._
@@ -44,16 +45,61 @@ import scalaz.effect.IO
 
 
 case class YggState(
+  dataDir: File,
   descriptors: Map[ProjectionDescriptor, File], 
   metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], 
-  checkpoints: mutable.Map[Int, Int])
+  checkpoints: mutable.Map[Int, Int]) {
+
+  private var descriptorState = descriptors 
+
+  import YggState._
+
+  def newRandomDir(parent: File): File = {
+    val newDir = File.createTempFile("col", "", parent)
+    newDir.delete
+    newDir.mkdirs
+    newDir
+  }
+
+  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
+
+  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
+    descriptorState.get(descriptor) match {
+      case Some(x) => x
+      case None    => {
+        val newDir = newDescriptorDir(descriptor, dataDir)
+        descriptorState += (descriptor -> newDir)
+        newDir
+      }
+    }
+  }
+
+  val descriptorIO = (descriptor: ProjectionDescriptor) =>
+    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
+    }.map(_ => ())
+
+  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
+    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
+      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
+    }.map(_ => ())
+  }
+
+  val checkpointIO = (checkpoints: Checkpoints) => {
+    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(dataDir, checkpointName)).map(_ => ())
+  }
+}
 
 object YggState extends Logging {
+  val descriptorName = "projection_descriptor.json"
+  val metadataName = "projection_metadata.json"
+  val checkpointName = "checkpoints.json"
+
   type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
  
   def restore(dataDir: File): IO[Validation[Error, YggState]] = {
     loadDescriptors(dataDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-      case Success((d,m)) => loadCheckpoints(dataDir) map { _.map( new YggState(d, m, _)) }
+      case Success((d,m)) => loadCheckpoints(dataDir) map { _.map( new YggState(dataDir, d, m, _)) }
       case Failure(e) => IO { Failure(e) }
     }}
   }
@@ -126,7 +172,9 @@ object YggState extends Logging {
       case (_          , Failure(e)) => Failure(e)
     }}
   }
-}
 
+  class DBIO(dataDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
+  }
+}
 
 // vim: set ts=4 sw=4 et:

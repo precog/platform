@@ -46,9 +46,6 @@ import akka.actor.ReceiveTimeout
 import akka.actor.ActorTimeoutException
 
 import blueeyes.util._
-import blueeyes.json.Printer._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
@@ -115,10 +112,8 @@ trait RealYggShard extends YggShard with Logging {
   lazy implicit val executionContext = ExecutionContext.defaultExecutionContext
   lazy implicit val dispatcher = system.dispatcher
 
-  lazy val dbio = new DBIO(yggConfig.dataDir, yggState.descriptors)
-
   lazy val routingTable: RoutingTable = SingleColumnProjectionRoutingTable 
-  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, dbio.descriptorLocator, dbio.descriptorIO)), "router")
+  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, yggState.descriptorLocator, yggState.descriptorIO)), "router")
   lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, yggState.checkpoints)), "metadata")
   lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor, dispatcher) 
 
@@ -129,7 +124,7 @@ trait RealYggShard extends YggShard with Logging {
   }
 
   def stop: Future[Unit] = {
-    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(dbio.metadataIO, dbio.checkpointIO)), "metadata_serializer")
+    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(yggState.metadataIO, yggState.checkpointIO)), "metadata_serializer")
 
     val defaultSystem = system
     val defaultTimeout = 300 seconds
@@ -195,45 +190,3 @@ trait RealYggShard extends YggShard with Logging {
   }
 }
 
-class DBIO(dataDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
-  private var descriptorDirs = descriptorLocations
-
-  val descriptorName = "projection_descriptor.json"
-  val metadataName = "projection_metadata.json"
-  val checkpointName = "checkpoints.json"
-
-  def newRandomDir(parent: File): File = {
-    val newDir = File.createTempFile("col", "", parent)
-    newDir.delete
-    newDir.mkdirs
-    newDir
-  }
-
-  def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
-
-  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
-    descriptorDirs.get(descriptor) match {
-      case Some(x) => x
-      case None    => {
-        val newDir = newDescriptorDir(descriptor, dataDir)
-        descriptorDirs += (descriptor -> newDir)
-        newDir
-      }
-    }
-  }
-
-  val descriptorIO = (descriptor: ProjectionDescriptor) =>
-    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
-    }.map(_ => ())
-
-  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
-    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
-    }.map(_ => ())
-  }
-
-  val checkpointIO = (checkpoints: Checkpoints) => {
-    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(dataDir, checkpointName)).map(_ => ())
-  }
-}

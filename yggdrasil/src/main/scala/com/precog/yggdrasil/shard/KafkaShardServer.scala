@@ -77,7 +77,7 @@ trait KafkaIngester extends Logging {
 
   implicit def executionContext: akka.dispatch.ExecutionContext
 
-  lazy val consumer = new KafkaConsumer(kafkaIngestConfig, routingActor)
+  lazy val consumer = new KafkaIngest(kafkaIngestConfig, routingActor)
 
   def startKafka = Future {
       if(kafkaIngestConfig.kafkaEnabled) { 
