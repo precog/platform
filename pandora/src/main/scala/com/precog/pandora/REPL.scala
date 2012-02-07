@@ -16,7 +16,7 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-import java.io.PrintStream
+import java.io.{File, PrintStream}
 import net.lag.configgy.Configgy
 
 trait REPL extends LineErrors
@@ -190,6 +190,8 @@ object Console {
     object repl extends REPL with AkkaIngestServer with DefaultYggConfig {
       
       val controlTimeout = Duration(120, "seconds")
+      
+      lazy val storageRoot = new File(args.headOption getOrElse "./data/")
 
       def startup {
         // start ingest server

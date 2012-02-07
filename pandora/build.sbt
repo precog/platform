@@ -29,6 +29,7 @@ run <<= inputTask { argTask =>
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
+      Seq("pandora/dist/data/") ++ 
       args
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
   }
