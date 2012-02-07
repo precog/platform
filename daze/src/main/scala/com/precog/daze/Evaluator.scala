@@ -1,7 +1,7 @@
 package com.precog
 package daze
 
-import akka.dispatch.Await
+import akka.dispatch.{Await, Future}
 import akka.util.duration._
 
 import scalaz.{Identity => _, _}
@@ -15,68 +15,69 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
 
-trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI {
   import Function._
   
   import instructions._
   import dag._
   
   def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
-    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] = graph match {
-      case SplitRoot(_, depth) => roots(depth)
+    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
+      case SplitRoot(_, depth) => Right(roots(depth))
       
-      case Root(_, instr) => {
-        val sev = instr match {
-          case PushString(str) => SString(str)
-          case PushNum(str) => SDecimal(BigDecimal(str))
-          case PushTrue => SBoolean(true)
-          case PushFalse => SBoolean(false)
-          case PushObject => SObject(Map())
-          case PushArray => SArray(Vector())
-        }
-        
-        ops.point((Vector(), sev))
-      }
+      case Root(_, instr) =>
+        Right(ops.point((Vector(), graph.value.get)))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, roots)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
-        implicit val order = identitiesOrder(parent.provenance.length)
-        
-        val result = loop(parent, roots) flatMap {
-          case (_, SString(str)) => Await.result(query.fullProjection[X](Path(str)), 10 seconds)
-          case _ => ops.empty[X, SEvent, IO]
+        parent.value match {
+          case Some(SString(str)) => Left(query.mask(Path(str)))
+          case Some(_) => Right(ops.empty[X, SEvent, IO])
+          
+          case None => {
+            implicit val order = identitiesOrder(parent.provenance.length)
+            
+            val result = maybeRealize(loop(parent, roots)) flatMap {
+              case (_, SString(str)) => Await.result(query.fullProjection[X](Path(str)), 10 seconds)
+              case _ => ops.empty[X, SEvent, IO]
+            }
+            
+            Right(ops.sort(result, None))
+          }
         }
-        
-        ops.sort(result)
       }
       
       case Operate(_, Comp, parent) => {
-        val enum = loop(parent, roots)
+        val parentRes = loop(parent, roots)
+        val parentResTyped = parentRes.left map { _ typed SBoolean }
+        val enum = maybeRealize(parentResTyped)
         
-        enum collect {
+        Right(enum collect {
           case (id, SBoolean(b)) => (id, SBoolean(!b))
-        }
+        })
       }
       
       case Operate(_, Neg, parent) => {
-        val enum = loop(parent, roots)
+        val parentRes = loop(parent, roots)
+        val parentResTyped = parentRes.left map { _ typed SDecimal }
+        val enum = maybeRealize(parentResTyped)
         
-        enum collect {
+        Right(enum collect {
           case (id, SDecimal(d)) => (id, SDecimal(-d))
-        }
+        })
       }
       
       case Operate(_, WrapArray, parent) => {
-        val enum = loop(parent, roots)
+        val enum = maybeRealize(loop(parent, roots))
         
-        enum map {
+        Right(enum map {
           case (id, sv) => (id, SArray(Vector(sv)))
-        }
+        })
       }
       
       case dag.Reduce(_, red, parent) => {
-        val enum = loop(parent, roots)
+        val enum = maybeRealize(loop(parent, roots))
         
         val mapped = enum map {
           case (_, sv) => sv
@@ -99,54 +100,115 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
 
         val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumP)
         
-        reducedDS map { sv => (Vector(), sv) }
+        Right(reducedDS map { sv => (Vector(), sv) })
       }
       
       case dag.Split(_, parent, child) => {
         implicit val order = ValuesOrder
         
-        val splitEnum = loop(parent, roots)
+        val splitEnum = maybeRealize(loop(parent, roots))
         
-        val result = ops.sort(splitEnum).uniq flatMap {
-          case (_, sv) => loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots)
+        val result = ops.sort(splitEnum, None).uniq flatMap {
+          case (_, sv) =>
+            maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
         }
         
-        ops.sort(result).uniq.zipWithIndex map {
+        val back: DatasetEnum[X, SEvent, IO] = ops.sort(result, None).uniq.zipWithIndex map {
           case ((_, sv), id) => (Vector(id), sv)
         }
+        
+        Right(back)
       }
       
       case Join(_, instr @ (VUnion | VIntersect), left, right) => {
         implicit val sortOfValueOrder = ValuesOrder
         
-        val leftEnum = ops.sort(loop(left, roots))
-        val rightEnum = ops.sort(loop(right, roots))
+        val leftEnum = ops.sort(maybeRealize(loop(left, roots)), None)
+        val rightEnum = ops.sort(maybeRealize(loop(right, roots)), None)
         
         // TODO we're relying on the fact that we *don't* need to preserve sane identities!
-        ops.cogroup(leftEnum, rightEnum) collect {
+        val back = ops.cogroup(leftEnum, rightEnum) collect {
           case Left3(sev)  if instr == VUnion => sev
           case Middle3((sev1, _))             => sev1
           case Right3(sev) if instr == VUnion => sev
         }
+        
+        Right(back)
       }
       
       // TODO IUnion and IIntersect
+      
+      case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
+        right.value.get match {
+          case sv2 @ SString(str) => {
+            val masked = loop(left, roots).left map { _ derefObject str }
+            
+            masked.right map { enum =>
+              enum collect {
+                unlift {
+                  case (ids, sv1) => binaryOp(DerefObject)(sv1, sv2) map { sv => (ids, sv) }
+                }
+              }
+            }
+          }
+          
+          case _ => Right(ops.empty[X, SEvent, IO])
+        }
+      }
+      
+      case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
+        right.value.get match {
+          case sv2 @ SDecimal(num) if num.isValidInt => {
+            val masked = loop(left, roots).left map { _ derefArray num.toInt }
+            
+            masked.right map { enum =>
+              enum collect {
+                unlift {
+                  case (ids, sv1) => binaryOp(DerefArray)(sv1, sv2) map { sv => (ids, sv) }
+                }
+              }
+            }
+          }
+          
+          case _ => Right(ops.empty[X, SEvent, IO])
+        }
+      }
       
       case Join(_, instr, left, right) => {
         lazy val length = sharedPrefixLength(left, right)
         implicit lazy val order = identitiesOrder(length)
         
-        val leftEnum = loop(left, roots)
-        val rightEnum = loop(right, roots)
-        
-        val (pairs, op, distinct) = instr match {
-          case Map2Match(op) => (leftEnum join rightEnum, op, true)
-          case Map2Cross(op) => (leftEnum :^ rightEnum, op, false)
-          case Map2CrossLeft(op) => (leftEnum :^ rightEnum, op, false)
-          case Map2CrossRight(op) => (leftEnum ^: rightEnum, op, false)
+        val op = instr match {
+          case Map2Match(op) => op
+          case Map2Cross(op) => op
+          case Map2CrossLeft(op) => op
+          case Map2CrossRight(op) => op
         }
         
-        pairs collect {
+        val leftRes = loop(left, roots)
+        val rightRes = loop(right, roots)
+        
+        val (leftTpe, rightTpe) = binOpType(op)
+        
+        val leftResTyped = leftRes.left map { mask =>
+          leftTpe map mask.typed getOrElse mask
+        }
+        
+        val rightResTyped = rightRes.left map { mask =>
+          rightTpe map mask.typed getOrElse mask
+        }
+        
+        val leftEnum = maybeRealize(leftResTyped)
+        val rightEnum = maybeRealize(rightResTyped)
+        
+        val (pairs, distinct) = instr match {
+          case Map2Match(op) => (leftEnum join rightEnum, true)
+          case Map2Cross(op) => (leftEnum :^ rightEnum, false)
+          case Map2CrossLeft(op) => (leftEnum :^ rightEnum, false)
+          case Map2CrossRight(op) => (leftEnum ^: rightEnum, false)
+        }
+        
+        val back = pairs collect {
           unlift {
             case ((ids1, sv1), (ids2, sv2)) => {
               val ids = if (distinct)
@@ -158,14 +220,21 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
             }
           }
         }
+        
+        Right(back)
       }
       
       case Filter(_, cross, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         implicit lazy val order = identitiesOrder(length)
         
-        val targetEnum = loop(target, roots)
-        val booleanEnum = loop(boolean, roots)
+        val targetRes = loop(target, roots)
+        val booleanRes = loop(boolean, roots)
+        
+        val booleanResTyped = booleanRes.left map { _ typed SBoolean }
+        
+        val targetEnum = maybeRealize(targetRes)
+        val booleanEnum = maybeRealize(booleanResTyped)
         
         val (pairs, distinct) = cross match {
           case None => (targetEnum join booleanEnum, true)
@@ -174,7 +243,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
           case Some(CrossRight) => (targetEnum ^: booleanEnum, false)
         }
         
-        pairs collect {
+        val back = pairs collect {
           case ((ids1, sv), (ids2, SBoolean(true))) => {
             val ids = if (distinct)
               (ids1 ++ (ids2 drop length))
@@ -184,16 +253,24 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
             (ids, sv)
           }
         }
+        
+        Right(back)
       }
       
-      case Sort(parent, indexes) => 
-        sortByIdentities(loop(parent, roots), indexes)
+      case s @ Sort(parent, indexes) => 
+        loop(parent, roots).right map { enum => sortByIdentities(enum, indexes, s.memoId) }
+      
+      case m @ Memoize(parent, _) =>
+        loop(parent, roots).right map { enum => ops.memoize(enum, m.memoId) }
     }
     
-    loop(orderCrosses(graph), Nil)
+    maybeRealize(loop(memoize(orderCrosses(graph)), Nil))
   }
-
-  def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int]): DatasetEnum[X, SEvent, IO] = {
+  
+  private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
+    (result.left map { mask => Await.result(mask.realize, 10 seconds) }).fold(identity, identity)
+  
+  protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int): DatasetEnum[X, SEvent, IO] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {
       def order(e1: SEvent, e2: SEvent): Ordering = {
         val (ids1, _) = e1
@@ -209,7 +286,7 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
       }
     }
     
-    ops.sort(enum) map {
+    ops.sort(enum, Some(memoId)) map {
       case (ids, sv) => {
         val (first, second) = ids.zipWithIndex partition {
           case (_, i) => indexes contains i
@@ -315,6 +392,34 @@ trait Evaluator extends DAG with CrossOrdering with OperationsAPI {
     }
     
     approx take k last
+  }
+  
+  private def binOpType(op: BinaryOperation): (Option[SType], Option[SType]) = op match {
+    case Add | Sub | Mul | Div | Lt | LtEq | Gt | GtEq =>
+      (Some(SDecimal), Some(SDecimal))
+    
+    case Eq | NotEq => (None, None)
+    
+    case Or | And => (Some(SBoolean), Some(SBoolean))
+    
+    case WrapObject => (Some(SString), None)
+    
+    case JoinObject => (Some(SObject), Some(SObject))
+    
+    case JoinArray => (Some(SArray), Some(SArray))
+    
+    case ArraySwap => (Some(SArray), Some(SDecimal))
+    
+    case DerefObject => (Some(SObject), Some(SString))
+    
+    case DerefArray => (Some(SObject), Some(SDecimal))
+  }
+  
+  private def unOpType(op: UnaryOperation): Option[SType] = op match {
+    case instructions.New => None
+    case Comp => Some(SBoolean)
+    case Neg => Some(SDecimal)
+    case WrapArray => None
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {

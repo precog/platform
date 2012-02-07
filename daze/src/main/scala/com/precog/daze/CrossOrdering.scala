@@ -37,7 +37,26 @@ trait CrossOrdering extends DAG {
           
           val (leftIndexes, rightIndexes) = determineSort(left2, right2)
           
-          Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+          val leftPrefix = leftIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          
+          if (leftPrefix && rightPrefix)
+            Join(loc, instr, left2, right2)
+          else if (leftPrefix && !rightPrefix)
+            Join(loc, instr, left2, Sort(right2, rightIndexes))
+          else if (!leftPrefix && rightPrefix)
+            Join(loc, instr, Sort(left2, leftIndexes), right2)
+          else
+            Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+        }
+        
+        case Join(loc, Map2Cross(op), left, right) => {
+          if (right.isSingleton)
+            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
+          else if (left.isSingleton)
+            Join(loc, Map2CrossRight(op), memoized(left), memoized(right))
+          else
+            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
         }
         
         case Join(loc, instr, left, right) =>
@@ -49,13 +68,25 @@ trait CrossOrdering extends DAG {
           
           val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
           
-          Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+          val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
+          
+          if (targetPrefix && booleanPrefix)
+            Filter(loc, None, range, target2, boolean2)
+          else if (targetPrefix && !booleanPrefix)
+            Filter(loc, None, range, target2, Sort(boolean2, booleanIndexes))
+          else if (!targetPrefix && booleanPrefix)
+            Filter(loc, None, range, Sort(target2, targetIndexes), boolean2)
+          else  
+            Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
         }
         
         case Filter(loc, cross, range, target, boolean) =>
           Filter(loc, cross, range, memoized(target), memoized(boolean))
         
         case Sort(parent, _) => memoized(parent)
+        
+        case Memoize(parent, priority) => Memoize(memoized(parent), priority)
       }
   
       memotable.get(node) getOrElse {

@@ -206,7 +206,7 @@ case class  FixedWidth(width: Int) extends StorageFormat {
   def min(i: Int) = width min i
 }
 
-sealed trait ColumnType { self: SType =>
+sealed trait ColumnType {
   def format: StorageFormat 
 }
 
@@ -294,7 +294,7 @@ case object SArray extends SType with (Vector[SValue] => SValue) {
   def unapply(v: SValue): Option[Vector[SValue]] = v.mapArrayOr(Option.empty[Vector[SValue]])(Some(_))
 }
 
-object SString extends (String => SValue) {
+object SString extends SType with (String => SValue) {
   def unapply(v: SValue): Option[String] = v.mapStringOr(Option.empty[String])(Some(_))
 
   def apply(v: String) = new SValue {
@@ -307,11 +307,11 @@ object SString extends (String => SValue) {
   }
 }
 
-case class SStringFixed(width: Int) extends SType with ColumnType {
+case class SStringFixed(width: Int) extends ColumnType {
   def format = FixedWidth(width)  
 }
 
-case object SStringArbitrary extends SType with ColumnType {
+case object SStringArbitrary extends ColumnType {
   def format = LengthEncoded  
 }
 
@@ -328,7 +328,7 @@ case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
 }
 
-case object SInt extends SType with ColumnType with (Int => SValue) {
+case object SInt extends ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
   def apply(v: Int) = new SValue {
     def fold[A](
@@ -340,7 +340,7 @@ case object SInt extends SType with ColumnType with (Int => SValue) {
   }
 }
 
-case object SLong extends SType with ColumnType with (Long => SValue) {
+case object SLong extends ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
   def apply(v: Long) = new SValue {
     def fold[A](
@@ -353,7 +353,7 @@ case object SLong extends SType with ColumnType with (Long => SValue) {
   def unapply(v: SValue): Option[Long] = v.mapLongOr(Option.empty[Long])(Some(_))
 }
 
-case object SFloat extends SType with ColumnType with (Float => SValue) {
+case object SFloat extends ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
   def apply(v: Float) = new SValue {
     def fold[A](
@@ -365,7 +365,7 @@ case object SFloat extends SType with ColumnType with (Float => SValue) {
   }
 }
 
-case object SDouble extends SType with ColumnType with (Double => SValue) {
+case object SDouble extends ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
   def apply(v: Double) = new SValue {
     def fold[A](
@@ -378,11 +378,11 @@ case object SDouble extends SType with ColumnType with (Double => SValue) {
   def unapply(v: SValue): Option[Double] = v.mapDoubleOr(Option.empty[Double])(Some(_))
 }
 
-case object SDecimalArbitrary extends SType with ColumnType {
+case object SDecimalArbitrary extends ColumnType {
   def format = LengthEncoded  
 }
 
-object SDecimal extends (BigDecimal => SValue) {
+object SDecimal extends SType with (BigDecimal => SValue) {
   def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
   def apply(v: BigDecimal) = new SValue {
     def fold[A](
@@ -394,7 +394,7 @@ object SDecimal extends (BigDecimal => SValue) {
   }
 }
 
-case object SNull extends SType with ColumnType with SValue {
+case object SNull extends ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -404,7 +404,7 @@ case object SNull extends SType with ColumnType with SValue {
   ) = nul
 }
 
-case object SEmptyObject extends SType with ColumnType with SValue {
+case object SEmptyObject extends ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -414,7 +414,7 @@ case object SEmptyObject extends SType with ColumnType with SValue {
   ) = obj(Map.empty)
 }
 
-case object SEmptyArray extends SType with ColumnType with SValue {
+case object SEmptyArray extends ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,

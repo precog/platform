@@ -25,6 +25,7 @@ trait StorageEngineInsertAPI
 
 trait StorageEngineQueryAPI {
   def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]]
+  def mask[X](path: Path): DatasetMask[X]
 
   //def column(path: String, selector: JPath, valueType: EType): DatasetEnum[X, SEvent, IO]
   //def columnRange(interval: Interval[ByteBuffer])(path: String, selector: JPath, valueType: EType): DatasetEnum[X, (Seq[Long], ByteBuffer), IO]
