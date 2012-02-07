@@ -116,7 +116,10 @@ trait REPL extends LineErrors
         true
       }
         
-      case Quit => false
+      case Quit => {
+        terminal.restore()
+        false
+      }
     }
     
     def loop() {
