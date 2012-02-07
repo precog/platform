@@ -35,24 +35,31 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
     } yield DatasetEnum(enumerator)
   }
 
-  private case class LevelDBDatasetMask[X](path: Path, selector: JPath, tpe: Option[SType]) extends DatasetMask[X] {
-    def derefObject(field: String): DatasetMask[X] = copy(selector = selector \ field)
-    def derefArray(index: Int): DatasetMask[X] = copy(selector = selector \ index)
+  private case class LevelDBDatasetMask[X](path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
+    def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
+
+    def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
+
     def typed(tpe: SType): DatasetMask[X] = copy(tpe = Some(tpe))
     lazy val realize: Future[DatasetEnum[X, SEvent, IO]] = {
-      for {
-        sources    <- tpe match {
-                        case Some(tpe) => storage.metadata.findProjections(path, selector, tpe)
-                        case None      => storage.metadata.findProjections(path, selector)
-                      }
-        enumerator: EnumeratorP[X, SEvent, IO] <- assemble(path, List((selector, sources)))
-      } yield DatasetEnum(enumerator)
+      def assembleForSelector(selector: JPath, descriptors: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
+        for {
+          sources    <- descriptors
+          enumerator: EnumeratorP[X, SEvent, IO] <- assemble(path, List((selector, sources)))
+        } yield DatasetEnum(enumerator)
+
+      (selector, tpe) match {
+        case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
+        case (Some(s), None     ) => assembleForSelector(s, storage.metadata.findProjections(path, s))
+        case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.metadata.findProjections(path, JPath.Identity))
+        case (_      , _        ) => fullProjection(path)
+      }
     }
   }
 
-  def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, JPath.Identity, None) 
+  def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, None, None) 
 
-  def assemble[X](path: Path, sources: Seq[(JPath, scala.collection.Map[ProjectionDescriptor, ColumnMetadata])]): Future[EnumeratorP[X, SEvent, IO]] = {
+  def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])]): Future[EnumeratorP[X, SEvent, IO]] = {
     // determine the projections from which to retrieve data
     // todo: for right now, this is implemented greedily such that the first
     // projection containing a desired column wins. It should be implemented
