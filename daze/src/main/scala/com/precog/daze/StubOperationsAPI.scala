@@ -64,10 +64,41 @@ trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with Default
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
     
+    private case class StubDatasetMask[X](path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
+      def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
+      def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
+      def typed(tpe: SType): DatasetMask[X] = this
+      
+      lazy val realize: Future[DatasetEnum[X, SEvent, IO]] = {
+        fullProjection[X](path) map { enum =>
+          enum collect unlift(mask)
+        }
+      }
+      
+      private def mask(sev: SEvent): Option[SEvent] = {
+        val (ids, sv) = sev
+        
+        val result = selector.foldLeft(Some(sv): Option[SValue]) {
+          case (None, _) => None
+          case (Some(SObject(obj)), Right(field)) => obj get field
+          case (Some(SArray(arr)), Left(index)) => arr.lift(index)
+          case _ => None
+        }
+        
+        result map { sv => (ids, sv) }
+      }
+      
+      // TODO merge with Evaluator impl
+      private def unlift[A, B](f: A => Option[B]): PartialFunction[A, B] = new PartialFunction[A, B] {
+        def apply(a: A) = f(a).get
+        def isDefinedAt(a: A) = f(a).isDefined
+      }
+    }
+    
     def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] =
       akka.dispatch.Promise.successful(DatasetEnum(readJSON[X](path)))
     
-    def mask[X](path: Path): DatasetMask[X] = null
+    def mask[X](path: Path): DatasetMask[X] = StubDatasetMask(path, Vector())
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
