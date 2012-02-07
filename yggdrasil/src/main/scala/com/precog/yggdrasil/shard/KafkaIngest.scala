@@ -17,7 +17,7 @@ trait KafkaIngestConfig extends Config {
   def kafkaConsumerConfig: Properties = JProperties.configurationToProperties(config.detach("precog.kafak.consumer"))
 }
 
-class KafkaConsumer(config: KafkaIngestConfig, router: ActorRef) extends Runnable with Logging {
+class KafkaIngest(config: KafkaIngestConfig, router: ActorRef) extends Runnable with Logging {
   private lazy val consumer = initConsumer
 
   def initConsumer = {
