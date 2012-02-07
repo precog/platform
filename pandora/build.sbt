@@ -1,6 +1,7 @@
 import sbt._
 import Keys._
 import AssemblyKeys._
+import java.io.File
 
 name := "pandora"
 
@@ -29,12 +30,16 @@ run <<= inputTask { argTask =>
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
-      Seq("pandora/dist/data/") ++ 
+      Seq("/tmp/pandora/data/") ++ 
       args
-    val back = Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
+    Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
-    back
-  }
+  } dependsOn extractData
+}
+
+extractData := streams map { s =>
+  s.log.info("Extracting LevelDB sample data...")     // doesn't actually print, because SBT is horrible
+  IO.copyDirectory(new File("pandora/dist/data/"), new File("/tmp/pandora/data/"), true, false)
 }
 
 initialCommands in console := """

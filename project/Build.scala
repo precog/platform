@@ -43,5 +43,6 @@ object PlatformBuild extends Build {
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)
 
   val dist = TaskKey[Unit]("dist", "builds dist")
+  val extractData = TaskKey[Unit]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
 }
 
