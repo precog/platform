@@ -186,35 +186,33 @@ trait REPL extends LineErrors
   case object Quit extends Command
 }
 
-object Console {
-  def main(args: Array[String]) {
-    Configgy.configureFromResource("default_ingest.conf")
-
-    object repl extends REPL with AkkaIngestServer with DefaultYggConfig {
-      
-      val controlTimeout = Duration(120, "seconds")
-      
-      lazy val storageRoot = new File(args.headOption getOrElse "./data/")
-
-      def startup {
-        // start ingest server
-        Await.result(start, controlTimeout)
-        // start storage shard 
-        Await.result(storage.start, controlTimeout)
-      }
-
-      def shutdown {
-        // stop storaget shard
-        Await.result(storage.stop, controlTimeout)
-        // stop ingest server
-        Await.result(stop, controlTimeout)
-
-        actorSystem.shutdown
-      }
+object Console extends App {
+  Configgy.configureFromResource("default_ingest.conf")
+  
+  object repl extends REPL with AkkaIngestServer with DefaultYggConfig {
+    
+    val controlTimeout = Duration(120, "seconds")
+    
+    lazy val storageRoot = new File(args.headOption getOrElse "./data/")
+    
+    def startup {
+      // start ingest server
+      Await.result(start, controlTimeout)
+      // start storage shard 
+      Await.result(storage.start, controlTimeout)
     }
     
-    repl.startup
-    repl.run
-    repl.shutdown
+    def shutdown {
+      // stop storaget shard
+      Await.result(storage.stop, controlTimeout)
+      // stop ingest server
+      Await.result(stop, controlTimeout)
+      
+      actorSystem.shutdown
+    }
   }
+  
+  repl.startup
+  repl.run
+  repl.shutdown
 }
