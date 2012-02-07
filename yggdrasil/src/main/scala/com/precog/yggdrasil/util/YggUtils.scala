@@ -18,6 +18,7 @@
  *
  */
 package com.precog.yggdrasil
+package util
 
 import com.precog.yggdrasil.leveldb._
 
@@ -30,7 +31,7 @@ import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
-object DBUtils {
+object YggUtils {
 
   import JsonParser._
   
