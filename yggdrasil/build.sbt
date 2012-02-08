@@ -49,8 +49,6 @@ libraryDependencies ++= Seq(
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   changing() 
 )
 
-
-
 resolvers ++= Seq(
   "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository"
 )
@@ -66,3 +64,5 @@ ivyXML :=
   </dependencies>
 
 seq(assemblySettings: _*)
+
+mainClass := Some("com.precog.yggdrasil.shard.KafkaShardServer")
