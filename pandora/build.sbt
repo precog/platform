@@ -49,8 +49,7 @@ run <<= inputTask { argTask =>
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
-      Seq("/tmp/pandora/data/") ++ 
-      args
+      (if (args.isEmpty) Seq("/tmp/pandora/data") else args)
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
   } dependsOn extractData
@@ -70,7 +69,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, 
   s.log.debug("Running with classpath: " + cpStr)
   val opts2 =
     Seq("-classpath", cpStr) ++
-    Seq("-Dpandora.data=/tmp/pandora/data") ++
+    Seq("-Dprecog.storage.root=/tmp/pandora/data") ++
     Seq("specs2.run") ++
     Seq("com.precog.pandora.PlatformSpecs")
   val result = Fork.java.fork(None, opts2, None, Map(), false, os getOrElse StdoutOutput).exitValue()
