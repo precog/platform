@@ -42,12 +42,12 @@ object KafkaShardServer extends Logging {
     val run = for (shard <- yggShard) yield {
      
       val startFuture = shard.start flatMap { _ => shard.startKafka }
-      val stopFuture = shard.stopKafka flatMap { _ => shard.stop }
 
       Await.result(startFuture, timeout)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() {
+          val stopFuture = shard.stopKafka flatMap { _ => shard.stop }
           Await.result(stopFuture, timeout)
         }
       })
