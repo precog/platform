@@ -62,8 +62,8 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
   
   trait AkkaIngestConfig extends YggConfig
  
-  val actorSystem = ActorSystem("akka_ingest_server")
-  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  lazy val actorSystem = ActorSystem("akka_ingest_server")
+  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   
   implicit def defaultFutureDispatch: MessageDispatcher
   
