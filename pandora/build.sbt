@@ -61,7 +61,6 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, 
 (console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, init, cp, si) =>
   IO.withTemporaryFile("pandora", ".scala") { file =>
     IO.write(file, init)
-    s.log.info("Initial commands are in: " + file.getCanonicalPath)
     val delim = java.io.File.pathSeparator
     val scalaCp = (si.compilerJar +: si.extraJars) map { _.getCanonicalPath }
     val fullCp = (cp map { _.data }) ++ scalaCp
@@ -70,8 +69,8 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, 
     val opts2 =
       Seq("-classpath", cpStr) ++
       Seq("-Dscala.usejavacp=true") ++
-      Seq("scala.tools.nsc.MainGenericRunner") // ++
-      // Seq("-i", file.getCanonicalPath)              // SI-5443
+      Seq("scala.tools.nsc.MainGenericRunner") ++
+      Seq("-Yrepl-sync", "-i", file.getCanonicalPath)
     Fork.java.fork(None, opts2, None, Map(), true, StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
   }
@@ -92,24 +91,34 @@ initialCommands in console := """
   | import quirrel.parser._
   | import quirrel.typer._
   | 
-  | val platform = new Compiler
-  |                  with LineErrors
-  |                  with ProvenanceChecker
-  |                  with Emitter
-  |                  with Evaluator
-  |                  with DatasetConsumers 
-  |                  with YggdrasilOperationsAPI
-  |                  with YggdrasilStorage
-  |                  with AkkaIngestServer
-  |                  with DefaultYggConfig {
-  |   
+  | import yggdrasil.{SValue, YggConfig}
+  | 
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with YggdrasilOperationsAPI with YggdrasilStorage with AkkaIngestServer {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
   |
   |   import java.io.File
   |
+  |   import scalaz.effect.IO
+  |   
+  |   import org.streum.configrity.Configuration
+  |   import org.streum.configrity.io.BlockFormat
+  | 
   |   val controlTimeout = Duration(120, "seconds")
-  |   lazy val storageRoot = new File("/tmp/pandora/data")
+  |
+  |   lazy val yggConfig = loadConfig(Some("/tmp/pandora/data"))
+  |
+  |   def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
+  |     val rawConfig = dataDir map {
+  |       "precog.storage.root = " + _
+  |     } getOrElse { "" }
+  |
+  |     IO { 
+  |       new YggConfig {
+  |         def config = Configuration.parse(rawConfig)  
+  |       }
+  |     }
+  |   }
   | 
   |   def startup() {
   |     // start storage shard 
@@ -117,7 +126,7 @@ initialCommands in console := """
   |   }
   |   
   |   def shutdown() {
-  |     // stop storaget shard
+  |     // stop storage shard
   |     Await.result(storage.stop, controlTimeout)
   |     
   |     actorSystem.shutdown()
