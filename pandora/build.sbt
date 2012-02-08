@@ -44,15 +44,15 @@ connectInput in run := true
 fork in run := true
 
 run <<= inputTask { argTask =>
-  (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask) map { (opts, cp, ci, os, mc, args) =>
+  (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask, extractData) map { (opts, cp, ci, os, mc, args, dataDir) =>
     val delim = java.io.File.pathSeparator
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
-      (if (args.isEmpty) Seq("/tmp/pandora/data") else args)
+      (if (args.isEmpty) Seq(dataDir) else args)
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
-  } dependsOn extractData
+  }
 }
 
 extractData <<= streams map { s =>
@@ -61,20 +61,21 @@ extractData <<= streams map { s =>
     s.log.info("Extracting LevelDB sample data...")
     IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
   }
+  target.getCanonicalPath
 }
 
-test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, os) =>
+test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) map { (s, cp, os, dataDir) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
   s.log.debug("Running with classpath: " + cpStr)
   val opts2 =
     Seq("-classpath", cpStr) ++
-    Seq("-Dprecog.storage.root=/tmp/pandora/data") ++
+    Seq("-Dprecog.storage.root=" + dataDir) ++
     Seq("specs2.run") ++
     Seq("com.precog.pandora.PlatformSpecs")
   val result = Fork.java.fork(None, opts2, None, Map(), false, os getOrElse StdoutOutput).exitValue()
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
-} dependsOn extractData
+}
 
 (console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, init, cp, si) =>
   IO.withTemporaryFile("pandora", ".scala") { file =>
