@@ -58,6 +58,25 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, 
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 } dependsOn extractData
 
+(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, init, cp, si) =>
+  IO.withTemporaryFile("pandora", ".scala") { file =>
+    IO.write(file, init)
+    s.log.info("Initial commands are in: " + file.getCanonicalPath)
+    val delim = java.io.File.pathSeparator
+    val scalaCp = (si.compilerJar +: si.extraJars) map { _.getCanonicalPath }
+    val fullCp = (cp map { _.data }) ++ scalaCp
+    val cpStr = fullCp mkString delim
+    s.log.debug("Running with classpath: " + cpStr)
+    val opts2 =
+      Seq("-classpath", cpStr) ++
+      Seq("-Dscala.usejavacp=true") ++
+      Seq("scala.tools.nsc.MainGenericRunner") // ++
+      // Seq("-i", file.getCanonicalPath)              // SI-5443
+    Fork.java.fork(None, opts2, None, Map(), true, StdoutOutput).exitValue()
+    jline.Terminal.getTerminal.initializeTerminal()
+  }
+} dependsOn extractData
+
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
   | 
