@@ -42,7 +42,8 @@ object AdSamples {
   val revenue = List("<500K", "500K-5M", "5-50M", "50-250M", "250-500M", "500M+")
   val category = List("electronics", "fashion", "travel", "media", "sundries", "magical")
   val ageTuples = List((0,17),(18,24),(25,36),(37,48),(49,60),(61,75),(76,130))
-  val ageRanges = ageTuples map { case (l, h) => JArray(List(JInt(l), JInt(h))) }
+  val ageRangeStrings = ageTuples map { case (l, h) => "%d-%d".format(l,h) }
+  val ageRangeArrays = ageTuples map { case (l, h) => JArray(List(JInt(l), JInt(h))) }
   val platforms = List("android", "iphone", "web", "blackberry", "other")
   val campaigns = for (i <- 0 to 30) yield "c" + i
   val pageId = for (i <- 0 to 4) yield "page-" + i
@@ -61,12 +62,20 @@ object AdSamples {
     round(exp(-random * 8) * size).toInt.min(size - 1).max(0)
   }
 
+  def defaultSample() = JObject(
+      JField("gender", oneOf(genders).sample.get) ::
+      JField("platform", platforms(exponentialIndex(platforms.size))) ::
+      JField("campaign", campaigns(gaussianIndex(campaigns.size))) ::
+      JField("cpm", chooseNum(1, 100).sample.get) ::
+      JField("ageRange", ageRangeStrings(gaussianIndex(ageRangeStrings.size))) :: Nil
+  )
+
   def adCampaignSample() = JObject(
       JField("gender", oneOf(genders).sample.get) ::
       JField("platform", platforms(exponentialIndex(platforms.size))) ::
       JField("campaign", campaigns(gaussianIndex(campaigns.size))) ::
       JField("cpm", chooseNum(1, 100).sample.get) ::
-      JField("ageRange", ageRanges(gaussianIndex(ageRanges.size))) :: Nil
+      JField("ageRange", ageRangeArrays(gaussianIndex(ageRangeArrays.size))) :: Nil
     )
 
   def adOrganizationSample() = JObject(
@@ -88,7 +97,7 @@ object AdSamples {
                             System.currentTimeMillis + millisPerDay)
 }
 
-case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.adCampaignSample _) extends SampleSet { self =>
+case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>
   def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
 
   import AdSamples._
