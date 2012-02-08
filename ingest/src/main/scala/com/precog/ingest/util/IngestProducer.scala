@@ -46,7 +46,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
     val threads = 0.until(threadCount).map(_ => new Thread() {
       override def run() {
         val samples = List(
-          ("/campaigns/", DistributedSampleSet(0)),
+          ("/campaigns/", DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)),
           ("/organizations/", DistributedSampleSet(0, sampler = AdSamples.adOrganizationSample _)),
           ("/clicks/", DistributedSampleSet(0, sampler = AdSamples.interactionSample _)),
           ("/impressions/", DistributedSampleSet(0, sampler = AdSamples.interactionSample _)))
