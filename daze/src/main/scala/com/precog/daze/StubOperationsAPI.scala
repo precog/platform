@@ -28,7 +28,7 @@ object StubOperationsAPI {
 
 // TODO decouple this from the evaluator specifics
 trait DatasetConsumers extends Evaluator {
-  protected def consumeEval(graph: DepGraph): Set[SEvent] = 
+  def consumeEval(graph: DepGraph): Set[SEvent] = 
     ((consume[Unit, SEvent, IO, Set] &= eval(graph).enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO
 }
 
