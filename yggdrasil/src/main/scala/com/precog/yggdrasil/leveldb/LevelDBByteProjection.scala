@@ -116,7 +116,7 @@ trait LevelDBByteProjection extends ByteProjection {
         keyBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
     }
 
-    identities.zipWithIndex.foreach {
+    identities.zipWithIndex.foreach {  
       case (id, i) => if (!usedIdentities.contains(i)) keyBuffer.writeIdentity(id)
       case _ =>
     }
@@ -193,8 +193,8 @@ trait LevelDBByteProjection extends ByteProjection {
 
     val unusedIdentities: List[IdentityRead] = unused.toList.map(i => (buf:RBuf) => (i, buf.readIdentity()))
 
-    unusedIdentities.foldLeft(initial) {
-      case (acc, id) => acc :+ Left(id) 
+    unusedIdentities.foldRight(initial) {
+      case (id, acc) => acc :+ Left(id) 
     }
   }
 
