@@ -41,7 +41,8 @@ object AdSamples {
   val employees = List("0-25","25-100","100-250","250-1000","1000-5000","5000-10000","10000+")
   val revenue = List("<500K", "500K-5M", "5-50M", "50-250M", "250-500M", "500M+")
   val category = List("electronics", "fashion", "travel", "media", "sundries", "magical")
-  val ageRanges = List("0-17", "18-24", "25-36", "37-48", "49-60", "61-75", "76-130")
+  val ageTuples = List((0,17),(18,24),(25,36),(37,48),(49,60),(61,75),(76,130))
+  val ageRanges = ageTuples map { case (l, h) => JArray(List(JInt(l), JInt(h))) }
   val platforms = List("android", "iphone", "web", "blackberry", "other")
   val campaigns = for (i <- 0 to 30) yield "c" + i
   val pageId = for (i <- 0 to 4) yield "page-" + i
