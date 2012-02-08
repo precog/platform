@@ -36,13 +36,19 @@ object KafkaShardServer extends Logging {
         }
       case (cfg, Failure(e)) => sys.error("Error loading shard state from: %s".format(cfg.dataDir))
     }
-    
+   
+    val timeout = 300 seconds
+
     val run = for (shard <- yggShard) yield {
-      Await.result(shard.start, 300 seconds)
+     
+      val startFuture = shard.start flatMap { _ => shard.startKafka }
+      val stopFuture = shard.stopKafka flatMap { _ => shard.stop }
+
+      Await.result(startFuture, timeout)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() { 
-          Await.result(shard.stop, 300 seconds) 
+        override def run() {
+          Await.result(stopFuture, timeout)
         }
       })
     }

@@ -1,0 +1,24 @@
+{
+  "columns":[{
+    "descriptor":{
+      "path":"/campaigns/",
+      "selector":".ageRange[0]",
+      "valueType":"Decimal",
+      "ownership":{
+        "ownership":["8E680858-329C-4F31-BEE3-2AD15FB67EED"]
+      }
+    },
+    "index":0
+  }],
+  "sorting":[{
+    "descriptor":{
+      "path":"/campaigns/",
+      "selector":".ageRange[0]",
+      "valueType":"Decimal",
+      "ownership":{
+        "ownership":["8E680858-329C-4F31-BEE3-2AD15FB67EED"]
+      }
+    },
+    "sortBy":"ById"
+  }]
+}
