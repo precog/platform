@@ -34,7 +34,7 @@ scalacOptions ++= Seq("-deprecation", "-unchecked")
 
 libraryDependencies ++= Seq(
   "org.sonatype.jline" % "jline" % "2.5",
-  "org.specs2" %% "specs2" % "1.7" % "test",
+  "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" changing(),
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
   
 outputStrategy := Some(StdoutOutput)
