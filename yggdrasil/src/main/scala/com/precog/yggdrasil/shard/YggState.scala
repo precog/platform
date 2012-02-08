@@ -81,7 +81,7 @@ case class YggState(
 
   val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
     descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.toList).serialize)), f)
+      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.values.toSet ).serialize)), f)
     }.map(_ => ())
   }
 
@@ -147,8 +147,8 @@ object YggState extends Logging {
       IOUtils.readFileToString(metadataFile).map { _ match {
         case None    => Success(List(mutable.Map[MetadataType, Metadata]()))
         case Some(c) => {
-          val validatedTuples = parse(c).validated[List[List[(MetadataType, Metadata)]]]
-          validatedTuples.map( _.map( mutable.Map(_: _*)))
+          val validatedTuples = parse(c).validated[List[Set[Metadata]]]
+          validatedTuples.map( _.map( Metadata.toTypedMap _ ))
         }
       }}
     }

@@ -44,12 +44,10 @@ libraryDependencies ++= Seq(
   "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT"                changing(),
   "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT"                changing(),
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9"            % "test",
-  "org.specs2"                  %% "specs2"             % "1.7"   % "test",
+  "org.specs2"                  %% "specs2"             % "1.8-SNAPSHOT"   % "test" changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.1-SNAPSHOT"   changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.1-SNAPSHOT"   changing() 
 )
-
-
 
 resolvers ++= Seq(
   "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository"
@@ -66,3 +64,5 @@ ivyXML :=
   </dependencies>
 
 seq(assemblySettings: _*)
+
+mainClass := Some("com.precog.yggdrasil.shard.KafkaShardServer")
