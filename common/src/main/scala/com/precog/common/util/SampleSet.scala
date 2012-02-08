@@ -19,9 +19,16 @@ trait SampleSet {
 
 object AdSamples {
   val genders = List("male", "female")
-  val ageRanges = List("0-17", "18-24", "25-36", "37-48", "49-60", "61-75", "76-130")
+  val employees = List("0-25","25-100","100-250","250-1000","1000-5000","5000-10000","10000+")
+  val revenue = List("<500K", "500K-5M", "5-50M", "50-250M", "250-500M", "500M+")
+  val category = List("electronics", "fashion", "travel", "media", "sundries", "magical")
+  val ageTuples = List((0,17),(18,24),(25,36),(37,48),(49,60),(61,75),(76,130))
+  val ageRangeStrings = ageTuples map { case (l, h) => "%d-%d".format(l,h) }
+  val ageRangeArrays = ageTuples map { case (l, h) => JArray(List(JInt(l), JInt(h))) }
   val platforms = List("android", "iphone", "web", "blackberry", "other")
   val campaigns = for (i <- 0 to 30) yield "c" + i
+  val pageId = for (i <- 0 to 4) yield "page-" + i
+  val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
 
   def gaussianIndex(size: Int): Int = {
@@ -35,20 +42,42 @@ object AdSamples {
     import scala.math._
     round(exp(-random * 8) * size).toInt.min(size - 1).max(0)
   }
-}
 
-case class DistributedSampleSet(queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector()) extends SampleSet { self =>
-  def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
+  def defaultSample() = adCampaignSample
 
-  import AdSamples._
-  def next = {
-    val sample = JObject(
+  def adCampaignSample() = JObject(
       JField("gender", oneOf(genders).sample.get) ::
       JField("platform", platforms(exponentialIndex(platforms.size))) ::
       JField("campaign", campaigns(gaussianIndex(campaigns.size))) ::
       JField("cpm", chooseNum(1, 100).sample.get) ::
-      JField("ageRange", ageRanges(gaussianIndex(ageRanges.size))) :: Nil
+      JField("ageRange", ageRangeArrays(gaussianIndex(ageRangeArrays.size))) :: Nil
     )
+
+  def adOrganizationSample() = JObject(
+    JField("employees", oneOf(employees).sample.get) ::
+    JField("revenue", oneOf(revenue).sample.get) ::
+    JField("category", oneOf(category).sample.get) ::
+    JField("campaign", campaigns(gaussianIndex(campaigns.size))) :: Nil
+  )
+
+  def interactionSample() = JObject(
+    JField("time", twoDayTimeFrame.sample.get) :: 
+    JField("pageId", oneOf(pageId).sample.get) :: 
+    JField("userId", oneOf(userId).sample.get) :: Nil
+  )
+  
+  val millisPerDay: Long = 24L * 60 * 60 * 1000
+
+  def twoDayTimeFrame = chooseNum(System.currentTimeMillis - millisPerDay,
+                            System.currentTimeMillis + millisPerDay)
+}
+
+case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>
+  def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
+
+  import AdSamples._
+  def next = {
+    val sample = sampler()
 
     // dumb sample accumulation, just takes the first n samples recorded
     (sample, if (recordedSamples.size >= queriableSampleSize) this else this.copy(recordedSamples = recordedSamples :+ sample))
