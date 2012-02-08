@@ -38,8 +38,11 @@ run <<= inputTask { argTask =>
 }
 
 extractData <<= streams map { s =>
-  s.log.info("Extracting LevelDB sample data...")
-  IO.copyDirectory(new File("pandora/dist/data/"), new File("/tmp/pandora/data/"), true, false)
+  val target = new File("/tmp/pandora/data/")
+  if (!target.exists()) {
+    s.log.info("Extracting LevelDB sample data...")
+    IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
+  }
 }
 
 test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, os) =>
