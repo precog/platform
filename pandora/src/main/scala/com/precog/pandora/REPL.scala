@@ -25,7 +25,6 @@ import net.lag.configgy.Configgy
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-
 trait REPL extends LineErrors
     with Parser
     with TreeShaker
@@ -193,51 +192,44 @@ trait REPL extends LineErrors
   case object Quit extends Command
 }
 
-object Console {
-  def main(args: Array[String]) {
-    // Configuration required for blueyes IngestServer
-    Configgy.configureFromResource("default_ingest.conf")
+object Console extends App {
+  // Configuration required for blueyes IngestServer
+  Configgy.configureFromResource("default_ingest.conf")
 
-    object repl extends REPL with AkkaIngestServer {
-     
-      val controlTimeout = Duration(120, "seconds")
-    
-      lazy val yggConfig = loadConfig(args.headOption)
+  object repl extends REPL with AkkaIngestServer {
+    val controlTimeout = Duration(120, "seconds")
+    lazy val yggConfig = loadConfig(args.headOption)
 
-      def startup {
-        // start ingest server
-        Await.result(start, controlTimeout)
-        // start storage shard 
-        Await.result(storage.start, controlTimeout)
-
-      }
-
-      def shutdown {
-        // stop storaget shard
-        Await.result(storage.stop, controlTimeout)
-        // stop ingest server
-        Await.result(stop, controlTimeout)
-
-        actorSystem.shutdown
-      }
-  
-      def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
-        val rawConfig = dataDir map {
-          "precog.storage.root = " + _
-        } getOrElse { "" }
-
-        IO { 
-          new YggConfig {
-            def config = Configuration.parse(rawConfig)  
-          }
-        }
-      }
-  
+    def startup() {
+      // start ingest server
+      Await.result(start, controlTimeout)
+      // start storage shard 
+      Await.result(storage.start, controlTimeout)
     }
 
-    repl.startup
-    repl.run
-    repl.shutdown
+    def shutdown() {
+      // stop storaget shard
+      Await.result(storage.stop, controlTimeout)
+      // stop ingest server
+      Await.result(stop, controlTimeout)
+
+      actorSystem.shutdown
+    }
+
+    def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
+      val rawConfig = dataDir map {
+        "precog.storage.root = " + _
+      } getOrElse { "" }
+
+      IO { 
+        new YggConfig {
+          def config = Configuration.parse(rawConfig)  
+        }
+      }
+    }
   }
-  
+
+  repl.startup()
+  repl.run()
+  repl.shutdown()
 }
