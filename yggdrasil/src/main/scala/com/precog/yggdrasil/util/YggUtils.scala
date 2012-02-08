@@ -94,11 +94,11 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
     println("Database Summary")
     println("----------------")
 
-    summary.foreach {
+    summary.toList.sortBy( _._1.toString ) foreach {
       case (path, selectors) =>
         println
         println("%s".format(path.toString))
-        selectors.foreach {
+        selectors.toList.sortBy( _._1.toString ) foreach {
           case (selector, summary) => println("  %-15s %-20s %10d (%.02f/%.02f)".format(selector.toString, summary.types.mkString(","), summary.count, summary.meanKeyLength, summary.meanValueLength))
         }
     }
