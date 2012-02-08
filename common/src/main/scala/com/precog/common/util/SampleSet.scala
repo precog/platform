@@ -62,13 +62,7 @@ object AdSamples {
     round(exp(-random * 8) * size).toInt.min(size - 1).max(0)
   }
 
-  def defaultSample() = JObject(
-      JField("gender", oneOf(genders).sample.get) ::
-      JField("platform", platforms(exponentialIndex(platforms.size))) ::
-      JField("campaign", campaigns(gaussianIndex(campaigns.size))) ::
-      JField("cpm", chooseNum(1, 100).sample.get) ::
-      JField("ageRange", ageRangeStrings(gaussianIndex(ageRangeStrings.size))) :: Nil
-  )
+  def defaultSample() = adCampaignSample
 
   def adCampaignSample() = JObject(
       JField("gender", oneOf(genders).sample.get) ::
