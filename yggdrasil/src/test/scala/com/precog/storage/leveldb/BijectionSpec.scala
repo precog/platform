@@ -57,7 +57,7 @@ class BijectionSpec extends Specification with ScalaCheck {
         Arbitrary(bdGen)
       }
 
-      check { (v : BigDecimal) => 
+      check { (v : BigDecimal) =>
         v.as[Array[Byte]].as[BigDecimal] must_== v
       }
     }
