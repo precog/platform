@@ -27,13 +27,26 @@ import org.fusesource.leveldbjni.JniDBFactory._
 
 import java.io.File
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
+import com.precog.analytics.Path
+
 object YggUtils {
 
   import JsonParser._
+  
+  case class ColumnSummary(types: Seq[ColumnType], count: Long, keyLengthSum: Long, valueLengthSum: Long) {
+    def +(other: ColumnSummary) = ColumnSummary(types ++ other.types, 
+                                            count + other.count, 
+                                            keyLengthSum + other.keyLengthSum, 
+                                            valueLengthSum + other.valueLengthSum)
+
+    def meanKeyLength: Double = keyLengthSum.toDouble / count
+    def meanValueLength: Double = valueLengthSum.toDouble / count
+  }
   
   val usage = """
 Usage: command {dbRoot|colRoot}
@@ -69,27 +82,63 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
   def databaseSummary(dirname: String) {
     val f = new File(dirname)
     val colDirs = for(colDir <- f.listFiles if colDir.isDirectory && !isDotDir(colDir)) yield { colDir }
-    colDirs foreach { columnSummary }
+    val summary = colDirs.foldLeft(Map[Path, Map[JPath, ColumnSummary]]()){
+      case (acc, colDir) => columnSummary(colDir, acc) 
+    }
+
+    printSummary(summary)
+  }
+
+  def printSummary(summary: Map[Path, Map[JPath, ColumnSummary]]) {
+    println("----------------")
+    println("Database Summary")
+    println("----------------")
+
+    summary.foreach {
+      case (path, selectors) =>
+        println
+        println("%s".format(path.toString))
+        selectors.foreach {
+          case (selector, summary) => println("  %-15s %-20s %10d (%.02f/%.02f)".format(selector.toString, summary.types.mkString(","), summary.count, summary.meanKeyLength, summary.meanValueLength))
+        }
+    }
+
+    println()
   }
 
   def isDotDir(f: File) = f.isDirectory && (f.getName == "." || f.getName == "..")
 
-  def columnSummary(colDir: File) {
-    val createOptions = (new Options).createIfMissing(false)
 
+  def columnSummary(colDir: File, acc: Map[Path, Map[JPath, ColumnSummary]]): Map[Path, Map[JPath, ColumnSummary]] = {
     val rawDescriptor = scala.io.Source.fromFile(new File(colDir, "projection_descriptor.json")).mkString
     val descriptor = parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
 
-    val db: DB = factory.open(new File(colDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
+    descriptor.columns.foldLeft( acc ) { 
+      case (acc, ColumnDescriptor(path, sel, colType, _)) =>
+        val colSummary = columnStats(colDir, colType, descriptor)
+        acc.get(path) map {
+          case pathMap => pathMap.get(sel) map { summary =>
+              acc + (path -> (pathMap + (sel -> (summary + colSummary))))
+            } getOrElse {
+              acc + (path -> (pathMap + (sel -> colSummary))) 
+            }
+        } getOrElse {
+          acc + (path -> (Map[JPath, ColumnSummary]() + (sel -> colSummary)))
+        }
+    }
+  }
+
+  def columnStats(colDir: File, colType: ColumnType, desc: ProjectionDescriptor): ColumnSummary = {
+    val createOptions = (new Options).createIfMissing(false)
+
+    val db: DB = factory.open(new File(colDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(desc)))
     try {
       val iterator: DBIterator = db.iterator
-      println
-      println("Stats for column: " + colDir.getName)
       try {
         iterator.seekToFirst
         var cnt = 0
-        var keyLengthSum = 0.0
-        var valueLengthSum = 0.0
+        var keyLengthSum = 0
+        var valueLengthSum = 0
         while(iterator.hasNext) {
           val key: Array[Byte] = iterator.peekNext().getKey
           val value: Array[Byte] = iterator.peekNext().getValue
@@ -99,8 +148,7 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
           iterator.next
         }
 
-        println("  rows: %d avg-key-len: %.01f avg-val-len: %.01f".format(cnt, keyLengthSum / cnt, valueLengthSum / cnt)) 
-        
+        ColumnSummary(List(colType), cnt, keyLengthSum, valueLengthSum) 
       } finally {
         iterator.close();
       }
@@ -109,6 +157,8 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
     }
   }
 
-  def columnDetail(dirname: String) { columnSummary(new File(dirname)) }
+  def columnDetail(dirname: String) { 
+    println("Column detail not yet implemented.")
+  }
 
 }
