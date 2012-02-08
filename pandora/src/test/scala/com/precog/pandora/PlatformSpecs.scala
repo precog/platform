@@ -1,12 +1,182 @@
 package com.precog
 package pandora
 
-import org.specs2.mutable._
+import daze._
+import daze.util._
 
-class PlatformSpecs extends Specification {
+import pandora._
+
+import quirrel._
+import quirrel.emitter._
+import quirrel.parser._
+import quirrel.typer._
+
+import yggdrasil._
+import yggdrasil.shard._
+
+import org.specs2.mutable._
+  
+import akka.dispatch.Await
+import akka.util.Duration
+
+import java.io.File
+
+import scalaz._
+import scalaz.effect.IO
+
+import org.streum.configrity.Configuration
+import org.streum.configrity.io.BlockFormat
+
+class PlatformSpecs extends Specification
+    with Compiler
+    with LineErrors
+    with ProvenanceChecker
+    with Emitter
+    with Evaluator
+    with DatasetConsumers 
+    with OperationsAPI
+    with AkkaIngestServer 
+    with YggdrasilEnumOpsComponent
+    with LevelDBQueryComponent {
+  
+  val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
+  
+  val maxEvalDuration = controlTimeout
+  
+  val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
+
+  object storage extends ActorYggShard {
+    val yggState = shardState 
+  }
+  
+  object ops extends Ops 
+  
+  object query extends QueryAPI 
+
+  
+  step {
+    startup()
+  }
+  
   "the full stack" should {
-    "do my bidding! BWAHAHAHAHAHA" in {
-      true mustEqual true
+    "count the campaigns dataset" >> {
+      "<root>" >> {
+        eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
+      }
+      
+      "gender" >> {
+        eval("count(dataset(//campaigns).gender)") mustEqual Set(SDecimal(100))
+      }
+      
+      "platform" >> {
+        eval("count(dataset(//campaigns).platform)") mustEqual Set(SDecimal(100))
+      }
+      
+      "campaign" >> {
+        eval("count(dataset(//campaigns).campaign)") mustEqual Set(SDecimal(100))
+      }
+      
+      "cpm" >> {
+        eval("count(dataset(//campaigns).cpm)") mustEqual Set(SDecimal(100))
+      }
+      
+      "ageRange" >> {
+        eval("count(dataset(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
+      }.pendingUntilFixed
     }
+    
+    "determine a histogram of genders on campaigns" in {
+      val input = """
+        | campaigns := dataset(//campaigns)
+        | hist('gender) :=
+        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
+        | hist""".stripMargin
+        
+      eval(input) mustEqual Set(
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
+    }
+    
+    /* commented out until we have memoization (MASSIVE time sink)
+    "determine a histogram of genders on category" in {
+      val input = """
+        | campaigns := dataset(//campaigns)
+        | organizations := dataset(//organizations)
+        | 
+        | hist('revenue, 'campaign) :=
+        |   organizations' := organizations where organizations.revenue = 'revenue
+        |   campaigns' := campaigns where campaigns.campaign = 'campaign
+        |   organizations'' := organizations' where organizations'.campaign = 'campaign
+        |   
+        |   campaigns' :: organizations''
+        |     { revenue: 'revenue, num: count(campaigns') }
+        |   
+        | hist""".stripMargin
+        
+      eval(input) mustEqual Set()   // TODO
+    }
+    
+    "determine most isolated clicks in time" in {
+      val input = """
+        | clicks := dataset(//clicks)
+        | 
+        | spacings('time) :=
+        |   click := clicks where clicks.time = 'time
+        |   belowTime := max(clicks.time where clicks.time < click.time)
+        |   aboveTime := min(clicks.time where clicks.time > click.time)
+        |   
+        |   {
+        |     click: click,
+        |     below: click.time - belowTime,
+        |     above: aboveTime - click.time
+        |   }
+        |   
+        | meanAbove := mean(spacings.above)
+        | meanBelow := mean(spacings.below)
+        | 
+        | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+        
+      eval(input) mustEqual Set()   // TODO
+    }
+     */
+  }
+  
+  step {
+    shutdown()
+  }
+  
+  
+  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
+    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+
+    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
+      val config = Configuration.parse(rawConfig)  
+      val flatMapTimeout = controlTimeout
+      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    }
+  }
+  
+  def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
+  
+  def evalE(str: String) = {
+    val tree = compile(str)
+    runPhasesInSequence(tree) must beEmpty
+    val Right(dag) = decorate(emit(tree))
+    consumeEval(dag)
+  }
+  
+  def startup() {
+    // start storage shard 
+    Await.result(storage.start, controlTimeout)
+  }
+  
+  def shutdown() {
+    // stop storage shard
+    Await.result(storage.stop, controlTimeout)
+    
+    actorSystem.shutdown()
   }
 }
