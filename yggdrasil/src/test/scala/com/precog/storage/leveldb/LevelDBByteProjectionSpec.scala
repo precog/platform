@@ -49,7 +49,7 @@ object LevelDBByteProjectionSpec {
   def identityFunction(identities: Identities, values: Seq[CValue]): (Identities, Seq[CValue]) = (identities, values)
 
 
-  //def constructEverything = {
+  //ef constructEverything = {
   //  def constructColumnDescriptor: Gen[ColumnDescriptor] = {
   //    def genPath: Gen[Path] = oneOf(Seq(Path("path1")))
   //    def genJPath: Gen[JPath] = oneOf(Seq(JPath("path1"),JPath("path2"),JPath("path3")))
@@ -145,28 +145,28 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
         Arbitrary(setOfColDes, uniqueIndices, columns, sorting)
       }
-
-      check { (x: (Set[ColumnDescriptor], Int, ListMap[ColumnDescriptor,Int], Seq[(ColumnDescriptor,SortBy)])) =>
-        val colDes = ColumnDescriptor(Path(""),JPath(""),SInt,Ownership(Set()))
-        val newByteProjection: Option[LevelDBByteProjection] = {
-          try {
-            Some(constructByteProjection(x._3, x._4))
-          } catch {
-            case e => None
+      
+        check { (x: (Set[ColumnDescriptor], Int, ListMap[ColumnDescriptor,Int], Seq[(ColumnDescriptor,SortBy)])) =>
+          val colDes = ColumnDescriptor(Path(""),JPath(""),SInt,Ownership(Set()))
+          val newByteProjection: Option[LevelDBByteProjection] = {
+            try {
+              Some(constructByteProjection(x._3, x._4))
+            } catch {
+              case e => None
+            }
           }
+          if (!(newByteProjection == None)) {
+            val newIdentities: Vector[Long] = constructIds(x._2)
+            val newValues: Seq[CValue] = constructValues(x._1)
+            newByteProjection.get.unproject(newByteProjection.get.project(newIdentities, newValues)._1, newByteProjection.get.project(newIdentities, newValues)._2)(identityFunction) must_== (newIdentities, newValues)
+          }
+          else {
+            val byteProjection: LevelDBByteProjection = constructByteProjection(ListMap(colDes -> 0), Seq((colDes, ByValue)))
+            val newIdentities: Vector[Long] = Vector(1L)
+            val newValues: Seq[CValue] = Seq(CInt(2))
+            byteProjection.unproject(byteProjection.project(newIdentities, newValues)._1, byteProjection.project(newIdentities, newValues)._2)(identityFunction) must_== (newIdentities, newValues)
+          } 
         }
-        if (!(newByteProjection == None)) { 
-          val newIdentities: Vector[Long] = constructIds(x._2)
-          val newValues: Seq[CValue] = constructValues(x._1)
-          newByteProjection.get.unproject(newByteProjection.get.project(newIdentities, newValues)._1, newByteProjection.get.project(newIdentities, newValues)._2)(identityFunction) must_== (newIdentities, newValues)
-        }
-        else {
-          val byteProjection: LevelDBByteProjection = constructByteProjection(ListMap(colDes -> 0), Seq((colDes, ByValue)))
-          val newIdentities: Vector[Long] = Vector(1L)
-          val newValues: Seq[CValue] = Seq(CInt(2))
-          byteProjection.unproject(byteProjection.project(newIdentities, newValues)._1, byteProjection.project(newIdentities, newValues)._2)(identityFunction) must_== (newIdentities, newValues)
-        } 
-      }
     }
   }
   

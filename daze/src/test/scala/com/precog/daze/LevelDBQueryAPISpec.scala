@@ -57,7 +57,7 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
 
   val (sampleData, _) = DistributedSampleSet.sample(5, 0)
   val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
-    case (acc, (jv, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jv, Map()))).foldLeft(acc) {
+    case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
       case (acc, ProjectionData(descriptor, identities, values, _)) =>
         acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
     }
