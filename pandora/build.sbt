@@ -44,55 +44,56 @@ connectInput in run := true
 fork in run := true
 
 run <<= inputTask { argTask =>
-  (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask) map { (opts, cp, ci, os, mc, args) =>
+  (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask, extractData) map { (opts, cp, ci, os, mc, args, dataDir) =>
     val delim = java.io.File.pathSeparator
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
       Seq(mc getOrElse "com.precog.pandora.Console") ++
-      Seq("/tmp/pandora/data/") ++ 
-      args
+      (if (args.isEmpty) Seq(dataDir) else args)
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
-  } dependsOn extractData
+  }
 }
 
 extractData <<= streams map { s =>
-  s.log.info("Extracting LevelDB sample data...")
-  IO.copyDirectory(new File("pandora/dist/data/"), new File("/tmp/pandora/data/"), true, false)
+  val target = new File("/tmp/pandora/data/")
+  if (!target.exists()) {
+    s.log.info("Extracting LevelDB sample data...")
+    IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
+  }
+  target.getCanonicalPath
 }
 
-extractLibs <<= (streams, fullClasspath in Compile) map { (s, cp) =>
-  val path = new File("/tmp/leveldbjni")
-  if (!path.exists()) {
-    s.log.info("Extracting LevelDB native libraries...")
-    path.mkdir()
-    for {
-      key <- cp
-      val file = key.data
-      if file.getName contains "leveldbjni"
-    } {
-      IO.unzip(file, path)      // TODO filter
-    }
-  }
-  val libPath = System.getProperty("java.library.path")
-  if (!libPath.contains("/tmp/leveldbjni")) {
-    val native = new File("/tmp/leveldbjni/META-INF/native/")
-    for (subdir <- native.listFiles) {
-      s.log.info("Adding " + subdir.getCanonicalPath + " to java.library.path")
-      System.setProperty("java.library.path", System.getProperty("java.library.path") + File.pathSeparator + subdir.getCanonicalPath)
-    }
-  }
+test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) map { (s, cp, os, dataDir) =>
+  val delim = java.io.File.pathSeparator
+  val cpStr = cp map { _.data } mkString delim
+  s.log.debug("Running with classpath: " + cpStr)
+  val opts2 =
+    Seq("-classpath", cpStr) ++
+    Seq("-Dprecog.storage.root=" + dataDir) ++
+    Seq("specs2.run") ++
+    Seq("com.precog.pandora.PlatformSpecs")
+  val result = Fork.java.fork(None, opts2, None, Map(), false, os getOrElse StdoutOutput).exitValue()
+  if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
 
-test <<= test dependsOn extractLibs
-
-testOnly <<= inputTask { argTask =>
-  streams map { s =>
-    error("test-only is currently not supported due to SBT insanity")
+(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, init, cp, si) =>
+  IO.withTemporaryFile("pandora", ".scala") { file =>
+    IO.write(file, init)
+    val delim = java.io.File.pathSeparator
+    val scalaCp = (si.compilerJar +: si.extraJars) map { _.getCanonicalPath }
+    val fullCp = (cp map { _.data }) ++ scalaCp
+    val cpStr = fullCp mkString delim
+    s.log.debug("Running with classpath: " + cpStr)
+    val opts2 =
+      Seq("-classpath", cpStr) ++
+      Seq("-Dscala.usejavacp=true") ++
+      Seq("scala.tools.nsc.MainGenericRunner") ++
+      Seq("-Yrepl-sync", "-i", file.getCanonicalPath)
+    Fork.java.fork(None, opts2, None, Map(), true, StdoutOutput).exitValue()
+    jline.Terminal.getTerminal.initializeTerminal()
   }
-}
-
-(console in Compile) <<= (console in Compile) dependsOn extractLibs
+} dependsOn extractData
 
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
@@ -109,42 +110,52 @@ initialCommands in console := """
   | import quirrel.parser._
   | import quirrel.typer._
   | 
-  | net.lag.configgy.Configgy.configureFromResource("default_ingest.conf")
-  |
-  | val platform = new Parser
-  |                  with LineErrors
-  |                  with TreeShaker
-  |                  with ProvenanceChecker
-  |                  with Emitter
-  |                  with Evaluator
-  |                  with DatasetConsumers 
-  |                  with YggdrasilOperationsAPI
-  |                  with YggdrasilStorage
-  |                  with AkkaIngestServer
-  |                  with DefaultYggConfig {
-  |   
+  | import yggdrasil.{SValue, YggConfig}
+  | 
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with YggdrasilOperationsAPI with YggdrasilStorage with AkkaIngestServer {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
   |
   |   import java.io.File
   |
+  |   import scalaz.effect.IO
+  |   
+  |   import org.streum.configrity.Configuration
+  |   import org.streum.configrity.io.BlockFormat
+  | 
   |   val controlTimeout = Duration(120, "seconds")
-  |   lazy val storageRoot = new File("/tmp/pandora/data")
+  |
+  |   lazy val yggConfig = loadConfig(Some("/tmp/pandora/data"))
+  |
+  |   private def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
+  |     val rawConfig = dataDir map {
+  |       "precog.storage.root = " + _
+  |     } getOrElse { "" }
+  |
+  |     IO { 
+  |       new YggConfig {
+  |         def config = Configuration.parse(rawConfig)  
+  |       }
+  |     }
+  |   }
+  |
+  |   def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
+  | 
+  |   def evalE(str: String) = {
+  |     val Right(dag) = decorate(emit(compile(str)))
+  |     consumeEval(dag)
+  |   }
   | 
   |   def startup() {
-  |     // start ingest server
-  |     Await.result(start, controlTimeout)
   |     // start storage shard 
   |     Await.result(storage.start, controlTimeout)
   |   }
   |   
   |   def shutdown() {
-  |     // stop storaget shard
+  |     // stop storage shard
   |     Await.result(storage.stop, controlTimeout)
-  |     // stop ingest server
-  |     Await.result(stop, controlTimeout)
   |     
-  |     actorSystem.shutdown
+  |     actorSystem.shutdown()
   |   }
   | }""".stripMargin
   
