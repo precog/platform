@@ -127,7 +127,7 @@ initialCommands in console := """
   |
   |   lazy val yggConfig = loadConfig(Some("/tmp/pandora/data"))
   |
-  |   def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
+  |   private def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
   |     val rawConfig = dataDir map {
   |       "precog.storage.root = " + _
   |     } getOrElse { "" }
@@ -137,6 +137,13 @@ initialCommands in console := """
   |         def config = Configuration.parse(rawConfig)  
   |       }
   |     }
+  |   }
+  |
+  |   def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
+  | 
+  |   def evalE(str: String) = {
+  |     val Right(dag) = decorate(emit(compile(str)))
+  |     consumeEval(dag)
   |   }
   | 
   |   def startup() {
