@@ -42,38 +42,18 @@ extractData <<= streams map { s =>
   IO.copyDirectory(new File("pandora/dist/data/"), new File("/tmp/pandora/data/"), true, false)
 }
 
-extractLibs <<= (streams, fullClasspath in Compile) map { (s, cp) =>
-  val path = new File("/tmp/leveldbjni")
-  if (!path.exists()) {
-    s.log.info("Extracting LevelDB native libraries...")
-    path.mkdir()
-    for {
-      key <- cp
-      val file = key.data
-      if file.getName contains "leveldbjni"
-    } {
-      IO.unzip(file, path)      // TODO filter
-    }
-  }
-  val libPath = System.getProperty("java.library.path")
-  if (!libPath.contains("/tmp/leveldbjni")) {
-    val native = new File("/tmp/leveldbjni/META-INF/native/")
-    for (subdir <- native.listFiles) {
-      s.log.info("Adding " + subdir.getCanonicalPath + " to java.library.path")
-      System.setProperty("java.library.path", System.getProperty("java.library.path") + File.pathSeparator + subdir.getCanonicalPath)
-    }
-  }
-}
-
-test <<= test dependsOn extractLibs
-
-testOnly <<= inputTask { argTask =>
-  streams map { s =>
-    error("test-only is currently not supported due to SBT insanity")
-  }
-}
-
-(console in Compile) <<= (console in Compile) dependsOn extractLibs
+test <<= (streams, fullClasspath in Test, outputStrategy in Test) map { (s, cp, os) =>
+  val delim = java.io.File.pathSeparator
+  val cpStr = cp map { _.data } mkString delim
+  s.log.debug("Running with classpath: " + cpStr)
+  val opts2 =
+    Seq("-classpath", cpStr) ++
+    Seq("-Dpandora.data=/tmp/pandora/data") ++
+    Seq("specs2.run") ++
+    Seq("com.precog.pandora.PlatformSpecs")
+  val result = Fork.java.fork(None, opts2, None, Map(), false, os getOrElse StdoutOutput).exitValue()
+  if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
+} dependsOn extractData
 
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
@@ -90,11 +70,8 @@ initialCommands in console := """
   | import quirrel.parser._
   | import quirrel.typer._
   | 
-  | net.lag.configgy.Configgy.configureFromResource("default_ingest.conf")
-  |
-  | val platform = new Parser
+  | val platform = new Compiler
   |                  with LineErrors
-  |                  with TreeShaker
   |                  with ProvenanceChecker
   |                  with Emitter
   |                  with Evaluator
@@ -113,8 +90,6 @@ initialCommands in console := """
   |   lazy val storageRoot = new File("/tmp/pandora/data")
   | 
   |   def startup() {
-  |     // start ingest server
-  |     Await.result(start, controlTimeout)
   |     // start storage shard 
   |     Await.result(storage.start, controlTimeout)
   |   }
@@ -122,10 +97,8 @@ initialCommands in console := """
   |   def shutdown() {
   |     // stop storaget shard
   |     Await.result(storage.stop, controlTimeout)
-  |     // stop ingest server
-  |     Await.result(stop, controlTimeout)
   |     
-  |     actorSystem.shutdown
+  |     actorSystem.shutdown()
   |   }
   | }""".stripMargin
   
