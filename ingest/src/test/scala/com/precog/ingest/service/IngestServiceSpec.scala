@@ -77,7 +77,7 @@ trait TestTokens {
  )
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens with NullQueryExecutorComponent {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens {
 
   val requestLoggingData = """
     requestLog {
@@ -109,6 +109,11 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   }
 
   val messaging = new CollectingMessaging
+
+  def queryExecutorFactory(configMap: ConfigMap) = new NullQueryExecutor {
+    lazy val actorSystem = ActorSystem("ingest_service_spec")
+    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  }
 
   def eventStoreFactory(configMap: ConfigMap): EventStore = {
     val defaultAddresses = NonEmptyList(MailboxAddress(0))

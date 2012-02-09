@@ -7,8 +7,13 @@ import common.Config
 
 import java.io.File
 
-trait YggConfig extends Config {
-  
+trait YggConfigComponent {
+  type YggConfig 
+
+  def yggConfig: YggConfig
+}
+
+trait BaseConfig extends Config {
   private val localDefaults = Configuration.parse("""
     precog {
       storage {
@@ -35,5 +40,4 @@ trait YggConfig extends Config {
   }
 
   lazy val sortBufferSize: Int = cfg[Int]("precog.storage.sortBufferSize")
-
 }
