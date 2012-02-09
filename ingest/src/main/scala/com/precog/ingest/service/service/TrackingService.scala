@@ -51,6 +51,8 @@ import com.weiglewilczek.slf4s.Logging
 import com.precog.analytics._
 import com.precog.common._
 
+import scalaz.Validation
+
 trait StorageReporting {
   def tokenId: String
   def stored(path: Path, count: Int)
@@ -168,8 +170,28 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
   ))
 }
 
+class QueryServiceHandler(queryService: QueryService)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+ 
+  private val InvalidQuery = HttpResponse[JValue](BadRequest, content=Some(JString("Expected query as json string.")))
+
+  val service = (request: HttpRequest[Future[JValue]]) => { 
+    Success{ (t: Token) => request.content.map { _.map { 
+      case JString(s) => HttpResponse[JValue](OK, content=Some(queryService.execute(s)))
+      case _          => InvalidQuery 
+    }}.getOrElse( Future { InvalidQuery } ) }
+  }
+
+  val metadata = Some(DescriptionMetadata(
+    """
+Takes a quirrel query and returns the result of evaluating the query.
+    """
+  ))
+}
+
 class EchoServiceHandler(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
+
   val service = (request: HttpRequest[Future[JValue]]) => { 
     Success{ (t: Token, p: Path) => Future(HttpResponse[JValue](OK, content=Some(JString("Testing 123.")))) }
   }
