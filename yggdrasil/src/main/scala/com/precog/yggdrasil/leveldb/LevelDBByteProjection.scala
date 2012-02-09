@@ -191,10 +191,10 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-    val unusedIdentities: List[IdentityRead] = unused.toList.map(i => (buf:RBuf) => (i, buf.readIdentity()))
+    val unusedIdentities: List[IdentityRead] = unused.toList.sorted.map(i => (buf:RBuf) => (i, buf.readIdentity()))
 
-    unusedIdentities.foldRight(initial) {
-      case (id, acc) => acc :+ Left(id) 
+    unusedIdentities.foldLeft(initial) {
+      case (acc, id) => acc :+ Left(id) 
     }
   }
 

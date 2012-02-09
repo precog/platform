@@ -57,7 +57,7 @@ trait SingleColumnProjectionRoutingTable extends RoutingTable {
   }
   
   def toProjectionDescriptor(colDesc: ColumnDescriptor) = 
-    ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc -> ById) ).toOption.get
+    ProjectionDescriptor(ListMap() + (colDesc -> 0), Seq[(ColumnDescriptor, SortBy)]() :+ (colDesc -> ById) ).toOption.get
 
 }
 
