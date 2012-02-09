@@ -28,6 +28,7 @@ import ingest.api._
 import ingest.util.QuerioZookeeper
 import ingest.service.IngestServer
 import ingest.service.EventStore
+import ingest.service.NullQueryExecutorComponent
 import yggdrasil.YggConfig
 import yggdrasil.shard.YggState
 import yggdrasil.shard.YggShard
@@ -57,7 +58,7 @@ import net.lag.configgy.ConfigMap
 import scalaz.{NonEmptyList, Validation, Success, Failure}
 import scalaz.effect.IO
 
-trait AkkaIngestServer extends IngestServer {
+trait AkkaIngestServer extends IngestServer with NullQueryExecutorComponent {
   trait AkkaIngestConfig extends YggConfig
  
   lazy val actorSystem = ActorSystem("akka_ingest_server")

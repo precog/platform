@@ -96,7 +96,7 @@ trait TestTokens {
  )
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens with NullQueryExecutorComponent {
 
   val requestLoggingData = """
     requestLog {
@@ -108,11 +108,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   override val clock = Clock.System
 
   override val configuration = "services{ingest{v1{" + requestLoggingData + mongoConfigFileData + "}}}"
-
-  def queryServiceFactory(config: ConfigMap) = new NullQueryService {
-    lazy val actorSystem = ActorSystem("akka_ingest_server")
-  } 
-
 
   override def mongoFactory(config: ConfigMap): Mongo = RealMongo(config)
   //override def mongoFactory(config: ConfigMap): Mongo = new MockMongo()

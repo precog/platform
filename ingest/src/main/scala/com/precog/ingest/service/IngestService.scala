@@ -73,7 +73,7 @@ import com.precog.ct.Mult.MDouble._
 import com.precog.ingest.service.service._
 import com.precog.ingest.service._
 
-case class IngestState(queryService: QueryService, indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
+case class IngestState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
@@ -83,7 +83,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def queryServiceFactory(configMap: ConfigMap): QueryService
+  def queryExecutorFactory(configMap: ConfigMap): QueryExecutor
 
   def eventStoreFactory(configMap: ConfigMap): EventStore
 
@@ -103,7 +103,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         startup {
           import context._
 
-          val queryService = queryServiceFactory(config.configMap("query_service"))
+          val queryExecutor = queryExecutorFactory(config.configMap("query_executor"))
 
           val indexdbConfig = config.configMap("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
@@ -115,9 +115,9 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
           val eventStore = eventStoreFactory(config.configMap("eventStore"))
 
-          queryService.startup.map { _ =>
+          queryExecutor.startup.map { _ =>
             IngestState(
-              queryService,
+              queryExecutor,
               indexMongo,
               tokenMgr,
               eventStore,
@@ -144,7 +144,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
                 post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
               } ~
               path("/query") {
-                post(new QueryServiceHandler(state.queryService))
+                post(new QueryServiceHandler(state.queryExecutor))
               } ~
               path("/echo") {
                 dataPath("vfs") {
