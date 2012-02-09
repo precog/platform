@@ -29,8 +29,8 @@ import scala.io.Source
 object ProvenanceSpecs extends Specification
     with StubPhases
     with Compiler
-    with ProvenanceChecker
-    with CriticalConditionFinder {
+    with ProvenanceChecker {
+
   import ast._
   
   "provenance computation" should {

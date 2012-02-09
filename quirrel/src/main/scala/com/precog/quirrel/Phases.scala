@@ -21,12 +21,8 @@ package com.precog.quirrel
 
 trait Phases {
   type Expr
-  type Solution
   type Error
   
-  type Binding
-  type FormalBinding
-  type Provenance
   type ConditionTree
   
   type Phase = Expr => Set[Error]
