@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import akka.dispatch.Await
+import akka.util.duration._
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
@@ -29,21 +31,29 @@ import scalaz.std.list._
 import Iteratee._
 
 trait TestConfig {
-  val yggConfig = new YggConfig {
+  lazy val yggConfig = new YggConfig {
     def config = org.streum.configrity.Configuration.parse("")
   }
 }
 
-object EvaluatorSpecs extends Specification
+class EvaluatorSpecs extends Specification
     with Evaluator
-    with OperationsAPI
     with TestConfig
-    with StubOperationsAPI {
+    with StubOperationsAPI { self =>
       
   import Function._
   
   import dag._
   import instructions._
+
+  def maxEvalDuration = intToDurationInt(30).seconds
+  def flatMapTimeout = intToDurationInt(30).seconds
+
+  object ops extends YggdrasilEnumOps {
+    def asyncContext = self.asyncContext
+    def flatMapTimeout = akka.util.Timeout(intToDurationInt(10) seconds)
+    def yggConfig = self.yggConfig
+  }
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -1597,8 +1607,10 @@ object EvaluatorSpecs extends Specification
   }
 
   "sortByIdentities" should {
-    def consumeToList(enum: DatasetEnum[Unit, SEvent, IO]): List[SEvent] =
-      (consume[Unit, SEvent, IO, List] &= enum.enum[IO]).run(_ => sys.error("")).unsafePerformIO
+    def consumeToList(d: DatasetEnum[Unit, SEvent, IO]): List[SEvent] ={
+      val enum = Await.result(d.fenum, intToDurationInt(5).seconds)
+      (consume[Unit, SEvent, IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO
+    }
 
     "order the numbers set by specified identities" in {
       val numbers = {

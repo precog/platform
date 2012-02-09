@@ -24,7 +24,6 @@ import analytics.TokenManager
 import common.Config
 import common.Event
 import common.EventMessage
-import daze.YggdrasilStorage
 import ingest.api._
 import ingest.util.QuerioZookeeper
 import ingest.service.IngestServer
@@ -32,7 +31,7 @@ import ingest.service.EventStore
 import yggdrasil.YggConfig
 import yggdrasil.shard.YggState
 import yggdrasil.shard.YggShard
-import yggdrasil.shard.RealYggShard
+import yggdrasil.shard.ActorYggShard
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -58,17 +57,16 @@ import net.lag.configgy.ConfigMap
 import scalaz.{NonEmptyList, Validation, Success, Failure}
 import scalaz.effect.IO
 
-trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
-  
+trait AkkaIngestServer extends IngestServer {
   trait AkkaIngestConfig extends YggConfig
  
   lazy val actorSystem = ActorSystem("akka_ingest_server")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   
   implicit def defaultFutureDispatch: MessageDispatcher
-  
-  def yggConfig: IO[YggConfig]
 
+  def storage: YggShard
+  
   def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
     new EventStore {
       private val idSource = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -79,17 +77,6 @@ trait AkkaIngestServer extends IngestServer with YggdrasilStorage {
       }
     }
   }
-  
-  private val yggShard: IO[YggShard] = yggConfig flatMap { cfg => YggState.restore(cfg.dataDir) map { (cfg, _) } } map { 
-    case (cfg, Success(state)) =>
-      new RealYggShard {
-        val yggState = state 
-        val yggConfig = cfg 
-      }
-    case (cfg, Failure(e)) => sys.error("Error loading shard state from: %s cause:\n".format(cfg.dataDir, e))
-  }
-  
-  lazy val storage: YggShard = yggShard.unsafePerformIO
   
   abstract override def stop = super.stop map { _ =>
     actorSystem.shutdown

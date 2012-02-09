@@ -91,21 +91,14 @@ import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 
 trait YggShard {
-  def start: Future[Unit]
-  def stop: Future[Unit]
-
-  def store(msg: EventMessage): Future[Unit]
-  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
-
   def metadata: StorageMetadata
-
-  def yggConfig: YggConfig
+  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
+  def store(msg: EventMessage): Future[Unit]
 }
 
-trait RealYggShard extends YggShard with Logging {
+trait ActorYggShard extends YggShard with Logging {
   val pre = "[Yggdrasil Shard]"
 
-  def yggConfig: YggConfig
   def yggState: YggState
 
   lazy implicit val system = ActorSystem("storage_shard")
