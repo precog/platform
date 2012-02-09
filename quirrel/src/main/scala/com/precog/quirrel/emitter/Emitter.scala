@@ -375,8 +375,7 @@ trait Emitter extends AST
                   setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
                     if (actuals.length == n) {
                       emitExpr(left)
-                    } 
-                    else {
+                    } else {
                       val nameToSolutions = d.equalitySolutions.toSeq sortWith { (a, b) =>
                         params.indexOf(a) < params.indexOf(b)
                       }

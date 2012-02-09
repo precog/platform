@@ -639,6 +639,46 @@ object EmitterSpecs extends Specification
           FilterMatch(0, None),
           Merge))
     }
+    
+    "emit split and merge for cf example with paired tic variables in critical condition" in {
+      testEmit("""
+        | clicks := dataset(//clicks)
+        | foo('a, 'b) :=
+        |   clicks' := clicks where clicks.time = 'a & clicks.pageId = 'b
+        |   clicks'
+        | foo""")(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Dup,
+          Dup,
+          Dup,
+          Swap(1),
+          PushString("time"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          PushString("time"),
+          Map2Cross(DerefObject),
+          Split,
+          Map2Cross(Eq),
+          Swap(1),
+          Swap(2),
+          PushString("pageId"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("pageId"),
+          Map2Cross(DerefObject),
+          Split,
+          Map2Cross(Eq),
+          Map2Match(And),
+          FilterMatch(0, None),
+          Merge,
+          Merge))
+    }
 
     "emit split and merge for ctr example" in {
       testEmit("clicks := dataset(//clicks) " + 

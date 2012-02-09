@@ -149,7 +149,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       } yield leftErr ++ rightErr
     }
     
-    case _ => {
+    case _ if containsTicVar(name)(expr) => {
       val result = expr match {
         case expr: RelationExpr => solveRelation(expr) { case TicVar(_, `name`) => true }
         case expr: Comp => solveComplement(expr) { case TicVar(_, `name`) => true }
@@ -158,6 +158,8 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       
       result map { e => Right(Definition(e)) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
     }
+    
+    case _ => Left(Set())
   }
   
   private def solveConditionForest(d: Dispatch, name: String, conditions: Set[ConditionTree]): (Set[Error], Option[Solution]) = {
@@ -189,6 +191,11 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     } else {
       (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
     }
+  }
+  
+  private def containsTicVar(name: String): Expr => Boolean = isSubtree {
+    case TicVar(_, `name`) => true
+    case _ => false
   }
   
   private def sequence[A](set: Set[Option[A]]): Option[Set[A]] = {
