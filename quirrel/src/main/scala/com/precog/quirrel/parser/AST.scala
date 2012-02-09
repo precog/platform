@@ -21,7 +21,7 @@ package com.precog
 package quirrel
 package parser
 
-import util.{Atom, SetAtom}
+import util.Atom
 
 import edu.uwm.cs.gll.LineStream
 import edu.uwm.cs.gll.ast._
@@ -300,7 +300,7 @@ trait AST extends Phases {
     }
   }
 
-  sealed trait Expr extends Node with Product {
+  sealed trait Expr extends Node with Product { self =>
       val nodeId = System.identityHashCode(this)
       
       private val _root = atom[Expr]
@@ -315,8 +315,17 @@ trait AST extends Phases {
       def constrainingExpr = _constrainingExpr()
       private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
       
-      private[quirrel] final lazy val _errors: SetAtom[Error] =
-        if (this eq root) new SetAtom[Error] else root._errors
+      private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
+        if (this eq root) {
+          atom[Set[Error]] {
+            _errors ++= runPhasesInSequence(root)
+          }
+        } else {
+          val back = root._errors
+          6 * 7     // do not remove!  SI-5455
+          back
+        }
+      }
       
       final def errors = _errors()
       
