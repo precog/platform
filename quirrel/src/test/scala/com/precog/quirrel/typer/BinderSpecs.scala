@@ -611,7 +611,6 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       for (file <- exampleDir.listFiles if file.getName endsWith ".qrl") {
         file.getName >> {
           val result = parse(LineStream(Source.fromFile(file)))
-          bindNames(result)
           result.errors must beEmpty
         }
       }
