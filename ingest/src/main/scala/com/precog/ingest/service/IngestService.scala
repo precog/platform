@@ -54,7 +54,7 @@ import com.precog.ct.Mult.MDouble._
 import com.precog.ingest.service.service._
 import com.precog.ingest.service._
 
-case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
+case class IngestState(queryService: QueryService, indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
@@ -63,6 +63,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkFutureJson._
 
   implicit val timeout = akka.util.Timeout(120000) //for now
+
+  def queryServiceFactory(configMap: ConfigMap): QueryService
 
   def eventStoreFactory(configMap: ConfigMap): EventStore
 
@@ -82,6 +84,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         startup {
           import context._
 
+          val queryService = queryServiceFactory(config.configMap("query_service"))
+
           val indexdbConfig = config.configMap("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
           val indexdb  = indexMongo.database(indexdbConfig.getString("database", "analytics-v" + serviceVersion))
@@ -92,12 +96,15 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
           val eventStore = eventStoreFactory(config.configMap("eventStore"))
 
-          Future(IngestState(
-            indexMongo,
-            tokenMgr,
-            eventStore,
-            storageReporting(config.configMap("storageReporting"))
-            ))
+          queryService.startup.map { _ =>
+            IngestState(
+              queryService,
+              indexMongo,
+              tokenMgr,
+              eventStore,
+              storageReporting(config.configMap("storageReporting"))
+            )
+          }
         } ->
         request { (state: IngestState) =>
 
@@ -116,7 +123,10 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
               } ~ 
               dataPath("vfs") {
                 post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
-              } ~ 
+              } ~
+              path("/query") {
+                post(new QueryServiceHandler(state.queryService))
+              } ~
               path("/echo") {
                 dataPath("vfs") {
                   get(new EchoServiceHandler())

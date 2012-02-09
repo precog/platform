@@ -35,4 +35,4 @@ trait KafkaEventStoreFactory {
   }
 }
 
-object KafkaIngestServer extends IngestServer with KafkaEventStoreFactory
+object KafkaIngestServer extends IngestServer with KafkaEventStoreFactory with HardwiredQueryServiceFactory

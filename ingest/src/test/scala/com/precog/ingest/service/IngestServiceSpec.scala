@@ -18,8 +18,10 @@ import blueeyes.util.metrics.Duration._
 import blueeyes.util.Clock
 import MimeTypes._
 
-import akka.dispatch.Future
+import akka.actor.ActorSystem
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
+import akka.dispatch.Future
 import akka.util.Duration
 
 import org.joda.time._
@@ -87,6 +89,11 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   override val clock = Clock.System
 
   override val configuration = "services{ingest{v1{" + requestLoggingData + mongoConfigFileData + "}}}"
+
+  def queryServiceFactory(config: ConfigMap) = new NullQueryService {
+    lazy val actorSystem = ActorSystem("akka_ingest_server")
+  } 
+
 
   override def mongoFactory(config: ConfigMap): Mongo = RealMongo(config)
   //override def mongoFactory(config: ConfigMap): Mongo = new MockMongo()
