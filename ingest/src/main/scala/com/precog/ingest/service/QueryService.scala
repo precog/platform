@@ -22,6 +22,7 @@ package ingest.service
 
 import blueeyes.json.JsonAST._
 
+import common.Config
 import daze._
 
 import quirrel.Compiler
@@ -35,7 +36,9 @@ import yggdrasil.shard._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
+import akka.util.duration._
 import akka.util.Duration
+import akka.util.Timeout
 
 import scalaz.{Success, Failure, Validation}
 import scalaz.effect.IO
@@ -46,29 +49,17 @@ import net.lag.configgy.ConfigMap
 
 trait QueryExecutor {
   def execute(query: String): JValue
-  def startup(): Future[Unit]
-  def shutdown(): Future[Unit]
-}
-
-trait QueryExecutorComponent {
-  def queryExecutorFactory(configMap: ConfigMap): QueryExecutor
+  def startup: Future[Unit]
+  def shutdown: Future[Unit]
 }
 
 trait NullQueryExecutor extends QueryExecutor {
-
-  val actorSystem: ActorSystem
-  lazy implicit val executionContext: ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  def actorSystem: ActorSystem
+  implicit def executionContext: ExecutionContext
 
   def execute(query: String) = JString("Query service not avaialble")
-  def startup() = Future(())
-  def shutdown() = Future { actorSystem.shutdown }
-
-}
-
-trait NullQueryExecutorComponent {
-  def queryExecutorFactory(configMap: ConfigMap) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("null_query_executor")
-  }
+  def startup = Future(())
+  def shutdown = Future { actorSystem.shutdown }
 }
 
 trait QuirrelQueryExecutor extends QueryExecutor 
@@ -105,49 +96,37 @@ trait QuirrelQueryExecutor extends QueryExecutor
   }
 }
 
-trait YggdrasilQueryExecutor extends QuirrelQueryExecutor { self =>
+trait YggdrasilQueryExecutor 
+    extends QuirrelQueryExecutor 
+    with YggdrasilEnumOpsComponent
+    with LevelDBQueryComponent { self =>
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
 
-    val yggConfig: YggConfig
-    val yggState: YggState
+  object ops extends Ops 
 
-    val actorSystem: ActorSystem
-    val asyncContext: ExecutionContext
-    val controlTimeout: Duration 
+  object query extends QueryAPI 
+}
 
-    object storage extends ActorYggShard {
-      val yggState = self.yggState
-      val yggConfig: YggConfig = self.yggConfig
-    }
-
-    object ops extends YggdrasilEnumOps {
-      val yggConfig: YggConfig = self.yggConfig 
-      val asyncContext = self.asyncContext
-      val flatMapTimeout = akka.util.Timeout(controlTimeout)
-    }
- 
-    object query extends LevelDBQueryAPI {
-      val storage = self.storage
-      val asyncContext = self.asyncContext
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-    }
-
-    def startup() = storage.start
-    def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
-
+trait QueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with Config {
+  val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
+  val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
 
 trait YggdrasilQueryExecutorComponent {
-
   import blueeyes.json.xschema.Extractor
 
-  def loadConfig() = IO { new YggConfig { def config = Configuration.parse("") } }
+  def loadConfig: IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO { 
+    new BaseConfig with QueryExecutorConfig {
+      val config = Configuration.parse("")  
+    }
+  }
     
   def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
   
   def queryExecutorFactory(): QueryExecutor = {
 
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
-      for( yConfig <- loadConfig();
+      for( yConfig <- loadConfig;
            state   <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => new YggdrasilQueryExecutor {
@@ -158,9 +137,13 @@ trait YggdrasilQueryExecutorComponent {
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
           val yggConfig = yConfig
-          val yggState = yState
 
+          object storage extends ActorYggShard {
+            val yggState = yState
+          }
 
+          def startup = storage.start
+          def shutdown = storage.stop map { _ => actorSystem.shutdown } 
         }}
       }
 
