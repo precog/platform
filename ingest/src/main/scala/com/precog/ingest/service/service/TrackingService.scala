@@ -151,14 +151,16 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
   ))
 }
 
-class QueryServiceHandler(queryService: QueryService)(implicit dispatcher: MessageDispatcher)
+class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
  
   private val InvalidQuery = HttpResponse[JValue](BadRequest, content=Some(JString("Expected query as json string.")))
 
   val service = (request: HttpRequest[Future[JValue]]) => { 
     Success{ (t: Token) => request.content.map { _.map { 
-      case JString(s) => HttpResponse[JValue](OK, content=Some(queryService.execute(s)))
+      case JString(s) => 
+        val queryResult = queryExecutor.execute(s)
+        HttpResponse[JValue](OK, content=Some(queryResult))
       case _          => InvalidQuery 
     }}.getOrElse( Future { InvalidQuery } ) }
   }

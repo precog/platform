@@ -9,7 +9,7 @@ import java.util.Properties
 import net.lag.configgy.ConfigMap
 import scalaz.NonEmptyList
 
-trait KafkaEventStoreFactory {
+trait KafkaEventStoreComponent {
 
   implicit def defaultFutureDispatch: MessageDispatcher
 
@@ -35,4 +35,4 @@ trait KafkaEventStoreFactory {
   }
 }
 
-object KafkaIngestServer extends IngestServer with KafkaEventStoreFactory with HardwiredQueryServiceFactory
+object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent with YggdrasilQueryExecutorComponent

@@ -16,31 +16,43 @@ import yggdrasil.shard._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
+import akka.util.Duration
 
-import scalaz.{Success, Failure}
+import scalaz.{Success, Failure, Validation}
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
 
 import net.lag.configgy.ConfigMap
 
-trait QueryService {
+trait QueryExecutor {
   def execute(query: String): JValue
   def startup(): Future[Unit]
   def shutdown(): Future[Unit]
 }
 
-trait NullQueryService extends QueryService {
+trait QueryExecutorComponent {
+  def queryExecutorFactory(configMap: ConfigMap): QueryExecutor
+}
+
+trait NullQueryExecutor extends QueryExecutor {
 
   val actorSystem: ActorSystem
-  implicit val executionContext: ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  lazy implicit val executionContext: ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def execute(query: String) = JString("Query service not avaialble")
   def startup() = Future(())
   def shutdown() = Future { actorSystem.shutdown }
+
 }
 
-trait QuirrelQueryService extends QueryService 
+trait NullQueryExecutorComponent {
+  def queryExecutorFactory(configMap: ConfigMap) = new NullQueryExecutor {
+    lazy val actorSystem = ActorSystem("null_query_executor")
+  }
+}
+
+trait QuirrelQueryExecutor extends QueryExecutor 
     with LineErrors
     with Compiler
     with Parser
@@ -49,8 +61,7 @@ trait QuirrelQueryService extends QueryService
     with Emitter
     with Evaluator
     with DatasetConsumers
-    with YggdrasilOperationsAPI 
-    with YggdrasilStorage {
+    with OperationsAPI { 
 
   def execute(query: String) = {
     asBytecode(query) match {
@@ -75,36 +86,77 @@ trait QuirrelQueryService extends QueryService
   }
 }
 
-trait HardwiredQueryService extends QuirrelQueryService {
-    lazy val actorSystem = ActorSystem("akka_ingest_server")
-    implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+trait YggdrasilQueryExecutor extends QuirrelQueryExecutor { self =>
 
-    val yggConfig = IO { new YggConfig { def config = Configuration.parse("") } }
-    
-    private val yggShard: IO[YggShard] = yggConfig flatMap { cfg => YggState.restore(cfg.dataDir) map { (cfg, _) } } map { 
-      case (cfg, Success(state)) =>
-        new RealYggShard {
-         val yggState = state
-          val yggConfig = cfg
-        }
-      case (cfg, Failure(e)) => sys.error("Error loading shard state from: %s cause:\n".format(cfg.dataDir, e))
+    val yggConfig: YggConfig
+    val yggState: YggState
+
+    val actorSystem: ActorSystem
+    val asyncContext: ExecutionContext
+    val controlTimeout: Duration 
+
+    object storage extends ActorYggShard {
+      val yggState = self.yggState
+      val yggConfig: YggConfig = self.yggConfig
     }
-  
-    lazy val storage: YggShard = yggShard.unsafePerformIO
+
+    object ops extends YggdrasilEnumOps {
+      val yggConfig: YggConfig = self.yggConfig 
+      val asyncContext = self.asyncContext
+      val flatMapTimeout = akka.util.Timeout(controlTimeout)
+    }
+ 
+    object query extends LevelDBQueryAPI {
+      val storage = self.storage
+      val asyncContext = self.asyncContext
+      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    }
 
     def startup() = storage.start
     def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
 }
 
-trait HardwiredQueryServiceFactory {
-  def queryServiceFactory(queryServiceConfig: ConfigMap): QueryService = {
-    new HardwiredQueryService { }
+trait YggdrasilQueryExecutorComponent {
+
+  import blueeyes.json.xschema.Extractor
+
+  def loadConfig() = IO { new YggConfig { def config = Configuration.parse("") } }
+    
+  def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
+  
+  def queryExecutorFactory(): QueryExecutor = {
+
+    val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
+      for( yConfig <- loadConfig();
+           state   <- YggState.restore(yConfig.dataDir) ) yield {
+
+        state map { yState => new YggdrasilQueryExecutor {
+          val controlTimeout = Duration(120, "seconds")
+          val maxEvalDuration = controlTimeout 
+
+          lazy val actorSystem = ActorSystem("akka_ingest_server")
+          implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+          val yggConfig = yConfig
+          val yggState = yState
+
+
+        }}
+      }
+
+    validatedQueryExecutor map { 
+      case Success(qs) => qs
+      case Failure(er) => sys.error("Error initializing query service: " + er)
+    } unsafePerformIO
+
   }
+
 }
 
-object QuickQueryService extends App {
-  object qs extends HardwiredQueryService
+object QuickQueryExecutor extends App with YggdrasilQueryExecutorComponent {
+
+  val qs = queryExecutorFactory()
 
   qs.execute(args(0)) match {
     case JString(s) => println(s)
