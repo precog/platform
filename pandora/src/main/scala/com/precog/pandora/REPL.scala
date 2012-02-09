@@ -5,6 +5,8 @@ import akka.dispatch.Await
 import akka.util.Duration
 
 import com.precog.yggdrasil.{SValue, YggConfig}
+import com.precog.yggdrasil.shard.YggState
+import com.precog.yggdrasil.shard.ActorYggShard
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
@@ -25,6 +27,12 @@ import net.lag.configgy.Configgy
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+trait Lifecycle {
+  def startup: IO[Unit]
+  def run: IO[Unit]
+  def shutdown: IO[Unit]
+}
+
 trait REPL extends LineErrors
     with Parser
     with TreeShaker
@@ -32,13 +40,12 @@ trait REPL extends LineErrors
     with Emitter
     with Evaluator
     with DatasetConsumers 
-    with YggdrasilOperationsAPI
-    with YggdrasilStorage {
+    with OperationsAPI {
 
   val Prompt = "quirrel> "
   val Follow = "       | "
 
-  def run() {
+  def run = IO {
     val terminal = TerminalFactory.getFlavor(TerminalFactory.Flavor.UNIX)
     terminal.init()
     
@@ -98,7 +105,7 @@ trait REPL extends LineErrors
         true
       }
       
-      case Help => { 
+      case Help => {
         printHelp(out)
         true
       }
@@ -196,40 +203,73 @@ object Console extends App {
   // Configuration required for blueyes IngestServer
   Configgy.configureFromResource("default_ingest.conf")
 
-  object repl extends REPL with AkkaIngestServer {
-    val controlTimeout = Duration(120, "seconds")
-    lazy val yggConfig = loadConfig(args.headOption)
+  def loadConfig(dataDir: Option[String]): IO[YggConfig] = IO {
+    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
 
-    def startup() {
-      // start ingest server
-      Await.result(start, controlTimeout)
-      // start storage shard 
-      Await.result(storage.start, controlTimeout)
+    new YggConfig {
+      def config = Configuration.parse(rawConfig)  
     }
+  }
 
-    def shutdown() {
-      // stop storaget shard
-      Await.result(storage.stop, controlTimeout)
-      // stop ingest server
-      Await.result(stop, controlTimeout)
+  val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
+    yconfig <- loadConfig(args.headOption) 
+    shard  <- YggState.restore(yconfig.dataDir) 
+  } yield {
+    shard map { shardState => 
+      new REPL with AkkaIngestServer with Lifecycle { self =>
+        val controlTimeout = Duration(120, "seconds")
+        val maxEvalDuration = controlTimeout
+        val yggConfig: YggConfig = yconfig
 
-      actorSystem.shutdown
-    }
+        object storage extends ActorYggShard {
+          val yggState = shardState 
+          val yggConfig: YggConfig = yconfig 
+        }
 
-    def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
-      val rawConfig = dataDir map {
-        "precog.storage.root = " + _
-      } getOrElse { "" }
+        object ops extends YggdrasilEnumOps {
+          val yggConfig: YggConfig = yconfig 
+          val asyncContext = self.asyncContext
+          val flatMapTimeout = akka.util.Timeout(controlTimeout)
+        }
 
-      IO { 
-        new YggConfig {
-          def config = Configuration.parse(rawConfig)  
+        object query extends LevelDBQueryAPI {
+          val storage = self.storage
+          val asyncContext = self.asyncContext
+          val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+        }
+
+        def startup = IO {
+          // start ingest server
+          Await.result(start, controlTimeout)
+          // start storage shard 
+          Await.result(storage.start, controlTimeout)
+        }
+
+        def shutdown = IO {
+          // stop storaget shard
+          Await.result(storage.stop, controlTimeout)
+          // stop ingest server
+          Await.result(stop, controlTimeout)
+
+          actorSystem.shutdown
         }
       }
     }
   }
 
-  repl.startup()
-  repl.run()
-  repl.shutdown()
+  val run = repl.flatMap[Unit] {
+    case scalaz.Success(lifecycle) => 
+      for {
+        _ <- lifecycle.startup
+        _ <- lifecycle.run
+        _ <- lifecycle.shutdown
+      } yield ()
+
+    case scalaz.Failure(error) =>
+      IO {
+        throw new RuntimeException("An error occurred deserializing a database descriptor: " + error)
+      }
+  }
+
+  run.unsafePerformIO
 }

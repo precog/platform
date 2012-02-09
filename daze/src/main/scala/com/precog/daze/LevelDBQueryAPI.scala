@@ -14,26 +14,27 @@ import akka.dispatch.Future
 import akka.util.duration._
 import blueeyes.json.JPath
 import java.io.File
-import scalaz.{Identity => _, _}
+
+import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.set._
 import scalaz.std.AllInstances._
-
 import Iteratee._
+
 trait LevelDBQueryAPI extends StorageEngineQueryAPI {
-  implicit def projectionRetrievalTimeout: akka.util.Timeout = 10 seconds
   implicit def asyncContext: akka.dispatch.ExecutionContext
+  def projectionRetrievalTimeout: akka.util.Timeout
 
   def storage: YggShard
 
-  def fullProjection[X](path: Path): Future[DatasetEnum[X, SEvent, IO]] = {
+  def fullProjection[X](path: Path): DatasetEnum[X, SEvent, IO] = DatasetEnum(
     for {
       selectors   <- storage.metadata.findSelectors(path) 
       sources     <- Future.sequence(selectors.map(s => storage.metadata.findProjections(path, s).map(p => (s, p))))
       enumerator: EnumeratorP[X, SEvent, IO]  <- assemble(path, sources)
-    } yield DatasetEnum(enumerator)
-  }
+    } yield enumerator
+  )
 
   private case class LevelDBDatasetMask[X](path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
     def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
@@ -41,12 +42,10 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
     def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
 
     def typed(tpe: SType): DatasetMask[X] = copy(tpe = Some(tpe))
-    lazy val realize: Future[DatasetEnum[X, SEvent, IO]] = {
-      def assembleForSelector(selector: JPath, descriptors: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
-        for {
-          sources    <- descriptors
-          enumerator: EnumeratorP[X, SEvent, IO] <- assemble(path, List((selector, sources)))
-        } yield DatasetEnum(enumerator)
+
+    lazy val realize: DatasetEnum[X, SEvent, IO] = {
+      def assembleForSelector(selector: JPath, retrieval: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
+        DatasetEnum(retrieval flatMap { descriptors =>  assemble[X](path, List((selector, descriptors))) })
 
       (selector, tpe) match {
         case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
@@ -100,7 +99,7 @@ trait LevelDBQueryAPI extends StorageEngineQueryAPI {
 
   private def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, SColumn, IO]] = {
     for {
-      projections <- Future.sequence(descriptors map { storage.projection(_) })
+      projections <- Future.sequence(descriptors map { storage.projection(_)(projectionRetrievalTimeout) })
     } yield {
       EnumeratorP.mergeAll(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
     }

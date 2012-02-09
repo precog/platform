@@ -73,7 +73,7 @@ trait SValue {
                                                           .map(sv => (SObject(o + (name -> sv)))) 
                                                         }
 
-      case JPathIndex(i) :: Nil => mapArrayOr(Option.empty[SValue]) { a => Some(SArray(a.padTo(i, SNull).updated(i, cv.toSValue))) }
+      case JPathIndex(i) :: Nil => mapArrayOr(Option.empty[SValue]) { a => Some(SArray(a.padTo(i + 1, SNull).updated(i, cv.toSValue))) }
       case JPathIndex(i) :: xs  => mapArrayOr(Option.empty[SValue]) { a => 
                                                       val child = xs.head match { 
                                                         case JPathField(_)  => SObject(Map())

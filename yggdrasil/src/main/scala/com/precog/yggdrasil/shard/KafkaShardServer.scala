@@ -29,18 +29,18 @@ object KafkaShardServer extends Logging {
     
     val yggShard = config flatMap { cfg => YggState.restore(cfg.dataDir) map { (cfg, _) } } map { 
       case (cfg, Success(state)) =>
-        new RealYggShard with KafkaIngester {
+        new ActorYggShard with KafkaIngester {
           val yggState = state 
           val yggConfig = cfg 
           val kafkaIngestConfig = cfg
         }
+
       case (cfg, Failure(e)) => sys.error("Error loading shard state from: %s".format(cfg.dataDir))
     }
    
     val timeout = 300 seconds
 
     val run = for (shard <- yggShard) yield {
-     
       val startFuture = shard.start flatMap { _ => shard.startKafka }
 
       Await.result(startFuture, timeout)
@@ -55,7 +55,6 @@ object KafkaShardServer extends Logging {
 
     run.unsafePerformIO
   }
-
 }
 
 trait KafkaIngester extends Logging {
