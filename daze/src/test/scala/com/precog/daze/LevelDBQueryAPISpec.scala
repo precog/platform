@@ -32,6 +32,7 @@ import org.specs2.mutable._
 object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
 
   val dataPath = Path("/test")
   def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
@@ -90,15 +91,15 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
       val enum = combine(projectionData) map { case (ids, sv) => sv }
       
       (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
-    }.pendingUntilFixed
+    }
   }
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(fullProjection[Unit](dataPath), intToDurationInt(30).seconds) map { case (ids, sv) => sv }
+      val enum = Await.result(fullProjection[Unit](dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
       
-      (consume[Unit, SValue, IO, List] &= enum.enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
-    }.pendingUntilFixed
+      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
+    }
   }
 }
 

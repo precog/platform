@@ -38,8 +38,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case None => {
             implicit val order = identitiesOrder(parent.provenance.length)
             
-            val result = maybeRealize(loop(parent, roots)) flatMap {
-              case (_, SString(str)) => Await.result(query.fullProjection[X](Path(str)), 10 seconds)
+            val result = ops.flatMap(maybeRealize(loop(parent, roots))) {
+              case (_, SString(str)) => query.fullProjection[X](Path(str))
               case _ => ops.empty[X, SEvent, IO]
             }
             
@@ -83,22 +83,22 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case (_, sv) => sv
         }
         
-        val enumP = mapped.enum
-
-        val reducedEnumP: EnumeratorP[X, SValue, IO] = new EnumeratorP[X, SValue, IO] {
-          def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, SValue, G] = {
-            import MO._
-            new EnumeratorT[X, SValue, G] {
-              def apply[A] = (step: StepT[X, SValue, G, A]) => 
-                for {
-                  opt <- reductionIter[X, G](red) &= enumP[G]
-                  a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, G](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, G]].zero))
-                } yield a
+        val reducedEnumPF = mapped.fenum map { enumP =>
+          new EnumeratorP[X, SValue, IO] {
+            def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, SValue, G] = {
+              import MO._
+              new EnumeratorT[X, SValue, G] {
+                def apply[A] = (step: StepT[X, SValue, G, A]) => 
+                  for {
+                    opt <- reductionIter[X, G](red) &= enumP[G]
+                    a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, G](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, G]].zero))
+                  } yield a
+              }
             }
           }
         }
 
-        val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumP)
+        val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumPF)
         
         Right(reducedDS map { sv => (Vector(), sv) })
       }
@@ -108,7 +108,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val splitEnum = maybeRealize(loop(parent, roots))
         
-        val result = ops.sort(splitEnum, None).uniq flatMap {
+        val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
           case (_, sv) =>
             maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
         }
@@ -268,7 +268,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   }
   
   private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
-    (result.left map { mask => Await.result(mask.realize, 10 seconds) }).fold(identity, identity)
+    (result.left map { _.realize }).fold(identity, identity)
   
   protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int): DatasetEnum[X, SEvent, IO] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {

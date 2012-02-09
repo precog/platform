@@ -10,5 +10,5 @@ trait DatasetMask[X] {
   def derefObject(field: String): DatasetMask[X] 
   def derefArray(index: Int): DatasetMask[X]
   def typed(tpe: SType): DatasetMask[X]
-  def realize: Future[DatasetEnum[X, SEvent, IO]]
+  def realize: DatasetEnum[X, SEvent, IO]
 }

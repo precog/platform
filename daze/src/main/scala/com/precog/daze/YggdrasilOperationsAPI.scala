@@ -4,30 +4,27 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 import com.precog.yggdrasil.util._
 
+import akka.dispatch.Await
+import akka.dispatch.Future
 import java.io.File
 
-import scalaz.Order
+import scalaz._
 import scalaz.effect._
+import scalaz.iteratee._
+import Iteratee._
 
-trait YggdrasilStorage {
-  def storage: YggShard
+trait AkkaConfig {
+  implicit def asyncContext: akka.dispatch.ExecutionContext
 }
 
-trait YggdrasilOperationsAPI extends OperationsAPI { self: YggdrasilStorage =>
-  def asyncContext: akka.dispatch.ExecutionContext
+trait YggdrasilEnumOps extends DatasetEnumOps {
+  def yggConfig: YggConfig
 
-  object ops extends DatasetEnumOps {
-    def sort[X](enum: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
-      DatasetEnum(Enumerators.sort[X](enum.enum, storage.yggConfig.sortBufferSize, storage.yggConfig.newWorkDir, enum.descriptor))
-    }
-    
-    def memoize[X](enum: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO] = enum      // TODO
+  def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO] = {
+    DatasetEnum(d.fenum.map(Enumerators.sort[X](_, yggConfig.sortBufferSize, yggConfig.scratchDir, d.descriptor)))
   }
-
-  object query extends LevelDBQueryAPI {
-    def asyncContext = self.asyncContext
-    def storage = self.storage
-  }
+  
+  def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO] = d      // TODO
 }
 
 // vim: set ts=4 sw=4 et:
