@@ -4,6 +4,8 @@ package util
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
 
+import scala.collection.generic.CanBuildFrom
+
 trait Source[+A] {
   def apply(): A
   def into(sink: Sink[A])
@@ -52,6 +54,55 @@ class Atom[A] extends Source[A] with Sink[A] {
       }
     } finally {
       lock.unlock()
+    }
+  }
+  
+  def +=[B](b: B)(implicit cbf: CanBuildFrom[A, B, A], evidence: A <:< TraversableOnce[B]) {
+    if (!isForced || setterThread != null) {
+      lock.lock()
+      try {
+        if (!isForced || setterThread != null) {
+          val builder = if (!isSet) {
+            cbf()
+          } else {
+            val back = cbf(value)
+            back ++= value
+            back
+          }
+          
+          builder += b
+          
+          value = builder.result()
+          isSet = true
+        }
+      } finally {
+        lock.unlock()
+      }
+    }
+  }
+  
+  def ++=[E, Coll[_]](c: Coll[E])(implicit cbf: CanBuildFrom[Coll[E], E, A], evidence: A =:= Coll[E], evidence2: Coll[E] <:< TraversableOnce[E]) {
+    if (!isForced || setterThread != null) {
+      lock.lock()
+      try {
+        if (!isForced || setterThread != null) {
+          val builder = if (!isSet) {
+            cbf()
+          } else {
+            val current = evidence(value)
+            val back = cbf(current)
+            back ++= current
+            back
+          }
+          
+          builder ++= evidence2(c)
+          
+          value = builder.result()
+          isSet = true
+        }
+      } finally {
+        lock.unlock()
+      }
     }
   }
   
@@ -106,6 +157,10 @@ class Atom[A] extends Source[A] with Sink[A] {
           lock.unlock()
           try {
             populate()
+            
+            if (!isSet) {
+              sys.error("Unable to self-populate atom (value not set following attempted population)")
+            }
           } finally {
             lock.lock()
           }
@@ -135,93 +190,8 @@ object Atom {
   def atom[A](f: =>Unit): Atom[A] = new Atom[A] {
     override def populate() = {
       f
-      
-      if (!isSet) {
-        sys.error("Unable to self-populate atom (value not set following attempted population)")
-      }
     }
   }
   
   def atom[A]: Atom[A] = new Atom[A]
-}
-
-
-trait Aggregate[A, Coll[_]] extends Source[Coll[A]] {
-  private val ref = new AtomicReference(init)
-  
-  @volatile
-  private var isForced = false
-  
-  @volatile
-  private var targets = Set[Sink[Coll[A]]]()
-  
-  private val lock = new ReentrantLock
-  
-  def +=(a: A)
-  def ++=(s: Coll[A])
-  
-  def apply() = {
-    if (isForced) {
-      ref.get
-    } else {
-      lock.lock()
-      try {
-        if (isForced) {
-          ref.get
-        } else {
-          isForced = true
-          val back = ref.get
-          
-          targets foreach { _() = back }
-          targets = Set()
-          
-          back
-        }
-      } finally {
-        lock.unlock()
-      }
-    }
-  }
-  
-  def into(sink: Sink[Coll[A]]) {
-    if (isForced) {
-      sink() = ref.get
-    } else {
-      lock.lock()
-      try {
-        if (isForced) {
-          sink() = ref.get
-        } else {
-          targets += sink
-        }
-      } finally {
-        lock.unlock()
-      }
-    }
-  }
-  
-  protected final def swap(f: Coll[A] => Coll[A]) {
-    var successful = false
-    while (!isForced && !successful) {
-      val set = ref.get
-      val set2 = f(set)
-      successful = ref.compareAndSet(set, set2)
-    }
-  }
-  
-  protected def init: Coll[A]
-}
-
-class SetAtom[A] extends Aggregate[A, Set] {
-  def +=(a: A) = swap { _ + a }
-  def ++=(s: Set[A]) = swap { _ ++ s }
-  
-  protected def init = Set[A]()
-}
-
-class MapAtom[A, B] extends Aggregate[(A, B), ({ type L[_] = Map[A, B] })#L] {
-  def +=(pair: (A, B)) = swap { _ + pair }
-  def ++=(m: Map[A, B]) = swap { _ ++ m }
-  
-  protected def init = Map[A, B]()
 }

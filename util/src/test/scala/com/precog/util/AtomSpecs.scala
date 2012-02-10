@@ -120,15 +120,21 @@ object AtomSpecs extends Specification with ScalaCheck {
   
   "aggregate atoms" should {
     "store all values and return" in check { xs: Set[Int] =>
-      val a = new SetAtom[Int]
-      xs foreach (a +=)
+      lazy val a: Atom[Set[Int]] = atom[Set[Int]] {
+        a() = Set()
+      }
+      
+      xs foreach { x => a += x }
       
       a() mustEqual xs
       a() mustEqual xs
     }
     
     "concatenate values and return" in check { (i: Int, xs: Set[Int]) =>
-      val a = new SetAtom[Int]
+      lazy val a: Atom[Set[Int]] = atom[Set[Int]] {
+        a() = Set()
+      }
+      
       a += i
       a ++= xs
       
@@ -137,7 +143,10 @@ object AtomSpecs extends Specification with ScalaCheck {
     }
     
     "silently fail for mutation following force" in {
-      val a = new SetAtom[Int]
+      lazy val a: Atom[Set[Int]] = atom[Set[Int]] {
+        a() = Set()
+      }
+      
       a += 42
       a() mustEqual Set(42)
       
