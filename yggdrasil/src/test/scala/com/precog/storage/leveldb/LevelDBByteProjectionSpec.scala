@@ -208,7 +208,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         val (projectedIds, projectedValues) = byteProjection.project(identities, values)
 
         byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (identities, values) 
-      }.display(maxDiscarded -> 500, minTestsOk -> 200)
+      }.set(maxDiscarded -> 500, minTestsOk -> 200)
     }
   }
 
