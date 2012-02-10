@@ -4,8 +4,9 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.util.Enumerators
 import com.precog.analytics.Path
 
-import akka.dispatch.Future
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
+import akka.dispatch.Future
 import akka.util.duration._
 
 import blueeyes.json._
@@ -51,10 +52,16 @@ trait DatasetConsumers extends Evaluator {
   }
 }
 
-trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with AkkaConfig { self =>
+trait StubOperationsAPI 
+    extends StorageEngineQueryComponent
+    with YggdrasilEnumOpsComponent
+    with DatasetConsumers { self =>
+
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
-  override object query extends StorageEngineQueryAPI {
+  object query extends QueryAPI
+  
+  trait QueryAPI extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
     
@@ -63,7 +70,7 @@ trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with AkkaCon
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[X] = this
       
-      lazy val realize: DatasetEnum[X, SEvent, IO] = {
+      def realize(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
         fullProjection[X](path) collect unlift(mask)
       }
       
@@ -87,7 +94,7 @@ trait StubOperationsAPI extends OperationsAPI with DatasetConsumers with AkkaCon
       }
     }
     
-    def fullProjection[X](path: Path): DatasetEnum[X, SEvent, IO] =
+    def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
       DatasetEnum(akka.dispatch.Promise.successful(readJSON[X](path)))
     
     def mask[X](path: Path): DatasetMask[X] = StubDatasetMask(path, Vector())

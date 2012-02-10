@@ -18,24 +18,29 @@ import scalaz.effect._
 import org.streum.configrity.Configuration
 
 object KafkaShardServer extends Logging { 
-
-  trait KafkaShardConfig extends YggConfig with KafkaIngestConfig
-
   def main(args: Array[String]) {
-    val config = IO { Configuration.load(args(0)) } map { cfg => new KafkaShardConfig {
-        def config = cfg
+    val config = IO {  
+      new BaseConfig with KafkaIngestConfig {
+        val config = Configuration.load(args(0))
       }
     }
     
-    val yggShard = config flatMap { cfg => YggState.restore(cfg.dataDir) map { (cfg, _) } } map { 
-      case (cfg, Success(state)) =>
-        new ActorYggShard with KafkaIngester {
-          val yggState = state 
-          val yggConfig = cfg 
-          val kafkaIngestConfig = cfg
-        }
+    val yggShard = for {
+      cfg <- config
+      restorationResult <- YggState.restore(cfg.dataDir)
+    } yield {
+      restorationResult match {
+        case Success(state) =>
+          new ActorYggShard with KafkaIngester with YggConfigComponent {
+            type YggConfig = BaseConfig with KafkaIngestConfig 
+            val yggState = state 
+            val yggConfig = cfg 
+            val kafkaIngestConfig = cfg
+          }
 
-      case (cfg, Failure(e)) => sys.error("Error loading shard state from: %s".format(cfg.dataDir))
+        case Failure(e) => 
+          sys.error("Error loading shard state from: %s".format(cfg.dataDir))
+      }
     }
    
     val timeout = 300 seconds

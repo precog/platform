@@ -14,6 +14,12 @@ trait AST extends Phases {
   import Atom._
   import ast._
   
+  type Solution
+
+  type Binding
+  type FormalBinding
+  type Provenance
+
   def printSExp(tree: Expr, indent: String = ""): String = tree match {
     case Add(_, left, right) => "%s(+\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Sub(_, left, right) => "%s(-\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
@@ -510,7 +516,7 @@ trait AST extends Phases {
         _errors ++= phase(root)
       }
     }
-  
+ 
   object ast {    
     sealed trait ExprLeafNode extends Expr with LeafNode
     

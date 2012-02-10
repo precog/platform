@@ -29,46 +29,49 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
-object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
-  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
-  implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
-
+class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent {
   val dataPath = Path("/test")
-  def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
+  implicit def asyncContext = ExecutionContext.defaultExecutionContext
 
-  object IdentitiesOrdering extends scala.math.Ordering[Identities] {
-    override def compare(id1: Identities, id2: Identities) = {
-      (id1 zip id2).foldLeft(0) {
-        case (0, (id1, id2)) => id1 compare id2
-        case (other, _) => other
+  type YggConfig = LevelDBQueryConfig
+  object yggConfig extends LevelDBQueryConfig {
+    val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
+  }
+
+  object storage extends YggShard {
+    def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+
+    object IdentitiesOrdering extends scala.math.Ordering[Identities] {
+      override def compare(id1: Identities, id2: Identities) = {
+        (id1 zip id2).foldLeft(0) {
+          case (0, (id1, id2)) => id1 compare id2
+          case (other, _) => other
+        }
       }
     }
-  }
 
-  case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
-    def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
+    case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
+      def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-    def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
-      enumPStream[X, (Identities, Seq[CValue]), IO](data.toStream)
+      def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
+        enumPStream[X, (Identities, Seq[CValue]), IO](data.toStream)
+      }
+
+      def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
     }
 
-    def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
-  }
+    val (sampleData, _) = DistributedSampleSet.sample(5, 0)
 
-  val (sampleData, _) = DistributedSampleSet.sample(5, 0)
-  val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
-    case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
-      case (acc, ProjectionData(descriptor, identities, values, _)) =>
-        acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
+    val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
+      case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+        case (acc, ProjectionData(descriptor, identities, values, _)) =>
+          acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
+      }
     }
-  }
 
-  val storage = new YggShard {
-    def yggConfig = sys.error("Feature not implemented in test stub.")
-    def start = sys.error("Feature not implemented in test stub.")
-    def stop = sys.error("Feature not implemented in test stub.")
     def store(em: EventMessage) = sys.error("Feature not implemented in test stub.")
+
     def metadata = new StorageMetadata {
       implicit val dispatcher = actorSystem.dispatcher
       def findSelectors(path: Path): Future[Seq[JPath]] = 
@@ -82,23 +85,25 @@ object LevelDBQueryAPISpec extends Specification with LevelDBQueryAPI {
       Future(projections(descriptor))
   }
 
+  object query extends QueryAPI
+
   "combine" should {
     "restore objects from their component parts" in {
-      val projectionData = projections map { 
+      val projectionData = storage.projections map { 
         case (pd, p) => ((pd.columns(0).selector, p.getAllPairs[Unit] map { case (ids, vs) =>  (ids, vs(0)) })) 
       } toList
 
-      val enum = combine(projectionData) map { case (ids, sv) => sv }
+      val enum = query.combine(projectionData) map { case (ids, sv) => sv }
       
-      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
+      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(fullProjection[Unit](dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.fullProjection[Unit](dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
       
-      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(sampleData.map(fromJValue))
+      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 }

@@ -40,7 +40,7 @@ object PlatformBuild extends Build {
   lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
   
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common)
+  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common, quirrel, daze, yggdrasil)
 
   val dist = TaskKey[Unit]("dist", "builds dist")
   val extractData = TaskKey[String]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
