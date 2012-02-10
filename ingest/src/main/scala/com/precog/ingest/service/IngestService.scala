@@ -49,8 +49,6 @@ import com.precog.ct._
 import com.precog.ct.Mult._
 import com.precog.ct.Mult.MDouble._
 
-//import com.precog.instrumentation.blueeyes.ReportGridInstrumentation
-//import com.precog.api.ReportGridTrackingClient
 import com.precog.ingest.service.service._
 import com.precog.ingest.service._
 
@@ -69,8 +67,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   def eventStoreFactory(configMap: ConfigMap): EventStore
 
   def mongoFactory(configMap: ConfigMap): Mongo
-
-  //def auditClient(configMap: ConfigMap): ReportGridTrackingClient[JValue] 
 
   def storageReporting(configMap: ConfigMap): StorageReporting
 
@@ -108,29 +104,13 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         } ->
         request { (state: IngestState) =>
 
-          //val audit = auditor(state.auditClient, clock, state.tokenManager)
-          //import audit._
-
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              /* The virtual file system, which is used for storing data,
-               * retrieving data, and querying for metadata.
-               */
-              path("/store") {
-                dataPath("vfs") {
-                  post(new TrackingService(state.eventStore, state.storageReporting, clock, false))
-                }
-              } ~ 
-              dataPath("vfs") {
+              dataPath("/store") {
                 post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
               } ~
               path("/query") {
                 post(new QueryServiceHandler(state.queryExecutor))
-              } ~
-              path("/echo") {
-                dataPath("vfs") {
-                  get(new EchoServiceHandler())
-                }
               }
             }
           }

@@ -79,14 +79,19 @@ trait YggdrasilQueryExecutor
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
   def execute(query: String) = {
-    asBytecode(query) match {
-      case Right(bytecode) => 
-        decorate(bytecode) match {
-          case Right(dag)  => JString(evaluateDag(dag))
-          case Left(error) => JString("Error processing dag: %s".format(error.toString))
-        }
-      
-      case Left(errors) => JString("Parsing errors: %s".format(errors.toString))
+    try {
+      asBytecode(query) match {
+        case Right(bytecode) => 
+          decorate(bytecode) match {
+            case Right(dag)  => JString(evaluateDag(dag))
+            case Left(error) => JString("Error processing dag: %s".format(error.toString))
+          }
+        
+        case Left(errors) => JString("Parsing errors: %s".format(errors.toString))
+      }
+    } catch {
+      // Need to be more specific here or maybe change execute to explicitly return errors 
+      case ex: Exception => JString("Error processing query: %s".format(ex.getMessage))
     }
   }
 
