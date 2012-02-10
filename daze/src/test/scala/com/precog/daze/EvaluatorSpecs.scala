@@ -25,21 +25,27 @@ import akka.util.duration._
 import com.precog.yggdrasil._
 import org.specs2.mutable._
 
+import java.io.File
+
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-trait TestConfig {
-  lazy val yggConfig = new YggConfig {
-    def config = org.streum.configrity.Configuration.parse("")
+trait TestConfigComponent {
+  lazy val yggConfig = new YggConfig
+
+  class YggConfig extends YggEnumOpsConfig {
+    def flatMapTimeout = intToDurationInt(30).seconds
+    def scratchDir: File = null //no filesystem storage in test!
+    def sortBufferSize = 1000
   }
 }
 
 class EvaluatorSpecs extends Specification
     with Evaluator
-    with TestConfig
-    with StubOperationsAPI { self =>
+    with StubOperationsAPI 
+    with TestConfigComponent { self =>
       
   import Function._
   
@@ -47,13 +53,8 @@ class EvaluatorSpecs extends Specification
   import instructions._
 
   def maxEvalDuration = intToDurationInt(30).seconds
-  def flatMapTimeout = intToDurationInt(30).seconds
 
-  object ops extends YggdrasilEnumOps {
-    def asyncContext = self.asyncContext
-    def flatMapTimeout = akka.util.Timeout(intToDurationInt(10) seconds)
-    def yggConfig = self.yggConfig
-  }
+  object ops extends Ops 
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {

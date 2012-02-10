@@ -17,17 +17,18 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.daze
+
+import com.precog.analytics.Path
+import com.precog.yggdrasil.SEvent
 
 import akka.dispatch.ExecutionContext
-import scalaz.effect._
 
-import com.precog.yggdrasil._
+import scalaz.effect.IO
 
-trait DatasetMask[X] {
-  def derefObject(field: String): DatasetMask[X] 
-  def derefArray(index: Int): DatasetMask[X]
-  def typed(tpe: SType): DatasetMask[X]
-  def realize(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+trait StorageEngineQueryAPI {
+  def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+  def mask[X](path: Path): DatasetMask[X]
 }
+
+// vim: set ts=4 sw=4 et:

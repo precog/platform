@@ -23,7 +23,8 @@ package pandora
 import akka.dispatch.Await
 import akka.util.Duration
 
-import com.precog.yggdrasil.{SValue, YggConfig}
+import com.precog.yggdrasil.SValue
+import com.precog.yggdrasil.BaseConfig
 import com.precog.yggdrasil.shard.YggState
 import com.precog.yggdrasil.shard.ActorYggShard
 
@@ -220,13 +221,16 @@ trait REPL extends LineErrors
 
 object Console extends App {
   // Configuration required for blueyes IngestServer
+  val controlTimeout = Duration(120, "seconds")
   Configgy.configureFromResource("default_ingest.conf")
 
-  def loadConfig(dataDir: Option[String]): IO[YggConfig] = IO {
+  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
 
-    new YggConfig {
-      def config = Configuration.parse(rawConfig)  
+    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
+      val config = Configuration.parse(rawConfig)  
+      val flatMapTimeout = controlTimeout
+      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     }
   }
 
@@ -235,27 +239,24 @@ object Console extends App {
     shard  <- YggState.restore(yconfig.dataDir) 
   } yield {
     shard map { shardState => 
-      new REPL with AkkaIngestServer with Lifecycle { self =>
-        val controlTimeout = Duration(120, "seconds")
+      new REPL 
+          with AkkaIngestServer 
+          with YggdrasilEnumOpsComponent
+          with LevelDBQueryComponent
+          with Lifecycle { self =>
+
+        type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+        val yggConfig = yconfig
+
         val maxEvalDuration = controlTimeout
-        val yggConfig: YggConfig = yconfig
 
         object storage extends ActorYggShard {
           val yggState = shardState 
-          val yggConfig: YggConfig = yconfig 
         }
 
-        object ops extends YggdrasilEnumOps {
-          val yggConfig: YggConfig = yconfig 
-          val asyncContext = self.asyncContext
-          val flatMapTimeout = akka.util.Timeout(controlTimeout)
-        }
+        object ops extends Ops 
 
-        object query extends LevelDBQueryAPI {
-          val storage = self.storage
-          val asyncContext = self.asyncContext
-          val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-        }
+        object query extends QueryAPI 
 
         def startup = IO {
           // start ingest server
@@ -285,9 +286,7 @@ object Console extends App {
       } yield ()
 
     case scalaz.Failure(error) =>
-      IO {
-        throw new RuntimeException("An error occurred deserializing a database descriptor: " + error)
-      }
+      IO(sys.error("An error occurred deserializing a database descriptor: " + error))
   }
 
   run.unsafePerformIO

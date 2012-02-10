@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 
 import com.precog.yggdrasil._
@@ -77,9 +78,6 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descript
 }
 
 trait DatasetEnumOps {
-  implicit def asyncContext: akka.dispatch.ExecutionContext
-  def flatMapTimeout: akka.util.Timeout
-
   def cogroup[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
     DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F].apply(en1, en2))
 
@@ -98,13 +96,10 @@ trait DatasetEnumOps {
   def map[X, E1, E2, F[_]: Monad](d: DatasetEnum[X, E1, F])(f: E1 => E2): DatasetEnum[X, E2, F] = 
     d.map(f)
 
-  def flatMap[X, E1, E2, F[_]: Monad](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F]): DatasetEnum[X, E2, F] = 
-    DatasetEnum(d.fenum.map(_.flatMap(e => Await.result(f(e).fenum, flatMapTimeout.duration))))
-
   def collect[X, E1, E2, F[_]: Monad](d: DatasetEnum[X, E1, F])(pf: PartialFunction[E1, E2]): DatasetEnum[X, E2, F] = 
     d.collect(pf)
 
-  def empty[X, E, F[_]: Monad]: DatasetEnum[X, E, F] = DatasetEnum(
+  def empty[X, E, F[_]](implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
       new EnumeratorP[X, E, F] {
         def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
@@ -115,7 +110,7 @@ trait DatasetEnumOps {
     )
   )
 
-  def point[X, E, F[_]: Monad](value: E): DatasetEnum[X, E, F] = DatasetEnum(
+  def point[X, E, F[_]](value: E)(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
       new EnumeratorP[X, E, F] {
         def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
@@ -126,7 +121,7 @@ trait DatasetEnumOps {
     )
   )
 
-  def liftM[X, E, F[_]: Monad](value: F[E]): DatasetEnum[X, E, F] = DatasetEnum(
+  def liftM[X, E, F[_]](value: F[E])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
       new EnumeratorP[X, E, F] {
         def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = new EnumeratorT[X, E, G] {
@@ -140,6 +135,8 @@ trait DatasetEnumOps {
       }
     )
   )
+
+  def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] 
 
   def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO]
   
