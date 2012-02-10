@@ -62,7 +62,8 @@ trait NullQueryExecutor extends QueryExecutor {
   def shutdown = Future { actorSystem.shutdown }
 }
 
-trait QuirrelQueryExecutor extends QueryExecutor 
+trait YggdrasilQueryExecutor 
+    extends QueryExecutor
     with LineErrors
     with Compiler
     with Parser
@@ -71,7 +72,30 @@ trait QuirrelQueryExecutor extends QueryExecutor
     with Emitter
     with Evaluator
     with DatasetConsumers
-    with OperationsAPI { 
+    with OperationsAPI 
+    with YggdrasilEnumOpsComponent
+    with LevelDBQueryComponent { self =>
+
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  
+  val yggConfig: YggConfig
+  val yggState: YggState
+
+  val actorSystem: ActorSystem
+  val asyncContext: ExecutionContext
+  val controlTimeout: Duration 
+
+  object storage extends ActorYggShard {
+    val yggState = self.yggState
+    val yggConfig: YggConfig = self.yggConfig
+  }
+
+  object ops extends Ops 
+
+  object query extends QueryAPI 
+  
+  def startup() = storage.start
+  def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
   def execute(query: String) = {
     asBytecode(query) match {
@@ -85,26 +109,15 @@ trait QuirrelQueryExecutor extends QueryExecutor
     }
   }
 
-  def evaluateDag(dag: DepGraph) = {
+  private def evaluateDag(dag: DepGraph) = {
     consumeEval(dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
   }
 
-  def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {
+  private def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {
     val tree = compile(query)
     val errors = runPhasesInSequence(tree)
     if(errors.size != 0) Left(errors) else Right(emit(tree)) 
   }
-}
-
-trait YggdrasilQueryExecutor 
-    extends QuirrelQueryExecutor 
-    with YggdrasilEnumOpsComponent
-    with LevelDBQueryComponent { self =>
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
-
-  object ops extends Ops 
-
-  object query extends QueryAPI 
 }
 
 trait QueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with Config {
@@ -137,13 +150,7 @@ trait YggdrasilQueryExecutorComponent {
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
           val yggConfig = yConfig
-
-          object storage extends ActorYggShard {
-            val yggState = yState
-          }
-
-          def startup = storage.start
-          def shutdown = storage.stop map { _ => actorSystem.shutdown } 
+          val yggState = yState
         }}
       }
 
@@ -154,14 +161,4 @@ trait YggdrasilQueryExecutorComponent {
 
   }
 
-}
-
-object QuickQueryExecutor extends App with YggdrasilQueryExecutorComponent {
-
-  val qs = queryExecutorFactory()
-
-  qs.execute(args(0)) match {
-    case JString(s) => println(s)
-    case _          => println("Unexpected result.")
-  }
 }
