@@ -17,7 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.service
+package com.precog.ingest
+
+import service._
 
 import blueeyes._
 import blueeyes.bkka._
@@ -68,10 +70,10 @@ import com.precog.ct._
 import com.precog.ct.Mult._
 import com.precog.ct.Mult.MDouble._
 
-import com.precog.ingest.service.service._
+import com.precog.ingest._
 import com.precog.ingest.service._
 
-case class IngestState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, storageReporting: StorageReporting)
+case class IngestState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, usageLogging: UsageLogging)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
@@ -87,7 +89,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   def mongoFactory(configMap: ConfigMap): Mongo
 
-  def storageReporting(configMap: ConfigMap): StorageReporting
+  def usageLogging(configMap: ConfigMap): UsageLogging 
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager
 
@@ -117,7 +119,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
               indexMongo,
               tokenMgr,
               eventStore,
-              storageReporting(config.configMap("storageReporting"))
+              usageLogging(config.configMap("usageLogging"))
             )
           }
         } ->
@@ -125,8 +127,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              dataPath("/store") {
-                post(new TrackingService(state.eventStore, state.storageReporting, clock, true))
+              dataPath("track") {
+                post(new TrackingServiceHandler(state.eventStore, state.usageLogging, clock, true))
               } ~
               path("/query") {
                 post(new QueryServiceHandler(state.queryExecutor))

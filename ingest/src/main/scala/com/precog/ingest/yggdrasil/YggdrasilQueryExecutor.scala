@@ -18,7 +18,8 @@
  *
  */
 package com.precog
-package ingest.service
+package ingest
+package yggdrasil 
 
 import blueeyes.json.JsonAST._
 
@@ -31,8 +32,8 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-import yggdrasil._
-import yggdrasil.shard._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.shard._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -47,19 +48,47 @@ import org.streum.configrity.Configuration
 
 import net.lag.configgy.ConfigMap
 
-trait QueryExecutor {
-  def execute(query: String): JValue
-  def startup: Future[Unit]
-  def shutdown: Future[Unit]
+trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with Config {
+  val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
+  val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
 
-trait NullQueryExecutor extends QueryExecutor {
-  def actorSystem: ActorSystem
-  implicit def executionContext: ExecutionContext
+trait YggdrasilQueryExecutorComponent {
+  import blueeyes.json.xschema.Extractor
 
-  def execute(query: String) = JString("Query service not avaialble")
-  def startup = Future(())
-  def shutdown = Future { actorSystem.shutdown }
+  def loadConfig: IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO { 
+    new BaseConfig with YggdrasilQueryExecutorConfig {
+      val config = Configuration.parse("")  
+    }
+  }
+    
+  def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
+  
+  def queryExecutorFactory(): QueryExecutor = {
+
+    val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
+      for( yConfig <- loadConfig;
+           state   <- YggState.restore(yConfig.dataDir) ) yield {
+
+        state map { yState => new YggdrasilQueryExecutor {
+          val controlTimeout = Duration(120, "seconds")
+          val maxEvalDuration = controlTimeout 
+
+          lazy val actorSystem = ActorSystem("akka_ingest_server")
+          implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+          val yggConfig = yConfig
+          val yggState = yState
+        }}
+      }
+
+    validatedQueryExecutor map { 
+      case Success(qs) => qs
+      case Failure(er) => sys.error("Error initializing query service: " + er)
+    } unsafePerformIO
+
+  }
+
 }
 
 trait YggdrasilQueryExecutor 
@@ -124,45 +153,3 @@ trait YggdrasilQueryExecutor
   }
 }
 
-trait QueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with Config {
-  val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
-  val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
-}
-
-trait YggdrasilQueryExecutorComponent {
-  import blueeyes.json.xschema.Extractor
-
-  def loadConfig: IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO { 
-    new BaseConfig with QueryExecutorConfig {
-      val config = Configuration.parse("")  
-    }
-  }
-    
-  def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
-  
-  def queryExecutorFactory(): QueryExecutor = {
-
-    val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
-      for( yConfig <- loadConfig;
-           state   <- YggState.restore(yConfig.dataDir) ) yield {
-
-        state map { yState => new YggdrasilQueryExecutor {
-          val controlTimeout = Duration(120, "seconds")
-          val maxEvalDuration = controlTimeout 
-
-          lazy val actorSystem = ActorSystem("akka_ingest_server")
-          implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-          val yggConfig = yConfig
-          val yggState = yState
-        }}
-      }
-
-    validatedQueryExecutor map { 
-      case Success(qs) => qs
-      case Failure(er) => sys.error("Error initializing query service: " + er)
-    } unsafePerformIO
-
-  }
-
-}

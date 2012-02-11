@@ -17,14 +17,39 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.util
+package com.precog
+package ingest
+package kafka
 
-import java.io.File
+import common._
 
-object FixMe {
-  private val show = new File(System.getProperty("user.home") + "/.fixme.show").exists
+import java.util.Properties
 
-  def fixme(msg: String) {
-    if(show) println("FIXME: " + msg)
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
+
+import _root_.kafka.producer._
+
+class KafkaMessaging(topic: String, config: Properties)(implicit dispatcher: MessageDispatcher) extends Messaging {
+ 
+  val producer = new Producer[String, IngestMessage](new ProducerConfig(config))
+
+  def send(address: MailboxAddress, msg: EventMessage) = {
+    Future {
+      val data = new ProducerData[String, IngestMessage](topic, msg)
+      try {
+        producer.send(data)
+      } catch {
+        case x => x.printStackTrace(System.out); throw x
+      }
+    }
   }
+
+  def close() = {
+    Future {
+      producer.close()
+    }
+  }
+
 }
+

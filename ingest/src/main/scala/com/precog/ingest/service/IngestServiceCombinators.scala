@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.service
+package com.precog.ingest
 package service
 
 import blueeyes._

@@ -17,33 +17,42 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.service
-package external
+package com.precog.ingest
+package service
 
-import blueeyes.core.data.{ByteChunk, Bijection, BijectionsChunkJson}
 import blueeyes.core.http._
+import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.service._
-import blueeyes.core.service.engines.HttpClientXLightWeb
 import blueeyes.json.JsonAST._
-//import rosetta.json.blueeyes._
 
 import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
-import java.net.InetAddress
-import java.util.Date
-import scalaz.Scalaz._
+import scalaz.Success
+import scalaz.Failure
 
-//import com.precog.instrumentation.blueeyes.ReportGridInstrumentation
-//import com.precog.api.ReportGridTrackingClient
-//import com.precog.api.blueeyes._
-//import com.precog.api.Tag
+import com.weiglewilczek.slf4s.Logging
 
-//import com.precog.analytics._
+import com.precog.analytics.Token
 
-//object NoopTrackingClient extends ReportGridTrackingClient[JValue](JsonBlueEyes) {
-//  override def track(path: com.precog.api.Path, name: String, properties: JValue = JsonBlueEyes.EmptyObject, rollup: Boolean = false, tags: Set[Tag[JValue]] = Set.empty[Tag[JValue]], count: Option[Int] = None, headers: Map[String, String] = Map.empty): Unit = {
-//    //println("Tracked " + path + "; " + name + " - " + properties)
-//  }
-//}
+class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+ 
+  private val InvalidQuery = HttpResponse[JValue](BadRequest, content=Some(JString("Expected query as json string.")))
 
-// vim: set ts=4 sw=4 et:
+  val service = (request: HttpRequest[Future[JValue]]) => { 
+    Success{ (t: Token) => request.content.map { _.map { 
+      case JString(s) => 
+        val queryResult = queryExecutor.execute(s)
+        HttpResponse[JValue](OK, content=Some(queryResult))
+
+      case _          => InvalidQuery 
+    }}.getOrElse( Future { InvalidQuery } ) }
+  }
+
+  val metadata = Some(DescriptionMetadata(
+    """
+Takes a quirrel query and returns the result of evaluating the query.
+    """
+  ))
+}

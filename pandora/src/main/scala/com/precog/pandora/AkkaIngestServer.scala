@@ -22,9 +22,9 @@ package pandora
 
 import common.Event
 import common.EventMessage
-import ingest.service.IngestServer
-import ingest.service.EventStore
-import ingest.service.NullQueryExecutor
+import ingest.EventStore
+import ingest.NullQueryExecutor
+import ingest.IngestServer
 import yggdrasil.shard.YggShard
 
 import akka.actor.ActorSystem

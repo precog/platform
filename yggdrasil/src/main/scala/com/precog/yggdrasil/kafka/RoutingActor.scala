@@ -21,7 +21,6 @@ package com.precog.yggdrasil
 package kafka
 
 import com.precog.util._
-import com.precog.common.util.FixMe._
 import leveldb._
 import shard._
 import Bijection._

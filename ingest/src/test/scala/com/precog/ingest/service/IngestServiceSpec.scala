@@ -20,6 +20,8 @@
 package com.precog.ingest
 package service
 
+import kafka._
+
 import blueeyes._
 import blueeyes.core.data._
 import blueeyes.core.http._
@@ -121,10 +123,8 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     mgr
   }
 
-  def storageReporting(config: ConfigMap) = {
-    //val testServer = Server("/")
-
-    new ReportGridStorageReporting(TrackingToken.tokenId) 
+  def usageLogging(config: ConfigMap) = {
+    new ReportGridUsageLogging(TrackingToken.tokenId) 
   }
 
   val messaging = new CollectingMessaging

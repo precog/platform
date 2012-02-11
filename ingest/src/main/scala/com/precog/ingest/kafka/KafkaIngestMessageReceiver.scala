@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.api
+package com.precog.ingest
+package kafka
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
@@ -31,9 +32,9 @@ import Scalaz._
 
 import org.scalacheck.Gen._
 
-import kafka.consumer._
-import kafka.message._
-import kafka.serializer._
+import _root_.kafka.consumer._
+import _root_.kafka.message._
+import _root_.kafka.serializer._
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
@@ -49,24 +50,6 @@ import com.precog.common.util.ArbitraryIngestMessage
 
 import com.precog.common._
 
-trait IngestMessageReceivers {
-  def find(address: MailboxAddress): List[IngestMessageReceiver]
-}
-
-trait IngestMessageReceiver extends Iterator[IngestMessage] {
-  def hasNext: Boolean
-  def next(): IngestMessage 
-  def sync()
-}
-
-object TestIngestMessageRecievers extends IngestMessageReceivers with ArbitraryIngestMessage {
-  def find(address: MailboxAddress) = List(new IngestMessageReceiver() {
-    def hasNext = true
-    def next() = genRandomEventMessage.sample.get
-    def sync() = Unit
-  })
-}
-
 class KafkaIngestMessageRecievers(receivers: Map[MailboxAddress, List[IngestMessageReceiver]]) {
   def find(address: MailboxAddress) = receivers(address)
 }
@@ -75,7 +58,7 @@ class KafkaIngestMessageReceiver(topic: String, config: Properties) extends Inge
   config.put("autocommit.enable", "false")
   
   val connector = Consumer.create(new ConsumerConfig(config))
-  val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new IngestMessageCodec)  
+  val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new KafkaIngestMessageCodec)  
   val stream = streams(topic)(0)
   val itr = stream.iterator
   
@@ -84,20 +67,10 @@ class KafkaIngestMessageReceiver(topic: String, config: Properties) extends Inge
   def sync() = connector.commitOffsets
 }
 
-case class MailboxAddress(id: Long)
-
-class SyncMessages(producerId: Int, initialId: Int = 1) {
-  private val nextId = new AtomicInteger(initialId)
-  
-  val start: SyncMessage = SyncMessage(producerId, 0, List.empty)
-  def next(eventIds: List[Int]): SyncMessage = SyncMessage(producerId, nextId.getAndIncrement(), eventIds)
-  def stop(eventIds: List[Int] = List.empty) = SyncMessage(producerId, Int.MaxValue, eventIds)
-}
-
 // This could be made more efficient by writing a custom message class that bootstraps from
 // a ByteBuffer, but this was the quick and dirty way to get moving
 
-class IngestMessageCodec extends Encoder[IngestMessage] with Decoder[IngestMessage] {
+class KafkaIngestMessageCodec extends Encoder[IngestMessage] with Decoder[IngestMessage] {
   def toMessage(event: IngestMessage) = {
     new Message(IngestMessageSerialization.toBytes(event))
   }

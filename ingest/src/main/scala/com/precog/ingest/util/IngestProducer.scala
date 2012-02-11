@@ -17,7 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest.util
+package com.precog.ingest
+package util
+
+import kafka._ 
 
 import scala.collection.mutable.ListBuffer
 
@@ -29,7 +32,6 @@ import com.precog.common._
 import com.precog.common.util.RealisticIngestMessage
 import com.precog.common.util.AdSamples
 import com.precog.common.util.DistributedSampleSet
-import com.precog.ingest.api._
 import com.precog.ingest.service._
 
 import akka.actor.ActorSystem
@@ -175,9 +177,9 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
     val defaultAddresses = NonEmptyList(MailboxAddress(0))
 
     val routeTable = new ConstantRouteTable(defaultAddresses)
-    val messaging = new SimpleKafkaMessaging(topic, props)
+    val messaging = new KafkaMessaging(topic, props)
 
-    val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
+    val qz = PrecogZookeeper.testPrecogZookeeper(zookeeperHosts)
     qz.setup
     val producerId = qz.acquireProducerId
     qz.close
