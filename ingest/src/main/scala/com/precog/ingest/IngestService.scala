@@ -93,8 +93,6 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager
 
-  val clock: Clock
-
   val analyticsService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
@@ -128,7 +126,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("track") {
-                post(new TrackingServiceHandler(state.eventStore, state.usageLogging, clock, true))
+                post(new TrackingServiceHandler(state.eventStore, state.usageLogging))
               } ~
               path("/query") {
                 post(new QueryServiceHandler(state.queryExecutor))

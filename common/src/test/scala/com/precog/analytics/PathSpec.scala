@@ -17,16 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
-package service 
+package com.precog.analytics
 
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
 import org.scalacheck._
 import org.scalacheck.Gen._
 import org.scalacheck.Prop._
-
-import com.precog.analytics.Path
 
 class PathSpec extends Specification with ScalaCheck {
   "rollups for a path" should {
@@ -52,6 +49,24 @@ class PathSpec extends Specification with ScalaCheck {
         Path("/my/fancy") :: 
         Path("/my") :: Nil
       )
+    }
+    
+    "Correctly identify child paths" in {
+      val parent = Path("/my/fancy/path")
+      val identical = Path("/my/fancy/path")
+      val child1 = Path("/my/fancy/path/child")
+      val child2 = Path("/my/fancy/path/grand/child")
+      val notChild1 = Path("/other/fancy/path")
+      val notChild2 = Path("/my/fancy/")
+
+      parent.equalOrChild(parent) must beTrue
+      parent.equalOrChild(identical) must beTrue
+      parent.equalOrChild(child1) must beTrue
+      parent.equalOrChild(child2) must beTrue
+
+      parent.equalOrChild(notChild1) must beFalse
+      parent.equalOrChild(notChild2) must beFalse
+      
     }
   }
 }

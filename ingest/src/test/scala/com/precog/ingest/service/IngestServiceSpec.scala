@@ -68,8 +68,6 @@ import BijectionsChunkFutureJson._
 
 //import rosetta.json.blueeyes._
 
-import com.precog.ingest.api._
-
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
   def instant() = now().toInstant
@@ -106,8 +104,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
       fields = "time cs-method cs-uri sc-status cs-content"
     }
   """
-
-  override val clock = Clock.System
 
   override val configuration = "services{ingest{v1{" + requestLoggingData + mongoConfigFileData + "}}}"
 
@@ -150,8 +146,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 }
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
-  val genTimeClock = clock 
-
   "Ingest Service" should {
     "abc123" must_== "abc123"
   }

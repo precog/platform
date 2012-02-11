@@ -62,6 +62,12 @@ case class Token(tokenId: String, parentTokenId: Option[String], accountTokenId:
     limits         = limits.limitTo(this.limits)
   )
 
+  def mayAccess(accessPath: Path, accessType: AccessType) = 
+    !expired && path.equalOrChild(accessPath) && permissions.hasPermissions(accessType)
+
+  def mayAccess(accessPath: Path, accessTypes: Set[AccessType]) =
+    !expired && path.equalOrChild(accessPath) && permissions.hasPermissions(accessTypes)
+
   def relativeTo(owner: Token) = copy(path = (this.path - owner.path).getOrElse(this.path))
 
   def absoluteFrom(owner: Token) = copy(path = owner.path / this.path)

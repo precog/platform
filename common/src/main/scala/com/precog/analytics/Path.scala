@@ -45,6 +45,9 @@ class Path private (val elements: String*) {
 
   def / (that: Path) = new Path(elements ++ that.elements: _*)
   def - (that: Path): Option[Path] = elements.startsWith(that.elements).option(new Path(elements.drop(that.elements.length): _*))
+
+  def equalOrChild(that: Path) = !(that - this).isEmpty
+
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth) 
 
   override def equals(that: Any) = that match {

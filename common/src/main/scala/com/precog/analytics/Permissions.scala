@@ -43,7 +43,12 @@ case class Permissions(read: Boolean, write: Boolean, share: Boolean, explore: B
     share = this.share && share,
     explore = this.explore && explore
   )
-  
+ 
+  lazy val allowableAccess = Permissions.availableAccessTypes(this)
+
+  def hasPermissions(accessType: AccessType) = allowableAccess.contains(accessType)
+  def hasPermissions(accessTypes: Set[AccessType]) = accessTypes.subsetOf(allowableAccess)
+
   /** Limits these permissions to the specified permissions. 
    */
   def limitTo(that: Permissions) = that.issue(read, write, share, explore)
@@ -81,5 +86,15 @@ trait PermissionsSerialization {
 
 object Permissions extends PermissionsSerialization {
   val All = Permissions(true, true, true, true)
+
+  val permissionAccessTypes: Set[AccessType] = Set(READ, WRITE, SHARE, EXPLORE)
+
+  def availableAccessTypes(perms: Permissions) = permissionAccessTypes filter {
+    case READ    => perms.read
+    case WRITE   => perms.write
+    case SHARE   => perms.share
+    case EXPLORE => perms.explore
+  }
+
 }
 
