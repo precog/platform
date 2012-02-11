@@ -1,5 +1,5 @@
 package com.precog
-package ingest.service 
+package ingest
 package service
 
 import blueeyes._

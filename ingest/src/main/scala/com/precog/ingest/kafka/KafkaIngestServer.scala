@@ -1,9 +1,11 @@
-package com.precog.ingest.service
+package com.precog.ingest
+package kafka
+
+import yggdrasil._
 
 import akka.dispatch.MessageDispatcher
 
-import com.precog.ingest.api._
-import com.precog.ingest.util.QuerioZookeeper
+import com.precog.ingest.util.PrecogZookeeper
 
 import java.util.Properties
 import net.lag.configgy.ConfigMap
@@ -24,9 +26,9 @@ trait KafkaEventStoreComponent {
     val defaultAddresses = NonEmptyList(MailboxAddress(0))
 
     val routeTable = new ConstantRouteTable(defaultAddresses)
-    val messaging = new SimpleKafkaMessaging(topicId, props)
+    val messaging = new KafkaMessaging(topicId, props)
 
-    val qz = QuerioZookeeper.testQuerioZookeeper(zookeeperHosts)
+    val qz = PrecogZookeeper.testPrecogZookeeper(zookeeperHosts)
     qz.setup
     val producerId = qz.acquireProducerId
     qz.close

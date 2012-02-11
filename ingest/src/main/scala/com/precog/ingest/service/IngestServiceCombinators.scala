@@ -1,4 +1,4 @@
-package com.precog.ingest.service
+package com.precog.ingest
 package service
 
 import blueeyes._

@@ -3,7 +3,7 @@ package com.precog.ingest.util
 import java.util.ArrayList
 import org.apache.zookeeper._
 
-class QuerioZookeeper(zkHosts: String, 
+class PrecogZookeeper(zkHosts: String, 
                       basePaths: Seq[String],
                       prefix: String) extends Watcher {
   
@@ -41,14 +41,14 @@ class QuerioZookeeper(zkHosts: String,
 
 }
 
-object QuerioZookeeper {
+object PrecogZookeeper {
 
   val prefix = "prodId-"
   val paths = List("com", "precog", "ingest", "v1", "producer", "id")
 
   val testHosts = "localhost:2181"
-  def testQuerioZookeeper(hosts: String = testHosts) = new QuerioZookeeper(hosts, "test" :: paths, prefix)
+  def testPrecogZookeeper(hosts: String = testHosts) = new PrecogZookeeper(hosts, "test" :: paths, prefix)
 
   val prodHosts = "localhost:2181"
-  def prodQuerioZookeeper(hosts: String = testHosts) = new QuerioZookeeper(hosts, paths, prefix)
+  def prodPrecogZookeeper(hosts: String = testHosts) = new PrecogZookeeper(hosts, paths, prefix)
 }

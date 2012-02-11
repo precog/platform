@@ -1,12 +1,12 @@
-package com.precog.ingest.util
+package com.precog.ingest
+package util
+
+import kafka.KafkaIngestMessageReceiver
 
 import java.util.Properties
 import java.io.{File, FileReader}
 
-import com.precog.ingest.api._
-import com.precog.ingest.service._
-
-import kafka.consumer._
+import _root_.kafka.consumer._
 
 object IngestConsumer {
   def main(args: Array[String]) = new IngestConsumer(args).run 

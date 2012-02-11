@@ -13,7 +13,6 @@ import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
 import com.precog.analytics._
-import com.precog.common.util.FixMe._
 
 import scalaz._
 import Scalaz._
