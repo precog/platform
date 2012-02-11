@@ -24,7 +24,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, pandora, util)
+  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, pandora, util, common)
   
   lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings : _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings: _*)

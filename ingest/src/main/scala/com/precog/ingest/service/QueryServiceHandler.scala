@@ -18,17 +18,23 @@ import com.precog.analytics.Token
 
 class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
- 
-  private val InvalidQuery = HttpResponse[JValue](BadRequest, content=Some(JString("Expected query as json string.")))
+
+  import QueryServiceHandler._
 
   val service = (request: HttpRequest[Future[JValue]]) => { 
-    Success{ (t: Token) => request.content.map { _.map { 
-      case JString(s) => 
-        val queryResult = queryExecutor.execute(s)
-        HttpResponse[JValue](OK, content=Some(queryResult))
+    Success{ (t: Token) => 
+      if(!t.expired) {
+        request.content.map { _.map { 
+          case JString(s) => 
+            val queryResult = queryExecutor.execute(s)
+            HttpResponse[JValue](OK, content=Some(queryResult))
 
-      case _          => InvalidQuery 
-    }}.getOrElse( Future { InvalidQuery } ) }
+          case _          => InvalidQuery 
+        }}.getOrElse( Future { InvalidQuery } )
+      } else {
+        Future { ExpiredToken }
+      }
+    }
   }
 
   val metadata = Some(DescriptionMetadata(
@@ -36,4 +42,12 @@ extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]]
 Takes a quirrel query and returns the result of evaluating the query.
     """
   ))
+}
+
+object QueryServiceHandler {
+  val InvalidQuery: HttpResponse[JValue] = toResponse(BadRequest, "Expected query as json string.")
+  val ExpiredToken: HttpResponse[JValue] = toResponse(Unauthorized, "Your token has expired.")
+
+  def toResponse(status: HttpStatusCode, msg: String): HttpResponse[JValue] = 
+    HttpResponse[JValue](status, content=Some(JString(msg)))
 }

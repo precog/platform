@@ -1,4 +1,4 @@
-package com.precog.ingest.api
+package com.precog.common
 
 import java.nio.ByteBuffer
 
@@ -9,8 +9,6 @@ import org.scalacheck._
 import org.scalacheck.Gen._
 
 import com.precog.common.util.ArbitraryIngestMessage
-
-import com.precog.common._
 
 import blueeyes.json.JsonAST._
 

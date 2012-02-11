@@ -63,8 +63,8 @@ class MetadataSpec extends Specification with MetadataGenerators {
   "metadata maps" should {
     "survive round trip serialization" in {
       Gen.listOfN(sampleSize, genMetadataMap).sample.get.map { in =>
-        in.toList.serialize.validated[List[(MetadataType, Metadata)]] must beLike {
-          case Success(out) => in must_== mutable.Map[MetadataType, Metadata](out: _*)
+        in.map(_._2).toList.serialize.validated[List[Metadata]] must beLike {
+          case Success(out) => in must_== mutable.Map[MetadataType, Metadata](out.map{ m => (m.metadataType, m) }: _*)
         }
       }
     }
