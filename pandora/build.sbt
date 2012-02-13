@@ -38,10 +38,8 @@ run <<= inputTask { argTask =>
 
 extractData <<= streams map { s =>
   val target = new File("/tmp/pandora/data/")
-  if (!target.exists()) {
-    s.log.info("Extracting LevelDB sample data...")
-    IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
-  }
+  s.log.info("Extracting LevelDB sample data...")
+  IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
   target.getCanonicalPath
 }
 
