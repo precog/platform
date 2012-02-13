@@ -100,8 +100,8 @@ object ProvenanceSpecs extends Specification
     }
     
     "identify tic-var as value" in {
-      val tree = parse("'foo")    // uses raw tic-var
-      tree.provenance mustEqual ValueProvenance
+      val tree @ Let(_, _, _, body, _) = parse("a('foo) := 'foo a(42)")    // uses raw tic-var
+      body.provenance mustEqual ValueProvenance
       tree.errors must beEmpty
     }
     

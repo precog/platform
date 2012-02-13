@@ -566,31 +566,31 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker {
     }
     
     "eliminate let when not found in scope in dispatch" in {
-      val tree = Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "foo", Vector(NumLit(LineStream(), "24"))))
+      val tree = Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "count", Vector(NumLit(LineStream(), "24"))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result must beLike {
-        case Dispatch(LineStream(), "foo", Vector(NumLit(LineStream(), "24"))) => ok
+        case Dispatch(LineStream(), "count", Vector(NumLit(LineStream(), "24"))) => ok
       }
       
       result.errors mustEqual Set(UnusedLetBinding("a"))
     }
     
     "preserve let when found in scope in dispatch" in {
-      val tree = Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "foo", Vector(Dispatch(LineStream(), "a", Vector()))))
+      val tree = Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "count", Vector(Dispatch(LineStream(), "a", Vector()))))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result must beLike {
-        case Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "foo", Vector(Dispatch(LineStream(), "a", Vector())))) => ok
+        case Let(LineStream(), "a", Vector(), NumLit(LineStream(), "42"), Dispatch(LineStream(), "count", Vector(Dispatch(LineStream(), "a", Vector())))) => ok
       }
       
       result.errors must beEmpty
     }
     
     "detect unused tic-variable in dispatch" in {
-      val tree = Let(LineStream(), "a", Vector("'a", "'b"), Dispatch(LineStream(), "foo", Vector(Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")))), Dispatch(LineStream(), "a", Vector()))
+      val tree = Let(LineStream(), "a", Vector("'a", "'b"), Dispatch(LineStream(), "count", Vector(Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")))), Dispatch(LineStream(), "a", Vector()))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
