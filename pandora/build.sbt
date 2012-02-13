@@ -18,34 +18,41 @@ libraryDependencies ++= Seq(
   "org.specs2" %% "specs2" % "1.8-SNAPSHOT" % "test" changing(),
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
   
+  
+mainClass := Some("com.precog.pandora.Console")
+
+mainTest := "com.precog.pandora.PlatformSpecs"
+
+dataDir := "/tmp/pandora/data"
+  
 outputStrategy := Some(StdoutOutput)
 
 connectInput in run := true
   
-fork in run := true
-
 run <<= inputTask { argTask =>
   (javaOptions in run, fullClasspath in Compile, connectInput in run, outputStrategy, mainClass in run, argTask, extractData) map { (opts, cp, ci, os, mc, args, dataDir) =>
     val delim = java.io.File.pathSeparator
     val opts2 = opts ++
       Seq("-classpath", cp map { _.data } mkString delim) ++
-      Seq(mc getOrElse "com.precog.pandora.Console") ++
+      Seq(mc.get) ++
       (if (args.isEmpty) Seq(dataDir) else args)
     Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
   }
 }
 
-extractData <<= streams map { s =>
-  val target = new File("/tmp/pandora/data/")
+extractData <<= (dataDir, streams) map { (dir, s) =>
+  val target = new File(dir)
   s.log.info("Extracting LevelDB sample data...")
   IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
   target.getCanonicalPath
 }
 
-definedTests in Test ~= { tests => tests filter { _.name != "com.precog.pandora.PlatformSpecs" } }
+definedTests in Test <<= (definedTests in Test, mainTest) map { (tests, name) =>
+  tests filter { _.name != name }
+}
 
-test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) map { (s, cp, os, dataDir) =>
+test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
   s.log.debug("Running with classpath: " + cpStr)
@@ -53,7 +60,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) m
     Seq("-classpath", cpStr) ++
     Seq("-Dprecog.storage.root=" + dataDir) ++
     Seq("specs2.run") ++
-    Seq("com.precog.pandora.PlatformSpecs")
+    Seq(testName)
   val result = Fork.java.fork(None, opts2, None, Map(), false, LoggedOutput(s.log)).exitValue()
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
@@ -159,8 +166,6 @@ initialCommands in console := """
   | }""".stripMargin
   
 logBuffered := false       // gives us incremental output from Specs2
-
-mainClass := Some("com.precog.pandora.Console")
 
 dist <<= (version, streams, baseDirectory, target in assembly, jarName in assembly) map { 
          (projectVersion: String, streams: TaskStreams, projectRoot: File, buildTarget: File, assemblyName: String) => {
