@@ -60,6 +60,16 @@ trait SValue {
     fold(d, d, d, d, d, d, d, ifNull)
   }
 
+  def hasProperty(selector: JPath) = (this \ selector).isDefined
+
+  def \(selector: JPath): Option[SValue] = selector.nodes match {
+    case JPathField(name) :: Nil => mapObjectOr(Option.empty[SValue]) { _.get(name) }
+    case JPathField(name) :: xs  => mapObjectOr(Option.empty[SValue]) { _.get(name).flatMap(_ \ JPath(xs)) }
+    case JPathIndex(i)    :: Nil => mapArrayOr(Option.empty[SValue])  { _.lift(i) }
+    case JPathIndex(i)    :: xs  => mapArrayOr(Option.empty[SValue])  { _.lift(i).flatMap(_ \ JPath(xs)) }
+    case Nil => Option.empty[SValue]
+  }
+
   def set(selector: JPath, cv: CValue): Option[SValue] = {
     selector.nodes match {
       case JPathField(name) :: Nil => mapObjectOr(Option.empty[SValue])  { o => Some(SObject(o + (name -> cv.toSValue))) }
