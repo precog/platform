@@ -28,7 +28,11 @@ object EmitterSpecs extends Specification
 
   import instructions._
 
-  val compileEmit = ((_: String).stripMargin) >>> (compile _) >>> (emit _)
+  def compileEmit(input: String) = {
+    val tree = compile(input.stripMargin)
+    tree.errors must beEmpty
+    emit(tree)
+  }
 
   def testEmit(v: String)(head: Vector[Instruction], streams: Vector[Instruction]*) =
     compileEmit(v).filter { case _ : Line => false; case _ => true } must beOneOf((head +: streams): _*)
