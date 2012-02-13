@@ -75,7 +75,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) m
     Seq("-Dprecog.storage.root=" + dataDir) ++
     Seq("specs2.run") ++
     Seq("com.precog.pandora.PlatformSpecs")
-  val result = Fork.java.fork(None, opts2, None, Map(), false, os getOrElse StdoutOutput).exitValue()
+  val result = Fork.java.fork(None, opts2, None, Map(), false, LoggedOutput(s.log)).exitValue()
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
 
