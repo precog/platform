@@ -45,6 +45,8 @@ extractData <<= streams map { s =>
   target.getCanonicalPath
 }
 
+definedTests in Test ~= { tests => tests filter { _.name != "com.precog.pandora.PlatformSpecs" } }
+
 test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) map { (s, cp, os, dataDir) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
