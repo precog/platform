@@ -58,7 +58,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) m
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
 
-(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance) map { (s, init, cp, si) =>
+(console in Compile) <<= (streams, initialCommands in console, fullClasspath in Compile, scalaInstance, extractData) map { (s, init, cp, si, dataDir) =>
   IO.withTemporaryFile("pandora", ".scala") { file =>
     IO.write(file, init)
     val delim = java.io.File.pathSeparator
@@ -69,12 +69,13 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData) m
     val opts2 =
       Seq("-classpath", cpStr) ++
       Seq("-Dscala.usejavacp=true") ++
+      Seq("-Dprecog.storage.root=" + dataDir) ++
       Seq("scala.tools.nsc.MainGenericRunner") ++
       Seq("-Yrepl-sync", "-i", file.getCanonicalPath)
     Fork.java.fork(None, opts2, None, Map(), true, StdoutOutput).exitValue()
     jline.Terminal.getTerminal.initializeTerminal()
   }
-} dependsOn extractData
+}
 
 initialCommands in console := """
   | import edu.uwm.cs.gll.LineStream
@@ -91,11 +92,13 @@ initialCommands in console := """
   | import quirrel.parser._
   | import quirrel.typer._
   | 
-  | import yggdrasil.{SValue, YggConfig}
+  | import yggdrasil._
+  | import yggdrasil.shard._
   | 
-  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with YggdrasilOperationsAPI with YggdrasilStorage with AkkaIngestServer {
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
+  |   import scalaz._
   |
   |   import java.io.File
   |
@@ -104,26 +107,41 @@ initialCommands in console := """
   |   import org.streum.configrity.Configuration
   |   import org.streum.configrity.io.BlockFormat
   | 
-  |   val controlTimeout = Duration(120, "seconds")
+  |   val controlTimeout = Duration(30, "seconds")
   |
-  |   lazy val yggConfig = loadConfig(Some("/tmp/pandora/data"))
+  |   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  |   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
   |
-  |   private def loadConfig(dataDir: Option[String]): IO[YggConfig] = {
-  |     val rawConfig = dataDir map {
-  |       "precog.storage.root = " + _
-  |     } getOrElse { "" }
+  |   val maxEvalDuration = controlTimeout
   |
-  |     IO { 
-  |       new YggConfig {
-  |         def config = Configuration.parse(rawConfig)  
-  |       }
+  |   val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
+  |   
+  |   object storage extends ActorYggShard {
+  |     val yggState = shardState 
+  |   }
+  |   
+  |   object ops extends Ops 
+  |   
+  |   object query extends QueryAPI 
+  |
+  |   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
+  |     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+  | 
+  |     new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
+  |       val config = Configuration.parse(rawConfig)  
+  |       val flatMapTimeout = controlTimeout
+  |       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
   |     }
   |   }
   |
   |   def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
   | 
   |   def evalE(str: String) = {
-  |     val Right(dag) = decorate(emit(compile(str)))
+  |     val tree = compile(str)
+  |     if (!tree.errors.isEmpty) {
+  |       sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
+  |     }
+  |     val Right(dag) = decorate(emit(tree))
   |     consumeEval(dag)
   |   }
   | 
