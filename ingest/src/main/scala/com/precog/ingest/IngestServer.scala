@@ -19,7 +19,7 @@ trait IngestServer extends BlueEyesServer with IngestService {
   }
 
   def usageLogging(config: ConfigMap) = {
-    new NullUsageLogging(token)
+    new NullUsageLogging("")
   }
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
