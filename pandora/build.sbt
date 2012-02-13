@@ -42,7 +42,12 @@ mainClass := Some("com.precog.pandora.Console")
 
 mainTest := "com.precog.pandora.PlatformSpecs"
 
-dataDir := "/tmp/pandora/data"
+dataDir := {
+  val file = File.createTempFile("pandora", ".db")
+  file.delete()
+  file.mkdir()
+  file.getCanonicalPath
+}
   
 outputStrategy := Some(StdoutOutput)
 
@@ -62,7 +67,7 @@ run <<= inputTask { argTask =>
 
 extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
-  s.log.info("Extracting LevelDB sample data...")
+  s.log.info("Extracting LevelDB sample data into %s...".format(dir))
   IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
   target.getCanonicalPath
 }
