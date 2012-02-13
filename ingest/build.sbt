@@ -46,4 +46,4 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-mainClass := Some("com.precog.ingest.service.KafkaIngestServer")
+mainClass := Some("com.precog.ingest.kafka.KafkaIngestServer")

@@ -39,6 +39,12 @@ trait BaseConfig extends Config {
         root = ./data
         sortBufferSize = 100000
       }
+      evaluator {
+        timeout {
+          fm = 30
+          projection = 30
+        }
+      }
     }
  """, io.BlockFormat)
 

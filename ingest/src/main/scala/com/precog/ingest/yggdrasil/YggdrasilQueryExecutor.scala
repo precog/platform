@@ -49,8 +49,8 @@ import org.streum.configrity.Configuration
 import net.lag.configgy.ConfigMap
 
 trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig with BaseConfig {
-  val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
-  val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
+  lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
+  lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
 
 trait YggdrasilQueryExecutorComponent {

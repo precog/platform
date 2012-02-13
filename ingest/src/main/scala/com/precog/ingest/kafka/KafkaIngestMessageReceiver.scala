@@ -80,3 +80,24 @@ class KafkaIngestMessageCodec extends Encoder[IngestMessage] with Decoder[Ingest
   }
 }
 
+class KafkaEventCodec extends Encoder[Event] with Decoder[Event] {
+  val charset = Charset.forName("UTF-8")
+ 
+  def toMessage(event: Event) = {
+    val msgBuffer = charset.encode(Printer.compact(Printer.render(event.serialize)))
+    val byteArray = new Array[Byte](msgBuffer.limit)
+    msgBuffer.get(byteArray)
+    new Message(byteArray)
+  }
+
+  def toEvent(msg: Message): Event = {
+    val decoder = charset.newDecoder
+    val charBuffer = decoder.decode(msg.payload)
+    val jvalue = JsonParser.parse(charBuffer.toString()) 
+    jvalue.validated[Event] match {
+      case Success(e) => e
+      case Failure(e) => sys.error("Error parsing event: " + e)
+    }
+  }
+}
+
