@@ -125,6 +125,14 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent {
       (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
+
+  "mask" should {
+    "descend" in {
+      val enum = Await.result(query.mask[Unit](dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
+      val enumv = enum map { case (ids, sv) => sv }
+      (consume[Unit, SValue, IO, List] &= enumv[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
+    }
+  }
 }
 
 

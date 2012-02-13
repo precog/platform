@@ -71,7 +71,14 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
       def realize(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
         def assembleForSelector(selector: JPath, retrieval: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
-          DatasetEnum(retrieval flatMap { descriptors =>  assemble[X](path, List((selector, descriptors))) })
+          DatasetEnum(
+            for {
+              descriptors <- retrieval 
+              enum        <- assemble[X](path, List((selector, descriptors))) 
+            } yield {
+              enum map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t }
+            }
+          )
 
         (selector, tpe) match {
           case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
