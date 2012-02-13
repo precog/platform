@@ -40,6 +40,9 @@ trait AkkaIngestServer extends IngestServer { self =>
         val seqId = idSource.incrementAndGet
         (storage.store(EventMessage(0, seqId, event))).mapTo[Unit]
       }
+
+      def start() = Future { () }(asyncContext)
+      def stop() = Future { () }(asyncContext)
     }
   }
   

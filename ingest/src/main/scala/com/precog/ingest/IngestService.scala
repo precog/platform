@@ -91,15 +91,17 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
           val eventStore = eventStoreFactory(config.configMap("eventStore"))
-
-          queryExecutor.startup.map { _ =>
-            IngestState(
-              queryExecutor,
-              indexMongo,
-              tokenMgr,
-              eventStore,
-              usageLogging(config.configMap("usageLogging"))
-            )
+          
+          eventStore.start flatMap { _ =>
+            queryExecutor.startup.map { _ =>
+              IngestState(
+                queryExecutor,
+                indexMongo,
+                tokenMgr,
+                eventStore,
+                usageLogging(config.configMap("usageLogging"))
+              )
+            }
           }
         } ->
         request { (state: IngestState) =>

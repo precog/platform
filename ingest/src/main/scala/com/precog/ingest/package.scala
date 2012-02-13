@@ -39,6 +39,8 @@ package object ingest {
 
   trait EventStore {
     def save(event: Event): Future[Unit]
+    def start(): Future[Unit]
+    def stop(): Future[Unit]
   }
 
   trait RouteTable {
