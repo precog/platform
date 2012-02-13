@@ -126,7 +126,7 @@ initialCommands in console := """
   | import yggdrasil._
   | import yggdrasil.shard._
   | 
-  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent {
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with DAGPrinter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
   |   import scalaz._
