@@ -46,7 +46,6 @@ class Atom[A] extends Source[A] with Sink[A] {
       if (!isSet || !isForced) {
         value = a
         isSet = true
-        setterThread = null
         
         semaphore synchronized {
           semaphore.notifyAll()
@@ -62,7 +61,7 @@ class Atom[A] extends Source[A] with Sink[A] {
       lock.lock()
       try {
         if (!isForced || setterThread != null) {
-          val builder = if (!isSet) {
+          val builder = if (value == null) {        // TODO gross!
             cbf()
           } else {
             val back = cbf(value)
@@ -73,7 +72,10 @@ class Atom[A] extends Source[A] with Sink[A] {
           builder += b
           
           value = builder.result()
-          isSet = true
+          
+          if (setterThread != null) {
+            isSet = true
+          }
         }
       } finally {
         lock.unlock()
@@ -86,7 +88,7 @@ class Atom[A] extends Source[A] with Sink[A] {
       lock.lock()
       try {
         if (!isForced || setterThread != null) {
-          val builder = if (!isSet) {
+          val builder = if (value == null) {        // TODO gross!
             cbf()
           } else {
             val current = evidence(value)
@@ -98,7 +100,10 @@ class Atom[A] extends Source[A] with Sink[A] {
           builder ++= evidence2(c)
           
           value = builder.result()
-          isSet = true
+          
+          if (setterThread != null) {
+            isSet = true
+          }
         }
       } finally {
         lock.unlock()
@@ -163,6 +168,7 @@ class Atom[A] extends Source[A] with Sink[A] {
             }
           } finally {
             lock.lock()
+            setterThread = null
           }
           
           value
