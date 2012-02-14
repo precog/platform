@@ -36,7 +36,7 @@ trait Phases {
   
   def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]]
   
-  def runPhasesInSequence(tree: Expr): Set[Error] =
+  private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }
   
   def Error(node: Expr, tp: ErrorType): Error

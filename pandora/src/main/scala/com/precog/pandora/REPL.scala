@@ -79,16 +79,13 @@ trait REPL extends LineErrors
       bindRoot(oldTree, oldTree)
       
       val tree = shakeTree(oldTree)
-      val phaseErrors = runPhasesInSequence(tree)
-      val allErrors = tree.errors ++ phaseErrors
+      val strs = for (error <- tree.errors) yield showError(error)
       
-      val strs = for (error <- allErrors) yield showError(error)
-      
-      if (!tree.errors.isEmpty || !phaseErrors.isEmpty) {
+      if (!tree.errors.isEmpty) {
         out.println(color.red(strs mkString "\n"))
       }
       
-      if (allErrors filterNot isWarning isEmpty)
+      if (tree.errors filterNot isWarning isEmpty)
         Some(tree)
       else
         None
