@@ -18,6 +18,8 @@ class TokenManagerSpec extends Specification with FutureMatchers {
   val mongo = new MockMongo()
   val tokenManager = new TokenManager(mongo.database("test"), "tokens", "deleted_tokens")
 
+  implicit val futureTimes = FutureTimeouts(25, Duration(250, "millis"))
+
   "Token Manager" should {
     "automatically populate the test token" in {
       tokenManager.lookup(Token.Test.tokenId) must whenDelivered {
