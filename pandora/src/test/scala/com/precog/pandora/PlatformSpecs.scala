@@ -37,11 +37,25 @@ class PlatformSpecs extends Specification
     with OperationsAPI
     with AkkaIngestServer 
     with YggdrasilEnumOpsComponent
-    with LevelDBQueryComponent {
+    with LevelDBQueryComponent 
+    with LevelDBMemoizationComponent {
+
+  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig] = IO {
+    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+
+    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig {
+      val config = Configuration.parse(rawConfig)  
+      val flatMapTimeout = controlTimeout
+      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+      val sortWorkDir = scratchDir
+      val memoizationBufferSize = sortBufferSize
+      val memoizationWorkDir = scratchDir
+    }
+  }
   
   val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig
   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
   
   val maxEvalDuration = controlTimeout
@@ -56,6 +70,7 @@ class PlatformSpecs extends Specification
   
   object query extends QueryAPI 
 
+  def memoizationContext[X] = new MemoContext[X]
   
   step {
     startup()
@@ -148,16 +163,6 @@ class PlatformSpecs extends Specification
     shutdown()
   }
   
-  
-  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
-    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
-
-    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
-      val config = Configuration.parse(rawConfig)  
-      val flatMapTimeout = controlTimeout
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-    }
-  }
   
   def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
   
