@@ -31,28 +31,32 @@ import scalaz.effect._
 import scalaz.iteratee._
 import IterateeT._
 
-trait MemoizationContext[X] {
+trait MemoizationContext {
+  def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext): Either[MemoizationContext.Memoizer[X], DatasetEnum[X, SEvent, IO]]
+}
+
+object MemoizationContext {
   trait Memoizer[X] {
     def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO): IterateeT[X, SEvent, F, A] => IterateeT[X, SEvent, F, A]
   }
 
-  def apply(memoId: Int)(implicit asyncContext: ExecutionContext): Either[Memoizer[X], DatasetEnum[X, SEvent, IO]]
-
-  val noopMemoizer: Memoizer[X] = new Memoizer[X] {
-    def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO) = iter => iter
+  object Memoizer {
+    def noop[X]: Memoizer[X] = new Memoizer[X] {
+      def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO) = iter => iter
+    }
   }
-}
 
-object MemoizationContext {
-  def Noop[X]: MemoizationContext[X] = new MemoizationContext[X] {
-    def apply(memoId: Int)(implicit asyncContext: ExecutionContext) = Left(noopMemoizer)
+  trait Noop extends MemoizationContext {
+    def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext) = Left(Memoizer.noop[X])
   }
+
+  object Noop extends Noop
 }
 
 trait MemoizationComponent {
-  type MemoContext[X] <: MemoizationContext[X]
+  type MemoContext <: MemoizationContext
 
-  def memoizationContext[X]: MemoContext[X]
+  def memoizationContext: MemoContext
 }
 
 // vim: set ts=4 sw=4 et:

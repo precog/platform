@@ -259,7 +259,7 @@ object Console extends App {
 
         object query extends QueryAPI 
 
-        def memoizationContext[X] = new MemoContext[X]
+        object memoizationContext extends MemoContext
 
         def startup = IO {
           // start ingest server

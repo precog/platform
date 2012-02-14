@@ -45,12 +45,11 @@ import Iteratee._
 import MonadPartialOrder._
 
 class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
-  type MemoContext[X] = MemoizationContext[X]
+  type MemoContext = MemoizationContext.Noop.type
   type YggConfig = YggEnumOpsConfig
 
   implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
-
 
   object yggConfig extends YggConfig {
     def sortBufferSize = 10
@@ -58,7 +57,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 
-  def memoizationContext[X] = MemoizationContext.Noop[X]
+  val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
   "sort" should {

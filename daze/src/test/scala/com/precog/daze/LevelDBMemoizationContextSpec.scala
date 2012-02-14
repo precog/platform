@@ -61,7 +61,7 @@ class LevelDBMemoizationContextSpec extends Specification with LevelDBMemoizatio
     val memoizationWorkDir = new File("")
   }
 
-  def memoizationContext[X] = new MemoContext[X] 
+  object memoizationContext extends MemoContext 
 
   object storage extends Storage
 
@@ -86,15 +86,14 @@ class LevelDBMemoizationContextSpec extends Specification with LevelDBMemoizatio
         case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
       }
 
-      val memoCtx = memoizationContext[Unit]
-      memoCtx(0) must beLike {
+      memoizationContext[Unit](0) must beLike {
         case Left(f) => 
           (
             (f[IO, List[SEvent]](Some(descriptor)).apply(consume[Unit, SEvent, IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO map {
               case (_, v) => v.mapLongOr(-1L)(identity[Long])
             } must_== expected
           ) and (
-            memoCtx(0) must beLike {
+            memoizationContext[Unit](0) must beLike {
               case Right(d) => 
                 (consume[Unit, SEvent, IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO map {
                   case (_, v) => v.mapLongOr(-1L)(identity[Long])

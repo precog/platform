@@ -35,9 +35,11 @@ import Iteratee._
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
 
-  class YggConfig extends YggEnumOpsConfig {
+  class YggConfig extends YggEnumOpsConfig with LevelDBMemoizationConfig {
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
+    def memoizationBufferSize = 1000
+    def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 }
@@ -45,7 +47,8 @@ trait TestConfigComponent {
 class EvaluatorSpecs extends Specification
     with Evaluator
     with StubOperationsAPI 
-    with TestConfigComponent { self =>
+    with TestConfigComponent 
+    { self =>
       
   import Function._
   
@@ -56,8 +59,8 @@ class EvaluatorSpecs extends Specification
 
   object ops extends Ops 
 
-  type MemoContext[X] = MemoizationContext[X]
-  def memoizationContext[X] = MemoizationContext.Noop[X]
+  type MemoContext = MemoizationContext.Noop.type
+  val memoizationContext = MemoizationContext.Noop
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {

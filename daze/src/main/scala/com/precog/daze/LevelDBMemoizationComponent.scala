@@ -41,8 +41,8 @@ trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationCom
 
   private var cache = Map.empty[Int, (Option[ProjectionDescriptor], Either[Vector[SEvent], File])]
 
-  class MemoContext[X] extends MemoizationContext[X] { 
-    def apply(memoId: Int)(implicit asyncContext: ExecutionContext): Either[Memoizer[X], DatasetEnum[X, SEvent, IO]] = component.synchronized {
+  class MemoContext extends MemoizationContext { 
+    def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext): Either[MemoizationContext.Memoizer[X], DatasetEnum[X, SEvent, IO]] = component.synchronized {
       cache.get(memoId) match {
         case Some((descriptor, Left(vector))) => 
           Right(DatasetEnum(Future(EnumeratorP.enumPStream[X, SEvent, IO](vector.toStream)), descriptor))
@@ -51,12 +51,15 @@ trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationCom
           sys.error("disk-based memoization not yet supported") 
 
         case None => Left(
-          new Memoizer[X] {
+          new MemoizationContext.Memoizer[X] {
             def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO) = (iter: IterateeT[X, SEvent, F, A]) => {
               import MO._
               (iter zip (fold[X, SEvent, F, Vector[SEvent]](Vector.empty[SEvent]) { (v, ev) => v :+ ev })) map {
                 case (result, vector) => 
-                  component.synchronized { if (!cache.isDefinedAt(memoId)) cache += (memoId -> (d, Left(vector))) }
+                  component.synchronized { if (!cache.isDefinedAt(memoId)) {
+                    println("Caching result for id " + memoId + ": " + vector)
+                    cache += (memoId -> (d, Left(vector))) 
+                  }}
                   result
               }
             }
