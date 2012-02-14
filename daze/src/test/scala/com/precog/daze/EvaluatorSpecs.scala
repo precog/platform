@@ -32,6 +32,8 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
+import com.precog.util.Identity
+
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
 
@@ -1632,9 +1634,9 @@ class EvaluatorSpecs extends Specification
         case ((ids, sv), i) => (ids :+ (5 - i), sv)
       }
 
-      val sorted = sortByIdentities(enum, Vector(0), 0)
-      val sorted2 = sortByIdentities(enum, Vector(1), 1)
-      val sorted3 = sortByIdentities(enum, Vector(1, 0), 2)
+      val sorted = sortByIdentities(enum, Vector(0), Identity.nextInt())
+      val sorted2 = sortByIdentities(enum, Vector(1), Identity.nextInt())
+      val sorted3 = sortByIdentities(enum, Vector(1, 0), Identity.nextInt())
 
       consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
          (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
