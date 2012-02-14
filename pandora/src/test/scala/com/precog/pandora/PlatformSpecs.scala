@@ -163,7 +163,7 @@ class PlatformSpecs extends Specification
   
   def evalE(str: String) = {
     val tree = compile(str)
-    runPhasesInSequence(tree) must beEmpty
+    tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
     consumeEval(dag)
   }
