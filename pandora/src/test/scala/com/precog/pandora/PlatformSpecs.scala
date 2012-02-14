@@ -70,7 +70,7 @@ class PlatformSpecs extends Specification
   
   object query extends QueryAPI 
 
-  def memoizationContext[X] = new MemoContext[X]
+  object memoizationContext extends MemoContext
   
   step {
     startup()
