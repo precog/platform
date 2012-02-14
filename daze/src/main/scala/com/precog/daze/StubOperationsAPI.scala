@@ -20,7 +20,6 @@
 package com.precog.daze
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.util.Enumerators
 import com.precog.analytics.Path
 
 import akka.dispatch.Await

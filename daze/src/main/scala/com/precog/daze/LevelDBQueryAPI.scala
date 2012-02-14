@@ -25,7 +25,6 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.kafka._
 import com.precog.yggdrasil.leveldb._
 import com.precog.yggdrasil.shard._
-import com.precog.yggdrasil.util.Enumerators
 import com.precog.analytics.Path
 import StorageMetadata._
 

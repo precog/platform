@@ -17,10 +17,16 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package util
+package com.precog
+package daze
 
-import com.precog.util._
+import yggdrasil._
+
+import akka.actor.ActorSystem
+import akka.dispatch.Await
+import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
+import akka.util.duration._
 
 import org.specs2.ScalaCheck
 import org.specs2.matcher.ThrownMessages
@@ -38,40 +44,32 @@ import scalaz.std.AllInstances._
 import Iteratee._
 import MonadPartialOrder._
 
-class EnumeratorsSpec extends Specification with ThrownMessages with Logging {
+class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
+  type MemoContext[X] = MemoizationContext[X]
+  type YggConfig = YggEnumOpsConfig
+
+  implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
+  implicit def asyncContext = ExecutionContext.defaultExecutionContext
+
+
+  object yggConfig extends YggConfig {
+    def sortBufferSize = 10
+    def sortWorkDir = sys.error("not used")
+    def flatMapTimeout = intToDurationInt(30).seconds
+  }
+
+  def memoizationContext[X] = MemoizationContext.Noop[X]
+  object ops extends Ops
+
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
       val enumP = enumPStream[Unit, SEvent, IO](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
+      val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, intToDurationInt(30).seconds)
 
-      (consume[Unit, SEvent, IO, List] &= (Enumerators.sort(enumP, 5, null, null).apply[IO]))
+      (consume[Unit, SEvent, IO, List] &= sorted[IO])
       .run(_ => sys.error("...")).unsafePerformIO.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
     }
-
-/*
-    "sort after zipWithIndex" in {
-      val enum = EnumeratorP.enumPStream[Unit, SEvent, IO](Stream(
-          SEvent(Vector(), SLong(1)), 
-          SEvent(Vector(), SLong(5)), 
-          SEvent(Vector(), SLong(3)), 
-          SEvent(Vector(), SLong(2)), 
-          SEvent(Vector(), SLong(7))
-          ))
-
-      val zipped = new EnumeratorP[Unit, (SEvent, Long), IO] {
-        def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[Unit, (SEvent, Long), G] = {
-          import MO._
-          enum[G].zipWithIndex
-        }
-      }
-
-      implicit val Ord: Order[(SEvent, Long)] = Order[Long].contramap((_: (SEvent, Long))._1._2.mapLongOr(sys.error("")){ a => a })
-
-      (consume[Unit, (SEvent, Long), IO, List] &= Enumerators.sort[Unit](zipped, 10, null, null).apply[IO])
-      .run(_ => sys.error("...")).unsafePerformIO.map(a => (a._1._2.mapLongOr(-1)(a => a), a._2)) must_== List((1L, 0L), (2L, 3L), (3L, 2L), (5L, 1L), (7L, 4L))
-    }
-    */
-    
   }
 }
 

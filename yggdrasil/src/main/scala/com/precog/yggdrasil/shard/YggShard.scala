@@ -96,6 +96,11 @@ trait YggShard {
   def store(msg: EventMessage): Future[Unit]
 }
 
+trait YggShardComponent {
+  type Storage <: YggShard
+  def storage: Storage
+}
+
 trait ActorYggShard extends YggShard with Logging {
   val pre = "[Yggdrasil Shard]"
 

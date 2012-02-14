@@ -36,9 +36,9 @@ trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
 
   class YggConfig extends YggEnumOpsConfig {
-    def flatMapTimeout = intToDurationInt(30).seconds
-    def scratchDir: File = null //no filesystem storage in test!
     def sortBufferSize = 1000
+    def sortWorkDir: File = null //no filesystem storage in test!
+    def flatMapTimeout = intToDurationInt(30).seconds
   }
 }
 
@@ -55,6 +55,9 @@ class EvaluatorSpecs extends Specification
   def maxEvalDuration = intToDurationInt(30).seconds
 
   object ops extends Ops 
+
+  type MemoContext[X] = MemoizationContext[X]
+  def memoizationContext[X] = MemoizationContext.Noop[X]
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {

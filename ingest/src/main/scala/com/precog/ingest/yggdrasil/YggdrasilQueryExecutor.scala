@@ -48,7 +48,7 @@ import org.streum.configrity.Configuration
 
 import net.lag.configgy.ConfigMap
 
-trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with Config {
+trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig with BaseConfig {
   val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
@@ -56,9 +56,12 @@ trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryCon
 trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.xschema.Extractor
 
-  def loadConfig: IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO { 
+  def loadConfig: IO[YggdrasilQueryExecutorConfig] = IO { 
     new BaseConfig with YggdrasilQueryExecutorConfig {
       val config = Configuration.parse("")  
+      val sortWorkDir = scratchDir
+      val memoizationBufferSize = sortBufferSize
+      val memoizationWorkDir = scratchDir
     }
   }
     
@@ -86,9 +89,7 @@ trait YggdrasilQueryExecutorComponent {
       case Success(qs) => qs
       case Failure(er) => sys.error("Error initializing query service: " + er)
     } unsafePerformIO
-
   }
-
 }
 
 trait YggdrasilQueryExecutor 
@@ -103,16 +104,13 @@ trait YggdrasilQueryExecutor
     with DatasetConsumers
     with OperationsAPI 
     with YggdrasilEnumOpsComponent
-    with LevelDBQueryComponent { self =>
+    with LevelDBQueryComponent 
+    with LevelDBMemoizationComponent { self =>
 
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig
   
-  val yggConfig: YggConfig
   val yggState: YggState
-
   val actorSystem: ActorSystem
-  val asyncContext: ExecutionContext
-  val controlTimeout: Duration 
 
   object storage extends ActorYggShard {
     val yggState = self.yggState
@@ -122,6 +120,8 @@ trait YggdrasilQueryExecutor
   object ops extends Ops 
 
   object query extends QueryAPI 
+
+  def memoizationContext[X] = new MemoContext[X]
   
   def startup() = storage.start
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 

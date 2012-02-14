@@ -138,9 +138,9 @@ trait DatasetEnumOps {
 
   def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] 
 
-  def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent]): DatasetEnum[X, SEvent, IO]
+  def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
   
-  def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int): DatasetEnum[X, SEvent, IO]
+  def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
 }
 
 // vim: set ts=4 sw=4 et:
