@@ -20,9 +20,13 @@ trait LevelDBMemoizationConfig {
 trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationComponent { component => 
   type YggConfig <: LevelDBMemoizationConfig
 
-  private var cache = Map.empty[Int, (Option[ProjectionDescriptor], Either[Vector[SEvent], File])]
+  @volatile private var cache = Map.empty[Int, (Option[ProjectionDescriptor], Either[Vector[SEvent], File])]
 
   class MemoContext extends MemoizationContext { 
+    def expire(memoId: Int) = IO {
+      component.synchronized { cache -= memoId }
+    }
+
     def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext): Either[MemoizationContext.Memoizer[X], DatasetEnum[X, SEvent, IO]] = component.synchronized {
       cache.get(memoId) match {
         case Some((descriptor, Left(vector))) => 
@@ -38,7 +42,6 @@ trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationCom
               (iter zip (fold[X, SEvent, F, Vector[SEvent]](Vector.empty[SEvent]) { (v, ev) => v :+ ev })) map {
                 case (result, vector) => 
                   component.synchronized { if (!cache.isDefinedAt(memoId)) {
-                    println("Caching result for id " + memoId + ": " + vector)
                     cache += (memoId -> (d, Left(vector))) 
                   }}
                   result

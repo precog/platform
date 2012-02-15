@@ -112,11 +112,10 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   logger.debug("Opening column index files")
 
   private val createOptions = (new Options).createIfMissing(true)
-  private val idIndexFile: DB =  factory.open(new File(baseDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
-  private lazy val valIndexFile: DB = {
-    sys.error("Value-based indexes have not been enabled.")
-     //factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
-  }
+  private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
+  //private lazy val valIndexFile: DB = {
+  //   factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
+  //}
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
@@ -156,26 +155,30 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     import MO._
     import MO.MG.bindSyntax._
 
-    def enumerator(iter : DBIterator, close : IO[Unit]): EnumeratorT[X, E, F] = new EnumeratorT[X, E, F] { 
-      def apply[A] = (s : StepT[X, E, F, A]) => {
-        val _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+    new EnumeratorT[X, E, F] { 
+      def apply[A] = {
+        val iter = idIndexFile.iterator
+        val close = IO(iter.close)
 
-        s.fold(
-          cont = k => if (iter.hasNext) {
-            val n = iter.next
-            k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== apply[A]
-          } else {
-            _done
-          },
-          done = (_, _) => _done,
-          err = _ => _done
-        )
+        def step(s : StepT[X, E, F, A]): IterateeT[X, E, F, A] = {
+          val _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+
+          s.fold(
+            cont = k => if (iter.hasNext) {
+              val n = iter.next
+              k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== step
+            } else {
+              _done
+            },
+            done = (_, _) => _done,
+            err = _ => _done
+          )
+        }
+
+        iter.seekToFirst()
+        step _
       }
     }
-
-    val iter = idIndexFile.iterator
-    iter.seekToFirst()
-    enumerator(iter, IO(iter.close))
   }
 
   def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
@@ -188,32 +191,35 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     import MO._
     import MO.MG.bindSyntax._
 
-    def enumerator(iter: DBIterator, close: IO[Unit]): EnumeratorT[X, E, F] = new EnumeratorT[X, E, F] { 
-      def apply[A] = (s: StepT[X, E, F, A]) => {
-        @inline def _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+    new EnumeratorT[X, E, F] { 
+      def apply[A] = {
+        val iter = idIndexFile.iterator
+        val close = IO(iter.close)
+        range.start match {
+          case Some(id) => iter.seek(id.as[Array[Byte]])
+          case None => iter.seekToFirst()
+        }
 
-        s.fold(
-          cont = k => if (iter.hasNext) {
-            val n = iter.next
-            val id = n.getKey.as[Identities]
-            range.end match {
-              case Some(end) if end <= id => _done
-              case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== apply[A]
-            }
-          } else _done,
-          done = (_, _) => _done,
-          err = _ => _done
-        )
+        def step(s: StepT[X, E, F, A]): IterateeT[X, E, F, A] = {
+          @inline def _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+
+          s.fold(
+            cont = k => if (iter.hasNext) {
+              val n = iter.next
+              val id = n.getKey.as[Identities]
+              range.end match {
+                case Some(end) if end <= id => _done
+                case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== step
+              }
+            } else _done,
+            done = (_, _) => _done,
+            err = _ => _done
+          )
+        }
+
+        step _
       }
     }
-  
-    val iter = idIndexFile.iterator
-    range.start match {
-      case Some(id) => iter.seek(id.as[Array[Byte]])
-      case None => iter.seekToFirst()
-    }
-
-    enumerator(iter, IO(iter.close))
   }
 
   def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {

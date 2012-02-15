@@ -31,7 +31,7 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with StubOperationsAPI 
     with TestConfigComponent 
-    { self =>
+    with LevelDBMemoizationComponent { self =>
       
   import Function._
   
@@ -42,8 +42,8 @@ class EvaluatorSpecs extends Specification
 
   object ops extends Ops 
 
-  type MemoContext = MemoizationContext.Noop.type
-  val memoizationContext = MemoizationContext.Noop
+  //type MemoContext = MemoizationContext.Noop.type
+  object memoizationContext extends MemoContext
   
   "evaluator" should {
     "evaluate simple two-value multiplication" in {

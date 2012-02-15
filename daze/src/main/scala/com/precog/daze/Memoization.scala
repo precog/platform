@@ -14,6 +14,7 @@ import IterateeT._
 
 trait MemoizationContext {
   def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext): Either[MemoizationContext.Memoizer[X], DatasetEnum[X, SEvent, IO]]
+  def expire(memoId: Int): IO[Unit]
 }
 
 object MemoizationContext {
@@ -29,6 +30,7 @@ object MemoizationContext {
 
   trait Noop extends MemoizationContext {
     def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext) = Left(Memoizer.noop[X])
+    def expire(memoId: Int) = IO(())
   }
 
   object Noop extends Noop

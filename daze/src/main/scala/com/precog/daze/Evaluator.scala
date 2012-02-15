@@ -15,7 +15,7 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI {
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizationComponent {
   import Function._
   
   import instructions._
@@ -110,9 +110,15 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val splitEnum = maybeRealize(loop(parent, roots))
         
+        lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
+        lazy val volatileIds = volatileMemos map { _.memoId }
+        
         val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
-          case (_, sv) =>
-            maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
+          case (_, sv) => {
+            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
+            val actions = (volatileIds map memoizationContext.expire).fold(IO {}) { _ >> _ }
+            back perform actions
+          }
         }
         
         val back: DatasetEnum[X, SEvent, IO] = ops.sort(result, None).uniq.zipWithIndex map {
