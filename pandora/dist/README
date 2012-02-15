@@ -4,53 +4,29 @@ To run the interactive command line:
 
   bin/repl
 
-
-INSERT DATA
-
-To insert test data into the system (note there is already test data at //test/path):
-
-1. start the repl in one terminal
-
-  bin/repl
-
-2. in another terminal run
-
-  bin/insert
-
-Note: test data is inserted at the path //insert/test/path
-
-
-RESET DATA
-
-1. remove data directory
-
-  rm -rf data/
-
-2. start the repl in one terminal
-
-  bin/repl
-
-3. initalize the test dataset
-
-  bin/init
-
-4. exit the REPL
-  
-quirrel> :quit 
-       | <ctrl-d>
-
-
 EXAMPLE QUERIES
 
-quirrel> count(dataset(//test/path))
+quirrel> count(dataset(//campaigns))
        | <ctrl-d>
 
-quirrel> tests := dataset(//test/path)
+count(dataset(//campaigns))
+
+
+quirrel> tests := dataset(//campaigns)
        | count(tests where tests.gender = "male")
        | <ctrl-d>
 
-quirrel> tests := dataset(//test/path)
+tests := dataset(//campaigns)
+count(tests where tests.gender = "male")
+
+
+quirrel> tests := dataset(//campaigns)
        | histogram('platform) :=
        |   { platform: 'platform, num: count(tests where tests.platform = 'platform) }
        | histogram
        | <ctrl-d>
+
+tests := dataset(//campaigns)
+histogram('platform) :=
+   { platform: 'platform, num: count(tests where tests.platform = 'platform) }
+histogram
