@@ -121,8 +121,6 @@ trait YggdrasilQueryExecutor
 
   object query extends QueryAPI 
 
-  object memoizationContext extends MemoContext
-  
   def startup() = storage.start
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 

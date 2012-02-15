@@ -61,9 +61,6 @@ class EvaluatorSpecs extends Specification
 
   object ops extends Ops 
 
-  //type MemoContext = MemoizationContext.Noop.type
-  object memoizationContext extends MemoContext
-  
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
       val line = Line(0, "")
@@ -1622,33 +1619,35 @@ class EvaluatorSpecs extends Specification
     }
 
     "order the numbers set by specified identities" in {
-      val numbers = {
-        val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
-        base.zipWithIndex map {
-          case ((_, sv), id) => (Vector(id): Identities, sv)
+      withMemoizationContext { ctx => 
+        val numbers = {
+          val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+          base.zipWithIndex map {
+            case ((_, sv), id) => (Vector(id): Identities, sv)
+          }
         }
+        val max = 5
+
+        val enum = numbers.zipWithIndex map {
+          case ((ids, sv), i) => (ids :+ (5 - i), sv)
+        }
+
+        val sorted = sortByIdentities(enum, Vector(0), Identity.nextInt(), ctx)
+        val sorted2 = sortByIdentities(enum, Vector(1), Identity.nextInt(), ctx)
+        val sorted3 = sortByIdentities(enum, Vector(1, 0), Identity.nextInt(), ctx)
+
+        consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
+           (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
+           (Vector(3, 2), SDecimal(1)), (Vector(4, 1), SDecimal(13)))
+
+        consumeToList(sorted2) mustEqual List((Vector(1, 4), SDecimal(13)),
+           (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+           (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
+
+        consumeToList(sorted3) mustEqual List((Vector(1, 4), SDecimal(13)),
+           (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
+           (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
       }
-      val max = 5
-
-      val enum = numbers.zipWithIndex map {
-        case ((ids, sv), i) => (ids :+ (5 - i), sv)
-      }
-
-      val sorted = sortByIdentities(enum, Vector(0), Identity.nextInt())
-      val sorted2 = sortByIdentities(enum, Vector(1), Identity.nextInt())
-      val sorted3 = sortByIdentities(enum, Vector(1, 0), Identity.nextInt())
-
-      consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
-         (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
-         (Vector(3, 2), SDecimal(1)), (Vector(4, 1), SDecimal(13)))
-
-      consumeToList(sorted2) mustEqual List((Vector(1, 4), SDecimal(13)),
-         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
-         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
-
-      consumeToList(sorted3) mustEqual List((Vector(1, 4), SDecimal(13)),
-         (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
-         (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
     }
   }
 }

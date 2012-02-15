@@ -259,8 +259,6 @@ object Console extends App {
 
         object query extends QueryAPI 
 
-        object memoizationContext extends MemoContext
-
         def startup = IO {
           // start ingest server
           Await.result(start, controlTimeout)
