@@ -345,6 +345,10 @@ trait DAG extends Instructions {
     def value: Option[SValue] = None
     
     def isSingleton: Boolean
+    
+    def isVariable(level: Int): Boolean
+    
+    def findMemos: Set[dag.Memoize]
   }
   
   object dag {
@@ -352,6 +356,10 @@ trait DAG extends Instructions {
       val provenance = Vector()
       
       val isSingleton = true
+      
+      def isVariable(level: Int) = depth >= level
+      
+      val findMemos = Set[Memoize]()
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
@@ -367,6 +375,10 @@ trait DAG extends Instructions {
       })
       
       val isSingleton = true
+      
+      def isVariable(level: Int) = false
+      
+      val findMemos = Set[Memoize]()
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
@@ -375,6 +387,10 @@ trait DAG extends Instructions {
       override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
@@ -384,6 +400,10 @@ trait DAG extends Instructions {
       }
       
       val isSingleton = false
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
     }
     
     // TODO propagate AOT value computation
@@ -391,18 +411,30 @@ trait DAG extends Instructions {
       lazy val provenance = parent.provenance
       
       lazy val isSingleton = parent.isSingleton
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector()
       
       val isSingleton = true
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
       
       lazy val isSingleton = parent.isSingleton && child.isSingleton
+      
+      def isVariable(level: Int) = parent.isVariable(level) || child.isVariable(level + 1)
+      
+      lazy val findMemos = parent.findMemos ++ child.findMemos
     }
     
     // TODO propagate AOT value computation
@@ -415,6 +447,10 @@ trait DAG extends Instructions {
       }
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
+      
+      def isVariable(level: Int) = left.isVariable(level) || right.isVariable(level)
+      
+      lazy val findMemos = left.findMemos ++ right.findMemos
     }
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
@@ -425,6 +461,10 @@ trait DAG extends Instructions {
       }
       
       lazy val isSingleton = target.isSingleton
+      
+      def isVariable(level: Int) = target.isVariable(level) || boolean.isVariable(level)
+      
+      lazy val findMemos = target.findMemos ++ boolean.findMemos
     }
     
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
@@ -446,6 +486,10 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton
       
       lazy val memoId = Identity.nextInt()
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
     }
     
     case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
@@ -455,6 +499,10 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton
       
       lazy val memoId = Identity.nextInt()
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos + this
     }
     
     

@@ -95,9 +95,11 @@ class LevelDBMemoizationContextSpec extends Specification with LevelDBMemoizatio
           ) and (
             memoizationContext[Unit](0) must beLike {
               case Right(d) => 
-                (consume[Unit, SEvent, IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO map {
-                  case (_, v) => v.mapLongOr(-1L)(identity[Long])
-                } must_== expected
+                (
+                  (consume[Unit, SEvent, IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO map {
+                    case (_, v) => v.mapLongOr(-1L)(identity[Long])
+                  } must_== expected
+                ) 
             }
           )
       }

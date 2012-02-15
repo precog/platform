@@ -30,6 +30,7 @@ import com.precog.analytics.Path
 import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
+import scalaz.syntax.monoid._
 
 import Iteratee._
 
@@ -75,11 +76,14 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descript
 
   def merge(d2: DatasetEnum[X, E, F])(implicit order: Order[E], monad: Monad[F]): DatasetEnum[X, E, F] =
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum merge)))
+
+  def perform[B](f: F[B])(implicit m: Monad[F]): DatasetEnum[X, E, F] = 
+    DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, E, F].append(enum, EnumeratorP.perform[X, E, F, B](f)) }, descriptor)
 }
 
 trait DatasetEnumOps {
   def cogroup[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
-    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F].apply(en1, en2))
+    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F](monad, order.order _).apply(en1, en2))
 
   def crossLeft[X, F[_]: Monad](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
     d1 :^ d2
