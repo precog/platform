@@ -13,6 +13,8 @@ scalaVersion := "2.9.1"
 
 scalacOptions ++= Seq("-deprecation", "-unchecked")
 
+javaOptions ++= Seq("-Xmx1G")
+
 libraryDependencies ++= Seq(
   "org.sonatype.jline" % "jline" % "2.5",
   "org.specs2" %% "specs2" % "1.8" % "test",
