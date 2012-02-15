@@ -129,9 +129,14 @@ trait DatasetEnumOps {
 
   def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] 
 
-  def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+  def sort[X](d: DatasetEnum[X, SEvent, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
   
-  def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+  def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int, ctx: MemoizationContext)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+
+  type Key = List[SValue]
+
+  // result must be (stably) ordered by key!!!!
+  //def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key]): DatasetEnum[X, (Key, DatasetEnum[X, SEvent, IO]), IO]
 }
 
 // vim: set ts=4 sw=4 et:

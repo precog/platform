@@ -22,16 +22,16 @@ trait YggEnumOpsConfig {
   def flatMapTimeout: Duration
 }
 
-trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsComponent with MemoizationComponent {
+trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsComponent {
   type YggConfig <: YggEnumOpsConfig
 
   trait Ops extends DatasetEnumOps {
     def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
       DatasetEnum(d.fenum.map(_.flatMap(e => Await.result(f(e).fenum, yggConfig.flatMapTimeout))))
 
-    def sort[X](d: DatasetEnum[X, SEvent, IO], memoId: Option[Int])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
+    def sort[X](d: DatasetEnum[X, SEvent, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
       import MemoizationContext._
-      memoId.toRight(Memoizer.noop[X]).right.flatMap(memoizationContext[X] _) match {
+      memoAs.toRight(Memoizer.noop[X]).right.flatMap({ case (i, ctx) => ctx[X](i) }) match {
         case Right(enum) => enum
         case Left(memoizer) =>
           DatasetEnum(
@@ -85,7 +85,7 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
       }
     }
     
-    def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
+    def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int, memoizationContext: MemoizationContext)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
       memoizationContext[X](memoId) match {
         case Right(enum) => enum
         case Left(memoizer) =>

@@ -70,8 +70,6 @@ class PlatformSpecs extends Specification
   
   object query extends QueryAPI 
 
-  object memoizationContext extends MemoContext
-  
   step {
     startup()
   }

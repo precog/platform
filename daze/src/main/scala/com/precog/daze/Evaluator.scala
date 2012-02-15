@@ -15,7 +15,25 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizationComponent {
+trait EvaluationContext {
+  type Context
+
+  def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO]
+}
+
+trait MemoizingEvaluationContext extends EvaluationContext with MemoizationComponent {
+  trait Context {
+    val memoizationContext: MemoizationContext
+  }
+
+  def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO] = {
+    withMemoizationContext { memoContext => 
+      f(new Context { val memoizationContext = memoContext }).perform(memoContext.purge)
+    }
+  }
+}
+
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext {
   import Function._
   
   import instructions._
@@ -24,13 +42,13 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   implicit def asyncContext: akka.dispatch.ExecutionContext
   
   def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
-    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]]): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
+    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
       case SplitRoot(_, depth) => Right(roots(depth))
       
       case Root(_, instr) =>
         Right(ops.point((Vector(), graph.value.get)))    // TODO don't be stupid
       
-      case dag.New(_, parent) => loop(parent, roots)
+      case dag.New(_, parent) => loop(parent, roots, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
@@ -40,7 +58,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case None => {
             implicit val order = identitiesOrder(parent.provenance.length)
             
-            val result = ops.flatMap(maybeRealize(loop(parent, roots))) {
+            val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx))) {
               case (_, SString(str)) => query.fullProjection[X](Path(str))
               case _ => ops.empty[X, SEvent, IO]
             }
@@ -51,7 +69,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
       
       case Operate(_, Comp, parent) => {
-        val parentRes = loop(parent, roots)
+        val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { _ typed SBoolean }
         val enum = maybeRealize(parentResTyped)
         
@@ -61,7 +79,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
       
       case Operate(_, Neg, parent) => {
-        val parentRes = loop(parent, roots)
+        val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { _ typed SDecimal }
         val enum = maybeRealize(parentResTyped)
         
@@ -71,7 +89,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
       
       case Operate(_, WrapArray, parent) => {
-        val enum = maybeRealize(loop(parent, roots))
+        val enum = maybeRealize(loop(parent, roots, ctx))
         
         Right(enum map {
           case (id, sv) => (id, SArray(Vector(sv)))
@@ -80,7 +98,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
-        val enum = maybeRealize(loop(parent, roots))
+        val enum = maybeRealize(loop(parent, roots, ctx))
         
         val mapped = enum map {
           case (_, sv) => sv
@@ -150,15 +168,15 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case dag.Split(_, parent, child) => {
         implicit val order = ValuesOrder
         
-        val splitEnum = maybeRealize(loop(parent, roots))
+        val splitEnum = maybeRealize(loop(parent, roots, ctx))
         
         lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
         lazy val volatileIds = volatileMemos map { _.memoId }
         
         val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
           case (_, sv) => {
-            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots))
-            val actions = (volatileIds map memoizationContext.expire).fold(IO {}) { _ >> _ }
+            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots, ctx))
+            val actions = (volatileIds map ctx.memoizationContext.expire).fold(IO {}) { _ >> _ }
             back perform actions
           }
         }
@@ -173,8 +191,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case Join(_, instr @ (VUnion | VIntersect), left, right) => {
         implicit val sortOfValueOrder = ValuesOrder
         
-        val leftEnum = ops.sort(maybeRealize(loop(left, roots)), None)
-        val rightEnum = ops.sort(maybeRealize(loop(right, roots)), None)
+        val leftEnum = ops.sort(maybeRealize(loop(left, roots, ctx)), None)
+        val rightEnum = ops.sort(maybeRealize(loop(right, roots, ctx)), None)
         
         // TODO we're relying on the fact that we *don't* need to preserve sane identities!
         val back = ops.cogroup(leftEnum, rightEnum) collect {
@@ -191,7 +209,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
           case sv2 @ SString(str) => {
-            val masked = loop(left, roots).left map { _ derefObject str }
+            val masked = loop(left, roots, ctx).left map { _ derefObject str }
             
             masked.right map { enum =>
               enum collect {
@@ -209,7 +227,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value.get match {
           case sv2 @ SDecimal(num) if num.isValidInt => {
-            val masked = loop(left, roots).left map { _ derefArray num.toInt }
+            val masked = loop(left, roots, ctx).left map { _ derefArray num.toInt }
             
             masked.right map { enum =>
               enum collect {
@@ -235,8 +253,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case Map2CrossRight(op) => op
         }
         
-        val leftRes = loop(left, roots)
-        val rightRes = loop(right, roots)
+        val leftRes = loop(left, roots, ctx)
+        val rightRes = loop(right, roots, ctx)
         
         val (leftTpe, rightTpe) = binOpType(op)
         
@@ -278,8 +296,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         lazy val length = sharedPrefixLength(target, boolean)
         implicit lazy val order = identitiesOrder(length)
         
-        val targetRes = loop(target, roots)
-        val booleanRes = loop(boolean, roots)
+        val targetRes = loop(target, roots, ctx)
+        val booleanRes = loop(boolean, roots, ctx)
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
@@ -308,19 +326,21 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
       
       case s @ Sort(parent, indexes) => 
-        loop(parent, roots).right map { enum => sortByIdentities(enum, indexes, s.memoId) }
+        loop(parent, roots, ctx).right map { enum => sortByIdentities(enum, indexes, s.memoId, ctx.memoizationContext) }
       
       case m @ Memoize(parent, _) =>
-        loop(parent, roots).right map { enum => ops.memoize(enum, m.memoId) }
+        loop(parent, roots, ctx).right map { enum => ops.memoize(enum, m.memoId, ctx.memoizationContext) }
     }
     
-    maybeRealize(loop(memoize(orderCrosses(graph)), Nil))
+    withContext { ctx =>
+      maybeRealize(loop(memoize(orderCrosses(graph)), Nil, ctx))
+    }
   }
-  
+
   private def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]]): DatasetEnum[X, SEvent, IO] =
     (result.left map { _.realize }).fold(identity, identity)
   
-  protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int): DatasetEnum[X, SEvent, IO] = {
+  protected def sortByIdentities[X](enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int, ctx: MemoizationContext): DatasetEnum[X, SEvent, IO] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {
       def order(e1: SEvent, e2: SEvent): Ordering = {
         val (ids1, _) = e1
@@ -336,7 +356,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
     }
     
-    ops.sort(enum, Some(memoId)) map {
+    ops.sort(enum, Some((memoId, ctx))) map {
       case (ids, sv) => {
         val (first, second) = ids.zipWithIndex partition {
           case (_, i) => indexes contains i

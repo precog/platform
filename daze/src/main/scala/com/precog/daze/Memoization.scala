@@ -15,6 +15,7 @@ import IterateeT._
 trait MemoizationContext {
   def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext): Either[MemoizationContext.Memoizer[X], DatasetEnum[X, SEvent, IO]]
   def expire(memoId: Int): IO[Unit]
+  def purge: IO[Unit]
 }
 
 object MemoizationContext {
@@ -31,6 +32,7 @@ object MemoizationContext {
   trait Noop extends MemoizationContext {
     def apply[X](memoId: Int)(implicit asyncContext: ExecutionContext) = Left(Memoizer.noop[X])
     def expire(memoId: Int) = IO(())
+    def purge = IO(())
   }
 
   object Noop extends Noop
@@ -39,7 +41,7 @@ object MemoizationContext {
 trait MemoizationComponent {
   type MemoContext <: MemoizationContext
 
-  def memoizationContext: MemoContext
+  def withMemoizationContext[A](f: MemoContext => A): A
 }
 
 // vim: set ts=4 sw=4 et:

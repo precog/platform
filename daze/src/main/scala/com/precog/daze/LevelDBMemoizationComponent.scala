@@ -20,9 +20,9 @@ trait LevelDBMemoizationConfig {
 trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationComponent { component => 
   type YggConfig <: LevelDBMemoizationConfig
 
-  @volatile private var cache = Map.empty[Int, (Option[ProjectionDescriptor], Either[Vector[SEvent], File])]
+  sealed trait MemoContext extends MemoizationContext { 
+    @volatile private var cache = Map.empty[Int, (Option[ProjectionDescriptor], Either[Vector[SEvent], File])]
 
-  class MemoContext extends MemoizationContext { 
     def expire(memoId: Int) = IO {
       component.synchronized { cache -= memoId }
     }
@@ -51,7 +51,11 @@ trait LevelDBMemoizationComponent extends YggConfigComponent with MemoizationCom
         )
       }
     }
+
+    def purge = IO {}
   }
+
+  def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
 }
 
 
