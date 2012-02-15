@@ -97,6 +97,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         })
       }
       
+      // TODO mode and median
       case dag.Reduce(_, red, parent) => {
         val enum = maybeRealize(loop(parent, roots))
         
@@ -104,24 +105,65 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case (_, sv) => sv
         }
         
-        val reducedEnumPF = mapped.fenum map { enumP =>
-          new EnumeratorP[X, SValue, IO] {
-            def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, SValue, G] = {
-              import MO._
-              new EnumeratorT[X, SValue, G] {
-                def apply[A] = (step: StepT[X, SValue, G, A]) => 
-                  for {
-                    opt <- reductionIter[X, G](red) &= enumP[G]
-                    a   <- step.pointI &= (opt.map(sv => EnumeratorT.enumOne[X, SValue, G](sv)).getOrElse(Monoid[EnumeratorT[X, SValue, G]].zero))
-                  } yield a
-              }
+        val reduced = red match {
+          case Count => {
+            mapped.reduce(Some(SDecimal(0))) {
+              case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
+            }
+          }
+          
+          case Mean => {
+            val pairs = mapped.reduce(None: Option[(BigDecimal, BigDecimal)]) {
+              case (None, SDecimal(v)) => Some((1, v))
+              case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
+              case (acc, _) => acc
+            }
+            
+            pairs map {
+              case (c, v) => SDecimal(v / c)
+            }
+          }
+          
+          case Max => {
+            mapped.reduce(None: Option[SValue]) {
+              case (None, SDecimal(v)) => Some(SDecimal(v))
+              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
+              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
+              case (acc, _) => acc
+            }
+          }
+          
+          case Min => {
+            mapped.reduce(None: Option[SValue]) {
+              case (None, SDecimal(v)) => Some(SDecimal(v))
+              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
+              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
+              case (acc, _) => acc
+            }
+          }
+          
+          case StdDev => {
+            val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
+              case (None, SDecimal(v)) => Some((1, v, v * v))
+              case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
+              case (acc, _) => acc
+            }
+            
+            stats map {
+              case (count, sum, sumsq) => SDecimal(sqrt(count * sumsq - sum * sum) / count)
+            }
+          }
+          
+          case Sum => {
+            mapped.reduce(None: Option[SValue]) {
+              case (None, sv @ SDecimal(_)) => Some(sv)
+              case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
+              case (acc, _) => acc
             }
           }
         }
-
-        val reducedDS = DatasetEnum[X, SValue, IO](reducedEnumPF)
         
-        Right(reducedDS map { sv => (Vector(), sv) })
+        Right(reduced map { sv => (Vector(), sv) })
       }
       
       case dag.Split(_, parent, child) => {
@@ -332,70 +374,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   private def unlift[A, B](f: A => Option[B]): PartialFunction[A, B] = new PartialFunction[A, B] {
     def apply(a: A) = f(a).get
     def isDefinedAt(a: A) = f(a).isDefined
-  }
-  
-  // TODO mode, median and stdDev
-  private def reductionIter[X, G[_]](red: Reduction)(implicit MO: G |>=| IO): IterateeT[X, SValue, G, Option[SValue]] = {
-    import MO._
-    red match {
-      case Count => {
-        fold[X, SValue, G, Option[SValue]](Some(SDecimal(0))) {
-          case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
-        }
-      }
-      
-      case Mean => {
-        val itr = fold[X, SValue, G, Option[(BigDecimal, BigDecimal)]](None) {
-          case (None, SDecimal(v)) => Some((1, v))
-          case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
-          case (acc, _) => acc
-        }
-        
-        itr map {
-          case Some((c, v)) => Some(SDecimal(v / c))
-          case None => None
-        }
-      }
-      
-      case Max => {
-        fold[X, SValue, G, Option[SValue]](None) {
-          case (None, SDecimal(v)) => Some(SDecimal(v))
-          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
-          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
-          case (acc, _) => acc
-        }
-      }
-      
-      case Min => {
-        fold[X, SValue, G, Option[SValue]](None) {
-          case (None, SDecimal(v)) => Some(SDecimal(v))
-          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
-          case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
-          case (acc, _) => acc
-        }
-      }
-      
-      case StdDev => {
-        val itr = fold[X, SValue, G, Option[(BigDecimal, BigDecimal, BigDecimal)]](None) {
-          case (None, SDecimal(v)) => Some((1, v, v * v))
-          case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
-          case (acc, _) => acc
-        }
-        
-        itr map {
-          case Some((count, sum, sumsq)) => Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
-          case None => None
-        }
-      }
-      
-      case Sum => {
-        fold[X, SValue, G, Option[SValue]](None) {
-          case (None, sv @ SDecimal(_)) => Some(sv)
-          case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
-          case (acc, _) => acc
-        }
-      }
-    }
   }
   
   /**
