@@ -12,6 +12,7 @@ import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.monoid._
+import scalaz.syntax.monad._
 
 import Iteratee._
 
@@ -19,17 +20,22 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descript
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
     DatasetEnum(fenum map (_ map f))
 
-  def reduce(b: Option[E])(f: (Option[E], E) => Option[E]): DatasetEnum[X, E, F] = DatasetEnum(
+  def reduce[E2](b: Option[E2])(f: (Option[E2], E) => Option[E2]): DatasetEnum[X, E2, F] = DatasetEnum(
     fenum map { enum => 
-      new EnumeratorP[X, E, F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+      new EnumeratorP[X, E2, F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
           import MO._
-          new EnumeratorT[X, E, G] {
-            def apply[A] = (step: StepT[X, E, G, A]) => {
-              for {
-                opt <- IterateeT.fold[X, E, G, Option[E]](b)(f) &= enum[G]
-                a   <- step.pointI &= (opt.map(v => EnumeratorT.enumOne[X, E, G](v)).getOrElse(Monoid[EnumeratorT[X, E, G]].zero))
-              } yield a
+          new EnumeratorT[X, E2, G] {
+            def apply[A] = (step: StepT[X, E2, G, A]) => {
+              def check(s: StepT[X, E, G, Option[E2]]): IterateeT[X, E2, G, A] = s.fold(
+                cont = k => k(eofInput) >>== { 
+                  s => s.mapContOr(_ => sys.error("diverging iteratee"), check(s))
+                }
+                , done = (opt, _) => opt.map(v => step.mapCont(f => f(elInput(v)))).getOrElse(step.pointI)
+                , err  = x => err(x)
+              )
+
+              iterateeT((IterateeT.fold[X, E, G, Option[E2]](b)(f) &= enum[G]).value >>= (s => check(s).value))
             }
           }
         }
