@@ -25,7 +25,7 @@ organization := "com.precog"
 
 scalaVersion := "2.9.1"
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
 
 libraryDependencies ++= Seq(
   "joda-time"                 % "joda-time"           % "1.6.2",
