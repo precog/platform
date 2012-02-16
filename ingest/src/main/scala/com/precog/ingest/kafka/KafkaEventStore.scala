@@ -51,11 +51,7 @@ class LocalKafkaEventStore(localTopic: String, localConfig: Properties)(implicit
 
   def save(event: Event) = Future {
     val data = new ProducerData[String, Event](localTopic, event)
-    try {
-      producer.send(data)
-    } catch {
-      case x => logger.info("Error saving event to local kafka queue.", x) 
-    }
+    producer.send(data)
   }
 
   def stop(): Future[Unit] = Future { producer.close } 
@@ -160,12 +156,23 @@ class KafkaEventRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, loca
   private val bufferSize: Int = 1024 * 1024
 
   def start() = Future[Unit] {
-    
+   
     val relayThread = new Thread() {
+      
+      val retryDelay = 5000
+
       override def run() {
-        val startingOffset = eventIdSeq.getLastOffset
-        logger.debug("Kafka relay agent starting from offset: " + startingOffset)
-        ingestBatch(startingOffset, 0, 0, 0)
+        while(true) {
+          val startingOffset = eventIdSeq.getLastOffset
+          logger.debug("Kafka relay agent starting from offset: " + startingOffset)
+          try {
+            ingestBatch(startingOffset, 0, 0, 0)
+          } catch {
+            case ex => 
+              logger.error("Error during ingest.", ex)
+          }
+          Thread.sleep(retryDelay)
+        }
       }
 
       @tailrec

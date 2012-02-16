@@ -59,12 +59,16 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
     Success { (t: Token, p: Path) =>
       if(t.mayAccess(p, WRITE)) {
         request.content map { futureContent =>
-          for {
-            event <- futureContent
-            _ <- eventStore.save(Event.fromJValue(p, event, t.accountTokenId))
-          } yield {
-            // could return the eventId to the user?
-            HttpResponse[JValue](OK)
+          try { 
+            for {
+              event <- futureContent
+              _ <- eventStore.save(Event.fromJValue(p, event, t.accountTokenId))
+            } yield {
+              // could return the eventId to the user?
+              HttpResponse[JValue](OK)
+            }
+          } catch {
+            case ex => Future(HttpResponse[JValue](ServiceUnavailable))
           }
         } getOrElse {
           Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data."))))

@@ -43,7 +43,7 @@ object PlatformBuild extends Build {
     }
   )
 
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, pandora, util, common)
+  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, pandora, util, common)
   
   lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings : _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings: _*)
@@ -61,6 +61,9 @@ object PlatformBuild extends Build {
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common, quirrel, daze, yggdrasil)
 
+  val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
+  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings: _*).dependsOn(ingest, common, quirrel, daze, yggdrasil)
+  
   val dist = TaskKey[Unit]("dist", "builds dist")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
   val extractData = TaskKey[String]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")
