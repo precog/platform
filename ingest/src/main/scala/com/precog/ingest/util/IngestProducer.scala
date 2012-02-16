@@ -26,6 +26,7 @@ import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.http.HttpResponse
+import blueeyes.core.http.HttpStatusCodes.OK
 import blueeyes.core.service.HttpClient
 import blueeyes.core.service.engines.HttpClientXLightWeb
 
@@ -142,9 +143,14 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 
     f.value match {
-      case Some(Right(_)) => ()
-      case Some(Left(ex)) => throw ex
-      case _              => throw new RuntimeException("Error processing insert request") 
+      case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
+      case Some(Right(HttpResponse(status, _, _, _)))                       => 
+        println("Not 200 status code: " + status.code)
+        throw new RuntimeException("Server returned error code with request")
+      case Some(Left(ex))                                              => 
+        throw ex
+      case _                                                           => 
+        throw new RuntimeException("Error processing insert request") 
     }
   }
 
