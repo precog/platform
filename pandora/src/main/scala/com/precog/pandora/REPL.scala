@@ -144,7 +144,7 @@ trait REPL extends LineErrors
     }
   
 
-    out.println("Welcome to Quirrel version 0.0.1.")
+    out.println("Welcome to Quirrel early access preview.")       // TODO we should try to get this string from a file
     out.println("Type in expressions to have them evaluated.")
     out.println("Press Ctrl-D on a new line to evaluate an expression.")
     out.println("Type in :help for more information.")
