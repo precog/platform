@@ -97,7 +97,42 @@ trait SValue {
     }
   }
 
-  def toJValue: JValue = fold(
+  lazy val structure: Set[(JPath, ColumnType)] = {
+    val toJPath: JPath = fold(
+      obj = m => m.toSeq flatMap { case (name, value) => value.structure map { case (path, ctype) (name \ path, ctype) }} toSet
+      arr = 
+      str = (JPath.Empty, CString)
+      bool = 
+      long = 
+      double =
+      num = 
+      nul =  )
+  }
+
+  lazy val toColType: ColumnType = fold (
+    obj = _ => SEmptyObject,
+    arr = _ => SEmptyArray,
+    str =   _ => SStringArbitrary,
+    bool =  _ => SBoolean,
+    long = _ => SLong,
+    double = _ => SDouble,
+    num = _ => SDecimalArbitrary,
+    nul = SNull )
+
+  lazy val toSeqColType: Seq[ColumnType] = fold(
+    obj = obj => obj.map({ case (_, v) => v.toColType}).toSeq,
+    arr = arr => arr.map(_.toColType).toSeq,
+    str =   _ => Seq(SStringArbitrary),
+    bool =  _ => Seq(SBoolean),
+    long = _ => Seq(SLong),
+    double = _ => Seq(SDouble),
+    num = _ => Seq(SDecimalArbitrary),
+    nul = Seq(SNull) )
+  
+   
+  //lazy val shash: Long = structure.hashCode
+
+  lazy val toJValue: JValue = fold(
     obj = obj => JObject(obj.map({ case (k, v) => JField(k, v.toJValue) })(collection.breakOut)),
     arr = arr => JArray(arr.map(_.toJValue)(collection.breakOut)),
     str = JString(_),
@@ -304,7 +339,7 @@ case object SArray extends SType with (Vector[SValue] => SValue) {
   def unapply(v: SValue): Option[Vector[SValue]] = v.mapArrayOr(Option.empty[Vector[SValue]])(Some(_))
 }
 
-object SString extends SType with (String => SValue) {
+case object SString extends SType with (String => SValue) {
   def unapply(v: SValue): Option[String] = v.mapStringOr(Option.empty[String])(Some(_))
 
   def apply(v: String) = new SValue {
@@ -338,7 +373,7 @@ case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
 }
 
-case object SInt extends ColumnType with (Int => SValue) {
+case object SInt extends SType with ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
   def apply(v: Int) = new SValue {
     def fold[A](
@@ -350,7 +385,7 @@ case object SInt extends ColumnType with (Int => SValue) {
   }
 }
 
-case object SLong extends ColumnType with (Long => SValue) {
+case object SLong extends SType with ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
   def apply(v: Long) = new SValue {
     def fold[A](
@@ -363,7 +398,7 @@ case object SLong extends ColumnType with (Long => SValue) {
   def unapply(v: SValue): Option[Long] = v.mapLongOr(Option.empty[Long])(Some(_))
 }
 
-case object SFloat extends ColumnType with (Float => SValue) {
+case object SFloat extends SType with ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
   def apply(v: Float) = new SValue {
     def fold[A](
@@ -375,7 +410,7 @@ case object SFloat extends ColumnType with (Float => SValue) {
   }
 }
 
-case object SDouble extends ColumnType with (Double => SValue) {
+case object SDouble extends SType with ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
   def apply(v: Double) = new SValue {
     def fold[A](
@@ -392,7 +427,7 @@ case object SDecimalArbitrary extends ColumnType {
   def format = LengthEncoded  
 }
 
-object SDecimal extends SType with (BigDecimal => SValue) {
+case object SDecimal extends SType with (BigDecimal => SValue) {
   def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
   def apply(v: BigDecimal) = new SValue {
     def fold[A](
