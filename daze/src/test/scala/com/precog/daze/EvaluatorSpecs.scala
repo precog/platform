@@ -37,11 +37,13 @@ import com.precog.util.Identity
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
 
-  class YggConfig extends YggEnumOpsConfig with LevelDBMemoizationConfig {
+  class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig {
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
+    def sortSerialization = SimpleProjectionSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
+    def memoizationSerialization = SimpleProjectionSerialization
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 }
@@ -50,7 +52,7 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with StubOperationsAPI 
     with TestConfigComponent 
-    with LevelDBMemoizationComponent { self =>
+    with DiskMemoizationComponent { self =>
       
   import Function._
   

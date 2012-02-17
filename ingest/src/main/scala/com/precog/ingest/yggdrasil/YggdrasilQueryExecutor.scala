@@ -48,7 +48,7 @@ import org.streum.configrity.Configuration
 
 import net.lag.configgy.ConfigMap
 
-trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig with BaseConfig {
+trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with BaseConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
@@ -60,8 +60,10 @@ trait YggdrasilQueryExecutorComponent {
     new BaseConfig with YggdrasilQueryExecutorConfig {
       val config = Configuration.parse("")  
       val sortWorkDir = scratchDir
+      val sortSerialization = SimpleProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
+      val memoizationSerialization = SimpleProjectionSerialization
     }
   }
     
@@ -105,9 +107,9 @@ trait YggdrasilQueryExecutor
     with OperationsAPI 
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
-    with LevelDBMemoizationComponent { self =>
+    with DiskMemoizationComponent { self =>
 
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig
+  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
   
   val yggState: YggState
   val actorSystem: ActorSystem

@@ -123,7 +123,7 @@ trait SValue {
     bool = JBool(_),
     long = JInt(_),
     double = JDouble(_),
-    num = sys.error("fix JValue"),
+    num = n => JInt(n.toBigInt), //sys.error("fix JValue"),
     nul = JNull)
 
   abstract override def equals(obj: Any) = obj match {

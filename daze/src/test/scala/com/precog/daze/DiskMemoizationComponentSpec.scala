@@ -50,15 +50,17 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
-class LevelDBMemoizationContextSpec extends Specification with LevelDBMemoizationComponent with StubYggShardComponent {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent {
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   implicit val timeout = Timeout(intToDurationInt(30).seconds)
+  def sampleSize = 50
 
-  type YggConfig = LevelDBMemoizationConfig 
-  object yggConfig extends LevelDBMemoizationConfig {
-    val memoizationBufferSize = 100
-    val memoizationWorkDir = new File("")
+  type YggConfig = DiskMemoizationConfig 
+  object yggConfig extends DiskMemoizationConfig {
+    val memoizationBufferSize = 10
+    val memoizationWorkDir = new File("/tmp")
+    val memoizationSerialization = SimpleProjectionSerialization
   }
 
   object storage extends Storage
@@ -96,7 +98,7 @@ class LevelDBMemoizationContextSpec extends Specification with LevelDBMemoizatio
                 case Right(d) => 
                   (
                     (consume[Unit, SEvent, IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO map {
-                      case (_, v) => v.mapLongOr(-1L)(identity[Long])
+                      case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
                     } must_== expected
                   ) 
               }
