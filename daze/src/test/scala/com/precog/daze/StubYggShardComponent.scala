@@ -34,6 +34,7 @@ trait StubYggShardComponent {
   implicit def asyncContext: ExecutionContext
 
   val dataPath = Path("/test")
+  def sampleSize: Int
 
   trait Storage extends YggShard {
     def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
@@ -57,7 +58,7 @@ trait StubYggShardComponent {
       def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
     }
 
-    val (sampleData, _) = DistributedSampleSet.sample(5, 0)
+    val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)
 
     val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
       case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {

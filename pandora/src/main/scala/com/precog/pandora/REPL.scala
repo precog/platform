@@ -202,16 +202,18 @@ object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   Configgy.configureFromResource("default_ingest.conf")
 
-  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig] = IO {
+  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
 
-    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig {
+    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
       val config = Configuration.parse(rawConfig)  
       val flatMapTimeout = controlTimeout
       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       val sortWorkDir = scratchDir
+      val sortSerialization = SimpleProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
+      val memoizationSerialization = SimpleProjectionSerialization
     }
   }
 
@@ -224,10 +226,10 @@ object Console extends App {
           with AkkaIngestServer 
           with YggdrasilEnumOpsComponent
           with LevelDBQueryComponent
-          with LevelDBMemoizationComponent
+          with DiskMemoizationComponent
           with Lifecycle { self =>
 
-        type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with LevelDBMemoizationConfig
+        type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
         val yggConfig = yconfig
 
         val maxEvalDuration = controlTimeout

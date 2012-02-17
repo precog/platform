@@ -35,6 +35,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   object yggConfig extends YggConfig {
     def sortBufferSize = 10
     def sortWorkDir = sys.error("not used")
+    def sortSerialization = SimpleProjectionSerialization
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 

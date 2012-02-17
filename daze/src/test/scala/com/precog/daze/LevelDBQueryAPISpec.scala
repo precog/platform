@@ -32,6 +32,7 @@ import org.specs2.mutable._
 class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with StubYggShardComponent {
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
+  def sampleSize = 20
 
   type YggConfig = LevelDBQueryConfig
   object yggConfig extends LevelDBQueryConfig {
