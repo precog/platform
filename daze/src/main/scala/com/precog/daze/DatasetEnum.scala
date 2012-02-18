@@ -16,26 +16,30 @@ import scalaz.syntax.monad._
 
 import Iteratee._
 
-case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descriptor: Option[ProjectionDescriptor] = None) {
+case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], descriptor: Option[ProjectionDescriptor] = None) {
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
-    DatasetEnum(fenum map (_ map f))
+    DatasetEnum(fenum map (_ map (_ map f)))
 
   def reduce[E2](b: Option[E2])(f: (Option[E2], E) => Option[E2]): DatasetEnum[X, E2, F] = DatasetEnum(
     fenum map { enum => 
-      new EnumeratorP[X, E2, F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E2, G] = {
+      new EnumeratorP[X, Vector[E2], F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Vector[E2], G] = {
           import MO._
-          new EnumeratorT[X, E2, G] {
-            def apply[A] = (step: StepT[X, E2, G, A]) => {
-              def check(s: StepT[X, E, G, Option[E2]]): IterateeT[X, E2, G, A] = s.fold(
+          new EnumeratorT[X, Vector[E2], G] {
+            def apply[A] = (step: StepT[X, Vector[E2], G, A]) => {
+              def check(s: StepT[X, Vector[E], G, Option[E2]]): IterateeT[X, Vector[E2], G, A] = s.fold(
                 cont = k => k(eofInput) >>== { 
                   s => s.mapContOr(_ => sys.error("diverging iteratee"), check(s))
                 }
-                , done = (opt, _) => opt.map(v => step.mapCont(f => f(elInput(v)))).getOrElse(step.pointI)
+                , done = (opt, _) => opt.map(v => step.mapCont(cf => cf(elInput(Vector(v))))).getOrElse(step.pointI)
                 , err  = x => err(x)
               )
 
-              iterateeT((IterateeT.fold[X, E, G, Option[E2]](b)(f) &= enum[G]).value >>= (s => check(s).value))
+              def chunkFold(a: (Option[E2], Vector[E])): Option[E2] = {
+                a._2.foldLeft(a._1)(f)
+              }
+
+              iterateeT((IterateeT.fold[X, Vector[E], G, Option[E2]](b)(chunkFold) &= enum[G]).value >>= (s => check(s).value))
             }
           }
         }
@@ -44,13 +48,13 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descript
   )
 
   def collect[E2](pf: PartialFunction[E, E2]): DatasetEnum[X, E2, F] = 
-    DatasetEnum(fenum map (_ collect pf))
+    DatasetEnum(fenum map (_ map (_ collect pf)))
 
   def uniq(implicit ord: Order[E]): DatasetEnum[X, E, F] = 
-    DatasetEnum(fenum map (_.uniq))
+    DatasetEnum(fenum map (_.uniqChunk))
 
   def zipWithIndex: DatasetEnum[X, (E, Long), F] = 
-    DatasetEnum(fenum map (_.zipWithIndex))
+    DatasetEnum(fenum map (_.zipChunkWithIndex))
 
   def :^[E2](d2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = 
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum :^ _)))
@@ -59,10 +63,10 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, E, F]], descript
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum :^ _)))
 
   def join(d2: DatasetEnum[X, E, F])(implicit order: Order[E], m: Monad[F]): DatasetEnum[X, (E, E), F] =
-    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum join)))
+    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.join[E])))
 
   def merge(d2: DatasetEnum[X, E, F])(implicit order: Order[E], monad: Monad[F]): DatasetEnum[X, E, F] =
-    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum merge)))
+    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.merge[E])))
 
   def perform[B](f: F[B])(implicit m: Monad[F]): DatasetEnum[X, E, F] = 
     DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, E, F].append(enum, EnumeratorP.perform[X, E, F, B](f)) }, descriptor)
@@ -92,35 +96,35 @@ trait DatasetEnumOps {
 
   def empty[X, E, F[_]](implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
-      new EnumeratorP[X, E, F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+      new EnumeratorP[X, Vector[E], F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Vector[E], G] = {
           import MO._
-          Monoid[EnumeratorT[X, E, G]].zero
+          Monoid[EnumeratorT[X, Vector[E], G]].zero
         }
       }
     )
   )
 
-  def point[X, E, F[_]](value: E)(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
+  def point[X, E, F[_]](value: Vector[E])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
-      new EnumeratorP[X, E, F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = {
+      new EnumeratorP[X, Vector[E], F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Vector[E], G] = {
           import MO._
-          EnumeratorT.enumOne[X, E, G](value)
+          EnumeratorT.enumOne[X, Vector[E], G](value)
         }
       }
     )
   )
 
-  def liftM[X, E, F[_]](value: F[E])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
+  def liftM[X, E, F[_]](value: F[Vector[E]])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E, F] = DatasetEnum(
     Future(
-      new EnumeratorP[X, E, F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, E, G] = new EnumeratorT[X, E, G] {
+      new EnumeratorP[X, Vector[E], F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Vector[E], G] = new EnumeratorT[X, Vector[E], G] {
           import MO._
           import MO.MG.bindSyntax._
 
-          def apply[A] = { (step: StepT[X, E, G, A]) => 
-            iterateeT[X, E, G, A](MO.promote(value) >>= { e => step.mapCont(f => f(elInput(e))).value })
+          def apply[A] = { (step: StepT[X, Vector[E], G, A]) => 
+            iterateeT[X, Vector[E], G, A](MO.promote(value) >>= { e => step.mapCont(f => f(elInput(e))).value })
           }
         }
       }

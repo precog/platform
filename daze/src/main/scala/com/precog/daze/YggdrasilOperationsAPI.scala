@@ -26,7 +26,8 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
   type YggConfig <: YggEnumOpsConfig
 
   trait Ops extends DatasetEnumOps {
-    def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
+    // I think we have to use Vector[E1] here, not sure how we could flatMap individual elements
+    def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: Vector[E1] => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
       DatasetEnum(d.fenum.map(_.flatMap(e => Await.result(f(e).fenum, yggConfig.flatMapTimeout))))
 
     def sort[X](d: DatasetEnum[X, SEvent, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
@@ -91,15 +92,15 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
         case Left(memoizer) =>
           DatasetEnum(
             d.fenum map { unmemoized =>
-              new EnumeratorP[X, SEvent, IO] {
-                def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, SEvent, F] = {
+              new EnumeratorP[X, Vector[SEvent], IO] {
+                def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, Vector[SEvent], F] = {
                   import MO._
                   import MO.MG.bindSyntax._
 
-                  new EnumeratorT[X, SEvent, F] {
+                  new EnumeratorT[X, Vector[SEvent], F] {
                     def apply[A] = {
                       val memof = memoizer[F, A](d.descriptor)
-                      (s: StepT[X, SEvent, F, A]) => memof(s.pointI) &= unmemoized[F]
+                      (s: StepT[X, Vector[SEvent], F, A]) => memof(s.pointI) &= unmemoized[F]
                     }
                   }
                 }
