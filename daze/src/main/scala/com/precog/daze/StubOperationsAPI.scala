@@ -53,9 +53,9 @@ trait DatasetConsumers extends Evaluator {
 
   def consumeEval(graph: DepGraph): Set[SEvent] = {
     val results = Await.result(
-      eval(graph).fenum.map { (enum: EnumeratorP[Unit, SEvent, IO]) => 
+      eval(graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
         try {
-          Right(((consume[Unit, SEvent, IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
+          Right(((consume[Unit, Vector[SEvent], IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
         } catch {
           case e => Left(e)
         }
@@ -66,7 +66,7 @@ trait DatasetConsumers extends Evaluator {
     results.left foreach { throw _ }
 
     val Right(back) = results
-    back
+    back.flatten
   }
 }
 
@@ -77,7 +77,9 @@ trait StubOperationsAPI
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
-  object query extends QueryAPI
+  object query extends QueryAPI {
+    val chunkSize = 2000
+  }
   
   trait QueryAPI extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
