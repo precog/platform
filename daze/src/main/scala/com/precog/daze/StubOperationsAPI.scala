@@ -82,6 +82,8 @@ trait StubOperationsAPI
   trait QueryAPI extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
+
+    def chunkSize: Int
     
     private case class StubDatasetMask[X](path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
@@ -120,7 +122,7 @@ trait StubOperationsAPI
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
       val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
-      Iteratee.enumPStream[X, SEvent, IO](stream)
+      Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
     }
     
     private def scaleId(path: Path)(seed: Int): Long = {
