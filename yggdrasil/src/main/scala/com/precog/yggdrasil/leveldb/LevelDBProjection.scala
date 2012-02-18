@@ -127,6 +127,8 @@ object LevelDBProjection {
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
   import LevelDBProjection._
 
+  val chunkSize = 2000
+
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
 
@@ -170,22 +172,23 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   // ID Traversals //
   ///////////////////
 
-  def traverseIndex[X, E, F[_]](f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, E, F] = {
+  def traverseIndex[X, E, F[_]](f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
     import MO._
     import MO.MG.bindSyntax._
 
-    new EnumeratorT[X, E, F] { 
+    new EnumeratorT[X, Vector[E], F] { 
       def apply[A] = {
         val iter = idIndexFile.iterator
+        val sIter = iter.asScala
         val close = IO(iter.close)
 
-        def step(s : StepT[X, E, F, A]): IterateeT[X, E, F, A] = {
-          val _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+        def step(s : StepT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
+          val _done = iterateeT[X, Vector[E], F, A](MO.promote(close) >> s.pointI.value)
 
           s.fold(
-            cont = k => if (iter.hasNext) {
-              val n = iter.next
-              k(elInput((unproject(n.getKey, n.getValue)(f)))) >>== step
+            cont = k => if (sIter.hasNext) {
+              val chunk = Vector(sIter.map{ n => unproject(n.getKey, n.getValue)(f) }.take(chunkSize).toSeq: _*)
+              k(elInput(chunk)) >>== step
             } else {
               _done
             },
@@ -200,36 +203,45 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
+  def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
     def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, Seq[CValue]), F] {
       (id, b) => (id, b)
     }
   }
 
-  def traverseIndexRange[X, E, F[_]](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit MO : F |>=| IO): EnumeratorT[X, E, F] = {
+  def traverseIndexRange[X, E, F[_]](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit MO : F |>=| IO): EnumeratorT[X, Vector[E], F] = {
     import MO._
     import MO.MG.bindSyntax._
 
-    new EnumeratorT[X, E, F] { 
+    new EnumeratorT[X, Vector[E], F] { 
       def apply[A] = {
         val iter = idIndexFile.iterator
+        val sIter = iter.asScala
         val close = IO(iter.close)
         range.start match {
           case Some(id) => iter.seek(id.as[Array[Byte]])
           case None => iter.seekToFirst()
         }
 
-        def step(s: StepT[X, E, F, A]): IterateeT[X, E, F, A] = {
-          @inline def _done = iterateeT[X, E, F, A](MO.promote(close) >> s.pointI.value)
+        def step(s: StepT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
+          @inline def _done = iterateeT[X, Vector[E], F, A](MO.promote(close) >> s.pointI.value)
 
           s.fold(
-            cont = k => if (iter.hasNext) {
-              val n = iter.next
-              val id = n.getKey.as[Identities]
-              range.end match {
-                case Some(end) if end <= id => _done
-                case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== step
+            cont = k => if (sIter.hasNext) {
+              val rawValues = sIter.map(n => (n, n.getKey.as[Identities])).take(chunkSize)
+              val chunk = Vector(range.end.map(end => rawValues.takeWhile(_._2 < end)).getOrElse(rawValues).map { case (n, ids) => unproject(n.getKey, n.getValue)(f) }.toSeq: _*)
+              
+              if (chunk.isEmpty) {
+                _done
+              } else {
+                k(elInput(chunk)) >>== step
               }
+//              val n = iter.next
+//              val id = n.getKey.as[Identities]
+//              range.end match {
+//                case Some(end) if end <= id => _done
+//                case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== step
+//              }
             } else _done,
             done = (_, _) => _done,
             err = _ => _done
@@ -241,7 +253,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = new EnumeratorP[X, (Identities, Seq[CValue]), IO] {
+  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
     def apply[F[_]](implicit MO: F |>=| IO) = traverseIndexRange[X, (Identities, Seq[CValue]), F](range) {
       (id, b) => (id, b)
     }
