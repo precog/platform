@@ -36,7 +36,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       for {
         selectors   <- storage.metadata.findSelectors(path) 
         sources     <- Future.sequence(selectors.map(s => storage.metadata.findProjections(path, s).map(p => (s, p))))
-        enumerator: EnumeratorP[X, SEvent, IO]  <- assemble(path, sources)
+        enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
       } yield enumerator
     )
 
@@ -56,7 +56,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
               descriptors <- retrieval 
               enum        <- assemble[X](path, List((selector, descriptors))) 
             } yield {
-              enum map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t }
+              enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t } }
             }
           )
 
@@ -81,8 +81,8 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       def order(c1: SColumn, c2: SColumn) = identityOrder(c1, c2)
     }
 
-    def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, SEvent, IO]] = {
-      def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, SColumn, IO]] = {
+    def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
+      def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
@@ -110,22 +110,22 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // encountering the middle case is an error since no single identity should ever correspond to 
       // two values of different types, so the resulting merged set should not contain any duplicate identities.
       val mergedFutures = descriptors map {
-        case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, (Identities, CValue), IO]) => (selector, e))
+        case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, Vector[(Identities, CValue)], IO]) => (selector, e))
       }
 
       Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
     }
 
-    def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
-      def combine(enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
+    def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
+      def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
-            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map {
+            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
               case Right3((id, cv)) => (id, SValue(selector, cv))
-            }
-          case Nil => EnumeratorP.empty[X, SEvent, IO]
+            } }
+          case Nil => EnumeratorP.empty[X, Vector[SEvent], IO]
         }
       }
 

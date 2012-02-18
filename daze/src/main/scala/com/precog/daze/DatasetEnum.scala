@@ -35,8 +35,8 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
                 , err  = x => err(x)
               )
 
-              def chunkFold(a: (Option[E2], Vector[E])): Option[E2] = {
-                a._2.foldLeft(a._1)(f)
+              val chunkFold: (Option[E2], Vector[E]) => Option[E2] = {
+                case (init, target) => target.foldLeft(init)(f)
               }
 
               iterateeT((IterateeT.fold[X, Vector[E], G, Option[E2]](b)(chunkFold) &= enum[G]).value >>= (s => check(s).value))
@@ -69,7 +69,7 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.merge[E])))
 
   def perform[B](f: F[B])(implicit m: Monad[F]): DatasetEnum[X, E, F] = 
-    DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, E, F].append(enum, EnumeratorP.perform[X, E, F, B](f)) }, descriptor)
+    DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, Vector[E], F].append(enum, EnumeratorP.perform[X, Vector[E], F, B](f)) }, descriptor)
 }
 
 trait DatasetEnumOps {
