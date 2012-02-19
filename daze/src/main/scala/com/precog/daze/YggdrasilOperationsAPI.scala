@@ -27,7 +27,13 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
 
   trait Ops extends DatasetEnumOps {
     def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
-      DatasetEnum(d.fenum.map(_.flatMap(e => Await.result(Future.sequence(e.map(f(_).fenum): _*), yggConfig.flatMapTimeout))))
+      DatasetEnum(d.fenum.map { e1e =>
+        val result : EnumeratorP[X, Vector[E2], F] = e1e.flatMap { ve => 
+          val epv : Vector[EnumeratorP[X, Vector[E2], F]] = ve.map(e => Await.result(f(e).fenum, yggConfig.flatMapTimeout))
+          epv.reduce { (ep1 : EnumeratorP[X, Vector[E2], F], ep2: EnumeratorP[X, Vector[E2], F]) => EnumeratorP.enumeratorPMonoid[X, Vector[E2], F].append(ep1, ep2) }
+        }
+        result
+      })
 
     def sort[X](d: DatasetEnum[X, SEvent, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[SEvent], asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
       import MemoizationContext._
