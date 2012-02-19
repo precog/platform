@@ -93,7 +93,7 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
 
 trait DatasetEnumOps {
   def cogroup[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
-    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F](monad, order.order _).apply(en1, en2))
+    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F](monad, order.order _, order, order).apply(en1, en2))
 
   def crossLeft[X, F[_]: Monad](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
     d1 :^ d2
