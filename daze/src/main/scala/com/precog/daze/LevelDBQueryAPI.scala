@@ -81,6 +81,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       def order(c1: SColumn, c2: SColumn) = identityOrder(c1, c2)
     }
 
+    private implicit object SEventIdentityOrder extends Order[SEvent] {
+      def order(s1: SEvent, s2: SEvent) = identityOrder(s1, s2)
+    }
+
     def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
       def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         for {
@@ -116,7 +120,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
     }
 
-    def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
+    def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit o: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
       def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
