@@ -214,7 +214,9 @@ object SValue extends SValueInstances {
     nul = "null")
 }
 
-sealed trait SType 
+sealed trait SType {
+  def =~(tpe: ColumnType) = tpe =~ this
+} 
 
 sealed trait StorageFormat {
   def min(i: Int): Int
@@ -229,7 +231,25 @@ case class  FixedWidth(width: Int) extends StorageFormat {
 }
 
 sealed trait ColumnType {
-  def format: StorageFormat 
+  def format: StorageFormat
+  
+  def =~(tpe: SType): Boolean = (this, tpe) match {
+    case (a, b) if a == b => true
+    
+    case (SStringFixed(_), SString) => true
+    case (SStringArbitrary, SString) => true
+    
+    case (SInt, SDecimal) => true
+    case (SLong, SDecimal) => true
+    case (SFloat, SDecimal) => true
+    case (SDouble, SDecimal) => true
+    case (SDecimalArbitrary, SDecimal) => true
+    
+    case (SEmptyObject, SObject) => true
+    case (SEmptyArray, SArray) => true
+    
+    case (_, _) => false
+  }
 }
 
 trait ColumnTypeSerialization {

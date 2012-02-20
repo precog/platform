@@ -54,7 +54,7 @@ trait StorageMetadata {
     findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
 
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
-    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
+    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
   }
 }
 
