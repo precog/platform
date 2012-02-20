@@ -96,6 +96,14 @@ class PlatformSpecs extends Specification
   }
   
   "the full stack" should {
+    "count a filtered clicks dataset" in {
+      val input = """
+        | clicks := dataset(//clicks)
+        | count(clicks where clicks.time > 0)""".stripMargin
+        
+      eval(input) mustEqual Set(SDecimal(100))
+    }
+    
     "count the campaigns dataset" >> {
       "<root>" >> {
         eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
