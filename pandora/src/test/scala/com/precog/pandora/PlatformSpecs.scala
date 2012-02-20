@@ -132,7 +132,6 @@ class PlatformSpecs extends Specification
         SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
     }
     
-    /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
         | campaigns := dataset(//campaigns)
@@ -147,10 +146,14 @@ class PlatformSpecs extends Specification
         |     { revenue: 'revenue, num: count(campaigns') }
         |   
         | hist""".stripMargin
-        
+
+      println("Waiting")
+      Thread.sleep(30000)
+      
       eval(input) mustEqual Set()   // TODO
     }
     
+    /* commented out until we have memoization (MASSIVE time sink)
     "determine most isolated clicks in time" in {
       val input = """
         | clicks := dataset(//clicks)
