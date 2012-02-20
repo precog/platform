@@ -97,38 +97,15 @@ trait SValue {
     }
   }
 
-  lazy val structure: Set[(JPath, ColumnType)] = {
-    val toJPath: JPath = fold(
-      obj = m => m.toSeq flatMap { case (name, value) => value.structure map { case (path, ctype) (name \ path, ctype) }} toSet
-      arr = 
-      str = (JPath.Empty, CString)
-      bool = 
-      long = 
-      double =
-      num = 
-      nul =  )
-  }
-
-  lazy val toColType: ColumnType = fold (
-    obj = _ => SEmptyObject,
-    arr = _ => SEmptyArray,
-    str =   _ => SStringArbitrary,
-    bool =  _ => SBoolean,
-    long = _ => SLong,
-    double = _ => SDouble,
-    num = _ => SDecimalArbitrary,
-    nul = SNull )
-
-  lazy val toSeqColType: Seq[ColumnType] = fold(
-    obj = obj => obj.map({ case (_, v) => v.toColType}).toSeq,
-    arr = arr => arr.map(_.toColType).toSeq,
-    str =   _ => Seq(SStringArbitrary),
-    bool =  _ => Seq(SBoolean),
-    long = _ => Seq(SLong),
-    double = _ => Seq(SDouble),
-    num = _ => Seq(SDecimalArbitrary),
-    nul = Seq(SNull) )
-  
+  lazy val structure: Set[(JPath, ColumnType)] = fold(
+    obj = m => m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPath(name + path.toString), ctype) }}.toSet,
+    arr = a => a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPath("[" + index + "]" + path.toString), ctype) }}.toSet,
+    str = s => Set((JPath(), SStringArbitrary)),
+    bool = b => Set((JPath(), SBoolean)),
+    long = l => Set((JPath(), SLong)),
+    double = d => Set((JPath(), SDouble)),
+    num = n => Set((JPath(), SDecimalArbitrary)),
+    nul = Set((JPath(), SNull)) )
    
   //lazy val shash: Long = structure.hashCode
 
@@ -439,7 +416,7 @@ case object SDecimal extends SType with (BigDecimal => SValue) {
   }
 }
 
-case object SNull extends ColumnType with SValue {
+case object SNull extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -449,7 +426,7 @@ case object SNull extends ColumnType with SValue {
   ) = nul
 }
 
-case object SEmptyObject extends ColumnType with SValue {
+case object SEmptyObject extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -459,7 +436,7 @@ case object SEmptyObject extends ColumnType with SValue {
   ) = obj(Map.empty)
 }
 
-case object SEmptyArray extends ColumnType with SValue {
+case object SEmptyArray extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
