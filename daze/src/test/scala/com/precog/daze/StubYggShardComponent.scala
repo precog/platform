@@ -67,13 +67,15 @@ trait StubYggShardComponent {
     }
 
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
+      val chunkSize = 2000
+
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-      def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
-        enumPStream[X, (Identities, Seq[CValue]), IO](data.toStream)
+      def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = {
+        enumPStream[X, Vector[(Identities, Seq[CValue])], IO](data.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
       }
 
-      def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
+      def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = sys.error("not needed")
     }
 
     val (sampleData, _) = DistributedSampleSet.sample(5, 0)
