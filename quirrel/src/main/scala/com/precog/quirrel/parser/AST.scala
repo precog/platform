@@ -544,7 +544,7 @@ trait AST extends Phases {
       override def children = List(child)
     }
 
-    final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'let
       
       lazy val criticalConditions = findCriticalConditions(this)
@@ -575,7 +575,7 @@ trait AST extends Phases {
       override def children = List(from, to, in)
     }
     
-    final case class TicVar(loc: LineStream, id: String) extends ExprLeafNode {
+    final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
       val label = 'ticvar
       
       private val _binding = attribute[FormalBinding](bindNames)
@@ -617,8 +617,8 @@ trait AST extends Phases {
       val isPrefix = true
       val child = left
     }
-    
-    final case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
+
+    final case class Dispatch(loc: LineStream, name: Identifier, actuals: Vector[Expr]) extends Expr {
       val label = 'dispatch
       
       private val _isReduction = attribute[Boolean](bindNames)
