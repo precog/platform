@@ -39,7 +39,7 @@ trait MemoizationContext {
 
 object MemoizationContext {
   trait Memoizer[X] {
-    def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO): IterateeT[X, SEvent, F, A] => IterateeT[X, SEvent, F, A]
+    def apply[F[_], A](d: Option[ProjectionDescriptor])(implicit MO: F |>=| IO): IterateeT[X, Vector[SEvent], F, A] => IterateeT[X, Vector[SEvent], F, A]
   }
 
   object Memoizer {

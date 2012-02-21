@@ -53,9 +53,9 @@ trait DatasetConsumers extends Evaluator {
 
   def consumeEval(graph: DepGraph): Set[SEvent] = {
     val results = Await.result(
-      eval(graph).fenum.map { (enum: EnumeratorP[Unit, SEvent, IO]) => 
+      eval(graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
         try {
-          Right(((consume[Unit, SEvent, IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
+          Right(((consume[Unit, Vector[SEvent], IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
         } catch {
           case e => Left(e)
         }
@@ -66,7 +66,7 @@ trait DatasetConsumers extends Evaluator {
     results.left foreach { throw _ }
 
     val Right(back) = results
-    back
+    back.flatten
   }
 }
 
@@ -77,11 +77,15 @@ trait StubOperationsAPI
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
-  object query extends QueryAPI
+  object query extends QueryAPI {
+    val chunkSize = 2000
+  }
   
   trait QueryAPI extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
+
+    def chunkSize: Int
     
     private case class StubDatasetMask[X](path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
@@ -120,7 +124,7 @@ trait StubOperationsAPI
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
       val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
-      Iteratee.enumPStream[X, SEvent, IO](stream)
+      Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
     }
     
     private def scaleId(path: Path)(seed: Int): Long = {
