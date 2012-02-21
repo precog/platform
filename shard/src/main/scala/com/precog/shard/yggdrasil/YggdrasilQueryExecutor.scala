@@ -18,7 +18,7 @@
  *
  */
 package com.precog
-package ingest
+package shard
 package yggdrasil 
 
 import blueeyes.json.JsonAST._
@@ -48,7 +48,7 @@ import org.streum.configrity.Configuration
 
 import net.lag.configgy.ConfigMap
 
-trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with BaseConfig {
+trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with KafkaIngestConfig with BaseConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
 }
@@ -57,8 +57,26 @@ trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.xschema.Extractor
 
   def loadConfig: IO[YggdrasilQueryExecutorConfig] = IO { 
-    new BaseConfig with YggdrasilQueryExecutorConfig {
-      val config = Configuration.parse("")  
+    new YggdrasilQueryExecutorConfig {
+      val config = Configuration.parse("""
+        precog {
+          kafka {
+            enabled = true
+            topic {
+              events = central_event_store
+            }
+            consumer {
+              zk {
+                connect = devqclus03.reportgrid.com:2181 
+                connectiontimeout {
+                  ms = 1000000
+                }
+              }
+              groupid = shard_consumer
+            }
+          }
+        }
+      """)  
       val sortWorkDir = scratchDir
       val sortSerialization = SimpleProjectionSerialization
       val memoizationBufferSize = sortBufferSize
@@ -104,27 +122,29 @@ trait YggdrasilQueryExecutor
     with Emitter
     with Evaluator
     with DatasetConsumers
-    with OperationsAPI 
+    with OperationsAPI
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
     with DiskMemoizationComponent { self =>
 
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
+  type YggConfig = YggdrasilQueryExecutorConfig
   
   val yggState: YggState
   val actorSystem: ActorSystem
 
-  object storage extends ActorYggShard {
+  object storage extends ActorYggShard with KafkaIngester with YggConfigComponent {
+    type YggConfig = self.YggConfig 
     val yggState = self.yggState
-    val yggConfig: YggConfig = self.yggConfig
+    val yggConfig = self.yggConfig
+    val kafkaIngestConfig = self.yggConfig
   }
 
   object ops extends Ops 
 
   object query extends QueryAPI 
 
-  def startup() = storage.start
-  def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
+  def startup() = storage.start flatMap { _ => storage.startKafka }
+  def shutdown() = storage.stopKafka flatMap { _ => storage.stop } map { _ => actorSystem.shutdown } 
 
   def execute(query: String) = {
     try {

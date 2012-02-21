@@ -164,7 +164,6 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
     f.value match {
       case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
       case Some(Right(HttpResponse(status, _, _, _)))                       => 
-        println("Not 200 status code: " + status.code)
         throw new RuntimeException("Server returned error code with request")
       case Some(Left(ex))                                              => 
         throw ex

@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
+package com.precog.shard
 
 import service._
 
@@ -73,9 +73,9 @@ import com.precog.ct.Mult.MDouble._
 import com.precog.ingest._
 import com.precog.ingest.service._
 
-case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, usageLogging: UsageLogging)
+case class ShardState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, usageLogging: UsageLogging)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
+trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
   import BijectionsChunkJson._
   import BijectionsChunkString._
@@ -83,7 +83,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def eventStoreFactory(configMap: ConfigMap): EventStore
+  def queryExecutorFactory(configMap: ConfigMap): QueryExecutor
 
   def mongoFactory(configMap: ConfigMap): Mongo
 
@@ -97,6 +97,8 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         startup {
           import context._
 
+          val queryExecutor = queryExecutorFactory(config.configMap("query_executor"))
+
           val indexdbConfig = config.configMap("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
           val indexdb  = indexMongo.database(indexdbConfig.getString("database", "analytics-v" + serviceVersion))
@@ -105,23 +107,20 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           val deletedTokensCollection = config.getString("tokens.deleted", "deleted_tokens")
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
-          val eventStore = eventStoreFactory(config.configMap("eventStore"))
-          
-          eventStore.start map { _ =>
-            IngestState(
+          queryExecutor.startup.map { _ =>
+            ShardState(
+              queryExecutor,
               indexMongo,
               tokenMgr,
-              eventStore,
               usageLogging(config.configMap("usageLogging"))
             )
           }
         } ->
-        request { (state: IngestState) =>
-
+        request { (state: ShardState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              dataPath("track") {
-                post(new TrackingServiceHandler(state.eventStore, state.usageLogging))
+              path("/query") {
+                post(new QueryServiceHandler(state.queryExecutor))
               }
             }
           }
@@ -138,7 +137,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   }
 }
 
-object IngestService extends HttpRequestHandlerCombinators with PartialFunctionCombinators {
+object ShardService extends HttpRequestHandlerCombinators with PartialFunctionCombinators {
   def parsePathInt(name: String) = 
     ((err: NumberFormatException) => DispatchError(BadRequest, "Illegal value for path parameter " + name + ": " + err.getMessage)) <-: (_: String).parseInt
 
