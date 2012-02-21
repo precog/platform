@@ -17,33 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "shard"
+package com.precog.shard
 
-version := "1.2.1-SNAPSHOT"
+import com.precog.ingest.service._
 
-organization := "com.precog"
+import blueeyes.BlueEyesServer
+import blueeyes.json.JsonAST._
+import blueeyes.persistence.mongo.Mongo
+import blueeyes.persistence.mongo.MongoCollection
+import blueeyes.persistence.mongo.Database
+import blueeyes.util.Clock
 
-scalaVersion := "2.9.1"
+import com.precog.analytics.TokenManager
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+import net.lag.configgy.ConfigMap
 
-libraryDependencies ++= Seq(
-      "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 % "joda-time"           % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "6.0.2",
-      "ch.qos.logback"            % "logback-classic"     % "1.0.0",
-      "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-      "org.specs2"                %% "specs2"             % "1.8"  % "test"
-)
+trait ShardWebapp extends BlueEyesServer with ShardService {
+  def mongoFactory(configMap: ConfigMap): Mongo = {
+    new blueeyes.persistence.mongo.MockMongo()
+  }
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
+  def usageLogging(config: ConfigMap) = {
+    new NullUsageLogging("")
+  }
 
-mainClass := Some("com.precog.shard.kafka.KafkaShardWebapp")
+  def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
+    new TokenManager(database, tokensCollection, deletedTokensCollection)
+
+  val clock = Clock.System
+}

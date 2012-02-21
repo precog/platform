@@ -18,9 +18,8 @@
  *
  */
 package com.precog.shard
+package kafka
 
-import com.precog.ingest._
-import com.precog.ingest.kafka._
-import com.precog.ingest.yggdrasil._
+import yggdrasil._
 
-object KafkaShardServer extends IngestServer with KafkaEventStoreComponent with YggdrasilQueryExecutorComponent 
+object KafkaShardWebapp extends ShardWebapp with YggdrasilQueryExecutorComponent

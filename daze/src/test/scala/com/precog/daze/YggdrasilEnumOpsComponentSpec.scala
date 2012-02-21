@@ -64,11 +64,11 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
-      val enumP = enumPStream[Unit, SEvent, IO](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
+      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3"))), Vector(SEvent(Vector(), SString("1")))))
       val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, intToDurationInt(30).seconds)
 
-      (consume[Unit, SEvent, IO, List] &= sorted[IO])
-      .run(_ => sys.error("...")).unsafePerformIO.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
+      (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO])
+      .run(_ => sys.error("...")).unsafePerformIO.flatten.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
     }
   }
 }

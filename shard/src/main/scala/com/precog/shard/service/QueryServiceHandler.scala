@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
+package com.precog.shard
 package service
 
 import blueeyes.core.http._

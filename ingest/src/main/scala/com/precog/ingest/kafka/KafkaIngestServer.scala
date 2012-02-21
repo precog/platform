@@ -20,8 +20,6 @@
 package com.precog.ingest
 package kafka
 
-import yggdrasil._
-
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
@@ -54,7 +52,7 @@ trait KafkaEventStoreComponent {
     centralConfig.put("zk.connect", centralZookeeperHosts)
     centralConfig.put("serializer.class", "com.precog.ingest.kafka.KafkaIngestMessageCodec")
 
-    val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination()
+    val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
     val agent = InetAddress.getLocalHost.getHostName
 
@@ -76,4 +74,4 @@ trait KafkaEventStoreComponent {
 
 }
 
-object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent with YggdrasilQueryExecutorComponent
+object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent

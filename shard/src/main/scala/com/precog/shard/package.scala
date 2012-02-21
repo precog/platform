@@ -17,33 +17,28 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "shard"
+package com.precog
 
-version := "1.2.1-SNAPSHOT"
+import blueeyes.json.JsonAST._
 
-organization := "com.precog"
+import akka.actor.ActorSystem
+import akka.dispatch.{Future, ExecutionContext, MessageDispatcher}
 
-scalaVersion := "2.9.1"
+package object shard {
 
-scalacOptions ++= Seq("-deprecation", "-unchecked")
+  trait QueryExecutor { 
+    def execute(query: String): JValue
+    def startup: Future[Unit]
+    def shutdown: Future[Unit]
+  }
 
-libraryDependencies ++= Seq(
-      "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 % "joda-time"           % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "6.0.2",
-      "ch.qos.logback"            % "logback-classic"     % "1.0.0",
-      "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-      "org.specs2"                %% "specs2"             % "1.8"  % "test"
-)
+  trait NullQueryExecutor extends QueryExecutor {
+    def actorSystem: ActorSystem    
+    implicit def executionContext: ExecutionContext
+  
+    def execute(query: String) = JString("Query service not avaialble")
+    def startup = Future(())
+    def shutdown = Future { actorSystem.shutdown }
+  }
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
-
-mainClass := Some("com.precog.shard.kafka.KafkaShardWebapp")
+}
