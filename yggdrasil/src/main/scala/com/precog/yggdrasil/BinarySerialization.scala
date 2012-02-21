@@ -16,21 +16,18 @@ import scala.actors.remote._
 
 import java.io._
 
-class BinarySerialization {
-  def writeHeader(data: DataOutputStream, col: Seq[(JPath, ColumnType)]): Unit = {
+class BinaryProjectionSerialization extends FileSerialization[SEvent] {
+  def writeHeader(data: DataOutputStream, col: Seq[(JPath, ColumnType)]): IO[Unit] = IO {
     data.writeInt(col.size)
-    col collect {
+    col map {
       case (sel, valType) => {       
-        val selectorString = sel.toString 
-        val valueTypeString = nameOf(valType)
-        
-        data.writeUTF(selectorString)
-        data.writeUTF(valueTypeString)
+        data.writeUTF(sel.toString)
+        data.writeUTF(nameOf(valType))
       }
     }
   }
 
-  def readHeader(data: DataInputStream): Seq[(JPath, ColumnType)] = {   
+  def readHeader(data: DataInputStream): IO[Seq[(JPath, ColumnType)]] = IO {   
     def loop(data: DataInputStream, acc: Seq[(JPath, ColumnType)], i: Int): Seq[(JPath, ColumnType)] = {
       if (i > 0) {
         val selector = JPath(data.readUTF())
@@ -46,21 +43,23 @@ class BinarySerialization {
     loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())
   }
 
-  def sValueToBinary(data: DataOutputStream, sv: SValue): Unit = sv.fold(
-    obj = obj       => obj.map { 
-      case (_, v)   => sValueToBinary(data, v)
-    },
-    arr = arr       => arr.map(v => sValueToBinary(data, v)),
-    str = str       => data.writeUTF(str),
-    bool = bool     => data.writeBoolean(bool),
-    long = long     => data.writeLong(long),
-    double = double => data.writeDouble(double),
-    num = num       => {
-      val bytes = num.as[Array[Byte]]
-      data.writeInt(bytes.length)
-      data.write(bytes, 0, bytes.length)
-    },
-    nul = sys.error("nothing should be written") )
+  def sValueToBinary(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
+    sv.fold(
+      obj = obj       => obj.map { 
+        case (_, v)   => sValueToBinary(data, v)
+      },
+      arr = arr       => arr.map(v => sValueToBinary(data, v)),
+      str = str       => data.writeUTF(str),
+      bool = bool     => data.writeBoolean(bool),
+      long = long     => data.writeLong(long),
+      double = double => data.writeDouble(double),
+      num = num       => {
+        val bytes = num.as[Array[Byte]]
+        data.writeInt(bytes.length)
+        data.write(bytes, 0, bytes.length)
+      },
+      nul = sys.error("nothing should be written") )
+  }
 
   private def readColumn(data: DataInputStream, ctype: ColumnType): CValue = ctype match {
     case SStringFixed(_)   => CString(data.readUTF())
