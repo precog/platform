@@ -1,12 +1,12 @@
 server {
-  port = 30060
-  sslPort = 30061
+  port = 30070
+  sslPort = 30071
   sslEnable = false
 
   log {
     level = "info"
     console = true
-    filename = "/var/log/reportgrid/ingest-v1.server.log"
+    filename = "/var/log/reportgrid/shard-v1.server.log"
     roll = "daily"
     use_parents = false
   }
@@ -18,7 +18,7 @@ services {
       log {
         level = "debug"
         console = true
-        filename = "/var/log/reportgrid/ingest-v1.log"
+        filename = "/var/log/reportgrid/shard-v1.log"
         roll = "daily"
         use_parents = false
       }
