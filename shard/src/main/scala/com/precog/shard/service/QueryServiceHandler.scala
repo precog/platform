@@ -1,4 +1,4 @@
-package com.precog.ingest
+package com.precog.shard
 package service
 
 import blueeyes.core.http._

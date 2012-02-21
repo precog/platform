@@ -1598,7 +1598,7 @@ class EvaluatorSpecs extends Specification
   "sortByIdentities" should {
     def consumeToList(d: DatasetEnum[Unit, SEvent, IO]): List[SEvent] ={
       val enum = Await.result(d.fenum, intToDurationInt(5).seconds)
-      (consume[Unit, SEvent, IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO
+      (consume[Unit, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
     }
 
     "order the numbers set by specified identities" in {

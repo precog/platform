@@ -3,29 +3,23 @@ package com.precog
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
-import akka.dispatch.{Future, ExecutionContext}
+import akka.dispatch.{Future, ExecutionContext, MessageDispatcher}
 
-package object common {
-  
-  type ProducerId = Int
-  type SequenceId = Int
+package object shard {
 
-  trait QueryExecutor {
+  trait QueryExecutor { 
     def execute(query: String): JValue
     def startup: Future[Unit]
     def shutdown: Future[Unit]
   }
 
   trait NullQueryExecutor extends QueryExecutor {
-    def actorSystem: ActorSystem
+    def actorSystem: ActorSystem    
     implicit def executionContext: ExecutionContext
-
+  
     def execute(query: String) = JString("Query service not avaialble")
     def startup = Future(())
     def shutdown = Future { actorSystem.shutdown }
   }
 
 }
-
-
-// vim: set ts=4 sw=4 et:

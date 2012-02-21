@@ -138,7 +138,10 @@ class PlatformSpecs extends Specification
         |     { revenue: 'revenue, num: count(campaigns') }
         |   
         | hist""".stripMargin
-        
+
+      println("Waiting")
+      Thread.sleep(30000)
+      
       eval(input) mustEqual Set()   // TODO
     }
     
