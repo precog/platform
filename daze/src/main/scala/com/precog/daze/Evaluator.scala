@@ -46,7 +46,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case SplitRoot(_, depth) => Right(roots(depth))
       
       case Root(_, instr) =>
-        Right(ops.point((Vector(), graph.value.get)))    // TODO don't be stupid
+        Right(ops.point(Vector((Vector(), graph.value.get))))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, roots, ctx)
       
@@ -58,7 +58,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case None => {
             implicit val order = identitiesOrder(parent.provenance.length)
             
-            val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx))) {
+            val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx))) { 
               case (_, SString(str)) => query.fullProjection[X](Path(str))
               case _ => ops.empty[X, SEvent, IO]
             }
@@ -175,7 +175,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
           case (_, sv) => {
-            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO]((Vector(), sv)) :: roots, ctx))
+            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO](Vector((Vector(), sv))) :: roots, ctx))
             val actions = (volatileIds map ctx.memoizationContext.expire).fold(IO {}) { _ >> _ }
             back perform actions
           }

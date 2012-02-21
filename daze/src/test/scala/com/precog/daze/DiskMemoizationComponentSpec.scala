@@ -64,22 +64,23 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
           case JInt(v) => v.toLong * 2
         }
 
-        val enum: EnumeratorP[Unit, SEvent, IO] = projection.getAllPairs[Unit] map { 
+        val enum: EnumeratorP[Unit, Vector[SEvent], IO] = projection.getAllPairs[Unit] map { _ map {
           case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
-        }
+        } }
 
         memoizationContext[Unit](0) must beLike {
           case Left(f) => 
             (
-              (f[IO, List[SEvent]](Some(descriptor)).apply(consume[Unit, SEvent, IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO map {
+              (f[IO, List[Vector[SEvent]]](Some(descriptor)).apply(consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                 case (_, v) => v.mapLongOr(-1L)(identity[Long])
               } must_== expected
             ) and (
               memoizationContext[Unit](0) must beLike {
                 case Right(d) => 
                   (
-                    (consume[Unit, SEvent, IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO map {
-                      case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
+                    (consume[Unit, Vector[SEvent], IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+                      //case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
+                      case (_, v) => v.mapLongOr(-1L)(v => v.toLong) // TODO: re-fix this for BigDecimal if that's really what it's supposed to be
                     } must_== expected
                   ) 
               }
