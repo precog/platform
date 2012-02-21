@@ -56,13 +56,13 @@ trait LineErrors extends Errors with Phases with parser.AST {
 }
 
 
-sealed trait ErrorType
+sealed trait ErrorType 
 
-case class UndefinedTicVariable(name: String) extends ErrorType {
+case class UndefinedTicVariable(name: TicId) extends ErrorType {
   override def toString = "undefined tic-variable: %s".format(name)
 }
 
-case class UndefinedFunction(name: String) extends ErrorType {
+case class UndefinedFunction(name: Identifier) extends ErrorType {
   override def toString = "undefined function: %s".format(name)
 }
 
@@ -91,11 +91,11 @@ case object FunctionArgsInapplicable extends ErrorType {
 }
 
 // intended to be a warning
-case class UnusedLetBinding(id: String) extends ErrorType {
+case class UnusedLetBinding(id: Identifier) extends ErrorType {
   override def toString = "binding '%s' defined but not referenced in scope".format(id)
 }
 
-case class UnusedTicVariable(id: String) extends ErrorType {
+case class UnusedTicVariable(id: TicId) extends ErrorType {
   override def toString = "function parameter %s defined but not referenced or constrained".format(id)
 }
 

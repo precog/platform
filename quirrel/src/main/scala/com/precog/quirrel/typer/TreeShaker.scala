@@ -35,13 +35,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     root
   }
   
-  private def performShake(tree: Expr): (Expr, Set[(String, Binding)], Set[Error]) = tree match {
+  private def performShake(tree: Expr): (Expr, Set[(Either[TicId, Identifier], Binding)], Set[Error]) = tree match {
     case b @ Let(loc, id, params, left, right) => {
       lazy val (left2, leftBindings, leftErrors) = performShake(left)
       val (right2, rightBindings, rightErrors) = performShake(right)
       
-      if (rightBindings contains (id -> UserDef(b))) {
-        val unusedParamBindings = Set(params zip (Stream continually (UserDef(b): Binding)): _*) &~ leftBindings
+      if (rightBindings contains (Right(id) -> UserDef(b))) {
+        val unusedParamBindings = Set(params zip (Stream continually (UserDef(b): Binding)): _*) &~ leftBindings.map({ case (id, b) => (id.left.get, b) })
         val errors = unusedParamBindings map { case (id, _) => Error(b, UnusedTicVariable(id)) }
         
         (Let(loc, id, params, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors ++ errors)
@@ -63,7 +63,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     }
     
     case e @ TicVar(loc, id) =>
-      (TicVar(loc, id), Set(id -> e.binding), Set())
+      (TicVar(loc, id), Set(Left(id) -> e.binding), Set())
     
     case e @ StrLit(_, _) => (e, Set(), Set())
     case e @ NumLit(_, _) => (e, Set(), Set())
@@ -76,7 +76,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       
       val props2 = mapped map { case (key, (value, _, _)) => (key, value) }
       
-      val bindings = mapped.foldLeft(Set[(String, Binding)]()) {
+      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
         case (bindings, (_, (_, bindings2, _))) => bindings ++ bindings2
       }
       
@@ -91,7 +91,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       val mapped = values map performShake
       val values2 = mapped map { case (value, _, _) => value }
       
-      val bindings = mapped.foldLeft(Set[(String, Binding)]()) {
+      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
         case (bindings, (_, bindings2, _)) => bindings ++ bindings2
       }
       
@@ -118,7 +118,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       val mapped = actuals map performShake
       val actuals2 = mapped map { case (value, _, _) => value }
       
-      val bindings = mapped.foldLeft(Set[(String, Binding)]()) {
+      val bindings = mapped.foldLeft(Set[(Either[TicId, Identifier], Binding)]()) {
         case (bindings, (_, bindings2, _)) => bindings ++ bindings2
       }
       
@@ -126,7 +126,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
         case (errors, (_, _, errors2)) => errors ++ errors2
       }
       
-      (Dispatch(loc, name, actuals2), bindings + (name -> d.binding), errors)
+      (Dispatch(loc, name, actuals2), bindings + (Right(name) -> d.binding), errors)
     }
     
     case Operation(loc, left, op, right) => {
@@ -233,3 +233,5 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     case Paren(_, child) => performShake(child)     // nix parentheses on shake
   }
 }
+
+
