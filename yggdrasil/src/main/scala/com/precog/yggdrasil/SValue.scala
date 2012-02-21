@@ -116,17 +116,17 @@ trait SValue {
     }
   }
 
-  lazy val structure: Set[(JPath, ColumnType)] = fold(
-    obj = m => m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPath(name + path.toString), ctype) }}.toSet,
-    arr = a => a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPath("[" + index + "]" + path.toString), ctype) }}.toSet,
-    str = s => Set((JPath(), SStringArbitrary)),
-    bool = b => Set((JPath(), SBoolean)),
-    long = l => Set((JPath(), SLong)),
-    double = d => Set((JPath(), SDouble)),
-    num = n => Set((JPath(), SDecimalArbitrary)),
-    nul = Set((JPath(), SNull)) )
+  lazy val structure: Seq[(JPath, ColumnType)] = fold(
+    obj = m => m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPathField(name) \ path, ctype) }},
+    arr = a => a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPathIndex(index) \ path, ctype) }},
+    str = s => List((JPath(), SStringArbitrary)),
+    bool = b => List((JPath(), SBoolean)),
+    long = l => List((JPath(), SLong)),
+    double = d => List((JPath(), SDouble)),
+    num = n => List((JPath(), SDecimalArbitrary)),
+    nul = List((JPath(), SNull)) )
    
-  //lazy val shash: Long = structure.hashCode
+  lazy val shash: Long = structure.hashCode
 
   lazy val toJValue: JValue = fold(
     obj = obj => JObject(obj.map({ case (k, v) => JField(k, v.toJValue) })(collection.breakOut)),
@@ -290,14 +290,16 @@ trait ColumnTypeSerialization {
     val FixedStringR = """String\(\d+\)""".r
     n match {
       case FixedStringR(w)      => Some(SStringFixed(w.toInt))
-      case "EmptyObject" => Some(SEmptyObject)
-      case "EmptyArray"  => Some(SEmptyArray)
       case "String"      => Some(SStringArbitrary)
       case "Boolean"     => Some(SBoolean)
+      case "Int"         => Some(SInt)
       case "Long"        => Some(SLong)
+      case "Float"       => Some(SFloat)
       case "Double"      => Some(SDouble)
       case "Decimal"     => Some(SDecimalArbitrary)
       case "Null"        => Some(SNull)
+      case "EmptyObject" => Some(SEmptyObject)
+      case "EmptyArray"  => Some(SEmptyArray)
       case _ => None
     }
   }
