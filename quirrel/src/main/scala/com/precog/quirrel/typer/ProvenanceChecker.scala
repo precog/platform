@@ -34,7 +34,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     def loop(expr: Expr, relations: Map[Provenance, Set[Provenance]], constraints: Map[Provenance, Expr]): Set[Error] = expr match {
       case expr @ Let(_, _, params, left, right) => {
         val leftErrors = loop(left, relations, constraints)
-        
+
         if (!params.isEmpty && left.provenance != NullProvenance) {
           val assumptions = expr.criticalConditions map {
             case (id, exprs) => {
@@ -186,18 +186,40 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         val (prov, errors) = d.binding match {
-          case BuiltIn(BuiltIns.Load.name, arity) => {
+          case BuiltIn(BuiltIns.Load.name, arity, _) => {
             if (exprs.length == arity)
               (pathParam map StaticProvenance getOrElse DynamicProvenance(provenanceId(expr)), Set())
             else
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
           
-          case BuiltIn(_, arity) => {
+          case BuiltIn(_, arity, true) => {
             if (exprs.length == arity)
-              (ValueProvenance, Set())     // note: assumes all primitive functions are reductions!
+              (ValueProvenance, Set())     
             else
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+          }
+
+          case BuiltIn(_, arity, false) => {
+            if (exprs.length == arity) {
+              if (arity == 1) {
+                (exprs(0).provenance, Set())
+              } else if (arity == 2) {
+                val result = unifyProvenance(relations)(exprs(0).provenance, exprs(1).provenance)
+                val back = result getOrElse NullProvenance
+                
+                val errors = if (!result.isDefined)
+                  Set(Error(expr, OperationOnUnrelatedSets))
+                else
+                  Set()
+
+                (back, errors)
+              } else {
+                sys.error("Not implemented yet!")
+              }
+            } else {
+              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+            }
           }
           
           case UserDef(e) => {

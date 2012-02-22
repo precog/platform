@@ -24,15 +24,15 @@ trait Binder extends parser.AST {
   import ast._
 
   object BuiltIns {
-    val Count   = BuiltIn(Identifier(Vector(), "count"), 1)
-    val Load    = BuiltIn(Identifier(Vector(), "dataset"), 1)
-    val Max     = BuiltIn(Identifier(Vector(), "max"), 1)
-    val Mean    = BuiltIn(Identifier(Vector(), "mean"), 1)
-    val Median  = BuiltIn(Identifier(Vector(), "median"), 1)
-    val Min     = BuiltIn(Identifier(Vector(), "min"), 1)
-    val Mode    = BuiltIn(Identifier(Vector(), "mode"), 1)
-    val StdDev  = BuiltIn(Identifier(Vector(), "stdDev"), 1)
-    val Sum     = BuiltIn(Identifier(Vector(), "sum"), 1)
+    val Count   = BuiltIn(Identifier(Vector(), "count"), 1, true)
+    val Load    = BuiltIn(Identifier(Vector(), "dataset"), 1, false)
+    val Max     = BuiltIn(Identifier(Vector(), "max"), 1, true)
+    val Mean    = BuiltIn(Identifier(Vector(), "mean"), 1, true)
+    val Median  = BuiltIn(Identifier(Vector(), "median"), 1, true)
+    val Min     = BuiltIn(Identifier(Vector(), "min"), 1, true)
+    val Mode    = BuiltIn(Identifier(Vector(), "mode"), 1, true)
+    val StdDev  = BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
+    val Sum     = BuiltIn(Identifier(Vector(), "sum"), 1, true)
   }
 
   val BuiltInFunctions = {
@@ -42,7 +42,23 @@ trait Binder extends parser.AST {
   }
 
   object Time {
-    val Hour = BuiltIn(Identifier(Vector("std", "time"), "hour"), 2)
+    val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
+    
+    //function and inverse ISO8601 <=> epoch millis
+
+    //the following are all projections to sets of integers
+    //todo truncate hour, truncate minute, and other truncate functions. Note: retain date information 
+
+    val Date = BuiltIn(Identifier(Vector("std", "time"), "date"), 1, false) //month day year format
+    val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
+    val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
+    val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
+    val WeekOfYear = BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
+    val DayOfMonth = BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
+    val DayOfWeek = BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
+    val HourOfDay = BuiltIn(Identifier(Vector("std", "time"), "hourOfDay"), 1, false)  
+    val MinuteOfHour = BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
+    val SecondOfMinute = BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
   }
   
   override def bindNames(tree: Expr) = {
@@ -100,8 +116,9 @@ trait Binder extends parser.AST {
           d.binding = env(Right(name))
           
           d.isReduction = env(Right(name)) match {
-            case BuiltIn(BuiltIns.Load.name, _) => false
-            case BuiltIn(_, _) => true
+            case BuiltIn(BuiltIns.Load.name, _, _) => false
+            case BuiltIn(_, _, true) => true
+            case BuiltIn(_, _, false) => false
             case _ => false
           }
           
@@ -166,7 +183,7 @@ trait Binder extends parser.AST {
   sealed trait FormalBinding extends Binding
   
   // TODO arity and types
-  case class BuiltIn(name: Identifier, arity: Int) extends Binding {
+  case class BuiltIn(name: Identifier, arity: Int, reduction: Boolean) extends Binding {
     override val toString = "<native: %s(%d)>".format(name, arity)
   }
   
