@@ -218,13 +218,13 @@ trait REPL extends LineErrors
 object Console extends App {
   // Configuration required for blueyes IngestServer
   val controlTimeout = Duration(120, "seconds")
-  val config = Configuration.load("default_ingest.conf", BlockFormat)
 
   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
-    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+    val config = Configuration.loadResource("/default_ingest.conf", BlockFormat)
+    val adjustedConfig = dataDir map { config.set("precog.storage.root", _) } getOrElse { config }
 
     new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
-      val config = Configuration.parse(rawConfig)  
+      val config = adjustedConfig  
       val flatMapTimeout = controlTimeout
       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       val sortWorkDir = scratchDir
@@ -246,6 +246,8 @@ object Console extends App {
           with LevelDBQueryComponent
           with DiskMemoizationComponent
           with Lifecycle { self =>
+
+        override def rootConfig = yconfig.config 
 
         type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
         val yggConfig = yconfig
