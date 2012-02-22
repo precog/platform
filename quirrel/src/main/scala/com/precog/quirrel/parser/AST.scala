@@ -15,6 +15,8 @@ trait AST extends Phases {
   import ast._
   
   type Solution
+  
+  type Bucket
 
   type Binding
   type FormalBinding
@@ -582,6 +584,7 @@ trait AST extends Phases {
       val label = 'let
       
       lazy val criticalConditions = findCriticalConditions(this)
+      lazy val groups = findGroups(this)
       
       private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
       def assumptions = _assumptions()
@@ -666,6 +669,10 @@ trait AST extends Phases {
       private val _equalitySolutions = attribute[Map[String, Solution]](solveCriticalConditions)
       def equalitySolutions = _equalitySolutions()
       private[quirrel] def equalitySolutions_=(map: Map[String, Solution]) = _equalitySolutions() = map
+      
+      private val _buckets = attribute[Map[String, Bucket]](inferBuckets)
+      def buckets = _buckets()
+      private[quirrel] def buckets_=(map: Map[String, Bucket]) = _buckets() = map
       
       def children = actuals.toList
     }
