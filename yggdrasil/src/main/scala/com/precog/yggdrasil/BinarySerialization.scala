@@ -16,8 +16,29 @@ import scala.actors.remote._
 
 import java.io._
 
-class BinaryProjectionSerialization extends FileSerialization[SEvent] {
+trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
+  type Structure = (Int, Seq[(JPath, ColumnType)])
+  final val HeaderFlag = 0
+  final val EventFlag = 1
+
+  def chunkSize: Int
+
+  def writeEvents(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] {
+    ev.foldLeft(Option.empty[Structure])
+    // in a tail-recursive loop or fold over ev
+    // compute the header for an event
+    // if the header is the same as previously seen, just write the event
+    // if the header is different, write the header then write the event
+  }
+
+  def readEvents(in: DataInputStream): IO[Option[Vector[SEvent]]] {
+    // in a tail-recursive loop
+    // first read a header
+    // then read events using that header until you see another header or reach the maximum chunk size
+  }
+
   def writeHeader(data: DataOutputStream, col: Seq[(JPath, ColumnType)]): IO[Unit] = IO {
+    data.writeInt(HeaderFlag)
     data.writeInt(col.size)
     col map {
       case (sel, valType) => {       
@@ -43,7 +64,13 @@ class BinaryProjectionSerialization extends FileSerialization[SEvent] {
     loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())
   }
 
-  def sValueToBinary(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
+  def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = IO {
+    data.writeInt(EventFlag)
+    writeIdentities(data, ev._1)
+    writeValue(data, ev._2)
+  }
+
+  def writeValue(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
     sv.fold(
       obj = obj       => obj.map { 
         case (_, v)   => sValueToBinary(data, v)
@@ -59,6 +86,28 @@ class BinaryProjectionSerialization extends FileSerialization[SEvent] {
         data.write(bytes, 0, bytes.length)
       },
       nul = sys.error("nothing should be written") )
+  }
+
+  def readNext(data: DataInputStream, Option[Seq[(JPath, ColumnType)])]): IO[Either[Seq[(JPath, ColumnType)], SEvent]] = IO {
+    data.readInt() match {
+      case HeaderFlag => Left(readHeader(data))
+      case EventFlag => Right(readEvent(data))
+    }
+  }
+
+  def readValue(data: DataInputStream, cols: Seq[(JPath, ColumnType)]): IO[SValue] = IO {
+    cols.foldLeft(Option.empty[SValue]) {
+      case (None     , (JPath.Identity, ctype)) => Some(readColumn(data, ctype).toSValue)
+      case (None     , (jpath, ctype))          => 
+        jpath.nodes match {
+          case JPathIndex(_) :: xs => SArray(Vector()).set(jpath, readColumn(data, ctype))
+          case JPathField(_) :: xs => SObject(Map()).set(jpath, readColumn(data, ctype))
+        }
+      case (Some(obj), (JPath.Identity, ctype)) => sys.error("Illegal data header: multiple values at a selector root.")
+      case (Some(obj), (jpath, ctype))          => obj.set(jpath, readColumn(data, ctype))
+    } getOrElse {
+      SNull
+    }
   }
 
   private def readColumn(data: DataInputStream, ctype: ColumnType): CValue = ctype match {
@@ -77,20 +126,5 @@ class BinaryProjectionSerialization extends FileSerialization[SEvent] {
     case SNull                  => CNull
     case SEmptyObject           => CEmptyObject
     case SEmptyArray            => CEmptyArray
-  }
-
-  def binaryToSValue(data: DataInputStream, cols: Seq[(JPath, ColumnType)]): SValue = {
-    cols.foldLeft(Option.empty[SValue]) {
-      case (None     , (JPath.Identity, ctype)) => Some(readColumn(data, ctype).toSValue)
-      case (None     , (jpath, ctype))          => 
-        jpath.nodes match {
-          case JPathIndex(_) :: xs => SArray(Vector()).set(jpath, readColumn(data, ctype))
-          case JPathField(_) :: xs => SObject(Map()).set(jpath, readColumn(data, ctype))
-        }
-      case (Some(obj), (JPath.Identity, ctype)) => sys.error("Illegal data header: multiple values at a selector root.")
-      case (Some(obj), (jpath, ctype))          => obj.set(jpath, readColumn(data, ctype))
-    } getOrElse {
-      SNull
-    }
   }
 }
