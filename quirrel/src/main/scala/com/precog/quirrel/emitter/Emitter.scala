@@ -183,6 +183,10 @@ trait Emitter extends AST
       emitMapState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, op)
     }
 
+    def emitUnary(expr: Expr, op: UnaryOperation): EmitterState = {
+      emitExpr(expr) >> emitInstr(Map1(op))
+    }
+
     def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
       emitCrossOrMatchState(left, leftProv, right, rightProv)(
         ifCross = FilterCross(depth, pred),
@@ -318,52 +322,110 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case BuiltIn(BuiltIns.Load.name, arity) =>
+            case BuiltIn(BuiltIns.Load.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
-            case BuiltIn(BuiltIns.Count.name, arity) =>
+            case BuiltIn(BuiltIns.Count.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Count))
             
-            case BuiltIn(BuiltIns.Max.name, arity) =>
+            case BuiltIn(BuiltIns.Max.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Max))
             
-            case BuiltIn(BuiltIns.Mean.name, arity) =>
+            case BuiltIn(BuiltIns.Mean.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Mean))
             
-            case BuiltIn(BuiltIns.Median.name, arity) =>
+            case BuiltIn(BuiltIns.Median.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Median))
             
-            case BuiltIn(BuiltIns.Min.name, arity) =>
+            case BuiltIn(BuiltIns.Min.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Min))
             
-            case BuiltIn(BuiltIns.Mode.name, arity) =>
+            case BuiltIn(BuiltIns.Mode.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Mode))
             
-            case BuiltIn(BuiltIns.StdDev.name, arity) =>
+            case BuiltIn(BuiltIns.StdDev.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(StdDev))
 
-            case BuiltIn(BuiltIns.Sum.name, arity) =>
+            case BuiltIn(BuiltIns.Sum.name, arity, _) =>
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
 
-            case BuiltIn(n, arity) =>
+            //**
+            //start of Time functions
+            //**
+            case BuiltIn(Time.Date.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(Date))
+
+            case BuiltIn(Time.Year.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(Year))
+
+            case BuiltIn(Time.QuarterOfYear.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(QuarterOfYear))
+
+            case BuiltIn(Time.MonthOfYear.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(MonthOfYear))
+
+            case BuiltIn(Time.WeekOfYear.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
+
+            case BuiltIn(Time.DayOfMonth.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(DayOfMonth))
+
+            case BuiltIn(Time.DayOfWeek.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(DayOfWeek))
+
+            case BuiltIn(Time.HourOfDay.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(HourOfDay))
+
+            case BuiltIn(Time.MinuteOfHour.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(MinuteOfHour))
+
+            case BuiltIn(Time.SecondOfMinute.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
+
+            case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
+              assert(arity == 2)
+
+              emitExpr(actuals.head) >> emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone)) //do we really want emitExpr here since takes only one Expr
+
+            case BuiltIn(n, arity, _) =>
               notImpl(expr)
 
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
