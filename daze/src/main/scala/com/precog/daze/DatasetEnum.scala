@@ -156,10 +156,9 @@ trait DatasetEnumOps {
   
   def memoize[X](d: DatasetEnum[X, SEvent, IO], memoId: Int, ctx: MemoizationContext)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
 
-  type Key = List[SValue]
-
   // result must be (stably) ordered by key!!!!
-  //def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key]): DatasetEnum[X, (Key, DatasetEnum[X, SEvent, IO]), IO]
+  type Key = List[SValue]
+  def group[X](d: DatasetEnum[X, SEvent, IO], fs: FileSerialization[Vector[(Key, SEvent)]])(f: SEvent => Key)(implicit ord: Order[Key]): Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
 }
 
 // vim: set ts=4 sw=4 et:
