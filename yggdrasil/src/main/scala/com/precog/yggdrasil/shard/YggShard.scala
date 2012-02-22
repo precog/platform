@@ -25,7 +25,7 @@ import com.precog.common._
 import com.precog.util._
 import com.precog.util.Bijection._
 import com.precog.yggdrasil.util.IOUtils
-import kafka._
+import com.precog.yggdrasil.kafka._
 import leveldb._
 
 import akka.actor.Props

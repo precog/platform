@@ -23,7 +23,7 @@ package kafka
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
-import com.precog.ingest.util.ZookeeperSystemCoordination
+import com.precog.common.util.ZookeeperSystemCoordination
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
@@ -59,7 +59,7 @@ trait KafkaEventStoreComponent {
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)
 
     val eventStore = new LocalKafkaEventStore(localTopic, localConfig)
-    val relayAgent = new KafkaEventRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
+    val relayAgent = new KafkaRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
 
     new EventStore {
       def save(event: Event) = eventStore.save(event)
