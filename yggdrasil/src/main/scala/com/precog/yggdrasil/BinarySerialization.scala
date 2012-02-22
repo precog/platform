@@ -36,6 +36,7 @@ import scala.actors.remote._
 
 import java.io._
 import scalaz.effect._
+import scalaz.syntax.monad._
 
 trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
@@ -46,19 +47,16 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
 
   def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
     out.writeInt(ev.size)
-    ev.foldLeft(Option.empty[Header]) {
-      case (opt, (ids, sv)) => {
+    ev.foldLeft((Option.empty[Header], IO(()))) {
+      case ((oldHeader, io), (ids, sv)) => 
         val newHeader = Header(ids.size, sv.structure)
-
-        if (opt.forall(_ == newHeader)) {
-          writeEvent(out, (ids, sv))
+        val nextIO = if (oldHeader.forall(_ == newHeader)) {
+          io >> writeEvent(out, (ids, sv))
         } else {
-          writeHeader(out, newHeader)
-          writeEvent(out, (ids, sv))
+          io >> writeHeader(out, newHeader) >> writeEvent(out, (ids, sv))
         }
 
-        Option(newHeader)
-      }
+        (Option(newHeader), nextIO)
     }
   }
     
@@ -67,31 +65,30 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     // if the header is the same as previously seen, just write the event
     // if the header is different, write the header then write the event
 
-  def readElement(in: DataInputStream): IO[Vector[SEvent]] = IO {
-    val length = in.readInt()
-    readInt() //reads initial HeaderFlag
-    def loop(in: DataInputStream, acc: Vector[SEvent], i: Int): Vector[SEvent] = { 
-      if (i > 0) {
-        val header = readHeader(in)
-        eventLoop(in, acc, i, header)
-        
-        def eventLoop(in: DataInputStream, acc: Vector[SEvent], i: Int, header: Header): Vector[SEvent] = {
-          if (i > 0) {
-            if (in.readInt() == EventFlag) {
-              val newAcc = acc :+ readEvent(in, header.idCount, header.structure)
-              eventLoop(in, newAcc, i - 1, header)
-            } else {
-              loop(in, acc, i)
-            }
-          } else {
-            acc
-          }
-        } 
-      } else {
-        acc
+  def readElement(in: DataInputStream): IO[Option[Vector[SEvent]]] = {
+    def loop(in: DataInputStream, acc: Vector[SEvent], i: Int, header: Option[Header]): IO[Option[Vector[SEvent]]] = { 
+      in.readInt() match {
+        case HeaderFlag =>
+          for {
+            newHeader <- readHeader(in)
+            result    <- loop(in, acc, i, Some(newHeader))
+          } yield result
+
+        case EventFlag => header match {
+          case None    => IO(None)
+          case Some(h) => 
+            for {
+              nextElement <- readEvent(in, h.idCount, h.structure)
+              result      <- loop(in, acc :+ nextElement, i - 1, header)
+            } yield result
+        }
       }
     }
-    loop(in, Vector.empty[SEvent], length)
+
+    for {
+      length <- IO { in.readInt() }
+      result <- loop(in, Vector.empty[SEvent], length, None)
+    } yield result
   }
 
     // in a tail-recursive loop
@@ -101,8 +98,8 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
 
   def writeHeader(data: DataOutputStream, header: Header): IO[Unit] = IO {
     data.writeInt(HeaderFlag)
-    //data.writeInt(header.idCount)
-    //data.writeInt(header.structure.size)
+    data.writeInt(header.idCount)
+    data.writeInt(header.structure.size)
     header.structure map {
       case (sel, valType) => {       
         data.writeUTF(sel.toString)
@@ -111,7 +108,7 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     }
   }
 
-  def readHeader(data: DataInputStream): IO[Header] = {   
+  def readHeader(data: DataInputStream): IO[Header] = {
     def loop(data: DataInputStream, acc: Seq[(JPath, ColumnType)], i: Int): Seq[(JPath, ColumnType)] = {
       if (i > 0) {
         val selector = JPath(data.readUTF())
@@ -125,14 +122,18 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     }
 
     IO {
-      Header(data.readInt(), loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())) 
+      val idCount = data.readInt()
+      val columns = data.readInt()
+      Header(idCount, loop(data, Vector.empty[(JPath, ColumnType)], columns)) 
     }
   }
 
-  def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = IO {
-    data.writeInt(EventFlag)
-    writeIdentities(data, ev._1)
-    writeValue(data, ev._2)
+  def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = {
+    for {
+      _ <- IO { data.writeInt(EventFlag) }
+      _ <- writeIdentities(data, ev._1)
+      _ <- writeValue(data, ev._2)
+    } yield ()
   }
 
   def writeIdentities(data: DataOutputStream, id: Identities): IO[Unit] = IO {
@@ -157,18 +158,14 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
       nul = sys.error("nothing should be written") )
   }
 
-  def readEvent(data: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = IO {
-    (readIdentities(data, length), readValue(data, cols))
+  def readEvent(data: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = {
+    for {
+      ids <- readIdentities(data, length)
+      sv  <- readValue(data, cols)
+    } yield (ids, sv)
   }
 
-  def readNext(data: DataInputStream, header: Header): IO[Either[Header, SEvent]] = IO {
-    data.readInt() match {
-      case HeaderFlag => Left(readHeader(data))
-      case EventFlag => Right(readEvent(data, header.idCount, header.structure))
-    }
-  }
-
-  def readIdentities(data: DataInputStream, length: Int): IO[Identities] = IO {
+  def readIdentities(data: DataInputStream, length: Int): IO[Identities] = {
     def loop(data: DataInputStream, acc: Vector[Long], i: Int): Identities = {
       if (i > 0) {
         loop(data, acc :+ data.readLong(), i - 1)
@@ -176,7 +173,10 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
         acc
       }
     }
-    loop(data, Vector.empty[Long], length)
+
+    IO {
+      loop(data, Vector.empty[Long], length)
+    }
   }
 
   def readValue(data: DataInputStream, cols: Seq[(JPath, ColumnType)]): IO[SValue] = IO {
