@@ -553,25 +553,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
   private def identitiesOrder(prefixLength: Int): Order[SEvent] = new Order[SEvent] {
     // very hot code!
-    def order(e1: SEvent, e2: SEvent) = {
-      val ids1 = e1._1
-      val ids2 = e2._1
-      
-      var result: Ordering = Ordering.EQ
-      var i = 0
-      while (i < prefixLength && (result eq Ordering.EQ)) {
-        val i1 = ids1(i)
-        val i2 = ids2(i)
-        
-        if (i1 != i2) {
-          result = Ordering.fromInt((i1 - i2) toInt)
-        }
-        
-        i += 1
-      }
-      
-      result
-    }
+    def order(e1: SEvent, e2: SEvent) = prefixIdentityOrder(e1._1, e2._1, prefixLength)
   }
   
   /**

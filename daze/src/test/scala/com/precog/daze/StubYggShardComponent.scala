@@ -58,15 +58,6 @@ trait StubYggShardComponent {
   trait Storage extends YggShard {
     def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
 
-    object IdentitiesOrdering extends scala.math.Ordering[Identities] {
-      override def compare(id1: Identities, id2: Identities) = {
-        (id1 zip id2).foldLeft(0) {
-          case (0, (id1, id2)) => id1 compare id2
-          case (other, _) => other
-        }
-      }
-    }
-
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
       val chunkSize = 2000
 

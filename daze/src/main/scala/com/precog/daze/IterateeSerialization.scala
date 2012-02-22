@@ -97,7 +97,7 @@ object SimpleProjectionSerialization extends FileSerialization[SEvent] {
       if (remaining > 0) { 
         val (newAcc,newRem) = try {
           val idCount = in.readInt
-          val ids = (0 until idCount).map(_ => in.readLong).toList
+          val ids = Vector((0 until idCount).map(_ => in.readLong): _*)
           val jstr = in.readUTF
           val ev = (ids, SValue.fromJValue(JsonParser.parse(jstr)))
           (acc :+ ev, remaining - 1)
