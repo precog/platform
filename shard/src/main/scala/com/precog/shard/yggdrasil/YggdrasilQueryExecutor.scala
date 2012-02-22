@@ -27,8 +27,6 @@ import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
 
-import net.lag.configgy.ConfigMap
-
 trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with KafkaIngestConfig with BaseConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
@@ -42,7 +40,7 @@ trait YggdrasilQueryExecutorComponent {
       val config = Configuration.parse("""
         precog {
           kafka {
-            enabled = true
+            enabled = true 
             topic {
               events = central_event_store
             }
@@ -66,7 +64,7 @@ trait YggdrasilQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
+  def queryExecutorFactory(queryExecutorConfig: Configuration): QueryExecutor = queryExecutorFactory()
   
   def queryExecutorFactory(): QueryExecutor = {
 

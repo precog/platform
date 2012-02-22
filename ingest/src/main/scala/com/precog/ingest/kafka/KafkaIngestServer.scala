@@ -11,14 +11,15 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import java.net.InetAddress
 
-import net.lag.configgy.ConfigMap
 import scalaz.NonEmptyList
+
+import org.streum.configrity.Configuration
 
 trait KafkaEventStoreComponent {
 
   implicit def defaultFutureDispatch: MessageDispatcher
 
-  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
+  def eventStoreFactory(eventConfig: Configuration): EventStore = {
     val localTopic = getConfig(eventConfig, "local.topic")
     val localBroker = getConfig(eventConfig, "local.broker")
     
@@ -49,7 +50,7 @@ trait KafkaEventStoreComponent {
     }
   }
 
-  def getConfig(cfg: ConfigMap, key: String): String = cfg.getString(key).getOrElse(
+  def getConfig(cfg: Configuration, key: String): String = cfg.get[String](key).getOrElse(
     sys.error("Invalid configuration eventStore.%s required".format(key))
   )
 

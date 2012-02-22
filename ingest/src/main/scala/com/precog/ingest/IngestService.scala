@@ -25,8 +25,6 @@ import HttpStatusCodes.{BadRequest, Unauthorized, Forbidden}
 
 import akka.dispatch.Future
 
-import net.lag.configgy.{Configgy, ConfigMap}
-
 import org.joda.time.base.AbstractInstant
 import org.joda.time.Instant
 import org.joda.time.DateTime
@@ -54,6 +52,8 @@ import com.precog.ct.Mult.MDouble._
 import com.precog.ingest._
 import com.precog.ingest.service._
 
+import org.streum.configrity.Configuration
+
 case class IngestState(indexMongo: Mongo, tokenManager: TokenManager, eventStore: EventStore, usageLogging: UsageLogging)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators {
@@ -64,11 +64,11 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def eventStoreFactory(configMap: ConfigMap): EventStore
+  def eventStoreFactory(configMap: Configuration): EventStore
 
-  def mongoFactory(configMap: ConfigMap): Mongo
+  def mongoFactory(configMap: Configuration): Mongo
 
-  def usageLogging(configMap: ConfigMap): UsageLogging 
+  def usageLogging(configMap: Configuration): UsageLogging 
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager
 
@@ -78,22 +78,22 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         startup {
           import context._
 
-          val indexdbConfig = config.configMap("indexdb")
+          val indexdbConfig = config.detach("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
-          val indexdb  = indexMongo.database(indexdbConfig.getString("database", "analytics-v" + serviceVersion))
+          val indexdb  = indexMongo.database(indexdbConfig[String]("database", "analytics-v" + serviceVersion))
 
-          val tokensCollection = config.getString("tokens.collection", "tokens")
-          val deletedTokensCollection = config.getString("tokens.deleted", "deleted_tokens")
+          val tokensCollection = config[String]("tokens.collection", "tokens")
+          val deletedTokensCollection = config[String]("tokens.deleted", "deleted_tokens")
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
-          val eventStore = eventStoreFactory(config.configMap("eventStore"))
+          val eventStore = eventStoreFactory(config.detach("eventStore"))
           
           eventStore.start map { _ =>
             IngestState(
               indexMongo,
               tokenMgr,
               eventStore,
-              usageLogging(config.configMap("usageLogging"))
+              usageLogging(config.detach("usageLogging"))
             )
           }
         } ->
