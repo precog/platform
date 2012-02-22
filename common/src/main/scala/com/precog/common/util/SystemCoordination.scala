@@ -1,4 +1,5 @@
-package com.precog.ingest.util 
+package com.precog.common
+package util 
 
 import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -27,6 +28,15 @@ trait SystemCoordination {
 
   def renewEventRelayState(agent: String, state: EventRelayState, blockSize: Int): Validation[Error, EventRelayState]
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] 
+
+  def loadYggCheckpoint(shard: String): YggCheckpoint = {
+    println("Placeholder for loading ygg checkpoint: " + shard)
+    YggCheckpoint(0, VectorClock.empty)
+  }
+
+  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint) {
+    println("Placeholder for saving ygg checkpoint: " + shard + " -> " + checkpoint)
+  }
 
   def close(): Unit
 }
@@ -112,6 +122,23 @@ trait ProducerStateSerialization {
 }
 
 object ProducerState extends ProducerStateSerialization
+
+case class YggCheckpoint(offset: Long, messageClock: VectorClock)
+
+class VectorClock(map: Map[Int, Int]) {   
+  def get(id: Int): Option[Int] = map.get(id)  
+  def hasId(id: Int): Boolean = map.contains(id)
+  def update(id: Int, sequence: Int) = map + (id -> sequence)
+  def lessThanOrEqual(other: VectorClock): Boolean = map forall { 
+    case (prodId, maxSeqId) => other.get(prodId).map( _ >= maxSeqId).getOrElse(true)
+  }
+}
+
+object VectorClock {
+  def apply(map: Map[Int, Int]) = new VectorClock(map)
+  def empty = apply(Map.empty)
+}
+
 
 class ZookeeperSystemCoordination(zkHosts: String, 
                       basePaths: Seq[String],

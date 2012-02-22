@@ -68,7 +68,7 @@ class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descript
 
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
+      expirationPolicy = ExpirationPolicy(Some(120), Some(600), TimeUnit.SECONDS), 
       evict = { 
         (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
       }
