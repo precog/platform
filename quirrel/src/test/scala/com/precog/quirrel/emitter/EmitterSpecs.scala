@@ -42,6 +42,7 @@ import scalaz.Scalaz._
 
 object EmitterSpecs extends Specification
     with ScalaCheck
+    with StubPhases
     with Compiler
     with Emitter
     with RawErrors 

@@ -25,6 +25,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   import ast._
   
   override def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = {
+    import condition._
+    
     def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[ConditionTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
@@ -154,14 +156,14 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   }
   
   private def runAtLevels(trees: Set[ConditionTree])(f: Expr => Set[Expr]): Set[ConditionTree] = trees flatMap {
-    case Condition(expr) => f(expr) map { Condition(_): ConditionTree }
+    case condition.Condition(expr) => f(expr) map { condition.Condition(_): ConditionTree }
     
-    case Reduction(b, trees) => {
+    case condition.Reduction(b, trees) => {
       val rec = runAtLevels(trees)(f)
       if (rec.isEmpty)
         Set[ConditionTree]()
       else
-        Set(Reduction(b, rec): ConditionTree)
+        Set(condition.Reduction(b, rec): ConditionTree)
     }
   }
   
@@ -245,6 +247,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   
   sealed trait ConditionTree
   
-  case class Condition(expr: Expr) extends ConditionTree
-  case class Reduction(b: BuiltIn, children: Set[ConditionTree]) extends ConditionTree
+  object condition {
+    case class Condition(expr: Expr) extends ConditionTree
+    case class Reduction(b: BuiltIn, children: Set[ConditionTree]) extends ConditionTree
+  }
 }

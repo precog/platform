@@ -27,9 +27,11 @@ import org.specs2.mutable.Specification
 object CriticalConditionFinderSpecs extends Specification
     with StubPhases
     with Compiler
-    with CriticalConditionFinder 
+    with CriticalConditionFinder
     with RandomLibrary {
-  import ast._  
+      
+  import ast._
+  import condition._  
   
   "critical condition finding" should {
     "detect critical conditions in a simple where" in {

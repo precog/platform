@@ -27,18 +27,20 @@ import scala.collection.mutable.Builder
 import parser._
 import typer._
 
-trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solver with Solutions {
-  import ast._
-  import condition._
+trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
+  import Function._
   
-  override def solveCriticalConditions(tree: Expr): Set[Error] = tree match {
+  import ast._
+  import group._
+  
+  override def inferBuckets(tree: Expr): Set[Error] = tree match {
     case expr @ Let(_, _, _, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
-    case New(_, child) => solveCriticalConditions(child)
+    case New(_, child) => inferBuckets(child)
     
     case Relate(_, from, to, in) =>
-      solveCriticalConditions(from) ++ solveCriticalConditions(to) ++ solveCriticalConditions(in)
+      inferBuckets(from) ++ inferBuckets(to) ++ inferBuckets(in)
     
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
@@ -46,26 +48,26 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     case BoolLit(_, _) => Set()
     
     case ObjectDef(_, props) =>
-      (props map { case (_, e) => solveCriticalConditions(e) }).fold(Set[Error]()) { _ ++ _ }
+      (props map { case (_, e) => inferBuckets(e) }).fold(Set[Error]()) { _ ++ _ }
     
     case ArrayDef(_, values) =>
-      (values map solveCriticalConditions).fold(Set[Error]()) { _ ++ _ }
+      (values map inferBuckets).fold(Set[Error]()) { _ ++ _ }
     
-    case Descent(_, child, _) => solveCriticalConditions(child)
+    case Descent(_, child, _) => inferBuckets(child)
     
     case Deref(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case d @ Dispatch(_, _, actuals) => {
-      val actualErrors = (actuals map solveCriticalConditions).fold(Set[Error]()) { _ ++ _ }
+      val actualErrors = (actuals map inferBuckets).fold(Set[Error]()) { _ ++ _ }
       
       val ourErrors = d.binding match {
         case UserDef(let) => {
           val remaining = let.params drop actuals.length
-          val work = let.criticalConditions filterKeys remaining.contains
+          val work = let.groups filterKeys remaining.contains
           
           val solvedData = work map {
-            case (name, forest) => name -> solveConditionForest(d, name, forest)
+            case (name, forest) => name -> solveGroupForest(d, name, forest)
           }
           
           val errors = solvedData.values map { case (errorSet, _) => errorSet } flatten
@@ -73,7 +75,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
             case (name, (_, Some(solution))) => name -> solution
           }
           
-          d.equalitySolutions = solutions
+          d.buckets = solutions
           
           val finalErrors = if (remaining forall solutions.contains)
             Set()
@@ -84,7 +86,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
         }
         
         case _ => {
-          d.equalitySolutions = Map()
+          d.buckets = Map()
           Set()
         }
       }
@@ -92,71 +94,75 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       actualErrors ++ ourErrors
     }
     
-    case Where(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
-    
-    case With(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
-    
-    case Union(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
-    
-    case Intersect(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+    case Operation(_, left, _, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Add(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Sub(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Mul(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Div(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Lt(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case LtEq(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Gt(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case GtEq(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Eq(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case NotEq(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case And(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Or(_, left, right) =>
-      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+      inferBuckets(left) ++ inferBuckets(right)
     
-    case Comp(_, child) => solveCriticalConditions(child)
+    case Comp(_, child) => inferBuckets(child)
     
-    case Neg(_, child) => solveCriticalConditions(child)
+    case Neg(_, child) => inferBuckets(child)
     
-    case Paren(_, child) => solveCriticalConditions(child)
+    case Paren(_, child) => inferBuckets(child)
   }
   
-  private def solveCondition(name: String, expr: Expr): Either[Set[Error], Solution] = expr match {
+  private def solveCondition(name: String, expr: Expr): Either[Set[Error], (Option[Solution], Set[Expr])] = expr match {
     case And(_, left, right) => {
       val recLeft = solveCondition(name, left)
       val recRight = solveCondition(name, right)
       
-      val sol = for {
-        leftSol <- recLeft.right
-        rightSol <- recRight.right
-      } yield Conjunction(leftSol, rightSol)
+      // desugared due to SI-5589
+      val sol = recLeft.right flatMap {
+        case (leftSol, leftExtras) => {
+          recRight.right map {
+            case (rightSol, rightExtras) => {
+              val merged = for (a <- leftSol; b <- rightSol) yield Conjunction(a, b)
+              val completeSol = merged orElse leftSol orElse rightSol
+              
+              val leftExtras2 = leftSol map const(leftExtras) getOrElse Set(left)
+              val rightExtras2 = rightSol map const(rightExtras) getOrElse Set(right)
+              
+              (completeSol, leftExtras2 ++ rightExtras2)
+            }
+          }
+        }
+      }
       
+      // TODO this misses errors sometimes
       for {
         leftErr <- sol.left
         rightErr <- recRight.left
@@ -167,11 +173,29 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       val recLeft = solveCondition(name, left)
       val recRight = solveCondition(name, right)
       
-      val sol = for {
-        leftSol <- recLeft.right
-        rightSol <- recRight.right
-      } yield Disjunction(leftSol, rightSol)
+      // desugared due to SI-5589
+      val maybeSol = recLeft.right flatMap {
+        case (leftSol, leftExtras) => {
+          recRight.right map {
+            case (rightSol, rightExtras) => {
+              for {
+                a <- leftSol
+                b <- rightSol
+                
+                if leftExtras.isEmpty
+                if rightExtras.isEmpty
+              } yield (Disjunction(a, b), Set[Expr]())
+            }
+          }
+        }
+      }
       
+      val sol = maybeSol.right flatMap {
+        case Some((solution, errors)) => Right((Some(solution), errors))
+        case None => Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
+      }
+      
+      // TODO this misses errors sometimes
       for {
         leftErr <- sol.left
         rightErr <- recRight.left
@@ -185,33 +209,36 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
         case _ => None
       }
       
-      result map { e => Right(Definition(e)) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
+      result map { e => Right((Some(Definition(e)), Set[Expr]())) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
     }
     
-    case _ => Left(Set())
+    case _ => Right((None, Set(expr)))
   }
   
-  private def solveConditionForest(d: Dispatch, name: String, conditions: Set[ConditionTree]): (Set[Error], Option[Solution]) = {
-    if (conditions exists { case Condition(_) => true case _ => false }) {
-      val solutions = conditions collect {
-        case Condition(expr) => solveCondition(name, expr)
+  private def solveGroupForest(d: Dispatch, name: String, groups: Set[GroupTree]): (Set[Error], Option[Bucket]) = {
+    if (groups exists { case Condition(_) => true case _ => false }) {
+      val solutions = groups collect {
+        case Condition(expr) => (expr, solveCondition(name, expr))
       }
       
-      val successes = solutions flatMap { _.right.toSeq }
-      val errors = (solutions flatMap { _.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
+      // if it's None all the way down, then we already have the error
+      val successes = for ((expr, result) <- solutions; (Some(solution), extras) <- result.right.toSeq)
+        yield Group(expr, expr.left, solution, extras)
+      
+      val errors = (solutions flatMap { _._2.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
       
       val (addend, result) = if (!successes.isEmpty)
-        (None, Some(successes reduce Conjunction))
+        (None, Some(successes reduce IntersectBucket))
       else
         (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
       
       (addend map (errors +) getOrElse errors, result)
-    } else if (conditions exists { case Reduction(_, _) => true case _ => false }) {
-      val (errors, successes) = conditions collect {
-        case Reduction(_, children) => solveConditionForest(d, name, children)
+    } else if (groups exists { case Reduction(_, _) => true case _ => false }) {
+      val (errors, successes) = groups collect {
+        case Reduction(_, children) => solveGroupForest(d, name, children)
       } unzip
       
-      val result = sequence(successes) map { _ reduce Disjunction }
+      val result = sequence(successes) map { _ reduce UnionBucket }
       
       if (result.isEmpty)
         (errors.flatten + Error(d, UnableToDetermineDefiningSet(name)), result)
@@ -232,4 +259,10 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       for (s <- acc; v <- opt) yield s + v
     }
   }
+  
+  sealed trait Bucket
+  
+  case class UnionBucket(left: Bucket, right: Bucket) extends Bucket
+  case class IntersectBucket(left: Bucket, right: Bucket) extends Bucket
+  case class Group(origin: Operation, target: Expr, forest: Solution, extras: Set[Expr]) extends Bucket
 }
