@@ -1,7 +1,7 @@
 package com.precog
 package yggdrasil
-package leveldb
 
+import leveldb._
 import com.precog.analytics.Path
 
 import com.precog.util.Bijection._
