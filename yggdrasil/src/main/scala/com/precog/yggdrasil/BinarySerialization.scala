@@ -1,5 +1,5 @@
-package com.precog.yggdrasil
-package leveldb
+package com.precog
+package yggdrasil
 
 import com.precog.analytics.Path
 
@@ -9,33 +9,33 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.SValue._
 import com.precog.yggdrasil.ColumnType._
 
-import com.precog.daze._
-import com.precog.daze.IterateeSerialization._
-
 import blueeyes.json._
 import blueeyes.json.JPath._
 
 import scala.actors.remote._
 
 import java.io._
+import scalaz.effect._
 
-trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
-  type Structure = (Int, Seq[(JPath, ColumnType)])
+trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
+  case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
   final val HeaderFlag = 0
   final val EventFlag = 1
 
   def chunkSize: Int
 
-  def writeEvents(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
-    ev.foldLeft(Option.empty[Structure]) {
+  def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
+    ev.foldLeft(Option.empty[Header]) {
       case (opt, (ids, sv)) => {
-        val newHeader = (sv.structure.size, sv.structure)
-        if (newHeader == opt.get) {
+        val newHeader = Header(ids.size, sv.structure)
+
+        if (opt.forall(_ == newHeader)) {
           writeEvent(out, (ids, sv))
         } else {
-          writeHeader(out, newHeader._2)
+          writeHeader(out, newHeader)
           writeEvent(out, (ids, sv))
         }
+
         Option(newHeader)
       }
     }
@@ -47,7 +47,7 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
     // if the header is the same as previously seen, just write the event
     // if the header is different, write the header then write the event
 
-  def readEvents(in: DataInputStream): IO[Option[Vector[SEvent]]] = IO {
+  def readElement(in: DataInputStream): IO[Option[Vector[SEvent]]] = IO {
     def loop(in: DataInputStream, acc: Vector[SEvent], i: Int) =  
     
     readHeader(in)
@@ -63,10 +63,11 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
     // then read events using that header until you see another header or reach the maximum chunk size
   }
 
-  def writeHeader(data: DataOutputStream, col: Seq[(JPath, ColumnType)]): IO[Unit] = IO {
+  def writeHeader(data: DataOutputStream, header: Header): IO[Unit] = IO {
     data.writeInt(HeaderFlag)
-    data.writeInt(col.size)
-    col map {
+    data.writeInt(header.idCount)
+    data.writeInt(header.structure.size)
+    header.structure map {
       case (sel, valType) => {       
         data.writeUTF(sel.toString)
         data.writeUTF(nameOf(valType))
@@ -74,7 +75,7 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
     }
   }
 
-  def readHeader(data: DataInputStream): IO[Seq[(JPath, ColumnType)]] = IO {   
+  def readHeader(data: DataInputStream): IO[Header] = {   
     def loop(data: DataInputStream, acc: Seq[(JPath, ColumnType)], i: Int): Seq[(JPath, ColumnType)] = {
       if (i > 0) {
         val selector = JPath(data.readUTF())
@@ -87,7 +88,9 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
       }
     }
 
-    loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())  //todo CAREFUL! the integer read should be the column size, not the header flag
+    IO {
+      Header(data.readInt(), loop(data, Vector.empty[(JPath, ColumnType)], data.readInt()))  //todo CAREFUL! the integer read should be the column size, not the header flag
+    }
   }
 
   def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = IO {
@@ -97,7 +100,6 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
   }
 
   def writeIdentities(data: DataInputStream, id: Identities): IO[Unit] = IO {
-    data.write(id.size)
     id.map(data.writeLong(_))
   }
 
@@ -132,9 +134,7 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
     }
   }
 
-  def readIdentities(data: DataInputStream): IO[Identities] = IO {
-    val length = data.readInt //assumes in writeIdentites, id.size is an Int
-    
+  def readIdentities(data: DataInputStream, length: Int): IO[Identities] = IO {
     def loop(data: DataInputStream, acc: Vector[Long], i: Int): Identities = {
       if (i > 0) {
         acc :+ data.readLong()
