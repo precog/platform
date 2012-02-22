@@ -17,7 +17,7 @@ import Iteratee._
 trait DiskMemoizationConfig {
   def memoizationBufferSize: Int
   def memoizationWorkDir: File
-  def memoizationSerialization: FileSerialization[SEvent]
+  def memoizationSerialization: FileSerialization[Vector[SEvent]]
 }
 
 trait DiskMemoizationComponent extends YggConfigComponent with MemoizationComponent { 
