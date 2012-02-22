@@ -43,7 +43,6 @@ import java.io.{File, PrintStream}
 
 import scalaz.effect.IO
 
-import net.lag.configgy.Configgy
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
@@ -219,7 +218,7 @@ trait REPL extends LineErrors
 object Console extends App {
   // Configuration required for blueyes IngestServer
   val controlTimeout = Duration(120, "seconds")
-  Configgy.configureFromResource("default_ingest.conf")
+  val config = Configuration.load("default_ingest.conf", BlockFormat)
 
   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }

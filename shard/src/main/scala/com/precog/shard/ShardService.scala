@@ -44,8 +44,6 @@ import HttpStatusCodes.{BadRequest, Unauthorized, Forbidden}
 
 import akka.dispatch.Future
 
-import net.lag.configgy.{Configgy, ConfigMap}
-
 import org.joda.time.base.AbstractInstant
 import org.joda.time.Instant
 import org.joda.time.DateTime
@@ -73,6 +71,8 @@ import com.precog.ct.Mult.MDouble._
 import com.precog.ingest._
 import com.precog.ingest.service._
 
+import org.streum.configrity.Configuration
+
 case class ShardState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, usageLogging: UsageLogging)
 
 trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators {
@@ -83,11 +83,11 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def queryExecutorFactory(configMap: ConfigMap): QueryExecutor
+  def queryExecutorFactory(config: Configuration): QueryExecutor
 
-  def mongoFactory(configMap: ConfigMap): Mongo
+  def mongoFactory(config: Configuration): Mongo
 
-  def usageLogging(configMap: ConfigMap): UsageLogging 
+  def usageLogging(config: Configuration): UsageLogging 
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager
 
@@ -97,14 +97,14 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
         startup {
           import context._
 
-          val queryExecutor = queryExecutorFactory(config.configMap("query_executor"))
+          val queryExecutor = queryExecutorFactory(config.detach("query_executor"))
 
-          val indexdbConfig = config.configMap("indexdb")
+          val indexdbConfig = config.detach("indexdb")
           val indexMongo = mongoFactory(indexdbConfig)
-          val indexdb  = indexMongo.database(indexdbConfig.getString("database", "analytics-v" + serviceVersion))
+          val indexdb  = indexMongo.database(indexdbConfig[String]("database", "analytics-v" + serviceVersion))
 
-          val tokensCollection = config.getString("tokens.collection", "tokens")
-          val deletedTokensCollection = config.getString("tokens.deleted", "deleted_tokens")
+          val tokensCollection = config[String]("tokens.collection", "tokens")
+          val deletedTokensCollection = config[String]("tokens.deleted", "deleted_tokens")
           val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
 
           queryExecutor.startup.map { _ =>
@@ -112,7 +112,7 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
               queryExecutor,
               indexMongo,
               tokenMgr,
-              usageLogging(config.configMap("usageLogging"))
+              usageLogging(config.detach("usageLogging"))
             )
           }
         } ->
