@@ -142,6 +142,23 @@ trait BytecodeWriter extends Writer with Version {
     def typeNum(tpe: Type) = tpe match {
       case Het => 0x00
     }
+
+    def builtInOp1(op: UnaryOperation) = op match {
+      case Date => 0x00
+      case Year => 0x01
+      case QuarterOfYear => 0x02
+      case MonthOfYear => 0x03
+      case WeekOfYear => 0x04
+      case DayOfMonth => 0x05
+      case DayOfWeek => 0x06
+      case HourOfDay => 0x07
+      case MinuteOfHour => 0x08
+      case SecondOfMinute => 0x09
+    }
+
+    def builtInOp2(op: BinaryOperation) = op match {
+      case ChangeTimeZone => 0x00
+    }
     
     if (!stream.isEmpty) {
       val (opcode, pad, arg) = stream.head match {
