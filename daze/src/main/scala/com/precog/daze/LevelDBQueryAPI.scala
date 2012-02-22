@@ -1,4 +1,5 @@
-package com.precog.daze
+package com.precog
+package daze
 
 import scala.annotation.tailrec
 
@@ -69,22 +70,6 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       }
     }
 
-    private implicit def identityOrder[A, B]: (((Identities, A), (Identities, B)) => Ordering) = 
-      (t1: (Identities, A), t2: (Identities, B)) => {
-        (t1._1 zip t2._1).foldLeft[Ordering](Ordering.EQ) {
-          case (Ordering.EQ, (i1, i2)) => Order[Long].order(i1, i2)
-          case (ord, _) => ord
-        }
-      }
-
-    private implicit object SColumnIdentityOrder extends Order[SColumn] {
-      def order(c1: SColumn, c2: SColumn) = identityOrder(c1, c2)
-    }
-
-    private implicit object SEventIdentityOrder extends Order[SEvent] {
-      def order(s1: SEvent, s2: SEvent) = identityOrder(s1, s2)
-    }
-
     def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
       def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         for {
@@ -116,6 +101,8 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       val mergedFutures = descriptors map {
         case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, Vector[(Identities, CValue)], IO]) => (selector, e))
       }
+
+      implicit val SEventOrder = SEventIdentityOrder
 
       Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
     }
