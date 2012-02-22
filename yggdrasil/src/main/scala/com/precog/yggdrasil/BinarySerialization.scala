@@ -9,6 +9,9 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.SValue._
 import com.precog.yggdrasil.ColumnType._
 
+import com.precog.daze._
+import com.precog.daze.IterateeSerialization._
+
 import blueeyes.json._
 import blueeyes.json.JPath._
 
@@ -23,15 +26,38 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
 
   def chunkSize: Int
 
-  def writeEvents(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] {
-    ev.foldLeft(Option.empty[Structure])
+  def writeEvents(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
+    ev.foldLeft(Option.empty[Structure]) {
+      case (opt, (ids, sv)) => {
+        val newHeader = (sv.structure.size, sv.structure)
+        if (newHeader == opt.get) {
+          writeEvent(out, (ids, sv))
+        } else {
+          writeHeader(out, newHeader._2)
+          writeEvent(out, (ids, sv))
+        }
+        Option(newHeader)
+      }
+    }
+  }
+    
+    
     // in a tail-recursive loop or fold over ev
     // compute the header for an event
     // if the header is the same as previously seen, just write the event
     // if the header is different, write the header then write the event
-  }
 
-  def readEvents(in: DataInputStream): IO[Option[Vector[SEvent]]] {
+  def readEvents(in: DataInputStream): IO[Option[Vector[SEvent]]] = IO {
+    def loop(in: DataInputStream, acc: Vector[SEvent], i: Int) =  
+    
+    readHeader(in)
+    if (readInt() == EventFlag) {
+      readEvent(in)
+    } else {
+      readHeader(in)
+    }
+
+
     // in a tail-recursive loop
     // first read a header
     // then read events using that header until you see another header or reach the maximum chunk size
@@ -61,13 +87,18 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
       }
     }
 
-    loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())
+    loop(data, Vector.empty[(JPath, ColumnType)], data.readInt())  //todo CAREFUL! the integer read should be the column size, not the header flag
   }
 
   def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = IO {
     data.writeInt(EventFlag)
     writeIdentities(data, ev._1)
     writeValue(data, ev._2)
+  }
+
+  def writeIdentities(data: DataInputStream, id: Identities): IO[Unit] = IO {
+    data.write(id.size)
+    id.map(data.writeLong(_))
   }
 
   def writeValue(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
@@ -88,11 +119,30 @@ trait BinaryProjectionSerialization extends FileSerialization[SEvent] {
       nul = sys.error("nothing should be written") )
   }
 
-  def readNext(data: DataInputStream, Option[Seq[(JPath, ColumnType)])]): IO[Either[Seq[(JPath, ColumnType)], SEvent]] = IO {
+  def readEvent(data: DataInputStream): IO[SEvent] = IO {
+    //data.readInt()
+    readIdentiites(data)
+    readValue(data)
+  }
+
+  def readNext(data: DataInputStream, variable: Option[Seq[(JPath, ColumnType)]]): IO[Either[Seq[(JPath, ColumnType)], SEvent]] = IO {
     data.readInt() match {
       case HeaderFlag => Left(readHeader(data))
       case EventFlag => Right(readEvent(data))
     }
+  }
+
+  def readIdentities(data: DataInputStream): IO[Identities] = IO {
+    val length = data.readInt //assumes in writeIdentites, id.size is an Int
+    
+    def loop(data: DataInputStream, acc: Vector[Long], i: Int): Identities = {
+      if (i > 0) {
+        acc :+ data.readLong()
+      } else {
+        acc
+      }
+    }
+    loop(data, Vector.empty[Long], length)
   }
 
   def readValue(data: DataInputStream, cols: Seq[(JPath, ColumnType)]): IO[SValue] = IO {
