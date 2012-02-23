@@ -95,6 +95,8 @@ trait BytecodeWriter extends Writer with Version {
       case New => 0x60
       
       case WrapArray => 0x61
+
+      case BuiltInFunction1(op) => 0xB1 | (builtInOp1(op) << 8)
     }
     
     def binaryOpNum(op: BinaryOperation) = op match {
@@ -123,6 +125,8 @@ trait BytecodeWriter extends Writer with Version {
       
       case DerefObject => 0xA0
       case DerefArray => 0xA1
+
+      case BuiltInFunction2(op) => 0xB0 | (builtInOp2(op) << 8)
     }
     
     def reductionNum(red: Reduction) = red match {
@@ -143,7 +147,7 @@ trait BytecodeWriter extends Writer with Version {
       case Het => 0x00
     }
 
-    def builtInOp1(op: UnaryOperation) = op match {
+    def builtInOp1(op: BuiltInOp1) = op match {
       case Date => 0x00
       case Year => 0x01
       case QuarterOfYear => 0x02
@@ -156,7 +160,7 @@ trait BytecodeWriter extends Writer with Version {
       case SecondOfMinute => 0x09
     }
 
-    def builtInOp2(op: BinaryOperation) = op match {
+    def builtInOp2(op: BuiltInOp2) = op match {
       case ChangeTimeZone => 0x00
     }
     

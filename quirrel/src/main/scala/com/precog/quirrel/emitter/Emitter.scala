@@ -392,57 +392,57 @@ trait Emitter extends AST
             case BuiltIn(Time.Date.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(Date))
+              emitUnary(actuals(0), BuiltInFunction1(Date))
 
             case BuiltIn(Time.Year.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(Year))
+              emitUnary(actuals(0), BuiltInFunction1(Year))
 
             case BuiltIn(Time.QuarterOfYear.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(QuarterOfYear))
+              emitUnary(actuals(0), BuiltInFunction1(QuarterOfYear))
 
             case BuiltIn(Time.MonthOfYear.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(MonthOfYear))
+              emitUnary(actuals(0), BuiltInFunction1(MonthOfYear))
 
             case BuiltIn(Time.WeekOfYear.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
+              emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
 
             case BuiltIn(Time.DayOfMonth.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(DayOfMonth))
+              emitUnary(actuals(0), BuiltInFunction1(DayOfMonth))
 
             case BuiltIn(Time.DayOfWeek.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(DayOfWeek))
+              emitUnary(actuals(0), BuiltInFunction1(DayOfWeek))
 
             case BuiltIn(Time.HourOfDay.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(HourOfDay))
+              emitUnary(actuals(0), BuiltInFunction1(HourOfDay))
 
             case BuiltIn(Time.MinuteOfHour.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(MinuteOfHour))
+              emitUnary(actuals(0), BuiltInFunction1(MinuteOfHour))
 
             case BuiltIn(Time.SecondOfMinute.name, arity, _) =>
               assert(arity == 1)
 
-              emitExpr(actuals.head) >> emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
+              emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
 
             case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
               assert(arity == 2)
 
-              emitExpr(actuals.head) >> emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone)) //do we really want emitExpr here since takes only one Expr
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone)) //do we really want emitExpr here since takes only one Expr
 
             case BuiltIn(n, arity, _) =>
               notImpl(expr)

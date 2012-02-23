@@ -125,7 +125,7 @@ trait BytecodeReader extends Reader {
         case _ => None
       }
 
-      lazy val builtIn1 = ((code >> 8) & 0xFFFFFF00) match {
+      lazy val builtIn1 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(Date)
         case 0x01 => Some(Year)
         case 0x02 => Some(QuarterOfYear)
@@ -138,7 +138,7 @@ trait BytecodeReader extends Reader {
         case 0x09 => Some(SecondOfMinute)
       }
 
-      lazy val builtIn2 = ((code >> 8) & 0xFFFFFF01) match {
+      lazy val builtIn2 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(ChangeTimeZone)
       }
       
