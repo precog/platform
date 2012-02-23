@@ -95,6 +95,19 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           case (id, sv) => (id, SArray(Vector(sv)))
         })
       }
+
+      case Operate(_, BuiltInFunction1(op), parent) => {
+        val parentRes = loop(parent, roots, ctx)
+        val parentResTyped = parentRes.left map { _ typed builtInOp1Type(op) }
+        val enum = maybeRealize(parentResTyped)
+
+        def opPerform(sev: SEvent): Option[SEvent] = {
+          val (id, sv) = sev
+          performBuiltInOp1(op, sv) map { sv => (id, sv) }
+        }
+
+        Right(enum collect unlift(opPerform))
+      }
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
@@ -419,6 +432,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case DerefObject => (Some(SObject), Some(SString))
     
     case DerefArray => (Some(SObject), Some(SDecimal))
+
+    case BuiltInFunction2 => (Some(SString), Some(SString))
   }
   
   private def unOpType(op: UnaryOperation): Option[SType] = op match {
@@ -426,6 +441,21 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case Comp => Some(SBoolean)
     case Neg => Some(SDecimal)
     case WrapArray => None
+    case BulitInFunction1 => Some(SString)
+  }
+
+  private def builtInOp1Type(op: BuiltInOp1): Option[SType] = op match {
+    case Date => Some(SString)
+    case Year=> Some(SString)
+    case QuarterOfYear => Some(SString)
+    case MonthOfYear => Some(SString)
+    case WeekOfYear => Some(SString)
+    case DayOfMonth => Some(SString)
+    case DayOfWeek => Some(SString)
+    case HourOfDay => Some(SString)
+    case MinuteOfHour => Some(SString)
+    case SecondOfMinute => Some(SString)
+
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -526,7 +556,31 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         case _ => None
       }
+
+      case BuiltInFunction2(ChangeTimeZone) => {
+        case (SString(time), SString(tz)) => {
+          if (isValidTimezone(tz) && isValidTime(time)) {
+            Some(Decimadfl(0))
+          }
+          
+        case _ => None
+      }
     }
+  }
+
+  private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
+    case (Date, SString(time)) => Some(SDecimal(0))
+    case (Year, SString(time)) => Some(SDecimal(0))
+    case (QuarterOfYear, SString(time)) => Some(SDecimal(0))
+    case (MonthOfYear, SString(time)) => Some(SDecimal(0))
+    case (WeekOfYear, SString(time)) => Some(SDecimal(0))
+    case (DayOfMonth, SString(time)) => Some(SDecimal(0))
+    case (DayOfWeek, SString(time)) => Some(SDecimal(0))
+    case (HourOfDay, SString(time)) => Some(SDecimal(0))
+    case (MinuteOfHour, SString(time)) => Some(SDecimal(0))
+    case (SecondOfMinute, SString(time)) => Some(SDecimal(0))
+    
+    case _ => None
   }
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
