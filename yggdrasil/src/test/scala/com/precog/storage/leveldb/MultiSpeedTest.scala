@@ -19,7 +19,7 @@
  */
 package com.precog.storage
 package leveldb
-
+import com.precog.common.VectorCase
 import com.precog.util.Bijection
 import com.precog.yggdrasil.leveldb.LevelDBProjection
 
@@ -64,7 +64,7 @@ object MultiSpeedTest {
       private var count = 0
       
       def receive = {
-        case Insert(id,v) => column.insert(Vector(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/).map(_ => count += 1).unsafePerformIO
+        case Insert(id,v) => column.insert(VectorCase(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/).map(_ => count += 1).unsafePerformIO
 
         case KillMeNow => column.close.map(_ => sender ? (ShutdownComplete(name, count))).map(_ => self ! PoisonPill).unsafePerformIO
       }

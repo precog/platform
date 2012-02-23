@@ -55,7 +55,7 @@ class RoutingTableSpec extends Specification {
       val actions = rt.route(event)
 
       val expected : Set[ProjectionData] = 
-        Set(ProjectionData(toProjDesc(colDesc :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)))
+        Set(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(event.identity),List[CValue](CString("Test")), List(Set.empty)))
 
       actions must_== expected 
     }
@@ -72,8 +72,8 @@ class RoutingTableSpec extends Specification {
       val actions = rt.route(event)
 
       val expected : Set[ProjectionData] = Set(
-          ProjectionData(toProjDesc(colDesc1 :: Nil), Vector(event.identity),List[CValue](CString("Test")), List(Set.empty)),
-          ProjectionData(toProjDesc(colDesc2 :: Nil), Vector(event.identity),List[CValue](CInt(1)), List(Set.empty))
+          ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase(event.identity),List[CValue](CString("Test")), List(Set.empty)),
+          ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase(event.identity),List[CValue](CInt(1)), List(Set.empty))
       )
 
       actions must_== expected

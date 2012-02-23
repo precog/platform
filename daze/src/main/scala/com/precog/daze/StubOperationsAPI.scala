@@ -19,6 +19,7 @@
  */
 package com.precog.daze
 
+import com.precog.common.VectorCase
 import com.precog.yggdrasil._
 import com.precog.analytics.Path
 
@@ -144,7 +145,7 @@ trait StubOperationsAPI
       JsonParser parse str
     
     private def wrapSEvent(id: Long, value: JValue): SEvent =
-      (Vector(id), wrapSValue(value))
+      (VectorCase(id), wrapSValue(value))
     
     private def wrapSValue(value: JValue): SValue = new SValue {
       def fold[A](

@@ -31,6 +31,8 @@ import scalaz.iteratee._
 import scalaz.syntax.monad._
 import Iteratee._
 
+import com.precog.common._
+
 trait FileSerialization[E] {
   def iStream(file: File) = new DataInputStream(new GZIPInputStream(new FileInputStream(file)))
   def oStream(file: File) = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(file)))
@@ -97,7 +99,7 @@ object SimpleProjectionSerialization extends FileSerialization[SEvent] {
       if (remaining > 0) { 
         val (newAcc,newRem) = try {
           val idCount = in.readInt
-          val ids = Vector((0 until idCount).map(_ => in.readLong): _*)
+          val ids = VectorCase((0 until idCount).map(_ => in.readLong): _*)
           val jstr = in.readUTF
           val ev = (ids, SValue.fromJValue(JsonParser.parse(jstr)))
           (acc :+ ev, remaining - 1)
