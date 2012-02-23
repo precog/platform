@@ -55,7 +55,7 @@ class PlatformSpecs extends Specification
     }
   }
   
-  val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  val controlTimeout = Duration(3600, "seconds")      // it's just unreasonable to run tests longer than this
   
   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
@@ -77,51 +77,51 @@ class PlatformSpecs extends Specification
   }
   
   "the full stack" should {
-    "count a filtered clicks dataset" in {
-      val input = """
-        | clicks := dataset(//clicks)
-        | count(clicks where clicks.time > 0)""".stripMargin
-        
-      eval(input) mustEqual Set(SDecimal(100))
-    }
-    
-    "count the campaigns dataset" >> {
-      "<root>" >> {
-        eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
-      }
-      
-      "gender" >> {
-        eval("count(dataset(//campaigns).gender)") mustEqual Set(SDecimal(100))
-      }
-      
-      "platform" >> {
-        eval("count(dataset(//campaigns).platform)") mustEqual Set(SDecimal(100))
-      }
-      
-      "campaign" >> {
-        eval("count(dataset(//campaigns).campaign)") mustEqual Set(SDecimal(100))
-      }
-      
-      "cpm" >> {
-        eval("count(dataset(//campaigns).cpm)") mustEqual Set(SDecimal(100))
-      }
-      
-      "ageRange" >> {
-        eval("count(dataset(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
-      }.pendingUntilFixed
-    }
-    
-    "determine a histogram of genders on campaigns" in {
-      val input = """
-        | campaigns := dataset(//campaigns)
-        | hist('gender) :=
-        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
-        | hist""".stripMargin
-        
-      eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
-    }
+//    "count a filtered clicks dataset" in {
+//      val input = """
+//        | clicks := dataset(//clicks)
+//        | count(clicks where clicks.time > 0)""".stripMargin
+//        
+//      eval(input) mustEqual Set(SDecimal(100))
+//    }
+//    
+//    "count the campaigns dataset" >> {
+//      "<root>" >> {
+//        eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
+//      }
+//      
+//      "gender" >> {
+//        eval("count(dataset(//campaigns).gender)") mustEqual Set(SDecimal(100))
+//      }
+//      
+//      "platform" >> {
+//        eval("count(dataset(//campaigns).platform)") mustEqual Set(SDecimal(100))
+//      }
+//      
+//      "campaign" >> {
+//        eval("count(dataset(//campaigns).campaign)") mustEqual Set(SDecimal(100))
+//      }
+//      
+//      "cpm" >> {
+//        eval("count(dataset(//campaigns).cpm)") mustEqual Set(SDecimal(100))
+//      }
+//      
+//      "ageRange" >> {
+//        eval("count(dataset(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
+//      }.pendingUntilFixed
+//    }
+//    
+//    "determine a histogram of genders on campaigns" in {
+//      val input = """
+//        | campaigns := dataset(//campaigns)
+//        | hist('gender) :=
+//        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
+//        | hist""".stripMargin
+//        
+//      eval(input) mustEqual Set(
+//        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
+//        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
+//    }
     
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
@@ -144,8 +144,10 @@ class PlatformSpecs extends Specification
       
       eval(input) mustEqual Set()   // TODO
     }
-    
+    * */
+     
     "determine most isolated clicks in time" in {
+
       val input = """
         | clicks := dataset(//clicks)
         | 
@@ -164,10 +166,27 @@ class PlatformSpecs extends Specification
         | meanBelow := mean(spacings.below)
         | 
         | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+
+      def time[T](f : => T): (T, Long) = {
+        val start = System.currentTimeMillis
+        val result = f
+        (result, System.currentTimeMillis - start)
+      }
+
+      println("warmup")
+      (1 to 10).foreach(_ => eval(input))
+
+      println("warmup complete")
+      Thread.sleep(30000)
+      println("running")
+
+      val runs = 25
+
+      println("Avg run time = " + (time((1 to runs).map(_ => eval(input)))._2 / (runs * 1.0)) + "ms")
         
-      eval(input) mustEqual Set()   // TODO
+      //eval(input) mustEqual Set()   // TODO
+      true mustEqual false
     }
-     */
   }
   
   step {

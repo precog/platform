@@ -14,6 +14,7 @@ import IterateeT._
 import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
+import com.precog.common.VectorCase
 
 trait EvaluationContext {
   type Context
@@ -46,7 +47,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case SplitRoot(_, depth) => Right(roots(depth))
       
       case Root(_, instr) =>
-        Right(ops.point(Vector((Vector(), graph.value.get))))    // TODO don't be stupid
+        Right(ops.point(Vector((VectorCase.empty[Identity], graph.value.get))))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, roots, ctx)
       
@@ -162,7 +163,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           }
         }
         
-        Right(reduced map { sv => (Vector(), sv) })
+        Right(reduced map { sv => (VectorCase.empty[Identity], sv) })
       }
       
       case dag.Split(_, parent, child) => {
@@ -175,14 +176,14 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
           case (_, sv) => {
-            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO](Vector((Vector(), sv))) :: roots, ctx))
+            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO](Vector((VectorCase.empty[Identity], sv))) :: roots, ctx))
             val actions = (volatileIds map ctx.memoizationContext.expire).fold(IO {}) { _ >> _ }
             back perform actions
           }
         }
         
         val back: DatasetEnum[X, SEvent, IO] = ops.sort(result, None).uniq.zipWithIndex map {
-          case ((_, sv), id) => (Vector(id), sv)
+          case ((_, sv), id) => (VectorCase(id), sv)
         }
         
         Right(back)
@@ -367,7 +368,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         }
         
         val (back, _) = (prefix ++ second).unzip
-        (back, sv)
+        (VectorCase.fromSeq(back), sv)
       }
     }
   }
