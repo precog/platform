@@ -114,8 +114,8 @@ trait Parser extends RegexParsers with Filters with AST {
   )
   
   private lazy val relations: Parser[Vector[Expr]] = (
-      relations ~ "--" ~ expr ^^ { (es, _, e) => es :+ e }
-    | expr ~ "--" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
+      relations ~ "relate" ~ expr ^^ { (es, _, e) => es :+ e }
+    | expr ~ "relate" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
   )
   
   private lazy val actuals: Parser[Vector[Expr]] = (
@@ -153,7 +153,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
   
-  private lazy val keywords = "new|true|false|where|with".r
+  private lazy val keywords = "new|true|false|where|with|relate".r
   
   private lazy val operations = "where|with".r
   
