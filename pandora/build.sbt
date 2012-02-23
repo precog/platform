@@ -109,7 +109,7 @@ initialCommands in console := """
   | import yggdrasil._
   | import yggdrasil.shard._
   | 
-  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with DAGPrinter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent {
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent with DiskMemoizationComponent with DAGPrinter {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
   |   import scalaz._
@@ -123,7 +123,7 @@ initialCommands in console := """
   | 
   |   val controlTimeout = Duration(30, "seconds")
   |
-  |   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
+  |   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
   |   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
   |
   |   val maxEvalDuration = controlTimeout
@@ -138,13 +138,18 @@ initialCommands in console := """
   |   
   |   object query extends QueryAPI 
   |
-  |   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
+  |   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
   |     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
   | 
-  |     new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
+  |     new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
   |       val config = Configuration.parse(rawConfig)  
   |       val flatMapTimeout = controlTimeout
   |       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+  |       val sortWorkDir = scratchDir
+  |       val sortSerialization = SimpleProjectionSerialization
+  |       val memoizationBufferSize = sortBufferSize
+  |       val memoizationWorkDir = scratchDir
+  |       val memoizationSerialization = SimpleProjectionSerialization
   |     }
   |   }
   |
