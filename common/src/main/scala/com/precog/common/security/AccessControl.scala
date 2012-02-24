@@ -3,8 +3,23 @@ package com.precog.common.security
 import blueeyes.json.JPath
 import com.precog.analytics.Path
 
-trait AccessControl extends TokenManagerComponent {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, sharingRequired: Boolean = false): Boolean = {
+trait AccessControl {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Boolean
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Boolean
+}
+
+object UnlimitedAccessControl extends AccessControl {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess) = true
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess) = true
+}
+
+trait TokenBasedAccessControl extends AccessControl with TokenManagerComponent {
+
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Boolean = {
+    mayAccessPath(uid, path, pathAccess, false)
+  }
+
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, sharingRequired: Boolean): Boolean = {
     tokenManager lookup(uid) map { mayAccessPath(_, path, pathAccess, sharingRequired) } getOrElse { false }
   }
 
@@ -44,8 +59,12 @@ trait AccessControl extends TokenManagerComponent {
 
     token.isValid && hasValidatedPermission
   }
-  
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess, sharingRequired: Boolean = false): Boolean = {
+ 
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Boolean = {
+    mayAccessData(uid, path, owners, dataAccess, false)
+  }
+
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess, sharingRequired: Boolean): Boolean = {
     tokenManager lookup(uid) map { mayAccessData(_, path, owners, dataAccess, sharingRequired) } getOrElse { false }
   }
 

@@ -8,7 +8,8 @@ package com.precog.shard.util
 import akka.dispatch.{Future, Await}
 import akka.util.duration._
 
-import com.precog.analytics._
+import com.precog.analytics.Path
+import com.precog.common.security._
 
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatusCodes.OK
@@ -102,13 +103,16 @@ verboseErrors - whether to print verbose error messages (default: false)
   }
 
   def runTest(properties: Properties) {
+    val sampleSet = new QuerySampler 
     val apiUrl = properties.getProperty("baseUrl", "http://localhost:30070/query")
     val threads = properties.getProperty("threads", "1").toInt 
+    val maxQuery = properties.getProperty("maxQuery", sampleSet.testQueries.size.toString).toInt 
+    val token = properties.getProperty("token", StaticTokenManager.rootUID)
+    val base = properties.getProperty("queryBase", "public")
     interval = properties.getProperty("iterations", "10").toInt
     intervalDouble = interval.toDouble
     val verboseErrors = properties.getProperty("verboseErrors", "false").toBoolean
 
-    val sampleSet = new QuerySampler 
 
     val workQueue = new ArrayBlockingQueue[JValue](1000)
 
@@ -126,7 +130,7 @@ verboseErrors - whether to print verbose error messages (default: false)
               val started = System.nanoTime()
               
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
-                                                          .query("tokenId", Token.Root.tokenId)
+                                                          .query("tokenId", token)
                                                           .contentType(application/MimeTypes.json)
                                                           .post[JValue]("")(sample)
 
@@ -163,7 +167,7 @@ verboseErrors - whether to print verbose error messages (default: false)
     //println("Starting sample inject")
     println("time                \ttotal errors\tqueries/s\tmin (ms)\tmax (ms)\tavg (ms)")
     while(true) {
-      val sample = sampleSet.next
+      val sample = sampleSet.next(base, maxQuery)
       workQueue.put(sample)
     }
   }
@@ -172,23 +176,23 @@ verboseErrors - whether to print verbose error messages (default: false)
 class QuerySampler {
   val allQueries = List(
 """
-count(dataset(//campaigns))
+count(dataset(//%s/campaigns))
 """,
 """
-tests := dataset(//campaigns)
+tests := dataset(//%s/campaigns)
 count(tests where tests.gender = "male")
 """,
 """
-tests := dataset(//campaigns)
+tests := dataset(//%s/campaigns)
 histogram('platform) :=
    { platform: 'platform, num: count(tests where tests.platform = 'platform) }
    histogram
 """
   )
 
-  val testQueries = allQueries
+  val testQueries = allQueries 
 
   private val random = new java.util.Random
 
-  def next(): JValue = JString(testQueries(random.nextInt(testQueries.size)))
+  def next(base: String, maxQuery: Int): JValue = JString(testQueries(random.nextInt(maxQuery)).format(base))
 }
