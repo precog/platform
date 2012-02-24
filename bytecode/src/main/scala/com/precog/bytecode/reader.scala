@@ -69,17 +69,21 @@ trait BytecodeReader extends Reader {
       
       lazy val tableInt = tableEntry flatMap readInt
       
-      lazy val unOp = (code & 0xFF) match {
+      lazy val unOp: Option[UnaryOperation] = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
         case 0x60 => Some(New)
         
         case 0x61 => Some(WrapArray)
+
+        case 0xB0 => builtIn1 match {
+          case Some(time) => Some(BuiltInFunction1(time))
+        }
         
         case _ => None
       }
       
-      lazy val binOp = (code & 0xFF) match {
+      lazy val binOp: Option[BinaryOperation] = (code & 0xFF) match {
         case 0x00 => Some(Add)
         case 0x01 => Some(Sub)
         case 0x02 => Some(Mul)
@@ -105,6 +109,10 @@ trait BytecodeReader extends Reader {
         
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
+
+        case 0xB1 => builtIn2 match { 
+          case Some(time) => Some(BuiltInFunction2(time))
+        }
         
         case _ => None
       }
@@ -216,7 +224,7 @@ trait BytecodeReader extends Reader {
       case 0x01 => Sub
       case 0x02 => Mul
       case 0x03 => Div
-      
+     
       case 0x41 => Neg
       
       case 0x30 => Or
