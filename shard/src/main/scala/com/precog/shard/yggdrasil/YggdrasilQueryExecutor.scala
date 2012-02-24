@@ -13,6 +13,7 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
+import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 
@@ -81,6 +82,11 @@ trait YggdrasilQueryExecutorComponent {
 
           val yggConfig = yConfig
           val yggState = yState
+
+          val centralZookeeperHosts = yConfig.config[String]("precog.kafka.consumer.zk.connect", "localhost:2181") 
+
+          val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
+          val yggCheckpoints: YggCheckpoints = new SystemCoordinationYggCheckpoints("shard", coordination) 
         }}
       }
 
@@ -110,12 +116,14 @@ trait YggdrasilQueryExecutor
   
   val yggState: YggState
   val actorSystem: ActorSystem
+  val yggCheckpoints: YggCheckpoints
 
   object storage extends ActorYggShard with KafkaIngester with YggConfigComponent {
     type YggConfig = self.YggConfig 
     val yggState = self.yggState
     val yggConfig = self.yggConfig
     val kafkaIngestConfig = self.yggConfig
+    val yggCheckpoints = self.yggCheckpoints
   }
 
   object ops extends Ops 

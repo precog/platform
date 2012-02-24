@@ -29,14 +29,8 @@ trait SystemCoordination {
   def renewEventRelayState(agent: String, state: EventRelayState, blockSize: Int): Validation[Error, EventRelayState]
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] 
 
-  def loadYggCheckpoint(shard: String): YggCheckpoint = {
-    println("Placeholder for loading ygg checkpoint: " + shard)
-    YggCheckpoint(0, VectorClock.empty)
-  }
-
-  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint) {
-    println("Placeholder for saving ygg checkpoint: " + shard + " -> " + checkpoint)
-  }
+  def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint]
+  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit
 
   def close(): Unit
 }
@@ -125,7 +119,26 @@ object ProducerState extends ProducerStateSerialization
 
 case class YggCheckpoint(offset: Long, messageClock: VectorClock)
 
-class VectorClock(map: Map[Int, Int]) {   
+trait YggCheckpointSerialization {
+  implicit val YggCheckpointDecomposer: Decomposer[YggCheckpoint] = new Decomposer[YggCheckpoint] {
+    override def decompose(checkpoint: YggCheckpoint): JValue = JObject(List(
+      JField("offset", checkpoint.offset),
+      JField("messageClock", checkpoint.messageClock)
+    ))
+  }
+
+  implicit val YggCheckpointExtractor: Extractor[YggCheckpoint] = new Extractor[YggCheckpoint] with ValidatedExtraction[YggCheckpoint] {
+    override def validated(obj: JValue): Validation[Error, YggCheckpoint] = 
+      ((obj \ "offset").validated[Long] |@|
+       (obj \ "messageClock").validated[VectorClock]).apply(YggCheckpoint(_,_))
+  }
+}
+
+object YggCheckpoint extends YggCheckpointSerialization {
+  val empty = YggCheckpoint(0, VectorClock.empty)
+}
+
+class VectorClock(val map: Map[Int, Int]) {   
   def get(id: Int): Option[Int] = map.get(id)  
   def hasId(id: Int): Boolean = map.contains(id)
   def update(id: Int, sequence: Int) = map + (id -> sequence)
@@ -134,11 +147,21 @@ class VectorClock(map: Map[Int, Int]) {
   }
 }
 
-object VectorClock {
+trait VectorClockSerialization {
+  implicit val VectorClockDecomposer: Decomposer[VectorClock] = new Decomposer[VectorClock] {
+    override def decompose(clock: VectorClock): JValue = clock.map.serialize 
+  }
+
+  implicit val VectorClockExtractor: Extractor[VectorClock] = new Extractor[VectorClock] with ValidatedExtraction[VectorClock] {
+    override def validated(obj: JValue): Validation[Error, VectorClock] = 
+      (obj.validated[Map[Int, Int]]).map(VectorClock(_))
+  }
+}
+
+object VectorClock extends VectorClockSerialization {
   def apply(map: Map[Int, Int]) = new VectorClock(map)
   def empty = apply(Map.empty)
 }
-
 
 class ZookeeperSystemCoordination(zkHosts: String, 
                       basePaths: Seq[String],
@@ -151,13 +174,18 @@ class ZookeeperSystemCoordination(zkHosts: String,
 
   lazy val producerIdBasePaths = List("producer", "id")
   lazy val relayAgentBasePaths = List("relay_agent")
+  lazy val shardCheckpointBasePaths = List("shard", "checkpoint")
 
   lazy val basePath = delimeter + basePaths.mkString(delimeter)  
 
-  lazy val producerIdBase = basePath + delimeter + producerIdBasePaths.mkString(delimeter)
+  private def makeBase(elements: List[String]) = basePath + delimeter + elements.mkString(delimeter)
+
+  lazy val producerIdBase = makeBase(producerIdBasePaths)
   lazy val producerIdPath = producerIdBase + delimeter + prefix  
 
-  lazy val relayAgentBase = basePath + delimeter + relayAgentBasePaths.mkString(delimeter)
+  lazy val relayAgentBase = makeBase(relayAgentBasePaths)
+  
+  lazy val shardCheckpointBase = makeBase(shardCheckpointBasePaths) 
 
   private val zkc = new ZkClient(zkHosts)
 
@@ -263,17 +291,45 @@ class ZookeeperSystemCoordination(zkHosts: String,
     Success(state)
   }
 
-  def relayAgentExists(agent: String): Boolean = {
-    zkc.exists(relayAgentPath(agent))
+  def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint] = {
+    val checkpointPath = shardCheckpointPath(shard)
+    val checkpoint = if(shardCheckpointExists(shard)) {
+      val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
+      val jvalue = JsonParser.parse(new String(bytes))
+      val checkpoint = jvalue.validated[YggCheckpoint]
+      logger.debug("%s: RESTORED".format(checkpoint))
+      checkpoint 
+    } else {
+      val initialCheckpoint = YggCheckpoint.empty 
+      zkc.createPersistent(shardCheckpointBase, true)
+      zkc.createPersistent(checkpointPath, jvalueToBytes(initialCheckpoint.serialize))
+      logger.debug("%s: NEW".format(initialCheckpoint))
+      Success(initialCheckpoint)
+    }
+    checkpoint.foreach { _ =>
+      zkc.createEphemeral(shardCheckpointActivePath(shard))
+    }
+    checkpoint
   }
 
-  def relayAgentActive(agent: String): Boolean = {
-    zkc.exists(relayAgentActivePath(agent))
-  }
+  def shardCheckpointExists(shard: String): Boolean = zkc.exists(shardCheckpointPath(shard))
 
-  def close() {
-    zkc.close()
+  private def shardCheckpointPath(shard: String): String = shardCheckpointBase + delimeter + shard
+  private def shardCheckpointActivePath(shard: String): String = shardCheckpointPath(shard) + delimeter + active 
+
+  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = {
+    zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
+      def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(checkpoint.serialize)
+    })
+    logger.debug("%s: SAVE".format(checkpoint))
+    //Success(state)
   }
+  
+  def relayAgentExists(agent: String) = zkc.exists(relayAgentPath(agent))
+
+  def relayAgentActive(agent: String) = zkc.exists(relayAgentActivePath(agent))
+
+  def close() = zkc.close()
 }
 
 object ZookeeperSystemCoordination {
