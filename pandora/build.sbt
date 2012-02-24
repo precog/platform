@@ -16,8 +16,8 @@ scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
 javaOptions ++= Seq("-Xmx1G")
 
 libraryDependencies ++= Seq(
-  "org.sonatype.jline" % "jline" % "2.5",
-  "org.specs2" %% "specs2" % "1.8" % "test",
+  "org.sonatype.jline"      % "jline"       % "2.5",
+  "org.specs2" %% "specs2"  % "1.8"         % "test",
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
   
   
@@ -109,7 +109,7 @@ initialCommands in console := """
   | import yggdrasil._
   | import yggdrasil.shard._
   | 
-  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with DAGPrinter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent {
+  | val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent with DiskMemoizationComponent with DAGPrinter {
   |   import akka.dispatch.Await
   |   import akka.util.Duration
   |   import scalaz._
@@ -121,12 +121,22 @@ initialCommands in console := """
   |   import org.streum.configrity.Configuration
   |   import org.streum.configrity.io.BlockFormat
   | 
-  |   val controlTimeout = Duration(30, "seconds")
+  |   lazy val controlTimeout = Duration(30, "seconds")
   |
-  |   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig
-  |   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
+  |   trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig
+  |   object yggConfig extends YggConfig {
+  |     lazy val config = Configuration parse {
+  |       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
+  |     }
   |
-  |   val maxEvalDuration = controlTimeout
+  |     lazy val flatMapTimeout = controlTimeout
+  |     lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+  |     lazy val chunkSerialization = SimpleProjectionSerialization
+  |     lazy val sortWorkDir = scratchDir
+  |     lazy val memoizationBufferSize = sortBufferSize
+  |     lazy val memoizationWorkDir = scratchDir
+  |     lazy val maxEvalDuration = controlTimeout
+  |   }
   |
   |   val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
   |   
@@ -138,16 +148,6 @@ initialCommands in console := """
   |   
   |   object query extends QueryAPI 
   |
-  |   def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig] = IO {
-  |     val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
-  | 
-  |     new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig {
-  |       val config = Configuration.parse(rawConfig)  
-  |       val flatMapTimeout = controlTimeout
-  |       val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-  |     }
-  |   }
-  |
   |   def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
   | 
   |   def evalE(str: String) = {
@@ -156,7 +156,7 @@ initialCommands in console := """
   |       sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
   |     }
   |     val Right(dag) = decorate(emit(tree))
-  |     consumeEval(dag)
+  |     consumeEval("0", dag)
   |   }
   | 
   |   def startup() {

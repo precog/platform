@@ -1,26 +1,25 @@
 package com.precog.ingest
 package kafka
 
-import yggdrasil._
-
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
-import com.precog.ingest.util.ZookeeperSystemCoordination
+import com.precog.common.util.ZookeeperSystemCoordination
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 
 import java.net.InetAddress
 
-import net.lag.configgy.ConfigMap
 import scalaz.NonEmptyList
+
+import org.streum.configrity.Configuration
 
 trait KafkaEventStoreComponent {
 
   implicit def defaultFutureDispatch: MessageDispatcher
 
-  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
+  def eventStoreFactory(eventConfig: Configuration): EventStore = {
     val localTopic = getConfig(eventConfig, "local.topic")
     val localBroker = getConfig(eventConfig, "local.broker")
     
@@ -35,14 +34,14 @@ trait KafkaEventStoreComponent {
     centralConfig.put("zk.connect", centralZookeeperHosts)
     centralConfig.put("serializer.class", "com.precog.ingest.kafka.KafkaIngestMessageCodec")
 
-    val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination()
+    val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
     val agent = InetAddress.getLocalHost.getHostName
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)
 
     val eventStore = new LocalKafkaEventStore(localTopic, localConfig)
-    val relayAgent = new KafkaEventRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
+    val relayAgent = new KafkaRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
 
     new EventStore {
       def save(event: Event) = eventStore.save(event)
@@ -51,10 +50,10 @@ trait KafkaEventStoreComponent {
     }
   }
 
-  def getConfig(cfg: ConfigMap, key: String): String = cfg.getString(key).getOrElse(
+  def getConfig(cfg: Configuration, key: String): String = cfg.get[String](key).getOrElse(
     sys.error("Invalid configuration eventStore.%s required".format(key))
   )
 
 }
 
-object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent with YggdrasilQueryExecutorComponent
+object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent

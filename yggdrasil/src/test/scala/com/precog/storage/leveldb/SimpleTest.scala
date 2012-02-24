@@ -1,6 +1,7 @@
 package com.precog.storage
 package leveldb
 
+import com.precog.common.VectorCase
 import com.precog.util.Bijection
 import com.precog.yggdrasil.leveldb.LevelDBProjection
 
@@ -15,7 +16,7 @@ object SimpleTest {
                 sys.error("Errors prevented creation of LevelDBProjection")
     }
 
-    c.insert(Vector(12364534l), sys.error("todo") /*new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer]*/)
+    c.insert(VectorCase(12364534l), sys.error("todo") /*new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer]*/)
   }
 }
 

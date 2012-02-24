@@ -97,14 +97,26 @@ trait SValue {
     }
   }
 
-  def toJValue: JValue = fold(
+  lazy val structure: Seq[(JPath, ColumnType)] = fold(
+    obj = m => m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPathField(name) \ path, ctype) }},
+    arr = a => a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPathIndex(index) \ path, ctype) }},
+    str = s => List((JPath(), SStringArbitrary)),
+    bool = b => List((JPath(), SBoolean)),
+    long = l => List((JPath(), SLong)),
+    double = d => List((JPath(), SDouble)),
+    num = n => List((JPath(), SDecimalArbitrary)),
+    nul = List((JPath(), SNull)) )
+   
+  lazy val shash: Long = structure.hashCode
+
+  lazy val toJValue: JValue = fold(
     obj = obj => JObject(obj.map({ case (k, v) => JField(k, v.toJValue) })(collection.breakOut)),
     arr = arr => JArray(arr.map(_.toJValue)(collection.breakOut)),
     str = JString(_),
     bool = JBool(_),
     long = JInt(_),
     double = JDouble(_),
-    num = n => JInt(n.toBigInt), //sys.error("fix JValue"),
+    num = n => JDouble(n.toDouble), //sys.error("fix JValue"),
     nul = JNull)
 
   abstract override def equals(obj: Any) = obj match {
@@ -202,7 +214,9 @@ object SValue extends SValueInstances {
     nul = "null")
 }
 
-sealed trait SType 
+sealed trait SType {
+  def =~(tpe: ColumnType) = tpe =~ this
+} 
 
 sealed trait StorageFormat {
   def min(i: Int): Int
@@ -217,7 +231,25 @@ case class  FixedWidth(width: Int) extends StorageFormat {
 }
 
 sealed trait ColumnType {
-  def format: StorageFormat 
+  def format: StorageFormat
+  
+  def =~(tpe: SType): Boolean = (this, tpe) match {
+    case (a, b) if a == b => true
+    
+    case (SStringFixed(_), SString) => true
+    case (SStringArbitrary, SString) => true
+    
+    case (SInt, SDecimal) => true
+    case (SLong, SDecimal) => true
+    case (SFloat, SDecimal) => true
+    case (SDouble, SDecimal) => true
+    case (SDecimalArbitrary, SDecimal) => true
+    
+    case (SEmptyObject, SObject) => true
+    case (SEmptyArray, SArray) => true
+    
+    case (_, _) => false
+  }
 }
 
 trait ColumnTypeSerialization {
@@ -239,14 +271,16 @@ trait ColumnTypeSerialization {
     val FixedStringR = """String\(\d+\)""".r
     n match {
       case FixedStringR(w)      => Some(SStringFixed(w.toInt))
-      case "EmptyObject" => Some(SEmptyObject)
-      case "EmptyArray"  => Some(SEmptyArray)
       case "String"      => Some(SStringArbitrary)
       case "Boolean"     => Some(SBoolean)
+      case "Int"         => Some(SInt)
       case "Long"        => Some(SLong)
+      case "Float"       => Some(SFloat)
       case "Double"      => Some(SDouble)
       case "Decimal"     => Some(SDecimalArbitrary)
       case "Null"        => Some(SNull)
+      case "EmptyObject" => Some(SEmptyObject)
+      case "EmptyArray"  => Some(SEmptyArray)
       case _ => None
     }
   }
@@ -304,7 +338,7 @@ case object SArray extends SType with (Vector[SValue] => SValue) {
   def unapply(v: SValue): Option[Vector[SValue]] = v.mapArrayOr(Option.empty[Vector[SValue]])(Some(_))
 }
 
-object SString extends SType with (String => SValue) {
+case object SString extends SType with (String => SValue) {
   def unapply(v: SValue): Option[String] = v.mapStringOr(Option.empty[String])(Some(_))
 
   def apply(v: String) = new SValue {
@@ -338,7 +372,7 @@ case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
 }
 
-case object SInt extends ColumnType with (Int => SValue) {
+case object SInt extends SType with ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
   def apply(v: Int) = new SValue {
     def fold[A](
@@ -350,7 +384,7 @@ case object SInt extends ColumnType with (Int => SValue) {
   }
 }
 
-case object SLong extends ColumnType with (Long => SValue) {
+case object SLong extends SType with ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
   def apply(v: Long) = new SValue {
     def fold[A](
@@ -363,7 +397,7 @@ case object SLong extends ColumnType with (Long => SValue) {
   def unapply(v: SValue): Option[Long] = v.mapLongOr(Option.empty[Long])(Some(_))
 }
 
-case object SFloat extends ColumnType with (Float => SValue) {
+case object SFloat extends SType with ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
   def apply(v: Float) = new SValue {
     def fold[A](
@@ -375,7 +409,7 @@ case object SFloat extends ColumnType with (Float => SValue) {
   }
 }
 
-case object SDouble extends ColumnType with (Double => SValue) {
+case object SDouble extends SType with ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
   def apply(v: Double) = new SValue {
     def fold[A](
@@ -392,7 +426,7 @@ case object SDecimalArbitrary extends ColumnType {
   def format = LengthEncoded  
 }
 
-object SDecimal extends SType with (BigDecimal => SValue) {
+case object SDecimal extends SType with (BigDecimal => SValue) {
   def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
   def apply(v: BigDecimal) = new SValue {
     def fold[A](
@@ -404,7 +438,7 @@ object SDecimal extends SType with (BigDecimal => SValue) {
   }
 }
 
-case object SNull extends ColumnType with SValue {
+case object SNull extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -414,7 +448,7 @@ case object SNull extends ColumnType with SValue {
   ) = nul
 }
 
-case object SEmptyObject extends ColumnType with SValue {
+case object SEmptyObject extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -424,7 +458,7 @@ case object SEmptyObject extends ColumnType with SValue {
   ) = obj(Map.empty)
 }
 
-case object SEmptyArray extends ColumnType with SValue {
+case object SEmptyArray extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,

@@ -34,15 +34,15 @@ object LevelDBByteProjectionSpec {
   val cvDouble2 = CDouble(9)
   val cvNum = CNum(8)
 
-  val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), SStringFixed(1), Ownership(Set()))
-  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), SStringArbitrary, Ownership(Set()))
-  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), SBoolean, Ownership(Set()))
-  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), SInt, Ownership(Set()))
-  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), SLong, Ownership(Set()))
-  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), SFloat, Ownership(Set()))
-  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), SDouble, Ownership(Set()))
-  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), SDouble, Ownership(Set()))  
-  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), SDecimalArbitrary, Ownership(Set()))
+  val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), SStringFixed(1), Authorities(Set()))
+  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), SStringArbitrary, Authorities(Set()))
+  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), SBoolean, Authorities(Set()))
+  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), SInt, Authorities(Set()))
+  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), SLong, Authorities(Set()))
+  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), SFloat, Authorities(Set()))
+  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), SDouble, Authorities(Set()))
+  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), SDouble, Authorities(Set()))  
+  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), SDecimalArbitrary, Authorities(Set()))
 
   def byteProjectionInstance(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = { 
     ProjectionDescriptor(indexedColumns, sorting) map { d => 
@@ -113,7 +113,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         case (des, byte) =>
           val identities: Vector[Long] = constructIds(des.indexedColumns.values.toSet.size)
           val values: Seq[CValue] = constructValues(des.columns)
-          val (projectedIds, projectedValues) = byte.project(identities, values)
+          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
 
           byte.unproject(projectedIds, projectedValues)(identityFunction) must_== (identities, values)
       }
@@ -128,13 +128,13 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         def genPath: Gen[Path] = Gen.oneOf(Seq(Path("path1"),Path("path2"),Path("path3"),Path("path4"),Path("path5")))
         def genJPath: Gen[JPath] = Gen.oneOf(Seq(JPath("jpath1"),JPath("jpath2"),JPath("jpath3"),JPath("jpath4"),JPath("jpath5")))
         def genColumnType: Gen[ColumnType] = Gen.oneOf(Seq(SInt,SFloat,SBoolean,SDouble,SLong,SDecimalArbitrary,SStringArbitrary))
-        def genOwnership: Gen[Ownership] = Gen.oneOf(Seq(Ownership(Set())))
+        def genAuthorities: Gen[Authorities] = Gen.oneOf(Seq(Authorities(Set())))
   
         val genColumnDescriptor = for {
           path      <- genPath
           selector  <- genJPath
           valueType <- genColumnType
-          ownership <- genOwnership
+          ownership <- genAuthorities
         } yield ColumnDescriptor(path, selector, valueType, ownership)
   
         genColumnDescriptor
@@ -202,7 +202,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1,1,64,-64,0,0,0,0,0,0,0,0,0,2)
       val expectedValue: Array[Byte] = Array(0,0,0,0,0,0,0,5)
 
-      val (key, value) = byteProjection.project(Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
+      val (key, value) = byteProjection.project(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
       key must_== expectedKey
       value must_== expectedValue
     }
@@ -215,7 +215,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,4,64,28,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2)
       val expectedValue: Array[Byte] = Array()
 
-      val (key, value) = byteProjection.project(Vector(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
+      val (key, value) = byteProjection.project(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
       key must_== expectedKey
       value must_== expectedValue
     } 
@@ -228,7 +228,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,4,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,2,64,28,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,1)
       val expectedValue: Array[Byte] = Array(64,-64,0,0,1)
 
-      val (key, value) = byteProjection.project(Vector(1L,2L,3L), Seq(cvInt, cvLong, cvFloat, cvDouble, cvBoolean))
+      val (key, value) = byteProjection.project(VectorCase(1L,2L,3L), Seq(cvInt, cvLong, cvFloat, cvDouble, cvBoolean))
       key must_== expectedKey
       value must_== expectedValue
     }
@@ -240,9 +240,9 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesLong, ById),(colDesBoolean, ByValue),(colDesFloat, ByValueThenId))
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
 
-      val (projectedIds, projectedValues) = byteProjection.project(Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
+      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
 
-      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (Vector(1L,2L), Seq(cvLong, cvBoolean, cvFloat)) 
+      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat)) 
     }
 
     "return the arguments of the project function (test2)" in {
@@ -250,9 +250,9 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesDouble, ByValue),(colDesBoolean, ByValue))
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
 
-      val (projectedIds, projectedValues) = byteProjection.project(Vector(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
+      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
 
-      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (Vector(1L,2L), Seq(cvInt, cvDouble, cvBoolean)) 
+      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean)) 
     }
 
     "return the arguments of the project function (test3)" in {
@@ -260,9 +260,9 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesFloat, ById),(colDesInt, ByValue), (colDesDouble, ById), (colDesBoolean, ByValue), (colDesDouble2, ById)) 
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
  
-      val (projectedIds, projectedValues) = byteProjection.project(Vector(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2))
+      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2))
 
-      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (Vector(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2)) 
+      byteProjection.unproject(projectedIds, projectedValues)(identityFunction) must_== (VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2)) 
     }
 
     

@@ -39,23 +39,16 @@ trait StubYggShardComponent {
   trait Storage extends YggShard {
     def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
 
-    object IdentitiesOrdering extends scala.math.Ordering[Identities] {
-      override def compare(id1: Identities, id2: Identities) = {
-        (id1 zip id2).foldLeft(0) {
-          case (0, (id1, id2)) => id1 compare id2
-          case (other, _) => other
-        }
-      }
-    }
-
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
+      val chunkSize = 2000
+
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-      def getAllPairs[X] : EnumeratorP[X, (Identities, Seq[CValue]), IO] = {
-        enumPStream[X, (Identities, Seq[CValue]), IO](data.toStream)
+      def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = {
+        enumPStream[X, Vector[(Identities, Seq[CValue])], IO](data.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
       }
 
-      def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, (Identities, Seq[CValue]), IO] = sys.error("not needed")
+      def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = sys.error("not needed")
     }
 
     val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)
@@ -77,6 +70,8 @@ trait StubYggShardComponent {
       def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
         Future(projections.keys.flatMap(pd => pd.columns.collect { case cd @ ColumnDescriptor(`path`, `selector`, _, _) => (pd, ColumnMetadata.Empty) }).toMap)
     }
+
+    def userMetadataView(uid: String) = metadata
 
     def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] =
       Future(projections(descriptor))

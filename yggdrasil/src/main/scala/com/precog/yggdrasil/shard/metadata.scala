@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package shard
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.analytics.Path
 
 import blueeyes.json._
@@ -54,14 +55,36 @@ trait StorageMetadata {
     findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
 
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
-    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
+    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
   }
 }
 
-class ShardMetadata(actor: ActorRef, messageDispatcher: MessageDispatcher) extends StorageMetadata {
-  import StorageMetadata._
+class SecureMetadata(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata { 
+  
+  def findSelectors(path: Path) = {
+    metadata.findSelectors(path) flatMap { selectors =>
+      Future.traverse(selectors) { selector =>
+        findProjections(path, selector) map { result =>
+          if(result.size > 1) List(selector) else List.empty 
+        }
+      } map { _.flatten }
+    }
+  }
 
-  implicit val dispatcher = messageDispatcher
+  def findProjections(path: Path, selector: JPath) = {
+    metadata.findProjections(path, selector) map { _.filter {
+      case (key, value) =>
+        value forall { 
+          case (colDesc, _) => 
+            val uids = colDesc.authorities.uids
+            accessControl.mayAccessData(uid, path, uids, DataQuery)
+        }
+    }}
+  }
+}
+
+class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
+  import StorageMetadata._
 
   implicit val serviceTimeout: Timeout = 10 seconds
  

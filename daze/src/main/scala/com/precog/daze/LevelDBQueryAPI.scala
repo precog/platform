@@ -1,4 +1,5 @@
-package com.precog.daze
+package com.precog
+package daze
 
 import scala.annotation.tailrec
 
@@ -32,17 +33,17 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
   def storage: YggShard
 
   trait QueryAPI extends StorageEngineQueryAPI {
-    override def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
+    override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
-        selectors   <- storage.metadata.findSelectors(path) 
-        sources     <- Future.sequence(selectors.map(s => storage.metadata.findProjections(path, s).map(p => (s, p))))
-        enumerator: EnumeratorP[X, SEvent, IO]  <- assemble(path, sources)
+        selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
+        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p))))
+        enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
       } yield enumerator
     )
 
-    override def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, None, None) 
+    override def mask[X](userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask[X](userUID, path, None, None) 
 
-    private case class LevelDBDatasetMask[X](path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
+    private case class LevelDBDatasetMask[X](userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
 
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
@@ -56,33 +57,21 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
               descriptors <- retrieval 
               enum        <- assemble[X](path, List((selector, descriptors))) 
             } yield {
-              enum map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t }
+              enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t } }
             }
           )
 
         (selector, tpe) match {
-          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
-          case (Some(s), None     ) => assembleForSelector(s, storage.metadata.findProjections(path, s))
-          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.metadata.findProjections(path, JPath.Identity))
-          case (_      , _        ) => fullProjection(path)
+          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
+          case (Some(s), None     ) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
+          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+          case (_      , _        ) => fullProjection(userUID, path)
         }
       }
     }
 
-    private implicit def identityOrder[A, B]: (((Identities, A), (Identities, B)) => Ordering) = 
-      (t1: (Identities, A), t2: (Identities, B)) => {
-        (t1._1 zip t2._1).foldLeft[Ordering](Ordering.EQ) {
-          case (Ordering.EQ, (i1, i2)) => Order[Long].order(i1, i2)
-          case (ord, _) => ord
-        }
-      }
-
-    private implicit object SColumnIdentityOrder extends Order[SColumn] {
-      def order(c1: SColumn, c2: SColumn) = identityOrder(c1, c2)
-    }
-
-    def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, SEvent, IO]] = {
-      def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, SColumn, IO]] = {
+    def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
+      def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
@@ -110,22 +99,24 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // encountering the middle case is an error since no single identity should ever correspond to 
       // two values of different types, so the resulting merged set should not contain any duplicate identities.
       val mergedFutures = descriptors map {
-        case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, (Identities, CValue), IO]) => (selector, e))
+        case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, Vector[(Identities, CValue)], IO]) => (selector, e))
       }
+
+      implicit val SEventOrder = SEventIdentityOrder
 
       Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
     }
 
-    def combine[X](enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
-      def combine(enumerators: List[(JPath, EnumeratorP[X, SColumn, IO])]): EnumeratorP[X, SEvent, IO] = {
+    def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit o: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
+      def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
-            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map {
+            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
               case Right3((id, cv)) => (id, SValue(selector, cv))
-            }
-          case Nil => EnumeratorP.empty[X, SEvent, IO]
+            } }
+          case Nil => EnumeratorP.empty[X, Vector[SEvent], IO]
         }
       }
 

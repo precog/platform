@@ -8,7 +8,7 @@ scalaVersion := "2.9.1"
 
 resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
+scalacOptions ++= Seq("-deprecation", "-g:none")
 
 libraryDependencies ++= Seq(
   "org.specs2" %% "specs2" % "1.8" % "test",

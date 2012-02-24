@@ -27,4 +27,4 @@ ivyXML :=
     </dependency>
   </dependencies>
 
-mainClass := Some("com.precog.shard.KafkaShardServer")
+mainClass := Some("com.precog.shard.kafka.KafkaShardWebapp")

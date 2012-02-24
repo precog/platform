@@ -34,6 +34,8 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   def sampleSize = 20
 
+  val testUID = "testUID"
+
   type YggConfig = LevelDBQueryConfig
   object yggConfig extends LevelDBQueryConfig {
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
@@ -46,28 +48,41 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
   "combine" should {
     "restore objects from their component parts" in {
       val projectionData = storage.projections map { 
-        case (pd, p) => ((pd.columns(0).selector, p.getAllPairs[Unit] map { case (ids, vs) =>  (ids, vs(0)) })) 
+        case (pd, p) => ((pd.columns(0).selector, p.getAllPairs[Unit] map { _ map { case (ids, vs) =>  (ids, vs(0)) } })) 
       } toList
 
-      val enum = query.combine(projectionData) map { case (ids, sv) => sv }
+      import scalaz.{Order,Ordering}
+      implicit def identityOrder[A, B]: (((Identities, A), (Identities, B)) => Ordering) = 
+        (t1: (Identities, A), t2: (Identities, B)) => {
+          (t1._1 zip t2._1).foldLeft[Ordering](Ordering.EQ) {
+            case (Ordering.EQ, (i1, i2)) => Order[Long].order(i1, i2)
+            case (ord, _) => ord
+          }
+        }
+
+      implicit object SEventIdentityOrder extends Order[SEvent] {
+        def order(s1: SEvent, s2: SEvent) = identityOrder(s1, s2)
+      }
+        
+      val enum = query.combine(projectionData) map { _ map { case (ids, sv) => sv } }
       
-      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      (consume[Unit, Vector[SValue], IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(query.fullProjection[Unit](dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.fullProjection[Unit](testUID, dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
       
-      (consume[Unit, SValue, IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      (consume[Unit, Vector[SValue], IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
-      val enum = Await.result(query.mask[Unit](dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
-      val enumv = enum map { case (ids, sv) => sv }
-      (consume[Unit, SValue, IO, List] &= enumv[IO]).run(_ => sys.error("...")).unsafePerformIO must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
+      val enum = Await.result(query.mask[Unit](testUID, dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
+      val enumv = enum map { _ map { case (ids, sv) => sv } }
+      (consume[Unit, Vector[SValue], IO, List] &= enumv[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
 }

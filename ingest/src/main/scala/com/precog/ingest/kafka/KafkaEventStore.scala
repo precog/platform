@@ -3,6 +3,7 @@ package ingest
 package kafka
 
 import common._
+import common.util._
 import ingest.util._
 
 import scala.annotation.tailrec
@@ -20,6 +21,7 @@ import org.I0Itec.zkclient
 import _root_.kafka.api._
 import _root_.kafka.consumer._
 import _root_.kafka.producer._
+import _root_.kafka.message._
 
 import scalaz._
 import Scalaz._
@@ -124,33 +126,27 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
 
 }
 
-class KafkaEventRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, localConfig: Properties, centralTopic: String, centralConfig: Properties)(implicit dispatcher: MessageDispatcher) extends Logging {
-
-  lazy private val eventCodec = new KafkaEventCodec
-
-  lazy private val producer = new Producer[String, EventMessage](new ProducerConfig(centralConfig))
+class KafkaMessageConsumer(host: String, port: Int, topic: String)(processor: List[MessageAndOffset] => Unit)(implicit dispatcher: MessageDispatcher) extends Logging {
 
   lazy private val consumer = {
-    new SimpleConsumer("localhost", 9082, 5000, 64 * 1024)
+    new SimpleConsumer(host, port, 5000, 64 * 1024)
   }
 
-  private val bufferSize: Int = 1024 * 1024
+  val bufferSize = 1024 * 1024
 
-  def start() = Future[Unit] {
-   
-    val relayThread = new Thread() {
-      
+  def start(nextOffset: => Long) = Future[Unit] {
+    val consumerThread = new Thread() {
       val retryDelay = 5000
 
       override def run() {
         while(true) {
-          val startingOffset = eventIdSeq.getLastOffset
-          logger.debug("Kafka relay agent starting from offset: " + startingOffset)
+          val offset = nextOffset
+          logger.debug("Kafka consumer starting from offset: " + offset)
           try {
-            ingestBatch(startingOffset, 0, 0, 0)
+            ingestBatch(offset, 0, 0, 0)
           } catch {
             case ex => 
-              logger.error("Error during ingest.", ex)
+              logger.error("Error in kafka consumer.", ex)
           }
           Thread.sleep(retryDelay)
         }
@@ -158,24 +154,23 @@ class KafkaEventRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, loca
 
       @tailrec
       def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
-        if(batch % 100 == 0) logger.debug("Processing batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-        val fetchRequest = new FetchRequest(localTopic, 0, offset, bufferSize)
+        if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
+        val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
 
         val messages = consumer.fetch(fetchRequest)
 
         // A future optimizatin would be to move this to another thread (or maybe actors)
-        val outgoing = messages map { msg => 
-          val (producerId, sequenceId) = eventIdSeq.next(msg.offset)
-          EventMessage(producerId, sequenceId, eventCodec.toEvent(msg.message)) 
-        } toList
-        val data = new ProducerData[String, EventMessage](centralTopic, outgoing)
-        producer.send(data)
+        val outgoing = messages.toList
+
+        if(outgoing.size > 0) {
+          processor(outgoing)
+        }
 
         val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
 
         val (newOffset, newWaitCount) = if(messages.size > 0) {
           val o: Long = messages.last.offset
-          logger.debug("Kafka relay agent batch size: %d offset: %d)".format(messages.size, o))
+          logger.debug("Kafka consumer batch size: %d offset: %d)".format(messages.size, o))
           (o, 0L)
         } else {
           (offset, waitCount + 1)
@@ -183,20 +178,14 @@ class KafkaEventRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, loca
         
         Thread.sleep(newDelay)
         
-        if(newOffset != offset) {
-          eventIdSeq.saveState(newOffset)
-        }
-
         ingestBatch(newOffset, batch + 1, newDelay, newWaitCount)
       }
     }
-    relayThread.start
+    consumerThread.start()
   }
-
-  def stop() = Future { consumer.close } map 
-                      { _ => producer.close } flatMap 
-                      { _ => eventIdSeq.close }
-
+  
+  def stop() = Future { consumer.close }
+  
   val maxDelay = 100.0
   val waitCountFactor = 25
 
@@ -207,5 +196,31 @@ class KafkaEventRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, loca
     } else {
       (maxDelay * (1.0 - messageBytes.toDouble / bufferSize)).toLong
     }
+  }
+}
+
+class KafkaRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, localConfig: Properties, centralTopic: String, centralConfig: Properties)(implicit dispatcher: MessageDispatcher) extends Logging {
+
+  lazy private val eventCodec = new KafkaEventCodec
+  lazy private val producer = new Producer[String, EventMessage](new ProducerConfig(centralConfig))
+
+  lazy private val consumer = {
+    new KafkaMessageConsumer("localhost", 9082, localTopic)(relayMessages _)
+  }
+
+  def start() = consumer.start(eventIdSeq.getLastOffset)
+
+  def stop() = consumer.stop().map
+               { _ => producer.close } flatMap 
+               { _ => eventIdSeq.close }
+
+  def relayMessages(messages: List[MessageAndOffset]) {
+    val outgoing = messages.map { msg =>
+      val (producerId, sequenceId) = eventIdSeq.next(msg.offset)
+      EventMessage(producerId, sequenceId, eventCodec.toEvent(msg.message))
+    }
+    val data = new ProducerData[String, EventMessage](centralTopic, outgoing)
+    producer.send(data)
+    eventIdSeq.saveState(messages.last.offset)
   }
 }

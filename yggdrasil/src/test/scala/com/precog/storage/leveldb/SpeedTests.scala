@@ -1,6 +1,7 @@
 package com.precog.storage
 package leveldb
 
+import com.precog.common.VectorCase
 import com.precog.util.Bijection
 import com.precog.yggdrasil.leveldb.LevelDBProjection
 
@@ -47,7 +48,7 @@ object SpeedTests {
       }
 
       time("writes") {
-        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(Vector(id), sys.error("todo") /*value.as[Array[Byte]].as[ByteBuffer]*/)) } unsafePerformIO
+        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(VectorCase(id), sys.error("todo") /*value.as[Array[Byte]].as[ByteBuffer]*/)) } unsafePerformIO
       }
     }
 

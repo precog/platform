@@ -39,12 +39,12 @@ services {
         }
         central {
           topic = "central_event_store"
-          zookeeperHosts = "127.0.0.1:2181"
+          zookeeperHosts = "devqclus03.reportgrid.com:2181"
         }
       }
 
       indexdb {
-        database = "analytics1"
+        database = "v2-tokens"
         servers = ["devmongo01.reportgrid.com:27017"]
       }
 
