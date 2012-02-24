@@ -21,9 +21,11 @@ package com.precog
 
 import scalaz.{Order,Ordering}
 
+import com.precog.common.VectorCase
+
 package object yggdrasil {
   type Identity = Long
-  type Identities = IndexedSeq[Identity]
+  type Identities = VectorCase[Identity]
   type SEvent = (Identities, SValue)
   type SColumn = (Identities, CValue)
 

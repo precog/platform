@@ -44,6 +44,8 @@ import scalaz.std.AllInstances._
 import Iteratee._
 import MonadPartialOrder._
 
+import com.precog.common.VectorCase
+
 class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
   type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
@@ -64,7 +66,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
-      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3"))), Vector(SEvent(Vector(), SString("1")))))
+      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
       val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, intToDurationInt(30).seconds)
 
       (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO])

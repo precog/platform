@@ -20,6 +20,7 @@
 package com.precog.storage
 package leveldb
 
+import com.precog.common.VectorCase
 import com.precog.util.Bijection
 import com.precog.yggdrasil.leveldb.LevelDBProjection
 
@@ -76,7 +77,7 @@ object ContinuousSpeedTest {
           override def run {
             while (true) {
               queue.take match {
-                case Insert(id, v) => column.insert(Vector(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/);
+                case Insert(id, v) => column.insert(VectorCase(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/);
                 case Flush => barrier.await()
               }
             }

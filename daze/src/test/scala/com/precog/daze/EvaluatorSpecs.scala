@@ -32,6 +32,7 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
+import com.precog.common.VectorCase
 import com.precog.util.Identity
 
 trait TestConfigComponent {
@@ -79,7 +80,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (Vector(), SDecimal(d)) => d.toInt
+        case (VectorCase(), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42)
@@ -94,7 +95,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SString(str)) => str
+          case (VectorCase(), SString(str)) => str
         }
         
         result2 must contain("daniel")
@@ -108,7 +109,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42)
@@ -122,7 +123,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SBoolean(b)) => b
+          case (VectorCase(), SBoolean(b)) => b
         }
         
         result2 must contain(true)
@@ -136,7 +137,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SBoolean(b)) => b
+          case (VectorCase(), SBoolean(b)) => b
         }
         
         result2 must contain(false)
@@ -150,7 +151,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SObject(obj)) => obj
+          case (VectorCase(), SObject(obj)) => obj
         }
         
         result2 must contain(Map())
@@ -164,7 +165,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SArray(arr)) => arr
+          case (VectorCase(), SArray(arr)) => arr
         }
         
         result2 must contain(Vector())
@@ -179,7 +180,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -196,7 +197,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(-42, -12, -77, -1, -13)
@@ -213,7 +214,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -232,7 +233,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(47, 17, 82, 6, 18)
@@ -250,7 +251,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(37, 7, 72, -4, 8)
@@ -268,7 +269,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(210, 60, 385, 5, 65)
@@ -286,7 +287,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toDouble
+          case (VectorCase(_), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
@@ -306,7 +307,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(47, 17, 82, 6, 18)
@@ -324,7 +325,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(37, 7, 72, -4, 8)
@@ -342,7 +343,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(210, 60, 385, 5, 65)
@@ -360,7 +361,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(5)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toDouble
+          case (VectorCase(_), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
@@ -379,7 +380,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(1)
       
       val optObj = result find {
-        case (Vector(), SObject(_)) => true
+        case (VectorCase(), SObject(_)) => true
         case _ => false
       } collect {
         case (_, SObject(obj)) => obj
@@ -405,7 +406,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(1)
       
       val optArr = result find {
-        case (Vector(), SArray(_)) => true
+        case (VectorCase(), SArray(_)) => true
         case _ => false
       } collect {
         case (_, SArray(arr)) => arr
@@ -436,7 +437,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(1)
       
       val optObj = result find {
-        case (Vector(), SObject(_)) => true
+        case (VectorCase(), SObject(_)) => true
         case _ => false
       } collect {
         case (_, SObject(obj)) => obj
@@ -470,7 +471,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(1)
       
       val optArr = result find {
-        case (Vector(), SArray(_)) => true
+        case (VectorCase(), SArray(_)) => true
         case _ => false
       } collect {
         case (_, SArray(arr)) => arr
@@ -507,7 +508,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val optArr = result find {
-          case (Vector(), SArray(_)) => true
+          case (VectorCase(), SArray(_)) => true
           case _ => false
         } collect {
           case (_, SArray(arr)) => arr
@@ -544,7 +545,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val optArr = result find {
-          case (Vector(), SArray(_)) => true
+          case (VectorCase(), SArray(_)) => true
           case _ => false
         } collect {
           case (_, SArray(arr)) => arr
@@ -575,7 +576,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -593,7 +594,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -611,9 +612,9 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
-        case (Vector(_), SString(str)) => str
-        case (Vector(_), SBoolean(b)) => b
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SString(str)) => str
+        case (VectorCase(_), SBoolean(b)) => b
       }
       
       result2 must contain(42, true, "daniel", 1, 13)
@@ -631,7 +632,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -649,7 +650,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
@@ -667,9 +668,9 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
-        case (Vector(_), SString(str)) => str
-        case (Vector(_), SBoolean(b)) => b
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SString(str)) => str
+        case (VectorCase(_), SBoolean(b)) => b
       }
       
       result2 must contain(42, true, "daniel", 1, 13)
@@ -691,7 +692,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(5)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(36, 12, 115, -165)
@@ -713,7 +714,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toDouble
+        case (VectorCase(_), SDecimal(d)) => d.toDouble
       }
       
       result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
@@ -731,7 +732,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(8)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toDouble
+        case (VectorCase(_), SDecimal(d)) => d.toDouble
       }
       
       result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
@@ -749,7 +750,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(2)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toDouble
+        case (VectorCase(_), SDecimal(d)) => d.toDouble
       }
       
       result2 must contain(42, 77)
@@ -772,7 +773,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1, 12)
@@ -792,7 +793,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(3)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(12, 1, 13)
@@ -812,7 +813,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 77)
@@ -832,7 +833,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(3)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 77, 13)
@@ -852,7 +853,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -872,7 +873,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(4)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 12, 77, 1)
@@ -896,7 +897,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(3)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 12, 1)
@@ -920,7 +921,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77, 13)
@@ -941,7 +942,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(4)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 12, 77, 1)
@@ -963,7 +964,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1, 12)
@@ -983,7 +984,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(3)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(12, 1, 13)
@@ -1003,7 +1004,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 77)
@@ -1023,7 +1024,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(3)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(42, 77, 13)
@@ -1043,7 +1044,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -1063,11 +1064,11 @@ class EvaluatorSpecs extends Specification
         result must haveSize(9)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
-          case (Vector(_), SBoolean(b)) => b
-          case (Vector(_), SString(str)) => str
-          case (Vector(_), SObject(obj)) => obj
-          case (Vector(_), SArray(arr)) => arr
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SBoolean(b)) => b
+          case (VectorCase(_), SString(str)) => str
+          case (VectorCase(_), SObject(obj)) => obj
+          case (VectorCase(_), SArray(arr)) => arr
         }
         
         result2 must contain(42, 12, 77, 1, true, false, "daniel",
@@ -1092,11 +1093,11 @@ class EvaluatorSpecs extends Specification
         result must haveSize(8)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
-          case (Vector(_), SBoolean(b)) => b
-          case (Vector(_), SString(str)) => str
-          case (Vector(_), SObject(obj)) => obj
-          case (Vector(_), SArray(arr)) => arr
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SBoolean(b)) => b
+          case (VectorCase(_), SString(str)) => str
+          case (VectorCase(_), SObject(obj)) => obj
+          case (VectorCase(_), SArray(arr)) => arr
         }
         
         result2 must contain(42, 12, 1, true, false, "daniel",
@@ -1121,7 +1122,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(2)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77, 13)
@@ -1142,11 +1143,11 @@ class EvaluatorSpecs extends Specification
         result must haveSize(9)
         
         val result2 = result collect {
-          case (Vector(_), SDecimal(d)) => d.toInt
-          case (Vector(_), SBoolean(b)) => b
-          case (Vector(_), SString(str)) => str
-          case (Vector(_), SObject(obj)) => obj
-          case (Vector(_), SArray(arr)) => arr
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case (VectorCase(_), SBoolean(b)) => b
+          case (VectorCase(_), SString(str)) => str
+          case (VectorCase(_), SObject(obj)) => obj
+          case (VectorCase(_), SArray(arr)) => arr
         }
         
         result2 must contain(42, 12, 77, 1, true, false, "daniel",
@@ -1168,7 +1169,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(25)
       
       val result2 = result collect {
-        case (Vector(_, _), SDecimal(d)) => d.toInt
+        case (VectorCase(_, _), SDecimal(d)) => d.toInt
       }
       
       result2 must haveSize(23)
@@ -1191,7 +1192,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(25)
       
       val result2 = result collect {
-        case (Vector(_, _), SDecimal(d)) => d.toInt
+        case (VectorCase(_, _), SDecimal(d)) => d.toInt
       }
       
       result2 must haveSize(20)
@@ -1226,7 +1227,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(4)
       
       val result2 = result collect {
-        case (Vector(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
       
       result2 must contain(55, 13, 119, 25)
@@ -1268,7 +1269,7 @@ class EvaluatorSpecs extends Specification
       result must haveSize(9)
       
       result foreach {
-        case (Vector(_), SObject(obj)) => {
+        case (VectorCase(_), SObject(obj)) => {
           obj must haveKey("user")
           obj must haveKey("num")
           
@@ -1330,7 +1331,7 @@ class EvaluatorSpecs extends Specification
       
       result must haveSize(1)
       result.toList.head must beLike {
-        case (Vector(_), SObject(obj)) => {
+        case (VectorCase(_), SObject(obj)) => {
           obj must haveKey("user")
           obj("user") must beLike { case SString("daniel") => ok }
           
@@ -1352,7 +1353,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(5)
@@ -1369,7 +1370,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(29)
@@ -1386,7 +1387,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -1403,7 +1404,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1420,7 +1421,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77)
@@ -1437,7 +1438,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1454,7 +1455,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toDouble
+          case (VectorCase(), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(27.575351312358652)
@@ -1471,7 +1472,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(145)
@@ -1490,7 +1491,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(10)
@@ -1507,7 +1508,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(29)
@@ -1524,7 +1525,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(13)
@@ -1541,7 +1542,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1558,7 +1559,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(77)
@@ -1575,7 +1576,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(1)
@@ -1592,7 +1593,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toDouble
+          case (VectorCase(), SDecimal(d)) => d.toDouble
         }
         
         result2 must contain(27.575351312358652)
@@ -1609,7 +1610,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (Vector(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d.toInt
         }
         
         result2 must contain(145)
@@ -1628,7 +1629,7 @@ class EvaluatorSpecs extends Specification
         val numbers = {
           val base = eval[Unit]("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
           base.zipWithIndex map {
-            case ((_, sv), id) => (Vector(id): Identities, sv)
+            case ((_, sv), id) => (VectorCase(id): Identities, sv)
           }
         }
         val max = 5
@@ -1641,17 +1642,17 @@ class EvaluatorSpecs extends Specification
         val sorted2 = sortByIdentities(enum, Vector(1), Identity.nextInt(), ctx)
         val sorted3 = sortByIdentities(enum, Vector(1, 0), Identity.nextInt(), ctx)
 
-        consumeToList(sorted) mustEqual List((Vector(0, 5), SDecimal(42)),
-           (Vector(1, 4), SDecimal(12)), (Vector(2, 3), SDecimal(77)),
-           (Vector(3, 2), SDecimal(1)), (Vector(4, 1), SDecimal(13)))
+        consumeToList(sorted) mustEqual List((VectorCase(0, 5), SDecimal(42)),
+           (VectorCase(1, 4), SDecimal(12)), (VectorCase(2, 3), SDecimal(77)),
+           (VectorCase(3, 2), SDecimal(1)), (VectorCase(4, 1), SDecimal(13)))
 
-        consumeToList(sorted2) mustEqual List((Vector(1, 4), SDecimal(13)),
-           (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
-           (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
+        consumeToList(sorted2) mustEqual List((VectorCase(1, 4), SDecimal(13)),
+           (VectorCase(2, 3), SDecimal(1)), (VectorCase(3, 2), SDecimal(77)),
+           (VectorCase(4, 1), SDecimal(12)), (VectorCase(5, 0), SDecimal(42)))
 
-        consumeToList(sorted3) mustEqual List((Vector(1, 4), SDecimal(13)),
-           (Vector(2, 3), SDecimal(1)), (Vector(3, 2), SDecimal(77)),
-           (Vector(4, 1), SDecimal(12)), (Vector(5, 0), SDecimal(42)))
+        consumeToList(sorted3) mustEqual List((VectorCase(1, 4), SDecimal(13)),
+           (VectorCase(2, 3), SDecimal(1)), (VectorCase(3, 2), SDecimal(77)),
+           (VectorCase(4, 1), SDecimal(12)), (VectorCase(5, 0), SDecimal(42)))
       }
     }
   }
