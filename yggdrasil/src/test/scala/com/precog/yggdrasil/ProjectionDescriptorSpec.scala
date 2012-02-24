@@ -18,9 +18,9 @@ import scalaz._
 class ProjectionDescriptorSpec extends Specification {
 
   val descriptors = List(
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), SStringArbitrary, Ownership(Set())),
-    ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), SStringArbitrary, Ownership(Set())),
-    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong, Ownership(Set()))
+    ColumnDescriptor(Path("/abc"), JPath(".foo.bar"), SStringArbitrary, Authorities(Set())),
+    ColumnDescriptor(Path("/abc"), JPath(".foo.bar.baz"), SStringArbitrary, Authorities(Set())),
+    ColumnDescriptor(Path("/def"), JPath(".bar.baz"), SLong, Authorities(Set()))
   )
 
   val indexes = List(0, 0, 1)

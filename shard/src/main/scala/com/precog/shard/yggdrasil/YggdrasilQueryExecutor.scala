@@ -4,7 +4,7 @@ package yggdrasil
 
 import blueeyes.json.JsonAST._
 
-import common.Config
+import common._
 import daze._
 
 import quirrel.Compiler
@@ -125,12 +125,12 @@ trait YggdrasilQueryExecutor
   def startup() = storage.start flatMap { _ => storage.startKafka }
   def shutdown() = storage.stopKafka flatMap { _ => storage.stop } map { _ => actorSystem.shutdown } 
 
-  def execute(query: String) = {
+  def execute(userUID: String, query: String) = {
     try {
       asBytecode(query) match {
         case Right(bytecode) => 
           decorate(bytecode) match {
-            case Right(dag)  => JString(evaluateDag(dag))
+            case Right(dag)  => JString(evaluateDag(userUID, dag))
             case Left(error) => JString("Error processing dag: %s".format(error.toString))
           }
         
@@ -142,8 +142,8 @@ trait YggdrasilQueryExecutor
     }
   }
 
-  private def evaluateDag(dag: DepGraph) = {
-    consumeEval(dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+  private def evaluateDag(userUID: String, dag: DepGraph) = {
+    consumeEval(userUID, dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
   }
 
   private def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {

@@ -32,9 +32,9 @@ object StubOperationsAPI {
 trait DatasetConsumers extends Evaluator {
   def maxEvalDuration: akka.util.Duration
 
-  def consumeEval(graph: DepGraph): Set[SEvent] = {
+  def consumeEval(userUID: String, graph: DepGraph): Set[SEvent] = {
     val results = Await.result(
-      eval(graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
+      eval(userUID, graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
         try {
           Right(((consume[Unit, Vector[SEvent], IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
         } catch {
@@ -68,13 +68,13 @@ trait StubOperationsAPI
 
     def chunkSize: Int
     
-    private case class StubDatasetMask[X](path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
+    private case class StubDatasetMask[X](userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[X] = this
       
       def realize(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
-        fullProjection[X](path) collect unlift(mask)
+        fullProjection[X](userUID, path) collect unlift(mask)
       }
       
       private def mask(sev: SEvent): Option[SEvent] = {
@@ -97,10 +97,10 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
+    def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
       DatasetEnum(akka.dispatch.Promise.successful(readJSON[X](path)))
     
-    def mask[X](path: Path): DatasetMask[X] = StubDatasetMask(path, Vector())
+    def mask[X](userUID: String, path: Path): DatasetMask[X] = StubDatasetMask(userUID, path, Vector())
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))

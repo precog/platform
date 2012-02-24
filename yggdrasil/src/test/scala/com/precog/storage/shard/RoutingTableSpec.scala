@@ -29,7 +29,7 @@ class RoutingTableSpec extends Specification {
     "project an event with one property to a single projection action" in {
       val rt = SingleColumnProjectionRoutingTable 
 
-      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set()))
+      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Authorities(Set()))
 
       val event = EventData(0, Set(ColumnData(colDesc, CString("Test"), Set.empty)))
 
@@ -44,8 +44,8 @@ class RoutingTableSpec extends Specification {
     "project an event with n properties to n projection actions" in {
       val rt = SingleColumnProjectionRoutingTable 
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Ownership(Set()))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Ownership(Set()))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Authorities(Set()))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Authorities(Set()))
 
       val event = EventData(0, Set(ColumnData(colDesc1, CString("Test"), Set.empty),
                                    ColumnData(colDesc2, CInt(1), Set.empty)))

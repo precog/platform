@@ -33,17 +33,17 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
   def storage: YggShard
 
   trait QueryAPI extends StorageEngineQueryAPI {
-    override def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
+    override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
-        selectors   <- storage.metadata.findSelectors(path) 
-        sources     <- Future.sequence(selectors.map(s => storage.metadata.findProjections(path, s).map(p => (s, p))))
+        selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
+        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p))))
         enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
       } yield enumerator
     )
 
-    override def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, None, None) 
+    override def mask[X](userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask[X](userUID, path, None, None) 
 
-    private case class LevelDBDatasetMask[X](path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
+    private case class LevelDBDatasetMask[X](userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
 
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
@@ -62,10 +62,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           )
 
         (selector, tpe) match {
-          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
-          case (Some(s), None     ) => assembleForSelector(s, storage.metadata.findProjections(path, s))
-          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.metadata.findProjections(path, JPath.Identity))
-          case (_      , _        ) => fullProjection(path)
+          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
+          case (Some(s), None     ) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
+          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+          case (_      , _        ) => fullProjection(userUID, path)
         }
       }
     }
