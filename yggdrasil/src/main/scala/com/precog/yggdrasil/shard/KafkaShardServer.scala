@@ -55,6 +55,7 @@ object KafkaShardServer extends Logging {
             val yggState = state 
             val yggConfig = cfg 
             val kafkaIngestConfig = cfg
+            val yggCheckpoints = new TestYggCheckpoints
           }
 
         case Failure(e) => 
@@ -84,11 +85,12 @@ object KafkaShardServer extends Logging {
 trait KafkaIngester extends Logging {
   def kafkaIngestConfig: KafkaIngestConfig
   def routingActor: ActorRef
+  def yggCheckpoints: YggCheckpoints
 
   implicit def executionContext: akka.dispatch.ExecutionContext
   implicit def dispatcher: akka.dispatch.MessageDispatcher
 
-  lazy val consumer = new NewKafkaIngest(new TestYggCheckpoints, kafkaIngestConfig, routingActor)
+  lazy val consumer = new NewKafkaIngest(yggCheckpoints, kafkaIngestConfig, routingActor)
 
   def startKafka = 
     if(kafkaIngestConfig.kafkaEnabled) { 

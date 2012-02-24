@@ -38,6 +38,9 @@ import _root_.kafka.message._
 
 import org.streum.configrity.JProperties
 
+import scalaz._
+import Scalaz._
+
 trait KafkaIngestConfig extends Config {
   def kafkaEnabled = config("precog.kafka.enabled", false) 
   def kafkaEventTopic = config[String]("precog.kafka.topic.events")
@@ -80,8 +83,12 @@ class NewKafkaIngest(checkpoints: YggCheckpoints, config: KafkaIngestConfig, rou
   def stop() = consumer.stop()
 
   def ingestMessages(messages: List[MessageAndOffset]) {
-    messages.foreach { msg =>
-      router ! IngestMessageSerialization.read(msg.message.payload)
+    if(!messages.isEmpty) {
+      messages.foreach { msg =>
+        router ! IngestMessageSerialization.read(msg.message.payload)
+      }
+      val newOffset = messages.last.offset
+      checkpoints.messagesConsumed(YggCheckpoint(newOffset, VectorClock.empty)) 
     }
   }
 }
@@ -108,7 +115,7 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   // - metadata must NEVER be ahead of leveldb state
   // - zookeeper state must NEVER be ahead of metadata
 
-  private var lastCheckpoint = YggCheckpoint(19875835201L, VectorClock.empty)
+  private var lastCheckpoint = YggCheckpoint(0L, VectorClock.empty)
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
@@ -116,7 +123,7 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   }
 
   def metadataPersisted(messageClock: VectorClock) {
-    val (before: Vector[YggCheckpoint], after: Vector[YggCheckpoint]) = pendingCheckpoints.span { 
+    val (before, after) = pendingCheckpoints.span { 
       _.messageClock.lessThanOrEqual(messageClock) 
     }
 
@@ -135,18 +142,26 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   } 
 }
 
-class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) {
+class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) extends YggCheckpoints {
   
-  private var lastCheckpoint = coordination.loadYggCheckpoint(shard)
+  private var lastCheckpoint = coordination.loadYggCheckpoint(shard) match {
+    case Success(checkpoint) => checkpoint
+    case Failure(e)          => sys.error("Error loading shard checkpoint from zookeeper")
+  }
   
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
     pendingCheckpoints = pendingCheckpoints :+ checkpoint 
+    // this is just a hack until I finish the true sync issues
+    // the intention here is prevent the load test env from
+    // not starting at a 0 offset every time it is clear that
+    // this may result in data loss
+    saveRecoveryPoint(checkpoint)
   }
 
   def metadataPersisted(messageClock: VectorClock) {
-    val (before: Vector[YggCheckpoint], after: Vector[YggCheckpoint]) = pendingCheckpoints.span { 
+    val (before, after) = pendingCheckpoints.span { 
       _.messageClock.lessThanOrEqual(messageClock) 
     }
 
