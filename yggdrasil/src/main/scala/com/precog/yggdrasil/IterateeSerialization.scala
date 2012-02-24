@@ -18,7 +18,7 @@
  *
  */
 package com.precog
-package daze
+package yggdrasil
 
 import java.io._
 import java.util.zip._

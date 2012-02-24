@@ -59,32 +59,27 @@ class PlatformSpecs extends Specification
     with LevelDBQueryComponent 
     with DiskMemoizationComponent {
 
-  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
-    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig 
 
-    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
-      val config = Configuration.parse(rawConfig)  
-      val flatMapTimeout = controlTimeout
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      val sortWorkDir = scratchDir
-      val sortSerialization = SimpleProjectionSerialization
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-      val memoizationSerialization = SimpleProjectionSerialization
+  object yggConfig extends YggConfig {
+    lazy val config = Configuration parse {
+      Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
+
+    lazy val flatMapTimeout = controlTimeout
+    lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    lazy val sortWorkDir = scratchDir
+    lazy val chunkSerialization = SimpleProjectionSerialization
+    lazy val memoizationBufferSize = sortBufferSize
+    lazy val memoizationWorkDir = scratchDir
+    lazy val maxEvalDuration = controlTimeout
   }
-  
-  val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
-  
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
-  lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
-  
-  val maxEvalDuration = controlTimeout
-  
-  val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
+
+  lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
   object storage extends ActorYggShard {
-    val yggState = shardState 
+    lazy val yggState = shardState 
   }
   
   object ops extends Ops 

@@ -25,6 +25,7 @@ import akka.util.Duration
 
 import com.precog.yggdrasil.SValue
 import com.precog.yggdrasil.BaseConfig
+import com.precog.yggdrasil.SimpleProjectionSerialization
 import com.precog.yggdrasil.shard.YggState
 import com.precog.yggdrasil.shard.ActorYggShard
 
@@ -217,23 +218,26 @@ trait REPL extends LineErrors
 }
 
 object Console extends App {
-  // Configuration required for blueyes IngestServer
   val controlTimeout = Duration(120, "seconds")
+  class REPLConfig(dataDir: Option[String]) extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig {
+    val config = Configuration.parse {
+      dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+    }
+
+    val flatMapTimeout = controlTimeout
+    val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    val sortWorkDir = scratchDir
+    val chunkSerialization = SimpleProjectionSerialization
+    val memoizationBufferSize = sortBufferSize
+    val memoizationWorkDir = scratchDir
+    val maxEvalDuration = controlTimeout
+  }
+
+  // Configuration required for blueyes IngestServer
   Configgy.configureFromResource("default_ingest.conf")
 
-  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
-    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
-
-    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
-      val config = Configuration.parse(rawConfig)  
-      val flatMapTimeout = controlTimeout
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      val sortWorkDir = scratchDir
-      val sortSerialization = SimpleProjectionSerialization
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-      val memoizationSerialization = SimpleProjectionSerialization
-    }
+  def loadConfig(dataDir: Option[String]): IO[REPLConfig] = IO {
+    new REPLConfig(dataDir)
   }
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
@@ -248,10 +252,8 @@ object Console extends App {
           with DiskMemoizationComponent
           with Lifecycle { self =>
 
-        type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
+        type YggConfig = REPLConfig
         val yggConfig = yconfig
-
-        val maxEvalDuration = controlTimeout
 
         object storage extends ActorYggShard {
           val yggState = shardState 

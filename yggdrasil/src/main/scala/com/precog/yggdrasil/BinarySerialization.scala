@@ -17,9 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package leveldb
+package com.precog
+package yggdrasil
 
+import leveldb._
 import com.precog.analytics.Path
 
 import com.precog.util.Bijection._
@@ -34,110 +35,170 @@ import blueeyes.json.JPath._
 import scala.actors.remote._
 
 import java.io._
+import scalaz.effect._
+import scalaz.syntax.monad._
 
-class BinarySerialization {
-  def writeHeader(data: DataOutputStream, col: Set[(JPath, ColumnType)]): Unit = {
-    col collect {
+trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
+  case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
+  final val HeaderFlag = 0
+  final val EventFlag = 1
+
+  def chunkSize: Int
+
+  def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
+    out.writeInt(ev.size)
+    ev.foldLeft((Option.empty[Header], IO(()))) {
+      case ((oldHeader, io), (ids, sv)) => 
+        val newHeader = Header(ids.size, sv.structure)
+        val nextIO = if (oldHeader.forall(_ == newHeader)) {
+          io >> writeEvent(out, (ids, sv))
+        } else {
+          io >> writeHeader(out, newHeader) >> writeEvent(out, (ids, sv))
+        }
+
+        (Option(newHeader), nextIO)
+    }
+  }
+    
+  def readElement(in: DataInputStream): IO[Option[Vector[SEvent]]] = {
+    def loop(in: DataInputStream, acc: Vector[SEvent], i: Int, header: Option[Header]): IO[Option[Vector[SEvent]]] = { 
+      in.readInt() match {
+        case HeaderFlag =>
+          for {
+            newHeader <- readHeader(in)
+            result    <- loop(in, acc, i, Some(newHeader))
+          } yield result
+
+        case EventFlag => header match {
+          case None    => IO(None)
+          case Some(h) => 
+            for {
+              nextElement <- readEvent(in, h.idCount, h.structure)
+              result      <- loop(in, acc :+ nextElement, i - 1, header)
+            } yield result
+        }
+      }
+    }
+
+    for {
+      length <- IO { in.readInt() }
+      result <- loop(in, Vector.empty[SEvent], length, None)
+    } yield result
+  }
+
+  def writeHeader(data: DataOutputStream, header: Header): IO[Unit] = IO {
+    data.writeInt(HeaderFlag)
+    data.writeInt(header.idCount)
+    data.writeInt(header.structure.size)
+    header.structure map {
       case (sel, valType) => {       
-        val selectorString = sel.toString 
-        val valueTypeString = nameOf(valType)
-        
-        data.writeUTF(selectorString)
-        data.writeUTF(valueTypeString)
+        data.writeUTF(sel.toString)
+        data.writeUTF(nameOf(valType))
       }
     }
   }
 
-  implicit def stringToColumnType(str: String): ColumnType = str match {  
-    case "String" => SStringArbitrary
-    case "Boolean" => SBoolean
-    case "Int" => SInt
-    case "Long" => SLong
-    case "Float" => SFloat
-    case "Double" => SDouble
-    case "Decimal" => SDecimalArbitrary
-    case "Null" => SNull
-    case "SEmptyObject" => SEmptyObject
-    case "EmptyArray" => SEmptyArray
-  }
-
-  def readHeader(data: DataInputStream): Set[(JPath, ColumnType)] = {   //todo needs to return type Set
-    def loop(data: DataInputStream, set: Set[(JPath, ColumnType)]): Set[(JPath, ColumnType)] = {
-      try {
-        val (data1, data2) = (JPath(data.readUTF()), data.readUTF())
-        val newSet = set + ((data1, data2))
-
-        loop(data, newSet)
-      } catch {
-        case e: IOException => 
-          exit(1)
+  def readHeader(data: DataInputStream): IO[Header] = {
+    def loop(data: DataInputStream, acc: Seq[(JPath, ColumnType)], i: Int): Seq[(JPath, ColumnType)] = {
+      if (i > 0) {
+        val selector = JPath(data.readUTF())
+        ColumnType.fromName(data.readUTF()) match {
+          case Some(ctype) => loop(data, acc :+ ((selector, ctype)), i - 1)
+          case None        => sys.error("Memoization header corrupt: unable to read back column type indicator.")
+        }
+      } else {
+        acc
       }
-      set
     }
-    loop(data, Set.empty[(JPath, ColumnType)])
+
+    IO {
+      val idCount = data.readInt()
+      val columns = data.readInt()
+      Header(idCount, loop(data, Vector.empty[(JPath, ColumnType)], columns)) 
+    }
   }
 
-  def sValueToBinary(data: DataOutputStream, sv: SValue): Unit = sv.fold(
-    obj = obj       => obj.map { 
-      case (k, v) => {
-        data.writeUTF(k)
-        sValueToBinary(data, v)
-      }
-    },
-    arr = arr       => arr.map(v => sValueToBinary(data, v)),
-    str = str       => data.writeUTF(str),
-    bool = bool     => data.writeBoolean(bool),
-    long = long     => data.writeLong(long),
-    double = double => data.writeDouble(double),
-    num = num       => {
-      val bytes = num.as[Array[Byte]]
-      data.writeInt(bytes.length)
-      data.write(bytes, 0, bytes.length)
-    },
-    nul = sys.error("nothing should be written") )
+  def writeEvent(data: DataOutputStream, ev: SEvent): IO[Unit] = {
+    for {
+      _ <- IO { data.writeInt(EventFlag) }
+      _ <- writeIdentities(data, ev._1)
+      _ <- writeValue(data, ev._2)
+    } yield ()
+  }
 
-  def colTypeToSValue(data: DataInputStream, column: ColumnType): SValue = column match {
-    case SStringArbitrary    => SString(data.readUTF())
-    case SStringFixed(w)     => SString(data.readUTF())
-    case SBoolean            => SBoolean(data.readBoolean())
-    case SInt                => SInt(data.readInt())
-    case SLong               => SLong(data.readLong())
-    case SFloat              => SFloat(data.readFloat())
-    case SDouble             => SDouble(data.readDouble())
-    case SDecimalArbitrary   => {
+  def writeIdentities(data: DataOutputStream, id: Identities): IO[Unit] = IO {
+    id.map(data.writeLong(_))
+  }
+
+  def writeValue(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
+    sv.fold(
+      obj = obj       => obj.map { 
+        case (_, v)   => writeValue(data, v)
+      },
+      arr = arr       => arr.map(v => writeValue(data, v)),
+      str = str       => data.writeUTF(str),
+      bool = bool     => data.writeBoolean(bool),
+      long = long     => data.writeLong(long),
+      double = double => data.writeDouble(double),
+      num = num       => {
+        val bytes = num.as[Array[Byte]]
+        data.writeInt(bytes.length)
+        data.write(bytes, 0, bytes.length)
+      },
+      nul = sys.error("nothing should be written") )
+  }
+
+  def readEvent(data: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = {
+    for {
+      ids <- readIdentities(data, length)
+      sv  <- readValue(data, cols)
+    } yield (ids, sv)
+  }
+
+  def readIdentities(data: DataInputStream, length: Int): IO[Identities] = {
+    def loop(data: DataInputStream, acc: Vector[Long], i: Int): Identities = {
+      if (i > 0) {
+        loop(data, acc :+ data.readLong(), i - 1)
+      } else {
+        acc
+      }
+    }
+
+    IO {
+      loop(data, Vector.empty[Long], length)
+    }
+  }
+
+  def readValue(data: DataInputStream, cols: Seq[(JPath, ColumnType)]): IO[SValue] = IO {
+    cols.foldLeft(Option.empty[SValue]) {
+      case (None     , (JPath.Identity, ctype)) => Some(readColumn(data, ctype).toSValue)
+      case (None     , (jpath, ctype))          => 
+        jpath.nodes match {
+          case JPathIndex(_) :: xs => SArray(Vector()).set(jpath, readColumn(data, ctype))
+          case JPathField(_) :: xs => SObject(Map()).set(jpath, readColumn(data, ctype))
+        }
+      case (Some(obj), (JPath.Identity, ctype)) => sys.error("Illegal data header: multiple values at a selector root.")
+      case (Some(obj), (jpath, ctype))          => obj.set(jpath, readColumn(data, ctype))
+    } getOrElse {
+      SNull
+    }
+  }
+
+  private def readColumn(data: DataInputStream, ctype: ColumnType): CValue = ctype match {
+    case SStringFixed(_)   => CString(data.readUTF())
+    case SStringArbitrary  => CString(data.readUTF())
+    case SBoolean          => CBoolean(data.readBoolean())
+    case SInt              => CInt(data.readInt())
+    case SLong             => CLong(data.readLong())
+    case SFloat            => CFloat(data.readFloat())
+    case SDouble           => CDouble(data.readDouble())
+    case SDecimalArbitrary => 
       val length = data.readInt()
       val sdecimalarb: Array[Byte] = new Array(length)
       data.read(sdecimalarb)
-      SDecimal(sdecimalarb.as[BigDecimal])
-    }
-    case SNull               => SNull
-    case SEmptyObject        => SEmptyObject
-    case SEmptyArray         => SEmptyArray
-
-  }
-
-  def binaryToSValue(data: DataInputStream, tp: SType, col: Seq[ColumnType]): SValue = {
-    tp match { 
-      case SObject           => SObject(col.map {
-        column => (data.readUTF(), colTypeToSValue(data, column))
-      }.toMap)
-
-      case SArray            => SArray(col.map {
-        column => colTypeToSValue(data, column)
-      }.foldLeft(Vector.empty[SValue])((vector, col) => vector :+ col))
-
-      case SString           => SString(data.readUTF())
-      case SBoolean          => SBoolean(data.readBoolean())
-      case SInt              => SInt(data.readInt())
-      case SLong             => SLong(data.readLong())
-      case SFloat            => SFloat(data.readFloat())
-      case SDouble           => SDouble(data.readDouble())
-      case SDecimal          => {
-        val length = data.readInt()
-        val sdecimalarb: Array[Byte] = new Array(length)
-        data.read(sdecimalarb)
-        SDecimal(sdecimalarb.as[BigDecimal])
-      }
-    }
+      CNum(sdecimalarb.as[BigDecimal])
+    case SNull                  => CNull
+    case SEmptyObject           => CEmptyObject
+    case SEmptyArray            => CEmptyArray
   }
 }
