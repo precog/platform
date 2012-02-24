@@ -17,20 +17,24 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "daze"
+package com.precog.util
 
-version := "0.0.1-SNAPSHOT"
+trait KMap[K[_], V[_]] {
+  def +[A](kv: (K[A], V[A])): KMap[K, V]
+  def -[A](k: K[A]): KMap[K, V]
+  def get[A](k: K[A]): Option[V[A]]
+  def isDefinedAt[A](k: K[A]): Boolean
+}
 
-organization := "com.precog"
+object KMap {
+  private case class CastMap[K[_], V[_]](delegate: Map[Any, Any]) extends KMap[K, V] {
+    def +[A](kv: (K[A], V[A])): KMap[K, V] = CastMap(delegate + kv)
+    def -[A](k: K[A]): KMap[K, V] = CastMap(delegate - k)
+    def get[A](k: K[A]): Option[V[A]] = delegate.get(k).map(_.asInstanceOf[V[A]])
+    def isDefinedAt[A](k: K[A]): Boolean = delegate.isDefinedAt(k)
+  }
 
-scalaVersion := "2.9.1"
+  def empty[K[_], V[_]]: KMap[K, V] = CastMap(Map())
+}
 
-resolvers += "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots"
-
-scalacOptions ++= Seq("-deprecation", "-g:none")
-
-libraryDependencies ++= Seq(
-  "org.specs2" %% "specs2" % "1.8" % "test",
-  "org.scala-tools.testing" %% "scalacheck" % "1.9")
-  
-logBuffered := false       // gives us incremental output from Specs2
+// vim: set ts=4 sw=4 et:

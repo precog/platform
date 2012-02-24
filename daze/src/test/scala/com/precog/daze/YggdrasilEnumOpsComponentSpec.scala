@@ -45,7 +45,7 @@ import Iteratee._
 import MonadPartialOrder._
 
 class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
-  type MemoContext = MemoizationContext.Noop.type
+  type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
 
   implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
@@ -54,10 +54,10 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   object yggConfig extends YggConfig {
     def sortBufferSize = 10
     def sortWorkDir = sys.error("not used")
-    def sortSerialization = SimpleProjectionSerialization
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 
+  implicit val chunkSerialization = SimpleProjectionSerialization
   val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
