@@ -4,7 +4,7 @@ package yggdrasil
 
 import blueeyes.json.JsonAST._
 
-import common.Config
+import common._
 import daze._
 
 import quirrel.Compiler
@@ -27,11 +27,10 @@ import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
 
-import net.lag.configgy.ConfigMap
-
-trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with KafkaIngestConfig with BaseConfig {
+trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with KafkaIngestConfig with BaseConfig with DatasetConsumersConfig{
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
+  lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
 }
 
 trait YggdrasilQueryExecutorComponent {
@@ -42,7 +41,7 @@ trait YggdrasilQueryExecutorComponent {
       val config = Configuration.parse("""
         precog {
           kafka {
-            enabled = true
+            enabled = true 
             topic {
               events = central_event_store
             }
@@ -59,14 +58,13 @@ trait YggdrasilQueryExecutorComponent {
         }
       """)  
       val sortWorkDir = scratchDir
-      val sortSerialization = SimpleProjectionSerialization
+      val chunkSerialization = SimpleProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
-      val memoizationSerialization = SimpleProjectionSerialization
     }
   }
     
-  def queryExecutorFactory(queryExecutorConfig: ConfigMap): QueryExecutor = queryExecutorFactory()
+  def queryExecutorFactory(queryExecutorConfig: Configuration): QueryExecutor = queryExecutorFactory()
   
   def queryExecutorFactory(): QueryExecutor = {
 
@@ -127,12 +125,12 @@ trait YggdrasilQueryExecutor
   def startup() = storage.start flatMap { _ => storage.startKafka }
   def shutdown() = storage.stopKafka flatMap { _ => storage.stop } map { _ => actorSystem.shutdown } 
 
-  def execute(query: String) = {
+  def execute(userUID: String, query: String) = {
     try {
       asBytecode(query) match {
         case Right(bytecode) => 
           decorate(bytecode) match {
-            case Right(dag)  => JString(evaluateDag(dag))
+            case Right(dag)  => JString(evaluateDag(userUID, dag))
             case Left(error) => JString("Error processing dag: %s".format(error.toString))
           }
         
@@ -144,8 +142,8 @@ trait YggdrasilQueryExecutor
     }
   }
 
-  private def evaluateDag(dag: DepGraph) = {
-    consumeEval(dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+  private def evaluateDag(userUID: String, dag: DepGraph) = {
+    consumeEval(userUID, dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
   }
 
   private def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {

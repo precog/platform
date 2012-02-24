@@ -34,6 +34,8 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   def sampleSize = 20
 
+  val testUID = "testUID"
+
   type YggConfig = LevelDBQueryConfig
   object yggConfig extends LevelDBQueryConfig {
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
@@ -70,7 +72,7 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(query.fullProjection[Unit](dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.fullProjection[Unit](testUID, dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
       
       (consume[Unit, Vector[SValue], IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
@@ -78,7 +80,7 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   "mask" should {
     "descend" in {
-      val enum = Await.result(query.mask[Unit](dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.mask[Unit](testUID, dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
       val enumv = enum map { _ map { case (ids, sv) => sv } }
       (consume[Unit, Vector[SValue], IO, List] &= enumv[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }

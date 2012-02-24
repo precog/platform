@@ -47,12 +47,14 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
 
   object storage extends Storage
 
+  val testUID = "testUID"
+
   "memoization" should {
     "ensure that results are not recomputed" in {
       withMemoizationContext { ctx =>
         val (descriptor, projection) = Await.result(
           for {
-            descriptors <- storage.metadata.findProjections(dataPath, JPath(".cpm"))
+            descriptors <- storage.userMetadataView(testUID).findProjections(dataPath, JPath(".cpm"))
             val descriptor = descriptors.toSeq.head._1
             projection <- storage.projection(descriptor)
           } yield {

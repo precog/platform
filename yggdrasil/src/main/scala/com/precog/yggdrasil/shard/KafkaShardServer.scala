@@ -67,19 +67,21 @@ trait KafkaIngester extends Logging {
   def routingActor: ActorRef
 
   implicit def executionContext: akka.dispatch.ExecutionContext
+  implicit def dispatcher: akka.dispatch.MessageDispatcher
 
-  lazy val consumer = new KafkaIngest(kafkaIngestConfig, routingActor)
+  lazy val consumer = new NewKafkaIngest(new TestYggCheckpoints, kafkaIngestConfig, routingActor)
 
-  def startKafka = Future {
-      if(kafkaIngestConfig.kafkaEnabled) { 
-        new Thread(consumer).start
-      }
+  def startKafka = 
+    if(kafkaIngestConfig.kafkaEnabled) { 
+      consumer.start 
+    } else {
+      Future { () }
     }
 
   import logger._
 
-  def stopKafka = Future { debug("[Kafka Ingester] Stopping kafka consumer") } map
-    { _ => consumer.requestStop } recover { case e => error("Error stopping kafka consumer", e) }
+  def stopKafka = Future { debug("[Kafka Ingester] Stopping kafka consumer") } flatMap
+    { _ => consumer.stop } recover { case e => error("Error stopping kafka consumer", e) }
 }
 
 // vim: set ts=4 sw=4 et:

@@ -11,14 +11,14 @@ import blueeyes.util.Clock
 
 import com.precog.analytics.TokenManager
 
-import net.lag.configgy.ConfigMap
+import org.streum.configrity.Configuration
 
 trait ShardWebapp extends BlueEyesServer with ShardService {
-  def mongoFactory(configMap: ConfigMap): Mongo = {
+  def mongoFactory(config: Configuration): Mongo = {
     new blueeyes.persistence.mongo.MockMongo()
   }
 
-  def usageLogging(config: ConfigMap) = {
+  def usageLogging(config: Configuration) = {
     new NullUsageLogging("")
   }
 

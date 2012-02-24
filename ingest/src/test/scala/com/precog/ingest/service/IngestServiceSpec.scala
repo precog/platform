@@ -27,7 +27,6 @@ import akka.dispatch.Future
 import akka.util.Duration
 
 import org.joda.time._
-import net.lag.configgy.ConfigMap
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
@@ -49,6 +48,9 @@ import BijectionsChunkString._
 import BijectionsChunkFutureJson._
 
 //import rosetta.json.blueeyes._
+
+import org.streum.configrity.Configuration
+import org.streum.configrity.io.BlockFormat
 
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
@@ -87,12 +89,12 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     }
   """
 
-  override val configuration = "services{ingest{v1{" + requestLoggingData + mongoConfigFileData + "}}}"
+  override val configuration = "services { ingest { v1 { " + requestLoggingData + mongoConfigFileData + " } } }"
 
-  override def mongoFactory(config: ConfigMap): Mongo = RealMongo(config)
-  //override def mongoFactory(config: ConfigMap): Mongo = new MockMongo()
+  override def mongoFactory(config: Configuration): Mongo = RealMongo(config)
+  //override def mongoFactory(config: Configuration): Mongo = new MockMongo()
 
-  //def auditClient(config: ConfigMap) = external.NoopTrackingClient
+  //def auditClient(config: Configuration) = external.NoopTrackingClient
 
   def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = {
     val mgr = new TokenManager(database, tokensCollection, deletedTokensCollection) 
@@ -101,18 +103,18 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     mgr
   }
 
-  def usageLogging(config: ConfigMap) = {
+  def usageLogging(config: Configuration) = {
     new ReportGridUsageLogging(TrackingToken.tokenId) 
   }
 
   val messaging = new CollectingMessaging
 
-  def queryExecutorFactory(configMap: ConfigMap) = new NullQueryExecutor {
+  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
     lazy val actorSystem = ActorSystem("ingest_service_spec")
     implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   }
 
-  def eventStoreFactory(configMap: ConfigMap): EventStore = {
+  def eventStoreFactory(config: Configuration): EventStore = {
     val defaultAddresses = NonEmptyList(MailboxAddress(0))
 
     val routeTable = new ConstantRouteTable(defaultAddresses)

@@ -1,10 +1,14 @@
 package com.precog.common.security
 
+import com.precog.analytics.Path
+
 import org.specs2.mutable._
 
 object AccessControlSpec extends Specification with AccessControlTestValues {
+  val accessControl = new AccessControl with TestTokenManagerComponent {
+    val tokenConfig = accessControlTokenConfig
+  }
 
-  val accessControl = new AccessControl with TestTokenManagerComponent
 
   "access control" should {
     "control path access" in {
@@ -200,6 +204,16 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessControl.mayAccessData(expiredChildUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
     }
+  }
+}
+
+object AccessControlUseCasesSpec extends Specification with AccessControlTestValues {
+ 
+  val accessControl = new AccessControl with TestTokenManagerComponent {
+    val tokenConfig = useCaseTokenConfig
+  }
+
+  "access control" should {
     "handle proposed use cases" in {
       "addon grants sandboxed to user paths" in {
         accessControl.mayAccessPath(customerUID, "/customer", PathRead) must beTrue
@@ -234,7 +248,25 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
   }
 }
 
-trait AccessControlTestValues {
+object AccessControlIsolationSpec extends Specification with AccessControlTestValues {
+
+  val accessControl = new AccessControl with TestTokenManagerComponent {
+    val tokenConfig = useCaseTokenConfig
+  }
+
+  "access control" should {
+    "handle proposed use cases" in {
+      accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID), DataQuery) must beTrue
+      accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonUID), DataQuery) must beTrue
+      accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID), DataQuery) must beFalse
+      accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beFalse
+    }
+  }
+}
+
+trait AccessControlTestValues { 
+
+  implicit def stringToPath(path: String) = Path(path)
 
   val rootUID = "root"
   val childUID = "childPerms"
@@ -310,11 +342,8 @@ trait AccessControlTestValues {
     Permissions()(
       MayAccessData(Subtree(path), OwnerAndDescendants(owner), DataQuery, mayShare)
     )
-}
-
-trait TestTokenManagerComponent extends TokenManagerComponent with AccessControlTestValues {
-
-  val tokenConfig = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
+  
+  val accessControlTokenConfig = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
     (rootUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
     (childUID, Some(rootUID), Permissions(mayReadChild, mayWriteChild)(mayQueryChild), Set(), false),
 
@@ -342,32 +371,61 @@ trait TestTokenManagerComponent extends TokenManagerComponent with AccessControl
     (noShareChildUID, Some(noShareUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
     (noShareGrantUID, None, Permissions()(), Set(noShareChildUID), false),
     (noDataShareUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRootNS), Set(), false),
-    (noDataShareChildUID, Some(noShareUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
+    (noDataShareChildUID, Some(noShareUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false)
+  )
+ 
+  def standardAccountPerms(path: Path, owner: UID, mayShare: Boolean = true) =
+    Permissions(
+      MayAccessPath(Subtree(path), PathRead, mayShare), 
+      MayAccessPath(Subtree(path), PathWrite, mayShare)
+    )(
+      MayAccessData(Subtree("/"), OwnerAndDescendants(owner), DataQuery, mayShare)
+    )
 
-    (addonUID, Some(rootUID), readWritePerms("/addon", true), Set(), false),
+  def customerAddonPerms(customerPath: Path, addonOwner: UID, mayShare: Boolean = true) =
+    Permissions(
+    )(
+      MayAccessData(Subtree(customerPath), OwnerAndDescendants(addonOwner), DataQuery, mayShare)
+    )
+
+  def publishPathPerms(path: Path, owner: UID, mayShare: Boolean = true) =
+    Permissions(
+      MayAccessPath(Subtree(path), PathRead, mayShare)
+    )(
+      MayAccessData(Subtree(path), OwnerAndDescendants(owner), DataQuery, mayShare)
+    )
+
+  val useCaseTokenConfig = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
+    (rootUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
+
+    (addonUID, Some(rootUID), standardAccountPerms("/addon", addonUID, true), Set(), false),
 
     (addonAgentUID, Some(addonUID), readWritePerms("/addon", false), Set(), false),
     
-    (addonPublicUID, Some(addonUID), readWriteQueryPerms("/addon/public", addonUID, true), Set(), false),
+    (addonPublicUID, Some(addonUID), publishPathPerms("/addon/public", addonUID, true), Set(), false),
    
-    (addonCustomerGrantUID, Some(addonUID), queryPerms("/customer", addonUID, true), Set(), false),
-    (addonKnownCustomerGrantUID, Some(addonUID), queryPerms("/knownCustomer", addonUID, true), Set(), false),
-    (addonUnknownCustomerGrantUID, Some(addonUID), queryPerms("/unknownCustomer", addonUID, true), Set(), false),
+    (addonCustomerGrantUID, Some(addonUID), customerAddonPerms("/customer", addonUID), Set(), false),
+    (addonKnownCustomerGrantUID, Some(addonUID), customerAddonPerms("/knownCustomer", addonUID), Set(), false),
+    (addonUnknownCustomerGrantUID, Some(addonUID), customerAddonPerms("/unknownCustomer", addonUID), Set(), false),
 
-    (customerUID, Some(rootUID), readWritePerms("/customer", true), Set(addonCustomerGrantUID, knownCustomerGrantUID, addonPublicUID), false),
-    (customersCustomerUID, Some(customerUID), readWriteQueryPerms("/customer/cust-id", addonUID, false), Set(), false),
+    (customerUID, Some(rootUID), standardAccountPerms("/customer", customerUID, true), Set(addonCustomerGrantUID, knownCustomerGrantUID, addonPublicUID), false),
+    (customersCustomerUID, Some(customerUID), readWriteQueryPerms("/customer/cust-id", customersCustomerUID, false) ++ queryPerms("/customer/cust-id", addonUID, false), Set(), false),
     
-    (knownCustomerUID, Some(rootUID), readWritePerms("/knownCustomer", true), Set(addonKnownCustomerGrantUID), false),
+    (knownCustomerUID, Some(rootUID), standardAccountPerms("/knownCustomer", knownCustomerUID, true), Set(addonKnownCustomerGrantUID), false),
     (knownCustomerGrantUID, Some(knownCustomerUID), readWriteQueryPerms("/knownCustomer", knownCustomerUID, true), Set(), false),
 
-    (unknownCustomerUID, Some(rootUID), readWritePerms("/unknownCustomer", true), Set(addonUnknownCustomerGrantUID), false)
+    (unknownCustomerUID, Some(rootUID), standardAccountPerms("/unknownCustomer", unknownCustomerUID, true), Set(addonUnknownCustomerGrantUID), false)
   )
+}
 
-  val map = Map( tokenConfig map {
+trait TestTokenManagerComponent extends TokenManagerComponent {
+  def tokenConfig: List[(UID, Option[UID], Permissions, Set[UID], Boolean)]
+
+  lazy val map = Map( tokenConfig map {
     case (uid, issuer, perms, grants, canShare) => (uid -> Token(uid, issuer, perms, grants, canShare))
   }: _*)
 
-  val tokenManager = new TokenManager {
+  lazy val tokenManager = new TokenManager {
     def lookup(uid: UID) = map.get(uid)
   }
 }
