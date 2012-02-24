@@ -4,6 +4,8 @@ package yggdrasil
 import java.io._
 import java.util.zip._
 
+import com.precog.common.VectorCase
+
 import scala.annotation.tailrec
 
 import scalaz._
@@ -74,7 +76,7 @@ object SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
 
   private def readEvent(in: DataInputStream): SEvent = {
     val idCount = in.readInt()
-    val ids = Vector((0 until idCount).map(_ => in.readLong): _*)
+    val ids = VectorCase.fromSeq((0 until idCount).map(_ => in.readLong))
     val jstr = in.readUTF
     (ids, SValue.fromJValue(JsonParser.parse(jstr)))
   }

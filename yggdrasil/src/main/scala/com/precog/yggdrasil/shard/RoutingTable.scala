@@ -52,7 +52,7 @@ trait SingleColumnProjectionRoutingTable extends RoutingTable {
   def route(eventData: EventData) = eventData match {
     case EventData(identity, event) => event.map {
       case ColumnData(colDesc, cValue, metadata) => 
-        ProjectionData(toProjectionDescriptor(colDesc), Vector(identity), Vector(cValue), List(metadata))
+        ProjectionData(toProjectionDescriptor(colDesc), Vector1(identity), Vector1(cValue), List(metadata))
     }
   }
   

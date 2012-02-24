@@ -27,7 +27,7 @@ package object leveldb {
         if (buf.remaining >= 8) read(acc :+ buf.getLong)
         else                    acc
 
-      read(Vector.empty[Long])
+      VectorCase.fromSeq(read(Vector.empty[Long]))
     }
   }
 

@@ -4,6 +4,8 @@ package yggdrasil
 import leveldb._
 import com.precog.analytics.Path
 
+import com.precog.common.VectorCase
+
 import com.precog.util.Bijection._
 
 import com.precog.yggdrasil._
@@ -137,7 +139,7 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   }
 
   def readIdentities(data: DataInputStream, length: Int): IO[Identities] = {
-    def loop(data: DataInputStream, acc: Vector[Long], i: Int): Identities = {
+    def loop(data: DataInputStream, acc: VectorCase[Long], i: Int): Identities = {
       if (i > 0) {
         loop(data, acc :+ data.readLong(), i - 1)
       } else {
@@ -146,7 +148,7 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     }
 
     IO {
-      loop(data, Vector.empty[Long], length)
+      loop(data, VectorCase.empty[Long], length)
     }
   }
 
