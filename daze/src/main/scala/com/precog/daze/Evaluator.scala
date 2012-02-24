@@ -21,9 +21,15 @@ trait EvaluationContext {
   def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO]
 }
 
-trait MemoizingEvaluationContext extends EvaluationContext with MemoizationComponent {
+trait EvaluatorConfig {
+  def chunkSerialization: FileSerialization[Vector[SEvent]]
+}
+
+trait MemoizingEvaluationContext extends EvaluationContext with MemoizationComponent with YggConfigComponent {
+  type YggConfig <: EvaluatorConfig 
+
   trait Context {
-    val memoizationContext: MemoizationContext
+    val memoizationContext: MemoContext
   }
 
   def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO] = {
@@ -40,6 +46,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   import dag._
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
+  implicit val chunkSerialization = yggConfig.chunkSerialization
   
   def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
     def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {

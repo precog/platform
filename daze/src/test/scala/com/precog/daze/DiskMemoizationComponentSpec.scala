@@ -35,6 +35,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   implicit val timeout = Timeout(intToDurationInt(30).seconds)
+  implicit val chunkSerialization = SimpleProjectionSerialization
   def sampleSize = 50
 
   type YggConfig = DiskMemoizationConfig 
@@ -48,7 +49,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
 
   "memoization" should {
     "ensure that results are not recomputed" in {
-      withMemoizationContext { memoizationContext => 
+      withMemoizationContext { ctx =>
         val (descriptor, projection) = Await.result(
           for {
             descriptors <- storage.metadata.findProjections(dataPath, JPath(".cpm"))
@@ -68,17 +69,17 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
           case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
         } }
 
-        memoizationContext[Unit](0) must beLike {
+        ctx[Unit, Vector[SEvent]](0) must beLike {
           case Left(f) => 
             (
-              (f[IO, List[Vector[SEvent]]](Some(descriptor)).apply(consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+              (f.memoizing[IO, List[Vector[SEvent]]](consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                 case (_, v) => v.mapLongOr(-1L)(identity[Long])
               } must_== expected
             ) and (
-              memoizationContext[Unit](0) must beLike {
+              ctx[Unit, Vector[SEvent]](0) must beLike {
                 case Right(d) => 
                   (
-                    (consume[Unit, Vector[SEvent], IO, List] &= Await.result(d.fenum, intToDurationInt(30).seconds).apply[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+                    (consume[Unit, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                       //case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
                       case (_, v) => v.mapLongOr(-1L)(v => v.toLong) // TODO: re-fix this for BigDecimal if that's really what it's supposed to be
                     } must_== expected

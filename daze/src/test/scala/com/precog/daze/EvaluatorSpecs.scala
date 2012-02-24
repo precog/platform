@@ -18,14 +18,14 @@ import com.precog.util.Identity
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
 
-  class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig {
+  class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
-    def sortSerialization = SimpleProjectionSerialization
+    def chunkSerialization = SimpleProjectionSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
-    def memoizationSerialization = SimpleProjectionSerialization
     def flatMapTimeout = intToDurationInt(30).seconds
+    def maxEvalDuration = intToDurationInt(30).seconds
   }
 }
 
@@ -39,8 +39,6 @@ class EvaluatorSpecs extends Specification
   
   import dag._
   import instructions._
-
-  def maxEvalDuration = intToDurationInt(30).seconds
 
   object ops extends Ops 
 
@@ -1602,7 +1600,7 @@ class EvaluatorSpecs extends Specification
     }
 
     "order the numbers set by specified identities" in {
-      withMemoizationContext { ctx => 
+      withMemoizationContext { ctx =>
         val numbers = {
           val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
           base.zipWithIndex map {
