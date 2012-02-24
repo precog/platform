@@ -28,13 +28,13 @@ object StubOperationsAPI {
   implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 }
 
-trait DatasetConsumersConfig {
+trait DatasetConsumersConfig extends EvaluatorConfig {
   def maxEvalDuration: akka.util.Duration
 }
 
 // TODO decouple this from the evaluator specifics
 trait DatasetConsumers extends Evaluator with YggConfigComponent {
-  type YggConfig <: DatasetConsumersConfig with EvaluatorConfig
+  type YggConfig <: DatasetConsumersConfig 
 
   def consumeEval(graph: DepGraph): Set[SEvent] = {
     val results = Await.result(
