@@ -35,12 +35,6 @@ trait Binder extends parser.AST {
     val Sum     = BuiltIn(Identifier(Vector(), "sum"), 1, true)
   }
 
-  val BuiltInFunctions = {
-    import BuiltIns._
-
-    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum)
-  }
-
   object Time {
     val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
     
@@ -60,7 +54,14 @@ trait Binder extends parser.AST {
     val MinuteOfHour = BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
     val SecondOfMinute = BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
   }
-  
+
+  val BuiltInFunctions = {
+    import BuiltIns._
+    import Time._
+
+    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, Date, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute)
+  }
+
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[Either[TicId, Identifier], Binding]): Set[Error] = tree match {
       case b @ Let(_, id, formals, left, right) => {
