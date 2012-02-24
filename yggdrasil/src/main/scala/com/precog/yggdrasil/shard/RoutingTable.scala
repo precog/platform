@@ -59,7 +59,7 @@ trait RoutingTable {
     e.data.flattenWithPath.flatMap {
       case (sel, jval) => extract(jval).map{
         case (ctype, cval) => 
-          val colDesc = ColumnDescriptor(e.path, sel, ctype, Ownership(Set(e.tokenId)))
+          val colDesc = ColumnDescriptor(e.path, sel, ctype, Authorities(Set(e.tokenId)))
           val metadata: Set[Metadata] = e.metadata.get(sel).getOrElse(Set.empty).map(x => x)
           ColumnData(colDesc, cval, metadata)
       }
@@ -71,7 +71,7 @@ trait SingleColumnProjectionRoutingTable extends RoutingTable {
   def route(eventData: EventData) = eventData match {
     case EventData(identity, event) => event.map {
       case ColumnData(colDesc, cValue, metadata) => 
-        ProjectionData(toProjectionDescriptor(colDesc), List(identity), List(cValue), List(metadata))
+        ProjectionData(toProjectionDescriptor(colDesc), Vector(identity), Vector(cValue), List(metadata))
     }
   }
   

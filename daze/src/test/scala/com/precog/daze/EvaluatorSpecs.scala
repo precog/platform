@@ -53,13 +53,18 @@ class EvaluatorSpecs extends Specification
     with StubOperationsAPI 
     with TestConfigComponent 
     with DiskMemoizationComponent { self =>
-      
+    
+
   import Function._
   
   import dag._
   import instructions._
 
   object ops extends Ops 
+  
+  val testUID = "testUID"
+
+  def testEval = consumeEval(testUID, _: DepGraph)
 
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -69,7 +74,7 @@ class EvaluatorSpecs extends Specification
         Root(line, PushNum("6")),
         Root(line, PushNum("7")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       
@@ -84,7 +89,7 @@ class EvaluatorSpecs extends Specification
       "push_string" >> {
         val line = Line(0, "")
         val input = Root(line, PushString("daniel"))
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -98,7 +103,7 @@ class EvaluatorSpecs extends Specification
       "push_num" >> {
         val line = Line(0, "")
         val input = Root(line, PushNum("42"))
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -112,7 +117,7 @@ class EvaluatorSpecs extends Specification
       "push_true" >> {
         val line = Line(0, "")
         val input = Root(line, PushTrue)
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -126,7 +131,7 @@ class EvaluatorSpecs extends Specification
       "push_false" >> {
         val line = Line(0, "")
         val input = Root(line, PushFalse)
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -140,7 +145,7 @@ class EvaluatorSpecs extends Specification
       "push_object" >> {
         val line = Line(0, "")
         val input = Root(line, PushObject)
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -154,7 +159,7 @@ class EvaluatorSpecs extends Specification
       "push_array" >> {
         val line = Line(0, "")
         val input = Root(line, PushArray)
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -169,7 +174,7 @@ class EvaluatorSpecs extends Specification
     "evaluate a load_local" in {
       val line = Line(0, "")
       val input = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -186,7 +191,7 @@ class EvaluatorSpecs extends Specification
       val input = Operate(line, Neg,
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -203,7 +208,7 @@ class EvaluatorSpecs extends Specification
       val input = dag.New(line,
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -222,7 +227,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -240,7 +245,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -258,7 +263,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -276,7 +281,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -296,7 +301,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -314,7 +319,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -332,7 +337,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -350,7 +355,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Root(line, PushNum("5")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(5)
         
@@ -369,7 +374,7 @@ class EvaluatorSpecs extends Specification
         Root(line, PushString("answer")),
         Root(line, PushNum("42")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       
@@ -395,7 +400,7 @@ class EvaluatorSpecs extends Specification
       val input = Operate(line, WrapArray,
         Root(line, PushNum("42")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       
@@ -426,7 +431,7 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("answer")),
           Root(line, PushNum("42"))))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       
@@ -460,7 +465,7 @@ class EvaluatorSpecs extends Specification
         Operate(line, WrapArray,
           Root(line, PushNum("42"))))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       
@@ -497,7 +502,7 @@ class EvaluatorSpecs extends Specification
                 Root(line, PushNum("42"))))),
           Root(line, PushNum("1")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -534,7 +539,7 @@ class EvaluatorSpecs extends Specification
                 Root(line, PushNum("42"))))),
           Root(line, PushNum("2")))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -565,7 +570,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
         Root(line, PushString("first")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -583,7 +588,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/het/pairs")), Het),
         Root(line, PushString("first")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -601,7 +606,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/het/het-pairs")), Het),
         Root(line, PushString("first")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -621,7 +626,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/hom/arrays")), Het),
         Root(line, PushNum("2")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -639,7 +644,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/het/arrays")), Het),
         Root(line, PushNum("2")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -657,7 +662,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/het/het-arrays")), Het),
         Root(line, PushNum("2")))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -681,7 +686,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
           Root(line, PushString("second"))))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(5)
       
@@ -703,7 +708,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
           Root(line, PushString("second"))))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(4)
       
@@ -721,7 +726,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(8)
       
@@ -739,7 +744,7 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
         
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(2)
       
@@ -762,7 +767,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -782,7 +787,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(3)
         
@@ -802,7 +807,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -822,7 +827,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(3)
         
@@ -842,7 +847,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -862,7 +867,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(4)
         
@@ -886,7 +891,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(3)
         
@@ -910,7 +915,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -931,7 +936,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(4)
         
@@ -953,7 +958,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -973,7 +978,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(3)
         
@@ -993,7 +998,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -1013,7 +1018,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(3)
         
@@ -1033,7 +1038,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1053,7 +1058,7 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
             Root(line, PushNum("13"))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(9)
         
@@ -1082,7 +1087,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(8)
         
@@ -1111,7 +1116,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(2)
         
@@ -1132,7 +1137,7 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
               Root(line, PushNum("13")))))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(9)
         
@@ -1158,7 +1163,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het)))
           
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(25)
       
@@ -1181,7 +1186,7 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           dag.New(line, dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))))
           
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(25)
       
@@ -1216,7 +1221,7 @@ class EvaluatorSpecs extends Specification
                 dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
                 SplitRoot(line, 0))))))
               
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(4)
       
@@ -1258,7 +1263,7 @@ class EvaluatorSpecs extends Specification
                     Root(line, PushString("user"))),
                   SplitRoot(line, 0)))))))
                   
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(9)
       
@@ -1321,7 +1326,7 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("num"))),
           Root(line, PushNum("9"))))
                   
-      val result = consumeEval(input)
+      val result = testEval(input)
       
       result must haveSize(1)
       result.toList.head must beLike {
@@ -1342,7 +1347,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Count,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1359,7 +1364,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Mean,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1376,7 +1381,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Median,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1393,7 +1398,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Mode,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1410,7 +1415,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Max,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1427,7 +1432,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Min,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1444,7 +1449,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, StdDev,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1461,7 +1466,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Sum,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1480,7 +1485,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Count,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1497,7 +1502,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Mean,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1514,7 +1519,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Median,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1531,7 +1536,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Mode,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1548,7 +1553,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Max,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1565,7 +1570,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Min,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1582,7 +1587,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, StdDev,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1599,7 +1604,7 @@ class EvaluatorSpecs extends Specification
         val input = dag.Reduce(line, Sum,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
           
-        val result = consumeEval(input)
+        val result = testEval(input)
         
         result must haveSize(1)
         
@@ -1621,7 +1626,7 @@ class EvaluatorSpecs extends Specification
     "order the numbers set by specified identities" in {
       withMemoizationContext { ctx =>
         val numbers = {
-          val base = eval[Unit](dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+          val base = eval[Unit]("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
           base.zipWithIndex map {
             case ((_, sv), id) => (Vector(id): Identities, sv)
           }

@@ -30,7 +30,7 @@ package object common {
   type SequenceId = Int
 
   trait QueryExecutor {
-    def execute(query: String): JValue
+    def execute(userUID: String, query: String): JValue
     def startup: Future[Unit]
     def shutdown: Future[Unit]
   }
@@ -39,7 +39,7 @@ package object common {
     def actorSystem: ActorSystem
     implicit def executionContext: ExecutionContext
 
-    def execute(query: String) = JString("Query service not avaialble")
+    def execute(userUID: String, query: String) = JString("Query service not avaialble")
     def startup = Future(())
     def shutdown = Future { actorSystem.shutdown }
   }

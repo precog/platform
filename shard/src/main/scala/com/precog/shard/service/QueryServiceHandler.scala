@@ -34,6 +34,7 @@ import scalaz.Failure
 import com.weiglewilczek.slf4s.Logging
 
 import com.precog.analytics.Token
+import com.precog.common._
 
 class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
@@ -45,7 +46,7 @@ extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]]
       if(!t.expired) {
         request.content.map { _.map { 
           case JString(s) => 
-            val queryResult = queryExecutor.execute(s)
+            val queryResult = queryExecutor.execute(t.tokenId, s)
             HttpResponse[JValue](OK, content=Some(queryResult))
 
           case _          => InvalidQuery 

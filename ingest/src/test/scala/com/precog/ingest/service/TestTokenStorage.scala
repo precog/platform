@@ -34,7 +34,6 @@ import akka.util.Timeout
 import akka.util.duration._
 
 import org.joda.time._
-import net.lag.configgy.ConfigMap
 import com.weiglewilczek.slf4s.Logger
 
 import org.specs2.mutable.Specification

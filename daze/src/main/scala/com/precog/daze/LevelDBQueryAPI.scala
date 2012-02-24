@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog
+package daze
 
 import scala.annotation.tailrec
 
@@ -51,17 +52,17 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
   def storage: YggShard
 
   trait QueryAPI extends StorageEngineQueryAPI {
-    override def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
+    override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
-        selectors   <- storage.metadata.findSelectors(path) 
-        sources     <- Future.sequence(selectors.map(s => storage.metadata.findProjections(path, s).map(p => (s, p))))
+        selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
+        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p))))
         enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
       } yield enumerator
     )
 
-    override def mask[X](path: Path): DatasetMask[X] = LevelDBDatasetMask[X](path, None, None) 
+    override def mask[X](userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask[X](userUID, path, None, None) 
 
-    private case class LevelDBDatasetMask[X](path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
+    private case class LevelDBDatasetMask[X](userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
 
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
@@ -80,28 +81,12 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           )
 
         (selector, tpe) match {
-          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.metadata.findProjections(path, s, tpe))
-          case (Some(s), None     ) => assembleForSelector(s, storage.metadata.findProjections(path, s))
-          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.metadata.findProjections(path, JPath.Identity))
-          case (_      , _        ) => fullProjection(path)
+          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
+          case (Some(s), None     ) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
+          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+          case (_      , _        ) => fullProjection(userUID, path)
         }
       }
-    }
-
-    private implicit def identityOrder[A, B]: (((Identities, A), (Identities, B)) => Ordering) = 
-      (t1: (Identities, A), t2: (Identities, B)) => {
-        (t1._1 zip t2._1).foldLeft[Ordering](Ordering.EQ) {
-          case (Ordering.EQ, (i1, i2)) => Order[Long].order(i1, i2)
-          case (ord, _) => ord
-        }
-      }
-
-    private implicit object SColumnIdentityOrder extends Order[SColumn] {
-      def order(c1: SColumn, c2: SColumn) = identityOrder(c1, c2)
-    }
-
-    private implicit object SEventIdentityOrder extends Order[SEvent] {
-      def order(s1: SEvent, s2: SEvent) = identityOrder(s1, s2)
     }
 
     def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
@@ -135,6 +120,8 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       val mergedFutures = descriptors map {
         case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, Vector[(Identities, CValue)], IO]) => (selector, e))
       }
+
+      implicit val SEventOrder = SEventIdentityOrder
 
       Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
     }

@@ -44,7 +44,6 @@ import java.io.{File, PrintStream}
 
 import scalaz.effect.IO
 
-import net.lag.configgy.Configgy
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
@@ -62,6 +61,8 @@ trait REPL extends LineErrors
     with Evaluator
     with DatasetConsumers 
     with OperationsAPI {
+
+  val dummyUID = "dummyUID"
 
   val Prompt = "quirrel> "
   val Follow = "       | "
@@ -103,7 +104,7 @@ trait REPL extends LineErrors
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = consumeEval(graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+            val result = consumeEval(dummyUID, graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
             
             out.println()
             out.println(color.cyan(result))
@@ -220,9 +221,8 @@ trait REPL extends LineErrors
 object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig {
-    val config = Configuration.parse {
-      dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
-    }
+    val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
+    val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
     val flatMapTimeout = controlTimeout
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
@@ -232,9 +232,6 @@ object Console extends App {
     val memoizationWorkDir = scratchDir
     val maxEvalDuration = controlTimeout
   }
-
-  // Configuration required for blueyes IngestServer
-  Configgy.configureFromResource("default_ingest.conf")
 
   def loadConfig(dataDir: Option[String]): IO[REPLConfig] = IO {
     new REPLConfig(dataDir)
@@ -253,6 +250,7 @@ object Console extends App {
           with Lifecycle { self =>
 
         type YggConfig = REPLConfig
+        override def rootConfig = yconfig.config 
         val yggConfig = yconfig
 
         object storage extends ActorYggShard {

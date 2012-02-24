@@ -72,24 +72,24 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Ownership(owners: Set[String])
+case class Authorities(uids: Set[String])
 
-trait OwnershipSerialization {
-  implicit val OwnershipDecomposer: Decomposer[Ownership] = new Decomposer[Ownership] {
-    override def decompose(ownership: Ownership): JValue = {
-      JObject(JField("ownership", JArray(ownership.owners.map(JString(_)).toList)) :: Nil)
+trait AuthoritiesSerialization {
+  implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
+    override def decompose(authorities: Authorities): JValue = {
+      JObject(JField("uids", JArray(authorities.uids.map(JString(_)).toList)) :: Nil)
     }
   }
 
-  implicit val OwnershipExtractor: Extractor[Ownership] = new Extractor[Ownership] with ValidatedExtraction[Ownership] {
-    override def validated(obj: JValue): Validation[Error, Ownership] =
-      (obj \ "ownership").validated[Set[String]].map(Ownership(_))
+  implicit val AuthoritiesExtractor: Extractor[Authorities] = new Extractor[Authorities] with ValidatedExtraction[Authorities] {
+    override def validated(obj: JValue): Validation[Error, Authorities] =
+      (obj \ "uids").validated[Set[String]].map(Authorities(_))
   }
 }
 
-object Ownership extends OwnershipSerialization 
+object Authorities extends AuthoritiesSerialization 
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, ownership: Ownership) 
+case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, authorities: Authorities) 
 
 trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
@@ -97,7 +97,7 @@ trait ColumnDescriptorSerialization {
       List(JField("path", selector.path.serialize),
            JField("selector", selector.selector.serialize),
            JField("valueType", selector.valueType.serialize),
-           JField("ownership", selector.ownership.serialize))
+           JField("authorities", selector.authorities.serialize))
     )
   }
 
@@ -106,12 +106,12 @@ trait ColumnDescriptorSerialization {
       ((obj \ "path").validated[Path] |@|
        (obj \ "selector").validated[JPath] |@|
        (obj \ "valueType").validated[ColumnType] |@|
-       (obj \ "ownership").validated[Ownership]).apply(ColumnDescriptor(_,_,_,_))
+       (obj \ "authorities").validated[Authorities]).apply(ColumnDescriptor(_,_,_,_))
   }
 }
 
 object ColumnDescriptor extends ColumnDescriptorSerialization 
-with ((Path, JPath, ColumnType, Ownership) => ColumnDescriptor)
+with ((Path, JPath, ColumnType, Authorities) => ColumnDescriptor)
 
 
 

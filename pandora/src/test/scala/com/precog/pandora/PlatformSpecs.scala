@@ -133,8 +133,8 @@ class PlatformSpecs extends Specification
         | hist""".stripMargin
         
       eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(50))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(50))))
     }
     
     /* commented out until we have memoization (MASSIVE time sink)
@@ -195,7 +195,7 @@ class PlatformSpecs extends Specification
     val tree = compile(str)
     tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
-    consumeEval(dag)
+    consumeEval("dummyUID", dag)
   }
   
   def startup() {

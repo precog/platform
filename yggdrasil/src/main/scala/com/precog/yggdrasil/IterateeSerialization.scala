@@ -93,7 +93,7 @@ object SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
 
   private def readEvent(in: DataInputStream): SEvent = {
     val idCount = in.readInt()
-    val ids = (0 until idCount).map(_ => in.readLong).toList
+    val ids = Vector((0 until idCount).map(_ => in.readLong): _*)
     val jstr = in.readUTF
     (ids, SValue.fromJValue(JsonParser.parse(jstr)))
   }

@@ -67,7 +67,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   implicit def asyncContext: akka.dispatch.ExecutionContext
   implicit val chunkSerialization = yggConfig.chunkSerialization
   
-  def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
+  def eval[X](userUID: String, graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
     def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
       case SplitRoot(_, depth) => Right(roots(depth))
       
@@ -78,14 +78,14 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
-          case Some(SString(str)) => Left(query.mask(Path(str)))
+          case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
           case Some(_) => Right(ops.empty[X, SEvent, IO])
           
           case None => {
             implicit val order = identitiesOrder(parent.provenance.length)
             
             val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx))) { 
-              case (_, SString(str)) => query.fullProjection[X](Path(str))
+              case (_, SString(str)) => query.fullProjection[X](userUID, Path(str))
               case _ => ops.empty[X, SEvent, IO]
             }
             
@@ -559,15 +559,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
 
   private def identitiesOrder(prefixLength: Int): Order[SEvent] = new Order[SEvent] {
-    def order(e1: SEvent, e2: SEvent) = {
-      val (ids1, _) = e1
-      val (ids2, _) = e2
-      
-      (ids1 zip ids2 take prefixLength).foldLeft[Ordering](Ordering.EQ) {
-        case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
-        case (acc, _) => acc
-      }
-    }
+    // very hot code!
+    def order(e1: SEvent, e2: SEvent) = prefixIdentityOrder(e1._1, e2._1, prefixLength)
   }
   
   /**
