@@ -77,7 +77,7 @@ trait BytecodeWriter extends Writer with Version {
       
       case WrapArray => 0x61
 
-      case BuiltInFunction1(op) => 0xB1 | (builtInOp1(op) << 8)
+      case BuiltInFunction1(op) => 0xB0 | (builtInOp1(op) << 8)
     }
     
     def binaryOpNum(op: BinaryOperation) = op match {
@@ -107,7 +107,7 @@ trait BytecodeWriter extends Writer with Version {
       case DerefObject => 0xA0
       case DerefArray => 0xA1
 
-      case BuiltInFunction2(op) => 0xB0 | (builtInOp2(op) << 8)
+      case BuiltInFunction2(op) => 0xB1 | (builtInOp2(op) << 8)
     }
     
     def reductionNum(red: Reduction) = red match {

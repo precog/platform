@@ -22,7 +22,10 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       val (right2, rightBindings, rightErrors) = performShake(right)
       
       if (rightBindings contains (Right(id) -> UserDef(b))) {
-        val unusedParamBindings = Set(params zip (Stream continually (UserDef(b): Binding)): _*) &~ leftBindings.map({ case (id, b) => (id.left.get, b) })
+        val unusedParamBindings = Set(params zip (Stream continually (UserDef(b): Binding)): _*) &~ leftBindings.collect { 
+          case (Left(id), b) => (id, b)
+        }  
+
         val errors = unusedParamBindings map { case (id, _) => Error(b, UnusedTicVariable(id)) }
         
         (Let(loc, id, params, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors ++ errors)
