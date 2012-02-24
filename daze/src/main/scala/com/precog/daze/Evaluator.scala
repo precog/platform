@@ -579,7 +579,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case BuiltInFunction2(ChangeTimeZone) => {
         case (SString(time), SString(tz)) => {
           if (isValidTimezone(tz) && isValidTime(time)) {
-            Some(Decimadfl(0))
+            Some(SDecimal(0))
           }
           
         case _ => None
