@@ -24,7 +24,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val Let(_, _, _, left: Dispatch, _) = parse("a := a 42")
       left.binding mustEqual NullBinding
       left.isReduction mustEqual false
-      left.errors mustEqual Set(UndefinedFunction("a"))
+      left.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
     "bind all tic-variables in expression scope" in {
@@ -73,30 +73,32 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         val d @ Dispatch(_, _, _) = parse("foo")
         d.binding mustEqual NullBinding
         d.isReduction mustEqual false
-        d.errors mustEqual Set(UndefinedFunction("foo"))
+        d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
       }
       
       {
         val d @ Dispatch(_, _, _) = parse("foo(2, 1, 4)")
         d.binding mustEqual NullBinding
         d.isReduction mustEqual false
-        d.errors mustEqual Set(UndefinedFunction("foo"))
-      }
-      
-      {
-        val d @ Dispatch(_, _, _) = parse("bar")
-        d.binding mustEqual NullBinding
-        d.isReduction mustEqual false
-        d.errors mustEqual Set(UndefinedFunction("bar"))
-      }
-      
-      {
-        val d @ Dispatch(_, _, _) = parse("baz")
-        d.binding mustEqual NullBinding
-        d.isReduction mustEqual false
-        d.errors mustEqual Set(UndefinedFunction("baz"))
+        d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
       }
     }
+
+    "reject unbound dispatch with a namespace" in {
+      {
+        val d @ Dispatch(_, _, _) = parse("foo :: bar :: baz")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo", "bar"), "baz")))
+      }
+      
+      {
+        val d @ Dispatch(_, _, _) = parse("foo :: bar :: baz(7, 8, 9)")
+        d.binding mustEqual NullBinding
+        d.isReduction mustEqual false
+        d.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo", "bar"), "baz")))
+      }
+    } 
     
     "reject unbound tic-variables" in {
       {
@@ -122,7 +124,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val Add(_, _, d: Dispatch) = parse("(a := 1 2) + a")
       d.binding mustEqual NullBinding
       d.isReduction mustEqual false
-      d.errors mustEqual Set(UndefinedFunction("a"))
+      d.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
     "not leak tic-variable into an adjacent scope" in {
@@ -253,21 +255,21 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "forward binding through relate" in {
       {
-        val e @ Let(_, _, _, _, Relate(_, d: Dispatch, _, _)) = parse("a := 42 a :: 1 2")
+        val e @ Let(_, _, _, _, Relate(_, d: Dispatch, _, _)) = parse("a := 42 a relate 1 2")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, _, Relate(_, _, d: Dispatch, _)) = parse("a := 42 1 :: a 2")
+        val e @ Let(_, _, _, _, Relate(_, _, d: Dispatch, _)) = parse("a := 42 1 relate a 2")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, _, Relate(_, _, _, d: Dispatch)) = parse("a := 42 1 :: 2 a")
+        val e @ Let(_, _, _, _, Relate(_, _, _, d: Dispatch)) = parse("a := 42 1 relate 2 a")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -539,67 +541,146 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
   
-  "pre-binding of built-in functions" should {
+  "pre-binding of BuiltIns" should {
     "bind count" in {
       val d @ Dispatch(_, _, _) = parse("count")
-      d.binding mustEqual BuiltIn("count", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "count"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind dataset" in {
       val d @ Dispatch(_, _, _) = parse("dataset")
-      d.binding mustEqual BuiltIn("dataset", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "dataset"), 1, false)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "bind max" in {
       val d @ Dispatch(_, _, _) = parse("max")
-      d.binding mustEqual BuiltIn("max", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "max"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind mean" in {
       val d @ Dispatch(_, _, _) = parse("mean")
-      d.binding mustEqual BuiltIn("mean", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "mean"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind median" in {
       val d @ Dispatch(_, _, _) = parse("median")
-      d.binding mustEqual BuiltIn("median", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "median"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind min" in {
       val d @ Dispatch(_, _, _) = parse("min")
-      d.binding mustEqual BuiltIn("min", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "min"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind mode" in {
       val d @ Dispatch(_, _, _) = parse("mode")
-      d.binding mustEqual BuiltIn("mode", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "mode"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind stdDev" in {
       val d @ Dispatch(_, _, _) = parse("stdDev")
-      d.binding mustEqual BuiltIn("stdDev", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
     }
     
     "bind sum" in {
       val d @ Dispatch(_, _, _) = parse("sum")
-      d.binding mustEqual BuiltIn("sum", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "sum"), 1, true)
       d.isReduction mustEqual true
+      d.errors must beEmpty
+    }
+  }
+
+  "pre-binding of Time functions" should {
+    "bind date" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: date")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "date"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind year" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: year")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind quarter" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: quarter")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind monthOfYear" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: monthOfYear")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind weekOfYear" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: weekOfYear")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind dayOfMonth" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfMonth")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind dayOfWeek" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfWeek")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind hourOfDay" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: hourOfDay")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "hourOfDay"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind minuteOfHour" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: minuteOfHour")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind secondOfMinute" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: secondOfMinute")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind changeTimeZone" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: changeTimeZone")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)
+      d.isReduction mustEqual false
       d.errors must beEmpty
     }
   }
