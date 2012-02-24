@@ -60,7 +60,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
   
-  def eval[X](graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
+  def eval[X](userUID: String, graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
     def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
       case SplitRoot(_, depth) => Right(roots(depth))
       
@@ -71,14 +71,14 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
-          case Some(SString(str)) => Left(query.mask(Path(str)))
+          case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
           case Some(_) => Right(ops.empty[X, SEvent, IO])
           
           case None => {
             implicit val order = identitiesOrder(parent.provenance.length)
             
             val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx))) { 
-              case (_, SString(str)) => query.fullProjection[X](Path(str))
+              case (_, SString(str)) => query.fullProjection[X](userUID, Path(str))
               case _ => ops.empty[X, SEvent, IO]
             }
             

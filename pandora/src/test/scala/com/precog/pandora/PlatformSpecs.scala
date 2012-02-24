@@ -74,7 +74,7 @@ class PlatformSpecs extends Specification
     }
   }
   
-  val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  val controlTimeout = Duration(30, "seconds") // it's just unreasonable to run tests longer than this
   
   type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
   lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
@@ -138,8 +138,8 @@ class PlatformSpecs extends Specification
         | hist""".stripMargin
         
       eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(50))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(50))))
     }
     
     /* commented out until we have memoization (MASSIVE time sink)
@@ -200,7 +200,7 @@ class PlatformSpecs extends Specification
     val tree = compile(str)
     tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
-    consumeEval(dag)
+    consumeEval("dummyUID", dag)
   }
   
   def startup() {

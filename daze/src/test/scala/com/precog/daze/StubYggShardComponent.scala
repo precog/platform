@@ -90,6 +90,8 @@ trait StubYggShardComponent {
         Future(projections.keys.flatMap(pd => pd.columns.collect { case cd @ ColumnDescriptor(`path`, `selector`, _, _) => (pd, ColumnMetadata.Empty) }).toMap)
     }
 
+    def userMetadataView(uid: String) = metadata
+
     def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] =
       Future(projections(descriptor))
   }

@@ -64,6 +64,7 @@ import scalaz.NonEmptyList
 import scalaz.Scalaz._
 
 import com.precog.analytics._
+import com.precog.common._
 import com.precog.ct._
 import com.precog.ct.Mult._
 import com.precog.ct.Mult.MDouble._

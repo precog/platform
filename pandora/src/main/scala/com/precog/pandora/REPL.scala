@@ -61,6 +61,8 @@ trait REPL extends LineErrors
     with DatasetConsumers 
     with OperationsAPI {
 
+  val dummyUID = "dummyUID"
+
   val Prompt = "quirrel> "
   val Follow = "       | "
 
@@ -101,7 +103,7 @@ trait REPL extends LineErrors
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = consumeEval(graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+            val result = consumeEval(dummyUID, graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
             
             out.println()
             out.println(color.cyan(result))

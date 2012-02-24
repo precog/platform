@@ -53,15 +53,15 @@ object LevelDBByteProjectionSpec {
   val cvDouble2 = CDouble(9)
   val cvNum = CNum(8)
 
-  val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), SStringFixed(1), Ownership(Set()))
-  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), SStringArbitrary, Ownership(Set()))
-  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), SBoolean, Ownership(Set()))
-  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), SInt, Ownership(Set()))
-  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), SLong, Ownership(Set()))
-  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), SFloat, Ownership(Set()))
-  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), SDouble, Ownership(Set()))
-  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), SDouble, Ownership(Set()))  
-  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), SDecimalArbitrary, Ownership(Set()))
+  val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), SStringFixed(1), Authorities(Set()))
+  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), SStringArbitrary, Authorities(Set()))
+  val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), SBoolean, Authorities(Set()))
+  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), SInt, Authorities(Set()))
+  val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), SLong, Authorities(Set()))
+  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), SFloat, Authorities(Set()))
+  val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), SDouble, Authorities(Set()))
+  val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), SDouble, Authorities(Set()))  
+  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), SDecimalArbitrary, Authorities(Set()))
 
   def byteProjectionInstance(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = { 
     ProjectionDescriptor(indexedColumns, sorting) map { d => 
@@ -147,13 +147,13 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         def genPath: Gen[Path] = Gen.oneOf(Seq(Path("path1"),Path("path2"),Path("path3"),Path("path4"),Path("path5")))
         def genJPath: Gen[JPath] = Gen.oneOf(Seq(JPath("jpath1"),JPath("jpath2"),JPath("jpath3"),JPath("jpath4"),JPath("jpath5")))
         def genColumnType: Gen[ColumnType] = Gen.oneOf(Seq(SInt,SFloat,SBoolean,SDouble,SLong,SDecimalArbitrary,SStringArbitrary))
-        def genOwnership: Gen[Ownership] = Gen.oneOf(Seq(Ownership(Set())))
+        def genAuthorities: Gen[Authorities] = Gen.oneOf(Seq(Authorities(Set())))
   
         val genColumnDescriptor = for {
           path      <- genPath
           selector  <- genJPath
           valueType <- genColumnType
-          ownership <- genOwnership
+          ownership <- genAuthorities
         } yield ColumnDescriptor(path, selector, valueType, ownership)
   
         genColumnDescriptor
