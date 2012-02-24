@@ -165,6 +165,7 @@ trait LevelDBByteProjection extends ByteProjection {
           val sdecimalarb: Array[Byte] = new Array(length)
           buf.get(sdecimalarb)
           CNum(sdecimalarb.as[BigDecimal])
+        case invalid                => sys.error("Invalid type read: " + invalid)
       }
     }
   }
