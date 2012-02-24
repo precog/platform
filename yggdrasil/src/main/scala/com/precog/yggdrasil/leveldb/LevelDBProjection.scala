@@ -35,6 +35,7 @@ import Bijection._
 import com.weiglewilczek.slf4s.Logger
 import scala.collection.JavaConverters._
 import scala.collection.Iterator
+import scala.collection.mutable.ArrayBuffer
 import scala.io.Source
 
 import scalaz.{Ordering => _, Source => _, _}
@@ -179,15 +180,29 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     new EnumeratorT[X, Vector[E], F] { 
       def apply[A] = {
         val iter = idIndexFile.iterator
-        val sIter = iter.asScala
         val close = IO(iter.close)
 
         def step(s : StepT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
           val _done = iterateeT[X, Vector[E], F, A](MO.promote(close) >> s.pointI.value)
 
           s.fold(
-            cont = k => if (sIter.hasNext) {
-              val chunk = Vector(sIter.map{ n => unproject(n.getKey, n.getValue)(f) }.take(chunkSize).toSeq: _*)
+            cont = k => if (iter.hasNext) {
+              val buffer = new ArrayBuffer[E](chunkSize)
+              var i = 0
+              val rawChunk: org.fusesource.leveldbjni.KeyValueChunk = iter.asInstanceOf[org.fusesource.leveldbjni.internal.JniDBIterator].nextChunk(chunkSize)
+              while (i < rawChunk.getSize) {
+                buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
+                i += 1
+              }
+
+//              val buffer = new ArrayBuffer[E](chunkSize)
+//              var i = chunkSize
+//              while (i > 0 && iter.hasNext) {
+//                val n = iter.next
+//                buffer += unproject(n.getKey, n.getValue)(f)
+//                i -= 1
+//              }
+              val chunk = Vector(buffer: _*)
               k(elInput(chunk)) >>== step
             } else {
               _done
