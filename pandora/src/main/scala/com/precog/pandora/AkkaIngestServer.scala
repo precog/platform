@@ -22,8 +22,8 @@ package pandora
 
 import common.Event
 import common.EventMessage
+import common.NullQueryExecutor
 import ingest.EventStore
-import ingest.NullQueryExecutor
 import ingest.IngestServer
 import yggdrasil.shard.YggShard
 
@@ -34,9 +34,9 @@ import akka.dispatch.MessageDispatcher
 
 import blueeyes.bkka.AkkaDefaults
 
-import net.lag.configgy.ConfigMap
-
 import scalaz.effect.IO
+
+import org.streum.configrity.Configuration
 
 trait AkkaIngestServer extends IngestServer { self =>
   lazy val actorSystem = ActorSystem("akka_ingest_server")
@@ -46,12 +46,12 @@ trait AkkaIngestServer extends IngestServer { self =>
 
   def storage: YggShard
   
-  def queryExecutorFactory(configMap: ConfigMap) = new NullQueryExecutor {
+  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
     lazy val actorSystem = self.actorSystem
     implicit def executionContext = self.asyncContext
   }
 
-  def eventStoreFactory(eventConfig: ConfigMap): EventStore = {
+  def eventStoreFactory(eventConfig: Configuration): EventStore = {
     new EventStore {
       private val idSource = new java.util.concurrent.atomic.AtomicInteger(0)
 

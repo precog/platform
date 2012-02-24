@@ -44,8 +44,10 @@ import scalaz.std.AllInstances._
 import Iteratee._
 import MonadPartialOrder._
 
+import com.precog.common.VectorCase
+
 class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
-  type MemoContext = MemoizationContext.Noop.type
+  type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
 
   implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
@@ -54,21 +56,21 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   object yggConfig extends YggConfig {
     def sortBufferSize = 10
     def sortWorkDir = sys.error("not used")
-    def sortSerialization = SimpleProjectionSerialization
     def flatMapTimeout = intToDurationInt(30).seconds
   }
 
+  implicit val chunkSerialization = SimpleProjectionSerialization
   val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
-      val enumP = enumPStream[Unit, SEvent, IO](Stream(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3")), SEvent(Vector(), SString("1"))))
+      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
       val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, intToDurationInt(30).seconds)
 
-      (consume[Unit, SEvent, IO, List] &= sorted[IO])
-      .run(_ => sys.error("...")).unsafePerformIO.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
+      (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO])
+      .run(_ => sys.error("...")).unsafePerformIO.flatten.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
     }
   }
 }

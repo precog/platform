@@ -59,32 +59,27 @@ class PlatformSpecs extends Specification
     with LevelDBQueryComponent 
     with DiskMemoizationComponent {
 
-  def loadConfig(dataDir: Option[String]): IO[BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig] = IO {
-    val rawConfig = dataDir map { "precog.storage.root = " + _ } getOrElse { "" }
+  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig 
 
-    new BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig {
-      val config = Configuration.parse(rawConfig)  
-      val flatMapTimeout = controlTimeout
-      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      val sortWorkDir = scratchDir
-      val sortSerialization = SimpleProjectionSerialization
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-      val memoizationSerialization = SimpleProjectionSerialization
+  object yggConfig extends YggConfig {
+    lazy val config = Configuration parse {
+      Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
+
+    lazy val flatMapTimeout = controlTimeout
+    lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    lazy val sortWorkDir = scratchDir
+    lazy val chunkSerialization = SimpleProjectionSerialization
+    lazy val memoizationBufferSize = sortBufferSize
+    lazy val memoizationWorkDir = scratchDir
+    lazy val maxEvalDuration = controlTimeout
   }
-  
-  val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
-  
-  type YggConfig = YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig
-  lazy val yggConfig = loadConfig(Option(System.getProperty("precog.storage.root"))).unsafePerformIO
-  
-  val maxEvalDuration = controlTimeout
-  
-  val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
+
+  lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
   object storage extends ActorYggShard {
-    val yggState = shardState 
+    lazy val yggState = shardState 
   }
   
   object ops extends Ops 
@@ -96,6 +91,14 @@ class PlatformSpecs extends Specification
   }
   
   "the full stack" should {
+    "count a filtered clicks dataset" in {
+      val input = """
+        | clicks := dataset(//clicks)
+        | count(clicks where clicks.time > 0)""".stripMargin
+        
+      eval(input) mustEqual Set(SDecimal(100))
+    }
+    
     "count the campaigns dataset" >> {
       "<root>" >> {
         eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
@@ -130,8 +133,8 @@ class PlatformSpecs extends Specification
         | hist""".stripMargin
         
       eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(55))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(45))))
+        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(50))),
+        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(50))))
     }
     
     /* commented out until we have memoization (MASSIVE time sink)
@@ -149,11 +152,15 @@ class PlatformSpecs extends Specification
         |     { revenue: 'revenue, num: count(campaigns') }
         |   
         | hist""".stripMargin
-        
+
+      println("Waiting")
+      Thread.sleep(30000)
+      
       eval(input) mustEqual Set()   // TODO
     }
-    
+     
     "determine most isolated clicks in time" in {
+
       val input = """
         | clicks := dataset(//clicks)
         | 
@@ -172,10 +179,28 @@ class PlatformSpecs extends Specification
         | meanBelow := mean(spacings.below)
         | 
         | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+
+      def time[T](f : => T): (T, Long) = {
+        val start = System.currentTimeMillis
+        val result = f
+        (result, System.currentTimeMillis - start)
+      }
+
+      println("warmup")
+      (1 to 10).foreach(_ => eval(input))
+
+      println("warmup complete")
+      Thread.sleep(30000)
+      println("running")
+
+      val runs = 25
+
+      println("Avg run time = " + (time((1 to runs).map(_ => eval(input)))._2 / (runs * 1.0)) + "ms")
         
-      eval(input) mustEqual Set()   // TODO
+      //eval(input) mustEqual Set()   // TODO
+      true mustEqual false
     }
-     */
+    */
   }
   
   step {
@@ -189,7 +214,7 @@ class PlatformSpecs extends Specification
     val tree = compile(str)
     tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
-    consumeEval(dag)
+    consumeEval("dummyUID", dag)
   }
   
   def startup() {

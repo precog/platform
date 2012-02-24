@@ -32,8 +32,6 @@ import blueeyes.json.JPath
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
-import net.lag.configgy.ConfigMap
-
 import org.joda.time.DateTime
 
 import java.util.concurrent.TimeUnit._

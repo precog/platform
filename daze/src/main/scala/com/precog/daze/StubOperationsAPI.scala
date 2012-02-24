@@ -19,6 +19,7 @@
  */
 package com.precog.daze
 
+import com.precog.common.VectorCase
 import com.precog.yggdrasil._
 import com.precog.analytics.Path
 
@@ -47,26 +48,30 @@ object StubOperationsAPI {
   implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 }
 
-// TODO decouple this from the evaluator specifics
-trait DatasetConsumers extends Evaluator {
+trait DatasetConsumersConfig extends EvaluatorConfig {
   def maxEvalDuration: akka.util.Duration
+}
 
-  def consumeEval(graph: DepGraph): Set[SEvent] = {
+// TODO decouple this from the evaluator specifics
+trait DatasetConsumers extends Evaluator with YggConfigComponent {
+  type YggConfig <: DatasetConsumersConfig 
+
+  def consumeEval(userUID: String, graph: DepGraph): Set[SEvent] = {
     val results = Await.result(
-      eval(graph).fenum.map { (enum: EnumeratorP[Unit, SEvent, IO]) => 
+      eval(userUID, graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
         try {
-          Right(((consume[Unit, SEvent, IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
+          Right(((consume[Unit, Vector[SEvent], IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
         } catch {
           case e => Left(e)
         }
       },
-      maxEvalDuration
+      yggConfig.maxEvalDuration
     )
 
     results.left foreach { throw _ }
 
     val Right(back) = results
-    back
+    back.flatten
   }
 }
 
@@ -74,22 +79,27 @@ trait StubOperationsAPI
     extends StorageEngineQueryComponent
     with YggdrasilEnumOpsComponent
     with DatasetConsumers { self =>
+  type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
-  object query extends QueryAPI
+  object query extends QueryAPI {
+    val chunkSize = 2000
+  }
   
   trait QueryAPI extends StorageEngineQueryAPI {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
+
+    def chunkSize: Int
     
-    private case class StubDatasetMask[X](path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
+    private case class StubDatasetMask[X](userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[X] = this
       
       def realize(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
-        fullProjection[X](path) collect unlift(mask)
+        fullProjection[X](userUID, path) collect unlift(mask)
       }
       
       private def mask(sev: SEvent): Option[SEvent] = {
@@ -112,15 +122,15 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection[X](path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
+    def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
       DatasetEnum(akka.dispatch.Promise.successful(readJSON[X](path)))
     
-    def mask[X](path: Path): DatasetMask[X] = StubDatasetMask(path, Vector())
+    def mask[X](userUID: String, path: Path): DatasetMask[X] = StubDatasetMask(userUID, path, Vector())
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
       val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
-      Iteratee.enumPStream[X, SEvent, IO](stream)
+      Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
     }
     
     private def scaleId(path: Path)(seed: Int): Long = {
@@ -140,7 +150,7 @@ trait StubOperationsAPI
       JsonParser parse str
     
     private def wrapSEvent(id: Long, value: JValue): SEvent =
-      (Vector(id), wrapSValue(value))
+      (VectorCase(id), wrapSValue(value))
     
     private def wrapSValue(value: JValue): SValue = new SValue {
       def fold[A](

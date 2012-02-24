@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package leveldb
 
+import com.precog.common.VectorCase
 import com.precog.util.Bijection._
 import java.nio.ByteBuffer
 import scalaz.Order
@@ -247,9 +248,9 @@ trait LevelDBByteProjection extends ByteProjection {
     merge(mergeDirectives.reverse, keyMembers, valueMembers, Nil)
   }
 
-  private def orderIdentities(identitiesInKey: Vector[(Int,Long)]): Vector[Long] = {
+  private def orderIdentities(identitiesInKey: Vector[(Int,Long)]): VectorCase[Long] = {
     val sorted = identitiesInKey.sorted
-    sorted.map(id => id._2)
+    VectorCase.fromSeq(sorted.map(id => id._2))
   }
 
   def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {

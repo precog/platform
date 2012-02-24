@@ -63,7 +63,6 @@ object CValue {
       case (CNum(a), CNum(b)) => Order[BigDecimal].order(a, b)
       case (vx, vy) => Order[Int].order(vx.typeIndex, vy.typeIndex)
     }
-
   }
 }
 

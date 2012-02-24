@@ -38,23 +38,7 @@ import Scalaz._
 
 import java.util.concurrent.atomic.AtomicInteger
 
-
 package object ingest {
-
-  trait QueryExecutor {
-    def execute(query: String): JValue
-    def startup: Future[Unit]
-    def shutdown: Future[Unit]
-  }
-
-  trait NullQueryExecutor extends QueryExecutor {
-    def actorSystem: ActorSystem
-    implicit def executionContext: ExecutionContext
-
-    def execute(query: String) = JString("Query service not avaialble")
-    def startup = Future(())
-    def shutdown = Future { actorSystem.shutdown }
-  }
 
   trait EventStore {
     def save(event: Event): Future[Unit]
