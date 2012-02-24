@@ -47,7 +47,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   import dag._
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
-  implicit val chunkSerialization = yggConfig.chunkSerialization
+  lazy implicit val chunkSerialization = yggConfig.chunkSerialization
   
   def eval[X](userUID: String, graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
     def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
