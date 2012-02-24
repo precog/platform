@@ -22,6 +22,7 @@ package shard
 
 import com.precog.analytics.Path
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.util._
 import com.precog.util.Bijection._
 import com.precog.yggdrasil.util.IOUtils
@@ -91,7 +92,7 @@ import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 
 trait YggShard {
-  def userMetadataView(uid: String): StorageMetadata
+  def userMetadataView(uid: String): MetadataView
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
   def store(msg: EventMessage): Future[Unit]
 }
@@ -114,7 +115,7 @@ trait ActorYggShard extends YggShard with Logging {
   lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, yggState.descriptorLocator, yggState.descriptorIO)), "router")
   lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, yggState.checkpoints)), "metadata")
   lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor)
-  def userMetadataView(uid: String): StorageMetadata = metadata
+  def userMetadataView(uid: String): MetadataView = new UserMetadataView(uid, UnlimitedAccessControl, metadata)
 
   import logger._
 

@@ -108,7 +108,7 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   // - metadata must NEVER be ahead of leveldb state
   // - zookeeper state must NEVER be ahead of metadata
 
-  private var lastCheckpoint = YggCheckpoint(6983018146L, VectorClock.empty)
+  private var lastCheckpoint = YggCheckpoint(19875835201L, VectorClock.empty)
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {

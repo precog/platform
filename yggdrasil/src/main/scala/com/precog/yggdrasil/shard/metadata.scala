@@ -78,13 +78,20 @@ trait StorageMetadata {
   }
 }
 
-class SecureMetadata(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata { 
+trait MetadataView extends StorageMetadata
+
+class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
+  def findSelectors(path: Path) = metadata.findSelectors(path)
+  def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
+}
+
+class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
   
   def findSelectors(path: Path) = {
     metadata.findSelectors(path) flatMap { selectors =>
       Future.traverse(selectors) { selector =>
         findProjections(path, selector) map { result =>
-          if(result.size > 1) List(selector) else List.empty 
+          if(result.isEmpty) List.empty else List(selector)
         }
       } map { _.flatten }
     }
@@ -92,13 +99,14 @@ class SecureMetadata(uid: String, accessControl: AccessControl, metadata: Storag
 
   def findProjections(path: Path, selector: JPath) = {
     metadata.findProjections(path, selector) map { _.filter {
-      case (key, value) =>
-        value forall { 
-          case (colDesc, _) => 
-            val uids = colDesc.authorities.uids
-            accessControl.mayAccessData(uid, path, uids, DataQuery)
-        }
-    }}
+        case (key, value) =>
+          value forall { 
+            case (colDesc, _) => 
+              val uids = colDesc.authorities.uids
+              accessControl.mayAccessData(uid, path, uids, DataQuery)
+          }
+      }
+    }
   }
 }
 
