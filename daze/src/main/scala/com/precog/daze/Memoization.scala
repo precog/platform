@@ -45,8 +45,18 @@ trait BufferingContext extends MemoizationContext {
   def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]]
 }
 
+object BufferingContext {
+  def memory(bufferSize: Int): BufferingContext = new MemoizationContext.Noop with BufferingContext {
+    def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = {
+      import MO._
+      import scalaz.std.list._
+      take[X, E, F, List](bufferSize).map(l => EnumeratorP.enumPStream[X, E, IO](l.toStream))
+    }
+  }
+}
+
 object MemoizationContext {
-  object Noop extends MemoizationContext {
+  class Noop extends MemoizationContext {
     def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = Left(
       new Memoizer[X, E] {
         def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = iter
@@ -56,6 +66,8 @@ object MemoizationContext {
     def expire(memoId: Int) = IO(())
     def purge = IO(())
   }
+
+  object Noop extends Noop
 }
 
 trait MemoizationComponent {
