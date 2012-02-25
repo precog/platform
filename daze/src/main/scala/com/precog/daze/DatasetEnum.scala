@@ -152,13 +152,13 @@ trait DatasetEnumOps {
 
   def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] 
 
-  def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: ClassManifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
+  def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: Manifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
   
   def memoize[X, E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)(implicit fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
 
   // result must be (stably) ordered by key!!!!
   type Key = List[SValue]
-  def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key], sfs: FileSerialization[(Key, SEvent)], buffering: Buffering[Vector[SEvent]], asyncContext: ExecutionContext): Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
+  def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key], fs: FileSerialization[Vector[(Key, SEvent)]], buffering: Buffering[Vector[SEvent]], asyncContext: ExecutionContext): Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
 }
 
 // vim: set ts=4 sw=4 et:
