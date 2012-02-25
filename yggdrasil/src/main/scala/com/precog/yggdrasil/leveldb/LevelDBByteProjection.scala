@@ -60,9 +60,9 @@ trait LevelDBByteProjection extends ByteProjection {
     def toArray: Array[Byte] = buf.array
   }
 
-  private val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
+  private final val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
-  private def listWidths(cvalues: Seq[CValue]): List[Int] = 
+  private final def listWidths(cvalues: Seq[CValue]): List[Int] = 
     descriptor.columns.map(_.valueType.format) zip cvalues map {
       case (FixedWidth(w), sv) => w
       case (LengthEncoded, sv) => 
@@ -75,7 +75,7 @@ trait LevelDBByteProjection extends ByteProjection {
         )
     }
 
-  private def allocateWidth(valueWidths: Seq[Int]): (Int) =  
+  private final def allocateWidth(valueWidths: Seq[Int]): (Int) =  
     descriptor.sorting.foldLeft(0) { 
       case (width, (col, ById)) =>
         (width + 8)
@@ -89,7 +89,7 @@ trait LevelDBByteProjection extends ByteProjection {
     }
 
 
-  def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
+  final def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
     lazy val valueWidths = listWidths(cvalues)
     val indexWidth = allocateWidth(valueWidths) 
 
@@ -131,70 +131,29 @@ trait LevelDBByteProjection extends ByteProjection {
 
     (keyBuffer.toArray, valuesBuffer.toArray)
   }
-
-  /** Mutable wrapper around a byte array to allow direct extraction of CValues */
-  private class LevelDBReadBuffer(arr: Array[Byte]) {
-    private final val buf = ByteBuffer.wrap(arr)
-
-    def readIdentity(): Long = buf.getLong
-
-    def readValue(valueType: ColumnType): CValue = {
-      valueType match {
-        case SStringFixed(width)    => 
-            val sstringbuffer: Array[Byte] = new Array(width)
-            buf.get(sstringbuffer)
-            CString(new String(sstringbuffer, "UTF-8"))
-        
-        case SStringArbitrary       => 
-          val length: Int = buf.getInt
-          val sstringarb: Array[Byte] = new Array(length)
-          buf.get(sstringarb)
-          CString(new String(sstringarb, "UTF-8"))
-
-        case SBoolean               => 
-          val b: Byte = buf.get
-          if (b == trueByte)       CBoolean(true)
-          else if (b == falseByte) CBoolean(false)
-          else                     sys.error("Boolean byte value was not true or false")
-
-        case SInt                   => CInt(buf.getInt)
-        case SLong                  => CLong(buf.getLong)
-        case SFloat                 => CFloat(buf.getFloat)
-        case SDouble                => CDouble(buf.getDouble)
-        case SDecimalArbitrary      => 
-          val length: Int = buf.getInt
-          val sdecimalarb: Array[Byte] = new Array(length)
-          buf.get(sdecimalarb)
-          CNum(sdecimalarb.as[BigDecimal])
-        case invalid                => sys.error("Invalid type read: " + invalid)
-      }
-    }
-  }
-
-  private type RBuf = LevelDBReadBuffer
-  private type IdentityRead = LevelDBReadBuffer => Tuple2[Int, Long]
-  private type ValueRead    = LevelDBReadBuffer => CValue
-
-
+  
+  private type RBuf = ByteBuffer
+  private type IdentityRead = ByteBuffer => Tuple2[Int, Long]
+  private type ValueRead    = ByteBuffer => CValue
       
   private lazy val keyParsers: IndexedSeq[Either[IdentityRead, ValueRead]] = { //should be able to remove the unused variable
     val (initial, unused) = descriptor.sorting.foldLeft((ArrayBuffer.empty[Either[IdentityRead, ValueRead]], ListSet(0.until(descriptor.identities): _*))) {
       case ((acc, ids), (col, ById))          => 
         val identityIndex = descriptor.indexedColumns(col)
-        (acc :+ Left((buf:RBuf) => (identityIndex, buf.readIdentity())), ids - identityIndex)
+        (acc :+ Left((buf:RBuf) => (identityIndex, CValueReader.readIdentity(buf))), ids - identityIndex)
 
       case ((acc, ids), (col, ByValue))       => 
-        (acc :+ Right((_:RBuf).readValue(col.valueType)), ids)
+        (acc :+ Right((buf:RBuf) => CValueReader.readValue(buf, col.valueType)), ids)
 
       case ((acc, ids), (col, ByValueThenId)) => 
         val identityIndex = descriptor.indexedColumns(col)
         (
-            acc :+ Right((_:RBuf).readValue(col.valueType)) :+ Left((buf:RBuf) => (identityIndex, buf.readIdentity())), 
+            acc :+ Right((buf:RBuf) => CValueReader.readValue(buf, col.valueType)) :+ Left((buf:RBuf) => (identityIndex, CValueReader.readIdentity(buf))), 
             ids - identityIndex
         )
     }
 
-    val unusedIdentities: List[IdentityRead] = unused.toList.sorted.map(i => (buf:RBuf) => (i, buf.readIdentity()))
+    val unusedIdentities: List[IdentityRead] = unused.toList.sorted.map(i => (buf:RBuf) => (i, CValueReader.readIdentity(buf)))
 
     unusedIdentities.foldLeft(initial) {
       case (acc, id) => acc :+ Left(id) 
@@ -209,7 +168,7 @@ trait LevelDBByteProjection extends ByteProjection {
         case _                => false
       })
     } map { col => 
-      (_: RBuf).readValue(col.valueType)
+      (buf: RBuf) => CValueReader.readValue(buf, col.valueType)
     }
   }
 
@@ -220,7 +179,7 @@ trait LevelDBByteProjection extends ByteProjection {
     }) 
   }
 
-  private def mergeValues(keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {  
+  private final def mergeValues(keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {  
     @tailrec def merge(mergeDirectives: List[Boolean], keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue], result: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {
       mergeDirectives match {
         case true  :: ms => merge(ms, keyMembers.init, valueMembers, result :+ keyMembers.last)
@@ -231,18 +190,18 @@ trait LevelDBByteProjection extends ByteProjection {
     merge(mergeDirectives.reverse, keyMembers, valueMembers, ArrayBuffer())
   }
 
-  private def orderIdentities(identitiesInKey: ArrayBuffer[(Int,Long)]): VectorCase[Long] = {
+  private final def orderIdentities(identitiesInKey: ArrayBuffer[(Int,Long)]): VectorCase[Long] = {
     val sorted = identitiesInKey.sorted
     VectorCase.fromSeq(sorted.map(id => id._2))
   }
 
-  def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {
+  final def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {
     val identitiesInKey = ArrayBuffer[(Int,Long)]()
     val valuesInKey = ArrayBuffer[CValue]()
     val valueMembers = ArrayBuffer[CValue]()
 
-    val keyBuffer = new LevelDBReadBuffer(keyBytes)
-    val valueBuffer = new LevelDBReadBuffer(valueBytes)
+    val keyBuffer = ByteBuffer.wrap(keyBytes)
+    val valueBuffer = ByteBuffer.wrap(valueBytes)
     
     keyParsers.foreach {
       case Left(lf)  => identitiesInKey += lf(keyBuffer)
@@ -257,10 +216,10 @@ trait LevelDBByteProjection extends ByteProjection {
     f(identities, values)
   }
 
-  def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
+  final def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
     def order(k1: Array[Byte], k2: Array[Byte]) = {
-      val buf1 = new LevelDBReadBuffer(k1)
-      val buf2 = new LevelDBReadBuffer(k2)
+      val buf1 = ByteBuffer.wrap(k1)
+      val buf2 = ByteBuffer.wrap(k2)
 
       var ordering : Ordering = Ordering.EQ
       val idOrder = Order[(Int,Long)]
@@ -285,6 +244,45 @@ trait LevelDBByteProjection extends ByteProjection {
     }
   }
 
+}
+
+// Utility methods for CValue extraction (avoid allocation)
+private[leveldb] object CValueReader {
+  import LevelDBByteProjection.{trueByte, falseByte}
+
+  final def readIdentity(buf: ByteBuffer): Long = buf.getLong
+
+  final def readValue(buf: ByteBuffer, valueType: ColumnType): CValue = {
+    valueType match {
+      case SStringFixed(width)    => 
+        val sstringbuffer: Array[Byte] = new Array(width)
+        buf.get(sstringbuffer)
+        CString(new String(sstringbuffer, "UTF-8"))
+      
+      case SStringArbitrary       => 
+        val length: Int = buf.getInt
+        val sstringarb: Array[Byte] = new Array(length)
+        buf.get(sstringarb)
+        CString(new String(sstringarb, "UTF-8"))
+
+      case SBoolean               => 
+        val b: Byte = buf.get
+        if (b == trueByte)       CBoolean(true)
+        else if (b == falseByte) CBoolean(false)
+        else                     sys.error("Boolean byte value was not true or false")
+
+      case SInt                   => CInt(buf.getInt)
+      case SLong                  => CLong(buf.getLong)
+      case SFloat                 => CFloat(buf.getFloat)
+      case SDouble                => CDouble(buf.getDouble)
+      case SDecimalArbitrary      => 
+        val length: Int = buf.getInt
+        val sdecimalarb: Array[Byte] = new Array(length)
+        buf.get(sdecimalarb)
+        CNum(sdecimalarb.as[BigDecimal])
+      case invalid                => sys.error("Invalid type read: " + invalid)
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:
