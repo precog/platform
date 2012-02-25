@@ -90,14 +90,14 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
           case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
         } }
 
-        ctx[Unit, Vector[SEvent]](0) must beLike {
+        ctx.memoizing[Unit, Vector[SEvent]](0) must beLike {
           case Left(f) => 
             (
-              (f.memoizing[IO, List[Vector[SEvent]]](consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+              (f(consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                 case (_, v) => v.mapLongOr(-1L)(identity[Long])
               } must_== expected
             ) and (
-              ctx[Unit, Vector[SEvent]](0) must beLike {
+              ctx.memoizing[Unit, Vector[SEvent]](0) must beLike {
                 case Right(d) => 
                   (
                     (consume[Unit, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
