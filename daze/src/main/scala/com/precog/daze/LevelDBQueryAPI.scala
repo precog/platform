@@ -39,7 +39,6 @@ import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.set._
-import scalaz.std.AllInstances._
 import Iteratee._
 
 trait LevelDBQueryConfig {
@@ -89,8 +88,11 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       }
     }
 
+    implicit val mergeOrder = Order[Identities].contramap((scol: SColumn) => scol._1)
+
     def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
       def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
+        import scalaz.std.list._
         for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
