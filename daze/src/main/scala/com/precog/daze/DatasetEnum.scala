@@ -139,7 +139,9 @@ trait DatasetEnumOps {
 
   // result must be (stably) ordered by key!!!!
   type Key = List[SValue]
-  def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key], fs: FileSerialization[Vector[(Key, SEvent)]], buffering: Buffering[Vector[SEvent]], asyncContext: ExecutionContext): Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
+  def group[X](d: DatasetEnum[X, SEvent, IO], bufctx: BufferingContext)(f: SEvent => Key)
+              (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
+              Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
 }
 
 // vim: set ts=4 sw=4 et:

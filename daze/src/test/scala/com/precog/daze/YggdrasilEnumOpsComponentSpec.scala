@@ -21,7 +21,10 @@ import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import scalaz.std.string._
-import scalaz.std.AllInstances._
+import scalaz.std.anyVal._
+import scalaz.syntax.order._
+import scalaz.syntax.semigroup._
+import Ordering._
 import Iteratee._
 import MonadPartialOrder._
 
@@ -42,6 +45,12 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
+  implicit val keyOrder: Order[ops.Key] = new Order[ops.Key] {
+    def order(k1: ops.Key, k2: ops.Key) = (k1.size ?|? k2.size) |+| (k1 zip k2).foldLeft[Ordering](EQ) {
+      case (ord, (v1, v2)) => ord |+| (v1 ?|? v2)
+    }
+  }
+
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
@@ -50,6 +59,21 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
 
       (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO])
       .run(_ => sys.error("...")).unsafePerformIO.flatten.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
+    }
+  }
+
+  "group" should {
+    "group values" in {
+
+      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(Vector(), SString("2")), SEvent(Vector(), SString("3"))), Vector(SEvent(Vector(), SString("1")))))
+      val keyf: SEvent => List[SValue] = { 
+        ev => ev._2.mapStringOr(List(SInt(0)))(s => List(SInt(s.toInt % 2)))
+      }
+
+      val grouped = Await.result((ops.group(DatasetEnum(Future(enumP), None))(keyf)), intToDurationInt(30).seconds)
+
+      val groups = (consume[Unit, (List[SInt], DatasetEnum[Unit, Vector[SEvent], IO]), IO, List] &= grouped[IO]).runOrZero.unsafePerformIO
+      groups must haveSize(2)
     }
   }
 }
