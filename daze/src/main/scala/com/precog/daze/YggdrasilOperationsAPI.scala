@@ -79,7 +79,7 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
                                       // originally provided and use that to consume the sorted buffer. We have to pass EOF to
                                       // restore the EOF that we received that triggered the original processing of the stream.
                                       cont(contf) &= 
-                                      mergeAll[X, E, IO](chunks.map(fs.reader[X]) :+ enumBuffer(i): _*).apply[F] &= 
+                                      mergeAllChunked[X, E, IO](chunks.map(fs.reader[X]) :+ enumBuffer(i): _*).apply[F] &= 
                                       EnumeratorT.perform[X, Vector[E], F, Unit](MO.promote(chunks.foldLeft(IO()) { (io, f) => io >> IO(f.delete) })) &= 
                                       enumEofT
                             )
@@ -123,12 +123,10 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
 
     def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key], fs: FileSerialization[Vector[(Key, SEvent)]], buffering: Buffering[Vector[SEvent]], asyncContext: ExecutionContext): 
     Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] = {
-      sys.error("todo") /*
       type LE = Vector[(Key, SEvent)]
       type Group = (Key, DatasetEnum[X, SEvent, IO])
       
       implicit val pairOrder = ord.contramap((_: (Key, SEvent))._1)
-
 
       def chunked(enum: EnumeratorP[X, Vector[(Key, SEvent)], IO]): EnumeratorP[X, Group, IO] = {
         new EnumeratorP[X, Group, IO] {
@@ -136,34 +134,29 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
             import MO._
 
             def apply[A] = {
-              def outerLoop(last: Option[Key], buffer: Vector[SEvent], s: StepT[X, Group, G, A]): IterateeT[X, LE, G, StepT[X, Group, G, A]] = {
-                // the inner loop will consume elements into the specified iteratee until the key
-                // changes, then will run the outer loop.
-                def loop(last: Option[Key], buffer: Vector[SEvent], bufStep: StepT[X, Vector[SEvent], G, EnumeratorP[X, Vector[SEvent], IO]], groupStep: StepT[X, Group, G, A]):
-                Input[LE] => IterateeT[X, LE, G, StepT[X, Group, G, A]] = {
-                  def loopDone(iter: IterateeT[X, Vector[SEvent], G, EnumeratorP[X, Vector[SEvent], IO]], remainder: Input[LE]): IterateeT[X, LE, G, StepT[X, Group, G, A]] = 
-                    iter flatMap { bufEnum => 
-                      iterateeT(
-                        last.map(k => groupStep.mapCont(_(elInput((k, DatasetEnum(Future(bufEnum))))))).getOrElse(groupStep.pointI) >>== {
-                          outerLoop(last, buffer, _: StepT[X, Group, G, A]) 
-                        }.value map { nextStep =>
-                          sdone(nextStep, emptyInput)
-                        }
-                      )
-                    }
-
-                  (_: Input[LE]).fold(
+              def loop(last: Key, buffer: Vector[SEvent], bufStep: StepT[X, Vector[SEvent], G, EnumeratorP[X, Vector[SEvent], IO]]): Input[Vector[(Key, SEvent)]] => IterateeT[X, Vector[(Key, SEvent)], G, Group] = {
+                def loopDone(bufIter: IterateeT[X, Vector[SEvent], G, EnumeratorP[X, Vector[SEvent], IO]], remainder: Input[Vector[(Key, SEvent)]]) = 
+                  iterateeT(
+                    (bufIter &= enumEofT).foldT(
+                      cont = contf  => sys.error("diverging iteratee"),
+                      done = (a, _) => MO.MG.point(sdone[X, Vector[(Key, SEvent)], G, Group]((last, DatasetEnum(Future(a))), remainder)),
+                      err  = x      => MO.MG.point(serr[X, Vector[(Key, SEvent)], G, Group](x))
+                    )
+                  )
+                  
+                (in: Input[Vector[(Key, SEvent)]]) => {
+                  in.fold(
                     el = el => 
                       el.headOption match {
-                        case Some((k, _)) if last.forall(_ == k) => 
-                          val (prefix, remainder) = el.span(_._1 == k)
+                        case Some((`last`, _)) =>
+                          val (prefix, remainder) = el.span(_._1 == last)
                           val merged = buffer ++ prefix.map(_._2)
 
                           if (remainder.isEmpty) {
                             if (merged.size < yggConfig.sortBufferSize) {
                               // we don't know whether the next chunk will have more data corresponding to this key, so
                               // we just continue, appending to our buffer but not advancing the bufstep.
-                              cont(loop(last, merged, bufStep, groupStep))
+                              cont(loop(last, merged, bufStep))
                             } else {
                               // we need to advance the bufstep with a chunk of maximal size, then
                               // continue with the rest in the buffer.
@@ -171,7 +164,7 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
                               iterateeT(
                                 for {
                                   bufStep  <- bufStep.mapCont(_(elInput(chunk))).value
-                                  loopStep <- cont(loop(last, rest, bufStep, groupStep)).value
+                                  loopStep <- cont(loop(last, rest, bufStep)).value
                                 } yield loopStep
                               )
                             }
@@ -182,25 +175,39 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
                             } else {
                               //advance the bufstep with a chunk of maximal size, then the rest, then be done.
                               val (chunk, rest) = merged.splitAt(yggConfig.sortBufferSize)
-                              loopDone(bufStep.mapCont(_(elInput(chunk))) >>== (s => s.mapCont(_(elInput(rest)))), elInput(remainder))
+                              loopDone((bufStep.mapCont(_(elInput(chunk))) >>== (s => s.mapCont(_(elInput(rest))))), elInput(remainder))
                             }
                           }
 
-                        case Some(_) =>
-                          loopDone(bufStep.pointI, elInput(el))
-                          
+                        case Some(_) => 
+                          loopDone(bufStep.pointI, in)
+
                         case None =>
-                          cont(loop(last, buffer, bufStep, groupStep))
+                          cont(loop(last, buffer, bufStep))
                       },
-                    empty = cont(loop(last, buffer, bufStep, groupStep)),
+                    empty = cont(loop(last, buffer, bufStep)),
                     eof   = loopDone(bufStep.mapCont(_(elInput(buffer))), eofInput)
                   )
                 }
-
-                s.mapCont(k => buffering[X, G] >>== (bufStep => cont(k) >>== (groupStep => cont(loop(last, buffer, bufStep, groupStep)))))
               }
 
-              (s: StepT[X, Group, G, A]) => iterateeT((outerLoop(None, Vector(), s) &= enum[G]).run(x => err[X, Group, G, A](x).value))
+              (step: StepT[X, Group, G, A]) => {
+                sys.error("todo") /*
+                // The inner loop will consume elements into the specified iteratee until the key
+                // changes, then will be done. When run with sequenceI, this should consume all of
+                // the available inputs.
+                def outerLoop: Input[Vector[(Key, SEvent)]] => IterateeT[X, Vector[(Key, SEvent)], G, Group] = 
+                  (_: Input[Vector[(Key, SEvent)]]).fold(
+                    el = el => el.headOption match {
+                      case Some((key, _)) => loop(key, Vector(), buffering[X, G])(el)
+                      case None => cont(outerLoop)
+                    },
+                    empty = cont(outerLoop),
+                    eof = 
+                  )
+                  */
+              
+              }
             }
           }
         }
@@ -247,13 +254,12 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
               (s: StepT[X, Group, G, A]) => consume(0, Vector.empty[File]).withResult(enum[G]) {
                 case (i, files) => 
                   val chunks: Seq[EnumeratorP[X, Vector[(Key, SEvent)], IO]] = files.map(fs.reader[X]) :+ enumBuffer(i)
-                  chunked(mergeAll(chunks: _*)).apply[G].apply(s)
+                  s.pointI &= chunked(mergeAllChunked(chunks: _*)).apply[G]
               }
             }
           }
         }
       }
-      */
     }
   }
 }

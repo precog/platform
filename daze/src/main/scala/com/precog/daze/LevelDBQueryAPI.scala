@@ -75,7 +75,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
         for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
-          EnumeratorP.mergeAll(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
+          mergeAllChunked(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
         }
       }
 
@@ -111,7 +111,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
-            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
+            cogroupEChunked[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
               case Right3((id, cv)) => (id, SValue(selector, cv))
