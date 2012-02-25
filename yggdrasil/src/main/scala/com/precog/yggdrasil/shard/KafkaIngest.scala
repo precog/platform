@@ -74,13 +74,14 @@ class KafkaIngest(config: KafkaIngestConfig, router: ActorRef) extends Runnable 
 
 class NewKafkaIngest(checkpoints: YggCheckpoints, config: KafkaIngestConfig, router: ActorRef)(implicit dispatcher: MessageDispatcher) extends Logging {
 
-  private lazy val consumer = {
-    new KafkaConsumer("devqclus03.reportgrid.com", 9092, config.kafkaEventTopic)(ingestMessages _)
+  private lazy val ingester = {
+    val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, config.kafkaEventTopic)
+    new KafkaBatchIngester(batchConsumer)(ingestMessages _)
   }
 
-  def start() = consumer.start(checkpoints.latestCheckpoint.offset)
+  def start() = ingester.start(checkpoints.latestCheckpoint.offset)
 
-  def stop() = consumer.stop()
+  def stop() = ingester.stop()
 
   def ingestMessages(messages: List[MessageAndOffset]) {
     if(!messages.isEmpty) {
@@ -153,11 +154,6 @@ class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordi
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
     pendingCheckpoints = pendingCheckpoints :+ checkpoint 
-    // this is just a hack until I finish the true sync issues
-    // the intention here is prevent the load test env from
-    // not starting at a 0 offset every time it is clear that
-    // this may result in data loss
-    saveRecoveryPoint(checkpoint)
   }
 
   def metadataPersisted(messageClock: VectorClock) {

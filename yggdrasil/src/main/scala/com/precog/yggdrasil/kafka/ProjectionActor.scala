@@ -58,6 +58,7 @@ import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 import scalaz.MonadPartialOrder._
 
+case object Stop
 
 case class ProjectionInsert(identities: Identities, values: Seq[CValue])
 
@@ -68,7 +69,7 @@ trait ProjectionResults {
   def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
 }
 
-class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
+class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor with Logging {
   def asCValue(jval: JValue): CValue = jval match { 
     case JString(s) => CString(s)
     case JInt(i)    => CNum(BigDecimal(i))
@@ -83,7 +84,9 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
       projection.close.unsafePerformIO
 
     case ProjectionInsert(identities, values) => 
+      //logger.debug("Projection insert")
       projection.insert(identities, values).unsafePerformIO
+      sender ! ()
 
     case ProjectionGet => 
       sender ! projection

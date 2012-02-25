@@ -52,9 +52,8 @@ object QueryBlast {
   var count = 0
   var errors = 0
   var startTime = 0L
-  var sum = 0l
-  var min = Long.MaxValue
-  var max = Long.MinValue
+
+  var stats = Map[Int, Stats]()
   
   var interval = 10 
   var intervalDouble = interval.toDouble
@@ -63,26 +62,37 @@ object QueryBlast {
 
   var maxCount : Option[Int] = None
 
-  def notifyError() {
+  class Stats(var count: Int, var errors: Int, var sum: Long, var min: Long, var max: Long)
+
+  def notifyError(index: Int) {
     notifyLock.synchronized {
       errors += 1
+      stats.get(index) match {
+        case Some(stats) => stats.errors += 1
+        case None        => stats = stats + (index -> new Stats(0, 1, 0, 0, 0))
+      }
     }
   }
 
-  def notifyComplete(nanos : Long) {
+  def notifyComplete(index: Int, nanos : Long) {
     notifyLock.synchronized {
+      stats.get(index) match {
+        case Some(stats) =>
+          stats.count += 1
+          stats.sum += nanos
+          stats.min = math.min(stats.min, nanos)
+          stats.max = math.max(stats.max, nanos)
+        case None        => stats = stats + (index -> new Stats(1, 0, nanos, nanos, nanos))
+      }
       count += 1
-      sum += nanos
-      min = math.min(min, nanos)
-      max = math.max(max, nanos)
-
       if ((count + errors) % interval == 0) {
         val now = System.currentTimeMillis()
-        println("%-20d\t%12d\t%f\t%f\t%f\t%f".format(now, errors, intervalDouble / ((now - startTime) / 1000.0d), min / 1000000.0d, max / 1000000.0d, (sum / intervalDouble) / 1000000.0d))
+        stats foreach {
+          case (key, stats) =>
+            println("%-20d\t%12d\t%f\t%f\t%f\t%f\t(%d)".format(now, stats.errors, intervalDouble / ((now - startTime) / 1000.0d), stats.min / 1000000.0d, stats.max / 1000000.0d, (stats.sum / stats.count) / 1000000.0d, key))
+        }
         startTime = now
-        sum = 0l
-        min = Long.MaxValue
-        max = Long.MinValue
+        stats = Map[Int, Stats]()
       }
     }
 
@@ -133,7 +143,7 @@ verboseErrors - whether to print verbose error messages (default: false)
     val verboseErrors = properties.getProperty("verboseErrors", "false").toBoolean
 
 
-    val workQueue = new ArrayBlockingQueue[JValue](1000)
+    val workQueue = new ArrayBlockingQueue[(Int, JValue)](1000)
 
 //    println("Starting workers")
     
@@ -144,7 +154,7 @@ verboseErrors - whether to print verbose error messages (default: false)
         override def run() {
           val client = new HttpClientXLightWeb
           while (true) {
-            val sample = workQueue.take()
+            val (index, sample) = workQueue.take()
             try {
               val started = System.nanoTime()
               
@@ -163,7 +173,7 @@ verboseErrors - whether to print verbose error messages (default: false)
                 case _                                                           =>  
                   throw new RuntimeException("Error processing insert request") 
               }    
-              notifyComplete(System.nanoTime() - started)
+              notifyComplete(index, System.nanoTime() - started)
             } catch {
               case e =>
                 if(verboseErrors) {
@@ -174,7 +184,7 @@ verboseErrors - whether to print verbose error messages (default: false)
                   e.printStackTrace
                   println()
                 }
-                notifyError()
+                notifyError(index)
             }
           }
         }
@@ -213,5 +223,8 @@ histogram('platform) :=
 
   private val random = new java.util.Random
 
-  def next(base: String, maxQuery: Int): JValue = JString(testQueries(random.nextInt(maxQuery)).format(base))
+  def next(base: String, maxQuery: Int): (Int, JValue) = {
+    val index = random.nextInt(maxQuery)
+    (index, JString(testQueries(index).format(base)))
+  }
 }
