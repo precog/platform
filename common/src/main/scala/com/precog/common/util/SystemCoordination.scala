@@ -138,10 +138,15 @@ object YggCheckpoint extends YggCheckpointSerialization {
   val empty = YggCheckpoint(0, VectorClock.empty)
 }
 
-class VectorClock(val map: Map[Int, Int]) {   
+case class VectorClock(map: Map[Int, Int]) {   
   def get(id: Int): Option[Int] = map.get(id)  
   def hasId(id: Int): Boolean = map.contains(id)
-  def update(id: Int, sequence: Int) = map + (id -> sequence)
+  def update(id: Int, sequence: Int) = 
+    if(map.get(id) exists { sequence > _ }) {
+      VectorClock(map + (id -> sequence))
+    } else {
+      this 
+    }
   def lessThanOrEqual(other: VectorClock): Boolean = map forall { 
     case (prodId, maxSeqId) => other.get(prodId).map( _ >= maxSeqId).getOrElse(true)
   }
@@ -159,7 +164,6 @@ trait VectorClockSerialization {
 }
 
 object VectorClock extends VectorClockSerialization {
-  def apply(map: Map[Int, Int]) = new VectorClock(map)
   def empty = apply(Map.empty)
 }
 

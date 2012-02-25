@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit
 import org.scalacheck.Gen._
 
 import com.precog.common._
+import com.precog.common.kafka._
 import com.precog.common.Event
 import com.precog.common.util.RealisticIngestMessage
 
@@ -87,26 +88,35 @@ trait ActorYggShard extends YggShard with Logging {
   val pre = "[Yggdrasil Shard]"
 
   def yggState: YggState
+  def yggCheckpoints: YggCheckpoints
+  def kafkaBatchConsumer: KafkaBatchConsumer
 
   lazy implicit val system = ActorSystem("storage_shard")
   lazy implicit val executionContext = ExecutionContext.defaultExecutionContext
   lazy implicit val dispatcher = system.dispatcher
 
-  lazy val routingTable: RoutingTable = SingleColumnProjectionRoutingTable 
-  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(metadataActor, routingTable, yggState.descriptorLocator, yggState.descriptorIO)), "router")
-  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, yggState.checkpoints)), "metadata")
+  lazy val ingestActor: ActorRef = system.actorOf(Props(new KafkaShardIngestActor(yggCheckpoints, kafkaBatchConsumer)), "shard_ingest")
+
+  lazy val routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+  lazy val routingActor: ActorRef = system.actorOf(Props(new NewRoutingActor(routingTable, yggState.descriptorLocator, yggState.descriptorIO, metadataActor, ingestActor, system.scheduler)), "router")
+
+  lazy val initialClock = yggCheckpoints.latestCheckpoint.messageClock
+
+  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, initialClock)), "metadata")
   lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor)
   def userMetadataView(uid: String): MetadataView = new UserMetadataView(uid, UnlimitedAccessControl, metadata)
+  
+  val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(yggCheckpoints, yggState.metadataIO)), "metadata_serializer")
 
   import logger._
 
-  def start: Future[Unit] = {
-    Future(())
+  def start: Future[Unit] = Future {  
+    val metadataSyncPeriod = Duration(1, "minutes")
+    system.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor)) 
+    routingActor ! CheckMessages
   }
 
   def stop: Future[Unit] = {
-    val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(yggState.metadataIO, yggState.checkpointIO)), "metadata_serializer")
-
     val defaultSystem = system
     val defaultTimeout = 300 seconds
     implicit val timeout: Timeout = defaultTimeout
@@ -115,15 +125,12 @@ trait ActorYggShard extends YggShard with Logging {
       gracefulStop(actor, timeout)(system)
 
     def flushMetadata = (_: Any) => metadataActor ? FlushMetadata(metadataSerializationActor)
-    def flushCheckpoints = (_: Any) => metadataActor ? FlushCheckpoints(metadataSerializationActor)
 
     Future { info(pre + "Stopping")(_) } map { _ => 
       debug(pre + "Stopping routing actor") } flatMap
       actorStop(routingActor) recover { case e => error("Error stopping routing actor", e) } map { _ => 
       debug(pre + "Flushing metadata") } flatMap
       flushMetadata recover { case e => error("Error flushing metadata", e) } map { _ => 
-      debug(pre + "Flushing checkpoints") } flatMap
-      flushCheckpoints recover { case e => error("Error flushing checkpoints") } map { _ => 
       debug(pre + "Stopping metadata actor") } flatMap
       actorStop(metadataActor) recover { case e => ("Error stopping metadata actor") } map { _ => 
       debug(pre + "Stopping flush actor") } flatMap
