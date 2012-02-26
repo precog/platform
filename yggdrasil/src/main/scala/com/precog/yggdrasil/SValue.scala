@@ -44,41 +44,49 @@ trait SValue {
     nul:    => A
   ): A
 
+  def asObject = mapObjectOr[Option[Map[String, SValue]]](None)(Some(_))
   def mapObjectOr[A](a: => A)(f: Map[String, SValue] => A): A = {
     val d = (_: Any) => a
     fold(f, d, d, d, d, d, d, a)
   }
 
+  def asArray = mapArrayOr[Option[Vector[SValue]]](None)(Some(_))
   def mapArrayOr[A](a: => A)(f: Vector[SValue] => A): A = {
     val d = (_: Any) => a
     fold(d, f, d, d, d, d, d, a)
   }
 
+  def asString = mapStringOr[Option[String]](None)(Some(_))
   def mapStringOr[A](a: => A)(f: String => A): A = {
     val d = (_: Any) => a
     fold(d, d, f, d, d, d, d, a)
   }
 
+  def asBoolean = mapBooleanOr[Option[Boolean]](None)(Some(_))
   def mapBooleanOr[A](a: => A)(f: Boolean => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, f, d, d, d, a)
   }
 
+  def asLong = mapLongOr[Option[Long]](None)(Some(_))
   def mapLongOr[A](a: => A)(f: Long => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, f, d, d, a)
   }
 
+  def asDouble = mapDoubleOr[Option[Double]](None)(Some(_))
   def mapDoubleOr[A](a: => A)(f: Double => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, f, d, a)
   }
 
+  def asBigDecimal = mapBigDecimalOr[Option[BigDecimal]](None)(Some(_))
   def mapBigDecimalOr[A](a: => A)(f: BigDecimal => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, d, f, a)
   }
 
+  def isNull = mapNullOr(false)(true)
   def mapNullOr[A](a: => A)(ifNull: => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, d, d, ifNull)
