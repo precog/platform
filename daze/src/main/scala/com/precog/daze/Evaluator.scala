@@ -20,6 +20,9 @@
 package com.precog
 package daze
 
+import org.joda.time._
+import org.joda.time.DateTimeZone
+
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
 
@@ -125,7 +128,10 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
       case Operate(_, BuiltInFunction1(op), parent) => {
         val parentRes = loop(parent, roots, ctx)
-        val parentResTyped = parentRes.left map { _ typed builtInOp1Type(op) }
+        val parentResTyped = parentRes.left map { _ typed { builtInOp1Type(op) match {
+          case Some(tp) => tp
+          case None     => sys.error("operation has no type")
+        }}} 
         val enum = maybeRealize(parentResTyped)
 
         def opPerform(sev: SEvent): Option[SEvent] = {
@@ -460,29 +466,30 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2 => (Some(SString), Some(SString))
+    case BuiltInFunction2(_) => (Some(SString), Some(SString))
   }
   
-  private def unOpType(op: UnaryOperation): Option[SType] = op match {
-    case instructions.New => None
-    case Comp => Some(SBoolean)
-    case Neg => Some(SDecimal)
-    case WrapArray => None
-    case BulitInFunction1 => Some(SString)
+  private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
+    case instructions.New    => None
+    case Comp                => Some(SBoolean)
+    case Neg                 => Some(SDecimal)
+    case WrapArray           => None
+    case BuiltInFunction1(_) => Some(SString)
   }
 
   private def builtInOp1Type(op: BuiltInOp1): Option[SType] = op match {
-    case Date => Some(SString)
-    case Year=> Some(SString)
-    case QuarterOfYear => Some(SString)
-    case MonthOfYear => Some(SString)
-    case WeekOfYear => Some(SString)
-    case DayOfMonth => Some(SString)
-    case DayOfWeek => Some(SString)
-    case HourOfDay => Some(SString)
-    case MinuteOfHour => Some(SString)
+    case Date           => Some(SString)
+    case Year           => Some(SLong)
+    case QuarterOfYear  => Some(SString)
+    case MonthOfYear    => Some(SString)
+    case WeekOfYear     => Some(SString)
+    case DayOfMonth     => Some(SString)
+    case DayOfWeek      => Some(SString)
+    case HourOfDay      => Some(SString)
+    case MinuteOfHour   => Some(SString)
     case SecondOfMinute => Some(SString)
 
+    case _              => None
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -586,10 +593,10 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
       case BuiltInFunction2(ChangeTimeZone) => {
         case (SString(time), SString(tz)) => {
-          if (isValidTimezone(tz) && isValidTime(time)) {
-            Some(SDecimal(0))
+          //if (isValidTimezone(tz) && isValidTime(time)) 
+          Some(SDecimal(0))
           }
-          
+ 
         case _ => None
       }
     }
@@ -597,7 +604,17 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
   private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
     case (Date, SString(time)) => Some(SDecimal(0))
-    case (Year, SString(time)) => Some(SDecimal(0))
+
+    //case (Year, SString(time)) => {
+    //  val newTime = new DateTime(time)
+    //  Some(SDecimal(newTime.year().get))
+    //} 
+    
+    case (Year, a) => {
+      val newTime = new DateTime(SLong.unapply(a).get)  //don't get an Option
+      Some(SDecimal(newTime.year().get))
+    }
+
     case (QuarterOfYear, SString(time)) => Some(SDecimal(0))
     case (MonthOfYear, SString(time)) => Some(SDecimal(0))
     case (WeekOfYear, SString(time)) => Some(SDecimal(0))
