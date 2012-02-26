@@ -42,7 +42,7 @@ trait Parser extends RegexParsers with Filters with AST {
   }
   
   def handleFailures(forest: Stream[Failure]): Nothing = {
-    val sorted = forest.toList sort { _.tail.length < _.tail.length }
+    val sorted = forest.toList sortWith { _.tail.length < _.tail.length }
     val length = sorted.head.tail.length
     
     val failures = Set(sorted takeWhile { _.tail.length == length }: _*)
@@ -283,7 +283,7 @@ trait Parser extends RegexParsers with Filters with AST {
       
       val expectation = pairs.headOption flatMap {
         case (_, headCount) => {
-          val (possibilities, _) = List unzip (pairs takeWhile { case (_, c) => headCount == c })
+          val (possibilities, _) = (pairs takeWhile { case (_, c) => headCount == c }).unzip
           
           if (possibilities.isEmpty)
             None

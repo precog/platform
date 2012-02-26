@@ -20,7 +20,6 @@ import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.set._
-import scalaz.std.AllInstances._
 import Iteratee._
 
 trait LevelDBQueryConfig {
@@ -70,12 +69,15 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       }
     }
 
+    implicit val mergeOrder = Order[Identities].contramap((scol: SColumn) => scol._1)
+
     def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
       def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
+        import scalaz.std.list._
         for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
-          EnumeratorP.mergeAll(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
+          mergeAllChunked(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
         }
       }
 
@@ -111,7 +113,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
-            cogroupE[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
+            cogroupEChunked[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
               case Right3((id, cv)) => (id, SValue(selector, cv))

@@ -63,10 +63,10 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum :^ _)))
 
   def join(d2: DatasetEnum[X, E, F])(implicit order: Order[E], m: Monad[F]): DatasetEnum[X, (E, E), F] =
-    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.join[E])))
+    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.joinChunked[E])))
 
   def merge(d2: DatasetEnum[X, E, F])(implicit order: Order[E], monad: Monad[F]): DatasetEnum[X, E, F] =
-    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.merge[E])))
+    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.mergeChunked[E])))
 
   def perform[B](f: F[B])(implicit m: Monad[F]): DatasetEnum[X, E, F] = 
     DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, Vector[E], F].append(enum, EnumeratorP.perform[X, Vector[E], F, B](f)) }, descriptor)
@@ -74,7 +74,7 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
 
 trait DatasetEnumOps {
   def cogroup[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
-    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupE[X, SEvent, SEvent, F](monad, order.order _, order, order).apply(en1, en2))
+    DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupEChunked[X, SEvent, SEvent, F](monad, order.order _, order, order).apply(en1, en2))
 
   def crossLeft[X, F[_]: Monad](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
     d1 :^ d2
@@ -133,13 +133,15 @@ trait DatasetEnumOps {
 
   def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] 
 
-  def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: ClassManifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
+  def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: Manifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
   
   def memoize[X, E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)(implicit fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] 
 
   // result must be (stably) ordered by key!!!!
   type Key = List[SValue]
-  def group[X](d: DatasetEnum[X, SEvent, IO])(f: SEvent => Key)(implicit ord: Order[Key], sfs: FileSerialization[(Key, SEvent)], buffering: Buffering[Vector[SEvent]], asyncContext: ExecutionContext): Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
+  def group[X](d: DatasetEnum[X, SEvent, IO], bufctx: BufferingContext)(f: SEvent => Key)
+              (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
+              Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
 }
 
 // vim: set ts=4 sw=4 et:
