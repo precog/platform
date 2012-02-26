@@ -40,7 +40,7 @@ object KafkaShardServer extends Logging {
             val yggState = state 
             val yggConfig = cfg 
             val kafkaIngestConfig = cfg
-            val kafkaBatchConsumer = sys.error("todo")
+            val batchConsumer = BatchConsumer.NullBatchConsumer 
             val yggCheckpoints = new TestYggCheckpoints
           }
 
@@ -66,9 +66,9 @@ object KafkaShardServer extends Logging {
 
 trait KafkaIngester extends Logging {
   def yggCheckpoints: YggCheckpoints
-  def kafkaBatchConsumer: KafkaBatchConsumer
+  def batchConsumer: BatchConsumer
 
-  lazy val kafkaShardIngestActor = new KafkaShardIngestActor(yggCheckpoints, kafkaBatchConsumer)
+  lazy val kafkaShardIngestActor = new KafkaShardIngestActor(yggCheckpoints, batchConsumer)
 }
 
 // vim: set ts=4 sw=4 et:

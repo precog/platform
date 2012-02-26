@@ -82,7 +82,19 @@ class KafkaBatchIngester(consumer: KafkaBatchConsumer)(processor: List[MessageAn
 
 }
 
-class KafkaBatchConsumer(host: String, port: Int, topic: String) {
+trait BatchConsumer {
+  def ingestBatch(offset: Long, bufferSize: Int): List[MessageAndOffset]
+  def close(): Unit
+}
+
+object BatchConsumer {
+  val NullBatchConsumer = new BatchConsumer {
+    def ingestBatch(offset: Long, bufferSize: Int) = List()
+    def close() = ()
+  }
+}
+
+class KafkaBatchConsumer(host: String, port: Int, topic: String) extends BatchConsumer {
  
   private val timeout = 5000
   private val buffer = 64 * 1024

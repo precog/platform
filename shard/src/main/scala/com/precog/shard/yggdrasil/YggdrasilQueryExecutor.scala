@@ -125,7 +125,7 @@ trait YggdrasilQueryExecutor
     val yggState = self.yggState
     val yggConfig = self.yggConfig
     val yggCheckpoints = self.yggCheckpoints
-    val kafkaBatchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
+    val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
   }
 
   object ops extends Ops 

@@ -12,8 +12,7 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 
 import com.precog.common._
-import com.precog.common.Event
-import com.precog.common.util.RealisticIngestMessage
+import com.precog.common.util._
 
 import scala.collection.mutable
 import scala.collection.immutable.ListMap
@@ -81,7 +80,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
       val fut = actor ? FindSelectors(events(0).path)
 
@@ -96,7 +95,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
       val fut = actor ? FindDescriptors(events(0).path, events(0).data.flattenWithPath.head._1)
 

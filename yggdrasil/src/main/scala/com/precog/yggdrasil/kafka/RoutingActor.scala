@@ -49,7 +49,71 @@ import scalaz.MonadPartialOrder._
 
 
 case object CheckMessages
-case class ProjectionActorRequest(descriptor: ProjectionDescriptor)
+
+case class AcquireProjection(descriptor: ProjectionDescriptor)
+case class ReleaseProjection(descriptor: ProjectionDescriptor) 
+
+trait ProjectionResult
+
+case class ProjectionAcquired(proj: ActorRef) extends ProjectionResult
+case class ProjectionError(ex: NonEmptyList[Throwable]) extends ProjectionResult
+
+class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO, scheduler: Scheduler) extends Actor with Logging {
+
+
+  def receive = {
+
+    case AcquireProjection(descriptor: ProjectionDescriptor) =>
+      val proj = projectionActor(descriptor)
+      mark(proj)
+      sender ! proj
+
+    case ReleaseProjection(descriptor: ProjectionDescriptor) =>
+      unmark(projectionActor(descriptor))
+
+  }
+
+  def mark(result: ProjectionResult): Unit = result match {
+    case ProjectionAcquired(proj) => proj ! IncrementRefCount
+    case _                        =>
+  }
+
+  def unmark(result: ProjectionResult): Unit = result match {
+    case ProjectionAcquired(proj) => proj ! DecrementRefCount
+    case _                        =>
+  }
+  
+  val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
+    CacheSettings(
+      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
+      evict = { 
+        (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
+      }
+    )
+  )
+
+  private def projectionActor(descriptor: ProjectionDescriptor): ProjectionResult = {
+    import ProjectionActors._
+    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
+      LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor, scheduler))))
+    }
+
+    actor.foreach(projectionActors.putIfAbsent(descriptor, _))
+    actor
+  }
+
+  def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
+    descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
+  }
+
+}
+
+object ProjectionActors {
+  implicit def validationToResult(validation: ValidationNEL[Throwable, ActorRef]): ProjectionResult = validation match {
+    case Success(proj) => ProjectionAcquired(proj)
+    case Failure(exs) => ProjectionError(exs)
+  }
+}
 
 object RoutingActor {
   private val pathDelimeter = "//"
@@ -68,75 +132,35 @@ object RoutingActor {
   private[kafka] implicit val timeout: Timeout = 30 seconds
 }
 
-class RoutingActor(metadataActor: ActorRef, routingTable: RoutingTable, descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO) extends Actor with Logging {
-  import RoutingActor._
+case object ControlledStop
+case class AwaitShutdown(replyTo: ActorRef)
 
-  val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
-    CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
-      evict = { 
-        (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
-      }
-    )
-  )
-
-  private def projectionActor(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, ActorRef] = {
-    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-      LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
-    }
-
-    actor.foreach(projectionActors.putIfAbsent(descriptor, _))
-    actor
-  }
-
-  def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
-    descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
-  }
-
-  def receive = {
-    case SyncMessage(producerId, syncId, eventIds) => // TODO 
-
-    case em @ EventMessage(eventId, _) =>
-      val projectionUpdates = routingTable.route(em)
-
-      registerCheckpointExpectation(eventId, projectionUpdates.size)
-
-      for (ProjectionData(descriptor, identities, values, metadata) <- projectionUpdates) {
-        projectionActor(descriptor) match {
-          case Success(actor) =>
-            val fut = actor ? ProjectionInsert(identities, values)
-            fut.onComplete { _ => 
-              metadataActor ! UpdateMetadata(List(InsertComplete(eventId, descriptor, values, metadata)))
-            }
-
-          case Failure(errors) => 
-            for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
-        }
-      }
-      sender ! ()
-
-    case ProjectionActorRequest(descriptor) =>
-      sender ! projectionActor(descriptor)
-
-    case a                                  =>
-      logger.error("Unknown Routing Actor action: " + a.getClass.getName)
-  }
-
-  def registerCheckpointExpectation(eventId: EventId, count: Int): Unit = metadataActor ! ExpectedEventActions(eventId, count)
-
-  def extractMetadataFor(desc: ProjectionDescriptor, metadata: Set[(ColumnDescriptor, JValue, Set[Metadata])]): Seq[Set[Metadata]] = 
-    desc.columns flatMap { c => metadata.find(_._1 == c).map( _._3 ) } toSeq
-}
-
-class NewRoutingActor(routingTable: RoutingTable, descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO, metadataActor: ActorRef, ingestActor: ActorRef, scheduler: Scheduler) extends Actor with Logging {
+class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler) extends Actor with Logging {
   
   import RoutingActor._
 
+  private var inShutdown = false
+
   def receive = {
     
+    case ControlledStop =>
+      inShutdown = true 
+      self ! AwaitShutdown(sender)
+
+    case as @ AwaitShutdown(replyTo) =>
+      if(inserted.isEmpty) {
+        logger.debug("Routing actor shutdown - Complete")
+        replyTo ! ()
+      } else {
+        logger.debug("Routing actor shutdown - Pending inserts (%d)".format(inserted.size)) 
+        scheduler.scheduleOnce(Duration(1, "second"), self, as)
+      }
+
     case CheckMessages =>
-      logger.debug("Routing Actor - Check Messages")
-      ingestActor ! GetMessages(self)
+      if(!inShutdown) {
+        logger.debug("Routing Actor - Check Messages")
+        ingestActor ! GetMessages(self)
+      }
     
     case NoMessages =>
       logger.debug("Routing Actor - No Messages")
@@ -149,14 +173,13 @@ class NewRoutingActor(routingTable: RoutingTable, descriptorLocator: ProjectionD
     case ic @ InsertComplete(_, _, _, _) =>
       //logger.debug("Insert Complete")
       markInsertComplete(ic)
-    
-    case ProjectionActorRequest(descriptor) =>
-      sender ! projectionActor(descriptor)
-  
+
   }
 
-  def scheduleNextCheck { 
-    scheduler.scheduleOnce(Duration(1, "second"), self, CheckMessages)
+  def scheduleNextCheck {
+    if(!inShutdown) {
+      scheduler.scheduleOnce(Duration(1, "second"), self, CheckMessages)
+    }
   }
 
   def processMessages(messages: Seq[IngestMessage]) {
@@ -169,15 +192,20 @@ class NewRoutingActor(routingTable: RoutingTable, descriptorLocator: ProjectionD
         markInsertsPending(eventId, projectionUpdates.size)  
 
         for (ProjectionData(descriptor, identities, values, metadata) <- projectionUpdates) {
-          projectionActor(descriptor) match {
-            case Success(actor) =>
-              val fut = actor ? ProjectionInsert(identities, values)
+          val acquire = projectionActors ? AcquireProjection(descriptor)
+          acquire.onComplete { 
+            case Left(t) =>
+              logger.error("Exception acquiring projection actor: ", t)
+
+            case Right(ProjectionAcquired(proj)) => 
+              val fut = proj ? ProjectionInsert(identities, values)
               fut.onComplete { _ => 
                 self ! InsertComplete(eventId, descriptor, values, metadata)
+                projectionActors ! ReleaseProjection(descriptor)
               }
-
-            case Failure(errors) => 
-              for (t <- errors.list) logger.error("Could not obtain actor for projection: " , t)
+              
+            case Right(ProjectionError(errs)) =>
+              for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
           }
         }
     }
@@ -191,8 +219,6 @@ class NewRoutingActor(routingTable: RoutingTable, descriptorLocator: ProjectionD
   }
 
   def markInsertComplete(insert: InsertComplete) { 
-    //logger.debug("Expectations: (Before)" + expectation.size)
-    //logger.debug("Inserted: (Before)" + inserted.size)
     val eventId = insert.eventId
     val inserts = inserted.get(eventId) map { _ :+ insert } getOrElse(List(insert))
     if(inserts.size >= expectation(eventId)) {
@@ -203,91 +229,12 @@ class NewRoutingActor(routingTable: RoutingTable, descriptorLocator: ProjectionD
       inserted += (eventId -> inserts) 
     }
     if(expectation.isEmpty) self ! CheckMessages
-    //logger.debug("Expectations: (After)" + expectation.size)
-    //logger.debug("Inserted: (After)" + inserted.size)
-    //logger.debug("Exp summary: " + expectation.foldLeft ( Map[Int, Int]() ) {
-    //  case (acc, (_, exp)) =>
-    //    val newCnt = acc.get(exp) map { _ + 1 } getOrElse { 1 }
-    //    acc + (exp -> newCnt)
-    //})
-    //logger.debug("Inserted summary: " + inserted.foldLeft ( Map[Int, Int]() ) {
-    //  case (acc, (_, ins)) =>
-    //    val newCnt = acc.get(ins.size) map { _ + 1 } getOrElse { 1 }
-    //    acc + (ins.size -> newCnt)
-    //})
-  }
-
-  val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
-    CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
-      evict = { 
-        (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
-      }
-    )
-  )
-
-  private def projectionActor(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, ActorRef] = {
-    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-      LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor))))
-    }
-
-    actor.foreach(projectionActors.putIfAbsent(descriptor, _))
-    actor
-  }
-
-  def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
-    descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
   }
 }
 
-//
-// NEED SKETCH FOR
-//
-
-// Updated projection actor responsibilities
-//
-// - wait for messages from routing actor
-// - process the given action and reply to routing actor
-
-// Updated routing actor responsibilities
-//
-// - start from idle
-// -- request messages from kafka consumer
-// -- if none 
-// --   enact delay strategy
-// -- else 
-// --   register leveldb expections
-// --   send events to leveldb
-// -- wait for leveldb responses
-// -- foreach leveldb response
-// --   update expectations
-// --   if expectations complete notify metadata
-// --   if all expectations complete continue
-// -- end
-
-//
-// HAVE SKETCH FOR
-//
-
-// Updated kafka consumer (now actor) responsibilities
-//
-// - get initial offset/message clock from YggCheckpoints
-// - wait for message request from routing actor
-// -   read message batch and send to routing actor
-// -   update YggCheckpoints with latest offset/message clock
-// - back to wait
-// - on shutdown close kafka connection
-
-// Updated metadata actor responsibilities 
-// - wait for metadata update calls from routing actor
-// - update metadata
-// - periodically write metadata to disk
-//   and register checkpoint
-
 case class InsertComplete(eventId: EventId, descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 
-
-class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: KafkaBatchConsumer) extends ShardIngestActor {
+class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
 
   private val bufferSize = 1024 * 1024
 
