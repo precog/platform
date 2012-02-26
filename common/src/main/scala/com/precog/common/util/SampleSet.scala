@@ -1,5 +1,9 @@
 package com.precog.common.util
 
+import org.joda.time._
+import org.joda.time.format._
+import org.joda.time.DateTimeZone
+
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import org.scalacheck.Gen._
@@ -30,6 +34,11 @@ object AdSamples {
   val pageId = for (i <- 0 to 4) yield "page-" + i
   val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
+  
+  val timeMillis = for (i <- 946684800000L to 1330257342000L) yield i
+  val timeZoneHours = for (i <- -11 to 12) yield i
+  val timeZoneMinutes = List(0, 30)
+  
 
   def gaussianIndex(size: Int): Int = {
     // multiplying by size / 5 means that 96% of the time, the sampled value will be within the range and no second try will be necessary
@@ -65,11 +74,19 @@ object AdSamples {
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
   )
+
+  def interactionSampleISO8601() = JObject(
+    JField("time", fmt.print(new DateTime(oneOf(timeMillis.sample.get)).withZone(DateTimeZone.forOffsetHoursMinutes(5,0)))) ::
+    JField("pageId", oneOf(pageId).sample.get) :: 
+    JField("userId", oneOf(userId).sample.get) :: Nil
+  )
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
 
   def twoDayTimeFrame = chooseNum(System.currentTimeMillis - millisPerDay,
                             System.currentTimeMillis + millisPerDay)
+
+  val fmt = DateTimeFormat.forPattern("yyyy-MM-dd'T'hh:mm:ss.SSSZZ")
 }
 
 case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>
