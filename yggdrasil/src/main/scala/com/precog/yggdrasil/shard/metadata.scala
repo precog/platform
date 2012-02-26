@@ -144,7 +144,7 @@ class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[Meta
 
     case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
 
-    case FlushMetadata(serializationActor)    => serializationActor ! SaveMetadata(projections.clone, messageClock)
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections.clone, messageClock))
     
   }
 
