@@ -128,14 +128,14 @@ private[precog] object VectorCase {
 
   def unapplySeq[A](x: VectorCase[A]) : Option[IndexedSeq[A]] = Some(x)
   
-  def fromSeq[A](seq: Seq[A]) = seq match {
-    case c: VectorCase[A] => c
+  def fromSeq[A](seq: Seq[A]): VectorCase[A] = seq match {
+    case c: VectorCase[_] => c
     case _ if seq.lengthCompare(0) <= 0 => Vector0
     case _ if seq.lengthCompare(1) <= 0 => Vector1(seq(0))
     case _ if seq.lengthCompare(2) <= 0 => Vector2(seq(0), seq(1))
     case _ if seq.lengthCompare(3) <= 0 => Vector3(seq(0), seq(1), seq(2))
     case _ if seq.lengthCompare(4) <= 0 => Vector4(seq(0), seq(1), seq(2), seq(3))
-    case vec: Vector[A] => VectorN(vec)
+    case vec: Vector[_] => VectorN(vec)
     case _ => VectorN(Vector(seq: _*))
   }
 }
@@ -183,7 +183,7 @@ private[precog] case class Vector1[+A](_1: A) extends VectorCase[A] {
     case Vector1(_2) => Vector2(_1, _2)
     case Vector2(_2, _3) => Vector3(_1, _2, _3)
     case Vector3(_2, _3, _4) => Vector4(_1, _2, _3, _4)
-    case _: Vector4[B] | _: VectorN[B] =>
+    case _: Vector4[_] | _: VectorN[_] =>
       VectorN(_1 +: that.toVector)
   }
   
@@ -214,11 +214,11 @@ private[precog] case class Vector2[+A](_1: A, _2: A) extends VectorCase[A] {
     case _ => throw new IndexOutOfBoundsException(index.toString)
   }
   
-  def ++[B >: A](that: VectorCase[B]) = that match {
+  def ++[B >: A](that: VectorCase[B]) : VectorCase[B] = that match {
     case Vector0 => this
     case Vector1(_3) => Vector3(_1, _2, _3)
     case Vector2(_3, _4) => Vector4(_1, _2, _3, _4)
-    case _: Vector3[B] | _: Vector4[B] | _: VectorN[B] =>
+    case _: Vector3[_] | _: Vector4[_] | _: VectorN[_] =>
       VectorN(Vector(_1, _2) ++ that.toVector)
   }
   
@@ -252,10 +252,10 @@ private[precog] case class Vector3[+A](_1: A, _2: A, _3: A) extends VectorCase[A
     case _ => throw new IndexOutOfBoundsException(index.toString)
   }
   
-  def ++[B >: A](that: VectorCase[B]) = that match {
+  def ++[B >: A](that: VectorCase[B]) : VectorCase[B] = that match {
     case Vector0 => this
     case Vector1(_4) => Vector4(_1, _2, _3, _4)
-    case _: Vector2[B] | _: Vector3[B] | _: Vector4[B] | _: VectorN[B] =>
+    case _: Vector2[_] | _: Vector3[_] | _: Vector4[_] | _: VectorN[_] =>
       VectorN(Vector(_1, _2, _3) ++ that.toVector)
   }
   
@@ -292,9 +292,9 @@ private[precog] case class Vector4[+A](_1: A, _2: A, _3: A, _4: A) extends Vecto
     case _ => throw new IndexOutOfBoundsException(index.toString)
   }
   
-  def ++[B >: A](that: VectorCase[B]) = that match {
+  def ++[B >: A](that: VectorCase[B]): VectorCase[B] = that match {
     case Vector0 => this
-    case _: Vector1[B] | _: Vector2[B] | _: Vector3[B] | _: Vector4[B] | _: VectorN[B] =>
+    case _: Vector1[_] | _: Vector2[_] | _: Vector3[_] | _: Vector4[_] | _: VectorN[_] =>
       VectorN(Vector(_1, _2, _3, _4) ++ that.toVector)
   }
   

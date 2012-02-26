@@ -41,7 +41,8 @@ import SValue._
 
 import scalaz.effect._
 import scalaz.iteratee._
-import scalaz.std.AllInstances._
+import scalaz.std.anyVal._
+import scalaz.std.list._
 import Iteratee._
 
 import scala.collection.immutable.SortedMap

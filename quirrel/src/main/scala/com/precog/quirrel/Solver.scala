@@ -208,11 +208,11 @@ trait Solver extends parser.AST {
     }
   }
   
-  private val add = curried(Add)
-  private val sub = curried(Sub)
-  private val mul = curried(Mul)
-  private val div = curried(Div)
-  private val neg = curried(Neg)
+  private val add = Add.curried
+  private val sub = Sub.curried
+  private val mul = Mul.curried
+  private val div = Div.curried
+  private val neg = Neg.curried
   
   private def flip[A, B, C](f: A => B => C)(b: B)(a: A) = f(a)(b)
 }

@@ -32,6 +32,8 @@ import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.monad._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.std._
 import Iteratee._
 
 trait DiskMemoizationConfig {
@@ -39,18 +41,56 @@ trait DiskMemoizationConfig {
   def memoizationWorkDir: File
 }
 
-trait DiskMemoizationComponent extends YggConfigComponent with MemoizationComponent { self =>
+trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponent { self =>
   type YggConfig <: DiskMemoizationConfig
 
   def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
 
-  sealed trait MemoContext extends MemoizationContext { ctx => 
+  sealed trait MemoContext extends MemoizationContext with BufferingContext { ctx => 
     type CacheKey[α] = Int
     type CacheValue[α] = Either[Vector[α], File]
     @volatile private var cache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
 
-    def apply[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
+    private def memoizer[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
+      import MO._
+
+      def consume(i: Int, acc: Vector[E]): IterateeT[X, E, F, Either[Vector[E], File]] = {
+        if (i < yggConfig.memoizationBufferSize) 
+          cont(
+            (_: Input[E]).fold(
+              el    = el => consume(i + 1, acc :+ el),
+              empty = consume(i, acc),
+              eof   = done(Left(acc), eofInput)))
+        else 
+          (fs.writer(new File(yggConfig.memoizationWorkDir, "memo" + memoId)) &= enumStream[X, E, F](acc.toStream)) map (f => Right(f))
+      }
+
+      consume(0, Vector.empty[E])
+    }
+
+    def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = ctx.synchronized {
+      import MO._
+      cache.get(memoId) match {
+        case Some(Left(vector)) => 
+          done[X, E, F, EnumeratorP[X, E, IO]](EnumeratorP.enumPStream[X, E, IO](vector.toStream), eofInput)
+          
+        case Some(Right(file)) => 
+          done[X, E, F, EnumeratorP[X, E, IO]](fs.reader[X](file), eofInput)
+
+        case None =>
+          import MO._
+          memoizer[X, E, F](memoId) map { memo =>
+            EnumeratorP.perform[X, E, IO, Unit](IO(ctx.synchronized { if (!cache.isDefinedAt(memoId)) cache += (memoId -> memo) })) |+|
+            memo.fold(
+              vector => EnumeratorP.enumPStream[X, E, IO](vector.toStream),
+              file   => fs.reader[X](file)
+            )
+          }
+      }
+    }
+
+    def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
       cache.get(memoId) match {
         case Some(Left(vector)) => 
           Right(EnumeratorP.enumPStream[X, E, IO](vector.toStream))
@@ -60,7 +100,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with MemoizationCompon
 
         case None => Left(
           new Memoizer[X, E] {
-            def memoizing[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = {
+            def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = {
               import MO._
               (iter zip memoizer[X, E, F](memoId)) map {
                 case (result, memo) => 
@@ -86,23 +126,6 @@ trait DiskMemoizationComponent extends YggConfigComponent with MemoizationCompon
         files = Nil
         cache = KMap.empty[CacheKey, CacheValue]
       }
-    }
-
-    def memoizer[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
-      import MO._
-
-      def consume(i: Int, acc: Vector[E]): IterateeT[X, E, F, Either[Vector[E], File]] = {
-        if (i < yggConfig.memoizationBufferSize) 
-          cont(
-            (_: Input[E]).fold(
-              el    = el => consume(i + 1, acc :+ el),
-              empty = consume(i, acc),
-              eof   = done(Left(acc), eofInput)))
-        else 
-          (fs.writer(new File(yggConfig.memoizationWorkDir, "memo" + memoId)) &= enumStream[X, E, F](acc.toStream)) map (f => Right(f))
-      }
-
-      consume(0, Vector.empty[E])
     }
   }
 }

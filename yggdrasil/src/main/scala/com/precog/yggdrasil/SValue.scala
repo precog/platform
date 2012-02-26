@@ -26,6 +26,11 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import scalaz._
+import scalaz.Ordering._
+import scalaz.syntax.order._
+import scalaz.syntax.semigroup._
+import scalaz.syntax.equal._
+import scalaz.std.AllInstances._
 
 trait SValue {
   def fold[A](
@@ -39,41 +44,49 @@ trait SValue {
     nul:    => A
   ): A
 
+  def asObject = mapObjectOr[Option[Map[String, SValue]]](None)(Some(_))
   def mapObjectOr[A](a: => A)(f: Map[String, SValue] => A): A = {
     val d = (_: Any) => a
     fold(f, d, d, d, d, d, d, a)
   }
 
+  def asArray = mapArrayOr[Option[Vector[SValue]]](None)(Some(_))
   def mapArrayOr[A](a: => A)(f: Vector[SValue] => A): A = {
     val d = (_: Any) => a
     fold(d, f, d, d, d, d, d, a)
   }
 
+  def asString = mapStringOr[Option[String]](None)(Some(_))
   def mapStringOr[A](a: => A)(f: String => A): A = {
     val d = (_: Any) => a
     fold(d, d, f, d, d, d, d, a)
   }
 
+  def asBoolean = mapBooleanOr[Option[Boolean]](None)(Some(_))
   def mapBooleanOr[A](a: => A)(f: Boolean => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, f, d, d, d, a)
   }
 
+  def asLong = mapLongOr[Option[Long]](None)(Some(_))
   def mapLongOr[A](a: => A)(f: Long => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, f, d, d, a)
   }
 
+  def asDouble = mapDoubleOr[Option[Double]](None)(Some(_))
   def mapDoubleOr[A](a: => A)(f: Double => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, f, d, a)
   }
 
+  def asBigDecimal = mapBigDecimalOr[Option[BigDecimal]](None)(Some(_))
   def mapBigDecimalOr[A](a: => A)(f: BigDecimal => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, d, f, a)
   }
 
+  def isNull = mapNullOr(false)(true)
   def mapNullOr[A](a: => A)(ifNull: => A): A = {
     val d = (_: Any) => a
     fold(d, d, d, d, d, d, d, ifNull)
@@ -177,20 +190,103 @@ trait SValue {
     )
 }
 
+
 trait SValueInstances {
-  implicit def equal: Equal[SValue] = new Equal[SValue] {
-    def equal(sv1: SValue, sv2: SValue) = {
-      (sv1 eq sv2) || sv1.fold(
-        obj    = v => sv2.mapObjectOr(false)(_ == v),
-        arr    = v => sv2.mapArrayOr(false)(_ == v),
-        str    = v => sv2.mapStringOr(false)(_ == v),
-        bool   = v => sv2.mapBooleanOr(false)(_ == v),
-        long   = v => sv2.mapLongOr(false)(_ == v),
-        double = v => sv2.mapDoubleOr(false)(_ == v),
-        num    = v => sv2.mapBigDecimalOr(false)(_ == v),
-        nul    = sv2.mapNullOr(false)(true)
-      )
+  case class paired(sv1: SValue, sv2: SValue) {
+    def fold[A](default: => A)(
+      obj:    Map[String, SValue] => Map[String, SValue] => A,
+      arr:    Vector[SValue] => Vector[SValue] => A,
+      str:    String => String => A,
+      bool:   Boolean => Boolean => A,
+      long:   Long => Long => A,
+      double: Double => Double => A,
+      num:    BigDecimal => BigDecimal => A,
+      nul:    => A
+    ) = sv1.fold(
+      obj    = v => sv2.mapObjectOr(default)(obj(v)),
+      arr    = v => sv2.mapArrayOr(default)(arr(v)),
+      str    = v => sv2.mapStringOr(default)(str(v)),
+      bool   = v => sv2.mapBooleanOr(default)(bool(v)),
+      long   = v => sv2.mapLongOr(default)(long(v)),
+      double = v => sv2.mapDoubleOr(default)(double(v)),
+      num    = v => sv2.mapBigDecimalOr(default)(num(v)),
+      nul    = sv2.mapNullOr(default)(nul)
+    )
+  }
+
+  def typeIndex(sv: SValue) = sv.fold(
+    obj  = o => 7,
+    arr  = a => 6,
+    str  = s => 5,
+    num  = n => 4,
+    double = d => 3,
+    long = l => 2,
+    bool = b => 1,
+    nul  = 0
+  )
+
+  implicit def order: Order[SValue] = new Order[SValue] {
+    private val objectOrder = (o1: Map[String, SValue]) => (o2: Map[String, SValue]) => {
+      (o1.size ?|? o2.size) |+| 
+      (o1.toSeq.sortBy(_._1) zip o2.toSeq.sortBy(_._1)).foldLeft[Ordering](EQ) {
+        case (ord, ((k1, v1), (k2, v2))) => ord |+| (k1 ?|? k2) |+| (v1 ?|? v2)
+      }
     }
+
+    private val arrayOrder = (o1: Vector[SValue]) => (o2: Vector[SValue]) => {
+      (o1.length ?|? o2.length) |+| 
+      (o1 zip o2).foldLeft[Ordering](EQ) {
+        case (ord, (v1, v2)) => ord |+| (v1 ?|? v2)
+      }
+    }
+
+    private val stringOrder = (Order[String].order _).curried
+    private val boolOrder = (Order[Boolean].order _).curried
+    private val longOrder = (Order[Long].order _).curried
+    private val doubleOrder = (Order[Double].order _).curried
+    private val numOrder = (Order[BigDecimal].order _).curried
+
+    def order(sv1: SValue, sv2: SValue) = paired(sv1, sv2).fold(typeIndex(sv1) ?|? typeIndex(sv2))(
+      obj    = objectOrder,
+      arr    = arrayOrder,
+      str    = stringOrder,
+      bool   = boolOrder,
+      long   = longOrder,
+      double = doubleOrder,
+      num    = numOrder,
+      nul    = EQ
+    )
+  }
+
+  implicit def equal: Equal[SValue] = new Equal[SValue] {
+    private val objectEqual = (o1: Map[String, SValue]) => (o2: Map[String, SValue]) => 
+      (o1.size == o2.size) &&
+      (o1.toSeq.sortBy(_._1) zip o2.toSeq.sortBy(_._1)).foldLeft(true) {
+        case (eql, ((k1, v1), (k2, v2))) => eql && k1 == k2 && v1 === v2
+      }
+
+    private val arrayEqual = (o1: Vector[SValue]) => (o2: Vector[SValue]) => 
+      (o1.length == o2.length) &&
+      (o1 zip o2).foldLeft(true) {
+        case (eql, (v1, v2)) => eql && v1 === v2
+      }
+
+    private val stringEqual = (Equal[String].equal _).curried
+    private val boolEqual = (Equal[Boolean].equal _).curried
+    private val longEqual = (Equal[Long].equal _).curried
+    private val doubleEqual = (Equal[Double].equal _).curried
+    private val numEqual = (Equal[BigDecimal].equal _).curried
+
+    def equal(sv1: SValue, sv2: SValue) = paired(sv1, sv2).fold(false)(
+      obj    = objectEqual,
+      arr    = arrayEqual,
+      str    = stringEqual,
+      bool   = boolEqual,
+      long   = longEqual,
+      double = doubleEqual,
+      num    = numEqual,
+      nul    = true
+    )
   }
 }
 
