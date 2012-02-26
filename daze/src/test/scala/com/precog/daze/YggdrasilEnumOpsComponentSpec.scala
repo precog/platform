@@ -40,7 +40,10 @@ import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import scalaz.std.string._
-import scalaz.std.AllInstances._
+import scalaz.std.anyVal._
+import scalaz.syntax.order._
+import scalaz.syntax.semigroup._
+import Ordering._
 import Iteratee._
 import MonadPartialOrder._
 
@@ -52,25 +55,53 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
 
   implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
+  val timeout = intToDurationInt(30).seconds
 
   object yggConfig extends YggConfig {
     def sortBufferSize = 10
     def sortWorkDir = sys.error("not used")
-    def flatMapTimeout = intToDurationInt(30).seconds
+    def flatMapTimeout = timeout
   }
 
   implicit val chunkSerialization = SimpleProjectionSerialization
   val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
+  implicit val keyOrder: Order[ops.Key] = new Order[ops.Key] {
+    def order(k1: ops.Key, k2: ops.Key) = (k1.size ?|? k2.size) |+| (k1 zip k2).foldLeft[Ordering](EQ) {
+      case (ord, (v1, v2)) => ord |+| (v1 ?|? v2)
+    }
+  }
+
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
       val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
-      val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, intToDurationInt(30).seconds)
+      val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
 
-      (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO])
-      .run(_ => sys.error("...")).unsafePerformIO.flatten.map(_._2.mapStringOr("wrong")(a => a)) must_== List("1", "2", "3")
+      (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("1", "2", "3")
+    }
+  }
+
+  "group" should {
+    "group values" in {
+      implicit val dummyFS = FileSerialization.noop[Vector[(ops.Key, SEvent)]] 
+      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
+      val keyf: SEvent => List[SValue] = { ev => 
+        ev._2.mapStringOr(List(SInt(0)))(s => List(SInt(s.toInt % 2)))
+      }
+
+      val grouped = Await.result((ops.group(DatasetEnum(Future(enumP), None), BufferingContext.memory(100))(keyf)), intToDurationInt(30).seconds)
+
+      val groups = (consume[Unit, (ops.Key, DatasetEnum[Unit, SEvent, IO]), IO, List] &= grouped[IO]).runOrZero.unsafePerformIO
+      groups must haveSize(2)
+      groups(0) must beLike {
+        case (List(SLong(0)), enum) => (consume[Unit, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("2")
+      }
+
+      groups(1) must beLike {
+        case (List(SLong(1)), enum) => (consume[Unit, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("3", "1")
+      }
     }
   }
 }

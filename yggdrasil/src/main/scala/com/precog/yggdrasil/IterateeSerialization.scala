@@ -76,6 +76,13 @@ trait FileSerialization[E] {
   }
 }
 
+object FileSerialization {
+  def noop[E]: FileSerialization[E] = new FileSerialization[E] {
+    def writeElement(out: DataOutputStream, ev: E): IO[Unit] = IO(())
+    def readElement(in: DataInputStream): IO[Option[E]] = IO(Option.empty[E])
+  }
+}
+
 import yggdrasil._
 object SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   import blueeyes.json._
