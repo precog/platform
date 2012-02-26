@@ -139,8 +139,11 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
               headDoneOr[X, Vector[(Key, SEvent)], G, StepT[X, Group, G, A]](
                 scont(contf),
                 v => v.headOption match {
-                  case Some((key, _)) => iterateeT(bufctx.buffering[X, Vector[SEvent], G](i).value.map(s => scont(loop(key, Vector(), s)))).flatMap(g => contf(elInput(g)) >>== apply[A])
-                  case None           => contf(emptyInput) >>== apply[A]
+                  case Some((key, _)) => 
+                    iterateeT(bufctx.buffering[X, Vector[SEvent], G](i).value.flatMap(s => loop(key, Vector(), s)(elInput(v)).value)).flatMap(g => contf(elInput(g)) >>== apply[A])
+
+                  case None => 
+                    contf(emptyInput) >>== apply[A]
                 }
               ),
             done = (a, r) => done(sdone(a, r), emptyInput),
