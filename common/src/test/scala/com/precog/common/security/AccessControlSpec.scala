@@ -5,7 +5,7 @@ import com.precog.analytics.Path
 import org.specs2.mutable._
 
 object AccessControlSpec extends Specification with AccessControlTestValues {
-  val accessControl = new AccessControl with TestTokenManagerComponent {
+  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
     val tokenConfig = accessControlTokenConfig
   }
 
@@ -209,7 +209,7 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
 
 object AccessControlUseCasesSpec extends Specification with AccessControlTestValues {
  
-  val accessControl = new AccessControl with TestTokenManagerComponent {
+  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
     val tokenConfig = useCaseTokenConfig
   }
 
@@ -250,7 +250,7 @@ object AccessControlUseCasesSpec extends Specification with AccessControlTestVal
 
 object AccessControlIsolationSpec extends Specification with AccessControlTestValues {
 
-  val accessControl = new AccessControl with TestTokenManagerComponent {
+  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
     val tokenConfig = useCaseTokenConfig
   }
 

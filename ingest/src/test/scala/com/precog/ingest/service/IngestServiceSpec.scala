@@ -34,8 +34,9 @@ import org.scalacheck.Gen._
 import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 
-import com.precog.analytics._
+import com.precog.analytics.Path
 import com.precog.common.NullQueryExecutor
+import com.precog.common.security._
 //import com.precog.api.{ReportGridConfig, ReportGridClient, HttpClient, Server} 
 //import com.precog.api.blueeyes.ReportGrid
 import com.precog.ct._
@@ -59,25 +60,9 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 }
 
 trait TestTokens {
-  val TestToken = Token(
-    tokenId        = "C7A18C95-3619-415B-A89B-4CE47693E4CC",
-    parentTokenId  = Some(Token.Root.tokenId),
-    accountTokenId = "C7A18C95-3619-415B-A89B-4CE47693E4CC",
-    path           = Path("unittest"),
-    permissions    = Permissions(true, true, true, true),
-    expires        = Token.Never,
-    limits         = Limits(order = 2, depth = 5, limit = 20, tags = 2, rollup = 2)
-  )
-
- val TrackingToken = Token(
-    tokenId        = "DB6DEF4F-678A-4F7D-9897-F920762887F1",
-    parentTokenId  = Some(Token.Root.tokenId),
-    accountTokenId = "DB6DEF4F-678A-4F7D-9897-F920762887F1",
-    path           = Path("__usage_tracking__"),
-    permissions    = Permissions(true, true, true, true),
-    expires        = Token.Never,
-    limits         = Limits(order = 1, depth = 2, limit = 5, tags = 1, rollup = 2, lossless=false)
- )
+  import StaticTokenManager._
+  val TestToken = lookup(testUID).get
+  val TrackingToken = lookup(usageUID).get
 }
 
 trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens {
@@ -91,21 +76,10 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
   override val configuration = "services { ingest { v1 { " + requestLoggingData + mongoConfigFileData + " } } }"
 
-  override def mongoFactory(config: Configuration): Mongo = RealMongo(config)
-  //override def mongoFactory(config: Configuration): Mongo = new MockMongo()
 
-  //def auditClient(config: Configuration) = external.NoopTrackingClient
-
-  def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = {
-    val mgr = new TokenManager(database, tokensCollection, deletedTokensCollection) 
-    mgr.tokenCache.put(TestToken.tokenId, TestToken)
-    mgr.tokenCache.put(TrackingToken.tokenId, TrackingToken)
-    mgr
-  }
-
-  def usageLogging(config: Configuration) = {
-    new ReportGridUsageLogging(TrackingToken.tokenId) 
-  }
+  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+  
+  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingToken.uid) 
 
   val messaging = new CollectingMessaging
 
@@ -123,7 +97,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   }
 
   lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).
-                                     query("tokenId", TestToken.tokenId)
+                                     query("tokenId", TestToken.uid)
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))

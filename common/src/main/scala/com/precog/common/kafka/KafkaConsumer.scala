@@ -13,14 +13,10 @@ import _root_.kafka.api._
 import _root_.kafka.consumer._
 import _root_.kafka.message._
 
-class KafkaConsumer(host: String, port: Int, topic: String)(processor: List[MessageAndOffset] => Unit)(implicit dispatcher: MessageDispatcher) extends Logging {
-
-  lazy private val consumer = {
-    new SimpleConsumer(host, port, 5000, 64 * 1024)
-  }
-
-  val bufferSize = 1024 * 1024
-
+class KafkaBatchIngester(consumer: KafkaBatchConsumer)(processor: List[MessageAndOffset] => Unit)(implicit dispatch: MessageDispatcher) extends Logging {
+  
+  private val bufferSize = 1024 * 1024
+  
   def start(nextOffset: => Long) = Future[Unit] {
     val consumerThread = new Thread() {
       val retryDelay = 5000
@@ -42,18 +38,17 @@ class KafkaConsumer(host: String, port: Int, topic: String)(processor: List[Mess
       @tailrec
       def ingestBatch(offset: Long, batch: Long, delay: Long, waitCount: Long) {
         if(batch % 100 == 0) logger.debug("Processing kafka consumer batch %d [%s]".format(batch, if(waitCount > 0) "IDLE" else "ACTIVE"))
-        val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
-
-        val messages = consumer.fetch(fetchRequest)
-
+        
         // A future optimizatin would be to move this to another thread (or maybe actors)
-        val outgoing = messages.toList
+        val messages = consumer.ingestBatch(offset, bufferSize) 
 
-        if(outgoing.size > 0) {
-          processor(outgoing)
+        val sizeInBytes = messages.map { _.message.size } reduce { _ + _ }
+
+        if(messages.size > 0) {
+          processor(messages)
         }
 
-        val newDelay = delayStrategy(messages.sizeInBytes.toInt, delay, waitCount)
+        val newDelay = delayStrategy(sizeInBytes, delay, waitCount)
 
         val (newOffset, newWaitCount) = if(messages.size > 0) {
           val o: Long = messages.last.offset
@@ -70,7 +65,7 @@ class KafkaConsumer(host: String, port: Int, topic: String)(processor: List[Mess
     }
     consumerThread.start()
   }
-  
+
   def stop() = Future { consumer.close }
   
   val maxDelay = 100.0
@@ -83,5 +78,36 @@ class KafkaConsumer(host: String, port: Int, topic: String)(processor: List[Mess
     } else {
       (maxDelay * (1.0 - messageBytes.toDouble / bufferSize)).toLong
     }
+  }
+
+}
+
+trait BatchConsumer {
+  def ingestBatch(offset: Long, bufferSize: Int): List[MessageAndOffset]
+  def close(): Unit
+}
+
+object BatchConsumer {
+  val NullBatchConsumer = new BatchConsumer {
+    def ingestBatch(offset: Long, bufferSize: Int) = List()
+    def close() = ()
+  }
+}
+
+class KafkaBatchConsumer(host: String, port: Int, topic: String) extends BatchConsumer {
+ 
+  private val timeout = 5000
+  private val buffer = 64 * 1024
+
+  private lazy val consumer = new SimpleConsumer(host, port, timeout, buffer) 
+
+  def ingestBatch(offset: Long, bufferSize: Int): List[MessageAndOffset] = {
+    val fetchRequest = new FetchRequest(topic, 0, offset, bufferSize)
+
+    consumer.fetch(fetchRequest).toList
+  }
+
+  def close() {
+    consumer.close
   }
 }

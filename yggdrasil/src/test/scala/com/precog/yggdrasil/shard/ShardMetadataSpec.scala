@@ -12,10 +12,8 @@ import com.precog.analytics.Path
 import com.precog.yggdrasil._
 
 import com.precog.common._
-import com.precog.common.Event
-import com.precog.common.util.RealisticIngestMessage
+import com.precog.common.util._
 
-import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
 import akka.actor._
@@ -27,7 +25,7 @@ import akka.dispatch._
 class ShardMetadataSpec extends Specification with RealisticIngestMessage {
   val sample = containerOfN[List, Event](50, genEvent).sample
  
-  def buildMetadata(sample: List[Event]): mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]] = {
+  def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
     def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
       case Event(path, tokenId, data, _) => data.flattenWithPath.map {
         case (sel, value) => ColumnDescriptor(path, sel, typeOf(value), Authorities(Set(tokenId)))
@@ -38,10 +36,12 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       ColumnType.forValue(jvalue).getOrElse(SNull)
     }
 
-    def columnMetadata(columns: Seq[ColumnDescriptor]): Seq[mutable.Map[MetadataType, Metadata]] = 
-      columns.map{ _ => mutable.Map[MetadataType, Metadata]() }
+    def columnMetadata(columns: Seq[ColumnDescriptor]): ColumnMetadata = 
+      columns.foldLeft(Map[ColumnDescriptor, MetadataMap]()) { 
+        (acc, col) => acc + (col -> Map[MetadataType, Metadata]() ) 
+      }
 
-    sample.map(projectionDescriptor).foldLeft( mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]]()) {
+    sample.map(projectionDescriptor).foldLeft( Map[ProjectionDescriptor, ColumnMetadata]()) {
       case (acc, el) => el.foldLeft(acc) {
         case (iacc, pd) => iacc + (pd -> columnMetadata(pd.columns)) 
       }
@@ -59,9 +59,9 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       }.toSet
     }
 
-    def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): mutable.Map[ProjectionDescriptor, mutable.Map[ColumnDescriptor, mutable.Map[MetadataType, Metadata]]] = {
-      def convertColDesc(cd: ColumnDescriptor) = mutable.Map[ColumnDescriptor, mutable.Map[MetadataType, Metadata]]() + (cd -> mutable.Map[MetadataType, Metadata]())
-      mutable.Map(events.flatMap {
+    def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
+      def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
+      Map(events.flatMap {
         case e @ Event(epath, token, data, metadata) if epath == path && data.flattenWithPath.exists(_._1 == selector) => List(toProjectionDescriptor(e, selector))
         case _                                                                              => List.empty
       }.map{ pd => (pd, convertColDesc(pd.columns.head)) }: _*)
@@ -81,7 +81,7 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, mutable.Map[Int, Int]())))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
       val fut = actor ? FindSelectors(events(0).path)
 
@@ -96,11 +96,11 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
       val metadata = buildMetadata(events)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, mutable.Map[Int, Int]())))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
       val fut = actor ? FindDescriptors(events(0).path, events(0).data.flattenWithPath.head._1)
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]]]
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]]
       val expected = extractMetadataFor(events(0).path, events(0).data.flattenWithPath.head._1)(events)
      
       result must_== expected

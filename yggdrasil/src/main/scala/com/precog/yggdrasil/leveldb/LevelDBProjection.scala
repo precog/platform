@@ -110,11 +110,14 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   import LevelDBProjection._
 
   val chunkSize = 32000 //bytes
+  val maxOpenFiles = 25
 
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
 
-  private val createOptions = (new Options).createIfMissing(true)
+  private val createOptions = (new Options)
+    .createIfMissing(true)
+    .maxOpenFiles(maxOpenFiles)
   private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
   //private lazy val valIndexFile: DB = {
   //   factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
