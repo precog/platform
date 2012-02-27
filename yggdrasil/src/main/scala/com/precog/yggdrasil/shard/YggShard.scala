@@ -136,9 +136,9 @@ trait ActorYggShard extends YggShard with Logging {
   import logger._
 
   def start: Future[Unit] = Future {  
-    // Not this is just to 'unlazy' the metadata
+    // Note this is just to 'unlazy' the metadata
     // sync scheduler call
-    metadataSyncCancel.isCancelled
+    this.metadataSyncCancel
     routingActor ! CheckMessages
   }
 
