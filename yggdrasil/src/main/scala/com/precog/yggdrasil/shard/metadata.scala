@@ -123,9 +123,14 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
   def update(inserts: List[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
    
-    projections = inserts.foldLeft(projections){ (acc, insert) =>
-      acc + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, acc))
+    val (projUpdate, clockUpdate) = inserts.foldLeft(projections, messageClock){ 
+      case ((projs, clock), insert) =>
+        (projs + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, projs)),
+         clock.update(insert.eventId.producerId, insert.eventId.sequenceId))
     }
+
+    projections = projUpdate
+    messageClock = clockUpdate
   }
  
   def findSelectors(path: Path): Seq[JPath] = {
