@@ -86,7 +86,9 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
               try {
                 send(event)
               } catch {
-                case _ => errors += 1
+                case ex => 
+                  ex.printStackTrace
+                  errors += 1
               }
               if(delay > 0) {
                 Thread.sleep(delay)

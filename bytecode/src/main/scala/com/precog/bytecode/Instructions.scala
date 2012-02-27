@@ -188,21 +188,25 @@ trait Instructions {
 
 
     sealed trait BuiltInOp1
-    
-    case object Date extends BuiltInOp1
+
     case object Year extends BuiltInOp1
     case object QuarterOfYear extends BuiltInOp1
     case object MonthOfYear extends BuiltInOp1
     case object WeekOfYear extends BuiltInOp1
+    case object DayOfYear extends BuiltInOp1
     case object DayOfMonth extends BuiltInOp1
     case object DayOfWeek extends BuiltInOp1
     case object HourOfDay extends BuiltInOp1
     case object MinuteOfHour extends BuiltInOp1
     case object SecondOfMinute extends BuiltInOp1
-    
+    case object MillisOfSecond extends BuiltInOp1
+
+
     sealed trait BuiltInOp2
 
     case object ChangeTimeZone extends BuiltInOp2
+    case object EpochToISO extends BuiltInOp2
+
     
     
     sealed trait Type

@@ -34,10 +34,11 @@ object AdSamples {
   val pageId = for (i <- 0 to 4) yield "page-" + i
   val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
+  val timeISO8601 = List("2010-11-04T15:38:12.782+03:00", "2010-04-22T06:22:38.039+06:30", "2009-05-30T12:31:42.462-09:00", "2009-02-11T22:12:18.493-02:00", "2008-09-19T06:28:31.325+10:00")
   
-  val timeMillis = for (i <- 946684800000L to 1330257342000L) yield i
-  val timeZoneHours = for (i <- -11 to 12) yield i
-  val timeZoneMinutes = List(0, 30)
+  //val timeMillis = for (i <- 946684800000L to 1330257342000L) yield i
+  //val timeZoneHours = for (i <- -11 to 12) yield i
+  //val timeZoneMinutes = List(0, 30)
   
 
   def gaussianIndex(size: Int): Int = {
@@ -76,7 +77,7 @@ object AdSamples {
   )
 
   def interactionSampleISO8601() = JObject(
-    JField("time", fmt.print(new DateTime(oneOf(timeMillis.sample.get)).withZone(DateTimeZone.forOffsetHoursMinutes(5,0)))) ::
+    JField("time", oneOf(timeISO8601).sample.get) :: 
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
   )
@@ -86,7 +87,7 @@ object AdSamples {
   def twoDayTimeFrame = chooseNum(System.currentTimeMillis - millisPerDay,
                             System.currentTimeMillis + millisPerDay)
 
-  val fmt = DateTimeFormat.forPattern("yyyy-MM-dd'T'hh:mm:ss.SSSZZ")
+  //val fmt = DateTimeFormat.forPattern("yyyy-MM-dd'T'HH:mm:ss.SSSZZ")
 }
 
 case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>

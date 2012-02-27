@@ -18,29 +18,32 @@ trait Binder extends parser.AST {
 
   object Time {
     val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
+    val EpochToISO = BuiltIn(Identifier(Vector("std", "time"), "epochToISO"), 2, false)
+    //val ISOToEpoch = BulitIn(Identifier(Vector("std", "time"), "iSOToEpoch"), 1, false)
     
-    //function and inverse ISO8601 <=> epoch millis
 
     //the following are all projections to sets of integers
     //todo truncate hour, truncate minute, and other truncate functions. Note: retain date information 
+    
 
-    val Date = BuiltIn(Identifier(Vector("std", "time"), "date"), 1, false) //month day year format
     val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
     val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
     val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
     val WeekOfYear = BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
+    val DayOfYear = BuiltIn(Identifier(Vector("std", "time"), "dayOfYear"), 1, false)
     val DayOfMonth = BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
     val DayOfWeek = BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
     val HourOfDay = BuiltIn(Identifier(Vector("std", "time"), "hourOfDay"), 1, false)  
     val MinuteOfHour = BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
     val SecondOfMinute = BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
+    val MillisOfSecond = BuiltIn(Identifier(Vector("std", "time"), "millisOfSecond"), 1, false)
   }
 
   val BuiltInFunctions = {
     import BuiltIns._
     import Time._
 
-    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, Date, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute)
+    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, EpochToISO, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond)
   }
 
   override def bindNames(tree: Expr) = {

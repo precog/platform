@@ -370,11 +370,6 @@ trait Emitter extends AST
             //**
             //start of Time functions
             //**
-            case BuiltIn(Time.Date.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(Date))
-
             case BuiltIn(Time.Year.name, arity, _) =>
               assert(arity == 1)
 
@@ -394,6 +389,11 @@ trait Emitter extends AST
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
+              
+            case BuiltIn(Time.DayOfYear.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(DayOfYear))
 
             case BuiltIn(Time.DayOfMonth.name, arity, _) =>
               assert(arity == 1)
@@ -420,10 +420,20 @@ trait Emitter extends AST
 
               emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
 
+            case BuiltIn(Time.MillisOfSecond.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(MillisOfSecond))
+
             case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
               assert(arity == 2)
 
-              emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone)) //do we really want emitExpr here since takes only one Expr
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone))
+
+            case BuiltIn(Time.EpochToISO.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(EpochToISO))
 
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
