@@ -168,18 +168,21 @@ trait InstructionGenerators extends Instructions {
   } yield res
 
   private lazy val genBuiltIn1 = oneOf(
-    Date,
     Year,
     QuarterOfYear,
     MonthOfYear,
     WeekOfYear,
+    DayOfYear,
     DayOfMonth,
     DayOfWeek,
     HourOfDay,
     MinuteOfHour,
-    SecondOfMinute)
+    SecondOfMinute,
+    MillisOfSecond)
 
-  private lazy val genBuiltIn2 = ChangeTimeZone
+  private lazy val genBuiltIn2 = oneOf (
+    ChangeTimeZone,
+    EpochToISO)
     
   private lazy val genReduction = oneOf(
     Count,

@@ -134,20 +134,22 @@ trait BytecodeReader extends Reader {
       }
 
       lazy val builtIn1 = ((code >> 8) & 0xFF) match {
-        case 0x00 => Some(Date)
         case 0x01 => Some(Year)
         case 0x02 => Some(QuarterOfYear)
         case 0x03 => Some(MonthOfYear)
         case 0x04 => Some(WeekOfYear)
+        case 0x10 => Some(DayOfYear)
         case 0x05 => Some(DayOfMonth)
         case 0x06 => Some(DayOfWeek)
         case 0x07 => Some(HourOfDay)
         case 0x08 => Some(MinuteOfHour)
         case 0x09 => Some(SecondOfMinute)
+        case 0x11 => Some(MillisOfSecond)
       }
 
       lazy val builtIn2 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(ChangeTimeZone)
+        case 0x01 => Some(EpochToISO)
       }
       
       lazy val tpe = (code & 0xFF) match {
