@@ -68,6 +68,18 @@ trait StubYggShardComponent {
         enumPStream[X, Vector[(Identities, Seq[CValue])], IO](data.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
       }
 
+      def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = {
+        enumPStream[X, Vector[Seq[CValue]], IO](data.values.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
+      def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = {
+        enumPStream[X, Vector[Identities], IO](data.keys.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
+      def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
+        enumPStream[X, Vector[(Identities, CValue)], IO](data.map{case (i,v) => (i, v(columnIndex))}.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
       def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = sys.error("not needed")
     }
 
