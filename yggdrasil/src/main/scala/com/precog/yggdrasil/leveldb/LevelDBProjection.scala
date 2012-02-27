@@ -109,7 +109,7 @@ object LevelDBProjection {
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
   import LevelDBProjection._
 
-  val chunkSize = 2000
+  val chunkSize = 32000 //bytes
 
   val logger = Logger("col:" + baseDir)
   logger.debug("Opening column index files")
@@ -204,6 +204,25 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       (id, b) => (id, b)
     }
   }
+
+  def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = new EnumeratorP[X, Vector[(Identities, CValue)], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
+      (id, b) => (id, b(columnIndex))
+    }
+  }
+
+  def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = new EnumeratorP[X, Vector[Identities], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Identities, F] {
+      (id, b) => id
+    }
+  }
+
+  def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = new EnumeratorP[X, Vector[Seq[CValue]], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Seq[CValue], F] {
+      (id, b) => b
+    }
+  }
+
 
   def traverseIndexRange[X, E, F[_]](range: Interval[Identities])(f: (Identities, Seq[CValue]) => E)(implicit MO : F |>=| IO): EnumeratorT[X, Vector[E], F] = {
     import MO._

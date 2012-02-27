@@ -110,10 +110,13 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     }
 
     def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit o: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
-      def combine(enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])]): EnumeratorP[X, Vector[SEvent], IO] = {
+      innerCombine(enumerators)
+    }
+
+    private def innerCombine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit ord: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
         enumerators match {
           case (selector, column) :: xs => 
-            cogroupEChunked[X, SEvent, SColumn, IO].apply(combine(xs), column).map { _ map {
+            cogroupEChunked[X, SEvent, SColumn, IO].apply(innerCombine(xs), column).map { _ map {
               case Left3(sevent) => sevent
               case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
               case Right3((id, cv)) => (id, SValue(selector, cv))
@@ -122,8 +125,6 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
         }
       }
 
-      combine(enumerators)
-    }
   }
 }
 // vim: set ts=4 sw=4 et:
