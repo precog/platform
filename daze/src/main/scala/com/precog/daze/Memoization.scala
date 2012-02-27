@@ -12,43 +12,62 @@ import scalaz.effect._
 import scalaz.iteratee._
 import IterateeT._
 
+trait MemoCache {
+  def expire(memoId: Int): IO[Unit]
+  def purge: IO[Unit]
+}
+
+object MemoCache {
+  object Noop extends MemoCache {
+    def expire(memoId: Int) = IO(())
+    def purge = IO(())
+  }
+}
+
 trait MemoizationContext {
+  def cache: MemoCache
+
   trait Memoizer[X, E] {
     def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO): IterateeT[X, E, F, A]
   }
 
   def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]]
-  def expire(memoId: Int): IO[Unit]
-  def purge: IO[Unit]
 }
 
-trait BufferingContext extends MemoizationContext {
+object MemoizationContext {
+  trait Noop extends MemoizationContext {
+    def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = Left(
+      new Memoizer[X, E] {
+        def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = iter
+      }
+    )
+  }
+
+  object Noop extends Noop {
+    val cache = MemoCache.Noop
+  }
+}
+
+trait BufferingContext {
+  def cache: MemoCache
+
   def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]]
 }
 
 object BufferingContext {
-  def memory(bufferSize: Int): BufferingContext = new MemoizationContext.Noop with BufferingContext {
+  trait Memory extends BufferingContext {
+    def bufferSize: Int
     def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = {
       import MO._
       import scalaz.std.list._
       take[X, E, F, List](bufferSize).map(l => EnumeratorP.enumPStream[X, E, IO](l.toStream))
     }
   }
-}
 
-object MemoizationContext {
-  class Noop extends MemoizationContext {
-    def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = Left(
-      new Memoizer[X, E] {
-        def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = iter
-      }
-    )
-
-    def expire(memoId: Int) = IO(())
-    def purge = IO(())
+  def memory(size: Int) = new Memory {
+    val cache = MemoCache.Noop
+    val bufferSize = size
   }
-
-  object Noop extends Noop
 }
 
 trait MemoizationComponent {
@@ -57,8 +76,8 @@ trait MemoizationComponent {
   def withMemoizationContext[A](f: MemoContext => A): A
 }
 
-trait BufferingComponent extends MemoizationComponent {
-  type MemoContext <: MemoizationContext with BufferingContext
+trait BufferingComponent {
+  type MemoContext <: BufferingContext
 
   def withMemoizationContext[A](f: MemoContext => A): A
 }

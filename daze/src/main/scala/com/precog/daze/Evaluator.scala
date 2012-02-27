@@ -35,7 +35,7 @@ trait MemoizingEvaluationContext extends EvaluationContext with MemoizationCompo
 
   def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO] = {
     withMemoizationContext { memoContext => 
-      f(new Context { val memoizationContext = memoContext }).perform(memoContext.purge)
+      f(new Context { val memoizationContext = memoContext }).perform(memoContext.cache.purge)
     }
   }
 }
@@ -184,7 +184,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
           case (_, sv) => {
             val back = maybeRealize(loop(child, ops.point[X, SEvent, IO](Vector((VectorCase.empty[Identity], sv))) :: roots, ctx))
-            val actions = (volatileIds map ctx.memoizationContext.expire).fold(IO {}) { _ >> _ }
+            val actions = (volatileIds map ctx.memoizationContext.cache.expire).fold(IO {}) { _ >> _ }
             back perform actions
           }
         }

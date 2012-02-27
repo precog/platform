@@ -69,26 +69,27 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(queryExecutorConfig: Configuration): QueryExecutor = queryExecutorFactory()
   
   def queryExecutorFactory(): QueryExecutor = {
-
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
       for( yConfig <- loadConfig;
            state   <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => new YggdrasilQueryExecutor {
-          val controlTimeout = Duration(120, "seconds")
-          val maxEvalDuration = controlTimeout 
-
           lazy val actorSystem = ActorSystem("akka_ingest_server")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
           val yggConfig = yConfig
-          val yggState = yState
-
           val centralZookeeperHosts = yConfig.config[String]("precog.kafka.consumer.zk.connect", "localhost:2181") 
 
-          val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
-          val yggCheckpoints: YggCheckpoints = new SystemCoordinationYggCheckpoints("shard", coordination) 
+          private val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
+          object ops extends Ops 
+          object query extends QueryAPI 
+          object storage extends Storage {
+            val yggState = yState
+            //val kafkaIngestConfig = yConfig
+            val yggCheckpoints = new SystemCoordinationYggCheckpoints("shard", coordination) 
+            val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
+          }
         }}
       }
 
@@ -115,22 +116,9 @@ trait YggdrasilQueryExecutor
     with DiskMemoizationComponent { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  
-  val yggState: YggState
+  trait Storage extends ActorYggShard with KafkaIngester
+
   val actorSystem: ActorSystem
-  val yggCheckpoints: YggCheckpoints
-
-  object storage extends ActorYggShard with KafkaIngester with YggConfigComponent {
-    type YggConfig = self.YggConfig 
-    val yggState = self.yggState
-    val yggConfig = self.yggConfig
-    val yggCheckpoints = self.yggCheckpoints
-    val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
-  }
-
-  object ops extends Ops 
-
-  object query extends QueryAPI 
 
   def startup() = storage.start
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
