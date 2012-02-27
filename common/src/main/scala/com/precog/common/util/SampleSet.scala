@@ -35,6 +35,7 @@ object AdSamples {
   val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
   val timeISO8601 = List("2010-11-04T15:38:12.782+03:00", "2010-04-22T06:22:38.039+06:30", "2009-05-30T12:31:42.462-09:00", "2009-02-11T22:12:18.493-02:00", "2008-09-19T06:28:31.325+10:00")
+  val timeZone = List(3600000, 720000, 25200000, -18000000, -28800000)
   
   //val timeMillis = for (i <- 946684800000L to 1330257342000L) yield i
   //val timeZoneHours = for (i <- -11 to 12) yield i
@@ -72,6 +73,7 @@ object AdSamples {
 
   def interactionSample() = JObject(
     JField("time", twoDayTimeFrame.sample.get) :: 
+    JField("timeZone", oneOf(timeZone).sample.get) :: 
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
   )
