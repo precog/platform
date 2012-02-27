@@ -135,107 +135,12 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         }}} 
         val enum = maybeRealize(parentResTyped)
 
-        op match {
-          case Year => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.year().get)
-              })
-            })
-          }
-          case QuarterOfYear => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                if (List(1,2,3) contains newTime.monthOfYear().get) { 
-                  SDecimal(1) 
-                } else if (List(4,5,6) contains newTime.monthOfYear().get) { 
-                  SDecimal(2)
-                } else if (List(7,8,9) contains newTime.monthOfYear().get) { 
-                  SDecimal(3)
-                } else if (List(10,11,12) contains newTime.monthOfYear().get) { 
-                  SDecimal(4)
-                } else sys.error("month formatted incorrectly")
-              })
-            })
-          }
-          case MonthOfYear => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.monthOfYear().get)
-              })
-            })
-          }
-          case WeekOfYear => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.weekOfWeekyear().get)
-              })
-            })
-          }
-          case DayOfYear => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.dayOfYear().get)
-              })
-            })
-          }
-          case DayOfMonth => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.dayOfMonth().get)
-              })
-            })
-          }
-          case DayOfWeek => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.dayOfWeek().get)
-              })
-            })
-          }
-          case HourOfDay => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.hourOfDay().get)
-              })
-            })
-          }
-          case MinuteOfHour => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.minuteOfHour().get)
-              })
-            })
-          }
-          case SecondOfMinute => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.secondOfMinute().get)
-              })
-            })
-          }
-          case MillisOfSecond => {
-            Right(enum collect {
-              case (id, SString(time)) => (id, {
-                val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-                SDecimal(newTime.millisOfSecond().get)
-              })
-            })
-          }
-          case _ => Right(enum collect {
-            case (id, sv) => (id, sv)
-          })
+        def opPerform(sev: SEvent): Option[SEvent] = {
+          val (id, sv) = sev
+          performBuiltInOp1(op, sv) map { sv => (id, sv) }
         }
+
+        Right(enum collect unlift(opPerform))
       }
       
       // TODO mode and median
@@ -562,7 +467,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2(_) => (Some(SString), Some(SString))
+    case BuiltInFunction2(_) => (Some(SDecimal), Some(SDecimal))
   }
   
   private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
@@ -684,6 +589,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       case DerefArray => {
         case (SArray(arr), SDecimal(index)) if index.isValidInt =>
           arr.lift(index.toInt)
+        
         case _ => None
       }
 
@@ -691,20 +597,86 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         case (SString(time), SString(tz)) => {
           //if (isValidTimezone(tz) && isValidTime(time)) 
           Some(SDecimal(0))
-        }
+          }
+ 
         case _ => None
       }
 
       case BuiltInFunction2(EpochToISO) => {
-        case (SLong(time), SString(tz)) => {
-          //if (isValidTimezone(tz) && isValidTime(time)) 
-          Some(SDecimal(0))
+        case (SDecimal(time), SDecimal(tz)) if (time >=Long.MinValue && time <= Long.MaxValue && tz.isValidInt) =>  {
+          val format = ISODateTimeFormat.dateTime()
+          val timeZone = DateTimeZone.forOffsetMillis(tz.toInt)
+          val dateTime = new DateTime(time.toLong, timeZone)
+          Some(SString(format.print(dateTime)))
         }
         case _ => None
       }
     }
   }
 
+  def isValidISO(str: String): Boolean = {
+    try { new DateTime(str); true
+    } catch {
+      case e:IllegalArgumentException => { false }
+    }
+  }
+
+  private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
+
+    case (Year, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.year().get))
+    }
+    case (QuarterOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      if (List(1,2,3) contains newTime.monthOfYear().get) { 
+        Some(SDecimal(1)) 
+      } else if (List(4,5,6) contains newTime.monthOfYear().get) { 
+        Some(SDecimal(2))
+      } else if (List(7,8,9) contains newTime.monthOfYear().get) { 
+        Some(SDecimal(3))
+      } else Some(SDecimal(4))
+    }
+    case (MonthOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.monthOfYear().get))
+    }
+    case (WeekOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.weekOfWeekyear().get))
+    }
+    case (DayOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfYear().get))
+    }
+    case (DayOfMonth, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfMonth().get))
+    }
+    case (DayOfWeek, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfWeek().get))
+    }
+    case (HourOfDay, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.hourOfDay().get))
+    }
+    case (MinuteOfHour, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.minuteOfHour().get))
+    }
+    case (SecondOfMinute, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.secondOfMinute().get))
+    }
+    case (MillisOfSecond, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.millisOfSecond().get))
+    }
+    
+    case _ => None
+  }
+  
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
 

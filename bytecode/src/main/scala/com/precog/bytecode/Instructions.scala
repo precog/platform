@@ -219,14 +219,12 @@ trait Instructions {
     case object MinuteOfHour extends BuiltInOp1
     case object SecondOfMinute extends BuiltInOp1
     case object MillisOfSecond extends BuiltInOp1
-
+    
 
     sealed trait BuiltInOp2
 
     case object ChangeTimeZone extends BuiltInOp2
     case object EpochToISO extends BuiltInOp2
-
-    
     
     sealed trait Type
     
