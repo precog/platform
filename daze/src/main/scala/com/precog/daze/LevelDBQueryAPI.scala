@@ -46,8 +46,9 @@ trait LevelDBQueryConfig {
 
 trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent {
   type YggConfig <: LevelDBQueryConfig
+  type Storage <: YggShard
 
-  def storage: YggShard
+  def storage: Storage
 
   trait QueryAPI extends StorageEngineQueryAPI {
     override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(

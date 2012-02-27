@@ -49,7 +49,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
   sealed trait MemoContext extends MemoizationContext with BufferingContext { ctx => 
     type CacheKey[α] = Int
     type CacheValue[α] = Either[Vector[α], File]
-    @volatile private var cache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
+    @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
 
     private def memoizer[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
@@ -71,7 +71,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
 
     def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = ctx.synchronized {
       import MO._
-      cache.get(memoId) match {
+      memoCache.get(memoId) match {
         case Some(Left(vector)) => 
           done[X, E, F, EnumeratorP[X, E, IO]](EnumeratorP.enumPStream[X, E, IO](vector.toStream), eofInput)
           
@@ -81,7 +81,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
         case None =>
           import MO._
           memoizer[X, E, F](memoId) map { memo =>
-            EnumeratorP.perform[X, E, IO, Unit](IO(ctx.synchronized { if (!cache.isDefinedAt(memoId)) cache += (memoId -> memo) })) |+|
+            EnumeratorP.perform[X, E, IO, Unit](IO(ctx.synchronized { if (!memoCache.isDefinedAt(memoId)) memoCache += (memoId -> memo) })) |+|
             memo.fold(
               vector => EnumeratorP.enumPStream[X, E, IO](vector.toStream),
               file   => fs.reader[X](file)
@@ -91,7 +91,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
     }
 
     def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
-      cache.get(memoId) match {
+      memoCache.get(memoId) match {
         case Some(Left(vector)) => 
           Right(EnumeratorP.enumPStream[X, E, IO](vector.toStream))
           
@@ -104,9 +104,9 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
               import MO._
               (iter zip memoizer[X, E, F](memoId)) map {
                 case (result, memo) => 
-                  ctx.synchronized { if (!cache.isDefinedAt(memoId)) {
+                  ctx.synchronized { if (!memoCache.isDefinedAt(memoId)) {
                     for (f <- memo.right) files = f :: files
-                    cache += (memoId -> memo) 
+                    memoCache += (memoId -> memo) 
                   }}
                   result
               }
@@ -116,15 +116,17 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponen
       }
     }
 
-    def expire(memoId: Int) = IO {
-      ctx.synchronized { cache -= memoId }
-    }
+    object cache extends MemoCache {
+      def expire(memoId: Int) = IO {
+        ctx.synchronized { memoCache -= memoId }
+      }
 
-    def purge = IO {
-      ctx.synchronized {
-        for (f <- files) f.delete
-        files = Nil
-        cache = KMap.empty[CacheKey, CacheValue]
+      def purge = IO {
+        ctx.synchronized {
+          for (f <- files) f.delete
+          files = Nil
+          memoCache = KMap.empty[CacheKey, CacheValue]
+        }
       }
     }
   }

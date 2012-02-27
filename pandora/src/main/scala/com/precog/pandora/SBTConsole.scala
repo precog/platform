@@ -70,6 +70,7 @@ object SBTConsole {
 
     val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
     
+    type Storage = ActorYggShard
     object storage extends ActorYggShard {
       val yggState = shardState
       val yggCheckpoints = new TestYggCheckpoints
