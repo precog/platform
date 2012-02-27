@@ -30,7 +30,8 @@ import blueeyes.json.xschema.DefaultSerialization._
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 
-import com.precog.analytics._
+import com.precog.analytics.Path
+import com.precog.common.security._
 
 trait IngestServiceCombinators extends HttpRequestHandlerCombinators {
   implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))

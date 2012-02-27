@@ -20,7 +20,10 @@
 package com.precog.yggdrasil
 package shard
 
+import kafka._
+
 import com.precog.common._
+import com.precog.common.util._
 import com.precog.common.security._
 import com.precog.analytics.Path
 
@@ -48,15 +51,9 @@ import scalaz.syntax
 import scalaz.effect._
 import scalaz.Scalaz._
 
-object StorageMetadata {
-  type ColumnMetadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]
-  object ColumnMetadata {
-    val Empty = Map.empty[ColumnDescriptor, Map[MetadataType, Metadata]]
-  }
-}
+import com.weiglewilczek.slf4s.Logging
 
 trait StorageMetadata {
-  import StorageMetadata._
 
   implicit val dispatcher: MessageDispatcher
 
@@ -78,13 +75,20 @@ trait StorageMetadata {
   }
 }
 
-class SecureMetadata(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata { 
+trait MetadataView extends StorageMetadata
+
+class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
+  def findSelectors(path: Path) = metadata.findSelectors(path)
+  def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
+}
+
+class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
   
   def findSelectors(path: Path) = {
     metadata.findSelectors(path) flatMap { selectors =>
       Future.traverse(selectors) { selector =>
         findProjections(path, selector) map { result =>
-          if(result.size > 1) List(selector) else List.empty 
+          if(result.isEmpty) List.empty else List(selector)
         }
       } map { _.flatten }
     }
@@ -92,18 +96,18 @@ class SecureMetadata(uid: String, accessControl: AccessControl, metadata: Storag
 
   def findProjections(path: Path, selector: JPath) = {
     metadata.findProjections(path, selector) map { _.filter {
-      case (key, value) =>
-        value forall { 
-          case (colDesc, _) => 
-            val uids = colDesc.authorities.uids
-            accessControl.mayAccessData(uid, path, uids, DataQuery)
-        }
-    }}
+        case (key, value) =>
+          value forall { 
+            case (colDesc, _) => 
+              val uids = colDesc.authorities.uids
+              accessControl.mayAccessData(uid, path, uids, DataQuery)
+          }
+      }
+    }
   }
 }
 
 class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
-  import StorageMetadata._
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
@@ -112,107 +116,78 @@ class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher)
   def findProjections(path: Path, selector: JPath) = 
     actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
 
-  def checkpoints: Future[Map[Int, Int]] = actor ? GetCheckpoints map { _.asInstanceOf[Map[Int, Int]] }
-
-  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): Future[Unit] = {
-    actor ? UpdateMetadata(eventId, desc, values, metadata) map { _.asInstanceOf[Unit] } 
-  }
-
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
 
 }
 
-class ShardMetadataActor(projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]], checkpoints: mutable.Map[Int, Int]) extends Actor {
+class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) extends Actor {
 
-  private val expectedEventActions = mutable.Map[EventId, Int]()
- 
+  private var projections = initialProjections
+
+  private var messageClock = initialClock 
+
   def receive = {
    
-    case ExpectedEventActions(eventId, expected) => 
-      sender ! setExpectation(eventId, expected)
-    
-    case UpdateMetadata(eventId, desc, values, metadata) => 
-      sender ! update(eventId, desc, values, metadata)
+    case UpdateMetadata(inserts) => 
+      sender ! update(inserts)
    
     case FindSelectors(path)                  => sender ! findSelectors(path)
 
     case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
+
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections, messageClock))
     
-    case GetCheckpoints                       => sender ! checkpoints.toMap
-    
-    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections.clone))
-    
-    case FlushCheckpoints(serializationActor) => sender ! (serializationActor ! SaveCheckpoints(checkpoints.clone)) 
-  
   }
 
-  def setExpectation(eventId: EventId, expected: Int) = {
-    expectedEventActions.put(eventId, expected)
-  }
-
-  def update(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): Unit = {
+  def update(inserts: List[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
    
-    updateExpectation(eventId, recordCheckpoint(checkpoints) _, expectedEventActions)
-
-    projections.put(desc, applyMetadata(desc, values, metadata, projections))
+    projections = inserts.foldLeft(projections){ (acc, insert) =>
+      acc + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, acc))
+    }
   }
  
   def findSelectors(path: Path): Seq[JPath] = {
-    projections.toSeq flatMap {
-      case (descriptor, _) => descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
+    projections.foldLeft(Vector[JPath]()) {
+      case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
     }
   }
 
-  def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
+  def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, ColumnMetadata] = {
     @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => col.path == path && col.selector == selector
 
-    for ((descriptor, metadata) <- projections.toMap if descriptor.columns.exists(matches(path, selector))) 
-    yield (descriptor, (descriptor.columns zip metadata.map(_.toMap)).toMap)
+    projections.filter {
+      case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
+    }
   }  
 }
 
 object MetadataUpdateHelper {
- def updateExpectation(eventId: EventId, ifSatisfied: (EventId) => Unit, expectedEventActions: mutable.Map[EventId, Int]) = {
-    decrementExpectation(eventId, expectedEventActions) match {
-      case Some(0) => ifSatisfied(eventId)
-      case _       => ()
-    }
-  }
-  
-  def decrementExpectation(eventId: EventId, expectedEventActions: mutable.Map[EventId, Int]): Option[Int] = {
-    val update = expectedEventActions.get(eventId).map( _ - 1 )
-    update.foreach {
-      case x if x > 0  => expectedEventActions.put(eventId, x)
-      case x if x <= 0 => expectedEventActions.remove(eventId)
-    }
-    update
+
+  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: Map[ProjectionDescriptor, ColumnMetadata]): ColumnMetadata = {
+    val initialMetadata = projections.get(desc).getOrElse(initMetadata(desc))
+    val userAndValueMetadata = addValueMetadata(values, metadata.map { Metadata.toTypedMap _ })
+
+    combineMetadata(desc, initialMetadata, userAndValueMetadata)
   }
 
-  def recordCheckpoint(checkpoints: mutable.Map[Int, Int])(eventId: EventId) {
-    eventId match {
-      case EventId(pid, sid) => {
-        val newVal = checkpoints.get(pid).map{ cur => if(cur < sid) sid else cur }.getOrElse(sid)
-        checkpoints.put(pid, newVal)
-      }
-    }
-  }
-
-  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]): Seq[MetadataMap] = {
-    combineMetadata(projections.get(desc).getOrElse(initMetadata(desc)))(addValueMetadata(values)(metadata map { Metadata.toTypedMap }))
-  }
-
-  def addValueMetadata(values: Seq[CValue])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
+  def addValueMetadata(values: Seq[CValue], metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
     values zip metadata map { t => valueStats(t._1).map( vs => t._2 + (vs.metadataType -> vs) ).getOrElse(t._2) }
   }
 
-  def combineMetadata(user: Seq[MetadataMap])(metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
-    user zip metadata map { t => t._1 |+| t._2 }
+  def combineMetadata(desc: ProjectionDescriptor, existingMetadata: ColumnMetadata, newMetadata: Seq[MetadataMap]): ColumnMetadata = {
+    val newColumnMetadata = desc.columns zip newMetadata
+    newColumnMetadata.foldLeft(existingMetadata) { 
+      case (acc, (col, newColMetadata)) =>
+        val updatedMetadata = acc.get(col) map { _ |+| newColMetadata } getOrElse { newColMetadata }
+        acc + (col -> updatedMetadata)
+    }
   }
 
-  def initMetadata(desc: ProjectionDescriptor): Seq[MetadataMap] = {
-    desc.columns map { cd => mutable.Map[MetadataType, Metadata]() } toSeq
-  }
+  def initMetadata(desc: ProjectionDescriptor): ColumnMetadata = 
+    desc.columns.foldLeft( Map[ColumnDescriptor, MetadataMap]() ) {
+      (acc, col) => acc + (col -> Map[MetadataType, Metadata]())
+    }
 
  def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
    str = (s: String)      => Some(StringValueStats(1, s, s)),
@@ -235,23 +210,20 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(eventId: EventId, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) extends ShardMetadataAction
+case class UpdateMetadata(inserts: List[InsertComplete]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
-case class FlushCheckpoints(serializationActor: ActorRef) extends ShardMetadataAction
 
-case object GetCheckpoints extends ShardMetadataAction
-
-class MetadataSerializationActor(metadataIO: MetadataIO, checkpointIO: CheckpointIO) extends Actor {
+class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: MetadataIO) extends Actor with Logging {
   def receive = {
-    case SaveMetadata(metadata) =>  sender ! metadata.toList.map {
+    case SaveMetadata(metadata, messageClock) => 
+      logger.debug("Syncing metadata")
+      metadata.toList.map {
         case (pd, md) => metadataIO(pd, md)
       }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
-
-    case SaveCheckpoints(checkpoints) => sender ! checkpointIO(checkpoints).unsafePerformIO
+      checkpoints.metadataPersisted(messageClock)
   }
 }
 
 sealed trait MetadataSerializationAction
 
-case class SaveMetadata(metadata: mutable.Map[ProjectionDescriptor, Seq[MetadataMap]]) extends MetadataSerializationAction
-case class SaveCheckpoints(metadata: mutable.Map[Int, Int]) extends MetadataSerializationAction
+case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock) extends MetadataSerializationAction

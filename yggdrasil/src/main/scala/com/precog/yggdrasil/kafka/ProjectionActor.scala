@@ -30,6 +30,7 @@ import com.precog.common._
 import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.ActorRef
+import akka.actor.Scheduler
 import akka.util.Timeout
 import akka.util.duration._
 
@@ -58,6 +59,10 @@ import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 import scalaz.MonadPartialOrder._
 
+case object Stop
+
+case object IncrementRefCount
+case object DecrementRefCount
 
 case class ProjectionInsert(identities: Identities, values: Seq[CValue])
 
@@ -68,7 +73,7 @@ trait ProjectionResults {
   def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
 }
 
-class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionDescriptor) extends Actor {
+class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionDescriptor, scheduler: Scheduler) extends Actor with Logging {
   def asCValue(jval: JValue): CValue = jval match { 
     case JString(s) => CString(s)
     case JInt(i)    => CNum(BigDecimal(i))
@@ -78,12 +83,26 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     case x          => sys.error("JValue type not yet supported: " + x.getClass.getName )
   }
 
+  var refCount = 0
+
   def receive = {
     case Stop => //close the db
-      projection.close.unsafePerformIO
+      if(refCount == 0) {
+        logger.debug("Closing projection.")
+        projection.close.unsafePerformIO
+      } else {
+        logger.debug("Deferring close ref count [%d]".format(refCount))
+        scheduler.scheduleOnce(1 second, self, Stop) 
+      }
+
+    case IncrementRefCount => refCount += 1
+
+    case DecrementRefCount => refCount -= 1
 
     case ProjectionInsert(identities, values) => 
+      //logger.debug("Projection insert")
       projection.insert(identities, values).unsafePerformIO
+      sender ! ()
 
     case ProjectionGet => 
       sender ! projection

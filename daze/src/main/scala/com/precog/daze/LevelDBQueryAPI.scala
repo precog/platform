@@ -27,7 +27,6 @@ import com.precog.yggdrasil.kafka._
 import com.precog.yggdrasil.leveldb._
 import com.precog.yggdrasil.shard._
 import com.precog.analytics.Path
-import StorageMetadata._
 
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
