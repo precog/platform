@@ -145,8 +145,12 @@ trait YggdrasilQueryExecutor
   }
 
   private def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {
-    val tree = compile(query)
-    if(tree.errors.isEmpty) Right(emit(tree)) else Left(tree.errors)
+    try {
+      val tree = compile(query)
+      if(tree.errors.isEmpty) Right(emit(tree)) else Left(tree.errors)
+    } catch {
+      case ex: ParseException => Left(...)
+    }
   }
 }
 

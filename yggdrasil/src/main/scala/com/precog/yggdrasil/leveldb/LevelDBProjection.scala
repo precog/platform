@@ -162,42 +162,47 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     import MO.MG.bindSyntax._
 
     new EnumeratorT[X, Vector[E], F] { 
+      import org.fusesource.leveldbjni.internal.JniDBIterator
       def apply[A] = {
-        val iter = idIndexFile.iterator
-        val close = IO(iter.close)
+        val iter  = IO(idIndexFile.iterator).flatMap(iter => IO(iter).ensuring(IO(iter.close)))
 
-        def step(s : StepT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
-          val _done = iterateeT[X, Vector[E], F, A](MO.promote(close) >> s.pointI.value)
+        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator]): IterateeT[X, Vector[E], F, A] = {
+          lazy val _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(iter.close)) >> s.pointI.value)
 
           s.fold(
-            cont = k => if (iter.hasNext) {
-              val buffer = new ArrayBuffer[E](chunkSize)
-              var i = 0
-              val rawChunk: org.fusesource.leveldbjni.KeyValueChunk = iter.asInstanceOf[org.fusesource.leveldbjni.internal.JniDBIterator].nextChunk(chunkSize)
-              while (i < rawChunk.getSize) {
-                buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
-                i += 1
-              }
+            cont = k => iteratee(
+              for {
+                iter     <- iterF
+                nextStep <- if (iter.hasNext) {
+                              val buffer = new ArrayBuffer[E](chunkSize)
+                              var i = 0
+                              val rawChunk: org.fusesource.leveldbjni.KeyValueChunk = iter.nextChunk(chunkSize)
+                              while (i < rawChunk.getSize) {
+                                buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
+                                i += 1
+                              }
 
-//              val buffer = new ArrayBuffer[E](chunkSize)
-//              var i = chunkSize
-//              while (i > 0 && iter.hasNext) {
-//                val n = iter.next
-//                buffer += unproject(n.getKey, n.getValue)(f)
-//                i -= 1
-//              }
-              val chunk = Vector(buffer: _*)
-              k(elInput(chunk)) >>== step
-            } else {
-              _done
-            },
+                //              val buffer = new ArrayBuffer[E](chunkSize)
+                //              var i = chunkSize
+                //              while (i > 0 && iter.hasNext) {
+                //                val n = iter.next
+                //                buffer += unproject(n.getKey, n.getValue)(f)
+                //                i -= 1
+                //              }
+                              val chunk = Vector(buffer: _*)
+                              k(elInput(chunk)) >>== step(_, MO.MG.point(iter))
+                            } else {
+                              _done
+                            } value
+              } yield nextStep
+            ),
             done = (_, _) => _done,
             err = _ => _done
           )
         }
 
         iter.seekToFirst()
-        step _
+        step(_, MO.promote(iter))
       }
     }
   }
@@ -233,40 +238,43 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
     new EnumeratorT[X, Vector[E], F] { 
       def apply[A] = {
-        val iter = idIndexFile.iterator
-        val sIter = iter.asScala
-        val close = IO(iter.close)
+        val iter  = IO(idIndexFile.iterator).flatMap(iter => IO(iter).ensuring(IO(iter.close)))
+        val sIter = iter.map(_.asScala)
         range.start match {
           case Some(id) => iter.seek(id.as[Array[Byte]])
           case None => iter.seekToFirst()
         }
 
-        def step(s: StepT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
-          @inline def _done = iterateeT[X, Vector[E], F, A](MO.promote(close) >> s.pointI.value)
+        def step(s: StepT[X, Vector[E], F, A], iterF: F[Iterator]): IterateeT[X, Vector[E], F, A] = {
+          @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(_.close) >> s.pointI.value)
 
-          s.fold(
-            cont = k => if (sIter.hasNext) {
-              val rawValues = sIter.map(n => (n, n.getKey.as[Identities])).take(chunkSize)
-              val chunk = Vector(range.end.map(end => rawValues.takeWhile(_._2 < end)).getOrElse(rawValues).map { case (n, ids) => unproject(n.getKey, n.getValue)(f) }.toSeq: _*)
-              
-              if (chunk.isEmpty) {
-                _done
-              } else {
-                k(elInput(chunk)) >>== step
-              }
+          @inline def next(iter: Iterator) if (sIter.hasNext) {
+            val rawValues = sIter.map(n => (n, n.getKey.as[Identities])).take(chunkSize)
+            val chunk = Vector(range.end.map(end => rawValues.takeWhile(_._2 < end)).getOrElse(rawValues).map { case (n, ids) => unproject(n.getKey, n.getValue)(f) }.toSeq: _*)
+            
+            if (chunk.isEmpty) {
+              _done
+            } else {
+              k(elInput(chunk)) >>== step(_, MO.MG.point(iter))
+            }
 //              val n = iter.next
 //              val id = n.getKey.as[Identities]
 //              range.end match {
 //                case Some(end) if end <= id => _done
 //                case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== step
 //              }
-            } else _done,
+          } else {
+            _done
+          } 
+
+          s.fold(
+            cont = k => iteratee(iterF flatMap (next(_).value)),
             done = (_, _) => _done,
             err = _ => _done
           )
         }
 
-        step _
+        step(_, MO.MG.promote(sIter))
       }
     }
   }
