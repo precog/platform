@@ -57,9 +57,7 @@ trait BytecodeReader extends Reader {
         
         case 0x61 => Some(WrapArray)
 
-        case 0xB0 => builtIn1 match {
-          case Some(time) => Some(BuiltInFunction1(time))
-        }
+        case 0xB0 => builtIn1 map BuiltInFunction1
         
         case _ => None
       }
@@ -91,9 +89,7 @@ trait BytecodeReader extends Reader {
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
 
-        case 0xB1 => builtIn2 match { 
-          case Some(time) => Some(BuiltInFunction2(time))
-        }
+        case 0xB1 => builtIn2 map BuiltInFunction2
         
         case _ => None
       }
@@ -126,11 +122,15 @@ trait BytecodeReader extends Reader {
         case 0x08 => Some(MinuteOfHour)
         case 0x09 => Some(SecondOfMinute)
         case 0x11 => Some(MillisOfSecond)
+
+        case _    => None
       }
 
       lazy val builtIn2 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(ChangeTimeZone)
         case 0x01 => Some(EpochToISO)
+
+        case _    => None
       }
       
       lazy val tpe = (code & 0xFF) match {
