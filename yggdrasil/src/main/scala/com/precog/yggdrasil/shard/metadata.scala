@@ -229,6 +229,7 @@ class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: Metada
       metadata.toList.map {
         case (pd, md) => metadataIO(pd, md)
       }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
+      logger.debug("Registering metadata checkpoint: " + messageClock)
       checkpoints.metadataPersisted(messageClock)
   }
 }

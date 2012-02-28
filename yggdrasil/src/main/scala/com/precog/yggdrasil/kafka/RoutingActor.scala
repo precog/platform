@@ -244,11 +244,15 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
     if(inserts.size >= expectation(eventId)) {
       expectation -= eventId
       inserted -= eventId
+      //logger.debug("Event insert complete: updating metadata")
       metadataActor ! UpdateMetadata(inserts)
     } else {
       inserted += (eventId -> inserts) 
     }
-    if(expectation.isEmpty) self ! CheckMessages
+    if(expectation.isEmpty) {
+      logger.debug("Batch complete")
+      self ! CheckMessages
+    }
   }
 }
 
