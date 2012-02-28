@@ -1268,7 +1268,7 @@ class EvaluatorSpecs extends Specification
       
       result must haveSize(9)
       
-      result foreach {
+      forall(result) {
         case (VectorCase(_), SObject(obj)) => {
           obj must haveKey("user")
           obj must haveKey("num")
@@ -1287,6 +1287,31 @@ class EvaluatorSpecs extends Specification
         }
         
         case p => failure("'%s' does not match the expected pattern".format(p))
+      }
+    }
+    
+    "evaluate with on the clicks dataset" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(JoinObject),
+        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+        Join(line, Map2Cross(WrapObject),
+          Root(line, PushString("t")),
+          Root(line, PushNum("42"))))
+          
+      val result = testEval(input)
+      
+      result must haveSize(100)
+      
+      forall(result) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveKey("user")
+          obj must haveKey("time")
+          obj must haveKey("page")
+          obj must haveKey("t")
+          
+          obj("t") mustEqual SDecimal(42)
+        }
       }
     }
     
