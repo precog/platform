@@ -575,11 +575,12 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
 
       case BuiltInFunction2(ChangeTimeZone) => {
-        case (SString(time), SString(tz)) => {
-          //if (isValidTimezone(tz) && isValidTime(time)) 
-          Some(SDecimal(0))
-          }
- 
+        case (SString(time), SDecimal(tz)) if (isValidISO(time) && tz.isValidInt) => {
+          val format = ISODateTimeFormat.dateTime()
+          val timeZone = DateTimeZone.forOffsetMillis(tz.toInt)
+          val dateTime = new DateTime(time, timeZone)
+          Some(SString(format.print(dateTime)))
+        }
         case _ => None
       }
 
