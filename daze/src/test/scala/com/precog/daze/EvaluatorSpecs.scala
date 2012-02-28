@@ -200,6 +200,26 @@ class EvaluatorSpecs extends Specification
       
       result2 must contain(42, 12, 77, 1, 13)
     }
+
+    //"evaluate a binary non-numeric operation mapped over homogenous set" >> {
+    //  "changeTimeZone" >> {
+    //    val line = Line(0, "")
+    //    
+    //    val input = Operate(line, BuiltInFunction2(ChangeTimeZone),
+    //      dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+    //      
+    //    val result = testEval(input)
+    //    
+    //    result must haveSize(5)
+    //    
+    //    val result2 = result collect {
+    //      case (VectorCase(_), SDecimal(d)) => d.toInt
+    //    }
+    //    
+    //    result2 must contain(-42, -12, -77, -1, -13)
+    //  }
+    //
+    //}
     
     "evaluate a binary numeric operation mapped over homogeneous numeric set" >> {
       "addition" >> {
@@ -1459,7 +1479,196 @@ class EvaluatorSpecs extends Specification
         result2 must contain(145)
       }
     }
-    
+
+    "non-reduction of homogeneous sets" >> {
+      "year" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(Year),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(2010, 2011, 2012)
+      }
+
+      "quarter" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(QuarterOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(1, 2, 3, 4)
+      }
+
+      "monthOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MonthOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(4, 2, 9, 12)
+      }
+
+      "weekOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(WeekOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(17, 8, 36, 6, 52)
+      }
+
+      "dayOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(52, 119, 42, 249, 363)
+      }
+
+      "dayOfMonth" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfMonth),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(21, 29, 11, 6, 28)
+      }
+
+      "dayOfWeek" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfWeek),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(1, 2, 6, 5, 4)
+      }
+
+      "hourOfDay" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(HourOfDay),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(20, 6, 9)
+      }
+
+      "minuteOfHour" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MinuteOfHour),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(9, 44, 11, 37, 38)
+      }
+
+      "secondOfMinute" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(SecondOfMinute),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(19, 59, 52, 33)
+      }
+
+      "millisOfSecond" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MillisOfSecond),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(430, 165, 848, 394, 599)
+      }
+    }
+
     "reduce heterogeneous sets" >> {
       "count" >> {
         val line = Line(0, "")
@@ -1595,6 +1804,195 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(145)
+      }
+    }
+
+    "non-reduction of heterogeneous sets" >> {
+      "year" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(Year),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(2010, 2011, 2012)
+      }
+
+      "quarter" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(QuarterOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(1, 2, 3, 4)
+      }
+
+      "monthOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MonthOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(4, 2, 9, 12)
+      }
+
+      "weekOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(WeekOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(17, 8, 36, 6, 52)
+      }
+
+      "dayOfYear" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfYear),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(52, 119, 42, 249, 363)
+      }
+
+      "dayOfMonth" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfMonth),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(21, 29, 11, 6, 28)
+      }
+
+      "dayOfWeek" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(DayOfWeek),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(1, 2, 6, 5, 4)
+      }
+
+      "hourOfDay" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(HourOfDay),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(20, 6, 9)
+      }
+
+      "minuteOfHour" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MinuteOfHour),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(9, 44, 11, 37, 38)
+      }
+
+      "secondOfMinute" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(SecondOfMinute),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(19, 59, 52, 33)
+      }
+
+      "millisOfSecond" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(MillisOfSecond),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(430, 165, 848, 394, 599)
       }
     }
   }
