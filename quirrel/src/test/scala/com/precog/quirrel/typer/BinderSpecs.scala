@@ -626,12 +626,6 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
 
   "pre-binding of Time functions" should {
-    "bind date" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: date")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "date"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
 
     "bind year" in {
       val d @ Dispatch(_, _, _) = parse("std :: time :: year")
