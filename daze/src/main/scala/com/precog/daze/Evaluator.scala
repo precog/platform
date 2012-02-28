@@ -129,10 +129,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
       case Operate(_, BuiltInFunction1(op), parent) => {
         val parentRes = loop(parent, roots, ctx)
-        val parentResTyped = parentRes.left map { _ typed { builtInOp1Type(op) match {
-          case Some(tp) => tp
-          case None     => sys.error("operation has no type")
-        }}} 
+        val parentResTyped = parentRes.left map { mask =>
+          builtInOp1Type(op) map mask.typed getOrElse mask
+        }
         val enum = maybeRealize(parentResTyped)
 
         def opPerform(sev: SEvent): Option[SEvent] = {
@@ -490,8 +489,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case MinuteOfHour   => Some(SString)
     case SecondOfMinute => Some(SString)
     case MillisOfSecond => Some(SString)
-
-    case _              => None
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -630,13 +627,8 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     }
     case (QuarterOfYear, SString(time)) if isValidISO(time) => {
       val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      if (List(1,2,3) contains newTime.monthOfYear().get) { 
-        Some(SDecimal(1)) 
-      } else if (List(4,5,6) contains newTime.monthOfYear().get) { 
-        Some(SDecimal(2))
-      } else if (List(7,8,9) contains newTime.monthOfYear().get) { 
-        Some(SDecimal(3))
-      } else Some(SDecimal(4))
+      val mo = newTime.monthOfYear.get
+      Some(SDecimal(((mo - 1) / 3) + 1))
     }
     case (MonthOfYear, SString(time)) if isValidISO(time) => {
       val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
