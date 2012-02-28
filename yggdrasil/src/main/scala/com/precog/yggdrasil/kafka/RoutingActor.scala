@@ -169,6 +169,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
     case Messages(messages) =>
       logger.debug("Routing Actor - Processing Message Batch (%d)".format(messages.size))
       processMessages(messages)
+      sender ! ()
     
     case ic @ InsertComplete(_, _, _, _) =>
       //logger.debug("Insert Complete")
