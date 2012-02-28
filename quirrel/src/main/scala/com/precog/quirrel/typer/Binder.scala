@@ -38,13 +38,6 @@ trait Binder extends parser.AST {
   object Time {
     val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
     val EpochToISO = BuiltIn(Identifier(Vector("std", "time"), "epochToISO"), 2, false)
-    //val ISOToEpoch = BulitIn(Identifier(Vector("std", "time"), "iSOToEpoch"), 1, false)
-    
-
-    //the following are all projections to sets of integers
-    //todo truncate hour, truncate minute, and other truncate functions. Note: retain date information 
-    
-
     val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
     val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
     val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
