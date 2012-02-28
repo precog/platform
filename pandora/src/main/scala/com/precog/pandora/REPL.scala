@@ -26,8 +26,8 @@ import akka.util.Duration
 import com.precog.yggdrasil.SValue
 import com.precog.yggdrasil.BaseConfig
 import com.precog.yggdrasil.SimpleProjectionSerialization
-import com.precog.yggdrasil.shard.YggState
-import com.precog.yggdrasil.shard.ActorYggShard
+import com.precog.yggdrasil.shard._
+import com.precog.common.kafka._
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
@@ -253,8 +253,11 @@ object Console extends App {
         override def rootConfig = yconfig.config 
         val yggConfig = yconfig
 
+        type Storage = ActorYggShard
         object storage extends ActorYggShard {
-          val yggState = shardState 
+          val yggState = shardState
+          val yggCheckpoints = new TestYggCheckpoints
+          val batchConsumer = BatchConsumer.NullBatchConsumer
         }
 
         object ops extends Ops 

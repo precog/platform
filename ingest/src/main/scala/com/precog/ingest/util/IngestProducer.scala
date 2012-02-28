@@ -27,8 +27,9 @@ import scala.collection.mutable.ListBuffer
 import java.util.Properties
 import java.io.{File, FileReader}
 
-import com.precog.analytics.{Path, Token}
+import com.precog.analytics.Path
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.common.util.RealisticIngestMessage
 import com.precog.common.util.AdSamples
 import com.precog.common.util.DistributedSampleSet
@@ -65,7 +66,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
   lazy val verbose = config.getProperty("verbose", "true").toBoolean
 
   def run() {
-    for(r <- 0 to repeats) {
+    for(r <- 0 until repeats) {
       val start = System.nanoTime
 
       val samples = List(
@@ -99,7 +100,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       override def run() {
         samples.foreach {
           case (path, sample) =>
-            def event = Event.fromJValue(Path(path), sample.next._1, Token.Root.tokenId)
+            def event = Event.fromJValue(Path(path), sample.next._1, "bogus")
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
@@ -155,12 +156,13 @@ object WebappIngestProducer {
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
+  lazy val token = config.getProperty("token", StaticTokenManager.rootUID)
   val client = new HttpClientXLightWeb 
 
   def send(event: Event) {
-
+    
     val f: Future[HttpResponse[JValue]] = client.path(base)
-                                                .query("tokenId", event.tokenId)
+                                                .query("tokenId", token)
                                                 .contentType(application/MimeTypes.json)
                                                 .post[JValue](event.path.toString)(event.data)
     Await.ready(f, 10 seconds) 

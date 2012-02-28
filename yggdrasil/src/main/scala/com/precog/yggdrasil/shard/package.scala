@@ -26,13 +26,14 @@ import scala.collection.mutable
 
 package object shard {
   
-  type MetadataMap = mutable.Map[MetadataType, Metadata]
-  type Checkpoints = mutable.Map[Int, Int]
+  type MetadataMap = Map[MetadataType, Metadata]
   
-  type MetadataIO = (ProjectionDescriptor, Seq[MetadataMap]) => IO[Unit]
-  type CheckpointIO = Checkpoints => IO[Unit]
+  type MetadataIO = (ProjectionDescriptor, ColumnMetadata) => IO[Unit]
 
-  type ProducerId = Int
-  type SequenceId = Int
+  type ColumnMetadata = Map[ColumnDescriptor, MetadataMap]
+
+  object ColumnMetadata {
+    val Empty = Map.empty[ColumnDescriptor, MetadataMap]
+  }
 
 }

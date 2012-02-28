@@ -46,12 +46,14 @@ trait Projection {
   def chunkSize: Int
 
   def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO]
+  def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO]
 
-  def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = getAllPairs map(_.map { case (id, _) => id })
-  def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = getAllPairs map( _.map { case (_, b) => b })
+  def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO]
+  def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO]
+
   def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
     val columnIndex = descriptor.columns.indexWhere(col => col.path == path && col.selector == selector)
-    getAllPairs map( _.map { case (id, b) => (id, b(columnIndex)) })
+    getAllColumnPairs(columnIndex)
   }
 
   def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO]

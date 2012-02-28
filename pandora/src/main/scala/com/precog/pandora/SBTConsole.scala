@@ -22,6 +22,8 @@ package com.precog.pandora
 import edu.uwm.cs.gll.LineStream
 
 import com.precog._
+import com.precog.yggdrasil.shard._
+import com.precog.common.kafka._
 
 import daze._
 import daze.util._
@@ -68,8 +70,11 @@ object SBTConsole {
 
     val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
     
+    type Storage = ActorYggShard
     object storage extends ActorYggShard {
-      val yggState = shardState 
+      val yggState = shardState
+      val yggCheckpoints = new TestYggCheckpoints
+      val batchConsumer = BatchConsumer.NullBatchConsumer
     }
     
     object ops extends Ops 

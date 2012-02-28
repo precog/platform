@@ -19,7 +19,11 @@
  */
 package com.precog.yggdrasil
 package shard
+
 import kafka._
+
+import com.precog.yggdrasil.kafka._
+import com.precog.common.kafka._
 
 import akka.actor.ActorRef
 import akka.dispatch.Future
@@ -55,6 +59,8 @@ object KafkaShardServer extends Logging {
             val yggState = state 
             val yggConfig = cfg 
             val kafkaIngestConfig = cfg
+            val batchConsumer = BatchConsumer.NullBatchConsumer 
+            val yggCheckpoints = new TestYggCheckpoints
           }
 
         case Failure(e) => 
@@ -65,15 +71,11 @@ object KafkaShardServer extends Logging {
     val timeout = 300 seconds
 
     val run = for (shard <- yggShard) yield {
-      val startFuture = shard.start flatMap { _ => shard.startKafka }
-
-      Await.result(startFuture, timeout)
+      
+      Await.result(shard.start, timeout)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() {
-          val stopFuture = shard.stopKafka flatMap { _ => shard.stop }
-          Await.result(stopFuture, timeout)
-        }
+        override def run() { Await.result(shard.stop, timeout) }
       })
     }
 
@@ -82,25 +84,10 @@ object KafkaShardServer extends Logging {
 }
 
 trait KafkaIngester extends Logging {
-  def kafkaIngestConfig: KafkaIngestConfig
-  def routingActor: ActorRef
+  def yggCheckpoints: YggCheckpoints
+  def batchConsumer: BatchConsumer
 
-  implicit def executionContext: akka.dispatch.ExecutionContext
-  implicit def dispatcher: akka.dispatch.MessageDispatcher
-
-  lazy val consumer = new NewKafkaIngest(new TestYggCheckpoints, kafkaIngestConfig, routingActor)
-
-  def startKafka = 
-    if(kafkaIngestConfig.kafkaEnabled) { 
-      consumer.start 
-    } else {
-      Future { () }
-    }
-
-  import logger._
-
-  def stopKafka = Future { debug("[Kafka Ingester] Stopping kafka consumer") } flatMap
-    { _ => consumer.stop } recover { case e => error("Error stopping kafka consumer", e) }
+  lazy val kafkaShardIngestActor = new KafkaShardIngestActor(yggCheckpoints, batchConsumer)
 }
 
 // vim: set ts=4 sw=4 et:

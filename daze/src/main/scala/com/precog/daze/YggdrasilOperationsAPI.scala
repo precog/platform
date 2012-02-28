@@ -30,6 +30,7 @@ import akka.dispatch.Future
 import akka.util.Duration
 import java.io.File
 
+import scala.annotation.tailrec
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -57,82 +58,40 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
       })
 
     def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: Manifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = {
-      memoAs.getOrElse((scala.util.Random.nextInt, MemoizationContext.Noop)) match {
-        case (memoId, ctx) => ctx.memoizing[X, Vector[E]](memoId) match {
-          case Right(memoized) => DatasetEnum(Future(memoized))
-          case Left(memoizer)  =>
-            DatasetEnum(
-              d.fenum map { unsorted =>
-                new EnumeratorP[X, Vector[E], IO] {
-                  def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
-                    import MO._
-                    implicit val MI = Monad[({type λ[α] = IterateeT[X, Vector[E], F, α]})#λ]
+      DatasetEnum(
+        d.fenum map { unsorted =>
+          val (memoId, memoctx) = memoAs.getOrElse((scala.util.Random.nextInt, MemoizationContext.Noop)) 
+          new EnumeratorP[X, Vector[E], IO] {
+            def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, Vector[E], G] = {
+              import MO._
 
-                    val buffer = new Array[E](yggConfig.sortBufferSize)
-                    val insert = (i: Int, e: E) => { buffer(i) = e; i + 1 }
-
-                    def bufferInsert(i: Int, el: Vector[E]): F[Unit] = {
-                      MO promote { IO { el.foldLeft(i) { insert } } }
-                    }
-
-                    def enumBuffer(to: Int) = new EnumeratorP[X, Vector[E], IO] {
-                      def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
-                        import MO._
-
-                        java.util.Arrays.sort(buffer, 0, to, order.toJavaComparator) // TODO: Get this working inside of EnumeratorT.perform again
-                        //EnumeratorT.perform[X, Vector[E], F, Unit](MO.promote(IO { java.util.Arrays.sort(buffer, 0, to, order.toJavaComparator) })) |+|
-                        enumOne[X, Vector[E], F](Vector(buffer.slice(0, to): _*))
-                      }
-                    }
-
-                    new EnumeratorT[X, Vector[E], F] {
-                      def apply[A] = {
-                        def sortFile(i: Int) = new File(yggConfig.sortWorkDir, "sort" + memoId + "." + i)
-
-                        def consume(i: Int, chunks: Vector[File], contf: Input[Vector[E]] => IterateeT[X, Vector[E], F, A]): IterateeT[X, Vector[E], F, A] = {
-                          if (i < yggConfig.sortBufferSize) cont { (in: Input[Vector[E]]) => 
-                            in.fold(
-                              el    = el => iterateeT(bufferInsert(i, el) >> consume(i + el.length, chunks, contf).value),
-                              empty = consume(i, chunks, contf),
-                              eof   = // once we've been sent EOF, we sort the buffer then finally rebuild the iteratee we were 
-                                      // originally provided and use that to consume the sorted buffer. We have to pass EOF to
-                                      // restore the EOF that we received that triggered the original processing of the stream.
-                                      cont(contf) &= 
-                                      mergeAllChunked[X, E, IO](chunks.map(fs.reader[X]) :+ enumBuffer(i): _*).apply[F] &= 
-                                      EnumeratorT.perform[X, Vector[E], F, Unit](MO.promote(chunks.foldLeft(IO()) { (io, f) => io >> IO(f.delete) })) &= 
-                                      enumEofT
-                            )
-                          } else {
-                            MI.bind(fs.writer(sortFile(chunks.size)) &= enumBuffer(i).apply[F]) { file => 
-                              consume(0, chunks :+ file, contf)
-                            }
-                          }
-                        }
-
-                        (s: StepT[X, Vector[E], F, A]) => memoizer(s mapCont { contf => consume(0, Vector.empty[File], contf) &= unsorted[F] })
-                      }
-                    }
+              new EnumeratorT[X, Vector[E], G] {
+                def apply[A] = (s: StepT[X, Vector[E], G, A]) => 
+                  memoctx.memoizing[X, Vector[E]](memoId) match {
+                    case Right(memoized) => s.pointI &= memoized[G]
+                    case Left(memoizer)  => memoizer(s.pointI &= sorted("sort" + memoId, unsorted, identity[E]).apply[G])
                   }
-                }
               }
-            )
+            }
+          }
         }
-      }
+      )
     }
     
-    def memoize[X, E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)(implicit fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = 
+    def memoize[X, E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)
+                     (implicit fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = 
       DatasetEnum(
         d.fenum map { unmemoized =>
           new EnumeratorP[X, Vector[E], IO] {
-            def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
+            def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, Vector[E], G] = {
               import MO._
               import MO.MG.bindSyntax._
 
-              new EnumeratorT[X, Vector[E], F] {
-                def apply[A] = (s: StepT[X, Vector[E], F, A]) => 
+              new EnumeratorT[X, Vector[E], G] {
+                def apply[A] = (s: StepT[X, Vector[E], G, A]) => 
                   memoctx.memoizing[X, Vector[E]](memoId) match {
-                    case Right(enum) => s.pointI &= enum[F]
-                    case Left(memoizer) => memoizer(s.pointI) &= unmemoized[F]
+                    case Right(memoized) => s.pointI &= memoized[G]
+                    case Left(memoizer)  => memoizer(s.pointI) &= unmemoized[G]
                   }
               }
             }
@@ -140,13 +99,12 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
         }
       )
 
-    def group[X](d: DatasetEnum[X, SEvent, IO], bufctx: BufferingContext)(f: SEvent => Key)
+    def group[X](d: DatasetEnum[X, SEvent, IO], memoId: Int, bufctx: BufferingContext)(keyFor: SEvent => Key)
                 (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
                 Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] = {
-      type LE = Vector[(Key, SEvent)]
       type Group = (Key, DatasetEnum[X, SEvent, IO])
       
-      implicit val pairOrder = ord.contramap((_: (Key, SEvent))._1)
+      implicit val pairOrder: Order[(Key, SEvent)] = ord.contramap((_: (Key, SEvent))._1)
 
       def chunked[G[_]](implicit MO: G |>=| IO): EnumerateeT[X, Vector[(Key, SEvent)], Group, G] = new EnumerateeT[X, Vector[(Key, SEvent)], Group, G] {
         import MO._
@@ -234,48 +192,85 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
             import MO._
 
             def apply[A] = {
-              val memoId = 0 //todo, fix this
-              def sortFile(i: Int) = new File(yggConfig.sortWorkDir, "groupsort" + memoId + "." + i)
-
-              val buffer = new Array[(Key, SEvent)](yggConfig.sortBufferSize)
-              def bufferInsert(i: Int, v: Vector[(Key, SEvent)]): G[Unit] = {
-                val insert = (i: Int, e: (Key, SEvent)) => { buffer(i) = e; i + 1 }
-                MO promote { IO { v.foldLeft(i) { insert } } }
-              }
-
-              def enumBuffer(to: Int) = new EnumeratorP[X, LE, IO] {
-                def apply[F[_]](implicit MO: F |>=| IO): EnumeratorT[X, LE, F] = {
-                  import MO._
-
-                  EnumeratorT.perform[X, LE, F, Unit](MO.promote(IO { java.util.Arrays.sort(buffer, 0, to, pairOrder.toJavaComparator) })) |+|
-                  enumOne[X, LE, F](Vector(buffer.slice(0, to): _*))
-                }
-              }
-
-              def consume(i: Int, chunks: Vector[File]): IterateeT[X, Vector[SEvent], G, (Int, Vector[File])] = {
-                if (i < yggConfig.sortBufferSize) cont { (in: Input[Vector[SEvent]]) => 
-                  in.fold(
-                    el    = el => iterateeT(bufferInsert(i, el map { ev => (f(ev), ev) }) >> consume(i + el.length, chunks).value),
-                    empty = consume(i, chunks),
-                    eof   = done((i, chunks), eofInput)
-                  )
-                } else {
-                  kvs.writer(sortFile(chunks.size)).withResult(enumBuffer(i).apply[G]) { file => 
-                    consume(0, chunks :+ file)
-                  }
-                }
-              }
-
-              (s: StepT[X, Group, G, A]) => consume(0, Vector.empty[File]).withResult(enum[G]) {
-                case (i, files) => 
-                  val chunks: Seq[EnumeratorP[X, Vector[(Key, SEvent)], IO]] = files.map(kvs.reader[X]) :+ enumBuffer(i)
-                  s.pointI &= chunked[G].run(mergeAllChunked(chunks: _*).apply[G])
-              }
+              (_: StepT[X, Group, G, A]).pointI &= chunked[G].run(sorted("groupsort" + memoId, enum, (ev: SEvent) => (keyFor(ev), ev)).apply[G])
             }
           }
         }
       }
     }
+
+    private def sorted[X, E, B <: AnyRef](filePrefix: String, enum: EnumeratorP[X, Vector[E], IO], f: E => B)
+                                         (implicit ord: Order[B], fs: FileSerialization[Vector[B]], mf: Manifest[B]): EnumeratorP[X, Vector[B], IO] = 
+      new EnumeratorP[X, Vector[B], IO] {
+        def apply[G[_]](implicit MO: G |>=| IO) = new EnumeratorT[X, Vector[B], G] {
+          import MO._
+
+          def apply[A] = {
+            def sortFile(i: Int) = new File(yggConfig.sortWorkDir, filePrefix + "." + i)
+
+            val buffer = new Array[B](yggConfig.sortBufferSize)
+
+            def bufferInsert(i: Int, v: Vector[E]): IO[Int] = {
+              @tailrec def insert(j: Int, iter: Iterator[E]): Int = {
+                if (i+j < buffer.length && iter.hasNext) {
+                  buffer(i+j) = f(iter.next())
+                  insert(j+1, iter)
+                } else j
+              }
+
+              IO { insert(0, v.iterator) } 
+            }
+
+            def enumBuffer(to: Int): EnumeratorP[X, Vector[B], IO] = new EnumeratorP[X, Vector[B], IO] {
+              def apply[G[_]](implicit MO: G |>=| IO) = new EnumeratorT[X, Vector[B], G] {
+                import MO._
+
+                def apply[A] = {
+                  (_: StepT[X, Vector[B], G, A]).pointI &= {
+                    //EnumeratorT.perform[X, Vector[B], G, Unit](MO.promote(IO { java.util.Arrays.sort(buffer, 0, to, ord.toJavaComparator) })) &=
+                    java.util.Arrays.sort(buffer, 0, to, ord.toJavaComparator)
+                    enumOne[X, Vector[B], G](Vector(buffer.slice(0, to): _*))
+                  }
+                }
+              }
+            }
+
+            type ChunkConsumer = IterateeT[X, Vector[E], IO, (Int, Vector[File])]
+            def spill(i: Int, sortFragments: Vector[File])(nextStep: File => ChunkConsumer): ChunkConsumer = {
+              fs.writer[X, IO](sortFile(sortFragments.size)).withResult(enumBuffer(i).apply[IO]) { nextStep }
+            }
+
+            def consumeChunk(i: Int, sortFragments: Vector[File], chunk: Vector[E]): ChunkConsumer = {
+              if (chunk.isEmpty) consume(i, sortFragments)
+              else iterateeT(
+                for {
+                  iadv     <- bufferInsert(i, chunk)
+                  nextStep <- if (iadv < chunk.length) spill(i + iadv, sortFragments) { file => consumeChunk(0, sortFragments :+ file, chunk.drop(iadv)) } value
+                              else                     consume(i + chunk.length, sortFragments).value
+                } yield nextStep
+              )
+            }
+
+            def consume(i: Int, sortFragments: Vector[File]): ChunkConsumer = cont { 
+              (_: Input[Vector[E]]).fold(
+                el    = el => consumeChunk(i, sortFragments, el),
+                empty = consume(i, sortFragments),
+                eof   = done((i, sortFragments), eofInput)
+              )
+            }
+
+            (s: StepT[X, Vector[B], G, A]) => consume(0, Vector.empty[File]).mapI(MO).withResult(enum[G]) {
+              case (i, files) => 
+                //todo: need to restore correct chunk sizes
+                val sortFragmentEnums: Seq[EnumeratorP[X, Vector[B], IO]] = files.map(fs.reader[X]) :+ enumBuffer(i)
+                val sorted = mergeAllChunked(sortFragmentEnums: _*) |+|
+                             EnumeratorP.perform[X, Vector[B], IO, Unit](files.foldLeft(IO()) { (io, f) => io >> IO(f.delete) })
+
+                s.pointI &= sorted[G]
+            }
+          }
+        }
+      }
   }
 }
 

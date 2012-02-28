@@ -39,24 +39,7 @@ import Scalaz._
 
 sealed trait MetadataType
 
-//trait MetadataTypeSerialization {
-//  implicit val MetadataTypeDecomposer: Decomposer[MetadataType] = new Decomposer[MetadataType] {
-//    override def decompose(metadataType: MetadataType): JValue = JString(MetadataType.toName(metadataType))
-//  }
-//
-//  implicit val MetadataTypeExtractor: Extractor[MetadataType] = new Extractor[MetadataType] with ValidatedExtraction[MetadataType] {
-//    override def validated(obj: JValue): Validation[Error, MetadataType] = obj match {
-//      case JString(n) => MetadataType.fromName(n) match {
-//        case Some(mt) => Success(mt)
-//        case None     => Failure(Invalid("Unknown metadata type: " + n))
-//      }
-//      case _          => Failure(Invalid("Unexpected json value for metadata type.: " + obj))
-//    }
-//  }
-//
-//}
-
-object MetadataType /* extends MetadataTypeSerialization */ {
+object MetadataType {
   def toName(metadataType: MetadataType): String = metadataType match {
     case BooleanValueStats => "BooleanValueStats"
     case LongValueStats => "LongValueStats"
@@ -128,12 +111,12 @@ trait MetadataSerialization {
 }
 
 object Metadata extends MetadataSerialization {
-  def toTypedMap(set: Set[Metadata]): mutable.Map[MetadataType, Metadata] = {
-    set.foldLeft(mutable.Map[MetadataType, Metadata]()) ( (acc, el) => acc + (el.metadataType -> el) ) 
+  def toTypedMap(set: Set[Metadata]): Map[MetadataType, Metadata] = {
+    set.foldLeft(Map[MetadataType, Metadata]()) ( (acc, el) => acc + (el.metadataType -> el) ) 
   }
 
-  implicit val MetadataSemigroup = new Semigroup[mutable.Map[MetadataType, Metadata]] {
-    def append(m1: mutable.Map[MetadataType, Metadata], m2: => mutable.Map[MetadataType, Metadata]) =
+  implicit val MetadataSemigroup = new Semigroup[Map[MetadataType, Metadata]] {
+    def append(m1: Map[MetadataType, Metadata], m2: => Map[MetadataType, Metadata]) =
       m1.foldLeft(m2) { (acc, t) =>
         val (mtype, meta) = t
         acc + (mtype -> acc.get(mtype).map( combineMetadata(_,meta) ).getOrElse(meta))

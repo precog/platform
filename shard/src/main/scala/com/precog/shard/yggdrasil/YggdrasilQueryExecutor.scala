@@ -32,6 +32,8 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
+import com.precog.common.util._
+import com.precog.common.kafka._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 
@@ -86,20 +88,27 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(queryExecutorConfig: Configuration): QueryExecutor = queryExecutorFactory()
   
   def queryExecutorFactory(): QueryExecutor = {
-
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
       for( yConfig <- loadConfig;
            state   <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => new YggdrasilQueryExecutor {
-          val controlTimeout = Duration(120, "seconds")
-          val maxEvalDuration = controlTimeout 
-
           lazy val actorSystem = ActorSystem("akka_ingest_server")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
           val yggConfig = yConfig
-          val yggState = yState
+          val centralZookeeperHosts = yConfig.config[String]("precog.kafka.consumer.zk.connect", "localhost:2181") 
+
+          private val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
+
+          object ops extends Ops 
+          object query extends QueryAPI 
+          object storage extends Storage {
+            val yggState = yState
+            //val kafkaIngestConfig = yConfig
+            val yggCheckpoints = new SystemCoordinationYggCheckpoints("shard", coordination) 
+            val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
+          }
         }}
       }
 
@@ -126,23 +135,12 @@ trait YggdrasilQueryExecutor
     with DiskMemoizationComponent { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  
-  val yggState: YggState
+  trait Storage extends ActorYggShard with KafkaIngester
+
   val actorSystem: ActorSystem
 
-  object storage extends ActorYggShard with KafkaIngester with YggConfigComponent {
-    type YggConfig = self.YggConfig 
-    val yggState = self.yggState
-    val yggConfig = self.yggConfig
-    val kafkaIngestConfig = self.yggConfig
-  }
-
-  object ops extends Ops 
-
-  object query extends QueryAPI 
-
-  def startup() = storage.start flatMap { _ => storage.startKafka }
-  def shutdown() = storage.stopKafka flatMap { _ => storage.stop } map { _ => actorSystem.shutdown } 
+  def startup() = storage.start
+  def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
   def execute(userUID: String, query: String) = {
     try {

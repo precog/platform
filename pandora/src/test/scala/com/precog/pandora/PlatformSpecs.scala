@@ -20,6 +20,8 @@
 package com.precog
 package pandora
 
+import common.kafka._
+
 import daze._
 import daze.util._
 
@@ -78,8 +80,11 @@ class PlatformSpecs extends Specification
 
   lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
+  type Storage = ActorYggShard
   object storage extends ActorYggShard {
     lazy val yggState = shardState 
+    lazy val yggCheckpoints = new TestYggCheckpoints
+    lazy val batchConsumer = BatchConsumer.NullBatchConsumer
   }
   
   object ops extends Ops 

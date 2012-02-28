@@ -23,6 +23,7 @@ package util
 import kafka._
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.analytics._
 import com.precog.common.util._
 
@@ -142,7 +143,7 @@ object DirectKafkaProducer extends App {
   val topic = "direct_test_topic"
  
   val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)
-  val event = Event.fromJValue(Path("/test/"), sample.next._1, Token.Root.tokenId)
+  val event = Event.fromJValue(Path("/test/"), sample.next._1, StaticTokenManager.rootUID)
   val msg = EventMessage(0,0,event) 
 
   val total = 1000000

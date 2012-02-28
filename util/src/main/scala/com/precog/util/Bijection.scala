@@ -26,7 +26,10 @@ sealed trait Unapply[A, B] {
 trait Bijection[A, B] extends Function1[A, B] with Unapply[A, B] 
 
 sealed class Biject[A](a: A) {
-  def as[B](implicit f: Either[Bijection[A, B], Bijection[B, A]]): B = f.fold(_ apply a, _ unapply a)
+  def as[B](implicit f: Either[Bijection[A, B], Bijection[B, A]]): B = f match {
+    case lbf: Left[_,_] => lbf.a.apply(a)
+    case rbf: Right[_,_] => rbf.b.unapply(a)
+  }
 }
 
 trait Bijections {

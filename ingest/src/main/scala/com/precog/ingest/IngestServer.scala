@@ -28,21 +28,15 @@ import blueeyes.persistence.mongo.MongoCollection
 import blueeyes.persistence.mongo.Database
 import blueeyes.util.Clock
 
-import com.precog.analytics.TokenManager
+import com.precog.common.security.StaticTokenManager
 
 import org.streum.configrity.Configuration
 
 trait IngestServer extends BlueEyesServer with IngestService {
-  def mongoFactory(config: Configuration): Mongo = {
-    new blueeyes.persistence.mongo.MockMongo()
-  }
 
-  def usageLogging(config: Configuration) = {
-    new NullUsageLogging("")
-  }
+  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
 
-  def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager = 
-    new TokenManager(database, tokensCollection, deletedTokensCollection)
+  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
 
   val clock = Clock.System
 }
