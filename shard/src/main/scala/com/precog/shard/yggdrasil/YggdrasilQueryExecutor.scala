@@ -106,7 +106,8 @@ trait YggdrasilQueryExecutorComponent {
           object storage extends Storage {
             val yggState = yState
             //val kafkaIngestConfig = yConfig
-            val yggCheckpoints = new SystemCoordinationYggCheckpoints("shard", coordination) 
+            val shardId = "shard" + System.getProperty("precog.shard.suffix", "")
+            val yggCheckpoints = new SystemCoordinationYggCheckpoints(shardId, coordination) 
             val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
           }
         }}
@@ -142,20 +143,22 @@ trait YggdrasilQueryExecutor
   def startup() = storage.start
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
-  def execute(userUID: String, query: String) = {
+  def execute(userUID: String, query: String) = executeWithError(userUID, query).fold(x => x, x => x)
+
+  def executeWithError(userUID: String, query: String) = {
     try {
       asBytecode(query) match {
         case Right(bytecode) => 
           decorate(bytecode) match {
-            case Right(dag)  => JString(evaluateDag(userUID, dag))
-            case Left(error) => JString("An error occurred in query analysis: %s".format(error))
+            case Right(dag)  => Right(JString(evaluateDag(userUID, dag)))
+            case Left(error) => Left(JString("An error occurred in query analysis: %s".format(error)))
           }
         
-        case Left(errors) => JString(errors)
+        case Left(error) => Left(JString(error))
       }
     } catch {
       // Need to be more specific here or maybe change execute to explicitly return errors 
-      case ex: Exception => JString("Error processing query: %s".format(ex.getMessage))
+      case ex: Exception => Left(JString("Error processing query: %s".format(ex.getMessage)))
     }
   }
 

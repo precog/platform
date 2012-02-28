@@ -31,6 +31,7 @@ package object common {
 
   trait QueryExecutor {
     def execute(userUID: String, query: String): JValue
+    def executeWithError(userUID: String, query: String): Either[JValue, JValue]
     def startup: Future[Unit]
     def shutdown: Future[Unit]
   }
@@ -40,6 +41,7 @@ package object common {
     implicit def executionContext: ExecutionContext
 
     def execute(userUID: String, query: String) = JString("Query service not avaialble")
+    def executeWithError(userUID: String, query: String) = Left(JString("Query service not avaialble"))
     def startup = Future(())
     def shutdown = Future { actorSystem.shutdown }
   }
