@@ -175,7 +175,8 @@ trait ActorYggShard extends YggShard with Logging {
 
   def store(msg: EventMessage): Future[Unit] = {
     implicit val storeTimeout: Timeout = Duration(10, "seconds")
-    (routingActor ? msg) map { _ => () }
+    val messages = Messages(Vector(msg))
+    (routingActor ? messages) map { _ => () }
   }
   
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
