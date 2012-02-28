@@ -654,6 +654,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
+    
+    "bind dayOfYear" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfYear")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfYear"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
 
     "bind dayOfMonth" in {
       val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfMonth")
@@ -690,9 +697,23 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
 
+    "bind millisOfSecond" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: millisOfSecond")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "millisOfSecond"), 1, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
     "bind changeTimeZone" in {
       val d @ Dispatch(_, _, _) = parse("std :: time :: changeTimeZone")
       d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+
+    "bind epochToISO" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: epochToISO")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "epochToISO"), 2, false)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }

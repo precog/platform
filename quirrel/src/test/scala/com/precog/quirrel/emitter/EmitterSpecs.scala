@@ -276,7 +276,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      testEmit("foo := dataset(//foo) bar := dataset(//bar) foo :: bar [foo.a, bar.a, foo.b, bar.b]")(
+      testEmit("foo := dataset(//foo) bar := dataset(//bar) foo relate bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -414,54 +414,160 @@ object EmitterSpecs extends Specification
           Reduce(Count)))
     }
 
-    "emit count reduction" in {
+    "emit mean reduction" in {
       testEmit("mean(1)")(
         Vector(
           PushNum("1"),
           Reduce(Mean)))
     }
 
-    "emit count reduction" in {
+    "emit median reduction" in {
       testEmit("median(1)")(
         Vector(
           PushNum("1"),
           Reduce(Median)))
     }
 
-    "emit count reduction" in {
+    "emit mode reduction" in {
       testEmit("mode(1)")(
         Vector(
           PushNum("1"),
           Reduce(Mode)))
     }
 
-    "emit count reduction" in {
+    "emit max reduction" in {
       testEmit("max(1)")(
         Vector(
           PushNum("1"),
           Reduce(Max)))
     }
 
-    "emit count reduction" in {
+    "emit min reduction" in {
       testEmit("min(1)")(
         Vector(
           PushNum("1"),
           Reduce(Min)))
     }
 
-    "emit count reduction" in {
+    "emit stdDev reduction" in {
       testEmit("stdDev(1)")(
         Vector(
           PushNum("1"),
           Reduce(StdDev)))
     }
 
-    "emit count reduction" in {
+    "emit sum reduction" in {
       testEmit("sum(1)")(
         Vector(
           PushNum("1"),
           Reduce(Sum)))
     }
+
+    "emit year non-reduction" in {
+      testEmit("""std :: time :: year("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(Year))))
+    }
+
+    "emit quarter non-reduction" in {
+      testEmit("""std :: time :: quarter("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(QuarterOfYear))))
+    }
+
+    "emit monthOfYear non-reduction" in {
+      testEmit("""std :: time :: monthOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MonthOfYear))))
+    }
+
+    "emit weekOfYear non-reduction" in {
+      testEmit("""std :: time :: weekOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(WeekOfYear))))
+    }
+
+    "emit dayOfYear non-reduction" in {
+      testEmit("""std :: time :: dayOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfYear))))
+    }
+
+    "emit dayOfMonth non-reduction" in {
+      testEmit("""std :: time :: dayOfMonth("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfMonth))))
+    }
+
+    "emit dayOfWeek non-reduction" in {
+      testEmit("""std :: time :: dayOfWeek("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfWeek))))
+    }
+
+    "emit hourOfDay non-reduction" in {
+      testEmit("""std :: time :: hourOfDay("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(HourOfDay))))
+    }
+
+    "emit minuteOfHour non-reduction" in {
+      testEmit("""std :: time :: minuteOfHour("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MinuteOfHour))))
+    }
+
+    "emit secondOfMinute non-reduction" in {
+      testEmit("""std :: time :: secondOfMinute("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(SecondOfMinute))))
+    }
+
+    "emit millisOfSecond non-reduction" in {
+      testEmit("""std :: time :: millisOfSecond("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MillisOfSecond))))
+    }
+
+    "emit changeTimeZone non-reduction" in {
+      testEmit("""std :: time :: changeTimeZone(dataset(//foo).time, dataset(//foo).timeZone)""")(
+        Vector(
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("time"), 
+          Map2Cross(DerefObject), 
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("timeZone"), 
+          Map2Cross(DerefObject), 
+          Map2Match(BuiltInFunction2(ChangeTimeZone))))
+    }
+
+    "emit epochToISO non-reduction" in {
+      testEmit("""std :: time :: epochToISO(dataset(//foo).time, dataset(//foo).timeZone)""")(
+        Vector(
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("time"), 
+          Map2Cross(DerefObject), 
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("timeZone"), 
+          Map2Cross(DerefObject), 
+          Map2Match(BuiltInFunction2(EpochToISO))))
+        }
+
 
     "emit body of fully applied characteristic function" in {
       testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
@@ -478,7 +584,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := dataset(//a) b := dataset(//b) a :: b (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := dataset(//a) b := dataset(//b) a relate b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
           LoadLocal(Het),
@@ -1030,7 +1136,7 @@ object EmitterSpecs extends Specification
           |     conversionTimes :=
           |       conversions.time where conversions.time = min(conversions where conversions.time > 'time)
           |     
-          |     conversionTimes :: impressionTimes
+          |     conversionTimes relate impressionTimes
           |       { impression: impressions, nextConversion: conversions }
           | 
           |   greaterConversions
