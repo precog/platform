@@ -26,9 +26,10 @@ extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]]
     Success{ (t: Token) => 
       request.content.map { _.map { 
         case JString(s) => 
-          val queryResult = queryExecutor.execute(t.uid, s)
-          HttpResponse[JValue](OK, content=Some(queryResult))
-
+          queryExecutor.executeWithError(t.uid, s) match {
+            case Right(result) => HttpResponse[JValue](OK, content=Some(result))
+            case Left(error)   => HttpResponse[JValue](BadRequest, content=Some(error))
+          }
         case _          => InvalidQuery 
       }}.getOrElse( Future { InvalidQuery } )
     }
