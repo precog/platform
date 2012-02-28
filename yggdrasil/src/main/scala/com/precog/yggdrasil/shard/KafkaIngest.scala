@@ -19,6 +19,9 @@ import _root_.kafka.message._
 
 import org.streum.configrity.JProperties
 
+import scalaz._
+import Scalaz._
+
 trait KafkaIngestConfig extends Config {
   def kafkaEnabled = config("precog.kafka.enabled", false) 
   def kafkaEventTopic = config[String]("precog.kafka.topic.events")
@@ -52,17 +55,22 @@ class KafkaIngest(config: KafkaIngestConfig, router: ActorRef) extends Runnable 
 
 class NewKafkaIngest(checkpoints: YggCheckpoints, config: KafkaIngestConfig, router: ActorRef)(implicit dispatcher: MessageDispatcher) extends Logging {
 
-  private lazy val consumer = {
-    new KafkaConsumer("devqclus03.reportgrid.com", 9092, config.kafkaEventTopic)(ingestMessages _)
+  private lazy val ingester = {
+    val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, config.kafkaEventTopic)
+    new KafkaBatchIngester(batchConsumer)(ingestMessages _)
   }
 
-  def start() = consumer.start(checkpoints.latestCheckpoint.offset)
+  def start() = ingester.start(checkpoints.latestCheckpoint.offset)
 
-  def stop() = consumer.stop()
+  def stop() = ingester.stop()
 
   def ingestMessages(messages: List[MessageAndOffset]) {
-    messages.foreach { msg =>
-      router ! IngestMessageSerialization.read(msg.message.payload)
+    if(!messages.isEmpty) {
+      messages.foreach { msg =>
+        router ! IngestMessageSerialization.read(msg.message.payload)
+      }
+      val newOffset = messages.last.offset
+      checkpoints.messagesConsumed(YggCheckpoint(newOffset, VectorClock.empty)) 
     }
   }
 }
@@ -89,7 +97,7 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   // - metadata must NEVER be ahead of leveldb state
   // - zookeeper state must NEVER be ahead of metadata
 
-  private var lastCheckpoint = YggCheckpoint(6983018146L, VectorClock.empty)
+  private var lastCheckpoint = YggCheckpoint(0L, VectorClock.empty)
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
@@ -97,7 +105,7 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   }
 
   def metadataPersisted(messageClock: VectorClock) {
-    val (before: Vector[YggCheckpoint], after: Vector[YggCheckpoint]) = pendingCheckpoints.span { 
+    val (before, after) = pendingCheckpoints.span { 
       _.messageClock.lessThanOrEqual(messageClock) 
     }
 
@@ -116,9 +124,12 @@ class TestYggCheckpoints extends YggCheckpoints with Logging {
   } 
 }
 
-class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) {
+class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) extends YggCheckpoints {
   
-  private var lastCheckpoint = coordination.loadYggCheckpoint(shard)
+  private var lastCheckpoint = coordination.loadYggCheckpoint(shard) match {
+    case Success(checkpoint) => checkpoint
+    case Failure(e)          => sys.error("Error loading shard checkpoint from zookeeper")
+  }
   
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
@@ -127,7 +138,7 @@ class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordi
   }
 
   def metadataPersisted(messageClock: VectorClock) {
-    val (before: Vector[YggCheckpoint], after: Vector[YggCheckpoint]) = pendingCheckpoints.span { 
+    val (before, after) = pendingCheckpoints.span { 
       _.messageClock.lessThanOrEqual(messageClock) 
     }
 

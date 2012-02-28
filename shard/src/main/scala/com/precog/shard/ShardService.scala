@@ -44,7 +44,7 @@ import scalaz.Failure
 import scalaz.NonEmptyList
 import scalaz.Scalaz._
 
-import com.precog.analytics._
+import com.precog.analytics.Path
 import com.precog.common._
 import com.precog.ct._
 import com.precog.ct.Mult._
@@ -52,10 +52,11 @@ import com.precog.ct.Mult.MDouble._
 
 import com.precog.ingest._
 import com.precog.ingest.service._
+import com.precog.common.security._
 
 import org.streum.configrity.Configuration
 
-case class ShardState(queryExecutor: QueryExecutor, indexMongo: Mongo, tokenManager: TokenManager, usageLogging: UsageLogging)
+case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl, usageLogging: UsageLogging)
 
 trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators {
   import IngestService._
@@ -67,11 +68,9 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
 
   def queryExecutorFactory(config: Configuration): QueryExecutor
 
-  def mongoFactory(config: Configuration): Mongo
+  def usageLoggingFactory(config: Configuration): UsageLogging 
 
-  def usageLogging(config: Configuration): UsageLogging 
-
-  def tokenManager(database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection): TokenManager
+  def tokenManagerFactory(config: Configuration): TokenManager
 
   val analyticsService = this.service("ingest", "1.0") {
     requestLogging(timeout) {
@@ -81,20 +80,18 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
 
           val queryExecutor = queryExecutorFactory(config.detach("query_executor"))
 
-          val indexdbConfig = config.detach("indexdb")
-          val indexMongo = mongoFactory(indexdbConfig)
-          val indexdb  = indexMongo.database(indexdbConfig[String]("database", "analytics-v" + serviceVersion))
+          val theTokenManager = tokenManagerFactory(config.detach("security"))
 
-          val tokensCollection = config[String]("tokens.collection", "tokens")
-          val deletedTokensCollection = config[String]("tokens.deleted", "deleted_tokens")
-          val tokenMgr = tokenManager(indexdb, tokensCollection, deletedTokensCollection)
+          val accessControl = new TokenBasedAccessControl {
+            val tokenManager = theTokenManager
+          }
 
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              indexMongo,
-              tokenMgr,
-              usageLogging(config.detach("usageLogging"))
+              theTokenManager,
+              accessControl,
+              usageLoggingFactory(config.detach("usageLogging"))
             )
           }
         } ->
@@ -107,13 +104,7 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
             }
           }
         } ->
-        shutdown { state => 
-          Future( 
-            Option(
-              Stoppable(state.tokenManager.database, Stoppable(state.indexMongo) :: Nil)
-            )
-          )
-        }
+        shutdown { state => Future[Option[Stoppable]]( None ) }
       }
     }
   }

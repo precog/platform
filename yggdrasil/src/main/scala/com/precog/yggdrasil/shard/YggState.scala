@@ -15,7 +15,6 @@ import java.io._
 import java.util.Properties
 
 import com.weiglewilczek.slf4s.Logging
-import scala.collection.mutable
 
 import scalaz._
 import scalaz.std.AllInstances._
@@ -28,8 +27,7 @@ import scalaz.effect.IO
 case class YggState(
   dataDir: File,
   descriptors: Map[ProjectionDescriptor, File], 
-  metadata: mutable.Map[ProjectionDescriptor, Seq[mutable.Map[MetadataType, Metadata]]], 
-  checkpoints: mutable.Map[Int, Int]) {
+  metadata: Map[ProjectionDescriptor, ColumnMetadata]) {
 
   private var descriptorState = descriptors 
 
@@ -60,14 +58,12 @@ case class YggState(
       f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
     }.map(_ => ())
 
-  val metadataIO = (descriptor: ProjectionDescriptor, metadata: Seq[MetadataMap]) => {
+  val metadataIO = (descriptor: ProjectionDescriptor, metadata: ColumnMetadata) => {
     descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(metadata.toList.map( _.values.toSet ).serialize)), f)
+      f => 
+        val metadataSeq = descriptor.columns map { col => metadata(col) }
+        IOUtils.safeWriteToFile(pretty(render(metadataSeq.toList.map( _.values.toSet ).serialize)), f)
     }.map(_ => ())
-  }
-
-  val checkpointIO = (checkpoints: Checkpoints) => {
-    IOUtils.safeWriteToFile(pretty(render(checkpoints.toList.serialize)), new File(dataDir, checkpointName)).map(_ => ())
   }
 }
 
@@ -76,11 +72,9 @@ object YggState extends Logging {
   val metadataName = "projection_metadata.json"
   val checkpointName = "checkpoints.json"
 
-  type MetadataSeq = Seq[mutable.Map[MetadataType, Metadata]]
- 
   def restore(dataDir: File): IO[Validation[Error, YggState]] = {
     loadDescriptors(dataDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-      case Success((d,m)) => loadCheckpoints(dataDir) map { _.map( new YggState(dataDir, d, m, _)) }
+      case Success((d,m)) => IO { Success(new YggState(dataDir, d, m)) }
       case Failure(e) => IO { Failure(e) }
     }}
   }
@@ -115,18 +109,23 @@ object YggState extends Logging {
     loadMap(baseDir)
   }
 
-  def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, mutable.Map[ProjectionDescriptor, MetadataSeq]]] = {
-    def readAll(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[(ProjectionDescriptor, MetadataSeq)]]] = {
-      val validatedEntries = descriptors.toList.map{ case (d, f) => readSingle(f) map { _.map((d, _)) } }.sequence[IO, Validation[Error, (ProjectionDescriptor, MetadataSeq)]]
+  def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Map[ProjectionDescriptor, ColumnMetadata]]] = {
+    def readAll(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[(ProjectionDescriptor, ColumnMetadata)]]] = {
+      val validatedEntries = descriptors.toList.map{ 
+        case (d, f) => readSingle(f) map { _.map {
+          case metadataSeq => (d, Map((d.columns zip metadataSeq): _*))
+        }}
+      }.sequence[IO, Validation[Error, (ProjectionDescriptor, ColumnMetadata)]]
 
       validatedEntries.map(flattenValidations)
     }
 
-    def readSingle(dir: File): IO[Validation[Error, MetadataSeq]] = {
+
+    def readSingle(dir: File): IO[Validation[Error, Seq[MetadataMap]]] = {
       import JsonParser._
       val metadataFile = new File(dir, "projection_metadata.json")
       IOUtils.readFileToString(metadataFile).map { _ match {
-        case None    => Success(List(mutable.Map[MetadataType, Metadata]()))
+        case None    => Success(List(Map[MetadataType, Metadata]()))
         case Some(c) => {
           val validatedTuples = parse(c).validated[List[Set[Metadata]]]
           validatedTuples.map( _.map( Metadata.toTypedMap _ ))
@@ -134,16 +133,7 @@ object YggState extends Logging {
       }}
     }
 
-    readAll(descriptors).map { _.map { mutable.Map(_: _*) } }
-  }
-
-  def loadCheckpoints(baseDir: File): IO[Validation[Error, mutable.Map[Int, Int]]] = {
-    import JsonParser._
-    val checkpointFile = new File(baseDir, "checkpoints.json")
-    IOUtils.readFileToString(checkpointFile).map { _ match { 
-      case None    => Success(mutable.Map[Int, Int]())
-      case Some(c) => parse(c).validated[List[(Int, Int)]].map( mutable.Map(_: _*))
-    }}
+    readAll(descriptors).map { _.map { Map(_: _*) } }
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {

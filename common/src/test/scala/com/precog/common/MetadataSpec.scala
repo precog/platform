@@ -6,8 +6,6 @@ import org.specs2.mutable.Specification
 
 import org.scalacheck._
 
-import scala.collection.mutable
-
 import scalaz._
 import Scalaz._
 
@@ -64,7 +62,7 @@ class MetadataSpec extends Specification with MetadataGenerators {
     "survive round trip serialization" in {
       Gen.listOfN(sampleSize, genMetadataMap).sample.get.map { in =>
         in.map(_._2).toList.serialize.validated[List[Metadata]] must beLike {
-          case Success(out) => in must_== mutable.Map[MetadataType, Metadata](out.map{ m => (m.metadataType, m) }: _*)
+          case Success(out) => in must_== Map[MetadataType, Metadata](out.map{ m => (m.metadataType, m) }: _*)
         }
       }
     }
@@ -100,7 +98,7 @@ trait MetadataGenerators {
 
   def genMetadataList: Gen[List[Metadata]] = for(cnt <- choose(0,10); l <- listOfN(cnt, genMetadata)) yield { l } 
 
-  def genMetadataMap: Gen[mutable.Map[MetadataType, Metadata]] = genMetadataList map { l => mutable.Map( l.map( m => (m.metadataType, m) ): _* ) }
+  def genMetadataMap: Gen[Map[MetadataType, Metadata]] = genMetadataList map { l => Map( l.map( m => (m.metadataType, m) ): _* ) }
 
   def genMetadata: Gen[Metadata] = frequency( metadataGenerators.map { (1, _) }: _* )
 

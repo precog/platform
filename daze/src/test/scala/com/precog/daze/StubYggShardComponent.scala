@@ -12,12 +12,12 @@ import blueeyes.json.JsonParser
 
 import com.precog.analytics._
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 import com.precog.yggdrasil.util._
 import com.precog.util._
-import StorageMetadata._
 import SValue._
 
 import scalaz.effect._
@@ -37,6 +37,7 @@ trait StubYggShardComponent {
   def sampleSize: Int
 
   trait Storage extends YggShard {
+
     def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
 
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
@@ -46,6 +47,18 @@ trait StubYggShardComponent {
 
       def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = {
         enumPStream[X, Vector[(Identities, Seq[CValue])], IO](data.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
+      def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = {
+        enumPStream[X, Vector[Seq[CValue]], IO](data.values.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
+      def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = {
+        enumPStream[X, Vector[Identities], IO](data.keys.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
+      }
+
+      def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
+        enumPStream[X, Vector[(Identities, CValue)], IO](data.map{case (i,v) => (i, v(columnIndex))}.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
       }
 
       def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = sys.error("not needed")
@@ -71,7 +84,7 @@ trait StubYggShardComponent {
         Future(projections.keys.flatMap(pd => pd.columns.collect { case cd @ ColumnDescriptor(`path`, `selector`, _, _) => (pd, ColumnMetadata.Empty) }).toMap)
     }
 
-    def userMetadataView(uid: String) = metadata
+    def userMetadataView(uid: String) = new UserMetadataView(uid, UnlimitedAccessControl, metadata)(actorSystem.dispatcher)
 
     def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] =
       Future(projections(descriptor))

@@ -72,7 +72,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
         ev._2.mapStringOr(List(SInt(0)))(s => List(SInt(s.toInt % 2)))
       }
 
-      val grouped = Await.result((ops.group(DatasetEnum(Future(enumP), None), BufferingContext.memory(100))(keyf)), intToDurationInt(30).seconds)
+      val grouped = Await.result((ops.group(DatasetEnum(Future(enumP), None), 0, BufferingContext.memory(100))(keyf)), intToDurationInt(30).seconds)
 
       val groups = (consume[Unit, (ops.Key, DatasetEnum[Unit, SEvent, IO]), IO, List] &= grouped[IO]).runOrZero.unsafePerformIO
       groups must haveSize(2)

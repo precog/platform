@@ -7,6 +7,7 @@ import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 
 import java.io.File
+import java.nio.ByteBuffer
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonParser
@@ -142,4 +143,36 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
     println("Column detail not yet implemented.")
   }
 
+}
+
+object LevelDBOpenFileTest extends App {
+    val createOptions = (new Options).createIfMissing(true)
+    val db: DB = factory.open(new File("./test"),createOptions) 
+
+    var cnt = 0L
+    var payload = Array[Byte](12)
+
+    val key = new Array[Byte](8)
+    val buf = ByteBuffer.wrap(key)
+
+    while(true) {
+      val batch = db.createWriteBatch()
+      try {
+        var batchCnt = 0
+        val limit = 100
+        while(batchCnt < limit) {
+          buf.clear
+          buf.putLong(cnt)
+          batch.put(key, payload)
+          batchCnt += 1
+          cnt += 1
+        }
+
+        db.write(batch)
+      } finally {
+        // Make sure you close the batch to avoid resource leaks.
+        batch.close()
+      }
+      if(cnt % 1000 == 0) println("Insert count: " + cnt) 
+    }
 }

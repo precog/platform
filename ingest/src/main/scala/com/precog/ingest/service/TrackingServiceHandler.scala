@@ -29,21 +29,22 @@ import scalaz.NonEmptyList
 
 import com.weiglewilczek.slf4s.Logging
 
-import com.precog.analytics._
+import com.precog.analytics.Path
 import com.precog.common._
+import com.precog.common.security._
 
 import scalaz.Validation
 
-class TrackingServiceHandler(eventStore: EventStore, usageLogging: UsageLogging)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>
-      if(t.mayAccess(p, WRITE)) {
+      if(accessControl.mayAccessPath(t.uid, p, PathWrite)) {
         request.content map { futureContent =>
           try { 
             for {
               event <- futureContent
-              _ <- eventStore.save(Event.fromJValue(p, event, t.accountTokenId))
+              _ <- eventStore.save(Event.fromJValue(p, event, t.uid))
             } yield {
               // could return the eventId to the user?
               HttpResponse[JValue](OK)

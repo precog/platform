@@ -1,6 +1,7 @@
 package com.precog
 package ingest
 package service
+package token
 
 import blueeyes._
 import blueeyes.core.service._
