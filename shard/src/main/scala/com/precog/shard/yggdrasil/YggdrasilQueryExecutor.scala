@@ -148,10 +148,10 @@ trait YggdrasilQueryExecutor
         case Right(bytecode) => 
           decorate(bytecode) match {
             case Right(dag)  => JString(evaluateDag(userUID, dag))
-            case Left(error) => JString("Error processing dag: %s".format(error.toString))
+            case Left(error) => JString("An error occurred in query analysis: %s".format(error))
           }
         
-        case Left(errors) => JString("Parsing errors: %s".format(errors.toString))
+        case Left(errors) => JString(errors)
       }
     } catch {
       // Need to be more specific here or maybe change execute to explicitly return errors 
@@ -163,12 +163,13 @@ trait YggdrasilQueryExecutor
     consumeEval(userUID, dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
   }
 
-  private def asBytecode(query: String): Either[Set[Error], Vector[Instruction]] = {
+  private def asBytecode(query: String): Either[String, Vector[Instruction]] = {
     try {
       val tree = compile(query)
-      if(tree.errors.isEmpty) Right(emit(tree)) else Left(tree.errors)
+      if (tree.errors.isEmpty) Right(emit(tree)) 
+      else Left("Errors occurred compiling your query: %s".format(tree.errors.mkString("\n\n")))
     } catch {
-      case ex: ParseException => Left(...)
+      case ex: ParseException => Left("An error occurred parsing your query: " + ex.getMessage)
     }
   }
 }
