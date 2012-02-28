@@ -289,11 +289,6 @@ object ProvenanceSpecs extends Specification
     }
 
     "identify built-in non-reduce dispatch of arity 1 according to its child" in {
-      {
-        val tree = compile("std :: time :: date(dataset(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
 
       {
         val tree = compile("std :: time :: year(dataset(//foo))")
