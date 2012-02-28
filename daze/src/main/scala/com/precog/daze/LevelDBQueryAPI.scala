@@ -61,9 +61,9 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           )
 
         (selector, tpe) match {
+          case (Some(s), None | Some(SObject) | Some(SArray)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
           case (Some(s), Some(tpe)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
-          case (Some(s), None     ) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
-          case (None   , Some(tpe)) => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+          case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
           case (_      , _        ) => fullProjection(userUID, path)
         }
       }
