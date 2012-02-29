@@ -119,6 +119,65 @@ object AdSamples {
 
 }
 
+object NewSamples {
+  import AdSamples._
+
+  val states = 
+    List("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", 
+    "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MT",  
+    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR",  
+    "MD", "MA", "MI", "MN", "MS", "MO", "PA", "RI", "SC", "SD", "TN",  
+    "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY") 
+
+  val shippingRates = List(5.95,6.95,10.95,24.95)
+  val handlingCharges = List(5.00,7.00,10.00,0)
+
+  val departments = List("sales", "marketting", "operations", "engineering", "manufacturing", "research")
+
+  def usersSample() = JObject(
+    JField("age", chooseNum(18,100).sample.get  ) :: 
+    JField("income", chooseNum(10,250).sample.get * 1000 ) ::  
+    JField("location", JObject(JField("state", oneOf(states).sample.get) :: Nil)) :: Nil 
+  )
+
+  def ordersSample() = {
+    val taxRate = chooseNum(70,110).sample.get.toDouble / 1000 
+    val subTotal = chooseNum(123,11145).sample.get.toDouble / 100
+    val shipping = oneOf(shippingRates).sample.get
+    val handling = oneOf(handlingCharges).sample.get
+    val total = subTotal * taxRate + shipping + handling
+    JObject(
+      JField("userId", chooseNum(12345,12545).sample.get) ::
+      JField("total", total) ::
+      JField("taxRate", taxRate) ::
+      JField("subTotal", subTotal) :: 
+      JField("shipping", shipping) :: 
+      JField("handling", handling) :: Nil
+    )
+  }
+
+  def recipients() = JArray(
+    listOfN(2, oneOf(departments)).sample.get.map(JString(_))
+  )
+
+  def paymentsSample() = JObject(
+    JField("date", twoDayTimeFrame.sample.get ) :: 
+    JField("recipients", recipients) :: 
+    JField("amount", chooseNum(500,50000).sample.get.toDouble / 100) :: Nil
+  )
+
+  def pageViewsSample() = JObject(
+    JField("duration", chooseNum(1,300).sample.get) :: 
+    JField("userId", chooseNum(12345,12360).sample.get) :: Nil
+  )
+
+  def customersSample() = JObject(
+    JField("userId", chooseNum(12345,12545).sample.get) ::
+    JField("income", chooseNum(10,250).sample.get * 1000) :: Nil
+  )
+
+}
+
 case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>
   def queriableSamples = (recordedSamples.size >= queriableSampleSize).option(recordedSamples)
 
