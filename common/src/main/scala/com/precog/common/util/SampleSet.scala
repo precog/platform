@@ -19,6 +19,10 @@
  */
 package com.precog.common.util
 
+import org.joda.time._
+import org.joda.time.format._
+import org.joda.time.DateTimeZone
+
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import org.scalacheck.Gen._
@@ -49,7 +53,9 @@ object AdSamples {
   val pageId = for (i <- 0 to 4) yield "page-" + i
   val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
-
+  val timeISO8601 = List("2010-11-04T15:38:12.782+03:00", "2010-04-22T06:22:38.039+06:30", "2009-05-30T12:31:42.462-09:00", "2009-02-11T22:12:18.493-02:00", "2008-09-19T06:28:31.325+10:00")
+  val timeZone = List("-12:00", "-11:00", "-10:00", "-09:00", "-08:00", "-07:00", "-06:00", "-05:00", "-04:00", "-03:00", "-02:00", "-01:00", "+00:00", "+01:00", "+02:00", "+03:00", "+04:00", "+05:00", "+06:00", "+07:00", "+08:00", "+09:00", "+10:00", "+11:00", "+12:00", "+13:00", "+14:00")
+  
   def gaussianIndex(size: Int): Int = {
     // multiplying by size / 5 means that 96% of the time, the sampled value will be within the range and no second try will be necessary
     val testIndex = (scala.util.Random.nextGaussian * (size / 5)) + (size / 2)
@@ -80,15 +86,37 @@ object AdSamples {
   )
 
   def interactionSample() = JObject(
-    JField("time", twoDayTimeFrame.sample.get) :: 
+    JField("timeMillis", earlierTimeFrame.sample.get) ::
+    JField("timeZone", oneOf(timeZone).sample.get) ::
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
+  )
+
+  def interactionSample2() = JObject(
+    JField("timeMillis", laterTimeFrame.sample.get) ::
+    JField("timeZone", oneOf(timeZone).sample.get) ::
+    JField("pageId", oneOf(pageId).sample.get) :: 
+    JField("userId", oneOf(userId).sample.get) :: Nil
+  )
+
+  def eventsSample() = JObject(
+    JField("time", toISO8601(laterTimeFrame.sample.get, oneOf(timeZone).sample.get)) ::
+    JField("platform", oneOf(platforms).sample.get) :: 
+    JField("eventName", oneOf(eventNames).sample.get) :: Nil
   )
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
 
-  def twoDayTimeFrame = chooseNum(System.currentTimeMillis - millisPerDay,
-                            System.currentTimeMillis + millisPerDay)
+  def earlierTimeFrame = chooseNum(System.currentTimeMillis - (20 * millisPerDay), System.currentTimeMillis - (10 * millisPerDay))
+  def laterTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay), System.currentTimeMillis)
+
+  def toISO8601(time: Long, tz: String): String = {
+    val format = ISODateTimeFormat.dateTime()
+    val timeZone = DateTimeZone.forID(tz.toString)
+    val dateTime = new DateTime(time.toLong, timeZone)
+    format.print(dateTime)
+  }
+
 }
 
 case class DistributedSampleSet(val queriableSampleSize: Int, private val recordedSamples: Vector[JObject] = Vector(), sampler: () => JObject = AdSamples.defaultSample _) extends SampleSet { self =>

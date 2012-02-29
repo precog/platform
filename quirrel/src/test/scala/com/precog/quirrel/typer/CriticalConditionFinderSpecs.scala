@@ -131,7 +131,7 @@ object CriticalConditionFinderSpecs extends Specification
       conditions must haveSize(1)
       
       conditions.head must beLike {
-        case Condition(Dispatch(_, "h", Vector())) => ok
+        case Condition(Dispatch(_, Identifier(Vector(), "h"), Vector())) => ok
       }
     }
     

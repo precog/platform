@@ -69,17 +69,19 @@ trait BytecodeReader extends Reader {
       
       lazy val tableInt = tableEntry flatMap readInt
       
-      lazy val unOp = (code & 0xFF) match {
+      lazy val unOp: Option[UnaryOperation] = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
         case 0x60 => Some(New)
         
         case 0x61 => Some(WrapArray)
+
+        case 0xB0 => builtIn1 map BuiltInFunction1
         
         case _ => None
       }
       
-      lazy val binOp = (code & 0xFF) match {
+      lazy val binOp: Option[BinaryOperation] = (code & 0xFF) match {
         case 0x00 => Some(Add)
         case 0x01 => Some(Sub)
         case 0x02 => Some(Mul)
@@ -105,6 +107,8 @@ trait BytecodeReader extends Reader {
         
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
+
+        case 0xB1 => builtIn2 map BuiltInFunction2
         
         case _ => None
       }
@@ -123,6 +127,30 @@ trait BytecodeReader extends Reader {
         case 0x07 => Some(Sum)
         
         case _ => None
+      }
+
+      lazy val builtIn1 = ((code >> 8) & 0xFF) match {
+        case 0x00 => Some(TimeZone)
+        case 0x01 => Some(Year)
+        case 0x02 => Some(QuarterOfYear)
+        case 0x03 => Some(MonthOfYear)
+        case 0x04 => Some(WeekOfYear)
+        case 0x10 => Some(DayOfYear)
+        case 0x05 => Some(DayOfMonth)
+        case 0x06 => Some(DayOfWeek)
+        case 0x07 => Some(HourOfDay)
+        case 0x08 => Some(MinuteOfHour)
+        case 0x09 => Some(SecondOfMinute)
+        case 0x11 => Some(MillisOfSecond)
+
+        case _    => None
+      }
+
+      lazy val builtIn2 = ((code >> 8) & 0xFF) match {
+        case 0x00 => Some(ChangeTimeZone)
+        case 0x01 => Some(MillisToISO)
+
+        case _    => None
       }
       
       lazy val tpe = (code & 0xFF) match {
@@ -199,7 +227,7 @@ trait BytecodeReader extends Reader {
       case 0x01 => Sub
       case 0x02 => Mul
       case 0x03 => Div
-      
+     
       case 0x41 => Neg
       
       case 0x30 => Or

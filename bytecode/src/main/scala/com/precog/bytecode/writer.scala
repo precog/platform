@@ -95,6 +95,8 @@ trait BytecodeWriter extends Writer with Version {
       case New => 0x60
       
       case WrapArray => 0x61
+
+      case BuiltInFunction1(op) => 0xB0 | (builtInOp1(op) << 8)
     }
     
     def binaryOpNum(op: BinaryOperation) = op match {
@@ -123,6 +125,8 @@ trait BytecodeWriter extends Writer with Version {
       
       case DerefObject => 0xA0
       case DerefArray => 0xA1
+
+      case BuiltInFunction2(op) => 0xB1 | (builtInOp2(op) << 8)
     }
     
     def reductionNum(red: Reduction) = red match {
@@ -141,6 +145,26 @@ trait BytecodeWriter extends Writer with Version {
     
     def typeNum(tpe: Type) = tpe match {
       case Het => 0x00
+    }
+
+    def builtInOp1(op: BuiltInOp1) = op match {
+      case TimeZone => 0x00
+      case Year => 0x01
+      case QuarterOfYear => 0x02
+      case MonthOfYear => 0x03
+      case WeekOfYear => 0x04
+      case DayOfYear => 0x10
+      case DayOfMonth => 0x05
+      case DayOfWeek => 0x06
+      case HourOfDay => 0x07
+      case MinuteOfHour => 0x08
+      case SecondOfMinute => 0x09
+      case MillisOfSecond => 0x11
+    }
+
+    def builtInOp2(op: BuiltInOp2) = op match {
+      case ChangeTimeZone => 0x00
+      case MillisToISO => 0x01
     }
     
     if (!stream.isEmpty) {

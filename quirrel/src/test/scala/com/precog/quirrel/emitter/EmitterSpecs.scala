@@ -82,7 +82,7 @@ object EmitterSpecs extends Specification
           PushNum("23.23123")))
     }
 
-    "emit cross-join of two withed datasets with value provenance" in {
+    "emit cross-join of two withed loads with value provenance" in {
       testEmit("5 with 2")(
         Vector(
           PushNum("5"),
@@ -90,7 +90,7 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinObject)))
     }
 
-    "emit cross-addition of two added datasets with value provenance" in {
+    "emit cross-addition of two added loads with value provenance" in {
       testEmit("5 + 2")(
         Vector(
           PushNum("5"),
@@ -98,7 +98,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Add)))
     }
 
-    "emit cross < for datasets with value provenance" in {
+    "emit cross < for loads with value provenance" in {
       testEmit("5 < 2")(
         Vector(
           PushNum("5"),
@@ -106,7 +106,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Lt)))
     }
 
-    "emit cross <= for datasets with value provenance" in {
+    "emit cross <= for loads with value provenance" in {
       testEmit("5 <= 2")(
         Vector(
           PushNum("5"),
@@ -114,7 +114,7 @@ object EmitterSpecs extends Specification
           Map2Cross(LtEq)))
     }
 
-    "emit cross > for datasets with value provenance" in {
+    "emit cross > for loads with value provenance" in {
       testEmit("5 > 2")(
         Vector(
           PushNum("5"),
@@ -122,7 +122,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Gt)))
     }
 
-    "emit cross >= for datasets with value provenance" in {
+    "emit cross >= for loads with value provenance" in {
       testEmit("5 >= 2")(
         Vector(
           PushNum("5"),
@@ -130,7 +130,7 @@ object EmitterSpecs extends Specification
           Map2Cross(GtEq)))
     }
 
-    "emit cross != for datasets with value provenance" in {
+    "emit cross != for loads with value provenance" in {
       testEmit("5 != 2")(
         Vector(
           PushNum("5"),
@@ -138,7 +138,7 @@ object EmitterSpecs extends Specification
           Map2Cross(NotEq)))
     }
 
-    "emit cross = for datasets with value provenance" in {
+    "emit cross = for loads with value provenance" in {
       testEmit("5 = 2")(
         Vector(
           PushNum("5"),
@@ -146,14 +146,14 @@ object EmitterSpecs extends Specification
           Map2Cross(Eq)))
     }
 
-    "emit cross ! for dataset with value provenance" in {
+    "emit cross ! for load with value provenance" in {
       testEmit("!true")(
         Vector(
           PushTrue,
           Map1(Comp)))
     }
 
-    "emit cross-subtraction of two subtracted datasets with value provenance" in {
+    "emit cross-subtraction of two subtracted loads with value provenance" in {
       testEmit("5 - 2")(
         Vector(
           PushNum("5"),
@@ -161,7 +161,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Sub)))
     }
 
-    "emit cross-division of two divided datasets with value provenance" in {
+    "emit cross-division of two divided loads with value provenance" in {
       testEmit("5 / 2")(
         Vector(
           PushNum("5"),
@@ -169,7 +169,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Div)))
     }
 
-    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of load in static provenance with load in value provenance" in {
       testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
@@ -178,7 +178,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit line information for cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit line information for cross for division of load in static provenance with load in value provenance" in {
       testEmitLine("load(\"foo\") * 2")(
         Vector(
           Line(1,"load(\"foo\") * 2"),
@@ -188,7 +188,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of load in static provenance with load in value provenance" in {
       testEmit("2 * load(\"foo\")")(
         Vector(
           PushNum("2"),
@@ -197,16 +197,16 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit negation of literal numeric dataset with value provenance" in {
-      testEmit("~5")(
+    "emit negation of literal numeric load with value provenance" in {
+      testEmit("neg 5")(
         Vector(
           PushNum("5"),
           Map1(Neg))
       )
     }
 
-    "emit negation of sum of two literal numeric datasets with value provenance" in {
-      testEmit("~(5 + 2)")(
+    "emit negation of sum of two literal numeric loads with value provenance" in {
+      testEmit("neg (5 + 2)")(
         Vector(
           PushNum("5"),
           PushNum("2"),
@@ -276,7 +276,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      testEmit("foo := load(//foo) bar := load(//bar) foo :: bar [foo.a, bar.a, foo.b, bar.b]")(
+      testEmit("foo := load(//foo) bar := load(//bar) foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -308,7 +308,7 @@ object EmitterSpecs extends Specification
           Map2Cross(ArraySwap)))
     }
 
-    "emit descent for object dataset" in {
+    "emit descent for object load" in {
       testEmit("clicks := load(//clicks) clicks.foo")(
         Vector(
           PushString("/clicks"),
@@ -317,7 +317,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject)))
     }
 
-    "emit descent for array dataset" in {
+    "emit descent for array load" in {
       testEmit("clicks := load(//clicks) clicks[1]")(
         Vector(
           PushString("/clicks"),
@@ -326,7 +326,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefArray)))
     }
 
-    "emit load of literal dataset" in {
+    "emit load of literal load" in {
       testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
@@ -334,7 +334,7 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit filter cross for where datasets from value provenance" in {
+    "emit filter cross for where loads from value provenance" in {
       testEmit("""1 where true""")(
         Vector(
           PushNum("1"),
@@ -342,7 +342,7 @@ object EmitterSpecs extends Specification
           FilterCross(0, None)))
     }
 
-    "emit descent for array dataset with non-constant indices" in {
+    "emit descent for array load with non-constant indices" in {
       testEmit("clicks := load(//clicks) clicks[clicks]")(
         Vector(
           PushString("/clicks"),
@@ -352,7 +352,7 @@ object EmitterSpecs extends Specification
           Map2Match(DerefArray)))
     }
 
-    "emit filter match for where datasets from same provenance" in {
+    "emit filter match for where loads from same provenance" in {
       testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
@@ -362,7 +362,7 @@ object EmitterSpecs extends Specification
           FilterMatch(0, None)))
     }
 
-    "emit filter match for datasets from same provenance when performing equality filter" in {
+    "emit filter match for loads from same provenance when performing equality filter" in {
       testEmit("foo := load(//foo) foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
@@ -376,7 +376,7 @@ object EmitterSpecs extends Specification
           FilterMatch(0, None)))
     }
 
-    "use dup bytecode to duplicate the same dataset" in {
+    "use dup bytecode to duplicate the same load" in {
       testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
@@ -414,54 +414,167 @@ object EmitterSpecs extends Specification
           Reduce(Count)))
     }
 
-    "emit count reduction" in {
+    "emit mean reduction" in {
       testEmit("mean(1)")(
         Vector(
           PushNum("1"),
           Reduce(Mean)))
     }
 
-    "emit count reduction" in {
+    "emit median reduction" in {
       testEmit("median(1)")(
         Vector(
           PushNum("1"),
           Reduce(Median)))
     }
 
-    "emit count reduction" in {
+    "emit mode reduction" in {
       testEmit("mode(1)")(
         Vector(
           PushNum("1"),
           Reduce(Mode)))
     }
 
-    "emit count reduction" in {
+    "emit max reduction" in {
       testEmit("max(1)")(
         Vector(
           PushNum("1"),
           Reduce(Max)))
     }
 
-    "emit count reduction" in {
+    "emit min reduction" in {
       testEmit("min(1)")(
         Vector(
           PushNum("1"),
           Reduce(Min)))
     }
 
-    "emit count reduction" in {
+    "emit stdDev reduction" in {
       testEmit("stdDev(1)")(
         Vector(
           PushNum("1"),
           Reduce(StdDev)))
     }
 
-    "emit count reduction" in {
+    "emit sum reduction" in {
       testEmit("sum(1)")(
         Vector(
           PushNum("1"),
           Reduce(Sum)))
+    } 
+    
+    "emit timeZone non-reduction" in {
+      testEmit("""std :: time :: timeZone("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(TimeZone))))
     }
+
+    "emit year non-reduction" in {
+      testEmit("""std :: time :: year("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(Year))))
+    }
+
+    "emit quarter non-reduction" in {
+      testEmit("""std :: time :: quarter("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(QuarterOfYear))))
+    }
+
+    "emit monthOfYear non-reduction" in {
+      testEmit("""std :: time :: monthOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MonthOfYear))))
+    }
+
+    "emit weekOfYear non-reduction" in {
+      testEmit("""std :: time :: weekOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(WeekOfYear))))
+    }
+
+    "emit dayOfYear non-reduction" in {
+      testEmit("""std :: time :: dayOfYear("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfYear))))
+    }
+
+    "emit dayOfMonth non-reduction" in {
+      testEmit("""std :: time :: dayOfMonth("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfMonth))))
+    }
+
+    "emit dayOfWeek non-reduction" in {
+      testEmit("""std :: time :: dayOfWeek("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(DayOfWeek))))
+    }
+
+    "emit hourOfDay non-reduction" in {
+      testEmit("""std :: time :: hourOfDay("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(HourOfDay))))
+    }
+
+    "emit minuteOfHour non-reduction" in {
+      testEmit("""std :: time :: minuteOfHour("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MinuteOfHour))))
+    }
+
+    "emit secondOfMinute non-reduction" in {
+      testEmit("""std :: time :: secondOfMinute("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(SecondOfMinute))))
+    }
+
+    "emit millisOfSecond non-reduction" in {
+      testEmit("""std :: time :: millisOfSecond("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(MillisOfSecond))))
+    }
+
+    "emit changeTimeZone non-reduction" in {
+      testEmit("""std :: time :: changeTimeZone(load(//foo).time, load(//foo).timeZone)""")(
+        Vector(
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("time"), 
+          Map2Cross(DerefObject), 
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("timeZone"), 
+          Map2Cross(DerefObject), 
+          Map2Match(BuiltInFunction2(ChangeTimeZone))))
+    }
+
+    "emit millisToISO non-reduction" in {
+      testEmit("""std :: time :: millisToISO(load(//foo).time, load(//foo).timeZone)""")(
+        Vector(
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("time"), 
+          Map2Cross(DerefObject), 
+          PushString("/foo"), 
+          LoadLocal(Het), 
+          PushString("timeZone"), 
+          Map2Cross(DerefObject), 
+          Map2Match(BuiltInFunction2(MillisToISO))))
+        }
+
 
     "emit body of fully applied characteristic function" in {
       testEmit("clicks := load(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
@@ -478,7 +591,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := load(//a) b := load(//b) a :: b (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := load(//a) b := load(//b) a ~ b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
           LoadLocal(Het),
@@ -1030,7 +1143,7 @@ object EmitterSpecs extends Specification
           |     conversionTimes :=
           |       conversions.time where conversions.time = min(conversions where conversions.time > 'time)
           |     
-          |     conversionTimes :: impressionTimes
+          |     conversionTimes ~ impressionTimes
           |       { impression: impressions, nextConversion: conversions }
           | 
           |   greaterConversions

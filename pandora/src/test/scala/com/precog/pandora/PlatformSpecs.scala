@@ -155,7 +155,7 @@ class PlatformSpecs extends Specification
         | a := load(//campaigns)
         | b := new a
         |
-        | a :: b
+        | a ~ b
         |   { aa: a.campaign, bb: b.campaign }"""
         
       val results = evalE(input.stripMargin)

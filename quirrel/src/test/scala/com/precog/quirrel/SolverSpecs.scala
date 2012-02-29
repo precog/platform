@@ -77,7 +77,7 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
     }
     
     "solve negation" in {
-      solve("~'a", 'a) must beLike {
+      solve("neg 'a", 'a) must beLike {
         case Some(Neg(_, NumLit(_, "0"))) => ok
       }
     }
@@ -263,11 +263,11 @@ object SolverSpecs extends Specification with parser.Parser with Solver with Stu
     }
     
     "solve addition with negation" in {
-      solve("2 * 'a + ~'a", 'a) must beLike {
+      solve("2 * 'a + neg 'a", 'a) must beLike {
         case Some(Div(_, NumLit(_, "0"), Sub(_, NumLit(_, "2"), NumLit(_, "1")))) => ok
       }
       
-      solve("~'a + 2 * 'a", 'a) must beLike {
+      solve("neg 'a + 2 * 'a", 'a) must beLike {
         case Some(Div(_, NumLit(_, "0"), Sub(_, NumLit(_, "2"), NumLit(_, "1")))) => ok
       }
     }
