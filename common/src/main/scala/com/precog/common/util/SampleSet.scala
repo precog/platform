@@ -137,7 +137,7 @@ object NewSamples {
   val shippingRates = List(5.95,6.95,10.95,24.95)
   val handlingCharges = List(5.00,7.00,10.00,0)
 
-  val departments = List("sales", "marketting", "operations", "engineering", "manufacturing", "research")
+  val departments = List("sales", "marketing", "operations", "engineering", "manufacturing", "research")
 
   def usersSample() = JObject(
     JField("age", chooseNum(18,100).sample.get  ) :: 
