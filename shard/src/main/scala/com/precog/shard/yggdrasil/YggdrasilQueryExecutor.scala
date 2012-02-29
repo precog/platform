@@ -158,7 +158,11 @@ trait YggdrasilQueryExecutor
       }
     } catch {
       // Need to be more specific here or maybe change execute to explicitly return errors 
-      case ex: Exception => Left(JString("Error processing query: %s".format(ex.getMessage)))
+      case ex: Exception => {
+        System.err.println("Error processing query: " + ex)
+        ex.printStackTrace
+        Left(JString("Error processing query: %s".format(ex.getMessage)))
+      }
     }
   }
 
