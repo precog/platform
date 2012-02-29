@@ -461,6 +461,13 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("1"),
           Reduce(Sum)))
+    } 
+    
+    "emit timeZone non-reduction" in {
+      testEmit("""std :: time :: timeZone("2012-02-29T00:44:52.599+08:00")""")(
+        Vector(
+          PushString("2012-02-29T00:44:52.599+08:00"),
+          Map1(BuiltInFunction1(TimeZone))))
     }
 
     "emit year non-reduction" in {

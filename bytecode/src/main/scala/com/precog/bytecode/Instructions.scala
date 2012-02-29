@@ -207,7 +207,8 @@ trait Instructions {
 
 
     sealed trait BuiltInOp1
-
+    
+    case object TimeZone extends BuiltInOp1
     case object Year extends BuiltInOp1
     case object QuarterOfYear extends BuiltInOp1
     case object MonthOfYear extends BuiltInOp1

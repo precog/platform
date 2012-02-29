@@ -389,6 +389,11 @@ trait Emitter extends AST
             //**
             //start of Time functions
             //**
+            case BuiltIn(Time.TimeZone.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(TimeZone))
+
             case BuiltIn(Time.Year.name, arity, _) =>
               assert(arity == 1)
 

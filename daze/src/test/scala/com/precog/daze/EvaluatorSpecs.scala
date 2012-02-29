@@ -1580,7 +1580,23 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "non-reduction of homogeneous sets" >> {
+    "non-reduction of homogeneous sets" >> { 
+      "timeZone" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(TimeZone),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SString(d)) => d.toString
+        }
+        
+        result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
+      }
       "year" >> {
         val line = Line(0, "")
         
@@ -1907,7 +1923,23 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "non-reduction of heterogeneous sets" >> {
+    "non-reduction of heterogeneous sets" >> { 
+      "timeZone" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1(TimeZone),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SString(d)) => d.toString
+        }
+        
+        result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
+      }
       "year" >> {
         val line = Line(0, "")
         

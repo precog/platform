@@ -480,6 +480,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   }
 
   private def builtInOp1Type(op: BuiltInOp1): Option[SType] = op match {
+    case TimeZone       => Some(SString)
     case Year           => Some(SString)
     case QuarterOfYear  => Some(SString)
     case MonthOfYear    => Some(SString)
@@ -629,7 +630,11 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
   }
 
   private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
-
+    case (TimeZone, SString(time)) if isValidISO(time) => {
+      val format = DateTimeFormat.forPattern("ZZ")
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SString(format.print(newTime)))
+    }
     case (Year, SString(time)) if isValidISO(time) => {
       val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
       Some(SDecimal(newTime.year().get))

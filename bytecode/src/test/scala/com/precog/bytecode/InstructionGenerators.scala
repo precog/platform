@@ -168,6 +168,7 @@ trait InstructionGenerators extends Instructions {
   } yield res
 
   private lazy val genBuiltIn1 = oneOf(
+    TimeZone,
     Year,
     QuarterOfYear,
     MonthOfYear,
