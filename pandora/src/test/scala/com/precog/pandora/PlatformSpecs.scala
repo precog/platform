@@ -1,6 +1,7 @@
 package com.precog
 package pandora
 
+import common.VectorCase
 import common.kafka._
 
 import daze._
@@ -79,7 +80,7 @@ class PlatformSpecs extends Specification
   "the full stack" should {
     "count a filtered clicks dataset" in {
       val input = """
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | count(clicks where clicks.time > 0)""".stripMargin
         
       eval(input) mustEqual Set(SDecimal(100))
@@ -87,38 +88,73 @@ class PlatformSpecs extends Specification
     
     "count the campaigns dataset" >> {
       "<root>" >> {
-        eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns))") mustEqual Set(SDecimal(100))
       }
       
       "gender" >> {
-        eval("count(dataset(//campaigns).gender)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).gender)") mustEqual Set(SDecimal(100))
       }
       
       "platform" >> {
-        eval("count(dataset(//campaigns).platform)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).platform)") mustEqual Set(SDecimal(100))
       }
       
       "campaign" >> {
-        eval("count(dataset(//campaigns).campaign)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).campaign)") mustEqual Set(SDecimal(100))
       }
       
       "cpm" >> {
-        eval("count(dataset(//campaigns).cpm)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).cpm)") mustEqual Set(SDecimal(100))
       }
       
       "ageRange" >> {
-        eval("count(dataset(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
-      }.pendingUntilFixed
+        eval("count(load(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
+      }
     }
     
     "evaluate the with operator across the campaigns dataset" in {
-      val input = "count(dataset(//campaigns) with { t: 42 })"
+      val input = "count(load(//campaigns) with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
+    }
+
+    "map object creation over the campaigns dataset" in {
+      val input = "{ aa: load(//campaigns).campaign }"
+      val results = evalE(input)
+      
+      results must haveSize(100)
+      
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(1)
+          obj must haveKey("aa")
+        }
+      }
+    }
+    
+    "perform a naive cartesian product on the campaigns dataset" in {
+      val input = """
+        | a := load(//campaigns)
+        | b := new a
+        |
+        | a :: b
+        |   { aa: a.campaign, bb: b.campaign }"""
+        
+      val results = evalE(input.stripMargin)
+      
+      results must haveSize(10000)
+      
+      forall(results) {
+        case (VectorCase(_, _), SObject(obj)) => {
+          obj must haveSize(2)
+          obj must haveKey("aa")
+          obj must haveKey("bb")
+        }
+      }
     }
     
     "determine a histogram of genders on campaigns" in {
       val input = """
-        | campaigns := dataset(//campaigns)
+        | campaigns := load(//campaigns)
         | hist('gender) :=
         |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
         | hist""".stripMargin
@@ -131,8 +167,8 @@ class PlatformSpecs extends Specification
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
-        | campaigns := dataset(//campaigns)
-        | organizations := dataset(//organizations)
+        | campaigns := load(//campaigns)
+        | organizations := load(//organizations)
         | 
         | hist('revenue, 'campaign) :=
         |   organizations' := organizations where organizations.revenue = 'revenue
@@ -153,7 +189,7 @@ class PlatformSpecs extends Specification
     "determine most isolated clicks in time" in {
 
       val input = """
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | 
         | spacings('time) :=
         |   click := clicks where clicks.time = 'time
@@ -192,6 +228,79 @@ class PlatformSpecs extends Specification
       true mustEqual false
     }
     */
+  
+    "evaluate the 'hello, quirrel' examples" >> {
+      "json" >> {
+        "object" >> {
+          val result = eval("""{ name: "John", age: 29, gender: "male" }""")
+          result must haveSize(1)
+          result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SString("male"))))
+        }
+        
+        "boolean" >> {
+          val result = eval("true")
+          result must haveSize(1)
+          result must contain(SBoolean(true))
+        }
+        
+        "string" >> {
+          val result = eval("\"hello, world\"")
+          result must haveSize(1)
+          result must contain(SString("hello, world"))
+        }
+      }
+      
+      "numbers" >> {
+        "addition" >> {
+          val result = eval("5 + 2")
+          result must haveSize(1)
+          result must contain(SDecimal(7))
+        }
+        
+        "multiplication" >> {
+          val result = eval("8 * 2")
+          result must haveSize(1)
+          result must contain(SDecimal(16))
+        }
+      }
+      
+      "booleans" >> {
+        "greater-than" >> {
+          val result = eval("5 > 2")
+          result must haveSize(1)
+          result must contain(SBoolean(true))
+        }
+        
+        "not-equal" >> {
+          val result = eval("\"foo\" != \"foo\"")
+          result must haveSize(1)
+          result must contain(SBoolean(false))
+        }
+      }
+      
+      "variables" >> {
+        "1" >> {
+          val input = """
+            | total := 2 + 1
+            | total * 3""".stripMargin
+            
+          val result = eval(input)
+          result must haveSize(1)
+          result must contain(SDecimal(9))
+        }
+        
+        "2" >> {
+          val input = """
+            | num := 4
+            | square := num * num
+            | square - 1""".stripMargin
+            
+          val result = eval(input)
+          result must haveSize(1)
+          result must contain(SDecimal(15))
+        }
+      }
+    }
   }
   
   step {

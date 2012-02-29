@@ -775,14 +775,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "correctly nest multiple binds" in {
       val input = """
         | a :=
-        |   b := dataset(//f)
-        |   c := dataset(//g)
+        |   b := load(//f)
+        |   c := load(//g)
         |
         |   d
         | e""".stripMargin
       
       parse(input) must beLike {
-        case Let(_, Identifier(Vector(), "a"), Vector(), Let(_, Identifier(Vector(), "b"), Vector(), Dispatch(_, Identifier(Vector(), "dataset"), Vector(StrLit(_, "/f"))), Let(_, Identifier(Vector(), "c"), Vector(), Dispatch(_, Identifier(Vector(), "dataset"), Vector(StrLit(_, "/g"))), Dispatch(_, Identifier(Vector(), "d"), Vector()))), Dispatch(_, Identifier(Vector(), "e"), Vector())) => ok
+        case Let(_, Identifier(Vector(), "a"), Vector(), Let(_, Identifier(Vector(), "b"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/f"))), Let(_, Identifier(Vector(), "c"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/g"))), Dispatch(_, Identifier(Vector(), "d"), Vector()))), Dispatch(_, Identifier(Vector(), "e"), Vector())) => ok
       }
     }
     
@@ -848,6 +848,46 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
   
   "global ambiguity resolution" should {
+    "recognize <keyword>foo as an identifier" >> {
+      "new" >> {
+        parse("newfoo") must beLike {
+          case Dispatch(_, "newfoo", Vector()) => ok
+        }
+      }
+      
+      "true" >> {
+        parse("truefoo") must beLike {
+          case Dispatch(_, "truefoo", Vector()) => ok
+        }
+      }
+      
+      "false" >> {
+        parse("falsefoo") must beLike {
+          case Dispatch(_, "falsefoo", Vector()) => ok
+        }
+      }
+      
+      "where" >> {
+        parse("wherefoo") must beLike {
+          case Dispatch(_, "wherefoo", Vector()) => ok
+        }
+      }
+      
+      "with" >> {
+        parse("withfoo") must beLike {
+          case Dispatch(_, "withfoo", Vector()) => ok
+        }
+      }
+    }
+    
+    "reject squashed where expression" in {
+      parse("a whereb") must throwA[ParseException]
+    }
+    
+    "reject squashed with expression" in {
+      parse("a withb") must throwA[ParseException]
+    }
+    
     "associate paired consecutive parentheses" in {
       parse("a := b := c (d) (e)") must beLike {
         case Let(_, Identifier(Vector(), "a"), Vector(), Let(_, Identifier(Vector(), "b"), Vector(), Dispatch(_, Identifier(Vector(), "c"), Vector()), Paren(_, Dispatch(_, Identifier(Vector(), "d"), Vector()))), Paren(_, Dispatch(_, Identifier(Vector(), "e"), Vector()))) => ok

@@ -56,11 +56,11 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
   def zipWithIndex: DatasetEnum[X, (E, Long), F] = 
     DatasetEnum(fenum map (_.zipChunkWithIndex))
 
-  def :^[E2](d2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = 
+  def crossLeft[E2](d2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = 
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum :^ _)))
 
-  def ^:[E2](d2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = 
-    DatasetEnum(fenum flatMap (enum => d2.fenum map (enum :^ _)))
+  def crossRight[E2](d2: DatasetEnum[X, E2, F]): DatasetEnum[X, (E, E2), F] = 
+    DatasetEnum(fenum flatMap { enum => d2.fenum map { _.:^[E2, E, Vector[E]](enum) map { _ map { case (a, b) => (b, a) } } } })
 
   def join(d2: DatasetEnum[X, E, F])(implicit order: Order[E], m: Monad[F]): DatasetEnum[X, (E, E), F] =
     DatasetEnum(fenum flatMap (enum => d2.fenum map (enum.joinChunked[E])))
@@ -77,10 +77,10 @@ trait DatasetEnumOps {
     DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupEChunked[X, SEvent, SEvent, F](monad, order.order _, order, order).apply(en1, en2))
 
   def crossLeft[X, F[_]: Monad](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
-    d1 :^ d2
+    d1 crossLeft d2
 
   def crossRight[X, F[_]: Monad](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F]): DatasetEnum[X, (SEvent, SEvent), F] = 
-    d1 ^: d2
+    d1 crossRight d2
 
   def join[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, (SEvent, SEvent), F] =
     d1 join d2

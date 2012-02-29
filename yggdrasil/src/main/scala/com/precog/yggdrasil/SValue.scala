@@ -520,7 +520,13 @@ case object SDecimalArbitrary extends ColumnType {
 }
 
 case object SDecimal extends SType with (BigDecimal => SValue) {
-  def unapply(v: SValue): Option[BigDecimal] = v.mapBigDecimalOr(Option.empty[BigDecimal])(Some(_))
+  def unapply(v: SValue): Option[BigDecimal] = v.fold(
+    obj = _ => None, arr = _ => None,
+    str = _ => None, bool = _ => None,
+    long = l => Some(BigDecimal(l)), double = d => Some(BigDecimal(d)), num = n => Some(n),
+    nul = None
+  )
+
   def apply(v: BigDecimal) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
