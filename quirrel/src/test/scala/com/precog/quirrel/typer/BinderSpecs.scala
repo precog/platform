@@ -174,7 +174,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
       
       {
-        val e @ Let(_, _, _, _, d: Dispatch) = parse("dataset := 1 dataset")
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("load := 1 load")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -568,9 +568,9 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
-    "bind dataset" in {
-      val d @ Dispatch(_, _, _) = parse("dataset")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "dataset"), 1, false)
+    "bind load" in {
+      val d @ Dispatch(_, _, _) = parse("load")
+      d.binding mustEqual BuiltIn("load", 1)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
