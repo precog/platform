@@ -55,8 +55,8 @@ trait Parser extends RegexParsers with Filters with AST {
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => Let(loc, id, fs, e1, e2) }
     | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, id, Vector(), e1, e2) }
     
-    | "new" ~ expr     ^# { (loc, _, e) => New(loc, e) }
-    | relations ~ expr ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
+    | """new\b""".r ~ expr ^# { (loc, _, e) => New(loc, e) }
+    | relations ~ expr     ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
     
     | id    ^# { (loc, id) => Dispatch(loc, id, Vector()) }
     | ticId ^# TicVar
@@ -143,7 +143,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val keywords = "new|true|false|where|with".r
   
-  private lazy val operations = "where|with".r
+  private lazy val operations = """(where|with)\b""".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true

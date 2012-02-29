@@ -800,6 +800,46 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
   
   "global ambiguity resolution" should {
+    "recognize <keyword>foo as an identifier" >> {
+      "new" >> {
+        parse("newfoo") must beLike {
+          case Dispatch(_, "newfoo", Vector()) => ok
+        }
+      }
+      
+      "true" >> {
+        parse("truefoo") must beLike {
+          case Dispatch(_, "truefoo", Vector()) => ok
+        }
+      }
+      
+      "false" >> {
+        parse("falsefoo") must beLike {
+          case Dispatch(_, "falsefoo", Vector()) => ok
+        }
+      }
+      
+      "where" >> {
+        parse("wherefoo") must beLike {
+          case Dispatch(_, "wherefoo", Vector()) => ok
+        }
+      }
+      
+      "with" >> {
+        parse("withfoo") must beLike {
+          case Dispatch(_, "withfoo", Vector()) => ok
+        }
+      }
+    }
+    
+    "reject squashed where expression" in {
+      parse("a whereb") must throwA[ParseException]
+    }
+    
+    "reject squashed with expression" in {
+      parse("a withb") must throwA[ParseException]
+    }
+    
     "associate paired consecutive parentheses" in {
       parse("a := b := c (d) (e)") must beLike {
         case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "c", Vector()), Paren(_, Dispatch(_, "d", Vector()))), Paren(_, Dispatch(_, "e", Vector()))) => ok
