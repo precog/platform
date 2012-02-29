@@ -86,22 +86,29 @@ object AdSamples {
   )
 
   def interactionSample() = JObject(
-    JField("time", tenDayTimeFrame.sample.get) :: 
-    JField("timeZone", oneOf(timeZone).sample.get) :: 
+    JField("timeMillis", earlierTimeFrame.sample.get) ::
+    JField("timeZone", oneOf(timeZone).sample.get) ::
+    JField("pageId", oneOf(pageId).sample.get) :: 
+    JField("userId", oneOf(userId).sample.get) :: Nil
+  )
+
+  def interactionSample2() = JObject(
+    JField("timeMillis", laterTimeFrame.sample.get) ::
+    JField("timeZone", oneOf(timeZone).sample.get) ::
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
   )
 
   def eventsSample() = JObject(
-    JField("time", toISO8601(tenDayTimeFrame.sample.get, oneOf(timeZone).sample.get)) :: 
+    JField("time", toISO8601(laterTimeFrame.sample.get, oneOf(timeZone).sample.get)) ::
     JField("platforms", oneOf(platforms).sample.get) :: 
     JField("eventNames", oneOf(eventNames).sample.get) :: Nil
   )
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
 
-  def tenDayTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay),
-                            System.currentTimeMillis)
+  def earlierTimeFrame = chooseNum(System.currentTimeMillis - (20 * millisPerDay), System.currentTimeMillis - (10 * millisPerDay))
+  def laterTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay), System.currentTimeMillis)
 
   def toISO8601(time: Long, tz: String): String = {
     val format = ISODateTimeFormat.dateTime()
