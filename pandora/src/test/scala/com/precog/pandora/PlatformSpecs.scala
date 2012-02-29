@@ -109,7 +109,7 @@ class PlatformSpecs extends Specification
       
       "ageRange" >> {
         eval("count(load(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
-      }.pendingUntilFixed
+      }
     }
     
     "evaluate the with operator across the campaigns dataset" in {

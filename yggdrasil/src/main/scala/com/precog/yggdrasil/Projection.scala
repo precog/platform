@@ -33,7 +33,10 @@ trait Projection {
   def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO]
 
   def getColumnValues[X](path: Path, selector: JPath): EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
-    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && col.selector == selector)
+
+    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+
+    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && isEqualOrChild(selector, col.selector))
     getAllColumnPairs(columnIndex)
   }
 
