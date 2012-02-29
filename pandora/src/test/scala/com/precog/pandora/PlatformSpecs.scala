@@ -247,6 +247,79 @@ class PlatformSpecs extends Specification
       true mustEqual false
     }
     */
+  
+    "evaluate the 'hello, quirrel' examples" >> {
+      "json" >> {
+        "object" >> {
+          val result = eval("""{ name: "John", age: 29, gender: "male" }""")
+          result must haveSize(1)
+          result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SString("male"))))
+        }
+        
+        "boolean" >> {
+          val result = eval("true")
+          result must haveSize(1)
+          result must contain(SBoolean(true))
+        }
+        
+        "string" >> {
+          val result = eval("\"hello, world\"")
+          result must haveSize(1)
+          result must contain(SString("hello, world"))
+        }
+      }
+      
+      "numbers" >> {
+        "addition" >> {
+          val result = eval("5 + 2")
+          result must haveSize(1)
+          result must contain(SDecimal(7))
+        }
+        
+        "multiplication" >> {
+          val result = eval("8 * 2")
+          result must haveSize(1)
+          result must contain(SDecimal(16))
+        }
+      }
+      
+      "booleans" >> {
+        "greater-than" >> {
+          val result = eval("5 > 2")
+          result must haveSize(1)
+          result must contain(SBoolean(true))
+        }
+        
+        "not-equal" >> {
+          val result = eval("\"foo\" != \"foo\"")
+          result must haveSize(1)
+          result must contain(SBoolean(false))
+        }
+      }
+      
+      "variables" >> {
+        "1" >> {
+          val input = """
+            | total := 2 + 1
+            | total * 3""".stripMargin
+            
+          val result = eval(input)
+          result must haveSize(1)
+          result must contain(SDecimal(9))
+        }
+        
+        "2" >> {
+          val input = """
+            | num := 4
+            | square := num * num
+            | square - 1""".stripMargin
+            
+          val result = eval(input)
+          result must haveSize(1)
+          result must contain(SDecimal(15))
+        }
+      }
+    }
   }
   
   step {
