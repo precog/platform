@@ -35,7 +35,7 @@ object AdSamples {
   val userId = for (i <- 1000 to 1020) yield "user-" + i
   val eventNames = List("impression", "click", "conversion")
   val timeISO8601 = List("2010-11-04T15:38:12.782+03:00", "2010-04-22T06:22:38.039+06:30", "2009-05-30T12:31:42.462-09:00", "2009-02-11T22:12:18.493-02:00", "2008-09-19T06:28:31.325+10:00")
-  val timeZone = for (i <- -11 to 12) yield 3600000 * i
+  val timeZone = List("-12:00", "-11:00", "-10:00", "-09:00", "-08:00", "-07:00", "-06:00", "-05:00", "-04:00", "-03:00", "-02:00", "-01:00", "+00:00", "+01:00", "+02:00", "+03:00", "+04:00", "+05:00", "+06:00", "+07:00", "+08:00", "+09:00", "+10:00", "+11:00", "+12:00", "+13:00", "+14:00")
   
   def gaussianIndex(size: Int): Int = {
     // multiplying by size / 5 means that 96% of the time, the sampled value will be within the range and no second try will be necessary
@@ -73,10 +73,10 @@ object AdSamples {
     JField("userId", oneOf(userId).sample.get) :: Nil
   )
 
-  def interactionSampleISO8601() = JObject(
+  def eventsSample() = JObject(
     JField("time", toISO8601(tenDayTimeFrame.sample.get, oneOf(timeZone).sample.get)) :: 
-    JField("pageId", oneOf(pageId).sample.get) :: 
-    JField("userId", oneOf(userId).sample.get) :: Nil
+    JField("platforms", oneOf(platforms).sample.get) :: 
+    JField("eventNames", oneOf(eventNames).sample.get) :: Nil
   )
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
@@ -84,9 +84,9 @@ object AdSamples {
   def tenDayTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay),
                             System.currentTimeMillis)
 
-  def toISO8601(time: Long, tz: Int): String = {
+  def toISO8601(time: Long, tz: String): String = {
     val format = ISODateTimeFormat.dateTime()
-    val timeZone = DateTimeZone.forOffsetMillis(tz.toInt)
+    val timeZone = DateTimeZone.forID(tz.toString)
     val dateTime = new DateTime(time.toLong, timeZone)
     format.print(dateTime)
   }
