@@ -106,12 +106,12 @@ class PlatformSpecs extends Specification
       "cpm" >> {
         eval("count(load(//campaigns).cpm)") mustEqual Set(SDecimal(100))
       }
-      
+
       "ageRange" >> {
         eval("count(load(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
       }
     }
-    
+
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(load(//campaigns) with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
@@ -299,6 +299,18 @@ class PlatformSpecs extends Specification
           result must haveSize(1)
           result must contain(SDecimal(15))
         }
+      }
+
+      "outliers" >> {
+        val input = """
+           | campaigns := load(//campaigns)
+           | bound := stdDev(campaigns.cpm)
+           | avg := mean(campaigns.cpm)
+           | outliers := campaigns where campaigns.cpm > (avg + bound)
+           | outliers.platform""".stripMargin
+
+          val result = eval(input)
+          result must haveSize(4)
       }
     }
   }
