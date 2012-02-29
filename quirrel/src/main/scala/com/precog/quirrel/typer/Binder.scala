@@ -6,7 +6,7 @@ trait Binder extends parser.AST {
 
   object BuiltIns {
     val Count   = BuiltIn("count", 1)
-    val Load    = BuiltIn("dataset", 1)
+    val Load    = BuiltIn("load", 1)
     val Max     = BuiltIn("max", 1)
     val Mean    = BuiltIn("mean", 1)
     val Median  = BuiltIn("median", 1)

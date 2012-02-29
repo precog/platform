@@ -23,7 +23,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = parse("a := 1 dataset(//foo)")
+        val tree = parse("a := 1 load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -39,7 +39,7 @@ object ProvenanceSpecs extends Specification
     
     "preserve provenance through let for unquantified function" in {
       val input = """
-        | interactions := dataset(//interactions)
+        | interactions := load(//interactions)
         | bounds('it) :=
         |   interactions.time where interactions = 'it
         | init := bounds
@@ -62,7 +62,7 @@ object ProvenanceSpecs extends Specification
     "identify new of unquantified function as distinct from the function" in {
       val input = """
         | histogram('a) :=
-        |   'a + count(dataset(//foo) where dataset(//foo) = 'a)
+        |   'a + count(load(//foo) where load(//foo) = 'a)
         | 
         | histogram' := new histogram
         | 
@@ -79,19 +79,19 @@ object ProvenanceSpecs extends Specification
     
     "identify relate according to its last expression" in {
       {
-        val tree = compile("dataset(//a) :: dataset(//b) 3")
+        val tree = compile("load(//a) :: load(//b) 3")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("dataset(//a) :: dataset(//b) dataset(//foo)")
+        val tree = compile("load(//a) :: load(//b) load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("dataset(//a) :: dataset(//b) (new 1)")
+        val tree = compile("load(//a) :: load(//b) (new 1)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -137,7 +137,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("{ a: 1, b: 2, c: dataset(//foo) }")
+        val tree = compile("{ a: 1, b: 2, c: load(//foo) }")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -165,7 +165,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("[1, 2, dataset(//foo)]")
+        val tree = compile("[1, 2, load(//foo)]")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -187,7 +187,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//bar).foo")
+        val tree = compile("load(//bar).foo")
         tree.provenance mustEqual StaticProvenance("/bar")
         tree.errors must beEmpty
       }
@@ -209,13 +209,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo)[2]")
+        val tree = compile("load(//foo)[2]")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1[dataset(//foo)]")
+        val tree = compile("1[load(//foo)]")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -240,77 +240,77 @@ object ProvenanceSpecs extends Specification
     // TODO arity
     "identify built-in reduce dispatch as value" in {
       {
-        val tree = compile("count(dataset(//foo))")
+        val tree = compile("count(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("max(dataset(//foo))")
+        val tree = compile("max(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("mean(dataset(//foo))")
+        val tree = compile("mean(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("median(dataset(//foo))")
+        val tree = compile("median(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("min(dataset(//foo))")
+        val tree = compile("min(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("mode(dataset(//foo))")
+        val tree = compile("mode(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("stdDev(dataset(//foo))")
+        val tree = compile("stdDev(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("sum(dataset(//foo))")
+        val tree = compile("sum(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
     }
     
-    "identify dataset dispatch with static params according to its path" in {
+    "identify load dispatch with static params according to its path" in {
       {
-        val tree = compile("dataset(//foo)")
+        val tree = compile("load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("dataset(//bar)")
+        val tree = compile("load(//bar)")
         tree.provenance mustEqual StaticProvenance("/bar")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("dataset(//bar/baz)")
+        val tree = compile("load(//bar/baz)")
         tree.provenance mustEqual StaticProvenance("/bar/baz")
         tree.errors must beEmpty
       }
     }
     
-    "identify dataset dispatch with non-static params as dynamic" in {
+    "identify load dispatch with non-static params as dynamic" in {
       {
-        val tree = compile("dataset(42)")
+        val tree = compile("load(42)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -318,7 +318,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a := 42 dataset(a)")
+        val tree = compile("a := 42 load(a)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -326,7 +326,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(count(42))")
+        val tree = compile("load(count(42))")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -334,7 +334,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(new 42)")
+        val tree = compile("load(new 42)")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -358,7 +358,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("id('a) := 'a id(dataset(//foo))")
+        val tree = compile("id('a) := 'a id(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -380,7 +380,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("id('a) := 'a + 5 id(dataset(//foo))")
+        val tree = compile("id('a) := 'a + 5 id(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -394,8 +394,8 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty
     }
     
-    "identify dispatch to dataset-modified identity function as static" in {
-      val tree = compile("id('a) := 'a + dataset(//foo) id(24)")
+    "identify dispatch to load-modified identity function as static" in {
+      val tree = compile("id('a) := 'a + load(//foo) id(24)")
       tree.provenance mustEqual StaticProvenance("/foo")
       tree.errors must beEmpty
     }
@@ -408,25 +408,25 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(dataset(//foo), 2)")
+        val tree = compile("fun('a, 'b) := 'a + 'b fun(load(//foo), 2)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(1, dataset(//foo))")
+        val tree = compile("fun('a, 'b) := 'a + 'b fun(1, load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b fun(dataset(//foo), dataset(//foo))")
+        val tree = compile("fun('a, 'b) := 'a + 'b fun(load(//foo), load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("fun('a, 'b) := 'a + 'b dataset(//foo) :: dataset(//bar) fun(dataset(//foo), dataset(//bar))")
+        val tree = compile("fun('a, 'b) := 'a + 'b load(//foo) :: load(//bar) fun(load(//foo), load(//bar))")
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
@@ -436,7 +436,7 @@ object ProvenanceSpecs extends Specification
     
     "identify dispatch to an unquantified value function as dynamic" in {
       {
-        val tree = compile("histogram('a) := 'a + count(dataset(//foo) where dataset(//foo) = 'a) histogram")
+        val tree = compile("histogram('a) := 'a + count(load(//foo) where load(//foo) = 'a) histogram")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
@@ -444,8 +444,8 @@ object ProvenanceSpecs extends Specification
       {
         val input = """
           | histogram('a) :=
-          |   foo := dataset(//foo)
-          |   bar := dataset(//bar)
+          |   foo := load(//foo)
+          |   bar := load(//bar)
           |   
           |   'a + count(foo :: bar foo where foo = 'a & bar = 12)
           | 
@@ -459,8 +459,8 @@ object ProvenanceSpecs extends Specification
       {
         val input = """
           | histogram('a) :=
-          |   foo := dataset(//foo)
-          |   bar := dataset(//bar)
+          |   foo := load(//foo)
+          |   bar := load(//bar)
           |   
           |   foo' := foo where foo = 'a
           |   bar' := bar where bar = 'a
@@ -480,8 +480,8 @@ object ProvenanceSpecs extends Specification
     "identify dispatch to an unquantified function with relate as dynamic" in {
       val input = """
         | fun('a) :=
-        |   foo := dataset(//foo)
-        |   bar := dataset(//bar)
+        |   foo := load(//foo)
+        |   bar := load(//bar)
         |
         |   foo' := foo where foo = 'a
         |   bar' := bar where bar = 'a
@@ -499,7 +499,7 @@ object ProvenanceSpecs extends Specification
     }
 
     "identify dispatch to unquantified function with a consistent dynamic provenance" in {
-      val tree = compile("histogram('a) := 'a + count(dataset(//foo) where dataset(//foo) = 'a) histogram + histogram")   // if not consistent, binary op will fail
+      val tree = compile("histogram('a) := 'a + count(load(//foo) where load(//foo) = 'a) histogram + histogram")   // if not consistent, binary op will fail
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
@@ -512,13 +512,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) where 2")
+        val tree = compile("load(//foo) where 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 where dataset(//foo)")
+        val tree = compile("1 where load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -548,13 +548,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) + 2")
+        val tree = compile("load(//foo) + 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 + dataset(//foo)")
+        val tree = compile("1 + load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -584,13 +584,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) - 2")
+        val tree = compile("load(//foo) - 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 - dataset(//foo)")
+        val tree = compile("1 - load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -620,13 +620,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) * 2")
+        val tree = compile("load(//foo) * 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 * dataset(//foo)")
+        val tree = compile("1 * load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -656,13 +656,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) / 2")
+        val tree = compile("load(//foo) / 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 / dataset(//foo)")
+        val tree = compile("1 / load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -692,13 +692,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) < 2")
+        val tree = compile("load(//foo) < 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 < dataset(//foo)")
+        val tree = compile("1 < load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -728,13 +728,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) <= 2")
+        val tree = compile("load(//foo) <= 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 <= dataset(//foo)")
+        val tree = compile("1 <= load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -764,13 +764,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) > 2")
+        val tree = compile("load(//foo) > 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 > dataset(//foo)")
+        val tree = compile("1 > load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -800,13 +800,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) >= 2")
+        val tree = compile("load(//foo) >= 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 >= dataset(//foo)")
+        val tree = compile("1 >= load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -836,13 +836,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) = 2")
+        val tree = compile("load(//foo) = 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 = dataset(//foo)")
+        val tree = compile("1 = load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -872,13 +872,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) != 2")
+        val tree = compile("load(//foo) != 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 != dataset(//foo)")
+        val tree = compile("1 != load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -908,13 +908,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) & 2")
+        val tree = compile("load(//foo) & 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 & dataset(//foo)")
+        val tree = compile("1 & load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -944,13 +944,13 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("dataset(//foo) | 2")
+        val tree = compile("load(//foo) | 2")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
       
       {
-        val tree = compile("1 | dataset(//foo)")
+        val tree = compile("1 | load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -980,7 +980,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("!dataset(//foo)")
+        val tree = compile("!load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -1002,7 +1002,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("~dataset(//foo)")
+        val tree = compile("~load(//foo)")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -1024,7 +1024,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("(dataset(//foo))")
+        val tree = compile("(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -1040,14 +1040,14 @@ object ProvenanceSpecs extends Specification
   }
   
   "provenance checking" should {
-    "reject object definition on different datasets" in {
-      val tree = compile("{ a: dataset(//foo), b: dataset(//bar) }")
+    "reject object definition on different loads" in {
+      val tree = compile("{ a: load(//foo), b: load(//bar) }")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject object definition on static and dynamic provenances" in {
-      val tree = compile("{ a: dataset(//foo), b: new 1 }")
+      val tree = compile("{ a: load(//foo), b: new 1 }")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1058,14 +1058,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject array definition on different datasets" in {
-      val tree = compile("[ dataset(//foo), dataset(//bar) ]")
+    "reject array definition on different loads" in {
+      val tree = compile("[ load(//foo), load(//bar) ]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject array definition on static and dynamic provenances" in {
-      val tree = compile("[ dataset(//foo), new 1 ]")
+      val tree = compile("[ load(//foo), new 1 ]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1076,14 +1076,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject deref on different datasets" in {
-      val tree = compile("dataset(//foo)[dataset(//bar)]")
+    "reject deref on different loads" in {
+      val tree = compile("load(//foo)[load(//bar)]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject deref on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo)[new 1]")
+      val tree = compile("load(//foo)[new 1]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1094,14 +1094,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject dispatch on different datasets" in {
-      val tree = compile("fun('a, 'b) := 'a + 'b fun(dataset(//foo), dataset(//bar))")
+    "reject dispatch on different loads" in {
+      val tree = compile("fun('a, 'b) := 'a + 'b fun(load(//foo), load(//bar))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject dispatch on static and dynamic provenances" in {
-      val tree = compile("fun('a, 'b) := 'a + 'b fun(dataset(//foo), new 1)")
+      val tree = compile("fun('a, 'b) := 'a + 'b fun(load(//foo), new 1)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1119,27 +1119,27 @@ object ProvenanceSpecs extends Specification
     }
     
     "reject dispatch to new-modified identity function with static provenance" in {
-      val tree = compile("fun('a) := 'a + new 42 fun(dataset(//foo))")
+      val tree = compile("fun('a) := 'a + new 42 fun(load(//foo))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
-    "reject dispatch to dataset-modified identity function with dynamic provenance" in {
-      val tree = compile("fun('a) := 'a + dataset(//foo) fun(new 24)")
+    "reject dispatch to load-modified identity function with dynamic provenance" in {
+      val tree = compile("fun('a) := 'a + load(//foo) fun(new 24)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
-    "reject dispatch to dataset-modified identity function with static provenance" in {
-      val tree = compile("fun('a) := 'a + dataset(//foo) fun(dataset(//foo))")
+    "reject dispatch to load-modified identity function with static provenance" in {
+      val tree = compile("fun('a) := 'a + load(//foo) fun(load(//foo))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(SetFunctionAppliedToSet)
     }
     
-    "reject dispatch to dataset-modified identity function with union provenance" in {
+    "reject dispatch to load-modified identity function with union provenance" in {
       val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
+        | foo := load(//foo)
+        | bar := load(//bar)
         |
         | id('a, 'b) := 'a + 'b + foo
         |
@@ -1158,7 +1158,7 @@ object ProvenanceSpecs extends Specification
     }
     
     "reject dispatch to where-less static function with too few parameters" in {
-      val tree = compile("fun('a) := 'a + dataset(//foo) fun")
+      val tree = compile("fun('a) := 'a + load(//foo) fun")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(UnspecifiedRequiredParams(Vector("'a")))
     }
@@ -1177,7 +1177,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a := dataset(//foo) a(1)")
+        val tree = compile("a := load(//foo) a(1)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(0, 1))
       }
@@ -1195,7 +1195,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a('b) := 'b + dataset(//foo) a(1, 2)")
+        val tree = compile("a('b) := 'b + load(//foo) a(1, 2)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(1, 2))
       }
@@ -1207,7 +1207,7 @@ object ProvenanceSpecs extends Specification
       }
       
       {
-        val tree = compile("a('b, 'c, 'd) := 'b + 'c + 'd + dataset(//foo) a(1, 2, 3, 4, 5)")
+        val tree = compile("a('b, 'c, 'd) := 'b + 'c + 'd + load(//foo) a(1, 2, 3, 4, 5)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(3, 5))
       }
@@ -1234,21 +1234,21 @@ object ProvenanceSpecs extends Specification
         }
       }
       
-      "dataset" >> {
+      "load" >> {
         {
-          val tree = compile("dataset")
+          val tree = compile("load")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 0))
         }
         
         {
-          val tree = compile("dataset(1, 2)")
+          val tree = compile("load(1, 2)")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
         
         {
-          val tree = compile("dataset(1, 2, 3)")
+          val tree = compile("load(1, 2, 3)")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 3))
         }
@@ -1397,55 +1397,55 @@ object ProvenanceSpecs extends Specification
     
     "reject dispatch to a set function with set parameters" in {
       {
-        val tree = compile("a('b) := 'b + dataset(//foo) a(dataset(//foo))")
+        val tree = compile("a('b) := 'b + load(//foo) a(load(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + dataset(//foo) a(dataset(//bar))")
+        val tree = compile("a('b) := 'b + load(//foo) a(load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//foo), dataset(//foo))")
+        val tree = compile("a('b, 'c) := 'b + 'c + load(//foo) a(load(//foo), load(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(dataset(//bar), dataset(//bar))")
+        val tree = compile("a('b, 'c) := 'b + 'c + load(//foo) a(load(//bar), load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + dataset(//foo) a(new 2, 42)")
+        val tree = compile("a('b, 'c) := 'b + 'c + load(//foo) a(new 2, 42)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + new 1 a(dataset(//foo))")
+        val tree = compile("a('b) := 'b + new 1 a(load(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b) := 'b + new 1 a(dataset(//bar))")
+        val tree = compile("a('b) := 'b + new 1 a(load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//foo), dataset(//foo))")
+        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(load(//foo), load(//foo))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
       
       {
-        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(dataset(//bar), dataset(//bar))")
+        val tree = compile("a('b, 'c) := 'b + 'c + new 1 a(load(//bar), load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(SetFunctionAppliedToSet)
       }
@@ -1457,14 +1457,14 @@ object ProvenanceSpecs extends Specification
       }
     }
     
-    "reject operation on different datasets" in {
-      val tree = compile("dataset(//foo) where dataset(//bar)")
+    "reject operation on different loads" in {
+      val tree = compile("load(//foo) where load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject operation on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) where new 1")
+      val tree = compile("load(//foo) where new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1475,14 +1475,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject addition on different datasets" in {
-      val tree = compile("dataset(//foo) + dataset(//bar)")
+    "reject addition on different loads" in {
+      val tree = compile("load(//foo) + load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject addition on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) + new 1")
+      val tree = compile("load(//foo) + new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1493,14 +1493,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject subtraction on different datasets" in {
-      val tree = compile("dataset(//foo) - dataset(//bar)")
+    "reject subtraction on different loads" in {
+      val tree = compile("load(//foo) - load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject subtraction on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) - new 1")
+      val tree = compile("load(//foo) - new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1511,14 +1511,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject multiplication on different datasets" in {
-      val tree = compile("dataset(//foo) * dataset(//bar)")
+    "reject multiplication on different loads" in {
+      val tree = compile("load(//foo) * load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject multiplication on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) * new 1")
+      val tree = compile("load(//foo) * new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1529,14 +1529,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject division on different datasets" in {
-      val tree = compile("dataset(//foo) / dataset(//bar)")
+    "reject division on different loads" in {
+      val tree = compile("load(//foo) / load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject division on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) / new 1")
+      val tree = compile("load(//foo) / new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1547,14 +1547,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject less-than on different datasets" in {
-      val tree = compile("dataset(//foo) < dataset(//bar)")
+    "reject less-than on different loads" in {
+      val tree = compile("load(//foo) < load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject less-than on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) < new 1")
+      val tree = compile("load(//foo) < new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1565,14 +1565,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject less-than-equal on different datasets" in {
-      val tree = compile("dataset(//foo) <= dataset(//bar)")
+    "reject less-than-equal on different loads" in {
+      val tree = compile("load(//foo) <= load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject less-than-equal on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) <= new 1")
+      val tree = compile("load(//foo) <= new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1583,14 +1583,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject greater-than on different datasets" in {
-      val tree = compile("dataset(//foo) > dataset(//bar)")
+    "reject greater-than on different loads" in {
+      val tree = compile("load(//foo) > load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject greater-than on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) > new 1")
+      val tree = compile("load(//foo) > new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1601,14 +1601,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject greater-than-equal on different datasets" in {
-      val tree = compile("dataset(//foo) >= dataset(//bar)")
+    "reject greater-than-equal on different loads" in {
+      val tree = compile("load(//foo) >= load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject greater-than-equal on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) >= new 1")
+      val tree = compile("load(//foo) >= new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1619,14 +1619,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject equality on different datasets" in {
-      val tree = compile("dataset(//foo) = dataset(//bar)")
+    "reject equality on different loads" in {
+      val tree = compile("load(//foo) = load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject equality on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) = new 1")
+      val tree = compile("load(//foo) = new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1637,14 +1637,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject not-equality on different datasets" in {
-      val tree = compile("dataset(//foo) != dataset(//bar)")
+    "reject not-equality on different loads" in {
+      val tree = compile("load(//foo) != load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject not-equality on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) != new 1")
+      val tree = compile("load(//foo) != new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1655,14 +1655,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject boolean and on different datasets" in {
-      val tree = compile("dataset(//foo) & dataset(//bar)")
+    "reject boolean and on different loads" in {
+      val tree = compile("load(//foo) & load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject boolean and on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) & new 1")
+      val tree = compile("load(//foo) & new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1673,14 +1673,14 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "reject boolean or on different datasets" in {
-      val tree = compile("dataset(//foo) | dataset(//bar)")
+    "reject boolean or on different loads" in {
+      val tree = compile("load(//foo) | load(//bar)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "reject boolean or on static and dynamic provenances" in {
-      val tree = compile("dataset(//foo) | new 1")
+      val tree = compile("load(//foo) | new 1")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -1695,7 +1695,7 @@ object ProvenanceSpecs extends Specification
   "explicit relation" should {
     "fail on natively-related sets" in {
       {
-        val tree = compile("dataset(//a) :: dataset(//a) 42")
+        val tree = compile("load(//a) :: load(//a) 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(AlreadyRelatedSets)
       }
@@ -1714,19 +1714,19 @@ object ProvenanceSpecs extends Specification
     }
     
     "fail on explicitly related sets" in {
-      val tree = compile("a := dataset(//a) b := dataset(//b) a :: b a :: b 42")
+      val tree = compile("a := load(//a) b := load(//b) a :: b a :: b 42")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(AlreadyRelatedSets)
     }
     
-    "accept object definition on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) { a: dataset(//foo), b: dataset(//bar) }")
+    "accept object definition on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) { a: load(//foo), b: load(//bar) }")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept object definition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s { a: dataset(//foo), b: s }")
+      val tree = compile("s := new 1 load(//foo) :: s { a: load(//foo), b: s }")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1737,14 +1737,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept array definition on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) [ dataset(//foo), dataset(//bar) ]")
+    "accept array definition on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) [ load(//foo), load(//bar) ]")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept array definition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s [ dataset(//foo), s ]")
+      val tree = compile("s := new 1 load(//foo) :: s [ load(//foo), s ]")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1755,14 +1755,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept deref on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo)[dataset(//bar)]")
+    "accept deref on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo)[load(//bar)]")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept deref on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo)[s]")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo)[s]")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1773,14 +1773,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept dispatch on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) fun('a, 'b) := 'a + 'b fun(dataset(//foo), dataset(//bar))")
+    "accept dispatch on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) fun('a, 'b) := 'a + 'b fun(load(//foo), load(//bar))")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     
     "accept dispatch on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s fun('a, 'b) := 'a + 'b fun(dataset(//foo), s)")
+      val tree = compile("s := new 1 load(//foo) :: s fun('a, 'b) := 'a + 'b fun(load(//foo), s)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
@@ -1791,14 +1791,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty
     }
     
-    "accept operation on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) where dataset(//bar)")
+    "accept operation on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) where load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept operation on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) where s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) where s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1809,14 +1809,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept addition on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) + dataset(//bar)")
+    "accept addition on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) + load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept addition on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) + s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) + s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1827,14 +1827,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept subtraction on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) - dataset(//bar)")
+    "accept subtraction on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) - load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept subtraction on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) - s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) - s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1845,14 +1845,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept multiplication on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) * dataset(//bar)")
+    "accept multiplication on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) * load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept multiplication on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) * s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) * s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1863,14 +1863,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept division on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) / dataset(//bar)")
+    "accept division on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) / load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept division on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) / s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) / s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1881,14 +1881,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept less-than on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) < dataset(//bar)")
+    "accept less-than on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) < load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) < s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) < s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1899,14 +1899,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept less-than-equal on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) <= dataset(//bar)")
+    "accept less-than-equal on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) <= load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept less-than-equal on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) <= s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) <= s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1917,14 +1917,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept greater-than on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) > dataset(//bar)")
+    "accept greater-than on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) > load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) > s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) > s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1935,14 +1935,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept greater-than-equal on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) >= dataset(//bar)")
+    "accept greater-than-equal on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) >= load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept greater-than-equal on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) >= s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) >= s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1953,14 +1953,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept equality on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) = dataset(//bar)")
+    "accept equality on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) = load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept equality on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) = s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) = s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1971,14 +1971,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept not-equality on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) != dataset(//bar)")
+    "accept not-equality on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) != load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept not-equality on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) != s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) != s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -1989,14 +1989,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept boolean and on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) & dataset(//bar)")
+    "accept boolean and on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) & load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept boolean and on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) & s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) & s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -2007,14 +2007,14 @@ object ProvenanceSpecs extends Specification
       tree.errors must beEmpty      
     }
     
-    "accept boolean or on different datasets when related" in {
-      val tree = compile("dataset(//foo) :: dataset(//bar) dataset(//foo) | dataset(//bar)")
+    "accept boolean or on different loads when related" in {
+      val tree = compile("load(//foo) :: load(//bar) load(//foo) | load(//bar)")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
     
     "accept boolean or on static and dynamic provenances when related" in {
-      val tree = compile("s := new 1 dataset(//foo) :: s dataset(//foo) | s")
+      val tree = compile("s := new 1 load(//foo) :: s load(//foo) | s")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -2026,7 +2026,7 @@ object ProvenanceSpecs extends Specification
     }
     
     "reject addition with unrelated relation" in {
-      val tree = compile("dataset(//a) :: dataset(//b) dataset(//c) + dataset(//d)")
+      val tree = compile("load(//a) :: load(//b) load(//c) + load(//d)")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -2034,8 +2034,8 @@ object ProvenanceSpecs extends Specification
     "accept operations according to the commutative relation" in {
       {
         val input = """
-          | foo := dataset(//foo)
-          | bar := dataset(//bar)
+          | foo := load(//foo)
+          | bar := load(//bar)
           | 
           | foo :: bar
           |   foo + bar""".stripMargin
@@ -2049,8 +2049,8 @@ object ProvenanceSpecs extends Specification
       
       {
         val input = """
-          | foo := dataset(//foo)
-          | bar := dataset(//bar)
+          | foo := load(//foo)
+          | bar := load(//bar)
           | 
           | foo :: bar
           |   bar + foo""".stripMargin
@@ -2065,9 +2065,9 @@ object ProvenanceSpecs extends Specification
     
     "accept operations according to the transitive relation" in {
       val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
-        | baz := dataset(//baz)
+        | foo := load(//foo)
+        | bar := load(//bar)
+        | baz := load(//baz)
         | 
         | foo :: bar
         |   bar :: baz
@@ -2082,9 +2082,9 @@ object ProvenanceSpecs extends Specification
     
     "accept operations according to the commutative-transitive relation" in {
       val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
-        | baz := dataset(//baz)
+        | foo := load(//foo)
+        | bar := load(//bar)
+        | baz := load(//baz)
         | 
         | foo :: bar
         |   bar :: baz
@@ -2100,8 +2100,8 @@ object ProvenanceSpecs extends Specification
     "accept multiple nested expressions in relation" in {
       {
         val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
+        | foo := load(//foo)
+        | bar := load(//bar)
         | 
         | foo :: bar
         |   foo + bar + foo""".stripMargin
@@ -2115,8 +2115,8 @@ object ProvenanceSpecs extends Specification
       
       {
         val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
+        | foo := load(//foo)
+        | bar := load(//bar)
         | 
         | foo :: bar
         |   bar + foo + foo""".stripMargin
@@ -2131,9 +2131,9 @@ object ProvenanceSpecs extends Specification
     
     "attribute union provenance to constituents in trinary operation" in {
       val input = """
-        | foo := dataset(//foo)
-        | bar := dataset(//bar)
-        | baz := dataset(//baz)
+        | foo := load(//foo)
+        | bar := load(//bar)
+        | baz := load(//baz)
         |
         | foo :: bar
         |   bar :: baz
@@ -2183,85 +2183,85 @@ object ProvenanceSpecs extends Specification
     
     "propagate through let" in {
       {
-        val tree = compile("a := dataset(//foo) + dataset(//b) a")
+        val tree = compile("a := load(//foo) + load(//b) a")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("a := dataset(//foo) a + dataset(//bar)")
+        val tree = compile("a := load(//foo) a + load(//bar)")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "not propagate through new" in {
-      val tree = compile("new (dataset(//a) + dataset(//b))")
+      val tree = compile("new (load(//a) + load(//b))")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through relate" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) :: dataset(//c) 42")
+        val tree = compile("(load(//a) + load(//b)) :: load(//c) 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("dataset(//c) :: (dataset(//a) + dataset(//b)) 42")
+        val tree = compile("load(//c) :: (load(//a) + load(//b)) 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through object definition" in {
-      val tree = compile("{ a: dataset(//a) + dataset(//b), b: 42 }")
+      val tree = compile("{ a: load(//a) + load(//b), b: 42 }")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through array definition" in {
-      val tree = compile("[dataset(//a) + dataset(//b), 42]")
+      val tree = compile("[load(//a) + load(//b), 42]")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through descent" in {
-      val tree = compile("(dataset(//a) + dataset(//b)).foo")
+      val tree = compile("(load(//a) + load(//b)).foo")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through dereference" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b))[42]")
+        val tree = compile("(load(//a) + load(//b))[42]")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42[dataset(//a) + dataset(//b)]")
+        val tree = compile("42[load(//a) + load(//b)]")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through dispatch" in {
-      val tree = compile("a('b) := 'b a(dataset(//a) + dataset(//b))")
+      val tree = compile("a('b) := 'b a(load(//a) + load(//b))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through operation" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) where 42")
+        val tree = compile("(load(//a) + load(//b)) where 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 + (dataset(//a) where dataset(//b))")
+        val tree = compile("42 + (load(//a) where load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2269,13 +2269,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through addition" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) + 42")
+        val tree = compile("(load(//a) + load(//b)) + 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 + (dataset(//a) + dataset(//b))")
+        val tree = compile("42 + (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2283,13 +2283,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through subtraction" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) - 42")
+        val tree = compile("(load(//a) + load(//b)) - 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 - (dataset(//a) + dataset(//b))")
+        val tree = compile("42 - (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2297,13 +2297,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through multiplication" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) * 42")
+        val tree = compile("(load(//a) + load(//b)) * 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 * (dataset(//a) + dataset(//b))")
+        val tree = compile("42 * (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2311,13 +2311,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through division" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) / 42")
+        val tree = compile("(load(//a) + load(//b)) / 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 / (dataset(//a) + dataset(//b))")
+        val tree = compile("42 / (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2325,13 +2325,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through less-than" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) < 42")
+        val tree = compile("(load(//a) + load(//b)) < 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 < (dataset(//a) + dataset(//b))")
+        val tree = compile("42 < (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2339,13 +2339,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through less-than-equal" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) <= 42")
+        val tree = compile("(load(//a) + load(//b)) <= 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 <= (dataset(//a) + dataset(//b))")
+        val tree = compile("42 <= (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2353,13 +2353,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through greater-than" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) > 42")
+        val tree = compile("(load(//a) + load(//b)) > 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 > (dataset(//a) + dataset(//b))")
+        val tree = compile("42 > (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2367,13 +2367,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through greater-than-equal" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) >= 42")
+        val tree = compile("(load(//a) + load(//b)) >= 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 >= (dataset(//a) + dataset(//b))")
+        val tree = compile("42 >= (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2381,13 +2381,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through equality" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) = 42")
+        val tree = compile("(load(//a) + load(//b)) = 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 = (dataset(//a) + dataset(//b))")
+        val tree = compile("42 = (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2395,13 +2395,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through not-equality" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) != 42")
+        val tree = compile("(load(//a) + load(//b)) != 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 != (dataset(//a) + dataset(//b))")
+        val tree = compile("42 != (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2409,13 +2409,13 @@ object ProvenanceSpecs extends Specification
     
     "propagate through boolean and" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) & 42")
+        val tree = compile("(load(//a) + load(//b)) & 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 & (dataset(//a) + dataset(//b))")
+        val tree = compile("42 & (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -2423,32 +2423,32 @@ object ProvenanceSpecs extends Specification
     
     "propagate through boolean or" in {
       {
-        val tree = compile("(dataset(//a) + dataset(//b)) | 42")
+        val tree = compile("(load(//a) + load(//b)) | 42")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
       
       {
-        val tree = compile("42 | (dataset(//a) + dataset(//b))")
+        val tree = compile("42 | (load(//a) + load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
     }
     
     "propagate through complementation" in {
-      val tree = compile("!(dataset(//a) + dataset(//b))")
+      val tree = compile("!(load(//a) + load(//b))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through negation" in {
-      val tree = compile("~(dataset(//a) + dataset(//b))")
+      val tree = compile("~(load(//a) + load(//b))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
     "propagate through parenthetical" in {
-      val tree = compile("(dataset(//a) + dataset(//b))")
+      val tree = compile("(load(//a) + load(//b))")
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
@@ -2459,51 +2459,51 @@ object ProvenanceSpecs extends Specification
       compile("42").constrainingExpr must beNone
     }
     
-    "leave datasets unconstrained when outside a relation" in {
-      compile("dataset(//foo)").constrainingExpr must beNone
+    "leave loads unconstrained when outside a relation" in {
+      compile("load(//foo)").constrainingExpr must beNone
     }
     
-    "constrain datasets within a relation" in {
+    "constrain loads within a relation" in {
       {
-        val Relate(_, from, _, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//foo)")
+        val Relate(_, from, _, in) = compile("load(//foo) :: load(//bar) load(//foo)")
         in.constrainingExpr must beSome(from)
       }
       
       {
-        val Relate(_, _, to, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//bar)")
+        val Relate(_, _, to, in) = compile("load(//foo) :: load(//bar) load(//bar)")
         in.constrainingExpr must beSome(to)
       }
     }
     
-    "leave unconnected datasets unconstrained within a relation" in {
-      val Relate(_, from, _, in) = compile("dataset(//foo) :: dataset(//bar) dataset(//baz)")
+    "leave unconnected loads unconstrained within a relation" in {
+      val Relate(_, from, _, in) = compile("load(//foo) :: load(//bar) load(//baz)")
       in.constrainingExpr must beNone
     }
     
     "propagate constraints through a nested relation" in {
       {
         val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
-          | dataset(//foo) :: dataset(//bar)
-          |   dataset(//foo) :: dataset(//baz)
-          |     dataset(//foo)""".stripMargin)
+          | load(//foo) :: load(//bar)
+          |   load(//foo) :: load(//baz)
+          |     load(//foo)""".stripMargin)
         
         in.constrainingExpr must beSome(from2)
       }
       
       {
         val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
-          | dataset(//foo) :: dataset(//bar)
-          |   dataset(//foo) :: dataset(//baz)
-          |     dataset(//bar)""".stripMargin)
+          | load(//foo) :: load(//bar)
+          |   load(//foo) :: load(//baz)
+          |     load(//bar)""".stripMargin)
         
         in.constrainingExpr must beSome(to1)
       }
       
       {
         val Relate(_, from1, to1, Relate(_, from2, to2, in)) = compile("""
-          | dataset(//foo) :: dataset(//bar)
-          |   dataset(//foo) :: dataset(//baz)
-          |     dataset(//baz)""".stripMargin)
+          | load(//foo) :: load(//bar)
+          |   load(//foo) :: load(//baz)
+          |     load(//baz)""".stripMargin)
         
         in.constrainingExpr must beSome(to2)
       }

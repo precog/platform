@@ -151,7 +151,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit cross for division of dataset in static provenance with dataset in value provenance" in {
-      testEmit("dataset(\"foo\") * 2")(
+      testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
           LoadLocal(Het),
@@ -160,9 +160,9 @@ object EmitterSpecs extends Specification
     }
 
     "emit line information for cross for division of dataset in static provenance with dataset in value provenance" in {
-      testEmitLine("dataset(\"foo\") * 2")(
+      testEmitLine("load(\"foo\") * 2")(
         Vector(
-          Line(1,"dataset(\"foo\") * 2"),
+          Line(1,"load(\"foo\") * 2"),
           PushString("foo"),
           LoadLocal(Het),
           PushNum("2"),
@@ -170,7 +170,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit cross for division of dataset in static provenance with dataset in value provenance" in {
-      testEmit("2 * dataset(\"foo\")")(
+      testEmit("2 * load(\"foo\")")(
         Vector(
           PushNum("2"),
           PushString("foo"),
@@ -223,7 +223,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit matched join of wrapped object for object with two fields having same provenance" in {
-      testEmit("clicks := dataset(//clicks) {foo: clicks, bar: clicks}")(
+      testEmit("clicks := load(//clicks) {foo: clicks, bar: clicks}")(
         Vector(
           PushString("foo"),
           PushString("/clicks"),
@@ -257,7 +257,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      testEmit("foo := dataset(//foo) bar := dataset(//bar) foo :: bar [foo.a, bar.a, foo.b, bar.b]")(
+      testEmit("foo := load(//foo) bar := load(//bar) foo :: bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -290,7 +290,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for object dataset" in {
-      testEmit("clicks := dataset(//clicks) clicks.foo")(
+      testEmit("clicks := load(//clicks) clicks.foo")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -299,7 +299,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for array dataset" in {
-      testEmit("clicks := dataset(//clicks) clicks[1]")(
+      testEmit("clicks := load(//clicks) clicks[1]")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -308,7 +308,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit load of literal dataset" in {
-      testEmit("""dataset("foo")""")(
+      testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
           LoadLocal(Het))
@@ -324,7 +324,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for array dataset with non-constant indices" in {
-      testEmit("clicks := dataset(//clicks) clicks[clicks]")(
+      testEmit("clicks := load(//clicks) clicks[clicks]")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -334,7 +334,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit filter match for where datasets from same provenance" in {
-      testEmit("""foo := dataset("foo") foo where foo""")(
+      testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
           LoadLocal(Het),
@@ -344,7 +344,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit filter match for datasets from same provenance when performing equality filter" in {
-      testEmit("foo := dataset(//foo) foo where foo.id = 2")(
+      testEmit("foo := load(//foo) foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -358,7 +358,7 @@ object EmitterSpecs extends Specification
     }
 
     "use dup bytecode to duplicate the same dataset" in {
-      testEmit("""clicks := dataset("foo") clicks + clicks""")(
+      testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
           LoadLocal(Het),
@@ -368,7 +368,7 @@ object EmitterSpecs extends Specification
     }
 
     "use dup bytecode non-locally" in {
-      testEmit("""clicks := dataset("foo") two := 2 * clicks two + clicks""")(
+      testEmit("""clicks := load("foo") two := 2 * clicks two + clicks""")(
         Vector(
           PushNum("2"),
           PushString("foo"),
@@ -445,7 +445,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit body of fully applied characteristic function" in {
-      testEmit("clicks := dataset(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
+      testEmit("clicks := load(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -459,7 +459,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := dataset(//a) b := dataset(//b) a :: b (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := load(//a) b := load(//b) a :: b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
           LoadLocal(Het),
@@ -537,7 +537,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit split and merge for trivial cf example" in {
-      testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day onDay")(
+      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -557,7 +557,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit vintersect for trivial cf example with conjunction" in {
-      testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
+      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -599,7 +599,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit vunion for trivial cf example with disjunction" in {
-      testEmit("clicks := dataset(//clicks) onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
+      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -642,7 +642,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with paired tic variables in critical condition" in {
       testEmit("""
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | foo('a, 'b) :=
         |   clicks' := clicks where clicks.time = 'a & clicks.pageId = 'b
         |   clicks'
@@ -681,8 +681,8 @@ object EmitterSpecs extends Specification
     }
 
     "emit split and merge for ctr example" in {
-      testEmit("clicks := dataset(//clicks) " + 
-               "imps   := dataset(//impressions)" +
+      testEmit("clicks := load(//clicks) " + 
+               "imps   := load(//impressions)" +
                "ctr('day) := count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)" +
                "ctr")(
         Vector(
@@ -798,7 +798,7 @@ object EmitterSpecs extends Specification
     
     "emit dup for merge results" in {
       val input = """
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | f('c) := count(clicks where clicks = 'c)
         | f.a + f.b""".stripMargin
         
@@ -829,7 +829,7 @@ object EmitterSpecs extends Specification
       "deviant-durations.qrl" >> {
         // TODO: Verify match/cross for tic variable solution fragmentsA
         testEmit("""
-          | interactions := dataset(//interactions)
+          | interactions := load(//interactions)
           | 
           | big1z('userId) :=
           |   userInteractions := interactions where interactions.userId = 'userId
@@ -1000,8 +1000,8 @@ object EmitterSpecs extends Specification
       "first-conversion.qrl" >> {
         testEmit("""
           | firstConversionAfterEachImpression('userId) :=
-          |   conversions' := dataset(//conversions)
-          |   impressions' := dataset(//impressions)
+          |   conversions' := load(//conversions)
+          |   impressions' := load(//impressions)
           | 
           |   conversions := conversions' where conversions'.userId = 'userId
           |   impressions := impressions' where impressions'.userId = 'userId
@@ -1183,7 +1183,7 @@ object EmitterSpecs extends Specification
       /*
       "histogram.qrl" >> {
         val input = """
-          | clicks := dataset(//clicks)
+          | clicks := load(//clicks)
           | 
           | histogram('value) :=
           |   { cnt: count(clicks where clicks = 'value), value: 'value }
@@ -1196,7 +1196,7 @@ object EmitterSpecs extends Specification
       
       "interaction-totals.qrl" >> {
         val input = """
-          | interactions := dataset(//interactions)
+          | interactions := load(//interactions)
           | 
           | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
           | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
@@ -1213,7 +1213,7 @@ object EmitterSpecs extends Specification
       
       "relative-durations.qrl" >> {
         val input = """
-          | interactions := dataset(//interactions)
+          | interactions := load(//interactions)
           | 
           | relativeDurations('userId, 'value) :=
           |   userInteractions := interactions where interactions.userId = 'userId

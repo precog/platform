@@ -80,7 +80,7 @@ class PlatformSpecs extends Specification
   "the full stack" should {
     "count a filtered clicks dataset" in {
       val input = """
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | count(clicks where clicks.time > 0)""".stripMargin
         
       eval(input) mustEqual Set(SDecimal(100))
@@ -88,37 +88,37 @@ class PlatformSpecs extends Specification
     
     "count the campaigns dataset" >> {
       "<root>" >> {
-        eval("count(dataset(//campaigns))") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns))") mustEqual Set(SDecimal(100))
       }
       
       "gender" >> {
-        eval("count(dataset(//campaigns).gender)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).gender)") mustEqual Set(SDecimal(100))
       }
       
       "platform" >> {
-        eval("count(dataset(//campaigns).platform)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).platform)") mustEqual Set(SDecimal(100))
       }
       
       "campaign" >> {
-        eval("count(dataset(//campaigns).campaign)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).campaign)") mustEqual Set(SDecimal(100))
       }
       
       "cpm" >> {
-        eval("count(dataset(//campaigns).cpm)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).cpm)") mustEqual Set(SDecimal(100))
       }
       
       "ageRange" >> {
-        eval("count(dataset(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
+        eval("count(load(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
       }.pendingUntilFixed
     }
     
     "evaluate the with operator across the campaigns dataset" in {
-      val input = "count(dataset(//campaigns) with { t: 42 })"
+      val input = "count(load(//campaigns) with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
     }
 
     "map object creation over the campaigns dataset" in {
-      val input = "{ aa: dataset(//campaigns).campaign }"
+      val input = "{ aa: load(//campaigns).campaign }"
       val results = evalE(input)
       
       results must haveSize(100)
@@ -133,7 +133,7 @@ class PlatformSpecs extends Specification
     
     "perform a naive cartesian product on the campaigns dataset" in {
       val input = """
-        | a := dataset(//campaigns)
+        | a := load(//campaigns)
         | b := new a
         |
         | a :: b
@@ -154,7 +154,7 @@ class PlatformSpecs extends Specification
     
     "determine a histogram of genders on campaigns" in {
       val input = """
-        | campaigns := dataset(//campaigns)
+        | campaigns := load(//campaigns)
         | hist('gender) :=
         |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
         | hist""".stripMargin
@@ -167,8 +167,8 @@ class PlatformSpecs extends Specification
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
-        | campaigns := dataset(//campaigns)
-        | organizations := dataset(//organizations)
+        | campaigns := load(//campaigns)
+        | organizations := load(//organizations)
         | 
         | hist('revenue, 'campaign) :=
         |   organizations' := organizations where organizations.revenue = 'revenue
@@ -189,7 +189,7 @@ class PlatformSpecs extends Specification
     "determine most isolated clicks in time" in {
 
       val input = """
-        | clicks := dataset(//clicks)
+        | clicks := load(//clicks)
         | 
         | spacings('time) :=
         |   click := clicks where clicks.time = 'time
