@@ -24,6 +24,7 @@ import akka.util.duration._
 import akka.util.Duration
 import akka.util.Timeout
 
+import com.weiglewilczek.slf4s.Logging
 import scalaz.{Success, Failure, Validation}
 import scalaz.effect.IO
 
@@ -114,7 +115,8 @@ trait YggdrasilQueryExecutor
     with OperationsAPI
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
-    with DiskMemoizationComponent { self =>
+    with DiskMemoizationComponent 
+    with Logging { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig
   trait Storage extends ActorYggShard with KafkaIngester
@@ -126,38 +128,61 @@ trait YggdrasilQueryExecutor
 
   def execute(userUID: String, query: String) = executeWithError(userUID, query).fold(x => x, x => x)
 
-  def executeWithError(userUID: String, query: String) = {
+  def executeWithError(userUID: String, query: String): Either[JValue, JValue] = {
     try {
       asBytecode(query) match {
         case Right(bytecode) => 
           decorate(bytecode) match {
-            case Right(dag)  => Right(JString(evaluateDag(userUID, dag)))
-            case Left(error) => Left(JString("An error occurred in query analysis: %s".format(error)))
+            case Right(dag)  => Right(evaluateDag(userUID, dag))
+            case Left(error) => 
+              logger.error("A stack error occurred evaluating the query '" + query + "': " + error)
+              Left(JString("Oops! Something unexpected went wrong. We're looking into it."))
           }
         
-        case Left(error) => Left(JString(error))
+        case Left(errors) => Left(errors)
       }
     } catch {
       // Need to be more specific here or maybe change execute to explicitly return errors 
-      case ex: Exception => {
-        System.err.println("Error processing query: " + ex)
-        ex.printStackTrace
-        Left(JString("Error processing query: %s".format(ex.getMessage)))
-      }
+      case ex: Exception => 
+        logger.error("An unexpected error occurred evaluating the query: " + query, ex)
+        Left(JString("Oops! Something unexpected went wrong. We're looking into it."))
     }
   }
 
-  private def evaluateDag(userUID: String, dag: DepGraph) = {
-    consumeEval(userUID, dag).toList.map{ _._2 }.map( SValue.asJSON _ ).mkString("[", ",", "]")
+  private def evaluateDag(userUID: String, dag: DepGraph): JArray = {
+    JArray(consumeEval(userUID, dag).toList map { _._2 } map { _.toJValue })
   }
 
-  private def asBytecode(query: String): Either[String, Vector[Instruction]] = {
+  private def asBytecode(query: String): Either[JValue, Vector[Instruction]] = {
     try {
       val tree = compile(query)
       if (tree.errors.isEmpty) Right(emit(tree)) 
-      else Left("Errors occurred compiling your query: %s".format(tree.errors.mkString("\n\n")))
+      else Left(
+        JArray(
+          (tree.errors: Set[Error]) map {
+            case Error(loc, tp) =>
+              JObject(
+                JField("message", JString("Errors occurred compiling your query.")) 
+                :: JField("lineNum", JInt(loc.lineNum))
+                :: JField("colNum", JInt(loc.colNum))
+                :: JField("detail", JString(tp.toString))
+                :: Nil
+              )
+          } toList
+        )
+      )
     } catch {
-      case ex: ParseException => Left("An error occurred parsing your query: " + ex.getMessage)
+      case ex: ParseException => Left(
+        JArray(
+          JObject(
+            JField("message", JString("An error occurred parsing your query."))
+            :: JField("lineNum", JInt(ex.failures.head.tail.lineNum))
+            :: JField("colNum", JInt(ex.failures.head.tail.colNum))
+            :: JField("detail", JString(ex.mkString))
+            :: Nil
+          ) :: Nil
+        )
+      )
     }
   }
 }
