@@ -148,7 +148,7 @@ trait YggdrasilQueryExecutor
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph) = {
-    consumeEval(userUID, dag) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+    consumeEval(userUID, dag).toList.map{ _._2 }.map( SValue.asJSON _ ).mkString("[", ",", "]")
   }
 
   private def asBytecode(query: String): Either[String, Vector[Instruction]] = {
