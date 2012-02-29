@@ -154,7 +154,11 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
   }
 
   def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, ColumnMetadata] = {
-    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => col.path == path && col.selector == selector
+    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+
+    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
+      col.path == path && isEqualOrChild(selector, col.selector)
+    }
 
     projections.filter {
       case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
