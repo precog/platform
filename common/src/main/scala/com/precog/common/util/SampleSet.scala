@@ -85,15 +85,20 @@ object AdSamples {
     JField("campaign", campaigns(gaussianIndex(campaigns.size))) :: Nil
   )
 
-  def interactionSample() = JObject(
-    JField("timeMillis", earlierTimeFrame.sample.get) ::
-    JField("timeZone", oneOf(timeZone).sample.get) ::
-    JField("pageId", oneOf(pageId).sample.get) :: 
-    JField("userId", oneOf(userId).sample.get) :: Nil
-  )
+  def interactionSample() = {
+    val time = earlierTimeFrame.sample.get
+    val timezone = oneOf(timeZone).sample.get
+    JObject(
+      JField("time", time) ::
+      JField("timeZone", timezone) ::
+      JField("timeString", toISO8601(time, timezone)) ::
+      JField("pageId", oneOf(pageId).sample.get) :: 
+      JField("userId", oneOf(userId).sample.get) :: Nil
+    )
+  }
 
   def interactionSample2() = JObject(
-    JField("timeMillis", laterTimeFrame.sample.get) ::
+    JField("time", laterTimeFrame.sample.get) ::
     JField("timeZone", oneOf(timeZone).sample.get) ::
     JField("pageId", oneOf(pageId).sample.get) :: 
     JField("userId", oneOf(userId).sample.get) :: Nil
@@ -161,7 +166,7 @@ object NewSamples {
   )
 
   def paymentsSample() = JObject(
-    JField("date", twoDayTimeFrame.sample.get ) :: 
+    JField("date", earlierTimeFrame.sample.get ) :: 
     JField("recipients", recipients) :: 
     JField("amount", chooseNum(500,50000).sample.get.toDouble / 100) :: Nil
   )

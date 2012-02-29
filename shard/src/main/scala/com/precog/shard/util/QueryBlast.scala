@@ -205,14 +205,14 @@ verboseErrors - whether to print verbose error messages (default: false)
 class QuerySampler {
   val allQueries = List(
 """
-count(dataset(//%s/campaigns))
+count(load(//%s/campaigns))
 """,
 """
-tests := dataset(//%s/campaigns)
+tests := load(//%s/campaigns)
 count(tests where tests.gender = "male")
 """,
 """
-tests := dataset(//%s/campaigns)
+tests := load(//%s/campaigns)
 histogram('platform) :=
    { platform: 'platform, num: count(tests where tests.platform = 'platform) }
    histogram

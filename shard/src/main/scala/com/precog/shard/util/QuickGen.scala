@@ -29,7 +29,7 @@ object QuickGen extends App {
     ("campaigns"      -> AdSamples.adCampaignSample _),
     ("organizations"  -> AdSamples.adOrganizationSample _),
     ("clicks"         -> AdSamples.interactionSample _),
-    ("impressions"    -> AdSamples.interactionSample _),
+    ("impressions"    -> AdSamples.interactionSample2 _),
     ("users"          -> NewSamples.usersSample _),
     ("orders"         -> NewSamples.ordersSample _),
     ("payments"       -> NewSamples.paymentsSample _),
