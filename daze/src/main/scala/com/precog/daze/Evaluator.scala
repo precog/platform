@@ -591,9 +591,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
 
       case BuiltInFunction2(ChangeTimeZone) => {
-        case (SString(time), SDecimal(tz)) if (isValidISO(time) && tz.isValidInt) => {
+        case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => {
           val format = ISODateTimeFormat.dateTime()
-          val timeZone = DateTimeZone.forOffsetMillis(tz.toInt)
+          val timeZone = DateTimeZone.forID(tz)
           val dateTime = new DateTime(time, timeZone)
           Some(SString(format.print(dateTime)))
         }
@@ -601,9 +601,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       }
 
       case BuiltInFunction2(EpochToISO) => {
-        case (SDecimal(time), SDecimal(tz)) if (time >=Long.MinValue && time <= Long.MaxValue && tz.isValidInt) =>  {
+        case (SDecimal(time), SString(tz)) if (time >=Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  {
           val format = ISODateTimeFormat.dateTime()
-          val timeZone = DateTimeZone.forOffsetMillis(tz.toInt)
+          val timeZone = DateTimeZone.forID(tz)
           val dateTime = new DateTime(time.toLong, timeZone)
           Some(SString(format.print(dateTime)))
         }
@@ -614,6 +614,13 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
   def isValidISO(str: String): Boolean = {
     try { new DateTime(str); true
+    } catch {
+      case e:IllegalArgumentException => { false }
+    }
+  }
+
+  def isValidTimeZone(str: String): Boolean = {
+    try { DateTimeZone.forID(str); true
     } catch {
       case e:IllegalArgumentException => { false }
     }
