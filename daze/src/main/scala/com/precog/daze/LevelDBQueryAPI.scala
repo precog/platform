@@ -54,7 +54,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
         selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
-        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p))))
+        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p.keySet))))
         enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
       } yield enumerator
     )
@@ -73,24 +73,43 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           DatasetEnum(
             for {
               descriptors <- retrieval 
-              enum        <- assemble[X](path, List((selector, descriptors))) 
+              // we don't know whether the descriptors retuned contain exactly the selector requested, 
+              // or children as well so we have to reassemble them such that we have relevant projections
+              // grouped by unique selector that is a child of the specified selector
+              val sources = descriptors flatMap {
+                case (descriptor, _) => 
+                  val baseSources = descriptor.columns collect { 
+                    case c if c.selector.nodes startsWith selector.nodes => (c.selector, Set(descriptor)) 
+                  } 
+                  
+                  baseSources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
+                    case (acc, (s, ds)) => acc + (s -> (acc.getOrElse(s, Set()) ++ ds))
+                  }
+              }
+              enum        <- assemble[X](path, sources.toSeq) 
             } yield {
               enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t } }
             }
           )
 
         (selector, tpe) match {
-          case (Some(s), None | Some(SObject) | Some(SArray)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
-          case (Some(s), Some(tpe)) => assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
-          case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+          case (Some(s), None | Some(SObject) | Some(SArray)) => 
+            assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
+
+          case (Some(s), Some(tpe)) => 
+            assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
+
+          case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
+            assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+
           case (_      , _        ) => fullProjection(userUID, path)
         }
       }
     }
 
-    implicit val mergeOrder = Order[Identities].contramap((scol: SColumn) => scol._1)
+    implicit val mergeOrder = Order[Identities].contramap[SColumn] { case (ids, _) => ids }
 
-    def assemble[X](path: Path, sources: Seq[(JPath, Map[ProjectionDescriptor, ColumnMetadata])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
+    def assemble[X](path: Path, sources: Seq[(JPath, Set[ProjectionDescriptor])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
       def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         import scalaz.std.list._
         for {
@@ -106,7 +125,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // to choose the projection that satisfies the largest number of columns.
       val descriptors = sources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
         case (acc, (selector, descriptorData)) => descriptorData.foldLeft(acc) {
-          case (acc, (descriptor, _)) => 
+          case (acc, descriptor) => 
             acc.get(selector) match {
               case Some(chosen) if chosen.contains(descriptor) ||
                                    (chosen exists { d => descriptor.columnAt(path, selector).exists(d.satisfies) }) => acc
