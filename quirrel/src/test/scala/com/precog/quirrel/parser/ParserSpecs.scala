@@ -851,31 +851,31 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "recognize <keyword>foo as an identifier" >> {
       "new" >> {
         parse("newfoo") must beLike {
-          case Dispatch(_, "newfoo", Vector()) => ok
+          case Dispatch(_, Identifier(Vector(), "newfoo"), Vector()) => ok
         }
       }
       
       "true" >> {
         parse("truefoo") must beLike {
-          case Dispatch(_, "truefoo", Vector()) => ok
+          case Dispatch(_, Identifier(Vector(), "truefoo"), Vector()) => ok
         }
       }
       
       "false" >> {
         parse("falsefoo") must beLike {
-          case Dispatch(_, "falsefoo", Vector()) => ok
+          case Dispatch(_, Identifier(Vector(), "falsefoo"), Vector()) => ok
         }
       }
       
       "where" >> {
         parse("wherefoo") must beLike {
-          case Dispatch(_, "wherefoo", Vector()) => ok
+          case Dispatch(_, Identifier(Vector(), "wherefoo"), Vector()) => ok
         }
       }
       
       "with" >> {
         parse("withfoo") must beLike {
-          case Dispatch(_, "withfoo", Vector()) => ok
+          case Dispatch(_, Identifier(Vector(), "withfoo"), Vector()) => ok
         }
       }
     }

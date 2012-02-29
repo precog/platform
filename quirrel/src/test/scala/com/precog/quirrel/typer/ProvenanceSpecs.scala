@@ -291,55 +291,55 @@ object ProvenanceSpecs extends Specification
     "identify built-in non-reduce dispatch of arity 1 according to its child" in {
 
       {
-        val tree = compile("std :: time :: year(dataset(//foo))")
+        val tree = compile("std :: time :: year(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: quarter(dataset(//foo))")
+        val tree = compile("std :: time :: quarter(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: monthOfYear(dataset(//foo))")
+        val tree = compile("std :: time :: monthOfYear(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: weekOfYear(dataset(//foo))")
+        val tree = compile("std :: time :: weekOfYear(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: dayOfMonth(dataset(//foo))")
+        val tree = compile("std :: time :: dayOfMonth(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: dayOfWeek(dataset(//foo))")
+        val tree = compile("std :: time :: dayOfWeek(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: hourOfDay(dataset(//foo))")
+        val tree = compile("std :: time :: hourOfDay(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: minuteOfHour(dataset(//foo))")
+        val tree = compile("std :: time :: minuteOfHour(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
 
       {
-        val tree = compile("std :: time :: secondOfMinute(dataset(//foo))")
+        val tree = compile("std :: time :: secondOfMinute(load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
@@ -347,7 +347,7 @@ object ProvenanceSpecs extends Specification
 
     "identify built-in reduce dispatch of arity 1 given incorrect number of parameters" in {
       {
-        val tree = compile("std :: time :: secondOfMinute(dataset(//foo), dataset(//bar))")
+        val tree = compile("std :: time :: secondOfMinute(load(//foo), load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(IncorrectArity(1, 2))
       }
@@ -355,7 +355,7 @@ object ProvenanceSpecs extends Specification
 
     "identify built-in non-reduce dispatch of arity 2 according to its children given unrelated sets" in {
       {
-        val tree = compile("std :: time :: changeTimeZone(dataset(//foo), dataset(//bar))")
+        val tree = compile("std :: time :: changeTimeZone(load(//foo), load(//bar))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }
@@ -364,7 +364,7 @@ object ProvenanceSpecs extends Specification
     "identify built-in non-reduce dispatch of arity 2 according to its children given related sets" in {
       
       {
-        val tree = compile("std :: time :: changeTimeZone(dataset(//foo), dataset(//foo))")
+        val tree = compile("std :: time :: changeTimeZone(load(//foo), load(//foo))")
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }

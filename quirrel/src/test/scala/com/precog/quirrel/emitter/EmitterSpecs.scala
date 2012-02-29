@@ -63,7 +63,7 @@ object EmitterSpecs extends Specification
           PushNum("23.23123")))
     }
 
-    "emit cross-join of two withed datasets with value provenance" in {
+    "emit cross-join of two withed loads with value provenance" in {
       testEmit("5 with 2")(
         Vector(
           PushNum("5"),
@@ -71,7 +71,7 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinObject)))
     }
 
-    "emit cross-addition of two added datasets with value provenance" in {
+    "emit cross-addition of two added loads with value provenance" in {
       testEmit("5 + 2")(
         Vector(
           PushNum("5"),
@@ -79,7 +79,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Add)))
     }
 
-    "emit cross < for datasets with value provenance" in {
+    "emit cross < for loads with value provenance" in {
       testEmit("5 < 2")(
         Vector(
           PushNum("5"),
@@ -87,7 +87,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Lt)))
     }
 
-    "emit cross <= for datasets with value provenance" in {
+    "emit cross <= for loads with value provenance" in {
       testEmit("5 <= 2")(
         Vector(
           PushNum("5"),
@@ -95,7 +95,7 @@ object EmitterSpecs extends Specification
           Map2Cross(LtEq)))
     }
 
-    "emit cross > for datasets with value provenance" in {
+    "emit cross > for loads with value provenance" in {
       testEmit("5 > 2")(
         Vector(
           PushNum("5"),
@@ -103,7 +103,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Gt)))
     }
 
-    "emit cross >= for datasets with value provenance" in {
+    "emit cross >= for loads with value provenance" in {
       testEmit("5 >= 2")(
         Vector(
           PushNum("5"),
@@ -111,7 +111,7 @@ object EmitterSpecs extends Specification
           Map2Cross(GtEq)))
     }
 
-    "emit cross != for datasets with value provenance" in {
+    "emit cross != for loads with value provenance" in {
       testEmit("5 != 2")(
         Vector(
           PushNum("5"),
@@ -119,7 +119,7 @@ object EmitterSpecs extends Specification
           Map2Cross(NotEq)))
     }
 
-    "emit cross = for datasets with value provenance" in {
+    "emit cross = for loads with value provenance" in {
       testEmit("5 = 2")(
         Vector(
           PushNum("5"),
@@ -127,14 +127,14 @@ object EmitterSpecs extends Specification
           Map2Cross(Eq)))
     }
 
-    "emit cross ! for dataset with value provenance" in {
+    "emit cross ! for load with value provenance" in {
       testEmit("!true")(
         Vector(
           PushTrue,
           Map1(Comp)))
     }
 
-    "emit cross-subtraction of two subtracted datasets with value provenance" in {
+    "emit cross-subtraction of two subtracted loads with value provenance" in {
       testEmit("5 - 2")(
         Vector(
           PushNum("5"),
@@ -142,7 +142,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Sub)))
     }
 
-    "emit cross-division of two divided datasets with value provenance" in {
+    "emit cross-division of two divided loads with value provenance" in {
       testEmit("5 / 2")(
         Vector(
           PushNum("5"),
@@ -150,7 +150,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Div)))
     }
 
-    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of load in static provenance with load in value provenance" in {
       testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
@@ -159,7 +159,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit line information for cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit line information for cross for division of load in static provenance with load in value provenance" in {
       testEmitLine("load(\"foo\") * 2")(
         Vector(
           Line(1,"load(\"foo\") * 2"),
@@ -169,7 +169,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit cross for division of dataset in static provenance with dataset in value provenance" in {
+    "emit cross for division of load in static provenance with load in value provenance" in {
       testEmit("2 * load(\"foo\")")(
         Vector(
           PushNum("2"),
@@ -178,7 +178,7 @@ object EmitterSpecs extends Specification
           Map2Cross(Mul)))
     }
 
-    "emit negation of literal numeric dataset with value provenance" in {
+    "emit negation of literal numeric load with value provenance" in {
       testEmit("neg 5")(
         Vector(
           PushNum("5"),
@@ -186,7 +186,7 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit negation of sum of two literal numeric datasets with value provenance" in {
+    "emit negation of sum of two literal numeric loads with value provenance" in {
       testEmit("neg (5 + 2)")(
         Vector(
           PushNum("5"),
@@ -289,7 +289,7 @@ object EmitterSpecs extends Specification
           Map2Cross(ArraySwap)))
     }
 
-    "emit descent for object dataset" in {
+    "emit descent for object load" in {
       testEmit("clicks := load(//clicks) clicks.foo")(
         Vector(
           PushString("/clicks"),
@@ -298,7 +298,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject)))
     }
 
-    "emit descent for array dataset" in {
+    "emit descent for array load" in {
       testEmit("clicks := load(//clicks) clicks[1]")(
         Vector(
           PushString("/clicks"),
@@ -307,7 +307,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefArray)))
     }
 
-    "emit load of literal dataset" in {
+    "emit load of literal load" in {
       testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
@@ -315,7 +315,7 @@ object EmitterSpecs extends Specification
       )
     }
 
-    "emit filter cross for where datasets from value provenance" in {
+    "emit filter cross for where loads from value provenance" in {
       testEmit("""1 where true""")(
         Vector(
           PushNum("1"),
@@ -323,7 +323,7 @@ object EmitterSpecs extends Specification
           FilterCross(0, None)))
     }
 
-    "emit descent for array dataset with non-constant indices" in {
+    "emit descent for array load with non-constant indices" in {
       testEmit("clicks := load(//clicks) clicks[clicks]")(
         Vector(
           PushString("/clicks"),
@@ -333,7 +333,7 @@ object EmitterSpecs extends Specification
           Map2Match(DerefArray)))
     }
 
-    "emit filter match for where datasets from same provenance" in {
+    "emit filter match for where loads from same provenance" in {
       testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
@@ -343,7 +343,7 @@ object EmitterSpecs extends Specification
           FilterMatch(0, None)))
     }
 
-    "emit filter match for datasets from same provenance when performing equality filter" in {
+    "emit filter match for loads from same provenance when performing equality filter" in {
       testEmit("foo := load(//foo) foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
@@ -357,7 +357,7 @@ object EmitterSpecs extends Specification
           FilterMatch(0, None)))
     }
 
-    "use dup bytecode to duplicate the same dataset" in {
+    "use dup bytecode to duplicate the same load" in {
       testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
@@ -529,7 +529,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit changeTimeZone non-reduction" in {
-      testEmit("""std :: time :: changeTimeZone(dataset(//foo).time, dataset(//foo).timeZone)""")(
+      testEmit("""std :: time :: changeTimeZone(load(//foo).time, load(//foo).timeZone)""")(
         Vector(
           PushString("/foo"), 
           LoadLocal(Het), 
@@ -543,7 +543,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit millisToISO non-reduction" in {
-      testEmit("""std :: time :: millisToISO(dataset(//foo).time, dataset(//foo).timeZone)""")(
+      testEmit("""std :: time :: millisToISO(load(//foo).time, load(//foo).timeZone)""")(
         Vector(
           PushString("/foo"), 
           LoadLocal(Het), 
