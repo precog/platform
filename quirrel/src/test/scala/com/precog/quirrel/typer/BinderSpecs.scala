@@ -255,21 +255,21 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "forward binding through relate" in {
       {
-        val e @ Let(_, _, _, _, Relate(_, d: Dispatch, _, _)) = parse("a := 42 a relate 1 2")
+        val e @ Let(_, _, _, _, Relate(_, d: Dispatch, _, _)) = parse("a := 42 a ~ 1 2")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, _, Relate(_, _, d: Dispatch, _)) = parse("a := 42 1 relate a 2")
+        val e @ Let(_, _, _, _, Relate(_, _, d: Dispatch, _)) = parse("a := 42 1 ~ a 2")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, _, Relate(_, _, _, d: Dispatch)) = parse("a := 42 1 relate 2 a")
+        val e @ Let(_, _, _, _, Relate(_, _, _, d: Dispatch)) = parse("a := 42 1 ~ 2 a")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -527,7 +527,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "forward binding through negation" in {
-      val e @ Let(_, _, _, _, Neg(_, d: Dispatch)) = parse("a := 42 ~a")
+      val e @ Let(_, _, _, _, Neg(_, d: Dispatch)) = parse("a := 42 neg a")
       d.binding mustEqual UserDef(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
