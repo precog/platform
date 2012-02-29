@@ -144,7 +144,7 @@ trait BytecodeWriter extends Writer with Version {
 
     def builtInOp2(op: BuiltInOp2) = op match {
       case ChangeTimeZone => 0x00
-      case EpochToISO => 0x01
+      case MillisToISO => 0x01
     }
     
     if (!stream.isEmpty) {

@@ -430,10 +430,10 @@ trait Emitter extends AST
 
               emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone))
 
-            case BuiltIn(Time.EpochToISO.name, arity, _) =>
+            case BuiltIn(Time.MillisToISO.name, arity, _) =>
               assert(arity == 2)
 
-              emitMap(actuals(0), actuals(1), BuiltInFunction2(EpochToISO))
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(MillisToISO))
 
             case BuiltIn(n, arity, _) =>
               notImpl(expr)

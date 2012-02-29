@@ -205,7 +205,7 @@ trait Instructions {
     sealed trait BuiltInOp2
 
     case object ChangeTimeZone extends BuiltInOp2
-    case object EpochToISO extends BuiltInOp2
+    case object MillisToISO extends BuiltInOp2
     
     sealed trait Type
     

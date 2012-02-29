@@ -163,7 +163,7 @@ trait InstructionGenerators extends Instructions {
 
   private lazy val genBuiltIn2 = oneOf (
     ChangeTimeZone,
-    EpochToISO)
+    MillisToISO)
     
   private lazy val genReduction = oneOf(
     Count,

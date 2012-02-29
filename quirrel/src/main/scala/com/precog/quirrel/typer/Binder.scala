@@ -18,7 +18,7 @@ trait Binder extends parser.AST {
 
   object Time {
     val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
-    val EpochToISO = BuiltIn(Identifier(Vector("std", "time"), "epochToISO"), 2, false)
+    val MillisToISO = BuiltIn(Identifier(Vector("std", "time"), "millisToISO"), 2, false)
     val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
     val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
     val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
@@ -36,7 +36,7 @@ trait Binder extends parser.AST {
     import BuiltIns._
     import Time._
 
-    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, EpochToISO, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond)
+    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, MillisToISO, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond)
   }
 
   override def bindNames(tree: Expr) = {

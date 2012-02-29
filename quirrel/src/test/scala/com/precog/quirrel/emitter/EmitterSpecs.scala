@@ -535,8 +535,8 @@ object EmitterSpecs extends Specification
           Map2Match(BuiltInFunction2(ChangeTimeZone))))
     }
 
-    "emit epochToISO non-reduction" in {
-      testEmit("""std :: time :: epochToISO(dataset(//foo).time, dataset(//foo).timeZone)""")(
+    "emit millisToISO non-reduction" in {
+      testEmit("""std :: time :: millisToISO(dataset(//foo).time, dataset(//foo).timeZone)""")(
         Vector(
           PushString("/foo"), 
           LoadLocal(Het), 
@@ -546,7 +546,7 @@ object EmitterSpecs extends Specification
           LoadLocal(Het), 
           PushString("timeZone"), 
           Map2Cross(DerefObject), 
-          Map2Match(BuiltInFunction2(EpochToISO))))
+          Map2Match(BuiltInFunction2(MillisToISO))))
         }
 
 
