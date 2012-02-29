@@ -466,7 +466,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2(EpochToISO) => (Some(SDecimal), Some(SString))
+    case BuiltInFunction2(MillisToISO) => (Some(SDecimal), Some(SString))
     
     case BuiltInFunction2(ChangeTimeZone) => (Some(SString), Some(SString))
   }
@@ -602,7 +602,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         case _ => None
       }
 
-      case BuiltInFunction2(EpochToISO) => {
+      case BuiltInFunction2(MillisToISO) => {
         case (SDecimal(time), SString(tz)) if (time >=Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  {
           val format = ISODateTimeFormat.dateTime()
           val timeZone = DateTimeZone.forID(tz)

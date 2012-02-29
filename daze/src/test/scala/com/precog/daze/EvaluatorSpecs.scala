@@ -239,10 +239,10 @@ class EvaluatorSpecs extends Specification
         result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
 
-      "epochToISO" >> {
+      "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(EpochToISO)),
+        val input = Join(line, Map2Match(BuiltInFunction2(MillisToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           
@@ -277,10 +277,10 @@ class EvaluatorSpecs extends Specification
         result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
 
-      "epochToISO" >> {
+      "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(EpochToISO)),
+        val input = Join(line, Map2Match(BuiltInFunction2(MillisToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           

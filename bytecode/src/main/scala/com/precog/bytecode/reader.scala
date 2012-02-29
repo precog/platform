@@ -147,7 +147,7 @@ trait BytecodeReader extends Reader {
 
       lazy val builtIn2 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(ChangeTimeZone)
-        case 0x01 => Some(EpochToISO)
+        case 0x01 => Some(MillisToISO)
 
         case _    => None
       }

@@ -711,9 +711,9 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
 
-    "bind epochToISO" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: epochToISO")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "epochToISO"), 2, false)
+    "bind millisToISO" in {
+      val d @ Dispatch(_, _, _) = parse("std :: time :: millisToISO")
+      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "millisToISO"), 2, false)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
