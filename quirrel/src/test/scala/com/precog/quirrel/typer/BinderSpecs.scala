@@ -570,7 +570,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "bind load" in {
       val d @ Dispatch(_, _, _) = parse("load")
-      d.binding mustEqual BuiltIn("load", 1)
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "load"), 1, false)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
