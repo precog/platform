@@ -111,6 +111,11 @@ class PlatformSpecs extends Specification
       }.pendingUntilFixed
     }
     
+    "evaluate the with operator across the campaigns dataset" in {
+      val input = "count(dataset(//campaigns) with { t: 42 })"
+      eval(input) mustEqual Set(SDecimal(100))
+    }
+    
     "determine a histogram of genders on campaigns" in {
       val input = """
         | campaigns := dataset(//campaigns)

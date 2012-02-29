@@ -341,9 +341,6 @@ sealed trait ColumnType {
     case (SDouble, SDecimal) => true
     case (SDecimalArbitrary, SDecimal) => true
     
-    case (SEmptyObject, SObject) => true
-    case (SEmptyArray, SArray) => true
-    
     case (_, _) => false
   }
 }
