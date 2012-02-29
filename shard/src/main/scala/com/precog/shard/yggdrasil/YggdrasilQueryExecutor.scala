@@ -182,6 +182,7 @@ trait YggdrasilQueryExecutor
             case Error(loc, tp) =>
               JObject(
                 JField("message", JString("Errors occurred compiling your query.")) 
+                :: JField("line", JString(loc.line))
                 :: JField("lineNum", JInt(loc.lineNum))
                 :: JField("colNum", JInt(loc.colNum))
                 :: JField("detail", JString(tp.toString))
@@ -195,6 +196,7 @@ trait YggdrasilQueryExecutor
         JArray(
           JObject(
             JField("message", JString("An error occurred parsing your query."))
+            :: JField("line", JString(ex.failures.head.tail.line))
             :: JField("lineNum", JInt(ex.failures.head.tail.lineNum))
             :: JField("colNum", JInt(ex.failures.head.tail.colNum))
             :: JField("detail", JString(ex.mkString))
