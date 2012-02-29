@@ -44,7 +44,7 @@ trait AST extends Phases {
     case Sub(_, left, right) => "%s(-\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Mul(_, left, right) => "%s(*\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Div(_, left, right) => "%s(/\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
-    case Neg(_, child) => "%s(~\n%s)".format(indent, printSExp(child, indent + "  "))
+    case Neg(_, child) => "%s(neg\n%s)".format(indent, printSExp(child, indent + "  "))
     case Paren(_, child) => printSExp(child, indent)
     case NumLit(_, value) => indent + value
     case TicVar(_, id) => indent + id
@@ -56,7 +56,7 @@ trait AST extends Phases {
     case Sub(_, left, right) => "(%s - %s)".format(printInfix(left), printInfix(right))
     case Mul(_, left, right) => "(%s * %s)".format(printInfix(left), printInfix(right))
     case Div(_, left, right) => "(%s / %s)".format(printInfix(left), printInfix(right))
-    case Neg(_, child) => "~%s".format(printInfix(child))
+    case Neg(_, child) => "neg%s".format(printInfix(child))
     case Paren(_, child) => "(%s)".format(printInfix(child))
     case NumLit(_, value) => value
     case TicVar(_, id) => id
@@ -98,7 +98,7 @@ trait AST extends Phases {
       }
       
       case Relate(loc, from: Expr, to: Expr, in: Expr) => {
-        indent + "type: relate\n" +
+        indent + "type: \n" +
           indent + "from:\n" + prettyPrint(from, level + 2) + "\n" +
           indent + "to:\n" + prettyPrint(to, level + 2) + "\n" +
           indent + "in:\n" + prettyPrint(in, level + 2)

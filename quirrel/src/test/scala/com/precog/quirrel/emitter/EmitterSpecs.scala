@@ -198,7 +198,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit negation of literal numeric dataset with value provenance" in {
-      testEmit("~5")(
+      testEmit("neg 5")(
         Vector(
           PushNum("5"),
           Map1(Neg))
@@ -206,7 +206,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit negation of sum of two literal numeric datasets with value provenance" in {
-      testEmit("~(5 + 2)")(
+      testEmit("neg (5 + 2)")(
         Vector(
           PushNum("5"),
           PushNum("2"),
@@ -276,7 +276,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      testEmit("foo := dataset(//foo) bar := dataset(//bar) foo relate bar [foo.a, bar.a, foo.b, bar.b]")(
+      testEmit("foo := dataset(//foo) bar := dataset(//bar) foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -584,7 +584,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := dataset(//a) b := dataset(//b) a relate b (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := dataset(//a) b := dataset(//b) a ~ b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
           LoadLocal(Het),
@@ -1136,7 +1136,7 @@ object EmitterSpecs extends Specification
           |     conversionTimes :=
           |       conversions.time where conversions.time = min(conversions where conversions.time > 'time)
           |     
-          |     conversionTimes relate impressionTimes
+          |     conversionTimes ~ impressionTimes
           |       { impression: impressions, nextConversion: conversions }
           | 
           |   greaterConversions

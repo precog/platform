@@ -77,13 +77,13 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "accept a relate expression" in {
-      parse("1 relate 2 3") must beLike {
+      parse("1 ~ 2 3") must beLike {
         case Relate(_, NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3")) => ok
       }
     }
     
     "accept a relate expression with more than two constraint sets" in {
-      parse("1 relate 2 relate 3 relate 4 5") must beLike {
+      parse("1 ~ 2 ~ 3 ~ 4 5") must beLike {
         case Relate(_, NumLit(_, "1"), NumLit(_, "2"),
           Relate(_, NumLit(_, "2"), NumLit(_, "3"),
             Relate(_, NumLit(_, "3"), NumLit(_, "4"), NumLit(_, "5")))) => ok
@@ -524,7 +524,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "accept numeric negation" in {
-      parse("~1") must beLike { case Neg(_, NumLit(_, "1")) => ok }
+      parse("neg 1") must beLike { case Neg(_, NumLit(_, "1")) => ok }
     }
     
     "accept parentheticals" in {
@@ -543,7 +543,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
         case Comp(_, Descent(_, NumLit(_, "1"), "x")) => ok
       }
       
-      parse("~1.x") must beLike {
+      parse("neg 1.x") must beLike {
         case Neg(_, Descent(_, NumLit(_, "1"), "x")) => ok
       }
       
@@ -551,16 +551,16 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
         case Comp(_, Deref(_, NumLit(_, "1"), NumLit(_, "2"))) => ok
       }
       
-      parse("~1[2]") must beLike {
+      parse("neg 1[2]") must beLike {
         case Neg(_, Deref(_, NumLit(_, "1"), NumLit(_, "2"))) => ok
       }
     }
     
     "favor negation/complement over multiplication/division" in {
       parse("!a * b") must beLike { case Mul(_, Comp(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
-      parse("~a * b") must beLike { case Mul(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
+      parse("neg a * b") must beLike { case Mul(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
       parse("!a / b") must beLike { case Div(_, Comp(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
-      parse("~a / b") must beLike { case Div(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
+      parse("neg a / b") must beLike { case Div(_, Neg(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
     }
     
     "favor multiplication/division over addition/subtraction" in {
@@ -641,14 +641,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "favor where over relate" in {
-      parse("a where b relate c d") must beLike { case Relate(_, Operation(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), "where", Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector()), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
-      parse("a relate b where c d") must beLike { case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Operation(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), "where", Dispatch(_, Identifier(Vector(), "c"), Vector())), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
+      parse("a where b ~ c d") must beLike { case Relate(_, Operation(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), "where", Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector()), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
+      parse("a ~ b where c d") must beLike { case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Operation(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), "where", Dispatch(_, Identifier(Vector(), "c"), Vector())), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
     }
   }
   
   "operator associativity" should {
     "associate relations to the right" in {
-      parse("a relate b a relate b 42") must beLike {
+      parse("a ~ b a ~ b 42") must beLike {
         case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector()),
                Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector()),
                  NumLit(_, "42"))) => ok
@@ -875,8 +875,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "disambiguate one-argument function within n-ary relation" in {
       val input = """
-        | a relate
-        |   b relate c
+        | a ~
+        |   b ~ c
         |     d := f
         |     (1)
         |   2""".stripMargin
