@@ -82,8 +82,8 @@ object AdSamples {
 
   def eventsSample() = JObject(
     JField("time", toISO8601(laterTimeFrame.sample.get, oneOf(timeZone).sample.get)) ::
-    JField("platforms", oneOf(platforms).sample.get) :: 
-    JField("eventNames", oneOf(eventNames).sample.get) :: Nil
+    JField("platform", oneOf(platforms).sample.get) :: 
+    JField("eventName", oneOf(eventNames).sample.get) :: Nil
   )
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
