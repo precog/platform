@@ -165,7 +165,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     new EnumeratorT[X, Vector[E], F] { 
       import org.fusesource.leveldbjni.internal.JniDBIterator
       def apply[A] = {
-        val iterIO  = IO(idIndexFile.iterator).flatMap(iter => IO(iter).ensuring(IO(iter.close))) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
+        val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
 
         def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator]): IterateeT[X, Vector[E], F, A] = {
           @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(IO(iter.close))) >> s.pointI.value)
@@ -235,7 +235,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
     new EnumeratorT[X, Vector[E], F] { 
       def apply[A] = {
-        val iterIO = IO(idIndexFile.iterator).flatMap(iter => IO(iter).ensuring(IO(iter.close))) map { iter =>
+        val iterIO = IO(idIndexFile.iterator) map { iter =>
           range.start match {
             case Some(id) => iter.seek(id.as[Array[Byte]])
             case None => iter.seekToFirst()
