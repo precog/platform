@@ -746,14 +746,14 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "correctly nest multiple binds" in {
       val input = """
         | a :=
-        |   b := dataset(//f)
-        |   c := dataset(//g)
+        |   b := load(//f)
+        |   c := load(//g)
         |
         |   d
         | e""".stripMargin
       
       parse(input) must beLike {
-        case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/f"))), Let(_, "c", Vector(), Dispatch(_, "dataset", Vector(StrLit(_, "/g"))), Dispatch(_, "d", Vector()))), Dispatch(_, "e", Vector())) => ok
+        case Let(_, "a", Vector(), Let(_, "b", Vector(), Dispatch(_, "load", Vector(StrLit(_, "/f"))), Let(_, "c", Vector(), Dispatch(_, "load", Vector(StrLit(_, "/g"))), Dispatch(_, "d", Vector()))), Dispatch(_, "e", Vector())) => ok
       }
     }
     
