@@ -220,23 +220,23 @@ class EvaluatorSpecs extends Specification
       result2 must contain(42, 12, 77, 1, 13)
     }
 
-    "evaluate a binary non-numeric operation mapped over homogeneous set" >> {
+    "evaluate a binary non-numeric operation mapped over homogeneous set" >> { //todo also test for case when second parameter is not a singleton
       "changeTimeZone" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2(ChangeTimeZone)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/millisTimeZone")), Het))
+          Root(line, PushString("-10:00")))
           
         val result = testEval(input)
         
         result must haveSize(5)
         
         val result2 = result collect {
-          case (VectorCase(_, _), SString(d)) => d.toString
+          case (VectorCase(_), SString(d)) => d.toString
         }
         
-        result2 must contain("2010-04-28T15:37:52.599-10:00", "2011-02-21T01:09:59.165-10:00", "2012-12-28T06:38:19.430-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00")
+        result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
 
       "epochToISO" >> {
@@ -244,37 +244,37 @@ class EvaluatorSpecs extends Specification
         
         val input = Join(line, Map2Match(BuiltInFunction2(EpochToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/millisTimeZone")), Het))
+          Root(line, PushString("-10:00")))
           
         val result = testEval(input)
         
         result must haveSize(5)
         
         val result2 = result collect {
-          case (VectorCase(_, _), SString(d)) => d.toString
+          case (VectorCase(_), SString(d)) => d.toString
         }
         
         result2 must contain("2012-02-28T06:44:52.420-10:00", "2012-02-18T06:44:52.780-10:00", "2012-02-21T08:28:42.774-10:00", "2012-02-25T08:01:27.710-10:00", "2012-02-18T06:44:52.854-10:00")      
       }
     }
 
-    "evaluate a binary non-numeric operation mapped over heterogeneous set" >> {
+    "evaluate a binary non-numeric operation mapped over heterogeneous set" >> { //todo also test for case when second parameter is not a singleton
       "changeTimeZone" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2(ChangeTimeZone)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/millisTimeZone")), Het))
+          Root(line, PushString("-10:00")))
           
         val result = testEval(input)
         
         result must haveSize(5)
         
         val result2 = result collect {
-          case (VectorCase(_, _), SString(d)) => d.toString
+          case (VectorCase(_), SString(d)) => d.toString
         }
         
-        result2 must contain("2010-04-28T15:37:52.599-10:00", "2011-02-21T01:09:59.165-10:00", "2012-12-28T06:38:19.430-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00")
+        result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
 
       "epochToISO" >> {
@@ -282,14 +282,14 @@ class EvaluatorSpecs extends Specification
         
         val input = Join(line, Map2Match(BuiltInFunction2(EpochToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/millisTimeZone")), Het))
+          Root(line, PushString("-10:00")))
           
         val result = testEval(input)
         
         result must haveSize(5)
         
         val result2 = result collect {
-          case (VectorCase(_, _), SString(d)) => d.toString
+          case (VectorCase(_), SString(d)) => d.toString
         }
         
         result2 must contain("2012-02-28T06:44:52.420-10:00", "2012-02-18T06:44:52.780-10:00", "2012-02-21T08:28:42.774-10:00", "2012-02-25T08:01:27.710-10:00", "2012-02-18T06:44:52.854-10:00")      

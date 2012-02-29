@@ -466,7 +466,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2(_) => (Some(SDecimal), Some(SDecimal))
+    case BuiltInFunction2(EpochToISO) => (Some(SDecimal), Some(SString))
+    
+    case BuiltInFunction2(ChangeTimeZone) => (Some(SString), Some(SString))
   }
   
   private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
