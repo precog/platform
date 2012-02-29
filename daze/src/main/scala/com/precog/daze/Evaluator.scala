@@ -279,9 +279,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val (pairs, distinct) = instr match {
           case Map2Match(op) => (leftEnum join rightEnum, true)
-          case Map2Cross(op) => (leftEnum :^ rightEnum, false)
-          case Map2CrossLeft(op) => (leftEnum :^ rightEnum, false)
-          case Map2CrossRight(op) => (leftEnum ^: rightEnum, false)
+          case Map2Cross(op) => (leftEnum crossLeft rightEnum, false)
+          case Map2CrossLeft(op)  => (leftEnum crossLeft  rightEnum, false)
+          case Map2CrossRight(op) => (leftEnum crossRight rightEnum, false)
         }
         
         val back = pairs collect {
@@ -314,9 +314,9 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         val (pairs, distinct) = cross match {
           case None => (targetEnum join booleanEnum, true)
-          case Some(CrossNeutral) => (targetEnum :^ booleanEnum, false)
-          case Some(CrossLeft) => (targetEnum :^ booleanEnum, false)
-          case Some(CrossRight) => (targetEnum ^: booleanEnum, false)
+          case Some(CrossNeutral) => (targetEnum crossLeft booleanEnum, false)
+          case Some(CrossLeft)  => (targetEnum crossLeft  booleanEnum, false)
+          case Some(CrossRight) => (targetEnum crossRight booleanEnum, false)
         }
         
         val back = pairs collect {
