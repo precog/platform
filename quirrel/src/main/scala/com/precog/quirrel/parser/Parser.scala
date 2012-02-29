@@ -111,8 +111,8 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "&" ~ expr ^# { (loc, e1, _, e2) => And(loc, e1, e2) }
     | expr ~ "|" ~ expr ^# { (loc, e1, _, e2) => Or(loc, e1, e2) }
     
-    | "!" ~ expr ^# { (loc, _, e) => Comp(loc, e) }
-    | "neg" ~ expr ^# { (loc, _, e) => Neg(loc, e) }
+    | "!" ~ expr           ^# { (loc, _, e) => Comp(loc, e) }
+    | """neg\b""".r ~ expr ^# { (loc, _, e) => Neg(loc, e) }
     
     | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
   ) filter (precedence & associativity)
