@@ -376,6 +376,27 @@ class EvaluatorSpecs extends Specification
       }
     }
     
+    "evaluate wrap_object on clicks dataset" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(WrapObject),
+        Root(line, PushString("aa")),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          Root(line, PushString("user"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(100)
+      
+      forall(result) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(1)
+          obj must haveKey("aa")
+        }
+      }
+    }
+    
     "evaluate wrap_array on a single value" in {
       val line = Line(0, "")
       
@@ -1343,6 +1364,34 @@ class EvaluatorSpecs extends Specification
           
           obj must haveKey("num")
           obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
+        }
+      }
+    }
+    
+    "perform a naive cartesian product on the clicks dataset" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(JoinObject),
+        Join(line, Map2Cross(WrapObject),
+          Root(line, PushString("aa")),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            Root(line, PushString("user")))),
+        Join(line, Map2Cross(WrapObject),
+          Root(line, PushString("bb")),
+          Join(line, Map2Cross(DerefObject),
+            dag.New(line, dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)),
+            Root(line, PushString("user")))))
+            
+      val result = testEval(input)
+      
+      result must haveSize(10000)
+      
+      forall(result) {
+        case (VectorCase(_, _), SObject(obj)) => {
+          obj must haveSize(2)
+          obj must haveKey("aa")
+          obj must haveKey("bb")
         }
       }
     }

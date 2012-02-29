@@ -1,6 +1,7 @@
 package com.precog
 package pandora
 
+import common.VectorCase
 import common.kafka._
 
 import daze._
@@ -114,6 +115,41 @@ class PlatformSpecs extends Specification
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(dataset(//campaigns) with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
+    }
+
+    "map object creation over the campaigns dataset" in {
+      val input = "{ aa: dataset(//campaigns).campaign }"
+      val results = evalE(input)
+      
+      results must haveSize(100)
+      
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(1)
+          obj must haveKey("aa")
+        }
+      }
+    }
+    
+    "perform a naive cartesian product on the campaigns dataset" in {
+      val input = """
+        | a := dataset(//campaigns)
+        | b := new a
+        |
+        | a :: b
+        |   { aa: a.campaign, bb: b.campaign }"""
+        
+      val results = evalE(input.stripMargin)
+      
+      results must haveSize(10000)
+      
+      forall(results) {
+        case (VectorCase(_, _), SObject(obj)) => {
+          obj must haveSize(2)
+          obj must haveKey("aa")
+          obj must haveKey("bb")
+        }
+      }
     }
     
     "determine a histogram of genders on campaigns" in {
