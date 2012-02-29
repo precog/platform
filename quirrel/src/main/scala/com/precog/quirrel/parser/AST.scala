@@ -25,7 +25,7 @@ trait AST extends Phases {
     case Sub(_, left, right) => "%s(-\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Mul(_, left, right) => "%s(*\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
     case Div(_, left, right) => "%s(/\n%s\n%s)".format(indent, printSExp(left, indent + "  "), printSExp(right, indent + "  "))
-    case Neg(_, child) => "%s(~\n%s)".format(indent, printSExp(child, indent + "  "))
+    case Neg(_, child) => "%s(neg\n%s)".format(indent, printSExp(child, indent + "  "))
     case Paren(_, child) => printSExp(child, indent)
     case NumLit(_, value) => indent + value
     case TicVar(_, id) => indent + id
@@ -37,7 +37,7 @@ trait AST extends Phases {
     case Sub(_, left, right) => "(%s - %s)".format(printInfix(left), printInfix(right))
     case Mul(_, left, right) => "(%s * %s)".format(printInfix(left), printInfix(right))
     case Div(_, left, right) => "(%s / %s)".format(printInfix(left), printInfix(right))
-    case Neg(_, child) => "~%s".format(printInfix(child))
+    case Neg(_, child) => "neg%s".format(printInfix(child))
     case Paren(_, child) => "(%s)".format(printInfix(child))
     case NumLit(_, value) => value
     case TicVar(_, id) => id
@@ -79,7 +79,7 @@ trait AST extends Phases {
       }
       
       case Relate(loc, from: Expr, to: Expr, in: Expr) => {
-        indent + "type: relate\n" +
+        indent + "type: \n" +
           indent + "from:\n" + prettyPrint(from, level + 2) + "\n" +
           indent + "to:\n" + prettyPrint(to, level + 2) + "\n" +
           indent + "in:\n" + prettyPrint(in, level + 2)
@@ -544,7 +544,7 @@ trait AST extends Phases {
       override def children = List(child)
     }
 
-    final case class Let(loc: LineStream, id: String, params: Vector[String], left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'let
       
       lazy val criticalConditions = findCriticalConditions(this)
@@ -575,7 +575,7 @@ trait AST extends Phases {
       override def children = List(from, to, in)
     }
     
-    final case class TicVar(loc: LineStream, id: String) extends ExprLeafNode {
+    final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
       val label = 'ticvar
       
       private val _binding = attribute[FormalBinding](bindNames)
@@ -617,8 +617,8 @@ trait AST extends Phases {
       val isPrefix = true
       val child = left
     }
-    
-    final case class Dispatch(loc: LineStream, name: String, actuals: Vector[Expr]) extends Expr {
+
+    final case class Dispatch(loc: LineStream, name: Identifier, actuals: Vector[Expr]) extends Expr {
       val label = 'dispatch
       
       private val _isReduction = attribute[Boolean](bindNames)

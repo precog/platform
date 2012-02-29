@@ -3,7 +3,7 @@ package com.precog.quirrel
 trait Phases {
   type Expr
   type Error
-  
+
   type ConditionTree
   
   type Phase = Expr => Set[Error]

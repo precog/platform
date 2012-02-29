@@ -52,14 +52,16 @@ trait Parser extends RegexParsers with Filters with AST {
   // %%
   
   lazy val expr: Parser[Expr] = (
-      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => Let(loc, id, fs, e1, e2) }
-    | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, id, Vector(), e1, e2) }
+      id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => 
+        Let(loc, Identifier(Vector(), id), fs, e1, e2)
+      }
+    | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, Identifier(Vector(), id), Vector(), e1, e2) }
     
     | """new\b""".r ~ expr ^# { (loc, _, e) => New(loc, e) }
     | relations ~ expr     ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
     
-    | id    ^# { (loc, id) => Dispatch(loc, id, Vector()) }
-    | ticId ^# TicVar
+    | namespacedId ^# { (loc, id) => Dispatch(loc, id, Vector()) }  
+    | ticId        ^# TicVar
     
     | pathLiteral ^# StrLit
     | strLiteral  ^# StrLit
@@ -71,7 +73,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "." ~ propertyName   ^# { (loc, e, _, p) => Descent(loc, e, p) }
     | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
-    | id ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }
+    | namespacedId ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }  
     | expr ~ operations ~ expr ^# Operation
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
@@ -91,19 +93,29 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "|" ~ expr ^# { (loc, e1, _, e2) => Or(loc, e1, e2) }
     
     | "!" ~ expr ^# { (loc, _, e) => Comp(loc, e) }
-    | "~" ~ expr ^# { (loc, _, e) => Neg(loc, e) }
+    | "neg" ~ expr ^# { (loc, _, e) => Neg(loc, e) }
     
     | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
   ) filter (precedence & associativity)
-  
+
+  private lazy val namespacedId: Parser[Identifier] = (
+      namespace ~ "::" ~ id ^^ { (ns, _, id) => Identifier(ns, id) }
+    | id                    ^^ { str => Identifier(Vector(), str) }
+  )
+
+  private lazy val namespace: Parser[Vector[String]] = (
+      namespace ~ "::" ~ id ^^ { (ns, _, id) => ns :+ id }
+    | id                    ^^ { Vector(_) }
+  )
+
   private lazy val formals: Parser[Vector[String]] = (
       formals ~ "," ~ ticId ^^ { (fs, _, f) => fs :+ f }
     | ticId                 ^^ { Vector(_) }
   )
   
   private lazy val relations: Parser[Vector[Expr]] = (
-      relations ~ "::" ~ expr ^^ { (es, _, e) => es :+ e }
-    | expr ~ "::" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
+      relations ~ "~" ~ expr ^^ { (es, _, e) => es :+ e }
+    | expr ~ "~" ~ expr      ^^ { (e1, _, e2) => Vector(e1, e2) }
   )
   
   private lazy val actuals: Parser[Vector[Expr]] = (
@@ -141,7 +153,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
   
-  private lazy val keywords = "new|true|false|where|with".r
+  private lazy val keywords = "new|true|false|where|with|neg".r
   
   private lazy val operations = """(where|with)\b""".r
   

@@ -185,3 +185,4 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     case SEmptyArray            => CEmptyArray
   }
 }
+

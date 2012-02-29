@@ -1,6 +1,10 @@
 package com.precog
 package daze
 
+import org.joda.time._
+import org.joda.time.format._
+import org.joda.time.DateTimeZone
+
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
 
@@ -102,6 +106,21 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         Right(enum map {
           case (id, sv) => (id, SArray(Vector(sv)))
         })
+      }
+
+      case Operate(_, BuiltInFunction1(op), parent) => {
+        val parentRes = loop(parent, roots, ctx)
+        val parentResTyped = parentRes.left map { mask =>
+          builtInOp1Type(op) map mask.typed getOrElse mask
+        }
+        val enum = maybeRealize(parentResTyped)
+
+        def opPerform(sev: SEvent): Option[SEvent] = {
+          val (id, sv) = sev
+          performBuiltInOp1(op, sv) map { sv => (id, sv) }
+        }
+
+        Right(enum collect unlift(opPerform))
       }
       
       // TODO mode and median
@@ -427,13 +446,33 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case DerefObject => (Some(SObject), Some(SString))
     
     case DerefArray => (Some(SObject), Some(SDecimal))
+
+    case BuiltInFunction2(MillisToISO) => (Some(SDecimal), Some(SString))
+    
+    case BuiltInFunction2(ChangeTimeZone) => (Some(SString), Some(SString))
   }
   
-  private def unOpType(op: UnaryOperation): Option[SType] = op match {
-    case instructions.New => None
-    case Comp => Some(SBoolean)
-    case Neg => Some(SDecimal)
-    case WrapArray => None
+  private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
+    case instructions.New    => None
+    case Comp                => Some(SBoolean)
+    case Neg                 => Some(SDecimal)
+    case WrapArray           => None
+    case BuiltInFunction1(_) => Some(SString)
+  }
+
+  private def builtInOp1Type(op: BuiltInOp1): Option[SType] = op match {
+    case TimeZone       => Some(SString)
+    case Year           => Some(SString)
+    case QuarterOfYear  => Some(SString)
+    case MonthOfYear    => Some(SString)
+    case WeekOfYear     => Some(SString)
+    case DayOfYear      => Some(SString)
+    case DayOfMonth     => Some(SString)
+    case DayOfWeek      => Some(SString)
+    case HourOfDay      => Some(SString)
+    case MinuteOfHour   => Some(SString)
+    case SecondOfMinute => Some(SString)
+    case MillisOfSecond => Some(SString)
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -534,7 +573,96 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         
         case _ => None
       }
+
+      case BuiltInFunction2(ChangeTimeZone) => {
+        case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => {
+          val format = ISODateTimeFormat.dateTime()
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(time, timeZone)
+          Some(SString(format.print(dateTime)))
+        }
+        case _ => None
+      }
+
+      case BuiltInFunction2(MillisToISO) => {
+        case (SDecimal(time), SString(tz)) if (time >=Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  {
+          val format = ISODateTimeFormat.dateTime()
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(time.toLong, timeZone)
+          Some(SString(format.print(dateTime)))
+        }
+        case _ => None
+      }
     }
+  }
+
+  def isValidISO(str: String): Boolean = {
+    try { new DateTime(str); true
+    } catch {
+      case e:IllegalArgumentException => { false }
+    }
+  }
+
+  def isValidTimeZone(str: String): Boolean = {
+    try { DateTimeZone.forID(str); true
+    } catch {
+      case e:IllegalArgumentException => { false }
+    }
+  }
+
+  private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
+    case (TimeZone, SString(time)) if isValidISO(time) => {
+      val format = DateTimeFormat.forPattern("ZZ")
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SString(format.print(newTime)))
+    }
+    case (Year, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.year().get))
+    }
+    case (QuarterOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      val mo = newTime.monthOfYear.get
+      Some(SDecimal(((mo - 1) / 3) + 1))
+    }
+    case (MonthOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.monthOfYear().get))
+    }
+    case (WeekOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.weekOfWeekyear().get))
+    }
+    case (DayOfYear, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfYear().get))
+    }
+    case (DayOfMonth, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfMonth().get))
+    }
+    case (DayOfWeek, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.dayOfWeek().get))
+    }
+    case (HourOfDay, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.hourOfDay().get))
+    }
+    case (MinuteOfHour, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.minuteOfHour().get))
+    }
+    case (SecondOfMinute, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.secondOfMinute().get))
+    }
+    case (MillisOfSecond, SString(time)) if isValidISO(time) => {
+      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+      Some(SDecimal(newTime.millisOfSecond().get))
+    }
+    
+    case _ => None
   }
   
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =

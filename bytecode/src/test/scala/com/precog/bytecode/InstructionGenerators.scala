@@ -111,9 +111,14 @@ trait InstructionGenerators extends Instructions {
   private lazy val genPushObject = PushObject
   private lazy val genPushArray = PushArray
   
-  private lazy val genUnaryOp = oneOf(Comp, New, Neg, WrapArray)
+  private lazy val genUnaryOp = for {
+    op  <- genBuiltIn1
+    res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1(op))
+  } yield res
   
-  private lazy val genBinaryOp = oneOf(
+  private lazy val genBinaryOp = for {
+    op  <- genBuiltIn2
+    res <- oneOf(
     Add,
     Sub,
     Mul,
@@ -138,7 +143,28 @@ trait InstructionGenerators extends Instructions {
     ArraySwap,
     
     DerefObject,
-    DerefArray)
+    DerefArray,
+  
+    BuiltInFunction2(op))
+  } yield res
+
+  private lazy val genBuiltIn1 = oneOf(
+    TimeZone,
+    Year,
+    QuarterOfYear,
+    MonthOfYear,
+    WeekOfYear,
+    DayOfYear,
+    DayOfMonth,
+    DayOfWeek,
+    HourOfDay,
+    MinuteOfHour,
+    SecondOfMinute,
+    MillisOfSecond)
+
+  private lazy val genBuiltIn2 = oneOf (
+    ChangeTimeZone,
+    MillisToISO)
     
   private lazy val genReduction = oneOf(
     Count,
