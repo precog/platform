@@ -169,21 +169,38 @@ trait InstructionGenerators extends Instructions {
 
   private lazy val genBuiltIn1 = oneOf(
     TimeZone,
+    Season, 
+
     Year,
     QuarterOfYear,
     MonthOfYear,
     WeekOfYear,
+    WeekOfMonth,
     DayOfYear,
     DayOfMonth,
     DayOfWeek,
     HourOfDay,
     MinuteOfHour,
     SecondOfMinute,
-    MillisOfSecond)
+    MillisOfSecond,
+   
+    Date,
+    YearMonth,
+    MonthDay,
+    DateHour,
+    DateHourMinute,
+    DateHourMinuteSecond,
+    DateHourMinuteSecondMillis,
+    TimeWithZone,
+    TimeWithoutZone,
+    HourMinute,
+    HourMinuteSecond
+  )
 
   private lazy val genBuiltIn2 = oneOf (
     ChangeTimeZone,
-    MillisToISO)
+    MillisToISO,
+    TimeDifference)
     
   private lazy val genReduction = oneOf(
     Count,

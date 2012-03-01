@@ -37,12 +37,19 @@ trait Binder extends parser.AST {
 
   object Time {
     val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
+    val TimeDifference = BuiltIn(Identifier(Vector("std", "time"), "timeDifference"), 2, false)
+
     val MillisToISO = BuiltIn(Identifier(Vector("std", "time"), "millisToISO"), 2, false)
+    //val ISOToMillis = BuiltIn(Identifier(Vector("std", "time"), "isoToMillis"), 1, false)
+
     val TimeZone = BuiltIn(Identifier(Vector("std", "time"), "timeZone"), 1, false)
+    val Season = BuiltIn(Identifier(Vector("std", "time"), "season"), 1, false) 
+
     val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
     val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
     val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
     val WeekOfYear = BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
+    val WeekOfMonth = BuiltIn(Identifier(Vector("std", "time"), "weekOfMonth"), 1, false)
     val DayOfYear = BuiltIn(Identifier(Vector("std", "time"), "dayOfYear"), 1, false)
     val DayOfMonth = BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
     val DayOfWeek = BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
@@ -50,13 +57,25 @@ trait Binder extends parser.AST {
     val MinuteOfHour = BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
     val SecondOfMinute = BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
     val MillisOfSecond = BuiltIn(Identifier(Vector("std", "time"), "millisOfSecond"), 1, false)
+
+    val Date = BuiltIn(Identifier(Vector("std", "time"), "date"), 1, false)
+    val YearMonth = BuiltIn(Identifier(Vector("std", "time"), "yearMonth"), 1, false)
+    val MonthDay = BuiltIn(Identifier(Vector("std", "time"), "monthDay"), 1, false)
+    val DateHour = BuiltIn(Identifier(Vector("std", "time"), "dateHour"), 1, false)
+    val DateHourMinute = BuiltIn(Identifier(Vector("std", "time"), "dateHourMin"), 1, false)
+    val DateHourMinuteSecond = BuiltIn(Identifier(Vector("std", "time"), "dateHourMinSec"), 1, false)
+    val DateHourMinuteSecondMillis = BuiltIn(Identifier(Vector("std", "time"), "dateHourMinSecMilli"), 1, false)
+    val TimeWithZone = BuiltIn(Identifier(Vector("std", "time"), "timeWithZone"), 1, false)
+    val TimeWithoutZone = BuiltIn(Identifier(Vector("std", "time"), "timeWithoutZone"), 1, false)
+    val HourMinute = BuiltIn(Identifier(Vector("std", "time"), "hourMin"), 1, false)
+    val HourMinuteSecond = BuiltIn(Identifier(Vector("std", "time"), "hourMinSec"), 1, false)
   }
 
   val BuiltInFunctions = {
     import BuiltIns._
     import Time._
 
-    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, MillisToISO, TimeZone, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond)
+    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, TimeDifference, MillisToISO, TimeZone, Season, Year, QuarterOfYear, MonthOfYear, WeekOfYear, WeekOfMonth, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond, Date, YearMonth, DateHour, DateHourMinute, DateHourMinuteSecond, DateHourMinuteSecondMillis, TimeWithZone, TimeWithoutZone, HourMinuteSecond, HourMinute)
   }
 
   override def bindNames(tree: Expr) = {
