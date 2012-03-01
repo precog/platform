@@ -370,10 +370,15 @@ trait Emitter extends AST
             //**
             //start of Time functions
             //**
-            case BuiltIn(Time.TimeZone.name, arity, _) =>
+           case BuiltIn(Time.TimeZone.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(TimeZone))
+
+           case BuiltIn(Time.Season.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(Season))
 
             case BuiltIn(Time.Year.name, arity, _) =>
               assert(arity == 1)
@@ -393,7 +398,12 @@ trait Emitter extends AST
             case BuiltIn(Time.WeekOfYear.name, arity, _) =>
               assert(arity == 1)
 
-              emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
+              emitUnary(actuals(0), BuiltInFunction1(WeekOfYear)) 
+              
+            case BuiltIn(Time.WeekOfMonth.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(WeekOfMonth))
               
             case BuiltIn(Time.DayOfYear.name, arity, _) =>
               assert(arity == 1)
@@ -430,6 +440,61 @@ trait Emitter extends AST
 
               emitUnary(actuals(0), BuiltInFunction1(MillisOfSecond))
 
+            case BuiltIn(Time.Date.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(Date))
+
+            case BuiltIn(Time.YearMonth.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(YearMonth))
+
+            case BuiltIn(Time.MonthDay.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(MonthDay))
+
+            case BuiltIn(Time.DateHour.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(DateHour))
+
+            case BuiltIn(Time.DateHourMinute.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(DateHourMinute))
+
+            case BuiltIn(Time.DateHourMinuteSecond.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(DateHourMinuteSecond))
+
+            case BuiltIn(Time.DateHourMinuteSecondMillis.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(DateHourMinuteSecondMillis))
+
+            case BuiltIn(Time.TimeWithZone.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(TimeWithZone))
+
+            case BuiltIn(Time.TimeWithoutZone.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(TimeWithoutZone))
+
+            case BuiltIn(Time.HourMinute.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(HourMinute))
+
+            case BuiltIn(Time.HourMinuteSecond.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(HourMinuteSecond))
+
             case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
               assert(arity == 2)
 
@@ -439,6 +504,12 @@ trait Emitter extends AST
               assert(arity == 2)
 
               emitMap(actuals(0), actuals(1), BuiltInFunction2(MillisToISO))
+
+            case BuiltIn(Time.TimeDifference.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(TimeDifference))
+
 
             case BuiltIn(n, arity, _) =>
               notImpl(expr)

@@ -190,10 +190,13 @@ trait Instructions {
     sealed trait BuiltInOp1
     
     case object TimeZone extends BuiltInOp1
+    case object Season extends BuiltInOp1
+
     case object Year extends BuiltInOp1
     case object QuarterOfYear extends BuiltInOp1
     case object MonthOfYear extends BuiltInOp1
     case object WeekOfYear extends BuiltInOp1
+    case object WeekOfMonth extends BuiltInOp1
     case object DayOfYear extends BuiltInOp1
     case object DayOfMonth extends BuiltInOp1
     case object DayOfWeek extends BuiltInOp1
@@ -201,12 +204,26 @@ trait Instructions {
     case object MinuteOfHour extends BuiltInOp1
     case object SecondOfMinute extends BuiltInOp1
     case object MillisOfSecond extends BuiltInOp1
-    
+
+    case object Date extends BuiltInOp1
+    case object YearMonth extends BuiltInOp1
+    case object MonthDay extends BuiltInOp1
+    case object DateHour extends BuiltInOp1
+    case object DateHourMinute extends BuiltInOp1
+    case object DateHourMinuteSecond extends BuiltInOp1
+    case object DateHourMinuteSecondMillis extends BuiltInOp1
+    case object TimeWithZone extends BuiltInOp1
+    case object TimeWithoutZone extends BuiltInOp1
+    case object HourMinute extends BuiltInOp1
+    case object HourMinuteSecond extends BuiltInOp1
+
+  
 
     sealed trait BuiltInOp2
 
     case object ChangeTimeZone extends BuiltInOp2
     case object MillisToISO extends BuiltInOp2
+    case object TimeDifference extends BuiltInOp2
     
     sealed trait Type
     
