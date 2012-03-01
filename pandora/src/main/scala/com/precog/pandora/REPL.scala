@@ -9,6 +9,8 @@ import com.precog.yggdrasil.BaseConfig
 import com.precog.yggdrasil.SimpleProjectionSerialization
 import com.precog.yggdrasil.shard._
 import com.precog.common.kafka._
+import blueeyes.json.Printer._
+import blueeyes.json.JsonAST._
 
 import edu.uwm.cs.gll.{Failure, LineStream, Success}
 
@@ -85,7 +87,10 @@ trait REPL extends LineErrors
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = consumeEval(dummyUID, graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+            val result = consumeEval(dummyUID, graph) fold (
+              error   => "An error occurred processing your query: " + error.getMessage,
+              results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
+            )
             
             out.println()
             out.println(color.cyan(result))

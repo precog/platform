@@ -3,6 +3,7 @@ package com.precog.analytics
 import blueeyes.concurrent.test._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.persistence.mongo._
+import blueeyes.util.Clock
 
 import akka.util.Timeout
 import akka.util.Duration
@@ -16,7 +17,7 @@ class TokenManagerSpec extends Specification with FutureMatchers {
   implicit val timeout: Timeout = Duration(30, "seconds")
 
   val mongo = new MockMongo()
-  val tokenManager = new TokenManager(mongo.database("test"), "tokens", "deleted_tokens")
+  val tokenManager = new TokenManager(mongo.database("test"), Clock.System, "tokens", "deleted_tokens")
 
   implicit val futureTimes = FutureTimeouts(25, Duration(250, "millis"))
 

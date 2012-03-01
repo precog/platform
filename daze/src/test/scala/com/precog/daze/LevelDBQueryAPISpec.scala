@@ -30,6 +30,7 @@ import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with StubYggShardComponent {
+
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   def sampleSize = 20
@@ -45,10 +46,12 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   object query extends QueryAPI
 
+  def die(x: => QueryAPI#X): IO[List[Vector[SValue]]] = throw x
+
   "combine" should {
     "restore objects from their component parts" in {
       val projectionData = storage.projections map { 
-        case (pd, p) => ((pd.columns(0).selector, p.getAllPairs[Unit] map { _ map { case (ids, vs) =>  (ids, vs(0)) } })) 
+        case (pd, p) => ((pd.columns(0).selector, p.getAllPairs(System.currentTimeMillis + 10000) map { _ map { case (ids, vs) =>  (ids, vs(0)) } })) 
       } toList
 
       import scalaz.{Order,Ordering}
@@ -66,23 +69,23 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
         
       val enum = query.combine(projectionData) map { _ map { case (ids, sv) => sv } }
       
-      (consume[Unit, Vector[SValue], IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enum[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(query.fullProjection[Unit](testUID, dataPath) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
       
-      (consume[Unit, Vector[SValue], IO, List] &= enum[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enum[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
-      val enum = Await.result(query.mask[Unit](testUID, dataPath).derefObject("gender").realize.fenum, intToDurationInt(30).seconds)
+      val enum = Await.result(query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000).fenum, intToDurationInt(30).seconds)
       val enumv = enum map { _ map { case (ids, sv) => sv } }
-      (consume[Unit, Vector[SValue], IO, List] &= enumv[IO]).run(_ => sys.error("...")).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
+      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enumv[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
 }

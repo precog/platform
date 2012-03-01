@@ -119,10 +119,9 @@ extends DelegatingService[A, Future[B], A, Token => Future[B]] {
       case Some(tokenId) =>
         delegate.service(request) map { (f: Token => Future[B]) =>
           tokenManager.lookup(tokenId) flatMap { 
-            case None =>                           Future(err(BadRequest,   "The specified token does not exist"))
-            case Some(token) if (token.expired) => Future(err(Unauthorized, "The specified token has expired"))
-
+            case Some(token) if (token.isExpired(tokenManager.clock)) => Future(err(Unauthorized, "Your token has expired."))
             case Some(token) => f(token)
+            case None        => Future(err(BadRequest,   "The specified token does not exist"))
           }
         }
     }
