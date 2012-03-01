@@ -29,6 +29,7 @@ import org.joda.time.DateTime
 import scalaz.Scalaz._
 import scalaz.Validation
 
+import blueeyes.util.Clock
 import org.joda.time.{DateTime, DateTimeZone}
 
 /** A token gives a user access to a path in the ReportGrid virtual file
@@ -40,7 +41,7 @@ import org.joda.time.{DateTime, DateTimeZone}
  * Tokens have permissions (read/write/share), expiration dates, and limits.
  */
 case class Token(tokenId: String, parentTokenId: Option[String], accountTokenId: String, path: Path, permissions: Permissions, expires: DateTime, limits: Limits) {
-  def expired  = expires.getMillis <= new DateTime(DateTimeZone.UTC).getMillis
+  def isExpired(clock: Clock) = expires.getMillis <= clock.now().getMillis
   def canRead  = permissions.read
   def canWrite = permissions.write
   def canShare = permissions.share
@@ -62,11 +63,11 @@ case class Token(tokenId: String, parentTokenId: Option[String], accountTokenId:
     limits         = limits.limitTo(this.limits)
   )
 
-  def mayAccess(accessPath: Path, accessType: AccessType) = 
-    !expired && path.equalOrChild(accessPath) && permissions.hasPermissions(accessType)
+  def mayAccess(accessPath: Path, accessType: AccessType, clock: Clock) = 
+    !isExpired(clock) && path.equalOrChild(accessPath) && permissions.hasPermissions(accessType)
 
-  def mayAccess(accessPath: Path, accessTypes: Set[AccessType]) =
-    !expired && path.equalOrChild(accessPath) && permissions.hasPermissions(accessTypes)
+  def mayAccess(accessPath: Path, accessTypes: Set[AccessType], clock: Clock) =
+    !isExpired(clock) && path.equalOrChild(accessPath) && permissions.hasPermissions(accessTypes)
 
   def relativeTo(owner: Token) = copy(path = (this.path - owner.path).getOrElse(this.path))
 

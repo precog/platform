@@ -28,8 +28,8 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.duration._
 
-import blueeyes.json._
-import JsonAST._
+import blueeyes.json.JsonAST._
+import blueeyes.json.JsonParser
 
 import scala.io.Source
 
@@ -37,8 +37,10 @@ import scalaz._
 import scalaz.std.AllInstances._
 import scalaz.effect._
 import scalaz.iteratee._
+import scalaz.syntax.monad._
 import Function._
 import IterateeT._
+import Validation._
 
 object StubOperationsAPI {
   import akka.actor.ActorSystem
@@ -56,22 +58,18 @@ trait DatasetConsumersConfig extends EvaluatorConfig {
 trait DatasetConsumers extends Evaluator with YggConfigComponent {
   type YggConfig <: DatasetConsumersConfig 
 
-  def consumeEval(userUID: String, graph: DepGraph): Set[SEvent] = {
-    val results = Await.result(
-      eval(userUID, graph).fenum.map { (enum: EnumeratorP[Unit, Vector[SEvent], IO]) => 
-        try {
-          Right(((consume[Unit, Vector[SEvent], IO, Set] &= enum[IO]) run { err => sys.error("O NOES!!!") }) unsafePerformIO)
-        } catch {
-          case e => Left(e)
-        }
-      },
-      yggConfig.maxEvalDuration
-    )
-
-    results.left foreach { throw _ }
-
-    val Right(back) = results
-    back.flatten
+  def consumeEval(userUID: String, graph: DepGraph): Validation[Throwable, Set[SEvent]] = {
+    implicit val bind = Validation.validationMonad[Throwable]
+    val validated: Validation[Throwable, Validation[Throwable, Set[SEvent]]] = Validation.fromTryCatch {
+      Await.result(
+        eval(userUID, graph).fenum.map { (enum: EnumeratorP[X, Vector[SEvent], IO]) => 
+          (consume[X, Vector[SEvent], IO, Set] &= enum[IO]) map { s => success[Throwable, Set[SEvent]](s.flatten) } run { err => IO(failure(err)) } unsafePerformIO
+        },
+        yggConfig.maxEvalDuration
+      )
+    } 
+    
+    validated.fail.map(err => new RuntimeException("Timed out after " + yggConfig.maxEvalDuration + " in consumeEval", err): Throwable).validation.join
   }
 }
 
@@ -93,13 +91,13 @@ trait StubOperationsAPI
 
     def chunkSize: Int
     
-    private case class StubDatasetMask[X](userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
+    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[X] = this
       
-      def realize(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
-        fullProjection[X](userUID, path) collect unlift(mask)
+      def realize(expiresAt: Long)(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
+        fullProjection(userUID, path, expiresAt) collect unlift(mask)
       }
       
       private def mask(sev: SEvent): Option[SEvent] = {
@@ -122,10 +120,10 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
+    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
       DatasetEnum(akka.dispatch.Promise.successful(readJSON[X](path)))
     
-    def mask[X](userUID: String, path: Path): DatasetMask[X] = StubDatasetMask(userUID, path, Vector())
+    def mask(userUID: String, path: Path): DatasetMask[X] = StubDatasetMask(userUID, path, Vector())
     
     private def readJSON[X](path: Path) = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))

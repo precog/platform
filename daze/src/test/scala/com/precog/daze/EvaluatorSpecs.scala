@@ -27,6 +27,7 @@ import org.specs2.mutable._
 
 import java.io.File
 
+import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
@@ -65,7 +66,10 @@ class EvaluatorSpecs extends Specification
   
   val testUID = "testUID"
 
-  def testEval = consumeEval(testUID, _: DepGraph)
+  def testEval = consumeEval(testUID, _: DepGraph) match {
+    case Success(results) => results
+    case Failure(error) => throw error
+  }
 
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -2179,15 +2183,15 @@ class EvaluatorSpecs extends Specification
   }
 
   "sortByIdentities" should {
-    def consumeToList(d: DatasetEnum[Unit, SEvent, IO]): List[SEvent] ={
+    def consumeToList[X](d: DatasetEnum[X, SEvent, IO]): List[SEvent] ={
       val enum = Await.result(d.fenum, intToDurationInt(5).seconds)
-      (consume[Unit, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
+      (consume[X, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
     }
 
     "order the numbers set by specified identities" in {
       withMemoizationContext { ctx =>
         val numbers = {
-          val base = eval[Unit]("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+          val base = eval("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
           base.zipWithIndex map {
             case ((_, sv), id) => (VectorCase(id): Identities, sv)
           }

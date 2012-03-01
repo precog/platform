@@ -62,7 +62,7 @@ class PlatformSpecs extends Specification
     with LevelDBQueryComponent 
     with DiskMemoizationComponent {
 
-  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  lazy val controlTimeout = Duration(15, "seconds")      // it's just unreasonable to run tests longer than this
   trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig 
 
   object yggConfig extends YggConfig {
@@ -70,8 +70,8 @@ class PlatformSpecs extends Specification
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
-    lazy val flatMapTimeout = controlTimeout
-    lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    lazy val flatMapTimeout = Duration(100, "seconds")
+    lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     lazy val sortWorkDir = scratchDir
     lazy val chunkSerialization = SimpleProjectionSerialization
     lazy val memoizationBufferSize = sortBufferSize
@@ -333,7 +333,10 @@ class PlatformSpecs extends Specification
     val tree = compile(str)
     tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
-    consumeEval("dummyUID", dag)
+    consumeEval("dummyUID", dag) match {
+      case Success(result) => result
+      case Failure(error) => throw error
+    }
   }
   
   def startup() {

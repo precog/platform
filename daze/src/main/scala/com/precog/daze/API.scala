@@ -23,7 +23,7 @@ package daze
 trait OperationsAPI extends StorageEngineQueryComponent with DatasetEnumOpsComponent
 
 trait StorageEngineQueryComponent {
-  type QueryAPI <: StorageEngineQueryAPI
+  type QueryAPI <: StorageEngineQueryAPI 
   def query: QueryAPI
 }
 
