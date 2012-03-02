@@ -149,6 +149,7 @@ trait InstructionGenerators extends Instructions {
   } yield res
 
   private lazy val genBuiltIn1 = oneOf(
+    GetMillis,
     TimeZone,
     Season, 
 
@@ -167,6 +168,7 @@ trait InstructionGenerators extends Instructions {
    
     Date,
     YearMonth,
+    YearDayOfYear,
     MonthDay,
     DateHour,
     DateHourMinute,
@@ -181,7 +183,15 @@ trait InstructionGenerators extends Instructions {
   private lazy val genBuiltIn2 = oneOf (
     ChangeTimeZone,
     MillisToISO,
-    TimeDifference)
+
+    YearsBetween, 
+    MonthsBetween, 
+    WeeksBetween, 
+    DaysBetween, 
+    HoursBetween, 
+    MinutesBetween, 
+    SecondsBetween, 
+    MillisBetween)
     
   private lazy val genReduction = oneOf(
     Count,

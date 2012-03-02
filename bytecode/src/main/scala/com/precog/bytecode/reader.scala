@@ -111,6 +111,7 @@ trait BytecodeReader extends Reader {
       }
 
       lazy val builtIn1 = ((code >> 8) & 0xFF) match {
+        case 0x27 => Some(GetMillis)
         case 0x00 => Some(TimeZone)
         case 0x13 => Some(Season)
 
@@ -129,6 +130,7 @@ trait BytecodeReader extends Reader {
 
         case 0x15 => Some(Date)
         case 0x16 => Some(YearMonth)
+        case 0x26 => Some(YearDayOfYear)
         case 0x17 => Some(MonthDay)
         case 0x18 => Some(DateHour)
         case 0x19 => Some(DateHourMinute)
@@ -145,7 +147,15 @@ trait BytecodeReader extends Reader {
       lazy val builtIn2 = ((code >> 8) & 0xFF) match {
         case 0x00 => Some(ChangeTimeZone)
         case 0x01 => Some(MillisToISO)
-        case 0x02 => Some(TimeDifference)
+
+        case 0x02 => Some(YearsBetween)
+        case 0x03 => Some(MonthsBetween)
+        case 0x04 => Some(WeeksBetween)
+        case 0x05 => Some(DaysBetween)
+        case 0x06 => Some(HoursBetween)
+        case 0x07 => Some(MinutesBetween)
+        case 0x08 => Some(SecondsBetween)
+        case 0x09 => Some(MillisBetween)
 
         case _    => None
       }

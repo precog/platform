@@ -129,6 +129,7 @@ trait BytecodeWriter extends Writer with Version {
     }
 
     def builtInOp1(op: BuiltInOp1) = op match {
+      case GetMillis => 0x27
       case TimeZone => 0x00
       case Season => 0x13
 
@@ -147,6 +148,7 @@ trait BytecodeWriter extends Writer with Version {
 
       case Date => 0x15
       case YearMonth => 0x16
+      case YearDayOfYear => 0x26
       case MonthDay => 0x17
       case DateHour => 0x18
       case DateHourMinute => 0x19
@@ -161,7 +163,15 @@ trait BytecodeWriter extends Writer with Version {
     def builtInOp2(op: BuiltInOp2) = op match {
       case ChangeTimeZone => 0x00
       case MillisToISO => 0x01
-      case TimeDifference => 0x02
+
+      case YearsBetween   => 0x02
+      case MonthsBetween  => 0x03
+      case WeeksBetween   => 0x04
+      case DaysBetween    => 0x05
+      case HoursBetween   => 0x06
+      case MinutesBetween => 0x07
+      case SecondsBetween => 0x08
+      case MillisBetween  => 0x09
     }
     
     if (!stream.isEmpty) {

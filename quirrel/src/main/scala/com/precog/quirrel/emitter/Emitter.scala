@@ -370,145 +370,193 @@ trait Emitter extends AST
             //**
             //start of Time functions
             //**
-           case BuiltIn(Time.TimeZone.name, arity, _) =>
+
+           case BuiltIn(DateTime.GetMillis.name, arity, _) =>
+              assert(arity == 1)
+
+              emitUnary(actuals(0), BuiltInFunction1(GetMillis))
+
+           case BuiltIn(DateTime.TimeZone.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(TimeZone))
 
-           case BuiltIn(Time.Season.name, arity, _) =>
+           case BuiltIn(DateTime.Season.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(Season))
 
-            case BuiltIn(Time.Year.name, arity, _) =>
+            case BuiltIn(DateTime.Year.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(Year))
 
-            case BuiltIn(Time.QuarterOfYear.name, arity, _) =>
+            case BuiltIn(DateTime.QuarterOfYear.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(QuarterOfYear))
 
-            case BuiltIn(Time.MonthOfYear.name, arity, _) =>
+            case BuiltIn(DateTime.MonthOfYear.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(MonthOfYear))
 
-            case BuiltIn(Time.WeekOfYear.name, arity, _) =>
+            case BuiltIn(DateTime.WeekOfYear.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(WeekOfYear)) 
               
-            case BuiltIn(Time.WeekOfMonth.name, arity, _) =>
+            case BuiltIn(DateTime.WeekOfMonth.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(WeekOfMonth))
               
-            case BuiltIn(Time.DayOfYear.name, arity, _) =>
+            case BuiltIn(DateTime.DayOfYear.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DayOfYear))
 
-            case BuiltIn(Time.DayOfMonth.name, arity, _) =>
+            case BuiltIn(DateTime.DayOfMonth.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DayOfMonth))
 
-            case BuiltIn(Time.DayOfWeek.name, arity, _) =>
+            case BuiltIn(DateTime.DayOfWeek.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DayOfWeek))
 
-            case BuiltIn(Time.HourOfDay.name, arity, _) =>
+            case BuiltIn(DateTime.HourOfDay.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(HourOfDay))
 
-            case BuiltIn(Time.MinuteOfHour.name, arity, _) =>
+            case BuiltIn(DateTime.MinuteOfHour.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(MinuteOfHour))
 
-            case BuiltIn(Time.SecondOfMinute.name, arity, _) =>
+            case BuiltIn(DateTime.SecondOfMinute.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
 
-            case BuiltIn(Time.MillisOfSecond.name, arity, _) =>
+            case BuiltIn(DateTime.MillisOfSecond.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(MillisOfSecond))
 
-            case BuiltIn(Time.Date.name, arity, _) =>
+            case BuiltIn(DateTime.Date.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(Date))
 
-            case BuiltIn(Time.YearMonth.name, arity, _) =>
+            case BuiltIn(DateTime.YearMonth.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(YearMonth))
+              
+            case BuiltIn(DateTime.YearDayOfYear.name, arity, _) =>
+              assert(arity == 1)
 
-            case BuiltIn(Time.MonthDay.name, arity, _) =>
+              emitUnary(actuals(0), BuiltInFunction1(YearDayOfYear))
+
+            case BuiltIn(DateTime.MonthDay.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(MonthDay))
 
-            case BuiltIn(Time.DateHour.name, arity, _) =>
+            case BuiltIn(DateTime.DateHour.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DateHour))
 
-            case BuiltIn(Time.DateHourMinute.name, arity, _) =>
+            case BuiltIn(DateTime.DateHourMinute.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DateHourMinute))
 
-            case BuiltIn(Time.DateHourMinuteSecond.name, arity, _) =>
+            case BuiltIn(DateTime.DateHourMinuteSecond.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DateHourMinuteSecond))
 
-            case BuiltIn(Time.DateHourMinuteSecondMillis.name, arity, _) =>
+            case BuiltIn(DateTime.DateHourMinuteSecondMillis.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(DateHourMinuteSecondMillis))
 
-            case BuiltIn(Time.TimeWithZone.name, arity, _) =>
+            case BuiltIn(DateTime.TimeWithZone.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(TimeWithZone))
 
-            case BuiltIn(Time.TimeWithoutZone.name, arity, _) =>
+            case BuiltIn(DateTime.TimeWithoutZone.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(TimeWithoutZone))
 
-            case BuiltIn(Time.HourMinute.name, arity, _) =>
+            case BuiltIn(DateTime.HourMinute.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(HourMinute))
 
-            case BuiltIn(Time.HourMinuteSecond.name, arity, _) =>
+            case BuiltIn(DateTime.HourMinuteSecond.name, arity, _) =>
               assert(arity == 1)
 
               emitUnary(actuals(0), BuiltInFunction1(HourMinuteSecond))
 
-            case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
+
+            //start of arity-2 functions
+            case BuiltIn(DateTime.ChangeTimeZone.name, arity, _) =>
               assert(arity == 2)
 
               emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone))
 
-            case BuiltIn(Time.MillisToISO.name, arity, _) =>
+            case BuiltIn(DateTime.MillisToISO.name, arity, _) =>
               assert(arity == 2)
 
               emitMap(actuals(0), actuals(1), BuiltInFunction2(MillisToISO))
 
-            case BuiltIn(Time.TimeDifference.name, arity, _) =>
+            case BuiltIn(DateTime.YearsBetween.name, arity, _) =>
               assert(arity == 2)
 
-              emitMap(actuals(0), actuals(1), BuiltInFunction2(TimeDifference))
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(YearsBetween))
+
+            case BuiltIn(DateTime.MonthsBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(MonthsBetween))
+
+            case BuiltIn(DateTime.WeeksBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(WeeksBetween))
+
+            case BuiltIn(DateTime.DaysBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(DaysBetween))
+
+            case BuiltIn(DateTime.HoursBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(HoursBetween))
+
+            case BuiltIn(DateTime.MinutesBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(MinutesBetween))
+
+            case BuiltIn(DateTime.SecondsBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(SecondsBetween))
+
+            case BuiltIn(DateTime.MillisBetween.name, arity, _) =>
+              assert(arity == 2)
+
+              emitMap(actuals(0), actuals(1), BuiltInFunction2(MillisBetween))
 
 
             case BuiltIn(n, arity, _) =>
