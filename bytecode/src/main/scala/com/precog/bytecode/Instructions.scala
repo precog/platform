@@ -207,7 +207,8 @@ trait Instructions {
 
 
     sealed trait BuiltInOp1
-    
+
+    case object GetMillis extends BuiltInOp1
     case object TimeZone extends BuiltInOp1
     case object Season extends BuiltInOp1
 
@@ -226,6 +227,7 @@ trait Instructions {
 
     case object Date extends BuiltInOp1
     case object YearMonth extends BuiltInOp1
+    case object YearDayOfYear extends BuiltInOp1
     case object MonthDay extends BuiltInOp1
     case object DateHour extends BuiltInOp1
     case object DateHourMinute extends BuiltInOp1
@@ -242,8 +244,18 @@ trait Instructions {
 
     case object ChangeTimeZone extends BuiltInOp2
     case object MillisToISO extends BuiltInOp2
-    case object TimeDifference extends BuiltInOp2
+
+    case object YearsBetween extends BuiltInOp2 
+    case object MonthsBetween extends BuiltInOp2
+    case object WeeksBetween extends BuiltInOp2
+    case object DaysBetween extends BuiltInOp2
+    case object HoursBetween extends BuiltInOp2
+    case object MinutesBetween extends BuiltInOp2
+    case object SecondsBetween extends BuiltInOp2
+    case object MillisBetween extends BuiltInOp2
+
     
+
     sealed trait Type
     
     case object Het extends Type
