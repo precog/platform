@@ -12,6 +12,7 @@ import java.io._
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.Map.Entry
+import java.util.concurrent.TimeoutException
 import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
@@ -158,11 +159,11 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   // ID Traversals //
   ///////////////////
 
-  def traverseIndex[X, E, F[_]](f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
+  def traverseIndex[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
     import MO._
     import MO.MG.bindSyntax._
 
-    new EnumeratorT[X, Vector[E], F] { 
+    new EnumeratorT[X, Vector[E], F] { self =>
       import org.fusesource.leveldbjni.internal.JniDBIterator
       def apply[A] = {
         val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
@@ -178,14 +179,6 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
               buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
               i += 1
             }
-
-//              val buffer = new ArrayBuffer[E](chunkSize)
-//              var i = chunkSize
-//              while (i > 0 && iter.hasNext) {
-//                val n = iter.next
-//                buffer += unproject(n.getKey, n.getValue)(f)
-//                i -= 1
-//              }
             val chunk = Vector(buffer: _*)
             k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter)))
           } else {
@@ -193,7 +186,13 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           } 
 
           s.fold(
-            cont = k => iterateeT(iterF flatMap (next(_, k).value)),
+            cont = k => {
+              if (System.currentTimeMillis >= expiresAt) {
+                iterateeT(iterF.flatMap(iter => MO.promote(IO(iter.close))) >> Monad[F].point(StepT.serr[X, Vector[E], F, A](new TimeoutException("Iteration expired"))))
+              } else {
+                iterateeT(iterF flatMap (next(_, k).value))
+              }
+            },
             done = (_, _) => _done,
             err = _ => _done
           )
@@ -204,26 +203,26 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, Seq[CValue]), F] {
+  def getAllPairs(expiresAt: Long) : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[(Identities, Seq[CValue]), F](expiresAt) {
       (id, b) => (id, b)
     }
   }
 
-  def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = new EnumeratorP[X, Vector[(Identities, CValue)], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
+  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = new EnumeratorP[X, Vector[(Identities, CValue)], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[(Identities, CValue), F](expiresAt) {
       (id, b) => (id, b(columnIndex))
     }
   }
 
-  def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = new EnumeratorP[X, Vector[Identities], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Identities, F] {
+  def getAllIds(expiresAt: Long) : EnumeratorP[X, Vector[Identities], IO] = new EnumeratorP[X, Vector[Identities], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[Identities, F](expiresAt) {
       (id, b) => id
     }
   }
 
-  def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = new EnumeratorP[X, Vector[Seq[CValue]], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Seq[CValue], F] {
+  def getAllValues(expiresAt: Long) : EnumeratorP[X, Vector[Seq[CValue]], IO] = new EnumeratorP[X, Vector[Seq[CValue]], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[Seq[CValue], F](expiresAt) {
       (id, b) => b
     }
   }

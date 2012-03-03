@@ -8,6 +8,7 @@ import blueeyes.core.service._
 import blueeyes.core.http.MimeTypes.{application, json}
 import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
+import blueeyes.util.Clock
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 import blueeyes.json.xschema._
@@ -66,7 +67,7 @@ trait TokenStorage {
   protected def deleteToken(token: Token): Future[Token]
 }
 
-class TokenManager (val database: Database, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection)(implicit timeout: Timeout, val dispatcher: MessageDispatcher) extends TokenStorage {
+class TokenManager(val database: Database, val clock: Clock, tokensCollection: MongoCollection, deletedTokensCollection: MongoCollection)(implicit timeout: Timeout, val dispatcher: MessageDispatcher) extends TokenStorage {
 
   //TODO: Add expiry settings.
   val tokenCache = Cache.concurrent[String, Token](CacheSettings(ExpirationPolicy(None, None, MILLISECONDS)))

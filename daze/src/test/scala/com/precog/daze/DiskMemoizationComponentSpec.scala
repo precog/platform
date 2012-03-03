@@ -31,6 +31,7 @@ import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent {
+  type X = Throwable
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   implicit val timeout = Timeout(intToDurationInt(30).seconds)
@@ -66,21 +67,21 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
           case JInt(v) => v.toLong * 2
         }
 
-        val enum: EnumeratorP[Unit, Vector[SEvent], IO] = projection.getAllPairs[Unit] map { _ map {
+        val enum = projection.getAllPairs(System.currentTimeMillis + 10000) map { _ map {
           case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
         } }
 
-        ctx.memoizing[Unit, Vector[SEvent]](0) must beLike {
+        ctx.memoizing[X, Vector[SEvent]](0) must beLike {
           case Left(f) => 
             (
-              (f(consume[Unit, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+              (f(consume[X, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                 case (_, v) => v.mapLongOr(-1L)(identity[Long])
               } must_== expected
             ) and (
-              ctx.memoizing[Unit, Vector[SEvent]](0) must beLike {
+              ctx.memoizing[X, Vector[SEvent]](0) must beLike {
                 case Right(d) => 
                   (
-                    (consume[Unit, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
+                    (consume[X, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
                       //case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
                       case (_, v) => v.mapLongOr(-1L)(v => v.toLong) // TODO: re-fix this for BigDecimal if that's really what it's supposed to be
                     } must_== expected

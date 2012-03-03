@@ -37,6 +37,17 @@ object AdSamples {
   val timeISO8601 = List("2010-11-04T15:38:12.782+03:00", "2010-04-22T06:22:38.039+06:30", "2009-05-30T12:31:42.462-09:00", "2009-02-11T22:12:18.493-02:00", "2008-09-19T06:28:31.325+10:00")
   val timeZone = List("-12:00", "-11:00", "-10:00", "-09:00", "-08:00", "-07:00", "-06:00", "-05:00", "-04:00", "-03:00", "-02:00", "-01:00", "+00:00", "+01:00", "+02:00", "+03:00", "+04:00", "+05:00", "+06:00", "+07:00", "+08:00", "+09:00", "+10:00", "+11:00", "+12:00", "+13:00", "+14:00")
   
+  val states = 
+    List("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", 
+    "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MT",  
+    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR",  
+    "MD", "MA", "MI", "MN", "MS", "MO", "PA", "RI", "SC", "SD", "TN",  
+    "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY") 
+
+  val shippingRates = List(5.95,6.95,10.95,24.95)
+  val handlingCharges = List(5.00,7.00,10.00,0)
+
+  val departments = List("sales", "marketing", "operations", "engineering", "manufacturing", "research")
   def gaussianIndex(size: Int): Int = {
     // multiplying by size / 5 means that 96% of the time, the sampled value will be within the range and no second try will be necessary
     val testIndex = (scala.util.Random.nextGaussian * (size / 5)) + (size / 2)
@@ -91,35 +102,6 @@ object AdSamples {
     JField("eventName", oneOf(eventNames).sample.get) :: Nil
   )
   
-  val millisPerDay: Long = 24L * 60 * 60 * 1000
-
-  def earlierTimeFrame = chooseNum(System.currentTimeMillis - (20 * millisPerDay), System.currentTimeMillis - (10 * millisPerDay))
-  def laterTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay), System.currentTimeMillis)
-
-  def toISO8601(time: Long, tz: String): String = {
-    val format = ISODateTimeFormat.dateTime()
-    val timeZone = DateTimeZone.forID(tz.toString)
-    val dateTime = new DateTime(time.toLong, timeZone)
-    format.print(dateTime)
-  }
-
-}
-
-object NewSamples {
-  import AdSamples._
-
-  val states = 
-    List("AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", 
-    "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MT",  
-    "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR",  
-    "MD", "MA", "MI", "MN", "MS", "MO", "PA", "RI", "SC", "SD", "TN",  
-    "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY") 
-
-  val shippingRates = List(5.95,6.95,10.95,24.95)
-  val handlingCharges = List(5.00,7.00,10.00,0)
-
-  val departments = List("sales", "marketing", "operations", "engineering", "manufacturing", "research")
-
   def usersSample() = JObject(
     JField("age", chooseNum(18,100).sample.get  ) :: 
     JField("income", chooseNum(10,250).sample.get * 1000 ) ::  
@@ -161,6 +143,18 @@ object NewSamples {
     JField("userId", chooseNum(12345,12545).sample.get) ::
     JField("income", chooseNum(10,250).sample.get * 1000) :: Nil
   )
+  
+  val millisPerDay: Long = 24L * 60 * 60 * 1000
+
+  def earlierTimeFrame = chooseNum(System.currentTimeMillis - (20 * millisPerDay), System.currentTimeMillis - (10 * millisPerDay))
+  def laterTimeFrame = chooseNum(System.currentTimeMillis - (10 * millisPerDay), System.currentTimeMillis)
+
+  def toISO8601(time: Long, tz: String): String = {
+    val format = ISODateTimeFormat.dateTime()
+    val timeZone = DateTimeZone.forID(tz.toString)
+    val dateTime = new DateTime(time.toLong, timeZone)
+    format.print(dateTime)
+  }
 
 }
 
