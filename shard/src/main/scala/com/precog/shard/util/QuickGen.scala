@@ -25,16 +25,19 @@ import blueeyes.json.Printer
 import blueeyes.json.JsonAST._
 
 object QuickGen extends App {
+  
+  import AdSamples._
+
   val datasets = Map( 
-    ("campaigns"      -> AdSamples.adCampaignSample _),
-    ("organizations"  -> AdSamples.adOrganizationSample _),
-    ("clicks"         -> AdSamples.interactionSample _),
-    ("impressions"    -> AdSamples.interactionSample2 _),
-    ("users"          -> NewSamples.usersSample _),
-    ("orders"         -> NewSamples.ordersSample _),
-    ("payments"       -> NewSamples.paymentsSample _),
-    ("pageViews"      -> NewSamples.pageViewsSample _),
-    ("customers"      -> NewSamples.customersSample _)
+    ("campaigns"      -> adCampaignSample _),
+    ("organizations"  -> adOrganizationSample _),
+    ("clicks"         -> interactionSample _),
+    ("impressions"    -> interactionSample2 _),
+    ("users"          -> usersSample _),
+    ("orders"         -> ordersSample _),
+    ("payments"       -> paymentsSample _),
+    ("pageViews"      -> pageViewsSample _),
+    ("customers"      -> customersSample _)
   )
 
   def usage() {

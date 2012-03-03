@@ -46,6 +46,8 @@ import akka.util.Timeout
 import com.weiglewilczek.slf4s.Logging
 import scalaz.{Success, Failure, Validation}
 import scalaz.effect.IO
+import scalaz.syntax.monad._
+import scalaz.Validation._
 
 import org.streum.configrity.Configuration
 
@@ -145,63 +147,62 @@ trait YggdrasilQueryExecutor
   def startup() = storage.start
   def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
 
-  def execute(userUID: String, query: String) = executeWithError(userUID, query).fold(x => x, x => x)
+  case class StackException(error: StackError) extends Exception(error.toString)
 
-  def executeWithError(userUID: String, query: String): Either[JValue, JValue] = {
-    try {
-      asBytecode(query) match {
-        case Right(bytecode) => 
-          decorate(bytecode) match {
-            case Right(dag)  => Right(evaluateDag(userUID, dag))
-            case Left(error) => 
-              logger.error("A stack error occurred evaluating the query '" + query + "': " + error)
-              Left(JString("Oops! Something unexpected went wrong. We're looking into it."))
-          }
-        
-        case Left(errors) => Left(errors)
+  def execute(userUID: String, query: String): Validation[EvaluationError, JArray] = {
+    import EvaluationError._
+    implicit val M = Validation.validationMonad[EvaluationError]
+
+    val solution: Validation[Throwable, Validation[EvaluationError, JArray]] = Validation.fromTryCatch {
+      asBytecode(query) flatMap { bytecode =>
+        Validation.fromEither(decorate(bytecode)).bimap(
+          error => systemError(StackException(error)),
+          dag   => evaluateDag(userUID, dag).fail.map(systemError(_)).validation
+        ).join
       }
-    } catch {
-      // Need to be more specific here or maybe change execute to explicitly return errors 
-      case ex: Exception => 
-        logger.error("An unexpected error occurred evaluating the query: " + query, ex)
-        Left(JString("Oops! Something unexpected went wrong. We're looking into it."))
-    }
+    } 
+
+    solution.fail.map(systemError(_)).validation.join
   }
 
-  private def evaluateDag(userUID: String, dag: DepGraph): JArray = {
-    JArray(consumeEval(userUID, dag).toList map { _._2 } map { _.toJValue })
+  private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
+    consumeEval(userUID, dag) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
   }
 
-  private def asBytecode(query: String): Either[JValue, Vector[Instruction]] = {
+  private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
     try {
       val tree = compile(query)
-      if (tree.errors.isEmpty) Right(emit(tree)) 
-      else Left(
-        JArray(
-          (tree.errors: Set[Error]) map {
-            case Error(loc, tp) =>
-              JObject(
-                JField("message", JString("Errors occurred compiling your query.")) 
-                :: JField("line", JString(loc.line))
-                :: JField("lineNum", JInt(loc.lineNum))
-                :: JField("colNum", JInt(loc.colNum))
-                :: JField("detail", JString(tp.toString))
-                :: Nil
-              )
-          } toList
+      if (tree.errors.isEmpty) success(emit(tree)) 
+      else failure(
+        UserError(
+          JArray(
+            (tree.errors: Set[Error]) map {
+              case Error(loc, tp) =>
+                JObject(
+                  JField("message", JString("Errors occurred compiling your query.")) 
+                  :: JField("line", JString(loc.line))
+                  :: JField("lineNum", JInt(loc.lineNum))
+                  :: JField("colNum", JInt(loc.colNum))
+                  :: JField("detail", JString(tp.toString))
+                  :: Nil
+                )
+            } toList
+          )
         )
       )
     } catch {
-      case ex: ParseException => Left(
-        JArray(
-          JObject(
-            JField("message", JString("An error occurred parsing your query."))
-            :: JField("line", JString(ex.failures.head.tail.line))
-            :: JField("lineNum", JInt(ex.failures.head.tail.lineNum))
-            :: JField("colNum", JInt(ex.failures.head.tail.colNum))
-            :: JField("detail", JString(ex.mkString))
-            :: Nil
-          ) :: Nil
+      case ex: ParseException => failure(
+        UserError(
+          JArray(
+            JObject(
+              JField("message", JString("An error occurred parsing your query."))
+              :: JField("line", JString(ex.failures.head.tail.line))
+              :: JField("lineNum", JInt(ex.failures.head.tail.lineNum))
+              :: JField("colNum", JInt(ex.failures.head.tail.colNum))
+              :: JField("detail", JString(ex.mkString))
+              :: Nil
+            ) :: Nil
+          )
         )
       )
     }

@@ -73,34 +73,36 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
     }
   }
 
+  def die(x: => Ops#X) = throw x
+
   "sort" should {
     "sort values" in {
       implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
-      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
+      val enumP = enumPStream[Ops#X, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
       val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
 
-      (consume[Unit, Vector[SEvent], IO, List] &= sorted[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("1", "2", "3")
+      (consume[Ops#X, Vector[SEvent], IO, List] &= sorted[IO]).run(die _).unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("1", "2", "3")
     }
   }
 
   "group" should {
     "group values" in {
       implicit val dummyFS = FileSerialization.noop[Vector[(ops.Key, SEvent)]] 
-      val enumP = enumPStream[Unit, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
+      val enumP = enumPStream[Ops#X, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
       val keyf: SEvent => List[SValue] = { ev => 
         ev._2.mapStringOr(List(SInt(0)))(s => List(SInt(s.toInt % 2)))
       }
 
       val grouped = Await.result((ops.group(DatasetEnum(Future(enumP), None), 0, BufferingContext.memory(100))(keyf)), intToDurationInt(30).seconds)
 
-      val groups = (consume[Unit, (ops.Key, DatasetEnum[Unit, SEvent, IO]), IO, List] &= grouped[IO]).runOrZero.unsafePerformIO
+      val groups = (consume[Ops#X, (ops.Key, DatasetEnum[Ops#X, SEvent, IO]), IO, List] &= grouped[IO]).run(die _).unsafePerformIO
       groups must haveSize(2)
       groups(0) must beLike {
-        case (List(SLong(0)), enum) => (consume[Unit, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("2")
+        case (List(SLong(0)), enum) => (consume[Ops#X, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).run(die _).unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("2")
       }
 
       groups(1) must beLike {
-        case (List(SLong(1)), enum) => (consume[Unit, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).runOrZero.unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("3", "1")
+        case (List(SLong(1)), enum) => (consume[Ops#X, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).run(die _).unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("3", "1")
       }
     }
   }

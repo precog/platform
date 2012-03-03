@@ -51,24 +51,24 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
   def storage: Storage
 
   trait QueryAPI extends StorageEngineQueryAPI {
-    override def fullProjection[X](userUID: String, path: Path)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
+    override def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
         selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
-        sources     <- Future.sequence(selectors.map(s => storage.userMetadataView(userUID).findProjections(path, s).map(p => (s, p.keySet))))
-        enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources)
+        sources     <- Future.sequence(selectors map { s => storage.userMetadataView(userUID).findProjections(path, s) map { p => (s, p.keySet) } })
+        enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources, expiresAt)
       } yield enumerator
     )
 
-    override def mask[X](userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask[X](userUID, path, None, None) 
+    override def mask(userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask(userUID, path, None, None) 
 
-    private case class LevelDBDatasetMask[X](userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
+    private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
       def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
 
       def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
 
       def typed(tpe: SType): DatasetMask[X] = copy(tpe = Some(tpe))
 
-      def realize(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
+      def realize(expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
         def assembleForSelector(selector: JPath, retrieval: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
           DatasetEnum(
             for {
@@ -86,9 +86,9 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
                     case (acc, (s, ds)) => acc + (s -> (acc.getOrElse(s, Set()) ++ ds))
                   }
               }
-              enum        <- assemble[X](path, sources.toSeq) 
+              enum        <- assemble(path, sources.toSeq, expiresAt) 
             } yield {
-              enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } collect { case Some(t) => t } }
+              enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } flatten }
             }
           )
 
@@ -102,20 +102,22 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
             assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
 
-          case (_      , _        ) => fullProjection(userUID, path)
+          case (_      , _        ) => fullProjection(userUID, path, expiresAt)
         }
       }
     }
 
     implicit val mergeOrder = Order[Identities].contramap[SColumn] { case (ids, _) => ids }
 
-    def assemble[X](path: Path, sources: Seq[(JPath, Set[ProjectionDescriptor])])(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
-      def retrieveAndMerge[X](path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
+    def assemble(path: Path, sources: Seq[(JPath, Set[ProjectionDescriptor])], expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
+      def retrieveAndMerge(path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         import scalaz.std.list._
-        for {
+        {for {
           projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
         } yield {
-          mergeAllChunked(projections.map(_.getColumnValues[X](path, selector)).toSeq: _*)
+          mergeAllChunked(projections.map(_.getColumnValues(path, selector, expiresAt)).toSeq: _*)
+        }} recover {
+          case ex => EnumeratorP.pointErr(new RuntimeException("An error occurred retrieving data for " + descriptors, ex))
         }
       }
 
@@ -144,7 +146,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
       implicit val SEventOrder = SEventIdentityOrder
 
-      Future.sequence(mergedFutures) map { en => combine[X](en.toList) }
+      Future.sequence(mergedFutures) map { en => combine(en.toList) }
     }
 
     def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit o: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {

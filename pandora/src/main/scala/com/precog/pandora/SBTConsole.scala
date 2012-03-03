@@ -81,7 +81,10 @@ object SBTConsole {
     
     object query extends QueryAPI 
 
-    def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
+    def eval(str: String): Set[SValue] = evalE(str)  match {
+      case Success(results) => results.map(_._2)
+      case Failure(t) => throw t
+    }
 
     def evalE(str: String) = {
       val tree = compile(str)
