@@ -86,6 +86,18 @@ trait YggdrasilQueryExecutorComponent {
             }
           }
         }
+        kafka {
+          batch {
+            host = localhost
+            port = 9092
+            topic = central_event_store
+          }
+        }
+        zookeeper {
+          hosts = devqclus03.reportgrid.com:2181
+          basepath = [ "com", "precog", "ingest", "v1" ]
+          prefix = test
+        } 
       """)  
       val sortWorkDir = scratchDir
       val chunkSerialization = SimpleProjectionSerialization
@@ -110,8 +122,8 @@ trait YggdrasilQueryExecutorComponent {
           object query extends QueryAPI 
           object storage extends Storage {
             type YggConfig = YggdrasilQueryExecutorConfig
-            val yggConfig = yConfig
-            val yggState = yState
+            lazy val yggConfig = yConfig
+            lazy val yggState = yState
           }
         }}
       }
