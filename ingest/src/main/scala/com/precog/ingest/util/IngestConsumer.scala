@@ -142,7 +142,7 @@ object DirectKafkaProducer extends App {
 
   val topic = "direct_test_topic"
  
-  val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)
+  val sample = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
   val event = Event.fromJValue(Path("/test/"), sample.next._1, StaticTokenManager.rootUID)
   val msg = EventMessage(0,0,event) 
 

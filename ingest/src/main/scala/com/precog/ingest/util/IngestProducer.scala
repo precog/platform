@@ -72,11 +72,11 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       val start = System.nanoTime
 
       val samples = List(
-        ("/campaigns/", DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)),
-        ("/organizations/", DistributedSampleSet(0, sampler = AdSamples.adOrganizationSample _)),
-        ("/impressions/", DistributedSampleSet(0, sampler = AdSamples.interactionSample _)),
-        ("/clicks/", DistributedSampleSet(0, sampler = AdSamples.interactionSample2 _)),
-        ("/events/", DistributedSampleSet(0, sampler = AdSamples.eventsSample _)))
+        ("/campaigns/", DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)),
+        ("/organizations/", DistributedSampleSet(0, sampler = AdSamples.adOrganizationSample)),
+        ("/impressions/", DistributedSampleSet(0, sampler = AdSamples.interactionSample)),
+        ("/clicks/", DistributedSampleSet(0, sampler = AdSamples.interactionSample2)),
+        ("/events/", DistributedSampleSet(0, sampler = AdSamples.eventsSample)))
 
       val testRuns = 0.until(threadCount).map(_ => new TestRun(samples))
 
@@ -96,7 +96,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
     close
   }
 
-  class TestRun(samples: List[(String, DistributedSampleSet)]) extends Runnable {
+  class TestRun(samples: List[(String, DistributedSampleSet[JObject])]) extends Runnable {
     private var errors = 0
     def errorCount = errors
       override def run() {
