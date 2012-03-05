@@ -45,6 +45,8 @@ object PlatformBuild extends Build {
   val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings: _*).dependsOn(ingest, common, quirrel, daze, yggdrasil)
   
+  lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings : _*).dependsOn(ingest, common, quirrel, daze, yggdrasil, shard)
+
   val dist = TaskKey[Unit]("dist", "builds dist")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
   val extractData = TaskKey[String]("extract-data", "Extracts the LevelDB data files used by the tests and the REPL")

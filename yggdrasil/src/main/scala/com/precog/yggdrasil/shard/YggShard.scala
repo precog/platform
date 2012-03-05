@@ -35,32 +35,21 @@ trait YggShardComponent {
   def storage: Storage
 }
 
-trait ActorYggShard extends YggShard with Logging {
+trait ActorYggShard extends
+    YggShard with
+    ActorEcosystem with
+    Logging {
   val pre = "[Yggdrasil Shard]"
-
+  
   def yggState: YggState
-  def yggCheckpoints: YggCheckpoints
-  def batchConsumer: BatchConsumer
 
   lazy implicit val system = ActorSystem("storage_shard")
   lazy implicit val executionContext = ExecutionContext.defaultExecutionContext
   lazy implicit val dispatcher = system.dispatcher
 
-  lazy val ingestActor: ActorRef = system.actorOf(Props(new KafkaShardIngestActor(yggCheckpoints, batchConsumer)), "shard_ingest")
-
-  lazy val routingTable: RoutingTable = SingleColumnProjectionRoutingTable
-  lazy val routingActor: ActorRef = system.actorOf(Props(new RoutingActor(routingTable, ingestActor, projectionActors, ingestActor, system.scheduler)), "router")
-
-  lazy val initialClock = yggCheckpoints.latestCheckpoint.messageClock
-
-  lazy val projectionActors: ActorRef = system.actorOf(Props(new ProjectionActors(yggState.descriptorLocator, yggState.descriptorIO, system.scheduler)), "projections")
-
-  lazy val metadataActor: ActorRef = system.actorOf(Props(new ShardMetadataActor(yggState.metadata, initialClock)), "metadata")
-  lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor)
+  private val metadata: StorageMetadata = new ShardMetadata(metadataActor)
   def userMetadataView(uid: String): MetadataView = new UserMetadataView(uid, UnlimitedAccessControl, metadata)
   
-  lazy val metadataSerializationActor: ActorRef = system.actorOf(Props(new MetadataSerializationActor(yggCheckpoints, yggState.metadataIO)), "metadata_serializer")
-
   val metadataSyncPeriod = Duration(1, "minutes")
   
   lazy val metadataSyncCancel = system.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
@@ -110,7 +99,7 @@ trait ActorYggShard extends YggShard with Logging {
       _  <- routingActorStop
       _  <- flushMetadata 
       _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionActors, "projection")
+      _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
       _  <- Future {
@@ -130,9 +119,9 @@ trait ActorYggShard extends YggShard with Logging {
   }
   
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
-    (projectionActors ? AcquireProjection(descriptor)) flatMap {
+    (projectionsActor ? AcquireProjection(descriptor)) flatMap {
       case ProjectionAcquired(actorRef) =>
-        projectionActors ! ReleaseProjection(descriptor)
+        projectionsActor ! ReleaseProjection(descriptor)
         (actorRef ? ProjectionGet).mapTo[Projection]
       
       case ProjectionError(err) =>

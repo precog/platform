@@ -206,7 +206,13 @@ trait REPL extends LineErrors
 
 object Console extends App {
   val controlTimeout = Duration(120, "seconds")
-  class REPLConfig(dataDir: Option[String]) extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig {
+  class REPLConfig(dataDir: Option[String]) extends 
+      BaseConfig with 
+      YggEnumOpsConfig with 
+      LevelDBQueryConfig with 
+      DiskMemoizationConfig with 
+      DatasetConsumersConfig with 
+      ProductionActorConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -240,10 +246,10 @@ object Console extends App {
         val yggConfig = yconfig
 
         type Storage = ActorYggShard
-        object storage extends ActorYggShard {
-          val yggState = shardState
-          val yggCheckpoints = new TestYggCheckpoints
-          val batchConsumer = BatchConsumer.NullBatchConsumer
+        object storage extends ActorYggShard with StandaloneActorEcosystem {
+          type YggConfig = REPLConfig
+          lazy val yggConfig = yconfig
+          lazy val yggState = shardState
         }
 
         object ops extends Ops 

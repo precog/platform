@@ -32,7 +32,13 @@ import scalaz.Validation._
 
 import org.streum.configrity.Configuration
 
-trait YggdrasilQueryExecutorConfig extends YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with KafkaIngestConfig with BaseConfig with DatasetConsumersConfig{
+trait YggdrasilQueryExecutorConfig extends 
+    YggEnumOpsConfig with 
+    LevelDBQueryConfig with 
+    DiskMemoizationConfig with 
+    ProductionActorConfig with
+    DatasetConsumersConfig with
+    BaseConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -79,20 +85,14 @@ trait YggdrasilQueryExecutorComponent {
         state map { yState => new YggdrasilQueryExecutor {
           lazy val actorSystem = ActorSystem("akka_ingest_server")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
           val yggConfig = yConfig
-          val centralZookeeperHosts = yConfig.config[String]("precog.kafka.consumer.zk.connect", "localhost:2181") 
-
-          private val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
           object ops extends Ops 
           object query extends QueryAPI 
           object storage extends Storage {
+            type YggConfig = YggdrasilQueryExecutorConfig
+            val yggConfig = yConfig
             val yggState = yState
-            //val kafkaIngestConfig = yConfig
-            val shardId = "shard" + System.getProperty("precog.shard.suffix", "")
-            val yggCheckpoints = new SystemCoordinationYggCheckpoints(shardId, coordination) 
-            val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, yggConfig.kafkaEventTopic) 
           }
         }}
       }
@@ -121,7 +121,7 @@ trait YggdrasilQueryExecutor
     with Logging { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  trait Storage extends ActorYggShard with KafkaIngester
+  trait Storage extends ActorYggShard with ProductionActorEcosystem
 
   val actorSystem: ActorSystem
 

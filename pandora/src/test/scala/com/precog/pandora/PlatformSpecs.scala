@@ -41,10 +41,16 @@ class PlatformSpecs extends Specification
     with AkkaIngestServer 
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
-    with DiskMemoizationComponent {
+    with DiskMemoizationComponent { platformSpecs =>
 
   lazy val controlTimeout = Duration(15, "seconds")      // it's just unreasonable to run tests longer than this
-  trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig 
+  trait YggConfig extends 
+    BaseConfig with 
+    YggEnumOpsConfig with 
+    LevelDBQueryConfig with 
+    DiskMemoizationConfig with 
+    DatasetConsumersConfig with
+    ProductionActorConfig
 
   object yggConfig extends YggConfig {
     lazy val config = Configuration parse {
@@ -63,10 +69,10 @@ class PlatformSpecs extends Specification
   lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
   type Storage = ActorYggShard
-  object storage extends ActorYggShard {
+  object storage extends ActorYggShard with StandaloneActorEcosystem {
+    type YggConfig = platformSpecs.YggConfig
+    lazy val yggConfig = platformSpecs.yggConfig
     lazy val yggState = shardState 
-    lazy val yggCheckpoints = new TestYggCheckpoints
-    lazy val batchConsumer = BatchConsumer.NullBatchConsumer
   }
   
   object ops extends Ops 
