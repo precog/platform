@@ -10,15 +10,15 @@ object QuickGen extends App {
   import AdSamples._
 
   val datasets = Map( 
-    ("campaigns"      -> adCampaignSample _),
-    ("organizations"  -> adOrganizationSample _),
-    ("clicks"         -> interactionSample _),
-    ("impressions"    -> interactionSample2 _),
-    ("users"          -> usersSample _),
-    ("orders"         -> ordersSample _),
-    ("payments"       -> paymentsSample _),
-    ("pageViews"      -> pageViewsSample _),
-    ("customers"      -> customersSample _)
+    ("campaigns"      -> adCampaignSample),
+    ("organizations"  -> adOrganizationSample),
+    ("clicks"         -> interactionSample),
+    ("impressions"    -> interactionSample2),
+    ("users"          -> usersSample),
+    ("orders"         -> ordersSample),
+    ("payments"       -> paymentsSample),
+    ("pageViews"      -> pageViewsSample),
+    ("customers"      -> customersSample)
   )
 
   def usage() {
