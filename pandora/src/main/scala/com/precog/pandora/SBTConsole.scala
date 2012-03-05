@@ -39,7 +39,7 @@ import yggdrasil._
 import yggdrasil.shard._
 
 object SBTConsole {
-  val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent with DiskMemoizationComponent with DAGPrinter {
+  val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent with DiskMemoizationComponent with DAGPrinter { console =>
     import akka.dispatch.Await
     import akka.util.Duration
     import scalaz._
@@ -53,7 +53,14 @@ object SBTConsole {
 
     lazy val controlTimeout = Duration(30, "seconds")
 
-    trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig
+    trait YggConfig extends 
+        BaseConfig with 
+        YggEnumOpsConfig with 
+        LevelDBQueryConfig with 
+        DiskMemoizationConfig with 
+        DatasetConsumersConfig with
+        ProductionActorConfig
+
     object yggConfig extends YggConfig {
       lazy val config = Configuration parse {
         Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
@@ -71,10 +78,10 @@ object SBTConsole {
     val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
     
     type Storage = ActorYggShard
-    object storage extends ActorYggShard {
+    object storage extends ActorYggShard with StandaloneActorEcosystem {
+      type YggConfig = console.YggConfig
+      val yggConfig = console.yggConfig
       val yggState = shardState
-      val yggCheckpoints = new TestYggCheckpoints
-      val batchConsumer = BatchConsumer.NullBatchConsumer
     }
     
     object ops extends Ops 

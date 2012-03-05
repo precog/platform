@@ -41,69 +41,6 @@ import org.streum.configrity.JProperties
 import scalaz._
 import Scalaz._
 
-trait KafkaIngestConfig extends Config {
-  def kafkaEnabled = config("precog.kafka.enabled", false) 
-  def kafkaEventTopic = config[String]("precog.kafka.topic.events")
-  def kafkaConsumerConfig: Properties = JProperties.configurationToProperties(config.detach("precog.kafka.consumer"))
-}
-
-class KafkaIngest(config: KafkaIngestConfig, router: ActorRef) extends Runnable with Logging {
-  private lazy val consumer = initConsumer
-
-  def initConsumer = {
-    val consumerConfig= new ConsumerConfig(config.kafkaConsumerConfig)
-    val consumer = Consumer.create(consumerConfig)
-    consumer
-  }
-
-  def run {
-    val rawEventsTopic = config.kafkaEventTopic 
-
-    val streams = consumer.createMessageStreams(Map(rawEventsTopic -> 1))
-
-    for(rawStreams <- streams.get(rawEventsTopic); stream <- rawStreams; message <- stream) {
-      val msg = IngestMessageSerialization.read(message.payload)
-      router ! msg 
-    }
-  }
-
-  def requestStop {
-    consumer.shutdown
-  }
-}
-
-class NewKafkaIngest(checkpoints: YggCheckpoints, config: KafkaIngestConfig, router: ActorRef)(implicit dispatcher: MessageDispatcher) extends Logging {
-
-  private lazy val ingester = {
-    val batchConsumer = new KafkaBatchConsumer("devqclus03.reportgrid.com", 9092, config.kafkaEventTopic)
-    new KafkaBatchIngester(batchConsumer)(ingestMessages _)
-  }
-
-  def start() = ingester.start(checkpoints.latestCheckpoint.offset)
-
-  def stop() = ingester.stop()
-
-  def ingestMessages(messages: List[MessageAndOffset]) {
-    if(!messages.isEmpty) {
-      messages.foreach { msg =>
-        router ! IngestMessageSerialization.read(msg.message.payload)
-      }
-      val newOffset = messages.last.offset
-      checkpoints.messagesConsumed(YggCheckpoint(newOffset, VectorClock.empty)) 
-    }
-  }
-}
-
-// shard ingest flow
-// - consume from kafka
-// - pass to router 
-// -- split to metadata and leveldb
-// -- when in leveldb notify metadata
-// 
-// other issues
-// - when is data 'in leveldb'
-// - what is the last metadata safe point
-
 trait YggCheckpoints {
 
   protected var lastCheckpoint = YggCheckpoint(0L, VectorClock.empty)

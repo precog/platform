@@ -154,7 +154,7 @@ object RoutingActor {
 case object ControlledStop
 case class AwaitShutdown(replyTo: ActorRef)
 
-class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler) extends Actor with Logging {
+class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
   
   import RoutingActor._
 
@@ -172,7 +172,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
         replyTo ! ()
       } else {
         logger.debug("Routing actor shutdown - Pending inserts (%d)".format(inserted.size)) 
-        scheduler.scheduleOnce(Duration(1, "second"), self, as)
+        scheduler.scheduleOnce(shutdownCheck, self, as)
       }
 
     case CheckMessages =>
