@@ -77,7 +77,7 @@ trait BytecodeWriter extends Writer with Version {
       
       case WrapArray => 0x61
 
-      case BuiltInFunction1(op) => 0xB0 | (builtInOp1(op) << 8)
+      case BuiltInFunction1Op(op) => 0xB0 | (op.opcode << 8)
     }
     
     def binaryOpNum(op: BinaryOperation) = op match {
@@ -107,7 +107,7 @@ trait BytecodeWriter extends Writer with Version {
       case DerefObject => 0xA0
       case DerefArray => 0xA1
 
-      case BuiltInFunction2(op) => 0xB1 | (builtInOp2(op) << 8)
+      case BuiltInFunction2Op(op) => 0xB1 | (op.opcode << 8)
     }
     
     def reductionNum(red: Reduction) = red match {
@@ -128,52 +128,6 @@ trait BytecodeWriter extends Writer with Version {
       case Het => 0x00
     }
 
-    def builtInOp1(op: BuiltInOp1) = op match {
-      case GetMillis => 0x27
-      case TimeZone => 0x00
-      case Season => 0x13
-
-      case Year => 0x01
-      case QuarterOfYear => 0x02
-      case MonthOfYear => 0x03
-      case WeekOfYear => 0x04
-      case WeekOfMonth => 0x14
-      case DayOfYear => 0x10
-      case DayOfMonth => 0x05
-      case DayOfWeek => 0x06
-      case HourOfDay => 0x07
-      case MinuteOfHour => 0x08
-      case SecondOfMinute => 0x09
-      case MillisOfSecond => 0x11
-
-      case Date => 0x15
-      case YearMonth => 0x16
-      case YearDayOfYear => 0x26
-      case MonthDay => 0x17
-      case DateHour => 0x18
-      case DateHourMinute => 0x19
-      case DateHourMinuteSecond => 0x20
-      case DateHourMinuteSecondMillis => 0x21
-      case TimeWithZone => 0x22
-      case TimeWithoutZone => 0x23
-      case HourMinute => 0x24
-      case HourMinuteSecond => 0x25
-    }
-
-    def builtInOp2(op: BuiltInOp2) = op match {
-      case ChangeTimeZone => 0x00
-      case MillisToISO => 0x01
-
-      case YearsBetween   => 0x02
-      case MonthsBetween  => 0x03
-      case WeeksBetween   => 0x04
-      case DaysBetween    => 0x05
-      case HoursBetween   => 0x06
-      case MinutesBetween => 0x07
-      case SecondsBetween => 0x08
-      case MillisBetween  => 0x09
-    }
-    
     if (!stream.isEmpty) {
       val (opcode, pad, arg) = stream.head match {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))

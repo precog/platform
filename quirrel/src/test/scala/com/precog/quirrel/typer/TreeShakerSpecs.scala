@@ -1,10 +1,12 @@
-package com.precog.quirrel
+package com.precog
+package quirrel
 package typer
 
+import bytecode.RandomLibrary
 import org.specs2.mutable.Specification
 import edu.uwm.cs.gll.LineStream
 
-object TreeShakerSpecs extends Specification with StubPhases with TreeShaker {
+object TreeShakerSpecs extends Specification with StubPhases with TreeShaker with RandomLibrary {
   import ast._
   
   "tree shaking" should {

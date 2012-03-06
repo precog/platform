@@ -47,7 +47,7 @@ trait MemoizingEvaluationContext extends EvaluationContext with MemoizationCompo
   }
 }
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext { self =>
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with ImplLibrary { self =>
   type X = QueryAPI#X
 
   import Function._
@@ -116,16 +116,16 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         })
       }
 
-      case Operate(_, BuiltInFunction1(op), parent) => {
+      case Operate(_, BuiltInFunction1Op(op), parent) => {
         val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>
-          builtInOp1Type(op) map mask.typed getOrElse mask
+          op.tpe map mask.typed getOrElse mask
         }
         val enum = maybeRealize(parentResTyped, ctx)
 
         def opPerform(sev: SEvent): Option[SEvent] = {
           val (id, sv) = sev
-          performBuiltInOp1(op, sv) map { sv => (id, sv) }
+          op.f.lift(sv) map { sv => (id, sv) }
         }
 
         Right(enum collect unlift(opPerform))
@@ -452,11 +452,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2(MillisToISO) => (Some(SDecimal), Some(SString))
-    
-    case BuiltInFunction2(ChangeTimeZone) => (Some(SString), Some(SString))
-
-    case BuiltInFunction2(YearsBetween | MonthsBetween | WeeksBetween | DaysBetween | HoursBetween | MinutesBetween | SecondsBetween | MillisBetween) => (Some(SString), Some(SString))
+    case BuiltInFunction2Op(f) => f.tpe
   }
   
   private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
@@ -464,39 +460,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case Comp                => Some(SBoolean)
     case Neg                 => Some(SDecimal)
     case WrapArray           => None
-    case BuiltInFunction1(_) => Some(SString)
-  }
-
-  private def builtInOp1Type(op: BuiltInOp1): Option[SType] = op match {
-    case GetMillis      => Some(SString)
-    case TimeZone       => Some(SString)
-    case Season         => Some(SString)
-
-    case Year           => Some(SString)
-    case QuarterOfYear  => Some(SString)
-    case MonthOfYear    => Some(SString)
-    case WeekOfYear     => Some(SString)
-    case WeekOfMonth    => Some(SString)
-    case DayOfYear      => Some(SString)
-    case DayOfMonth     => Some(SString)
-    case DayOfWeek      => Some(SString)
-    case HourOfDay      => Some(SString)
-    case MinuteOfHour   => Some(SString)
-    case SecondOfMinute => Some(SString)
-    case MillisOfSecond => Some(SString)
-
-    case Date                       => Some(SString)
-    case YearMonth                  => Some(SString)
-    case YearDayOfYear              => Some(SString)
-    case MonthDay                   => Some(SString)
-    case DateHour                   => Some(SString)
-    case DateHourMinute             => Some(SString)
-    case DateHourMinuteSecond       => Some(SString)
-    case DateHourMinuteSecondMillis => Some(SString)
-    case TimeWithZone               => Some(SString)
-    case TimeWithoutZone            => Some(SString)
-    case HourMinute                 => Some(SString)
-    case HourMinuteSecond           => Some(SString)
+    case BuiltInFunction1Op(f) => f.tpe
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -598,249 +562,10 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         case _ => None
       }
 
-      case BuiltInFunction2(ChangeTimeZone) => {
-        case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => {
-          val format = ISODateTimeFormat.dateTime()
-          val timeZone = DateTimeZone.forID(tz)
-          val dateTime = new DateTime(time, timeZone)
-          Some(SString(format.print(dateTime)))
-        }
-        case _ => None
-      }
-      case BuiltInFunction2(YearsBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Years.yearsBetween(newTime1, newTime2).getYears
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(WeeksBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Weeks.weeksBetween(newTime1, newTime2).getWeeks
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(DaysBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Days.daysBetween(newTime1, newTime2).getDays
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(HoursBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Hours.hoursBetween(newTime1, newTime2).getHours
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(MinutesBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Minutes.minutesBetween(newTime1, newTime2).getMinutes
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(SecondsBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Seconds.secondsBetween(newTime1, newTime2).getSeconds
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(MonthsBetween) => {
-        case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => {
-          val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-          val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-          val num = Months.monthsBetween(newTime1, newTime2).getMonths
-          Some(SDecimal(num))
-        }
-        case _ => None
-      }
-
-      case BuiltInFunction2(MillisToISO) => {
-        case (SDecimal(time), SString(tz)) if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  {
-          val format = ISODateTimeFormat.dateTime()
-          val timeZone = DateTimeZone.forID(tz)
-          val dateTime = new DateTime(time.toLong, timeZone)
-          Some(SString(format.print(dateTime)))
-        }
-        case _ => None
-      }
+      case BuiltInFunction2Op(op) => Function.untupled(op.f.lift)
     }
   }
 
-  def isValidISO(str: String): Boolean = {
-    try { new DateTime(str); true
-    } catch {
-      case e:IllegalArgumentException => { false }
-    }
-  }
-
-  def isValidTimeZone(str: String): Boolean = {
-    try { DateTimeZone.forID(str); true
-    } catch {
-      case e:IllegalArgumentException => { false }
-    }
-  }
-
-  private def performBuiltInOp1(op: BuiltInOp1, sv: SValue): Option[SValue] = (op, sv) match {
-    case (GetMillis, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.getMillis))
-    }    
-    case (TimeZone, SString(time)) if isValidISO(time) => {
-      val format = DateTimeFormat.forPattern("ZZ")
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SString(format.print(newTime)))
-    }
-    case (Season, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val day = newTime.dayOfYear.get
-      val season = {
-        if (day >= 79 & day < 171) "spring"
-        else if (day >= 171 & day < 265) "summer"
-        else if (day >= 265 & day < 355) "fall"
-        else "winter"
-      }
-      Some(SString(season))
-    }
-    case (Year, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.year().get))
-    }
-    case (QuarterOfYear, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val mo = newTime.monthOfYear.get
-      Some(SDecimal(((mo - 1) / 3) + 1))
-    }
-    case (MonthOfYear, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.monthOfYear().get))
-    }
-    case (WeekOfYear, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.weekOfWeekyear().get))
-    } 
-    case (WeekOfMonth, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val dayOfMonth = newTime.dayOfMonth().get
-      val firstDate = newTime.withDayOfMonth(1)
-      val firstDayOfWeek = firstDate.dayOfWeek().get
-      val offset = firstDayOfWeek - 1
-      val week = ((dayOfMonth + offset) / 7) + 1
-      Some(SDecimal(week))
-    }
-    case (DayOfYear, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.dayOfYear().get))
-    }
-    case (DayOfMonth, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.dayOfMonth().get))
-    }
-    case (DayOfWeek, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.dayOfWeek().get))
-    }
-    case (HourOfDay, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.hourOfDay().get))
-    }
-    case (MinuteOfHour, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.minuteOfHour().get))
-    }
-    case (SecondOfMinute, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.secondOfMinute().get))
-    }
-    case (MillisOfSecond, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      Some(SDecimal(newTime.millisOfSecond().get))
-    }
-    case (Date, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.date()
-      Some(SString(fmt.print(newTime)))
-    }
-    case (YearMonth, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.yearMonth()
-      Some(SString(fmt.print(newTime)))
-    }
-    case (YearDayOfYear, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.ordinalDate()
-      Some(SString(fmt.print(newTime)))
-    }
-    case (MonthDay, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = DateTimeFormat.forPattern("MM-dd")
-      Some(SString(fmt.print(newTime)))
-    }
-   case (DateHour, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.dateHour()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (DateHourMinute, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.dateHourMinute()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (DateHourMinuteSecond, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.dateHourMinuteSecond()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (DateHourMinuteSecondMillis, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (TimeWithZone, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.time()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (TimeWithoutZone, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (HourMinute, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.hourMinute()
-      Some(SString(fmt.print(newTime)))
-    }
-   case (HourMinuteSecond, SString(time)) if isValidISO(time) => {
-      val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-      val fmt = ISODateTimeFormat.hourMinuteSecond()
-      Some(SString(fmt.print(newTime)))
-    }
-   case _ => None
-  }
-  
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
 
