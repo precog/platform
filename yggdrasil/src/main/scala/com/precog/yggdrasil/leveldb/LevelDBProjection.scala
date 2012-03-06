@@ -27,6 +27,8 @@ import com.precog.util.Bijection._
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
+import org.fusesource.leveldbjni.DataWidth
+
 import java.io._
 import java.nio.Buffer
 import java.nio.ByteBuffer
@@ -130,7 +132,8 @@ object LevelDBProjection {
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
   import LevelDBProjection._
 
-  val chunkSize = 32000 //bytes
+  val chunkSize = 32000 // bytes
+  val chunkBuffer = ByteBuffer.allocate(chunkSize)
   val maxOpenFiles = 25
 
   val logger = Logger("col:" + baseDir)
@@ -184,6 +187,8 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
     new EnumeratorT[X, Vector[E], F] { self =>
       import org.fusesource.leveldbjni.internal.JniDBIterator
+      import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
+
       def apply[A] = {
         val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
 
@@ -191,12 +196,11 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(IO(iter.close))) >> s.pointI.value)
 
           @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A]) = if (iter.hasNext) {
-            val buffer = new ArrayBuffer[E](chunkSize)
-            var i = 0
-            val rawChunk: org.fusesource.leveldbjni.KeyValueChunk = iter.nextChunk(chunkSize)
-            while (i < rawChunk.getSize) {
-              buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
-              i += 1
+            val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
+            val chunkIter: java.util.Iterator[KeyValuePair] = iter.nextChunk(chunkBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
+            while (chunkIter.hasNext) {
+              val kvPair = chunkIter.next()
+              buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
             }
             val chunk = Vector(buffer: _*)
             k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter)))
