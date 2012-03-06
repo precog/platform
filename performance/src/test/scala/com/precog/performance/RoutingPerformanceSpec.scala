@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   "routing actor" should {
     
-    "route 10K elements per second".performBatch(100000, 10000) { inserts =>
+    "route 10K elements in 750ms".performBatch(10000, 750) { inserts =>
 
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
 
@@ -30,7 +30,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       val batchSize = 100
 
-      val sampler = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)
+      val sampler = DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)
 
       val samples = 0.until(batchSize) map { _ =>
         sampler.next._1
@@ -56,7 +56,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
       val projectionActors: ActorRef = 
         system.actorOf(Props(new MockProjectionActors(projectionActor)), "mock_projections_actor")
 
-      val routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+      val routingTable: RoutingTable = AltSingleColumnProjectionRoutingTable
       val routingActor: ActorRef = 
         system.actorOf(Props(new RoutingActor(routingTable, ingestActor, projectionActors, metadataActor, system.scheduler, Duration(5, "millis"))), "router")
     
