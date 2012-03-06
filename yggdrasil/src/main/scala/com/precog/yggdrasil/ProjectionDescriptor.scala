@@ -188,6 +188,9 @@ trait ProjectionDescriptorSerialization {
 }
 
 object ProjectionDescriptor extends ProjectionDescriptorSerialization {
+
+  def trustedApply(identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): ProjectionDescriptor = ProjectionDescriptor(identities, indexedColumns, sorting)
+
   def apply(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): Validation[String, ProjectionDescriptor] = {
     val identities = indexedColumns.values.toSeq.sorted.foldLeft(Option(0)) {
       // test that identities are 0-based and sequential

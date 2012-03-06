@@ -177,16 +177,16 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
 
     case CheckMessages =>
       if(!inShutdown) {
-        logger.debug("Routing Actor - Check Messages")
+        //logger.debug("Routing Actor - Check Messages")
         ingestActor ! GetMessages(self)
       }
     
     case NoMessages =>
-      logger.debug("Routing Actor - No Messages")
+      //logger.debug("Routing Actor - No Messages")
       scheduleNextCheck
     
     case Messages(messages) =>
-      logger.debug("Routing Actor - Processing Message Batch (%d)".format(messages.size))
+      //logger.debug("Routing Actor - Processing Message Batch (%d)".format(messages.size))
       processMessages(messages)
       sender ! ()
     
@@ -203,36 +203,46 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
   }
 
   def processMessages(messages: Seq[IngestMessage]) {
-    messages foreach {
-      case SyncMessage(_, _, _) => // TODO
+    var m = 0
+    while(m < messages.size) {
+      messages(m) match {
+        case SyncMessage(_, _, _) => // TODO
 
-      case em @ EventMessage(eventId, _) =>
-        val projectionUpdates = routingTable.route(em)
-        
-        markInsertsPending(eventId, projectionUpdates.size)  
+        case em @ EventMessage(eventId, _) =>
 
-        for (ProjectionData(descriptor, identities, values, metadata) <- projectionUpdates) {
-          val acquire = projectionActors ? AcquireProjection(descriptor)
-          acquire.onComplete { 
-            case Left(t) =>
-              logger.error("Exception acquiring projection actor: ", t)
+          val projectionUpdates = routingTable.route(em)
+          
+          markInsertsPending(eventId, projectionUpdates.size)  
 
-            case Right(ProjectionAcquired(proj)) => 
-              val fut = proj ? ProjectionInsert(identities, values)
-              fut.onComplete { _ => 
-                self ! InsertComplete(eventId, descriptor, values, metadata)
-                projectionActors ! ReleaseProjection(descriptor)
-              }
-              
-            case Right(ProjectionError(errs)) =>
-              for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
+          var cnt = 0
+          while(cnt < projectionUpdates.length) {
+            val pd = projectionUpdates(cnt)
+            val acquire = projectionActors ? AcquireProjection(pd.descriptor)
+            acquire.onComplete { 
+              case Left(t) =>
+                logger.error("Exception acquiring projection actor: ", t)
+
+              case Right(ProjectionAcquired(proj)) => 
+                val fut = proj ? ProjectionInsert(pd.identities, pd.values)
+                fut.onComplete { _ => 
+                  self ! InsertComplete(eventId, pd.descriptor, pd.values, pd.metadata)
+                  projectionActors ! ReleaseProjection(pd.descriptor)
+                }
+                
+              case Right(ProjectionError(errs)) =>
+                for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
+            }
+            cnt += 1
           }
-        }
+      }
+      m += 1
     }
   }
 
-  private var expectation = Map[EventId, Int]()
-  private var inserted = Map[EventId, List[InsertComplete]]()
+  import scala.collection.mutable
+
+  private var expectation = mutable.Map[EventId, Int]()
+  private val inserted = mutable.Map[EventId, mutable.ListBuffer[InsertComplete]]()
 
   def markInsertsPending(eventId: EventId, expected: Int) { 
     expectation += (eventId -> expected)
@@ -240,7 +250,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
 
   def markInsertComplete(insert: InsertComplete) { 
     val eventId = insert.eventId
-    val inserts = inserted.get(eventId) map { _ :+ insert } getOrElse(List(insert))
+    val inserts = inserted.get(eventId) map { _ += insert } getOrElse(mutable.ListBuffer(insert))
     if(inserts.size >= expectation(eventId)) {
       expectation -= eventId
       inserted -= eventId
@@ -250,7 +260,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
       inserted += (eventId -> inserts) 
     }
     if(expectation.isEmpty) {
-      logger.debug("Batch complete")
+      //logger.debug("Batch complete")
       self ! CheckMessages
     }
   }
