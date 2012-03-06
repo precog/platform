@@ -126,6 +126,7 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
 
+  override val hashCode: Int = scala.runtime.ScalaRunTime._hashCode(ProjectionDescriptor.this)
 }
 
 trait ProjectionDescriptorSerialization {

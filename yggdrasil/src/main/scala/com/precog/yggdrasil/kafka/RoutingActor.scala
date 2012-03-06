@@ -66,19 +66,22 @@ import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 import scalaz.MonadPartialOrder._
 
+import scala.collection.mutable.ListBuffer
 
 case object CheckMessages
 
 case class AcquireProjection(descriptor: ProjectionDescriptor)
+case class AcquireProjectionBatch(descriptors: Iterable[ProjectionDescriptor])
 case class ReleaseProjection(descriptor: ProjectionDescriptor) 
+case class ReleaseProjectionBatch(descriptors: Array[ProjectionDescriptor]) 
 
 trait ProjectionResult
 
 case class ProjectionAcquired(proj: ActorRef) extends ProjectionResult
+case class ProjectionBatchAcquired(projs: Map[ProjectionDescriptor, ActorRef]) extends ProjectionResult
 case class ProjectionError(ex: NonEmptyList[Throwable]) extends ProjectionResult
 
 class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO, scheduler: Scheduler) extends Actor with Logging {
-
 
   def receive = {
 
@@ -86,10 +89,38 @@ class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descripto
       val proj = projectionActor(descriptor)
       mark(proj)
       sender ! proj
+    
+    case AcquireProjectionBatch(descriptors) =>
+      var result = Map.empty[ProjectionDescriptor, ActorRef] 
+      var errors = ListBuffer.empty[ProjectionError]
+      
+      val descItr = descriptors.iterator
+     
+      while(descItr.hasNext && errors.size == 0) {
+        val desc = descItr.next
+        val proj = projectionActor(desc)
+        mark(proj)
+        proj match {
+          case ProjectionAcquired(proj) => result += (desc -> proj)
+          case pe @ ProjectionError(_)  => errors += pe
+        }
+      }
+
+      if(errors.size == 0) {
+        sender ! ProjectionBatchAcquired(result) 
+      } else {
+        sender ! errors(0)
+      }
 
     case ReleaseProjection(descriptor: ProjectionDescriptor) =>
       unmark(projectionActor(descriptor))
-
+    
+    case ReleaseProjectionBatch(descriptors: Array[ProjectionDescriptor]) =>
+      var cnt = 0
+      while(cnt < descriptors.length) {
+        unmark(projectionActor(descriptors(cnt)))
+        cnt += 1
+      }
   }
 
   def mark(result: ProjectionResult): Unit = result match {
@@ -187,18 +218,78 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
     
     case Messages(messages) =>
       //logger.debug("Routing Actor - Processing Message Batch (%d)".format(messages.size))
-      processMessages(messages)
+      batchProcessMessages(messages)
       sender ! ()
     
     case ic @ InsertComplete(_, _, _, _) =>
       //logger.debug("Insert Complete")
       markInsertComplete(ic)
+    
+    case ibc @ InsertBatchComplete(inserts) =>
+      var i = 0
+      while(i < inserts.size) {
+        markInsertComplete(inserts(i))
+        i += 1
+      }
 
   }
 
   def scheduleNextCheck {
     if(!inShutdown) {
       scheduler.scheduleOnce(Duration(1, "second"), self, CheckMessages)
+    }
+  }
+
+  def batchProcessMessages(messages: Seq[IngestMessage]) {
+    import scala.collection.mutable
+
+    var actions = mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
+
+    var m = 0
+    while(m < messages.size) {
+      messages(m) match {
+        case SyncMessage(_, _, _) => // TODO
+
+        case em @ EventMessage(eventId, _) =>
+
+          val projectionUpdates = routingTable.route(em)
+          markInsertsPending(eventId, projectionUpdates.size)  
+
+          var i = 0
+          while(i < projectionUpdates.size) {
+            val update = projectionUpdates(i)
+            val insert = ProjectionInsert(update.identities, update.values)
+            val complete = InsertComplete(eventId, update.descriptor, update.values, update.metadata)
+            val (inserts, completes) = actions.get(update.descriptor) getOrElse { (Vector.empty, Vector.empty) }
+            val newActions = (inserts :+ insert, completes :+ complete) 
+            actions += (update.descriptor -> newActions)
+            i += 1
+          }
+      }
+      m += 1
+    }
+
+    val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
+    acquire.onComplete { 
+      case Left(t) =>
+        logger.error("Exception acquiring projection actor: ", t)
+
+      case Right(ProjectionBatchAcquired(actorMap)) => 
+        
+        val descItr = actions.keys.iterator
+        while(descItr.hasNext) {
+          val desc = descItr.next
+          val (inserts, completes) = actions(desc)
+          val actor = actorMap(desc)
+          val fut = actor ? ProjectionBatchInsert(inserts)
+          fut.onComplete { _ => 
+            self ! InsertBatchComplete(completes)
+            projectionActors ! ReleaseProjection(desc)
+          }
+        }
+        
+      case Right(ProjectionError(errs)) =>
+        for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
     }
   }
 
@@ -211,7 +302,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
         case em @ EventMessage(eventId, _) =>
 
           val projectionUpdates = routingTable.route(em)
-          
+
           markInsertsPending(eventId, projectionUpdates.size)  
 
           var cnt = 0
@@ -267,6 +358,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
 }
 
 case class InsertComplete(eventId: EventId, descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+case class InsertBatchComplete(inserts: Seq[InsertComplete])
 
 class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
 
