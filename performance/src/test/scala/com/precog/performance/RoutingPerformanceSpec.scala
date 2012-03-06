@@ -5,6 +5,7 @@ import org.specs2.mutable.Specification
 import com.precog.analytics.Path
 import com.precog.common._
 import com.precog.common.util._
+import com.precog.yggdrasil._
 import com.precog.yggdrasil.kafka._
 import com.precog.yggdrasil.shard._
 
@@ -22,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   "routing actor" should {
     
-    "route 10K elements in 750ms".performBatch(10000, 750) { inserts =>
+    "route 100K elements in 2.5s".performBatch(100000, 2500) { inserts =>
 
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
 
@@ -96,6 +97,8 @@ class MockIngestActor(toSend: Int, barrier: CountDownLatch, messageBatch: Seq[In
         barrier.countDown
         replyTo ! NoMessages
       }
+    case ()                    =>
+
     case x                     =>  println("Unplanned ingest actor action: " + x.getClass.getName)
   }
 }
@@ -104,6 +107,13 @@ class MockProjectionActors(projectionActor: ActorRef) extends Actor {
   def receive = {
     case AcquireProjection(desc) =>
       sender ! ProjectionAcquired(projectionActor)
+    case AcquireProjectionBatch(descs) =>
+      var map = Map.empty[ProjectionDescriptor, ActorRef]
+      val descItr = descs.iterator
+      while(descItr.hasNext) {
+        map += (descItr.next -> projectionActor)
+      }
+      sender ! ProjectionBatchAcquired(map)
     case ReleaseProjection(_) =>
     case _                     =>  println("Unplanned projection actors action")
   } 
@@ -112,6 +122,8 @@ class MockProjectionActors(projectionActor: ActorRef) extends Actor {
 class MockProjectionActor extends Actor {
   def receive = {
     case ProjectionInsert(_,_) =>
+      sender ! ()
+    case ProjectionBatchInsert(_) =>
       sender ! ()
     case _                     =>  println("Unplanned projection actor action")
   }

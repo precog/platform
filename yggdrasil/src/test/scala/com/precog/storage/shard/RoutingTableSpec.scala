@@ -21,43 +21,59 @@ class RoutingTableSpec extends Specification {
       ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
 
     "project an empty event to an empty set of projection actions" in {
-      val rt = SingleColumnProjectionRoutingTable 
+      val rt = AltSingleColumnProjectionRoutingTable 
 
-      rt.route(EventData(0, Set.empty)) must_== Set.empty
+      rt.route(EventData(0, Set.empty)) must_== Array.empty
     }
 
     "project an event with one property to a single projection action" in {
-      val rt = SingleColumnProjectionRoutingTable 
+      val rt = AltSingleColumnProjectionRoutingTable 
+      
+      val jval = JObject(
+        JField("selector", JString("Test")) :: Nil 
+      )
 
-      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Authorities(Set()))
+      val metadata = Map[JPath, Set[UserMetadata]]() +
+                     (JPath(".selector") -> Set.empty[UserMetadata])
+      
+      val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
+      
+      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SStringArbitrary, Authorities(Set("token")))
 
-      val event = EventData(0, Set(ColumnData(colDesc, CString("Test"), Set.empty)))
+      val actions = rt.route(msg)
 
-      val actions = rt.route(event)
-
-      val expected : Set[ProjectionData] = 
-        Set(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(event.identity),List[CValue](CString("Test")), List(Set.empty)))
+      val expected : Array[ProjectionData] = 
+        Array(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)))
 
       actions must_== expected 
     }
 
     "project an event with n properties to n projection actions" in {
-      val rt = SingleColumnProjectionRoutingTable 
+      val rt = AltSingleColumnProjectionRoutingTable 
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SLong, Authorities(Set()))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".selector.foo"), SLong, Authorities(Set()))
+      val jval = JObject(
+        JField("selector", JString("Test")) ::
+        JField("foo", JObject( JField("bar", JInt(123)) :: Nil )) :: Nil
+      )
 
-      val event = EventData(0, Set(ColumnData(colDesc1, CString("Test"), Set.empty),
-                                   ColumnData(colDesc2, CInt(1), Set.empty)))
+      val metadata = Map[JPath, Set[UserMetadata]]() +
+                     (JPath(".selector") -> Set.empty[UserMetadata]) +
+                     (JPath(".foo.bar") -> Set.empty[UserMetadata])
 
-      val actions = rt.route(event)
+      val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
 
-      val expected : Set[ProjectionData] = Set(
-          ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase(event.identity),List[CValue](CString("Test")), List(Set.empty)),
-          ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase(event.identity),List[CValue](CInt(1)), List(Set.empty))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SStringArbitrary, Authorities(Set("token")))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), SDecimalArbitrary, Authorities(Set("token")))
+
+      val actions = rt.route(msg)
+
+      val expected : Array[ProjectionData] = Array(
+          ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)),
+          ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CNum(123)), List(Set.empty))
       )
 
       actions must_== expected
+      
     }
   }
 }
