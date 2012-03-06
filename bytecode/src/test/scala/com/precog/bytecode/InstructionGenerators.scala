@@ -20,13 +20,32 @@
 package com.precog.bytecode
 
 import org.scalacheck._
+import Arbitrary.arbitrary
+import Gen._
 
-trait InstructionGenerators extends Instructions {
+trait RandomLibrary extends Library {
+  case class BIF1(namespace: Vector[String], name: String, opcode: Int) extends BuiltInFunc1
+  case class BIF2(namespace: Vector[String], name: String, opcode: Int) extends BuiltInFunc2
+
+  private lazy val genBuiltIn1 = for {
+    op <- choose(0, 1000)
+    n  <- identifier
+    ns <- listOfN(2, identifier)
+  } yield BIF1(Vector(ns: _*), n, op)
+
+  private lazy val genBuiltIn2 = for {
+    op <- choose(0, 1000)
+    n  <- identifier
+    ns <- listOfN(2, identifier)
+  } yield BIF2(Vector(ns: _*), n, op)
+    
+  lazy val lib1 = containerOfN[Set, BIF1](30, genBuiltIn1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val lib2 = containerOfN[Set, BIF2](30, genBuiltIn2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+}
+
+trait InstructionGenerators extends Instructions with RandomLibrary {
   import instructions._
-  
-  import Arbitrary.arbitrary
-  import Gen._
-  
+
   implicit lazy val arbInstruction: Arbitrary[Instruction] = Arbitrary(genInstruction)
   
   implicit lazy val arbUnaryOp: Arbitrary[UnaryOperation] = Arbitrary(genUnaryOp)
@@ -131,12 +150,12 @@ trait InstructionGenerators extends Instructions {
   private lazy val genPushArray = PushArray
   
   private lazy val genUnaryOp = for {
-    op  <- genBuiltIn1
-    res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1(op))
+    op  <- oneOf(lib1.toSeq)
+    res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1Op(op))
   } yield res
   
   private lazy val genBinaryOp = for {
-    op  <- genBuiltIn2
+    op  <- oneOf(lib2.toSeq)
     res <- oneOf(
     Add,
     Sub,
@@ -164,54 +183,9 @@ trait InstructionGenerators extends Instructions {
     DerefObject,
     DerefArray,
   
-    BuiltInFunction2(op))
+    BuiltInFunction2Op(op))
   } yield res
 
-  private lazy val genBuiltIn1 = oneOf(
-    GetMillis,
-    TimeZone,
-    Season, 
-
-    Year,
-    QuarterOfYear,
-    MonthOfYear,
-    WeekOfYear,
-    WeekOfMonth,
-    DayOfYear,
-    DayOfMonth,
-    DayOfWeek,
-    HourOfDay,
-    MinuteOfHour,
-    SecondOfMinute,
-    MillisOfSecond,
-   
-    Date,
-    YearMonth,
-    YearDayOfYear,
-    MonthDay,
-    DateHour,
-    DateHourMinute,
-    DateHourMinuteSecond,
-    DateHourMinuteSecondMillis,
-    TimeWithZone,
-    TimeWithoutZone,
-    HourMinute,
-    HourMinuteSecond
-  )
-
-  private lazy val genBuiltIn2 = oneOf (
-    ChangeTimeZone,
-    MillisToISO,
-
-    YearsBetween, 
-    MonthsBetween, 
-    WeeksBetween, 
-    DaysBetween, 
-    HoursBetween, 
-    MinutesBetween, 
-    SecondsBetween, 
-    MillisBetween)
-    
   private lazy val genReduction = oneOf(
     Count,
     

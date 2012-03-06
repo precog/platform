@@ -18,27 +18,30 @@
  *
  */
 package com.precog
-package quirrel
+package bytecode
 
-import org.specs2.mutable._
+trait BuiltInFunc1 {
+  val namespace: Vector[String]
+  val name: String
+  val opcode: Int
 
-import bytecode.RandomLibrary
-import parser._
-import typer._
-import emitter._
+  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  override def toString = "[0x%06x]".format(opcode) + fqn
+}
 
-object PhasesSpecs extends Specification
-    with StubPhases
-    with Compiler
-    with ProvenanceChecker
-    with CriticalConditionSolver
-    with RawErrors 
-    with RandomLibrary {
-  
-  "full compiler" should {
-    "self-populate AST errors atom" in {
-      val tree = compile("fubar")
-      tree.errors must not(beEmpty)
-    }
-  }
+trait BuiltInFunc2 {
+  val namespace: Vector[String]
+  val name: String
+  val opcode: Int
+
+  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  override def toString = "[0x%06x]".format(opcode) + fqn
+}
+
+trait Library {
+  type BIF1 <: BuiltInFunc1
+  type BIF2 <: BuiltInFunc2
+
+  def lib1: Set[BIF1] 
+  def lib2: Set[BIF2] 
 }

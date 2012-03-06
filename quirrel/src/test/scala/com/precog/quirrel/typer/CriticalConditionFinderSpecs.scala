@@ -17,15 +17,18 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.quirrel
+package com.precog
+package quirrel
 package typer
 
+import bytecode.RandomLibrary
 import org.specs2.mutable.Specification
 
 object CriticalConditionFinderSpecs extends Specification
     with StubPhases
     with Compiler
-    with CriticalConditionFinder {
+    with CriticalConditionFinder 
+    with RandomLibrary {
   import ast._  
   
   "critical condition finding" should {

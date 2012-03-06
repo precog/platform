@@ -32,6 +32,9 @@ trait Reader extends Instructions {
 trait BytecodeReader extends Reader {
   import instructions._
   import Function._
+
+  private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
+  private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
     val version = buffer.getInt()
@@ -76,7 +79,7 @@ trait BytecodeReader extends Reader {
         
         case 0x61 => Some(WrapArray)
 
-        case 0xB0 => builtIn1 map BuiltInFunction1
+        case 0xB0 => stdlib1Ops.get(((code >> 8) & 0xFFFFFF).toInt)
         
         case _ => None
       }
@@ -108,7 +111,7 @@ trait BytecodeReader extends Reader {
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
 
-        case 0xB1 => builtIn2 map BuiltInFunction2
+        case 0xB1 => stdlib2Ops.get(((code >> 8) & 0xFFFFFF).toInt)
         
         case _ => None
       }
@@ -129,56 +132,6 @@ trait BytecodeReader extends Reader {
         case _ => None
       }
 
-      lazy val builtIn1 = ((code >> 8) & 0xFF) match {
-        case 0x27 => Some(GetMillis)
-        case 0x00 => Some(TimeZone)
-        case 0x13 => Some(Season)
-
-        case 0x01 => Some(Year)
-        case 0x02 => Some(QuarterOfYear)
-        case 0x03 => Some(MonthOfYear)
-        case 0x04 => Some(WeekOfYear)
-        case 0x14 => Some(WeekOfMonth)
-        case 0x10 => Some(DayOfYear)
-        case 0x05 => Some(DayOfMonth)
-        case 0x06 => Some(DayOfWeek)
-        case 0x07 => Some(HourOfDay)
-        case 0x08 => Some(MinuteOfHour)
-        case 0x09 => Some(SecondOfMinute)
-        case 0x11 => Some(MillisOfSecond)
-
-        case 0x15 => Some(Date)
-        case 0x16 => Some(YearMonth)
-        case 0x26 => Some(YearDayOfYear)
-        case 0x17 => Some(MonthDay)
-        case 0x18 => Some(DateHour)
-        case 0x19 => Some(DateHourMinute)
-        case 0x20 => Some(DateHourMinuteSecond)
-        case 0x21 => Some(DateHourMinuteSecondMillis)
-        case 0x22 => Some(TimeWithZone)
-        case 0x23 => Some(TimeWithoutZone)
-        case 0x24 => Some(HourMinute)
-        case 0x25 => Some(HourMinuteSecond)
-
-        case _    => None
-      }
-
-      lazy val builtIn2 = ((code >> 8) & 0xFF) match {
-        case 0x00 => Some(ChangeTimeZone)
-        case 0x01 => Some(MillisToISO)
-
-        case 0x02 => Some(YearsBetween)
-        case 0x03 => Some(MonthsBetween)
-        case 0x04 => Some(WeeksBetween)
-        case 0x05 => Some(DaysBetween)
-        case 0x06 => Some(HoursBetween)
-        case 0x07 => Some(MinutesBetween)
-        case 0x08 => Some(SecondsBetween)
-        case 0x09 => Some(MillisBetween)
-
-        case _    => None
-      }
-      
       lazy val tpe = (code & 0xFF) match {
         case 0x00 => Some(Het)
       }
