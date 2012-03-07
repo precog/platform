@@ -1,6 +1,6 @@
 package com.precog.pandora
 
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 import com.precog._
 import com.precog.yggdrasil.shard._

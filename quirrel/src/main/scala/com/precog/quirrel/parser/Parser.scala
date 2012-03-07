@@ -1,18 +1,18 @@
 package com.precog.quirrel
 package parser
 
-import edu.uwm.cs.gll.ExpectedLiteral
-import edu.uwm.cs.gll.ExpectedRegex
-import edu.uwm.cs.gll.Failure
-import edu.uwm.cs.gll.LineStream
-import edu.uwm.cs.gll.RegexParsers
-import edu.uwm.cs.gll.RegexUtils
-import edu.uwm.cs.gll.Result
-import edu.uwm.cs.gll.Success
-import edu.uwm.cs.gll.UnexpectedEndOfStream
-import edu.uwm.cs.gll.ast.{UnaryNode, Filters, Node}
-import edu.uwm.cs.util.ComplementarySet
-import edu.uwm.cs.util.UniversalCharSet
+import com.codecommit.gll.ExpectedLiteral
+import com.codecommit.gll.ExpectedRegex
+import com.codecommit.gll.Failure
+import com.codecommit.gll.LineStream
+import com.codecommit.gll.RegexParsers
+import com.codecommit.gll.RegexUtils
+import com.codecommit.gll.Result
+import com.codecommit.gll.Success
+import com.codecommit.gll.UnexpectedEndOfStream
+import com.codecommit.gll.ast.{UnaryNode, Filters, Node}
+import com.codecommit.util.ComplementarySet
+import com.codecommit.util.UniversalCharSet
 
 trait Parser extends RegexParsers with Filters with AST {
   import ast._

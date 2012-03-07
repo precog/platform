@@ -12,7 +12,7 @@ import com.precog.common.kafka._
 import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._
 
-import edu.uwm.cs.gll.{Failure, LineStream, Success}
+import com.codecommit.gll.{Failure, LineStream, Success}
 
 import jline.TerminalFactory
 import jline.console.ConsoleReader
