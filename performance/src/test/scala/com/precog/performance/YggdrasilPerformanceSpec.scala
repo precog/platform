@@ -59,13 +59,13 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
       }
     }
 
-    "insert 10K elements in 3.5s".performBatch(10000, 3500) { i =>
+    "insert 10K elements in 7s".performBatch(10000, 7000) { i =>
       val batchSize = 1000
  
       insert(shard, Path("/test/large/"), batchSize, i / batchSize)   
     }
     
-    "read 10K elements in 1.5ms".performBatch(10000, 1500) { i =>
+    "read 10K elements in 4s".performBatch(10000, 4000) { i =>
       val result = executor.execute("token", "count(load(//test/large))") 
       result match {
         case Success(jval) => 
@@ -73,7 +73,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
       }
     }
     
-    "read 100 elements 100 times in 2.5s".performBatch(100, 2500) { i =>
+    "read 100 elements 100 times in 5s".performBatch(100, 5000) { i =>
       insert(shard, Path("/test/small1"), 100, 1)
       
       var cnt = 0

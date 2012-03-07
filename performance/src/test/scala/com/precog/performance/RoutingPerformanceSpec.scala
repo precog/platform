@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   "routing actor" should {
     
-    "route 100K elements in 4s".performBatch(100000, 4000) { inserts =>
+    "route 100K elements in 5s".performBatch(100000, 5000) { inserts =>
 
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
 
