@@ -43,7 +43,7 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
       tmpFile.mkdirs
     }
 
-    "insert 1M elements in 6s".performBatch(1000000, 6000) { i =>
+    "insert 1M elements in 8s".performBatch(1000000, 8000) { i =>
       val createOptions = (new Options).createIfMissing(true)  
       val db: DB = factory.open(tmpFile, createOptions)
 
@@ -88,7 +88,7 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
       db.close
     }
 
-    "read 1M elements in 800ms (batch)".performBatch(1000000, 800) { i =>
+    "read 1M elements in 1s (batch)".performBatch(1000000, 1000) { i =>
       import org.fusesource.leveldbjni.internal.JniDBIterator
       val createOptions = (new Options).createIfMissing(true)  
       val db: DB = factory.open(tmpFile, createOptions)
