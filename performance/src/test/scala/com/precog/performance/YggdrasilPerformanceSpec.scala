@@ -59,7 +59,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
       }
     }
 
-    "insert 10K elements in 3s".performBatch(10000, 3000) { i =>
+    "insert 10K elements in 3.5s".performBatch(10000, 3500) { i =>
       val batchSize = 1000
  
       insert(shard, Path("/test/large/"), batchSize, i / batchSize)   
