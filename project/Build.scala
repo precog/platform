@@ -12,7 +12,8 @@ object PlatformBuild extends Build {
                       "ReportGrid snapshot repo (public)" at "http://nexus.reportgrid.com/content/repositories/public-snapshots",
                       "Typesafe Repository"               at "http://repo.typesafe.com/typesafe/releases/",
                       "Maven Repo 1"                      at "http://repo1.maven.org/maven2/",
-                      "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/"),
+                      "Guiceyfruit"                       at "http://guiceyfruit.googlecode.com/svn/repo/releases/",
+                      "Sonatype Snapshots"                at "https://oss.sonatype.org/content/repositories/snapshots/"),
 
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials"),
 
