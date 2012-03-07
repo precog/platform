@@ -11,7 +11,7 @@ import org.specs2.mutable._
 
 import java.io.File
 import scala.io.Source
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 import typer._
 

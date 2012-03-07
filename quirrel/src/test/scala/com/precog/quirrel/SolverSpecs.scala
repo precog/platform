@@ -1,7 +1,7 @@
 package com.precog.quirrel
 
-import edu.uwm.cs.gll.LineStream
-import edu.uwm.cs.gll.ast.Node
+import com.codecommit.gll.LineStream
+import com.codecommit.gll.ast.Node
 
 import org.specs2.mutable.Specification
 

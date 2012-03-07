@@ -3,7 +3,7 @@ package quirrel
 package typer
 
 import bytecode.RandomLibrary
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
 import java.io.File

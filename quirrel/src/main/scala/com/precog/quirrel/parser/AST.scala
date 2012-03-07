@@ -4,8 +4,8 @@ package parser
 
 import util.Atom
 
-import edu.uwm.cs.gll.LineStream
-import edu.uwm.cs.gll.ast._
+import com.codecommit.gll.LineStream
+import com.codecommit.gll.ast._
 
 import scalaz.Scalaz._
 import scalaz.Tree

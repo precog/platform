@@ -120,7 +120,7 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
     
   }
 
-  def update(inserts: List[InsertComplete]): Unit = {
+  def update(inserts: Seq[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
    
     val (projUpdate, clockUpdate) = inserts.foldLeft(projections, messageClock){ 
@@ -200,7 +200,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(inserts: List[InsertComplete]) extends ShardMetadataAction
+case class UpdateMetadata(inserts: Seq[InsertComplete]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
 
 class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: MetadataIO) extends Actor with Logging {

@@ -69,7 +69,7 @@ trait YggdrasilQueryExecutorComponent {
         }
         kafka {
           batch {
-            host = localhost
+            host = devqclus03.reportgrid.com 
             port = 9092
             topic = central_event_store
           }
