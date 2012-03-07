@@ -114,6 +114,7 @@ trait YggdrasilQueryExecutorComponent {
            state   <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => new YggdrasilQueryExecutor {
+          trait Storage extends ActorYggShard with ProductionActorEcosystem
           lazy val actorSystem = ActorSystem("akka_ingest_server")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
           val yggConfig = yConfig
@@ -152,7 +153,7 @@ trait YggdrasilQueryExecutor
     with Logging { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  trait Storage extends ActorYggShard with ProductionActorEcosystem
+  type Storage <: ActorYggShard
 
   val actorSystem: ActorSystem
 

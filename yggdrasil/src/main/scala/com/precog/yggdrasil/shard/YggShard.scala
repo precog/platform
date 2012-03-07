@@ -47,6 +47,7 @@ trait YggShard {
   def userMetadataView(uid: String): MetadataView
   def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
   def store(msg: EventMessage): Future[Unit]
+  def storeBatch(msgs: Seq[EventMessage]): Future[Unit]
 }
 
 trait YggShardComponent {
@@ -131,9 +132,11 @@ trait ActorYggShard extends
     } yield ()
   }
 
-  def store(msg: EventMessage): Future[Unit] = {
+  def store(msg: EventMessage): Future[Unit] = storeBatch(Vector(msg))
+  
+  def storeBatch(msgs: Seq[EventMessage]): Future[Unit] = {
     implicit val storeTimeout: Timeout = Duration(10, "seconds")
-    val messages = Messages(Vector(msg))
+    val messages = Messages(msgs)
     (routingActor ? messages) map { _ => () }
   }
   
