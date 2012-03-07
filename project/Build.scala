@@ -24,7 +24,7 @@ import sbt.NameFilter._
 
 object PlatformBuild extends Build {
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
-    resolvers ++= Seq("Local Maven Repository"            at "file://"+Path.userHome.absolutePath+"/.m2/repository",
+    resolvers ++= Seq(//"Local Maven Repository"            at "file://"+Path.userHome.absolutePath+"/.m2/repository",
                       "ReportGrid repo"                   at "http://nexus.reportgrid.com/content/repositories/releases",
                       "ReportGrid repo (public)"          at "http://nexus.reportgrid.com/content/repositories/public-releases",
                       "ReportGrid snapshot repo"          at "http://nexus.reportgrid.com/content/repositories/snapshots",
