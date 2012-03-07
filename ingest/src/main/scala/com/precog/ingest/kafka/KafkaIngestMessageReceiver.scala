@@ -46,8 +46,6 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import com.precog.common.util.ArbitraryIngestMessage
-
 import com.precog.common._
 
 class KafkaIngestMessageRecievers(receivers: Map[MailboxAddress, List[IngestMessageReceiver]]) {

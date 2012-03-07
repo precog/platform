@@ -56,13 +56,13 @@ object PlatformBuild extends Build {
   val pandoraSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings : _*) dependsOn (quirrel, daze, yggdrasil, ingest)
   
-  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common, util)
+  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common % "compile->compile;test->test", util)
   
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common, quirrel, daze, yggdrasil)
+  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
 
   val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings: _*).dependsOn(ingest, common, quirrel, daze, yggdrasil)
+  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil)
   
   lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings : _*).dependsOn(ingest, common, quirrel, daze, yggdrasil, shard)
 
