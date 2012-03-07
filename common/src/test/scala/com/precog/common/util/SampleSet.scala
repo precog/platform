@@ -70,12 +70,13 @@ object AdSamples {
   val departments = List("sales", "marketing", "operations", "engineering", "manufacturing", "research")
   def gaussianIndex(size: Int): Gen[Int] = {
     Gen( p => {
-      def sample(): Double = {
+      def sample: Double = {
         val testIndex = (p.rng.nextGaussian * (size / 5)) + (size / 2)
-        if (testIndex < 0 || testIndex >= size) sample() 
+        if (testIndex < 0 || testIndex >= size) sample
         else testIndex
       }
-      Some(sample().toInt)
+
+      Some(sample.toInt)
     })
   }
 
@@ -86,9 +87,9 @@ object AdSamples {
     })
   }
 
-  def defaultSample() = adCampaignSample
+  def defaultSample = adCampaignSample
 
-  def adCampaignSample() = for {
+  def adCampaignSample = for {
     gender <- oneOf(genders)
     plat <- exponentialIndex(platforms.size).map{ platforms(_) }
     camp <- gaussianIndex(campaigns.size).map{ campaigns(_) }
@@ -104,7 +105,7 @@ object AdSamples {
     )
   }
 
-  def adOrganizationSample() = for {
+  def adOrganizationSample = for {
     emps <- oneOf(employees)
     rev <- oneOf(revenue)
     cat <- oneOf(category)
@@ -118,7 +119,7 @@ object AdSamples {
     )
   }
 
-  def interactionSample() = for {
+  def interactionSample = for {
     time <- earlierTimeFrame
     tz <- oneOf(timeZone)
     ts <- ISO8601(time, tz)
@@ -134,7 +135,7 @@ object AdSamples {
     )
   }
 
-  def interactionSample2() = for {
+  def interactionSample2 = for {
     time <- laterTimeFrame
     tz <- oneOf(timeZone)
     pid <- oneOf(pageId)
@@ -148,7 +149,7 @@ object AdSamples {
     )
   }
 
-  def eventsSample() = for {
+  def eventsSample = for {
     time <- ISO8601(laterTimeFrame, oneOf(timeZone))
     platform <- oneOf(platforms)
     eventName <- oneOf(eventNames)
@@ -160,7 +161,7 @@ object AdSamples {
     )
   }
   
-  def usersSample() = for {
+  def usersSample = for {
     age <- chooseNum(18,100)
     income <- chooseNum(10,250).map{ _ * 1000 }
     state <- oneOf(states)
@@ -172,7 +173,7 @@ object AdSamples {
     )
   }
 
-  def ordersSample() = for {
+  def ordersSample = for {
     userId <- chooseNum(12345, 12545)
     taxRate <- chooseNum(70,110).map { _.toDouble / 100 }
     subTotal <- chooseNum(123, 11145).map { _.toDouble / 100 }
@@ -190,11 +191,11 @@ object AdSamples {
     )
   }
 
-  def recipientsSample() = listOfN(2, oneOf(departments)).map { list => 
+  def recipientsSample = listOfN(2, oneOf(departments)).map { list => 
     JArray( list.map { JString(_) } )
   }
 
-  def paymentsSample() = for {
+  def paymentsSample = for {
     date <- earlierTimeFrame
     recipients <- recipientsSample 
     amount <- chooseNum(500, 5000).map( _.toDouble / 100)
@@ -206,7 +207,7 @@ object AdSamples {
     )
   }
 
-  def pageViewsSample() = for {
+  def pageViewsSample = for {
     duration <- chooseNum(1,300)
     userId <- chooseNum(12345, 12360)
   } yield {
@@ -216,7 +217,7 @@ object AdSamples {
     )
   }
 
-  def customersSample() = for {
+  def customersSample = for {
     userId <- chooseNum(12345, 12545)
     income <- chooseNum(10,250).map( _ * 1000)
   } yield {
