@@ -19,7 +19,7 @@
  */
 package com.precog.quirrel
 
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 /**
  * Not ''really'' the full compiler.  Technically, this trait just gives you the
