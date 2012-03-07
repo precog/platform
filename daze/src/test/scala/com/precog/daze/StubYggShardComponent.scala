@@ -74,6 +74,7 @@ trait StubYggShardComponent {
     }
 
     def store(em: EventMessage) = sys.error("Feature not implemented in test stub.")
+    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
     def metadata = new StorageMetadata {
       implicit val dispatcher = actorSystem.dispatcher

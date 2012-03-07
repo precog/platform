@@ -114,7 +114,6 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   import LevelDBProjection._
 
   val chunkSize = 32000 // bytes
-  val chunkBuffer = ByteBuffer.allocate(chunkSize)
   val maxOpenFiles = 25
 
   val logger = Logger("col:" + baseDir)
@@ -173,10 +172,10 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       def apply[A] = {
         val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
 
-        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator]): IterateeT[X, Vector[E], F, A] = {
+        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator], chunkBuffer: ByteBuffer): IterateeT[X, Vector[E], F, A] = {
           @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(IO(iter.close))) >> s.pointI.value)
 
-          @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A]) = if (iter.hasNext) {
+          @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A], chunkBuffer: ByteBuffer) = if (iter.hasNext) {
             val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
             val chunkIter: java.util.Iterator[KeyValuePair] = iter.nextChunk(chunkBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
             while (chunkIter.hasNext) {
@@ -184,7 +183,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
               buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
             }
             val chunk = Vector(buffer: _*)
-            k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter)))
+            k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter), chunkBuffer))
           } else {
             _done
           } 
@@ -194,7 +193,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
               if (System.currentTimeMillis >= expiresAt) {
                 iterateeT(iterF.flatMap(iter => MO.promote(IO(iter.close))) >> Monad[F].point(StepT.serr[X, Vector[E], F, A](new TimeoutException("Iteration expired"))))
               } else {
-                iterateeT(iterF flatMap (next(_, k).value))
+                iterateeT(iterF flatMap (next(_, k, chunkBuffer).value))
               }
             },
             done = (_, _) => _done,
@@ -202,7 +201,8 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           )
         }
 
-        step(_, MO.promote(iterIO))
+        val chunkBuffer = ByteBuffer.allocate(chunkSize)
+        step(_, MO.promote(iterIO), chunkBuffer)
       }
     }
   }

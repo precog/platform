@@ -72,7 +72,7 @@ trait InMemoryMetadataActorComponent extends
     StateComponent with
     ActorSystemComponent {
   
-  private def initialCheckpoint = checkpoints.latestCheckpoint.messageClock
+  private lazy val initialCheckpoint = checkpoints.latestCheckpoint.messageClock
 
   override lazy val metadataActor = {
     system.actorOf(Props(new ShardMetadataActor(yggState.metadata, initialCheckpoint)), "metadata") 

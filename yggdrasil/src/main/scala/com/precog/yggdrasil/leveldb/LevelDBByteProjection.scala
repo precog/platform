@@ -202,7 +202,7 @@ trait LevelDBByteProjection extends ByteProjection {
 
     val keyBuffer = ByteBuffer.wrap(keyBytes)
     val valueBuffer = ByteBuffer.wrap(valueBytes)
-    
+   
     keyParsers.foreach {
       case Left(lf)  => identitiesInKey += lf(keyBuffer)
       case Right(rf) => valuesInKey += rf(keyBuffer)
