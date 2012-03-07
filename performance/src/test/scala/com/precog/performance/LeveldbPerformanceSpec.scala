@@ -88,7 +88,7 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
       db.close
     }
 
-    "read 1M elements in 1s (batch)".performBatch(1000000, 1000) { i =>
+    "read 1M elements in 1.5s (batch)".performBatch(1000000, 1500) { i =>
       import org.fusesource.leveldbjni.internal.JniDBIterator
       val createOptions = (new Options).createIfMissing(true)  
       val db: DB = factory.open(tmpFile, createOptions)
