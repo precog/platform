@@ -23,7 +23,7 @@ package typer
 
 import bytecode.RandomLibrary
 import org.specs2.mutable.Specification
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 object TreeShakerSpecs extends Specification with StubPhases with TreeShaker with RandomLibrary {
   import ast._

@@ -65,6 +65,7 @@ case object IncrementRefCount
 case object DecrementRefCount
 
 case class ProjectionInsert(identities: Identities, values: Seq[CValue])
+case class ProjectionBatchInsert(insert: Seq[ProjectionInsert])
 
 case object ProjectionGet
 
@@ -102,6 +103,15 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     case ProjectionInsert(identities, values) => 
       //logger.debug("Projection insert")
       projection.insert(identities, values).unsafePerformIO
+      sender ! ()
+    
+    case ProjectionBatchInsert(inserts) =>
+      var i = 0
+      while(i < inserts.length) {
+        val insert = inserts(i)
+        projection.insert(insert.identities, insert.values).unsafePerformIO
+        i += 1
+      }
       sender ! ()
 
     case ProjectionGet => 

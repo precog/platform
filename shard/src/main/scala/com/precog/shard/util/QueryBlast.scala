@@ -37,7 +37,8 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
 import blueeyes.core.service.engines.HttpClientXLightWeb
 
-import _root_.blueeyes.json.JsonAST.{JObject, JValue, JString}
+import blueeyes.json.Printer
+import blueeyes.json.JsonAST.{JObject, JValue, JString}
 
 import java.lang.{Thread, Object}
 
@@ -178,7 +179,8 @@ verboseErrors - whether to print verbose error messages (default: false)
               case e =>
                 if(verboseErrors) {
                   println("QUERY - ERROR")
-                  println(sample)
+                  println("URL: " + apiUrl + "?tokenId="+token)
+                  println("Event: " + Printer.compact(Printer.render(sample)))
                   println()
                   println("ERROR MESSAGE")
                   e.printStackTrace

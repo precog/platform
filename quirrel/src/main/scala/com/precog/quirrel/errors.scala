@@ -19,7 +19,7 @@
  */
 package com.precog.quirrel
 
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 trait Errors extends Phases {
   def isWarning(error: Error): Boolean
