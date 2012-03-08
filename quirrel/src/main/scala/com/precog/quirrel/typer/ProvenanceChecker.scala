@@ -184,6 +184,31 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         lazy val pathParam = exprs.headOption collect {
           case StrLit(_, value) => value
         }
+
+        def checkMappedFunction(arity: Int) = {
+          if (exprs.length == arity) {
+            arity match {
+              case 1 => 
+                (exprs(0).provenance, Set.empty[Error])
+
+              case 2 => 
+                val result = unifyProvenance(relations)(exprs(0).provenance, exprs(1).provenance)
+                val back = result getOrElse NullProvenance
+                
+                val errors = if (!result.isDefined)
+                  Set(Error(expr, OperationOnUnrelatedSets))
+                else
+                  Set()
+
+                (back, errors)
+
+              case _ => 
+                sys.error("Not implemented yet!")
+            }
+          } else {
+            (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+          }
+        }
         
         val (prov, errors) = d.binding match {
           case BuiltIn(BuiltIns.Load.name, arity, _) => {
@@ -200,27 +225,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
 
-          case BuiltIn(_, arity, false) => {
-            if (exprs.length == arity) {
-              if (arity == 1) {
-                (exprs(0).provenance, Set())
-              } else if (arity == 2) {
-                val result = unifyProvenance(relations)(exprs(0).provenance, exprs(1).provenance)
-                val back = result getOrElse NullProvenance
-                
-                val errors = if (!result.isDefined)
-                  Set(Error(expr, OperationOnUnrelatedSets))
-                else
-                  Set()
-
-                (back, errors)
-              } else {
-                sys.error("Not implemented yet!")
-              }
-            } else {
-              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
-            }
-          }
+          case BuiltIn(_, arity, false) => checkMappedFunction(arity)
+          case StdlibBuiltIn1(_) => checkMappedFunction(1)
+          case StdlibBuiltIn2(_) => checkMappedFunction(2)
           
           case UserDef(e) => {
             if (exprs.length > e.params.length) {
@@ -281,9 +288,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                         
                         case _ if e.params.length == exprs.length => (resultProv, Set())
                         
-                        case _ if e.params.length != exprs.length => (DynamicProvenance(provenanceId(expr)), Set())
-
-                        case _ => sys.error("scalac, please be smarter")
+                        case _ /* if e.params.length != exprs.length */ => (DynamicProvenance(provenanceId(expr)), Set())
                       }
                     }
                   }

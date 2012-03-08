@@ -435,6 +435,7 @@ case object SObject extends SType with (Map[String, SValue] => SValue) {
   }
 
   def unapply(v: SValue): Option[Map[String, SValue]] = v.mapObjectOr(Option.empty[Map[String, SValue]])(Some(_))
+  override def toString(): String = "SObject"
 }
 
 case object SArray extends SType with (Vector[SValue] => SValue) {
@@ -448,6 +449,7 @@ case object SArray extends SType with (Vector[SValue] => SValue) {
   }
 
   def unapply(v: SValue): Option[Vector[SValue]] = v.mapArrayOr(Option.empty[Vector[SValue]])(Some(_))
+  override def toString(): String = "SArray"
 }
 
 case object SString extends SType with (String => SValue) {
@@ -461,6 +463,7 @@ case object SString extends SType with (String => SValue) {
       nul:    => A
     ) = str(v)
   }
+  override def toString(): String = "SString"
 }
 
 case class SStringFixed(width: Int) extends ColumnType {
@@ -482,9 +485,10 @@ case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
     ) = bool(v)
   }
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
+  override def toString(): String = "SBoolean"
 }
 
-case object SInt extends SType with ColumnType with (Int => SValue) {
+case object SInt extends ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
   def apply(v: Int) = new SValue {
     def fold[A](
@@ -494,9 +498,10 @@ case object SInt extends SType with ColumnType with (Int => SValue) {
       nul:    => A
     ) = long(v)
   }
+  override def toString(): String = "SInt"
 }
 
-case object SLong extends SType with ColumnType with (Long => SValue) {
+case object SLong extends ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
   def apply(v: Long) = new SValue {
     def fold[A](
@@ -507,9 +512,10 @@ case object SLong extends SType with ColumnType with (Long => SValue) {
     ) = long(v)
   }
   def unapply(v: SValue): Option[Long] = v.mapLongOr(Option.empty[Long])(Some(_))
+  override def toString(): String = "SLong"
 }
 
-case object SFloat extends SType with ColumnType with (Float => SValue) {
+case object SFloat extends ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
   def apply(v: Float) = new SValue {
     def fold[A](
@@ -519,9 +525,10 @@ case object SFloat extends SType with ColumnType with (Float => SValue) {
       nul:    => A
     ) = double(v)
   }
+  override def toString(): String = "SFloat"
 }
 
-case object SDouble extends SType with ColumnType with (Double => SValue) {
+case object SDouble extends ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
   def apply(v: Double) = new SValue {
     def fold[A](
@@ -532,6 +539,7 @@ case object SDouble extends SType with ColumnType with (Double => SValue) {
     ) = double(v)
   }
   def unapply(v: SValue): Option[Double] = v.mapDoubleOr(Option.empty[Double])(Some(_))
+  override def toString(): String = "SDouble"
 }
 
 case object SDecimalArbitrary extends ColumnType {
@@ -554,6 +562,7 @@ case object SDecimal extends SType with (BigDecimal => SValue) {
       nul:    => A
     ) = num(v)
   }
+  override def toString(): String = "SDecimal"
 }
 
 case object SNull extends SType with ColumnType with SValue {
@@ -566,7 +575,7 @@ case object SNull extends SType with ColumnType with SValue {
   ) = nul
 }
 
-case object SEmptyObject extends SType with ColumnType with SValue {
+case object SEmptyObject extends ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -576,7 +585,7 @@ case object SEmptyObject extends SType with ColumnType with SValue {
   ) = obj(Map.empty)
 }
 
-case object SEmptyArray extends SType with ColumnType with SValue {
+case object SEmptyArray extends ColumnType with SValue {
   def format = FixedWidth(0)
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,

@@ -28,8 +28,10 @@ import com.precog.yggdrasil.BaseConfig
 import com.precog.yggdrasil.SimpleProjectionSerialization
 import com.precog.yggdrasil.shard._
 import com.precog.common.kafka._
+import blueeyes.json.Printer._
+import blueeyes.json.JsonAST._
 
-import edu.uwm.cs.gll.{Failure, LineStream, Success}
+import com.codecommit.gll.{Failure, LineStream, Success}
 
 import jline.TerminalFactory
 import jline.console.ConsoleReader
@@ -104,7 +106,10 @@ trait REPL extends LineErrors
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = consumeEval(dummyUID, graph) map { _._2 } map SValue.asJSON mkString ("[", ",", "]")
+            val result = consumeEval(dummyUID, graph) fold (
+              error   => "An error occurred processing your query: " + error.getMessage,
+              results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
+            )
             
             out.println()
             out.println(color.cyan(result))
@@ -220,7 +225,13 @@ trait REPL extends LineErrors
 
 object Console extends App {
   val controlTimeout = Duration(120, "seconds")
-  class REPLConfig(dataDir: Option[String]) extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig {
+  class REPLConfig(dataDir: Option[String]) extends 
+      BaseConfig with 
+      YggEnumOpsConfig with 
+      LevelDBQueryConfig with 
+      DiskMemoizationConfig with 
+      DatasetConsumersConfig with 
+      ProductionActorConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -254,10 +265,10 @@ object Console extends App {
         val yggConfig = yconfig
 
         type Storage = ActorYggShard
-        object storage extends ActorYggShard {
-          val yggState = shardState
-          val yggCheckpoints = new TestYggCheckpoints
-          val batchConsumer = BatchConsumer.NullBatchConsumer
+        object storage extends ActorYggShard with StandaloneActorEcosystem {
+          type YggConfig = REPLConfig
+          lazy val yggConfig = yconfig
+          lazy val yggState = shardState
         }
 
         object ops extends Ops 

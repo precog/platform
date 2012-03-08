@@ -17,10 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.quirrel
+package com.precog
+package quirrel
 package typer
 
-import edu.uwm.cs.gll.LineStream
+import bytecode.RandomLibrary
+import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import parser._
@@ -28,7 +30,7 @@ import parser._
 import java.io.File
 import scala.io.Source
 
-object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder {
+object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder with RandomLibrary {
   import ast._
   
   "let binding" should {
@@ -105,14 +107,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
 
     "reject unbound dispatch with a namespace" in {
       {
-        val d @ Dispatch(_, _, _) = parse("foo :: bar :: baz")
+        val d @ Dispatch(_, _, _) = parse("foo::bar::baz")
         d.binding mustEqual NullBinding
         d.isReduction mustEqual false
         d.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo", "bar"), "baz")))
       }
       
       {
-        val d @ Dispatch(_, _, _) = parse("foo :: bar :: baz(7, 8, 9)")
+        val d @ Dispatch(_, _, _) = parse("foo::bar::baz(7, 8, 9)")
         d.binding mustEqual NullBinding
         d.isReduction mustEqual false
         d.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo", "bar"), "baz")))
@@ -625,97 +627,23 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
 
-  "pre-binding of Time functions" should {
-
-    "bind year" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: year")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
+  "pre-binding of builtin functions" should {
+    "bind unary functions" in {
+      forall(lib1) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual StdlibBuiltIn1(f)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
     }
 
-    "bind quarter" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: quarter")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind monthOfYear" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: monthOfYear")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind weekOfYear" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: weekOfYear")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-    
-    "bind dayOfYear" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfYear")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfYear"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind dayOfMonth" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfMonth")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind dayOfWeek" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: dayOfWeek")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind hourOfDay" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: hourOfDay")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "hourOfDay"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind minuteOfHour" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: minuteOfHour")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind secondOfMinute" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: secondOfMinute")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind millisOfSecond" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: millisOfSecond")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "millisOfSecond"), 1, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind changeTimeZone" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: changeTimeZone")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
-    }
-
-    "bind millisToISO" in {
-      val d @ Dispatch(_, _, _) = parse("std :: time :: millisToISO")
-      d.binding mustEqual BuiltIn(Identifier(Vector("std", "time"), "millisToISO"), 2, false)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
+    "bind binary functions" in {
+      forall(lib2) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual StdlibBuiltIn2(f)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
     }
   }
   

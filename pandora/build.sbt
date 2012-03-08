@@ -111,7 +111,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, m
 }
 
 initialCommands in console := """
-  | import edu.uwm.cs.gll.LineStream
+  | import com.codecommit.gll.LineStream
   | 
   | import com.precog._
   |

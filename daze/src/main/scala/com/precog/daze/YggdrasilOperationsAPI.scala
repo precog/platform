@@ -29,12 +29,14 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.Duration
 import java.io.File
+import java.util.concurrent.TimeoutException
 
 import scala.annotation.tailrec
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.monad._
+import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import Iteratee._
 
@@ -48,16 +50,21 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
   type YggConfig <: YggEnumOpsConfig
 
   trait Ops extends DatasetEnumOps {
-    def flatMap[X, E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
-      DatasetEnum(d.fenum.map { e1e =>
-        val result : EnumeratorP[X, Vector[E2], F] = e1e.flatMap { ve => 
-          val epv : Vector[EnumeratorP[X, Vector[E2], F]] = ve.map(e => Await.result(f(e).fenum, yggConfig.flatMapTimeout))
-          epv.reduce { (ep1 : EnumeratorP[X, Vector[E2], F], ep2: EnumeratorP[X, Vector[E2], F]) => EnumeratorP.enumeratorPMonoid[X, Vector[E2], F].append(ep1, ep2) }
+    def flatMap[E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
+      DatasetEnum(d.fenum.map { e1 =>
+        e1 flatMap { 
+          (_: Vector[E1]).foldLeft(EnumeratorP.empty[X, Vector[E2], F]) { 
+            case (acc, e) => 
+              try {
+                acc |+| Await.result(f(e).fenum, yggConfig.flatMapTimeout)
+              } catch {
+                case ex => EnumeratorP.pointErr(new RuntimeException("Timed out in flatMap; returning error enumerator. ", ex))
+              }
+          }
         }
-        result
       })
 
-    def sort[X, E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: Manifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = {
+    def sort[E <: AnyRef](d: DatasetEnum[X, E, IO], memoAs: Option[(Int, MemoizationContext)])(implicit order: Order[E], cm: Manifest[E], fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = {
       DatasetEnum(
         d.fenum map { unsorted =>
           val (memoId, memoctx) = memoAs.getOrElse((scala.util.Random.nextInt, MemoizationContext.Noop)) 
@@ -78,7 +85,7 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
       )
     }
     
-    def memoize[X, E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)
+    def memoize[E](d: DatasetEnum[X, E, IO], memoId: Int, memoctx: MemoizationContext)
                      (implicit fs: FileSerialization[Vector[E]], asyncContext: ExecutionContext): DatasetEnum[X, E, IO] = 
       DatasetEnum(
         d.fenum map { unmemoized =>
@@ -99,9 +106,9 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
         }
       )
 
-    def group[X](d: DatasetEnum[X, SEvent, IO], memoId: Int, bufctx: BufferingContext)(keyFor: SEvent => Key)
-                (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
-                Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] = {
+    def group(d: DatasetEnum[X, SEvent, IO], memoId: Int, bufctx: BufferingContext)(keyFor: SEvent => Key)
+             (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
+             Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] = {
       type Group = (Key, DatasetEnum[X, SEvent, IO])
       
       implicit val pairOrder: Order[(Key, SEvent)] = ord.contramap((_: (Key, SEvent))._1)

@@ -17,10 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.quirrel
+package com.precog
+package quirrel
 package typer
 
-trait Binder extends parser.AST {
+import bytecode.Library
+
+trait Binder extends parser.AST with Library {
   import ast._
 
   object BuiltIns {
@@ -33,30 +36,8 @@ trait Binder extends parser.AST {
     val Mode    = BuiltIn(Identifier(Vector(), "mode"), 1, true)
     val StdDev  = BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
     val Sum     = BuiltIn(Identifier(Vector(), "sum"), 1, true)
-  }
 
-  object Time {
-    val ChangeTimeZone = BuiltIn(Identifier(Vector("std", "time"), "changeTimeZone"), 2, false)  
-    val MillisToISO = BuiltIn(Identifier(Vector("std", "time"), "millisToISO"), 2, false)
-    val TimeZone = BuiltIn(Identifier(Vector("std", "time"), "timeZone"), 1, false)
-    val Year = BuiltIn(Identifier(Vector("std", "time"), "year"), 1, false)
-    val QuarterOfYear = BuiltIn(Identifier(Vector("std", "time"), "quarter"), 1, false)
-    val MonthOfYear = BuiltIn(Identifier(Vector("std", "time"), "monthOfYear"), 1, false)
-    val WeekOfYear = BuiltIn(Identifier(Vector("std", "time"), "weekOfYear"), 1, false)
-    val DayOfYear = BuiltIn(Identifier(Vector("std", "time"), "dayOfYear"), 1, false)
-    val DayOfMonth = BuiltIn(Identifier(Vector("std", "time"), "dayOfMonth"), 1, false)
-    val DayOfWeek = BuiltIn(Identifier(Vector("std", "time"), "dayOfWeek"), 1, false)
-    val HourOfDay = BuiltIn(Identifier(Vector("std", "time"), "hourOfDay"), 1, false)  
-    val MinuteOfHour = BuiltIn(Identifier(Vector("std", "time"), "minuteOfHour"), 1, false)
-    val SecondOfMinute = BuiltIn(Identifier(Vector("std", "time"), "secondOfMinute"), 1, false)
-    val MillisOfSecond = BuiltIn(Identifier(Vector("std", "time"), "millisOfSecond"), 1, false)
-  }
-
-  val BuiltInFunctions = {
-    import BuiltIns._
-    import Time._
-
-    Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, ChangeTimeZone, MillisToISO, TimeZone, Year, QuarterOfYear, MonthOfYear, WeekOfYear, DayOfYear, DayOfMonth, DayOfWeek, HourOfDay, MinuteOfHour, SecondOfMinute, MillisOfSecond)
+    val all = Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum)
   }
 
   override def bindNames(tree: Expr) = {
@@ -174,15 +155,28 @@ trait Binder extends parser.AST {
       case Paren(_, child) => loop(child, env)
     }
     
-    loop(tree, BuiltInFunctions.map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(StdlibBuiltIn1) ++ lib2.map(StdlibBuiltIn2) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
   sealed trait FormalBinding extends Binding
-  
+  sealed trait FunctionBinding extends Binding {
+    def name: Identifier
+  }
+
   // TODO arity and types
-  case class BuiltIn(name: Identifier, arity: Int, reduction: Boolean) extends Binding {
+  case class BuiltIn(name: Identifier, arity: Int, reduction: Boolean) extends FunctionBinding {
     override val toString = "<native: %s(%d)>".format(name, arity)
+  }
+
+  case class StdlibBuiltIn1(f: BIF1) extends FunctionBinding {
+    val name = Identifier(f.namespace, f.name)
+    override val toString = "<native: %s(%d)>".format(f.name, 1)
+  }
+  
+  case class StdlibBuiltIn2(f: BIF2) extends FunctionBinding {
+    val name = Identifier(f.namespace, f.name)
+    override val toString = "<native: %s(%d)>".format(f.name, 2)
   }
   
   case class UserDef(b: Let) extends Binding with FormalBinding {

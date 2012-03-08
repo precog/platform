@@ -386,81 +386,14 @@ trait Emitter extends AST
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
 
-            //**
-            //start of Time functions
-            //**
-            case BuiltIn(Time.TimeZone.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(TimeZone))
-
-            case BuiltIn(Time.Year.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(Year))
-
-            case BuiltIn(Time.QuarterOfYear.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(QuarterOfYear))
-
-            case BuiltIn(Time.MonthOfYear.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(MonthOfYear))
-
-            case BuiltIn(Time.WeekOfYear.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(WeekOfYear))
-              
-            case BuiltIn(Time.DayOfYear.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(DayOfYear))
-
-            case BuiltIn(Time.DayOfMonth.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(DayOfMonth))
-
-            case BuiltIn(Time.DayOfWeek.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(DayOfWeek))
-
-            case BuiltIn(Time.HourOfDay.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(HourOfDay))
-
-            case BuiltIn(Time.MinuteOfHour.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(MinuteOfHour))
-
-            case BuiltIn(Time.SecondOfMinute.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(SecondOfMinute))
-
-            case BuiltIn(Time.MillisOfSecond.name, arity, _) =>
-              assert(arity == 1)
-
-              emitUnary(actuals(0), BuiltInFunction1(MillisOfSecond))
-
-            case BuiltIn(Time.ChangeTimeZone.name, arity, _) =>
-              assert(arity == 2)
-
-              emitMap(actuals(0), actuals(1), BuiltInFunction2(ChangeTimeZone))
-
-            case BuiltIn(Time.MillisToISO.name, arity, _) =>
-              assert(arity == 2)
-
-              emitMap(actuals(0), actuals(1), BuiltInFunction2(MillisToISO))
-
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
+
+            case StdlibBuiltIn1(op) =>
+              emitUnary(actuals(0), BuiltInFunction1Op(op))
+
+            case StdlibBuiltIn2(op) =>
+              emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op))
 
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {

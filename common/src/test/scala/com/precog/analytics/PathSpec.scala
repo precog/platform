@@ -50,6 +50,10 @@ class PathSpec extends Specification with ScalaCheck {
         Path("/my") :: Nil
       )
     }
+
+    "drop a matching prefix using '-'" in {
+      todo
+    } 
     
     "Correctly identify child paths" in {
       val parent = Path("/my/fancy/path")

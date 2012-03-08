@@ -20,7 +20,7 @@
 package com.precog.quirrel
 package parser
 
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 import org.scalacheck.Prop
 import org.specs2.ScalaCheck
 import org.specs2.mutable._

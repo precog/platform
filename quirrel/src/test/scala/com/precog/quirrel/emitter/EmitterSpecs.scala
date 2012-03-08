@@ -22,6 +22,7 @@ package quirrel
 package emitter
 
 import com.precog.bytecode.Instructions
+import com.precog.bytecode.RandomLibrary
 
 import org.scalacheck.Prop
 import org.specs2.ScalaCheck
@@ -29,7 +30,7 @@ import org.specs2.mutable._
 
 import java.io.File
 import scala.io.Source
-import edu.uwm.cs.gll.LineStream
+import com.codecommit.gll.LineStream
 
 import typer._
 
@@ -43,7 +44,8 @@ object EmitterSpecs extends Specification
     with ScalaCheck
     with Compiler
     with Emitter
-    with RawErrors {
+    with RawErrors 
+    with RandomLibrary {
 
   import instructions._
 
@@ -463,92 +465,17 @@ object EmitterSpecs extends Specification
           Reduce(Sum)))
     } 
     
-    "emit timeZone non-reduction" in {
-      testEmit("""std :: time :: timeZone("2012-02-29T00:44:52.599+08:00")""")(
+    "emit unary non-reduction" in {
+      val f = lib1.head
+      testEmit("""%s::%s("2012-02-29T00:44:52.599+08:00")""".format(f.namespace.mkString("::"), f.name))(
         Vector(
           PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(TimeZone))))
-    }
+          Map1(BuiltInFunction1Op(f))))
+    }    
 
-    "emit year non-reduction" in {
-      testEmit("""std :: time :: year("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(Year))))
-    }
-
-    "emit quarter non-reduction" in {
-      testEmit("""std :: time :: quarter("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(QuarterOfYear))))
-    }
-
-    "emit monthOfYear non-reduction" in {
-      testEmit("""std :: time :: monthOfYear("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(MonthOfYear))))
-    }
-
-    "emit weekOfYear non-reduction" in {
-      testEmit("""std :: time :: weekOfYear("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(WeekOfYear))))
-    }
-
-    "emit dayOfYear non-reduction" in {
-      testEmit("""std :: time :: dayOfYear("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(DayOfYear))))
-    }
-
-    "emit dayOfMonth non-reduction" in {
-      testEmit("""std :: time :: dayOfMonth("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(DayOfMonth))))
-    }
-
-    "emit dayOfWeek non-reduction" in {
-      testEmit("""std :: time :: dayOfWeek("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(DayOfWeek))))
-    }
-
-    "emit hourOfDay non-reduction" in {
-      testEmit("""std :: time :: hourOfDay("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(HourOfDay))))
-    }
-
-    "emit minuteOfHour non-reduction" in {
-      testEmit("""std :: time :: minuteOfHour("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(MinuteOfHour))))
-    }
-
-    "emit secondOfMinute non-reduction" in {
-      testEmit("""std :: time :: secondOfMinute("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(SecondOfMinute))))
-    }
-
-    "emit millisOfSecond non-reduction" in {
-      testEmit("""std :: time :: millisOfSecond("2012-02-29T00:44:52.599+08:00")""")(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1(MillisOfSecond))))
-    }
-
-    "emit changeTimeZone non-reduction" in {
-      testEmit("""std :: time :: changeTimeZone(load(//foo).time, load(//foo).timeZone)""")(
+    "emit binary non-reduction" in {
+      val f = lib2.head
+      testEmit("""%s::%s(load(//foo).time, load(//foo).timeZone)""".format(f.namespace.mkString("::"), f.name))(
         Vector(
           PushString("/foo"), 
           LoadLocal(Het), 
@@ -558,23 +485,8 @@ object EmitterSpecs extends Specification
           LoadLocal(Het), 
           PushString("timeZone"), 
           Map2Cross(DerefObject), 
-          Map2Match(BuiltInFunction2(ChangeTimeZone))))
+          Map2Match(BuiltInFunction2Op(f))))
     }
-
-    "emit millisToISO non-reduction" in {
-      testEmit("""std :: time :: millisToISO(load(//foo).time, load(//foo).timeZone)""")(
-        Vector(
-          PushString("/foo"), 
-          LoadLocal(Het), 
-          PushString("time"), 
-          Map2Cross(DerefObject), 
-          PushString("/foo"), 
-          LoadLocal(Het), 
-          PushString("timeZone"), 
-          Map2Cross(DerefObject), 
-          Map2Match(BuiltInFunction2(MillisToISO))))
-        }
-
 
     "emit body of fully applied characteristic function" in {
       testEmit("clicks := load(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(

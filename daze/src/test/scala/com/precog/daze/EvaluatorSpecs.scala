@@ -27,6 +27,7 @@ import org.specs2.mutable._
 
 import java.io.File
 
+import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
@@ -53,7 +54,8 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with StubOperationsAPI 
     with TestConfigComponent 
-    with DiskMemoizationComponent { self =>
+    with DiskMemoizationComponent 
+    with TimeLib { self =>
     
 
   import Function._
@@ -65,7 +67,10 @@ class EvaluatorSpecs extends Specification
   
   val testUID = "testUID"
 
-  def testEval = consumeEval(testUID, _: DepGraph)
+  def testEval = consumeEval(testUID, _: DepGraph) match {
+    case Success(results) => results
+    case Failure(error) => throw error
+  }
 
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -224,7 +229,7 @@ class EvaluatorSpecs extends Specification
       "changeTimeZone" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(ChangeTimeZone)),
+        val input = Join(line, Map2Match(BuiltInFunction2Op(ChangeTimeZone)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("-10:00")))
           
@@ -239,10 +244,130 @@ class EvaluatorSpecs extends Specification
         result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
 
+ "yearsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(YearsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-2, -1, 0)
+      }
+ "monthsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MonthsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-16, -4, -27, 4, -11)
+      }
+ "weeksBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(WeeksBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-49, -118, -72, -21, 21)
+      }
+ "daysBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(DaysBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-505, -347, 148, -826, -150)
+      }
+ "hoursBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(HoursBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-12131, -3606, -19836, -8340, 3554)
+      }
+ "minutesBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MinutesBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-727898, 213295, -216396, -500411, -1190164)
+      }
+ "secondsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(SecondsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-30024690, -43673890, -12983796, -71409896, 12797729)
+      }
+
       "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(MillisToISO)),
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MillisToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           
@@ -262,8 +387,8 @@ class EvaluatorSpecs extends Specification
       "changeTimeZone" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(ChangeTimeZone)),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        val input = Join(line, Map2Match(BuiltInFunction2Op(ChangeTimeZone)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("-10:00")))
           
         val result = testEval(input)
@@ -276,12 +401,131 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
+      "yearsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(YearsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-2, -1, 0)
+      }
+      "monthsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MonthsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-16, -4, -27, 4, -11)
+      }
+      "weeksBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(WeeksBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-49, -118, -72, -21, 21)
+      }
+      "daysBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(DaysBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(-505, -347, 148, -826, -150)
+      }
+      "hoursBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(HoursBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-12131, -3606, -19836, -8340, 3554)
+      }
+      "minutesBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MinutesBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-727898, 213295, -216396, -500411, -1190164)
+      }
+      "secondsBetween" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Match(BuiltInFunction2Op(SecondsBetween)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+          Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(-30024690, -43673890, -12983796, -71409896, 12797729)
+      }
 
       "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2(MillisToISO)),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
+        val input = Join(line, Map2Match(BuiltInFunction2Op(MillisToISO)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           
         val result = testEval(input)
@@ -1630,10 +1874,26 @@ class EvaluatorSpecs extends Specification
     }
 
     "non-reduction of homogeneous sets" >> { 
+      "getMillis" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(1272505072599L, 1315327492848L, 1328976693394L, 1356712699430L, 1298286599165L)
+      }  
       "timeZone" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(TimeZone),
+        val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1645,11 +1905,27 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
+      }     
+      "season" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(Season),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SString(d)) => d.toString
+        }
+        
+        result2 must contain("spring", "winter", "summer")
       }
       "year" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(Year),
+        val input = dag.Operate(line, BuiltInFunction1Op(Year),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1666,7 +1942,7 @@ class EvaluatorSpecs extends Specification
       "quarter" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(QuarterOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1683,7 +1959,7 @@ class EvaluatorSpecs extends Specification
       "monthOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MonthOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1700,7 +1976,7 @@ class EvaluatorSpecs extends Specification
       "weekOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(WeekOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1713,11 +1989,27 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(17, 8, 36, 6, 52)
       }
+      "weekOfMonth" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(2, 5, 4)
+      }
 
       "dayOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1734,7 +2026,7 @@ class EvaluatorSpecs extends Specification
       "dayOfMonth" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfMonth),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1751,7 +2043,7 @@ class EvaluatorSpecs extends Specification
       "dayOfWeek" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfWeek),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1768,7 +2060,7 @@ class EvaluatorSpecs extends Specification
       "hourOfDay" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(HourOfDay),
+        val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1785,7 +2077,7 @@ class EvaluatorSpecs extends Specification
       "minuteOfHour" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MinuteOfHour),
+        val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1802,7 +2094,7 @@ class EvaluatorSpecs extends Specification
       "secondOfMinute" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(SecondOfMinute),
+        val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1819,7 +2111,7 @@ class EvaluatorSpecs extends Specification
       "millisOfSecond" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MillisOfSecond),
+        val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
           
         val result = testEval(input)
@@ -1972,11 +2264,27 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "non-reduction of heterogeneous sets" >> { 
+    "non-reduction of heterogeneous sets" >> {  
+      "getMillis" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toLong
+        }
+        
+        result2 must contain(1272505072599L, 1315327492848L, 1328976693394L, 1356712699430L, 1298286599165L)
+      }  
       "timeZone" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(TimeZone),
+        val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -1988,11 +2296,27 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain("+08:00", "+09:00", "-10:00", "-07:00", "+06:00")
+      } 
+      "season" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(Season),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SString(d)) => d.toString
+        }
+        
+        result2 must contain("spring", "winter", "summer")
       }
       "year" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(Year),
+        val input = dag.Operate(line, BuiltInFunction1Op(Year),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2009,7 +2333,7 @@ class EvaluatorSpecs extends Specification
       "quarter" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(QuarterOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2026,7 +2350,7 @@ class EvaluatorSpecs extends Specification
       "monthOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MonthOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2043,7 +2367,7 @@ class EvaluatorSpecs extends Specification
       "weekOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(WeekOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2060,7 +2384,7 @@ class EvaluatorSpecs extends Specification
       "dayOfYear" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfYear),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2072,12 +2396,28 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(52, 119, 42, 249, 363)
+      } 
+      "weekOfMonth" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(2, 5, 4)
       }
 
       "dayOfMonth" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfMonth),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2094,7 +2434,7 @@ class EvaluatorSpecs extends Specification
       "dayOfWeek" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(DayOfWeek),
+        val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2111,7 +2451,7 @@ class EvaluatorSpecs extends Specification
       "hourOfDay" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(HourOfDay),
+        val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2128,7 +2468,7 @@ class EvaluatorSpecs extends Specification
       "minuteOfHour" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MinuteOfHour),
+        val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2145,7 +2485,7 @@ class EvaluatorSpecs extends Specification
       "secondOfMinute" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(SecondOfMinute),
+        val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2162,7 +2502,7 @@ class EvaluatorSpecs extends Specification
       "millisOfSecond" >> {
         val line = Line(0, "")
         
-        val input = dag.Operate(line, BuiltInFunction1(MillisOfSecond),
+        val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
           
         val result = testEval(input)
@@ -2179,15 +2519,15 @@ class EvaluatorSpecs extends Specification
   }
 
   "sortByIdentities" should {
-    def consumeToList(d: DatasetEnum[Unit, SEvent, IO]): List[SEvent] ={
+    def consumeToList[X](d: DatasetEnum[X, SEvent, IO]): List[SEvent] ={
       val enum = Await.result(d.fenum, intToDurationInt(5).seconds)
-      (consume[Unit, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
+      (consume[X, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
     }
 
     "order the numbers set by specified identities" in {
       withMemoizationContext { ctx =>
         val numbers = {
-          val base = eval[Unit]("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
+          val base = eval("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
           base.zipWithIndex map {
             case ((_, sv), id) => (VectorCase(id): Identities, sv)
           }

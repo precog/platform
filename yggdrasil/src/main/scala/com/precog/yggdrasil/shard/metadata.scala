@@ -139,12 +139,17 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
     
   }
 
-  def update(inserts: List[InsertComplete]): Unit = {
+  def update(inserts: Seq[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
    
-    projections = inserts.foldLeft(projections){ (acc, insert) =>
-      acc + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, acc))
+    val (projUpdate, clockUpdate) = inserts.foldLeft(projections, messageClock){ 
+      case ((projs, clock), insert) =>
+        (projs + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, projs)),
+         clock.update(insert.eventId.producerId, insert.eventId.sequenceId))
     }
+
+    projections = projUpdate
+    messageClock = clockUpdate
   }
  
   def findSelectors(path: Path): Seq[JPath] = {
@@ -214,7 +219,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(inserts: List[InsertComplete]) extends ShardMetadataAction
+case class UpdateMetadata(inserts: Seq[InsertComplete]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
 
 class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: MetadataIO) extends Actor with Logging {
@@ -224,6 +229,7 @@ class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: Metada
       metadata.toList.map {
         case (pd, md) => metadataIO(pd, md)
       }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
+      logger.debug("Registering metadata checkpoint: " + messageClock)
       checkpoints.metadataPersisted(messageClock)
   }
 }

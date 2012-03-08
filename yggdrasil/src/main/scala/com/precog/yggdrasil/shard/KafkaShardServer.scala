@@ -40,10 +40,15 @@ import scalaz.effect._
 
 import org.streum.configrity.Configuration
 
-object KafkaShardServer extends Logging { 
+object KafkaShardServer extends Logging {
+  
+  trait KafkaShardServerConfig extends
+     ProductionActorConfig with
+     BaseConfig 
+
   def main(args: Array[String]) {
     val config = IO {  
-      new BaseConfig with KafkaIngestConfig {
+      new KafkaShardServerConfig {
         val config = Configuration.load(args(0))
       }
     }
@@ -54,8 +59,10 @@ object KafkaShardServer extends Logging {
     } yield {
       restorationResult match {
         case Success(state) =>
-          new ActorYggShard with KafkaIngester with YggConfigComponent {
-            type YggConfig = BaseConfig with KafkaIngestConfig 
+          new ActorYggShard with 
+            ProductionActorEcosystem with
+            YggConfigComponent {
+            type YggConfig = KafkaShardServerConfig 
             val yggState = state 
             val yggConfig = cfg 
             val kafkaIngestConfig = cfg
@@ -81,13 +88,6 @@ object KafkaShardServer extends Logging {
 
     run.unsafePerformIO
   }
-}
-
-trait KafkaIngester extends Logging {
-  def yggCheckpoints: YggCheckpoints
-  def batchConsumer: BatchConsumer
-
-  lazy val kafkaShardIngestActor = new KafkaShardIngestActor(yggCheckpoints, batchConsumer)
 }
 
 // vim: set ts=4 sw=4 et:

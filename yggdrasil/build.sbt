@@ -49,10 +49,6 @@ libraryDependencies ++= Seq(
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT"   changing() 
 )
 
-resolvers ++= Seq(
-  "Local Maven Repository" at     "file://"+Path.userHome.absolutePath+"/.m2/repository"
-)
-
 ivyXML :=
   <dependencies>
     <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">

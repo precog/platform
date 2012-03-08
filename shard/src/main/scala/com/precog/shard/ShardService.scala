@@ -91,7 +91,7 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
 
   def tokenManagerFactory(config: Configuration): TokenManager
 
-  val analyticsService = this.service("ingest", "1.0") {
+  val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
