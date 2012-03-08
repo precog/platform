@@ -36,7 +36,7 @@ class PlatformSpecs extends Specification
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with DatasetConsumers 
+    with MemoryDatasetConsumer 
     with OperationsAPI
     with AkkaIngestServer 
     with YggdrasilEnumOpsComponent

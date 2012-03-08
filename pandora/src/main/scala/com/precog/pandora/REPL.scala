@@ -42,7 +42,7 @@ trait REPL extends LineErrors
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with DatasetConsumers 
+    with MemoryDatasetConsumer 
     with OperationsAPI {
 
   val dummyUID = "dummyUID"
