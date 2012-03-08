@@ -142,7 +142,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           jvals.zipWithIndex.map {
             case (jval, idx) =>
               val event = Event(Path("/test/null"), "token", jval, Map.empty)
-              EventMessage(EventId(0,idx), event)
+              EventMessage(EventId(1,idx), event)
           }
         case _ => sys.error("Unexpected parse result")
       }
@@ -236,7 +236,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           jvals.zipWithIndex.map {
             case (jval, idx) =>
               val event = Event(Path("/test/mixed"), "token", jval, Map.empty)
-              EventMessage(EventId(0,idx), event)
+              EventMessage(EventId(2,idx), event)
           }
         case _ => sys.error("Unexpected parse result")
       }
