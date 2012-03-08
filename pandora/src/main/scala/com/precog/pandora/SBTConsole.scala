@@ -39,7 +39,28 @@ import yggdrasil._
 import yggdrasil.shard._
 
 object SBTConsole {
-  val platform = new Compiler with LineErrors with ProvenanceChecker with Emitter with Evaluator with DatasetConsumers with OperationsAPI with AkkaIngestServer with YggdrasilEnumOpsComponent with LevelDBQueryComponent with DiskMemoizationComponent with DAGPrinter { console =>
+  trait Platform  extends Compiler 
+                  with LineErrors 
+                  with ProvenanceChecker 
+                  with Emitter 
+                  with Evaluator 
+                  with MemoryDatasetConsumer 
+                  with OperationsAPI 
+                  with AkkaIngestServer 
+                  with YggdrasilEnumOpsComponent 
+                  with LevelDBQueryComponent 
+                  with DiskMemoizationComponent 
+                  with DAGPrinter {
+
+    trait YggConfig extends BaseConfig 
+                    with YggEnumOpsConfig 
+                    with LevelDBQueryConfig 
+                    with DiskMemoizationConfig 
+                    with DatasetConsumersConfig 
+                    with ProductionActorConfig
+  }
+
+  val platform = new Platform { console =>
     import akka.dispatch.Await
     import akka.util.Duration
     import scalaz._
@@ -53,13 +74,6 @@ object SBTConsole {
 
     lazy val controlTimeout = Duration(30, "seconds")
 
-    trait YggConfig extends 
-        BaseConfig with 
-        YggEnumOpsConfig with 
-        LevelDBQueryConfig with 
-        DiskMemoizationConfig with 
-        DatasetConsumersConfig with
-        ProductionActorConfig
 
     object yggConfig extends YggConfig {
       lazy val config = Configuration parse {

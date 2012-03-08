@@ -145,7 +145,7 @@ trait YggdrasilQueryExecutor
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with DatasetConsumers
+    with MemoryDatasetConsumer
     with OperationsAPI
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
