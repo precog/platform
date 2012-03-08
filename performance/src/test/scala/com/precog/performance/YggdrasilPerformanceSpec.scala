@@ -150,9 +150,11 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
 
       val result = executor.execute("token", "load(//test/null)")
       result match {
-        case Success(jval) =>
-          println(jval)
-          success
+        case Success(JArray(vals)) =>
+          if(vals.size == 2) success else failure
+        case Success(res) =>
+          println(res)
+          failure
         case Failure(err) =>
           println(err)
           failure
@@ -244,9 +246,11 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
       
       val result = executor.execute("token", "load(//test/mixed)")
       result match {
-        case Success(jval) =>
-          println(jval)
-          success
+        case Success(JArray(vals)) =>
+          if(vals.size == 2) success else failure
+        case Success(res) =>
+          println(res)
+          failure
         case Failure(err) =>
           println(err)
           failure
