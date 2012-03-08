@@ -30,14 +30,14 @@ import org.joda.time.format._
 trait ImplLibrary extends Library {
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class BIF1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends BuiltInFunc1 {
-    val f: PartialFunction[SValue, SValue]
-    val tpe: Option[SType]
+    val operation: PartialFunction[SValue, SValue]
+    val operandType: Option[SType]
   }
 
   private val defaultBinaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class BIF2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends BuiltInFunc2 {
-    val f: PartialFunction[(SValue, SValue), SValue]
-    val tpe: (Option[SType], Option[SType])
+    val operation: PartialFunction[(SValue, SValue), SValue]
+    val operandType: (Option[SType], Option[SType])
   }
 
   lazy val lib1 = _lib1
@@ -109,8 +109,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   object ChangeTimeZone extends BIF2(Vector("std", "time"), "changeTimeZone") {
-    val tpe = (Some(SString), Some(SString))
-    val f: PartialFunction[(SValue, SValue), SValue] = {
+    val operandType = (Some(SString), Some(SString))
+    val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => 
         val format = ISODateTimeFormat.dateTime()
         val timeZone = DateTimeZone.forID(tz)
@@ -120,9 +120,9 @@ trait TimeLib extends ImplLibrary {
   }
 
   trait TimeBetween extends BIF2 {
-    val tpe = (Some(SString), Some(SString)) 
+    val operandType = (Some(SString), Some(SString)) 
 
-    val f: PartialFunction[(SValue, SValue), SValue] = {
+    val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => 
         val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
         val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
@@ -165,8 +165,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   object MillisToISO extends BIF2(Vector("std", "time"), "millisToISO") { 
-    val tpe = (Some(SDecimal), Some(SString))
-    val f: PartialFunction[(SValue, SValue), SValue] = {
+    val operandType = (Some(SDecimal), Some(SString))
+    val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SDecimal(time), SString(tz)) if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  
         val format = ISODateTimeFormat.dateTime()
         val timeZone = DateTimeZone.forID(tz)
@@ -176,8 +176,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   object GetMillis extends BIF1(Vector("std", "time"), "getMillis") { 
-    val tpe = Some(SString)
-    val f: PartialFunction[SValue, SValue] = {
+    val operandType = Some(SString)
+    val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SLong(newTime.getMillis)
@@ -185,8 +185,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   object TimeZone extends BIF1(Vector("std", "time"), "timeZone") { 
-    val tpe = Some(SString)
-    val f: PartialFunction[SValue, SValue] = {
+    val operandType = Some(SString)
+    val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val format = DateTimeFormat.forPattern("ZZ")
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
@@ -195,8 +195,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   object Season extends BIF1(Vector("std", "time"), "season") { 
-    val tpe = Some(SString)
-    val f: PartialFunction[SValue, SValue] = {
+    val operandType = Some(SString)
+    val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         val day = newTime.dayOfYear.get
@@ -210,8 +210,8 @@ trait TimeLib extends ImplLibrary {
   } 
 
   trait TimeFraction extends BIF1 {
-    val tpe = Some(SString)
-    val f: PartialFunction[SValue, SValue] = {
+    val operandType = Some(SString)
+    val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SLong(fraction(newTime))
@@ -275,8 +275,8 @@ trait TimeLib extends ImplLibrary {
   }
 
   trait TimeTruncation extends BIF1 {
-    val tpe = Some(SString)
-    val f: PartialFunction[SValue, SValue] = {
+    val operandType = Some(SString)
+    val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SString(fmt.print(newTime))

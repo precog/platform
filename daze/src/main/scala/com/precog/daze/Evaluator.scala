@@ -135,16 +135,16 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         })
       }
 
-      case Operate(_, BuiltInFunction1Op(op), parent) => {
+      case Operate(_, BuiltInFunction1Op(f), parent) => {
         val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>
-          op.tpe map mask.typed getOrElse mask
+          f.operandType map mask.typed getOrElse mask
         }
         val enum = maybeRealize(parentResTyped, ctx)
 
         def opPerform(sev: SEvent): Option[SEvent] = {
           val (id, sv) = sev
-          op.f.lift(sv) map { sv => (id, sv) }
+          f.operation.lift(sv) map { sv => (id, sv) }
         }
 
         Right(enum collect unlift(opPerform))
@@ -471,7 +471,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     
     case DerefArray => (Some(SObject), Some(SDecimal))
 
-    case BuiltInFunction2Op(f) => f.tpe
+    case BuiltInFunction2Op(f) => f.operandType
   }
   
   private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
@@ -479,7 +479,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     case Comp                => Some(SBoolean)
     case Neg                 => Some(SDecimal)
     case WrapArray           => None
-    case BuiltInFunction1Op(f) => f.tpe
+    case BuiltInFunction1Op(f) => f.operandType
   }
 
   private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
@@ -581,7 +581,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         case _ => None
       }
 
-      case BuiltInFunction2Op(op) => Function.untupled(op.f.lift)
+      case BuiltInFunction2Op(f) => Function.untupled(f.operation.lift)
     }
   }
 
