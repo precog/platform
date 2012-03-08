@@ -3,6 +3,7 @@ package quirrel
 
 import org.specs2.mutable._
 
+import bytecode.RandomLibrary
 import parser._
 import typer._
 import emitter._
@@ -12,7 +13,8 @@ object PhasesSpecs extends Specification
     with Compiler
     with ProvenanceChecker
     with CriticalConditionSolver
-    with RawErrors {
+    with RawErrors 
+    with RandomLibrary {
   
   "full compiler" should {
     "self-populate AST errors atom" in {

@@ -2,7 +2,7 @@ package com.precog.bytecode
 
 import scalaz.Scalaz._
 
-trait Instructions {
+trait Instructions extends Library {
   sealed trait Instruction { self =>
     import instructions._
 
@@ -135,8 +135,8 @@ trait Instructions {
     
     sealed trait PredicateOp
 
-    case class BuiltInFunction1(op: BuiltInOp1) extends UnaryOperation
-    case class BuiltInFunction2(op: BuiltInOp2) extends BinaryOperation
+    case class BuiltInFunction1Op(op: BIF1) extends UnaryOperation
+    case class BuiltInFunction2Op(op: BIF2) extends BinaryOperation
     
     case object Add extends BinaryOperation with PredicateInstr with PredicateOp
     case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
@@ -171,7 +171,6 @@ trait Instructions {
     
     case object Range extends PredicateInstr
     
-    
     sealed trait Reduction
     
     case object Count extends Reduction
@@ -186,28 +185,6 @@ trait Instructions {
     case object StdDev extends Reduction
     case object Sum extends Reduction
 
-
-    sealed trait BuiltInOp1
-    
-    case object TimeZone extends BuiltInOp1
-    case object Year extends BuiltInOp1
-    case object QuarterOfYear extends BuiltInOp1
-    case object MonthOfYear extends BuiltInOp1
-    case object WeekOfYear extends BuiltInOp1
-    case object DayOfYear extends BuiltInOp1
-    case object DayOfMonth extends BuiltInOp1
-    case object DayOfWeek extends BuiltInOp1
-    case object HourOfDay extends BuiltInOp1
-    case object MinuteOfHour extends BuiltInOp1
-    case object SecondOfMinute extends BuiltInOp1
-    case object MillisOfSecond extends BuiltInOp1
-    
-
-    sealed trait BuiltInOp2
-
-    case object ChangeTimeZone extends BuiltInOp2
-    case object MillisToISO extends BuiltInOp2
-    
     sealed trait Type
     
     case object Het extends Type

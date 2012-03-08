@@ -1,6 +1,8 @@
 package com.precog.yggdrasil.shard
 
+import org.specs2._
 import org.specs2.mutable.Specification
+import org.scalacheck._
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
@@ -22,8 +24,7 @@ import akka.util._
 import akka.util.duration._
 import akka.dispatch._
 
-class ShardMetadataSpec extends Specification with RealisticIngestMessage {
-  val sample = containerOfN[List, Event](50, genEvent).sample
+class ShardMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage {
  
   def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
     def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
@@ -49,6 +50,8 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
   }
  
   "ShardMetadata" should {
+   
+    implicit val eventListArbitrary = Arbitrary(containerOfN[List, Event](50, genEvent))
  
     implicit val timeout = Timeout(Long.MaxValue)
    
@@ -61,49 +64,61 @@ class ShardMetadataSpec extends Specification with RealisticIngestMessage {
 
     def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
       def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
+      def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
       Map(events.flatMap {
-        case e @ Event(epath, token, data, metadata) if epath == path && data.flattenWithPath.exists(_._1 == selector) => List(toProjectionDescriptor(e, selector))
+        case e @ Event(epath, token, data, metadata) if epath == path => 
+          data.flattenWithPath.collect {
+            case (k, v) if isEqualOrChild(selector, k) => k
+          }.map( toProjectionDescriptor(e, _) )
         case _                                                                              => List.empty
       }.map{ pd => (pd, convertColDesc(pd.columns.head)) }: _*)
     }
 
     def toProjectionDescriptor(e: Event, selector: JPath) = {
       def extractType(selector: JPath, data: JValue): ColumnType = {
-        data.flattenWithPath.find( _._1 == selector).flatMap[ColumnType]( t => ColumnType.forValue(t._2) ).getOrElse(SNull)
+        data.flattenWithPath.find( _._1 == selector).flatMap[ColumnType]( t => ColumnType.forValue(t._2) ).getOrElse(sys.error("bang"))
       }
+      
       val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.data), Authorities(Set(e.tokenId)))
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
     }
 
+    
 
-    "return all selectors for a given path" in {
-      val events = sample.get
-      val metadata = buildMetadata(events)
+    "return all selectors for a given path" ! check { (sample: List[Event]) =>
+      val metadata = buildMetadata(sample)
 
       val system = ActorSystem("metadata_test_system")
       val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
-      val fut = actor ? FindSelectors(events(0).path)
+      val fut = actor ? FindSelectors(sample(0).path)
+      
 
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[JPath]].toSet
-      val expected = extractSelectorsFor(events(0).path)(events)
+      
+      system.shutdown
+     
+      val expected = extractSelectorsFor(sample(0).path)(sample)
       
       result must_== expected
     }
 
-    "return all metadata for a given (path, selector)" in {
-      val events = sample.get
-      val metadata = buildMetadata(events)
+    "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
+      val metadata = buildMetadata(sample)
 
       val system = ActorSystem("metadata_test_system")
       val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
 
-      val fut = actor ? FindDescriptors(events(0).path, events(0).data.flattenWithPath.head._1)
+      val fut = actor ? FindDescriptors(sample(0).path, sample(0).data.flattenWithPath.head._1)
 
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]]
-      val expected = extractMetadataFor(events(0).path, events(0).data.flattenWithPath.head._1)(events)
+      
+      system.shutdown
      
+      val expected = extractMetadataFor(sample(0).path, sample(0).data.flattenWithPath.head._1)(sample)
+    
       result must_== expected
+
     }
   }
 }

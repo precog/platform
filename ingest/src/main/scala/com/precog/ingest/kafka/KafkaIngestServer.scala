@@ -36,7 +36,7 @@ trait KafkaEventStoreComponent {
 
     val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
-    val agent = InetAddress.getLocalHost.getHostName
+    val agent = InetAddress.getLocalHost.getHostName + System.getProperty("precog.shard.suffix", "")
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)
 

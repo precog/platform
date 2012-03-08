@@ -142,12 +142,12 @@ case class VectorClock(map: Map[Int, Int]) {
   def get(id: Int): Option[Int] = map.get(id)  
   def hasId(id: Int): Boolean = map.contains(id)
   def update(id: Int, sequence: Int) = 
-    if(map.get(id) exists { sequence > _ }) {
+    if(map.get(id) forall { sequence > _ }) {
       VectorClock(map + (id -> sequence))
     } else {
       this 
     }
-  def lessThanOrEqual(other: VectorClock): Boolean = map forall { 
+  def isLowerBoundOf(other: VectorClock): Boolean = map forall { 
     case (prodId, maxSeqId) => other.get(prodId).map( _ >= maxSeqId).getOrElse(true)
   }
 }
@@ -326,7 +326,6 @@ class ZookeeperSystemCoordination(zkHosts: String,
       def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(checkpoint.serialize)
     })
     logger.debug("%s: SAVE".format(checkpoint))
-    //Success(state)
   }
   
   def relayAgentExists(agent: String) = zkc.exists(relayAgentPath(agent))

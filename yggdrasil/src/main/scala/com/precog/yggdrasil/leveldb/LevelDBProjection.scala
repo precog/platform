@@ -8,10 +8,13 @@ import com.precog.util.Bijection._
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
+import org.fusesource.leveldbjni.DataWidth
+
 import java.io._
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.Map.Entry
+import java.util.concurrent.TimeoutException
 import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
@@ -110,7 +113,7 @@ object LevelDBProjection {
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
   import LevelDBProjection._
 
-  val chunkSize = 32000 //bytes
+  val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
 
   val logger = Logger("col:" + baseDir)
@@ -158,72 +161,72 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   // ID Traversals //
   ///////////////////
 
-  def traverseIndex[X, E, F[_]](f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
+  def traverseIndex[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
     import MO._
     import MO.MG.bindSyntax._
 
-    new EnumeratorT[X, Vector[E], F] { 
+    new EnumeratorT[X, Vector[E], F] { self =>
       import org.fusesource.leveldbjni.internal.JniDBIterator
+      import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
+
       def apply[A] = {
         val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
 
-        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator]): IterateeT[X, Vector[E], F, A] = {
+        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator], chunkBuffer: ByteBuffer): IterateeT[X, Vector[E], F, A] = {
           @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(IO(iter.close))) >> s.pointI.value)
 
-          @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A]) = if (iter.hasNext) {
-            val buffer = new ArrayBuffer[E](chunkSize)
-            var i = 0
-            val rawChunk: org.fusesource.leveldbjni.KeyValueChunk = iter.nextChunk(chunkSize)
-            while (i < rawChunk.getSize) {
-              buffer += unproject(rawChunk.keyAt(i), rawChunk.valAt(i))(f)
-              i += 1
+          @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A], chunkBuffer: ByteBuffer) = if (iter.hasNext) {
+            val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
+            val chunkIter: java.util.Iterator[KeyValuePair] = iter.nextChunk(chunkBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
+            while (chunkIter.hasNext) {
+              val kvPair = chunkIter.next()
+              buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
             }
-
-//              val buffer = new ArrayBuffer[E](chunkSize)
-//              var i = chunkSize
-//              while (i > 0 && iter.hasNext) {
-//                val n = iter.next
-//                buffer += unproject(n.getKey, n.getValue)(f)
-//                i -= 1
-//              }
             val chunk = Vector(buffer: _*)
-            k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter)))
+            k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter), chunkBuffer))
           } else {
             _done
           } 
 
           s.fold(
-            cont = k => iterateeT(iterF flatMap (next(_, k).value)),
+            cont = k => {
+              if (System.currentTimeMillis >= expiresAt) {
+                iterateeT(iterF.flatMap(iter => MO.promote(IO(iter.close))) >> Monad[F].point(StepT.serr[X, Vector[E], F, A](new TimeoutException("Iteration expired"))))
+              } else {
+                iterateeT(iterF flatMap (next(_, k, chunkBuffer).value))
+              }
+            },
             done = (_, _) => _done,
             err = _ => _done
           )
         }
 
-        step(_, MO.promote(iterIO))
+        val chunkBuffer = ByteBuffer.allocate(chunkSize)
+        step(_, MO.promote(iterIO), chunkBuffer)
       }
     }
   }
 
-  def getAllPairs[X] : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, Seq[CValue]), F] {
+  def getAllPairs(expiresAt: Long) : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = new EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[(Identities, Seq[CValue]), F](expiresAt) {
       (id, b) => (id, b)
     }
   }
 
-  def getAllColumnPairs[X](columnIndex: Int) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = new EnumeratorP[X, Vector[(Identities, CValue)], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, (Identities, CValue), F] {
+  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = new EnumeratorP[X, Vector[(Identities, CValue)], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[(Identities, CValue), F](expiresAt) {
       (id, b) => (id, b(columnIndex))
     }
   }
 
-  def getAllIds[X] : EnumeratorP[X, Vector[Identities], IO] = new EnumeratorP[X, Vector[Identities], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Identities, F] {
+  def getAllIds(expiresAt: Long) : EnumeratorP[X, Vector[Identities], IO] = new EnumeratorP[X, Vector[Identities], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[Identities, F](expiresAt) {
       (id, b) => id
     }
   }
 
-  def getAllValues[X] : EnumeratorP[X, Vector[Seq[CValue]], IO] = new EnumeratorP[X, Vector[Seq[CValue]], IO] {
-    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[X, Seq[CValue], F] {
+  def getAllValues(expiresAt: Long) : EnumeratorP[X, Vector[Seq[CValue]], IO] = new EnumeratorP[X, Vector[Seq[CValue]], IO] {
+    def apply[F[_]](implicit MO: F |>=| IO) = traverseIndex[Seq[CValue], F](expiresAt) {
       (id, b) => b
     }
   }

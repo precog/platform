@@ -5,8 +5,6 @@ import ingest._
 
 import ingest.util.FutureUtils
 
-import com.precog.common.util.ArbitraryIngestMessage
-
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
@@ -55,14 +53,6 @@ package object ingest {
     def hasNext: Boolean
     def next(): IngestMessage 
     def sync()
-  }
-
-  object TestIngestMessageRecievers extends IngestMessageReceivers with ArbitraryIngestMessage {
-    def find(address: MailboxAddress) = List(new IngestMessageReceiver() {
-      def hasNext = true
-      def next() = genRandomEventMessage.sample.get
-      def sync() = Unit
-    })  
   }
 
   class EventRouter(routeTable: RouteTable, messaging: Messaging) {

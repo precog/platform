@@ -107,6 +107,7 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
 
+  override val hashCode: Int = scala.runtime.ScalaRunTime._hashCode(ProjectionDescriptor.this)
 }
 
 trait ProjectionDescriptorSerialization {
@@ -169,6 +170,9 @@ trait ProjectionDescriptorSerialization {
 }
 
 object ProjectionDescriptor extends ProjectionDescriptorSerialization {
+
+  def trustedApply(identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): ProjectionDescriptor = ProjectionDescriptor(identities, indexedColumns, sorting)
+
   def apply(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): Validation[String, ProjectionDescriptor] = {
     val identities = indexedColumns.values.toSeq.sorted.foldLeft(Option(0)) {
       // test that identities are 0-based and sequential

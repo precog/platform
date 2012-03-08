@@ -1,6 +1,6 @@
 package com.precog.quirrel
 
-import edu.uwm.cs.gll.ast.Node
+import com.codecommit.gll.ast.Node
 import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.tailrec
 import scala.collection.parallel.ParSet

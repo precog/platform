@@ -41,18 +41,24 @@ class PlatformSpecs extends Specification
     with AkkaIngestServer 
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
-    with DiskMemoizationComponent {
+    with DiskMemoizationComponent { platformSpecs =>
 
-  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
-  trait YggConfig extends BaseConfig with YggEnumOpsConfig with LevelDBQueryConfig with DiskMemoizationConfig with DatasetConsumersConfig 
+  lazy val controlTimeout = Duration(15, "seconds")      // it's just unreasonable to run tests longer than this
+  trait YggConfig extends 
+    BaseConfig with 
+    YggEnumOpsConfig with 
+    LevelDBQueryConfig with 
+    DiskMemoizationConfig with 
+    DatasetConsumersConfig with
+    ProductionActorConfig
 
   object yggConfig extends YggConfig {
     lazy val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
-    lazy val flatMapTimeout = controlTimeout
-    lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+    lazy val flatMapTimeout = Duration(100, "seconds")
+    lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     lazy val sortWorkDir = scratchDir
     lazy val chunkSerialization = SimpleProjectionSerialization
     lazy val memoizationBufferSize = sortBufferSize
@@ -63,10 +69,10 @@ class PlatformSpecs extends Specification
   lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
   type Storage = ActorYggShard
-  object storage extends ActorYggShard {
+  object storage extends ActorYggShard with StandaloneActorEcosystem {
+    type YggConfig = platformSpecs.YggConfig
+    lazy val yggConfig = platformSpecs.yggConfig
     lazy val yggState = shardState 
-    lazy val yggCheckpoints = new TestYggCheckpoints
-    lazy val batchConsumer = BatchConsumer.NullBatchConsumer
   }
   
   object ops extends Ops 
@@ -326,7 +332,10 @@ class PlatformSpecs extends Specification
     val tree = compile(str)
     tree.errors must beEmpty
     val Right(dag) = decorate(emit(tree))
-    consumeEval("dummyUID", dag)
+    consumeEval("dummyUID", dag) match {
+      case Success(result) => result
+      case Failure(error) => throw error
+    }
   }
   
   def startup() {

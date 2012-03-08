@@ -1,7 +1,9 @@
-package com.precog.quirrel
+package com.precog
+package quirrel
 package typer
 
-import edu.uwm.cs.gll.LineStream
+import bytecode.RandomLibrary
+import com.codecommit.gll.LineStream
 import org.specs2.mutable.Specification
 
 import java.io.File
@@ -10,7 +12,8 @@ import scala.io.Source
 object ProvenanceSpecs extends Specification
     with StubPhases
     with Compiler
-    with ProvenanceChecker {
+    with ProvenanceChecker 
+    with RandomLibrary {
 
   import ast._
   
@@ -289,85 +292,31 @@ object ProvenanceSpecs extends Specification
     }
 
     "identify built-in non-reduce dispatch of arity 1 according to its child" in {
-
-      {
-        val tree = compile("std :: time :: year(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: quarter(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: monthOfYear(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: weekOfYear(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: dayOfMonth(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: dayOfWeek(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: hourOfDay(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: minuteOfHour(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
-
-      {
-        val tree = compile("std :: time :: secondOfMinute(load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
+      val f = lib1.head
+      val tree = compile("%s(load(//foo))".format(f.fqn))
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
     }
 
     "identify built-in reduce dispatch of arity 1 given incorrect number of parameters" in {
-      {
-        val tree = compile("std :: time :: secondOfMinute(load(//foo), load(//bar))")
-        tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(IncorrectArity(1, 2))
-      }
+      val f = lib1.head
+      val tree = compile("%s(load(//foo), load(//bar))".format(f.fqn))
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(IncorrectArity(1, 2))
     }
 
     "identify built-in non-reduce dispatch of arity 2 according to its children given unrelated sets" in {
-      {
-        val tree = compile("std :: time :: changeTimeZone(load(//foo), load(//bar))")
-        tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets)
-      }
+      val f = lib2.head
+      val tree = compile("%s(load(//foo), load(//bar))".format(f.fqn))
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
 
     "identify built-in non-reduce dispatch of arity 2 according to its children given related sets" in {
-      
-      {
-        val tree = compile("std :: time :: changeTimeZone(load(//foo), load(//foo))")
-        tree.provenance mustEqual StaticProvenance("/foo")
-        tree.errors must beEmpty
-      }
+      val f = lib2.head
+      val tree = compile("""%s(load(//foo), "bar")""".format(f.fqn))
+      tree.provenance mustEqual StaticProvenance("/foo")
+      tree.errors must beEmpty
     }
     
     "identify load dispatch with static params according to its path" in {

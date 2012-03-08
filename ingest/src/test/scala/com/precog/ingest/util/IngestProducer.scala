@@ -23,6 +23,8 @@ import akka.util.duration._
 
 import blueeyes.bkka.AkkaDefaults
 
+import blueeyes.json.JsonParser
+
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 import blueeyes.core.data.BijectionsChunkJson._
@@ -51,11 +53,11 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
       val start = System.nanoTime
 
       val samples = List(
-        ("/campaigns/", DistributedSampleSet(0, sampler = AdSamples.adCampaignSample _)),
-        ("/organizations/", DistributedSampleSet(0, sampler = AdSamples.adOrganizationSample _)),
-        ("/impressions/", DistributedSampleSet(0, sampler = AdSamples.interactionSample _)),
-        ("/clicks/", DistributedSampleSet(0, sampler = AdSamples.interactionSample2 _)),
-        ("/events/", DistributedSampleSet(0, sampler = AdSamples.eventsSample _)))
+        ("/campaigns/", DistributedSampleSet(0, sampler = AdSamples.adCampaignSample)),
+        ("/organizations/", DistributedSampleSet(0, sampler = AdSamples.adOrganizationSample)),
+        ("/impressions/", DistributedSampleSet(0, sampler = AdSamples.interactionSample)),
+        ("/clicks/", DistributedSampleSet(0, sampler = AdSamples.interactionSample2)),
+        ("/events/", DistributedSampleSet(0, sampler = AdSamples.eventsSample)))
 
       val testRuns = 0.until(threadCount).map(_ => new TestRun(samples))
 
@@ -75,7 +77,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
     close
   }
 
-  class TestRun(samples: List[(String, DistributedSampleSet)]) extends Runnable {
+  class TestRun(samples: List[(String, DistributedSampleSet[JObject])]) extends Runnable {
     private var errors = 0
     def errorCount = errors
       override def run() {
@@ -133,6 +135,59 @@ repeats - number of of times to repeat test (default: 1)
 
 object WebappIngestProducer {
   def main(args: Array[String]) =  new WebappIngestProducer(args).run()
+}
+
+
+object JsonLoader extends App {
+  def usage() {
+    println(
+"""
+Usage:
+
+  command {host} {token} {json data file}
+"""
+    )
+  }
+
+  val client = new HttpClientXLightWeb
+
+  def run(url: String, token: String, datafile: String) {
+    val data = scala.io.Source.fromFile(datafile).toList.mkString
+    val json = JsonParser.parse(data)
+    json match {
+      case JArray(elements) => elements.foreach { send(url, token, _ ) } 
+      case _                =>
+        println("Error the input file must contain an array of elements to insert")
+        System.exit(1)
+    }
+  }
+
+  def send(url: String, token: String, event: JValue) {
+    
+    val f: Future[HttpResponse[JValue]] = client.path(url)
+                                                .query("tokenId", token)
+                                                .contentType(application/MimeTypes.json)
+                                                .post[JValue]("")(event)
+    Await.ready(f, 10 seconds) 
+    f.value match {
+      case Some(Right(HttpResponse(status, _, _, _))) if status.code == OK => ()
+      case Some(Right(HttpResponse(status, _, _, _)))                       => 
+        throw new RuntimeException("Server returned error code with request")
+      case Some(Left(ex))                                              => 
+        throw ex
+      case _                                                           => 
+        throw new RuntimeException("Error processing insert request") 
+    }
+  }
+
+  if(args.size < 3) {
+    usage()
+    System.exit(1)
+  } else {
+    run(args(0), args(1), args(2))
+  }
+  
+  AkkaDefaults.actorSystem.shutdown
 }
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {

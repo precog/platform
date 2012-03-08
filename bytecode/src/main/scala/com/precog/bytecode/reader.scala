@@ -13,6 +13,9 @@ trait Reader extends Instructions {
 trait BytecodeReader extends Reader {
   import instructions._
   import Function._
+
+  private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
+  private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
     val version = buffer.getInt()
@@ -57,7 +60,7 @@ trait BytecodeReader extends Reader {
         
         case 0x61 => Some(WrapArray)
 
-        case 0xB0 => builtIn1 map BuiltInFunction1
+        case 0xB0 => stdlib1Ops.get(((code >> 8) & 0xFFFFFF).toInt)
         
         case _ => None
       }
@@ -89,7 +92,7 @@ trait BytecodeReader extends Reader {
         case 0xA0 => Some(DerefObject)
         case 0xA1 => Some(DerefArray)
 
-        case 0xB1 => builtIn2 map BuiltInFunction2
+        case 0xB1 => stdlib2Ops.get(((code >> 8) & 0xFFFFFF).toInt)
         
         case _ => None
       }
@@ -110,30 +113,6 @@ trait BytecodeReader extends Reader {
         case _ => None
       }
 
-      lazy val builtIn1 = ((code >> 8) & 0xFF) match {
-        case 0x00 => Some(TimeZone)
-        case 0x01 => Some(Year)
-        case 0x02 => Some(QuarterOfYear)
-        case 0x03 => Some(MonthOfYear)
-        case 0x04 => Some(WeekOfYear)
-        case 0x10 => Some(DayOfYear)
-        case 0x05 => Some(DayOfMonth)
-        case 0x06 => Some(DayOfWeek)
-        case 0x07 => Some(HourOfDay)
-        case 0x08 => Some(MinuteOfHour)
-        case 0x09 => Some(SecondOfMinute)
-        case 0x11 => Some(MillisOfSecond)
-
-        case _    => None
-      }
-
-      lazy val builtIn2 = ((code >> 8) & 0xFF) match {
-        case 0x00 => Some(ChangeTimeZone)
-        case 0x01 => Some(MillisToISO)
-
-        case _    => None
-      }
-      
       lazy val tpe = (code & 0xFF) match {
         case 0x00 => Some(Het)
       }
