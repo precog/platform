@@ -68,6 +68,7 @@ object AdSamples {
   val handlingCharges = List(5.00,7.00,10.00,0)
 
   val departments = List("sales", "marketing", "operations", "engineering", "manufacturing", "research")
+ 
   def gaussianIndex(size: Int): Gen[Int] = {
     Gen( p => {
       def sample: Double = {
@@ -248,7 +249,6 @@ object AdSamples {
     val dateTime = new DateTime(time.toLong, timeZone)
     format.print(dateTime)
   }
-
 }
 
 case class DistributedSampleSet[T](val queriableSampleSize: Int, sampler: Gen[T], private val recordedSamples: Vector[T] = Vector()) extends SampleSet[T] { self =>

@@ -46,46 +46,56 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   final val EventFlag = 1
 
   def chunkSize: Int
-
-  def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = IO {
-    out.writeInt(ev.size)
-    ev.foldLeft((Option.empty[Header], IO(()))) {
-      case ((oldHeader, io), (ids, sv)) => 
+  
+  def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = {
+    val (_, result) = ev.foldLeft((Option.empty[Header], IO(out.writeInt(ev.size)))) {
+      case ((oldHeader, io), (ids, sv)) => {
         val newHeader = Header(ids.size, sv.structure)
-        val nextIO = if (oldHeader.forall(_ == newHeader)) {
-          io >> writeEvent(out, (ids, sv))
+        if (oldHeader.exists(_ == newHeader)) {
+          (oldHeader, io >> writeEvent(out, (ids, sv)))
         } else {
-          io >> writeHeader(out, newHeader) >> writeEvent(out, (ids, sv))
+          (Some(newHeader), io >> writeHeader(out, newHeader) >> writeEvent(out, (ids, sv)))
         }
-
-        (Option(newHeader), nextIO)
+      }
     }
+    
+    result
   }
     
   def readElement(in: DataInputStream): IO[Option[Vector[SEvent]]] = {
     def loop(in: DataInputStream, acc: Vector[SEvent], i: Int, header: Option[Header]): IO[Option[Vector[SEvent]]] = { 
-      in.readInt() match {
-        case HeaderFlag =>
-          for {
-            newHeader <- readHeader(in)
-            result    <- loop(in, acc, i, Some(newHeader))
-          } yield result
-
-        case EventFlag => header match {
-          case None    => IO(None)
-          case Some(h) => 
+      if (i > 0) {
+        IO(in.readInt()) flatMap {
+          case HeaderFlag =>
             for {
-              nextElement <- readEvent(in, h.idCount, h.structure)
-              result      <- loop(in, acc :+ nextElement, i - 1, header)
+              newHeader <- readHeader(in)
+              result    <- loop(in, acc, i, Some(newHeader))
             } yield result
+
+          case EventFlag => header match {
+            case None    => IO(None)
+            case Some(h) => 
+              for {
+                nextElement <- readEvent(in, h.idCount, h.structure)
+                result      <- loop(in, acc :+ nextElement, i - 1, header)
+              } yield result
+          }
         }
+      } else {
+        if (acc.isEmpty) IO(None)
+        else IO(Some(acc))
       }
     }
 
-    for {
-      length <- IO { in.readInt() }
-      result <- loop(in, Vector.empty[SEvent], length, None)
-    } yield result
+    {
+      for {
+        length <- IO(in.readInt())
+        result <- loop(in, Vector.empty[SEvent], length, None)
+      } yield result
+    } except {
+      case ex: java.io.EOFException => IO(None)
+      case ex => ex.printStackTrace; IO(None)
+    }
   }
 
   def writeHeader(data: DataOutputStream, header: Header): IO[Unit] = IO {
@@ -132,22 +142,25 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
     id.map(data.writeLong(_))
   }
 
-  def writeValue(data: DataOutputStream, sv: SValue): IO[Unit] = IO {
-    sv.fold(
-      obj = obj       => obj.map { 
-        case (_, v)   => writeValue(data, v)
-      },
-      arr = arr       => arr.map(v => writeValue(data, v)),
-      str = str       => data.writeUTF(str),
-      bool = bool     => data.writeBoolean(bool),
-      long = long     => data.writeLong(long),
-      double = double => data.writeDouble(double),
-      num = num       => {
-        val bytes = num.as[Array[Byte]]
-        data.writeInt(bytes.length)
-        data.write(bytes, 0, bytes.length)
-      },
-      nul = sys.error("nothing should be written") )
+  def writeValue(data: DataOutputStream, sv: SValue): IO[Unit] = {
+    def determineValue(data: DataOutputStream, sv: SValue): Unit = {
+      sv.fold(
+        obj = obj       => obj.map { 
+          case (_, v)   => determineValue(data, v)
+        },
+        arr = arr       => arr.map(v => determineValue(data, v)),
+        str = str       => data.writeUTF(str),
+        bool = bool     => data.writeBoolean(bool),
+        long = long     => data.writeLong(long),
+        double = double => data.writeDouble(double),
+        num = num       => {
+          val bytes = num.as[Array[Byte]]
+          data.writeInt(bytes.length)
+          data.write(bytes, 0, bytes.length)
+        },
+        nul = data.writeInt(0))
+    }
+    IO(determineValue(data, sv))
   }
 
   def readEvent(data: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = {
@@ -199,7 +212,10 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
       val sdecimalarb: Array[Byte] = new Array(length)
       data.read(sdecimalarb)
       CNum(sdecimalarb.as[BigDecimal])
-    case SNull                  => CNull
+    case SNull                  => {
+      data.readInt()
+      CNull
+    }
     case SEmptyObject           => CEmptyObject
     case SEmptyArray            => CEmptyArray
   }

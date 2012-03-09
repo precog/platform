@@ -129,9 +129,19 @@ trait SValue {
     }
   }
 
-  lazy val structure: Seq[(JPath, ColumnType)] = fold(
-    obj = m => m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPathField(name) \ path, ctype) }},
-    arr = a => a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPathIndex(index) \ path, ctype) }},
+  def structure: Seq[(JPath, ColumnType)] = fold(
+    obj = m => {
+      if (m.isEmpty) List((JPath(), SEmptyObject))
+      else {
+        m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPathField(name) \ path, ctype) }}
+      }
+    },
+    arr = a => {
+      if (a.isEmpty) List((JPath(), SEmptyArray))
+      else {
+        a.zipWithIndex.flatMap { case (value, index) => value.structure map { case (path, ctype) => (JPathIndex(index) \ path, ctype) }}
+      }
+    },
     str = s => List((JPath(), SStringArbitrary)),
     bool = b => List((JPath(), SBoolean)),
     long = l => List((JPath(), SLong)),
@@ -375,7 +385,7 @@ trait ColumnTypeSerialization {
     case SDouble                => "Double"
     case SDecimalArbitrary      => "Decimal"
     case SNull                  => "Null"
-    case SEmptyObject           => "SEmptyObject"
+    case SEmptyObject           => "EmptyObject"
     case SEmptyArray            => "EmptyArray"
   } 
 
