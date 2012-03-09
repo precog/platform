@@ -31,7 +31,9 @@ import com.precog.shard.yggdrasil._
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
+import akka.util.Timeout
 import akka.util.Duration
+import akka.util.duration._
 
 import java.io.File
 
@@ -40,14 +42,13 @@ import org.streum.configrity.Configuration
 import scalaz._
 import Scalaz._
 
-trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
+trait YggdrasilProfilingSpec extends Specification with PerformanceSpec {
 
   "yggdrasil" should {
     sequential 
 
-    val timeout = Duration(30, "seconds")
-    val tmpDir = newTempDir 
-   
+    val timeout = Duration(5000, "seconds")
+
     val config = Configuration.parse("""
           precog {
             kafka {
@@ -70,15 +71,24 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
             batch {
               host = devqclus03.reportgrid.com 
               port = 9092
-              topic = central_event_store          }
+              topic = central_event_store
+            }
           }
           zookeeper {
             hosts = devqclus03.reportgrid.com:2181
-            basepath = [ "com", "precog", "ingest", "v1" ]          prefix = test
+            basepath = [ "com", "precog", "ingest", "v1" ]
+            prefix = test
           } 
         """)  
+    val tmpDir = newTempDir() 
+    lazy val shard = new TestShard(config, tmpDir)
+    lazy val executor = new TestQueryExecutor(config, shard)
+    
+    step {    
+      Await.result(shard.actorsStart, timeout)
+    }
 
-    def insert(shard: TestShard, path: Path, batchSize: Int, batches: Int) {
+    def insert(shard: TestShard, path: Path, pid: Int, batchSize: Int, batches: Int) {
 
       val batch = new Array[EventMessage](batchSize)
 
@@ -89,7 +99,7 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
         while(i < batchSize) {
           val jval = AdSamples.adCampaignSample.sample.get
           val event = Event(path, "token", jval, Map.empty)
-          batch(i) = EventMessage(EventId(0, id), event)
+          batch(i) = EventMessage(EventId(pid, id), event)
           i += 1
           id += 1
         }
@@ -100,42 +110,79 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
     }
 
     "insert" in {
-      val shard = new TestShard(config, tmpDir)
-      Await.result(shard.actorsStart, timeout)
-      val batchSize = 1000
-      val elements = 10000
-     
-      try { 
-        insert(shard, Path("/test/large/"), batchSize, elements / batchSize)
-      } finally {
-        Await.result(shard.actorsStop, timeout)
-      }
-    }
-
-    "not fail during startup" in {
-      val shard = new TestShard(config, tmpDir)
-      val executor = new TestQueryExecutor(config, shard)
-      val t = new Thread() {
-        override def run() {
-          val limit = 100
-          var cnt = 0 
-          while(cnt < limit) {
-            val result = executor.execute("token", "count(load(//test/large))")
-            cnt += 1
-          }
+      performBatch(10000, 7000) { i =>
+        val batchSize = 1000
+        var cnt = 0
+        while(true) {
+          println("Test " + cnt)
+          insert(shard, Path("/test/large/"), 0, batchSize, i / batchSize)   
+          cnt += 1
         }
       }
-      t.start()
-      Await.result(shard.actorsStart, timeout)
-      t.join
-      Await.result(shard.actorsStop, timeout)
-      success
-    }
-
+    }.pendingUntilFixed
+    
+    "read large" in {
+      performBatch(10000, 4000) { i =>
+        var cnt = 0 
+        while(true) {
+          println("Test " + cnt)
+          val result = executor.execute("token", "count(load(//test/large))") 
+          result match {
+            case Success(jval) => 
+            case Failure(e) => new RuntimeException("Query result failure")
+          }
+          cnt += 1
+        }
+      }
+    }.pendingUntilFixed
+    
+    "read small" in {
+      insert(shard, Path("/test/small1"), 1, 100, 1)
+      
+      performBatch(100, 5000) { i =>
+      
+        var cnt = 0
+        while(true) {
+          if(cnt % 100 == 0) println("Test " + cnt)
+          val result = executor.execute("token", "count(load(//test/small1))") 
+          result match {
+            case Success(jval) =>
+            case Failure(e) => new RuntimeException("Query result failure")
+          }
+          cnt += 1
+        }
+      }
+    }.pendingUntilFixed
+    
+    "multi-thread read" in {
+      insert(shard, Path("/test/small2"), 2, 100, 1)
+      val threadCount = 10 
+      val threads = (0.until(threadCount)) map { _ =>
+        new Thread {
+          override def run() {
+            var cnt = 0
+            while(true) {
+              if(cnt % 100 == 0) println("Test " + cnt)
+              val result = executor.execute("token", "count(load(//test/small2))") 
+              result match {
+                case Success(jval) =>
+                case Failure(e) => new RuntimeException("Query result failure")
+              }
+              cnt += 1
+            }
+          }
+        } 
+      }
+      performBatch(10, 2500) { i =>
+          threads.foreach{ _.start }
+          threads.foreach{ _.join }
+      } 
+    }.pendingUntilFixed
+    
     "cleanup" in {
+      Await.result(shard.actorsStop, timeout) 
       cleanupTempDir(tmpDir)
       success
     }
   }
-
 }
