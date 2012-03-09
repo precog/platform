@@ -38,7 +38,7 @@ trait StubYggShardComponent {
 
   trait Storage extends YggShard {
 
-    def routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+    def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
       val chunkSize = 2000

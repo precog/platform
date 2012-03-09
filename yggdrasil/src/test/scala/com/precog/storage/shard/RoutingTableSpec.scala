@@ -20,14 +20,8 @@ class RoutingTableSpec extends Specification {
     def toProjDesc(colDescs: List[ColumnDescriptor]) = 
       ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
 
-    "project an empty event to an empty set of projection actions" in {
-      val rt = AltSingleColumnProjectionRoutingTable 
-
-      rt.route(EventData(0, Set.empty)) must_== Array.empty
-    }
-
     "project an event with one property to a single projection action" in {
-      val rt = AltSingleColumnProjectionRoutingTable 
+      val rt = new SingleColumnProjectionRoutingTable
       
       val jval = JObject(
         JField("selector", JString("Test")) :: Nil 
@@ -49,7 +43,7 @@ class RoutingTableSpec extends Specification {
     }
 
     "project an event with n properties to n projection actions" in {
-      val rt = AltSingleColumnProjectionRoutingTable 
+      val rt = new SingleColumnProjectionRoutingTable
 
       val jval = JObject(
         JField("selector", JString("Test")) ::

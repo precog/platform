@@ -91,7 +91,7 @@ object LevelDBByteProjectionSpec {
 class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
   "a byte projection generated from sample data" should {
     "return the arguments of project, when unproject is applied to project" in {
-      val routingTable: RoutingTable = SingleColumnProjectionRoutingTable
+      val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0)
       //println(sampleData)
