@@ -75,6 +75,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   }
   
   lazy val routingActor = {
+    val routingTable = new SingleColumnProjectionRoutingTable
     actorSystem.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionsActor, metadataActor, actorSystem.scheduler)), "router")
   }
   
@@ -140,7 +141,6 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   
   private val metadataSyncPeriod = Duration(1, "minutes")
   
-  private lazy val routingTable = SingleColumnProjectionRoutingTable
   
   private lazy val ingestBatchConsumer = {
     new KafkaBatchConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaTopic)
@@ -184,6 +184,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   }
   
   lazy val routingActor = {
+    val routingTable = new SingleColumnProjectionRoutingTable 
     actorSystem.actorOf(Props(new RoutingActor(routingTable, None, projectionsActor, metadataActor, actorSystem.scheduler)), "router")
   }
   
@@ -243,8 +244,6 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   }
   
   private val metadataSyncPeriod = Duration(1, "minutes")
-  
-  private lazy val routingTable = SingleColumnProjectionRoutingTable
   
   private lazy val metadataSerializationActor = {
     actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, yggState.metadataIO)), "metadata_serializer")

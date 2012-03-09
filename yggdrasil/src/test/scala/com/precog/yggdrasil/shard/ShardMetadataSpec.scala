@@ -102,13 +102,11 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
     }
 
-    
-
     "return all selectors for a given path" ! check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)), "metadata_test")
 
       val fut = actor ? FindSelectors(sample(0).path)
       
@@ -126,7 +124,7 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
 
       val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)))
+      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)), "metadata_test")
 
       val fut = actor ? FindDescriptors(sample(0).path, sample(0).data.flattenWithPath.head._1)
 

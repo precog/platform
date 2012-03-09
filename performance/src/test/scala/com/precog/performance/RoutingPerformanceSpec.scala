@@ -74,7 +74,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
       val projectionActors: ActorRef = 
         system.actorOf(Props(new MockProjectionActors(projectionActor)), "mock_projections_actor")
 
-      val routingTable: RoutingTable = AltSingleColumnProjectionRoutingTable
+      val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       
       val ingestActor: ActorRef = 
         system.actorOf(Props(new MockIngestActor(inserts / batchSize, barrier, batch)), "mock_shard_ingest")

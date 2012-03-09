@@ -109,75 +109,75 @@ trait YggdrasilProfilingSpec extends Specification with PerformanceSpec {
       }
     }
 
-    "insert" in {
-      performBatch(10000, 7000) { i =>
-        val batchSize = 1000
-        var cnt = 0
-        while(true) {
-          println("Test " + cnt)
-          insert(shard, Path("/test/large/"), 0, batchSize, i / batchSize)   
-          cnt += 1
-        }
-      }
-    }.pendingUntilFixed
+//    "insert" in {
+//      performBatch(10000, 7000) { i =>
+//        val batchSize = 1000
+//        var cnt = 0
+//        while(true) {
+//          println("Test " + cnt)
+//          insert(shard, Path("/test/large/"), cnt, batchSize, i / batchSize)   
+//          cnt += 1
+//        }
+//      }
+//    }
     
-    "read large" in {
-      performBatch(10000, 4000) { i =>
-        var cnt = 0 
-        while(true) {
-          println("Test " + cnt)
-          val result = executor.execute("token", "count(load(//test/large))") 
-          result match {
-            case Success(jval) => 
-            case Failure(e) => new RuntimeException("Query result failure")
-          }
-          cnt += 1
-        }
-      }
-    }.pendingUntilFixed
+//    "read large" in {
+//      performBatch(10000, 4000) { i =>
+//        var cnt = 0 
+//        while(true) {
+//          println("Test " + cnt)
+//          val result = executor.execute("token", "count(load(//test/large))") 
+//          result match {
+//            case Success(jval) => 
+//            case Failure(e) => new RuntimeException("Query result failure")
+//          }
+//          cnt += 1
+//        }
+//      }
+//    }
     
-    "read small" in {
-      insert(shard, Path("/test/small1"), 1, 100, 1)
-      
-      performBatch(100, 5000) { i =>
-      
-        var cnt = 0
-        while(true) {
-          if(cnt % 100 == 0) println("Test " + cnt)
-          val result = executor.execute("token", "count(load(//test/small1))") 
-          result match {
-            case Success(jval) =>
-            case Failure(e) => new RuntimeException("Query result failure")
-          }
-          cnt += 1
-        }
-      }
-    }.pendingUntilFixed
-    
-    "multi-thread read" in {
-      insert(shard, Path("/test/small2"), 2, 100, 1)
-      val threadCount = 10 
-      val threads = (0.until(threadCount)) map { _ =>
-        new Thread {
-          override def run() {
-            var cnt = 0
-            while(true) {
-              if(cnt % 100 == 0) println("Test " + cnt)
-              val result = executor.execute("token", "count(load(//test/small2))") 
-              result match {
-                case Success(jval) =>
-                case Failure(e) => new RuntimeException("Query result failure")
-              }
-              cnt += 1
-            }
-          }
-        } 
-      }
-      performBatch(10, 2500) { i =>
-          threads.foreach{ _.start }
-          threads.foreach{ _.join }
-      } 
-    }.pendingUntilFixed
+//    "read small" in {
+//      insert(shard, Path("/test/small1"), 1, 100, 1)
+//      
+//      performBatch(100, 5000) { i =>
+//      
+//        var cnt = 0
+//        while(true) {
+//          if(cnt % 100 == 0) println("Test " + cnt)
+//          val result = executor.execute("token", "count(load(//test/small1))") 
+//          result match {
+//            case Success(jval) =>
+//            case Failure(e) => new RuntimeException("Query result failure")
+//          }
+//          cnt += 1
+//        }
+//      }
+//    }
+//    
+//    "multi-thread read" in {
+//      insert(shard, Path("/test/small2"), 2, 100, 1)
+//      val threadCount = 10 
+//      val threads = (0.until(threadCount)) map { _ =>
+//        new Thread {
+//          override def run() {
+//            var cnt = 0
+//            while(true) {
+//              if(cnt % 100 == 0) println("Test " + cnt)
+//              val result = executor.execute("token", "count(load(//test/small2))") 
+//              result match {
+//                case Success(jval) =>
+//                case Failure(e) => new RuntimeException("Query result failure")
+//              }
+//              cnt += 1
+//            }
+//          }
+//        } 
+//      }
+//      performBatch(10, 2500) { i =>
+//          threads.foreach{ _.start }
+//          threads.foreach{ _.join }
+//      } 
+//    }.pendingUntilFixed
     
     "cleanup" in {
       Await.result(shard.actorsStop, timeout) 
