@@ -54,7 +54,7 @@ import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 
 import com.precog.analytics.Path
-import com.precog.common.NullQueryExecutor
+import com.precog.daze._
 import com.precog.common.security._
 //import com.precog.api.{ReportGridConfig, ReportGridClient, HttpClient, Server} 
 //import com.precog.api.blueeyes.ReportGrid

@@ -64,7 +64,7 @@ import scalaz.NonEmptyList
 import scalaz.Scalaz._
 
 import com.precog.analytics.Path
-import com.precog.common._
+import com.precog.daze.QueryExecutor
 import com.precog.ct._
 import com.precog.ct.Mult._
 import com.precog.ct.Mult.MDouble._

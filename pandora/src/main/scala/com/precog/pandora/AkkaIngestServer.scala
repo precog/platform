@@ -22,7 +22,7 @@ package pandora
 
 import common.Event
 import common.EventMessage
-import common.NullQueryExecutor
+import daze.NullQueryExecutor
 import ingest.EventStore
 import ingest.IngestServer
 import yggdrasil.shard.YggShard
