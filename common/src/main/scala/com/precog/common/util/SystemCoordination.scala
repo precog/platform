@@ -270,7 +270,7 @@ class ZookeeperSystemCoordination(zkHosts: String,
     val agentPath = relayAgentPath(agent)
     val state = if(relayAgentExists(agent)) {
       val bytes = zkc.readData(agentPath).asInstanceOf[Array[Byte]]
-      val jvalue = JsonParser.parse(new String(bytes))
+      val jvalue = JsonParser.parse(new String(bytes)) //TODO: Specify an encoding here and wherever this is written
       val state = jvalue.validated[EventRelayState]
       logger.debug("%s: RESTORED".format(state))
       state
