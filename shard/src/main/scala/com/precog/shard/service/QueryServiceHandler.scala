@@ -16,7 +16,7 @@ import scalaz.Validation._
 
 import com.weiglewilczek.slf4s.Logging
 
-import com.precog.common._
+import com.precog.daze._
 import com.precog.common.security._
 
 class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)

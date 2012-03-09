@@ -1,5 +1,5 @@
 package com.precog
-package common
+package daze
 
 import blueeyes.json.JsonAST._
 
