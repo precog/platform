@@ -114,10 +114,12 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[JPath]].toSet
       
       system.shutdown
+      while(!system.isTerminated) { Thread.sleep(100) }
      
       val expected = extractSelectorsFor(sample(0).path)(sample)
       
       result must_== expected
+
     }
 
     "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
@@ -132,6 +134,8 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       
       system.shutdown
      
+      while(!system.isTerminated) { Thread.sleep(100) }
+
       val expected = extractMetadataFor(sample(0).path, sample(0).data.flattenWithPath.head._1)(sample)
     
       result must_== expected

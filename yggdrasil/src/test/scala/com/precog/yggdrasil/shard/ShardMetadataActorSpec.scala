@@ -40,7 +40,7 @@ import scala.collection.immutable.ListMap
 object ShardMetadataActorSpec extends Specification {
 
   val system = ActorSystem("shard_metadata_test")
-  implicit val timeout = system.settings.ActorTimeout
+  implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
     "correctly propagates initial message clock on flush request" in {

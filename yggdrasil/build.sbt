@@ -36,7 +36,7 @@ testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 
 libraryDependencies ++= Seq(
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
-  "com.typesafe.akka"           %  "akka-actor"         % "2.0-M3",
+  "com.typesafe.akka"           %  "akka-actor"         % "2.0",
   "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
   "org.apache"                  %% "kafka-core"         % "0.7.5",
   "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.2-SNAPSHOT"                changing(),
