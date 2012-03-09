@@ -32,6 +32,7 @@ import blueeyes.util.Clock
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
+import akka.util.Timeout
 
 import IngestService._
 //import com.precog.api.ReportGridTrackingClient
@@ -54,7 +55,7 @@ import com.precog.common.security._
 
 import scalaz.Validation
 
-class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>
@@ -63,7 +64,7 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
           try { 
             for {
               event <- futureContent
-              _ <- eventStore.save(Event.fromJValue(p, event, t.uid))
+              _ <- eventStore.save(Event.fromJValue(p, event, t.uid), insertTimeout)
             } yield {
               // could return the eventId to the user?
               HttpResponse[JValue](OK)

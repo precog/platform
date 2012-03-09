@@ -38,6 +38,7 @@ import com.precog.ingest.service._
 import akka.actor.ActorSystem
 import akka.dispatch.Future
 import akka.dispatch.Await
+import akka.util.Timeout
 import akka.util.duration._
 
 import blueeyes.bkka.AkkaDefaults
@@ -98,6 +99,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
 
   class TestRun(samples: List[(String, DistributedSampleSet[JObject])]) extends Runnable {
     private var errors = 0
+    val timeout = new Timeout(120000)
     def errorCount = errors
       override def run() {
         samples.foreach {
@@ -106,7 +108,7 @@ abstract class IngestProducer(args: Array[String]) extends RealisticIngestMessag
             0.until(messages).foreach { i =>
               if(i % 10 == 0 && verbose) println("Sending to [%s]: %d".format(path, i))
               try {
-                send(event)
+                send(event, timeout)
               } catch {
                 case ex => 
                   ex.printStackTrace
@@ -148,7 +150,7 @@ threads - number of producer threads (default: 1)
 repeats - number of of times to repeat test (default: 1)
     """
   
-  def send(event: Event): Unit
+  def send(event: Event, timeout: Timeout): Unit
   def close(): Unit = ()
 }
 
@@ -214,7 +216,7 @@ class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val token = config.getProperty("token", StaticTokenManager.rootUID)
   val client = new HttpClientXLightWeb 
 
-  def send(event: Event) {
+  def send(event: Event, timeout: Timeout) {
     
     val f: Future[HttpResponse[JValue]] = client.path(base)
                                                 .query("tokenId", token)
@@ -250,8 +252,8 @@ class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val zookeeperHosts = config.getProperty("zookeeperHosts", "127.0.0.1:2181")
   lazy val store = kafkaStore(testTopic)
 
-  def send(event: Event) {
-    store.save(event)
+  def send(event: Event, timeout: Timeout) {
+    store.save(event, timeout)
   }
 
   def kafkaStore(topic: String): KafkaEventStore = {

@@ -40,11 +40,12 @@ import org.streum.configrity.Configuration
 import scalaz._
 import Scalaz._
 
-trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
+trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
   sequential 
 
   val timeout = Duration(30, "seconds")
-
+  val tmpFile = File.createTempFile("insert_test", "_db")
+ 
   val config = Configuration.parse("""
         precog {
           kafka {
@@ -67,27 +68,20 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           batch {
             host = devqclus03.reportgrid.com 
             port = 9092
-            topic = central_event_store
-          }
+            topic = central_event_store          }
         }
         zookeeper {
           hosts = devqclus03.reportgrid.com:2181
-          basepath = [ "com", "precog", "ingest", "v1" ]
-          prefix = test
+          basepath = [ "com", "precog", "ingest", "v1" ]          prefix = test
         } 
       """)  
-  val tmpFile = File.createTempFile("insert_test", "_db")
-  lazy val shard = new TestShard(config, tmpFile)
-  lazy val executor = new TestQueryExecutor(config, shard)
-  
+
   step {    
     tmpFile.delete
     tmpFile.mkdirs
-    Await.result(shard.actorsStart, timeout)
   }
 
   "yggdrasil" should {
-
     def insert(shard: TestShard, path: Path, batchSize: Int, batches: Int) {
 
       val batch = new Array[EventMessage](batchSize)
@@ -109,61 +103,38 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
       }
     }
 
-    "insert 10K elements in 7s".performBatch(10000, 7000) { i =>
+    "insert 10K elements in 7s".performBatch(1000, 1000) { i =>
       val batchSize = 1000
  
+      val shard = new TestShard(config, tmpFile)
+      Await.result(shard.actorsStart, timeout)
       insert(shard, Path("/test/large/"), batchSize, i / batchSize)   
+      Await.result(shard.actorsStop, timeout)
     }
-    
-    "read 10K elements in 4s".performBatch(10000, 4000) { i =>
-      val result = executor.execute("token", "count(load(//test/large))") 
-      result match {
-        case Success(jval) => 
-        case Failure(e) => new RuntimeException("Query result failure")
-      }
-    }
-    
-    "read 100 elements 100 times in 5s".performBatch(100, 5000) { i =>
-      insert(shard, Path("/test/small1"), 100, 1)
-      
-      var cnt = 0
-      while(cnt < i) {
-        val result = executor.execute("token", "count(load(//test/small1))") 
-        result match {
-          case Success(jval) =>
-          case Failure(e) => new RuntimeException("Query result failure")
-        }
-        cnt += 1
-      }
-    }
-    
-    "multi-thread read 100 elements 100 times in 3s".performBatch(10, 2500) { i =>
-      insert(shard, Path("/test/small2"), 100, 1)
-      val threadCount = 10 
-      
-      val threads = (0.until(threadCount)) map { _ =>
-        new Thread {
-          override def run() {
-            var cnt = 0
-            while(cnt < i) {
-              val result = executor.execute("token", "count(load(//test/small2))") 
-              result match {
-                case Success(jval) =>
-                case Failure(e) => new RuntimeException("Query result failure")
-              }
-              cnt += 1
-            }
+
+    "not fail during startup" in {
+      val shard = new TestShard(config, tmpFile)
+      val executor = new TestQueryExecutor(config, shard)
+      val t = new Thread() {
+        override def run() {
+          val limit = 100
+          var cnt = 0 
+          while(cnt < limit) {
+            val result = executor.execute("token", "count(load(//test/small1))")
+            cnt += 1
           }
-        } 
+        }
       }
-      threads.foreach{ _.start }
-      threads.foreach{ _.join }
-      
+      t.start()
+      Await.result(shard.actorsStart, timeout)
+      t.join
+      Await.result(shard.actorsStop, timeout)
+      success
     }
+
   }
 
   step {
-    Await.result(shard.actorsStop, timeout) 
     def delDir(dir : File) {
       dir.listFiles.foreach {
         case d if d.isDirectory => delDir(d)
@@ -173,30 +144,4 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
     }
     delDir(tmpFile)
   }
-}
-
-class TestQueryExecutor(config: Configuration, testShard: TestShard) extends YggdrasilQueryExecutor {
-
-  lazy val actorSystem = ActorSystem("test_query_executor")
-  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  lazy val yggConfig = new YggdrasilQueryExecutorConfig {
-      val config = TestQueryExecutor.this.config
-      val sortWorkDir = scratchDir
-      val chunkSerialization = SimpleProjectionSerialization
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-    }  
-  type Storage = TestShard
-  object ops extends Ops
-  object query extends QueryAPI
-
-  val storage = testShard
-}
-
-class TestShard(config: Configuration, dataDir: File) extends ActorYggShard with StandaloneActorEcosystem {
-  type YggConfig = ProductionActorConfig
-  lazy val yggConfig = new ProductionActorConfig {
-    lazy val config = TestShard.this.config
-  }
-  lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
 }

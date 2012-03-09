@@ -185,7 +185,7 @@ object RoutingActor {
 case object ControlledStop
 case class AwaitShutdown(replyTo: ActorRef)
 
-class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
+class RoutingActor(routingTable: RoutingTable, ingestActor: Option[ActorRef], projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
   
   import RoutingActor._
 
@@ -209,7 +209,7 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: ActorRef, projection
     case CheckMessages =>
       if(!inShutdown) {
         //logger.debug("Routing Actor - Check Messages")
-        ingestActor ! GetMessages(self)
+        ingestActor foreach { actor => actor ! GetMessages(self) }
       }
     
     case NoMessages =>

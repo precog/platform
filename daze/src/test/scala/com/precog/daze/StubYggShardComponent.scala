@@ -92,8 +92,7 @@ trait StubYggShardComponent {
       }
     }
 
-    def store(em: EventMessage) = sys.error("Feature not implemented in test stub.")
-    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
+    def storeBatch(ems: Seq[EventMessage], timeout: Timeout) = sys.error("Feature not implemented in test stub.")
 
     def metadata = new StorageMetadata {
       implicit val dispatcher = actorSystem.dispatcher
@@ -106,7 +105,7 @@ trait StubYggShardComponent {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, UnlimitedAccessControl, metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] =
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection] =
       Future(projections(descriptor))
   }
 }

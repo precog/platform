@@ -78,7 +78,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       val routingTable: RoutingTable = AltSingleColumnProjectionRoutingTable
       val routingActor: ActorRef = 
-        system.actorOf(Props(new RoutingActor(routingTable, ingestActor, projectionActors, metadataActor, system.scheduler, Duration(5, "millis"))), "router")
+        system.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionActors, metadataActor, system.scheduler, Duration(5, "millis"))), "router")
     
       val start = System.nanoTime
  

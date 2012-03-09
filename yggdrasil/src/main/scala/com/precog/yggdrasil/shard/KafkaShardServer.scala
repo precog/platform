@@ -59,15 +59,10 @@ object KafkaShardServer extends Logging {
     } yield {
       restorationResult match {
         case Success(state) =>
-          new ActorYggShard with 
-            ProductionActorEcosystem with
-            YggConfigComponent {
+          new ActorYggShard with ProductionActorEcosystem with YggConfigComponent {
             type YggConfig = KafkaShardServerConfig 
             val yggState = state 
             val yggConfig = cfg 
-            val kafkaIngestConfig = cfg
-            val batchConsumer = BatchConsumer.NullBatchConsumer 
-            val yggCheckpoints = new TestYggCheckpoints
           }
 
         case Failure(e) => 
@@ -79,10 +74,10 @@ object KafkaShardServer extends Logging {
 
     val run = for (shard <- yggShard) yield {
       
-      Await.result(shard.start, timeout)
+      Await.result(shard.actorsStart, timeout)
 
       Runtime.getRuntime.addShutdownHook(new Thread() {
-        override def run() { Await.result(shard.stop, timeout) }
+        override def run() { Await.result(shard.actorsStop, timeout) }
       })
     }
 

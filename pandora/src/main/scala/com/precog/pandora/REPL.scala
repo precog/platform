@@ -279,12 +279,12 @@ object Console extends App {
           // start ingest server
           Await.result(start, controlTimeout)
           // start storage shard 
-          Await.result(storage.start, controlTimeout)
+          Await.result(storage.actorsStart, controlTimeout)
         }
 
         def shutdown = IO {
           // stop storaget shard
-          Await.result(storage.stop, controlTimeout)
+          Await.result(storage.actorsStop, controlTimeout)
           // stop ingest server
           Await.result(stop, controlTimeout)
 

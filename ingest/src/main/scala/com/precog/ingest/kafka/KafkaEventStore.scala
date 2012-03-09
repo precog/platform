@@ -21,6 +21,8 @@ package com.precog
 package ingest
 package kafka
 
+import akka.util.Timeout
+
 import common._
 import common.util._
 import ingest.util._
@@ -51,7 +53,7 @@ class LocalKafkaEventStore(localTopic: String, localConfig: Properties)(implicit
 
   def start(): Future[Unit] = Future { () } 
 
-  def save(event: Event) = Future {
+  def save(event: Event, timeout: Timeout) = Future {
     val data = new ProducerData[String, Event](localTopic, event)
     producer.send(data)
   }
@@ -63,7 +65,7 @@ class LocalKafkaEventStore(localTopic: String, localConfig: Properties)(implicit
 class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
   private val nextEventId = new AtomicInteger(firstEventId)
   
-  def save(event: Event) = {
+  def save(event: Event, timeout: Timeout) = {
     val eventId = nextEventId.incrementAndGet
     router.route(EventMessage(producerId, eventId, event)) map { _ => () }
   }
