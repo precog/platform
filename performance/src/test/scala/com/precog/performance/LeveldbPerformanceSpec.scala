@@ -72,7 +72,7 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
       val createOptions = (new Options).createIfMissing(true)  
       val db: DB = factory.open(tmpDir, createOptions)
       try { 
-        performBatch(1000000, 3000) { i =>
+        performBatch(1000000, 4500) { i =>
           val iter = db.iterator.asInstanceOf[JniDBIterator]
           iter.seekToFirst
 
