@@ -85,7 +85,11 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
                              (block.producerId, nextSequenceId.getAndIncrement)
   }
 
-  // How to approach this from a lazy viewpoint (deferred at this time but need to return)
+  // How to approach this from a lazy viewpoint (deferred at this time but need to return) -nm
+  // The correct way to do this is to pass the initial state as a constructor argument, and make
+  // the constructor private and only expose it via the companion object's apply method. Since registering
+  // the relay agent (as is done in loadInitialState) is an operation that can fail, you should not be
+  // able to even construct such an id sequence if you can't obtain the initial state.
   private var state: InternalState = loadInitialState
 
   private def loadInitialState() = {
