@@ -56,7 +56,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
           for {
             descriptors <- storage.userMetadataView(testUID).findProjections(dataPath, JPath(".cpm"))
             val descriptor = descriptors.toSeq.head._1
-            projection <- storage.projection(descriptor)
+            projection <- storage.projection(descriptor, timeout)
           } yield {
             (descriptor, projection)
           },

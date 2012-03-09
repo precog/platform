@@ -1,6 +1,7 @@
 package com.precog.ingest
 package kafka
 
+import akka.util.Timeout
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
@@ -44,7 +45,7 @@ trait KafkaEventStoreComponent {
     val relayAgent = new KafkaRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
 
     new EventStore {
-      def save(event: Event) = eventStore.save(event)
+      def save(event: Event, timeout: Timeout) = eventStore.save(event, timeout)
       def start() = relayAgent.start flatMap { _ => eventStore.start }
       def stop() = eventStore.stop flatMap { _ => relayAgent.stop }
     }

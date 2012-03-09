@@ -136,10 +136,8 @@ trait YggdrasilQueryExecutor
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard
 
-  val actorSystem: ActorSystem
-
-  def startup() = storage.start
-  def shutdown() = storage.stop map { _ => actorSystem.shutdown } 
+  def startup() = storage.actorsStart
+  def shutdown() = storage.actorsStop
 
   case class StackException(error: StackError) extends Exception(error.toString)
 

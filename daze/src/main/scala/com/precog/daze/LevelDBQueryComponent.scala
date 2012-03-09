@@ -94,7 +94,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       def retrieveAndMerge(path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
         import scalaz.std.list._
         {for {
-          projections <- Future.sequence(descriptors map { storage.projection(_)(yggConfig.projectionRetrievalTimeout) })
+          projections <- Future.sequence(descriptors map { storage.projection(_, yggConfig.projectionRetrievalTimeout) })
         } yield {
           mergeAllChunked(projections.map(_.getColumnValues(path, selector, expiresAt)).toSeq: _*)
         }} recover {

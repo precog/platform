@@ -22,106 +22,30 @@ import akka.actor.Terminated
 import akka.actor.ReceiveTimeout
 import akka.actor.ActorTimeoutException
 
-import com.weiglewilczek.slf4s._
-
-trait YggShard {
-  def userMetadataView(uid: String): MetadataView
-  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection]
-  def store(msg: EventMessage): Future[Unit]
-  def storeBatch(msgs: Seq[EventMessage]): Future[Unit]
-}
-
 trait YggShardComponent {
   type Storage <: YggShard
   def storage: Storage
 }
 
-trait ActorYggShard extends
-    YggShard with
-    ActorEcosystem with
-    Logging {
-  val pre = "[Yggdrasil Shard]"
+trait YggShard {
+  def userMetadataView(uid: String): MetadataView
+  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection]
+  def store(msg: EventMessage, timeout: Timeout): Future[Unit] = storeBatch(Vector(msg), timeout) 
+  def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit]
+}
+
+trait ActorYggShard extends YggShard with ActorEcosystem {
   
   def yggState: YggState
 
-  lazy implicit val system = ActorSystem("storage_shard")
-  lazy implicit val executionContext = ExecutionContext.defaultExecutionContext
-  lazy implicit val dispatcher = system.dispatcher
+  lazy implicit val dispatcher = actorSystem.dispatcher
 
   private val metadata: StorageMetadata = new ShardMetadata(metadataActor)
+  
   def userMetadataView(uid: String): MetadataView = new UserMetadataView(uid, UnlimitedAccessControl, metadata)
   
-  val metadataSyncPeriod = Duration(1, "minutes")
-  
-  lazy val metadataSyncCancel = system.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
-
-  import logger._
-
-  def start: Future[Unit] = Future {  
-    // Note this is just to 'unlazy' the metadata
-    // sync scheduler call
-    this.metadataSyncCancel
-    routingActor ! CheckMessages
-  }
-
-  def stop: Future[Unit] = {
-    val defaultSystem = system
-    val defaultTimeout = 300 seconds
-    implicit val timeout: Timeout = defaultTimeout
-
-    def actorStop(actor: ActorRef, name: String): Future[Unit] = {
-      for {
-        _ <- Future(debug(pre + "Stopping " + name + " actor"))
-        b <- gracefulStop(actor, defaultTimeout)(defaultSystem) 
-      } yield {
-        debug(pre + "Stop call for " + name + " actor returned " + b) 
-      } 
-    } recover { 
-      case e => error("Error stopping " + name + " actor", e) 
-    }
-
-    def routingActorStop = for {
-      _ <- Future(debug(pre + "Sending controlled stop message to routing actor"))
-      _ <- (routingActor ? ControlledStop) recover { case e => error("Controlled stop failed for routing actor.", e) }
-      _ <- actorStop(routingActor, "routing")
-    } yield ()
-
-    def flushMetadata = {
-      debug(pre + "Flushing metadata")
-      (metadataActor ? FlushMetadata(metadataSerializationActor)) recover { case e => error("Error flushing metadata", e) }
-    }
-
-    for {
-      _  <- Future(info(pre + "Stopping"))
-      _  <- Future {
-              debug(pre + "Stopping metadata sync") 
-              metadataSyncCancel.cancel 
-            }
-      _  <- routingActorStop
-      _  <- flushMetadata 
-      _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionsActor, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
-      _  <- Future {
-              debug(pre + "Stopping actor system")
-              system.shutdown 
-              info(pre + "Stopped")
-            } recover { 
-              case e => error("Error stopping actor system", e)
-            }
-    } yield ()
-  }
-
-  def store(msg: EventMessage): Future[Unit] = storeBatch(Vector(msg))
-  
-  def storeBatch(msgs: Seq[EventMessage]): Future[Unit] = {
-    implicit val storeTimeout: Timeout = Duration(10, "seconds")
-    val messages = Messages(msgs)
-    (routingActor ? messages) map { _ => () }
-  }
-  
-  def projection(descriptor: ProjectionDescriptor)(implicit timeout: Timeout): Future[Projection] = {
+  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection] = {
+    implicit val ito = timeout 
     (projectionsActor ? AcquireProjection(descriptor)) flatMap {
       case ProjectionAcquired(actorRef) =>
         projectionsActor ! ReleaseProjection(descriptor)
@@ -131,32 +55,11 @@ trait ActorYggShard extends
         sys.error("Error acquiring projection actor: " + err)
     }
   }
-
-  def gracefulStop(target: ActorRef, timeout: Duration)(implicit system: ActorSystem): Future[Boolean] = {
-    if (target.isTerminated) {
-      Promise.successful(true)
-    } else {
-      val result = Promise[Boolean]()
-      system.actorOf(Props(new Actor {
-        // Terminated will be received when target has been stopped
-        context watch target
-        
-        target ! PoisonPill
-        // ReceiveTimeout will be received if nothing else is received within the timeout
-        context setReceiveTimeout timeout
-
-        def receive = {
-          case Terminated(a) if a == target ⇒
-            result success true
-            context stop self
-          case ReceiveTimeout ⇒
-            result failure new ActorTimeoutException(
-              "Failed to stop [%s] within [%s]".format(target.path, context.receiveTimeout))
-            context stop self
-        }
-      }))
-      result
-    }
+  
+  def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
+    implicit val ito = timeout
+    (routingActor ? Messages(msgs)) map { _ => () }
   }
+  
 }
 

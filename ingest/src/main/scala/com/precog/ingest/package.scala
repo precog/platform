@@ -1,5 +1,7 @@
 package com.precog
 
+import akka.util.Timeout
+
 import common._
 import ingest._
 
@@ -20,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 package object ingest {
 
   trait EventStore {
-    def save(event: Event): Future[Unit]
+    def save(event: Event, timeout: Timeout): Future[Unit]
     def start(): Future[Unit]
     def stop(): Future[Unit]
   }

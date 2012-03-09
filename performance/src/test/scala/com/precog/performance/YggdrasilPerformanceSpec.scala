@@ -26,14 +26,45 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
 
   val timeout = Duration(30, "seconds")
 
+  val config = Configuration.parse("""
+        precog {
+          kafka {
+            enabled = true 
+            topic {
+              events = central_event_store
+            }
+            consumer {
+              zk {
+                connect = devqclus03.reportgrid.com:2181 
+                connectiontimeout {
+                  ms = 1000000
+                }
+              }
+              groupid = shard_consumer
+            }
+          }
+        }
+        kafka {
+          batch {
+            host = devqclus03.reportgrid.com 
+            port = 9092
+            topic = central_event_store
+          }
+        }
+        zookeeper {
+          hosts = devqclus03.reportgrid.com:2181
+          basepath = [ "com", "precog", "ingest", "v1" ]
+          prefix = test
+        } 
+      """)  
   val tmpFile = File.createTempFile("insert_test", "_db")
-  lazy val shard = new TestShard(tmpFile)
-  lazy val executor = new TestQueryExecutor(shard)
+  lazy val shard = new TestShard(config, tmpFile)
+  lazy val executor = new TestQueryExecutor(config, shard)
   
   step {    
     tmpFile.delete
     tmpFile.mkdirs
-    Await.result(shard.start, timeout)
+    Await.result(shard.actorsStart, timeout)
   }
 
   "yggdrasil" should {
@@ -53,7 +84,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           i += 1
           id += 1
         }
-        val result = shard.storeBatch(batch)
+        val result = shard.storeBatch(batch, timeout)
         Await.result(result, timeout)
         b += 1
       }
@@ -113,7 +144,7 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
   }
 
   step {
-    Await.result(shard.stop, timeout) 
+    Await.result(shard.actorsStop, timeout) 
     def delDir(dir : File) {
       dir.listFiles.foreach {
         case d if d.isDirectory => delDir(d)
@@ -125,42 +156,12 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
   }
 }
 
-class TestQueryExecutor(testShard: TestShard) extends YggdrasilQueryExecutor {
+class TestQueryExecutor(config: Configuration, testShard: TestShard) extends YggdrasilQueryExecutor {
 
   lazy val actorSystem = ActorSystem("test_query_executor")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   lazy val yggConfig = new YggdrasilQueryExecutorConfig {
-      val config = Configuration.parse("""
-        precog {
-          kafka {
-            enabled = true 
-            topic {
-              events = central_event_store
-            }
-            consumer {
-              zk {
-                connect = devqclus03.reportgrid.com:2181 
-                connectiontimeout {
-                  ms = 1000000
-                }
-              }
-              groupid = shard_consumer
-            }
-          }
-        }
-        kafka {
-          batch {
-            host = devqclus03.reportgrid.com 
-            port = 9092
-            topic = central_event_store
-          }
-        }
-        zookeeper {
-          hosts = devqclus03.reportgrid.com:2181
-          basepath = [ "com", "precog", "ingest", "v1" ]
-          prefix = test
-        } 
-      """)  
+      val config = TestQueryExecutor.this.config
       val sortWorkDir = scratchDir
       val chunkSerialization = SimpleProjectionSerialization
       val memoizationBufferSize = sortBufferSize
@@ -173,6 +174,10 @@ class TestQueryExecutor(testShard: TestShard) extends YggdrasilQueryExecutor {
   val storage = testShard
 }
 
-class TestShard(dataDir: File) extends ActorYggShard with StandaloneActorEcosystem {
+class TestShard(config: Configuration, dataDir: File) extends ActorYggShard with StandaloneActorEcosystem {
+  type YggConfig = ProductionActorConfig
+  lazy val yggConfig = new ProductionActorConfig {
+    lazy val config = TestShard.this.config
+  }
   lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
 }

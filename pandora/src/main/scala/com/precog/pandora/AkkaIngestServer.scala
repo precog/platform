@@ -12,6 +12,7 @@ import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
+import akka.util.Timeout
 
 import blueeyes.bkka.AkkaDefaults
 
@@ -36,9 +37,9 @@ trait AkkaIngestServer extends IngestServer { self =>
     new EventStore {
       private val idSource = new java.util.concurrent.atomic.AtomicInteger(0)
 
-      def save(event: Event): Future[Unit] = {
+      def save(event: Event, timeout: Timeout): Future[Unit] = {
         val seqId = idSource.incrementAndGet
-        (storage.store(EventMessage(0, seqId, event))).mapTo[Unit]
+        (storage.store(EventMessage(0, seqId, event), timeout)).mapTo[Unit]
       }
 
       def start() = Future { () }(asyncContext)

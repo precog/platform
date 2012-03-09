@@ -63,6 +63,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
+  val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   def tokenManagerFactory(config: Configuration): TokenManager
@@ -94,7 +95,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("track") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging))
+                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout))
               }
             }
           }

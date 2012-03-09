@@ -340,12 +340,12 @@ class PlatformSpecs extends Specification
   
   def startup() {
     // start storage shard 
-    Await.result(storage.start, controlTimeout)
+    Await.result(storage.actorsStart, controlTimeout)
   }
   
   def shutdown() {
     // stop storage shard
-    Await.result(storage.stop, controlTimeout)
+    Await.result(storage.actorsStop, controlTimeout)
     
     actorSystem.shutdown()
   }
