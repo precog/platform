@@ -11,9 +11,8 @@ import java.io.File
 import java.nio.ByteBuffer
 
 class PerformanceSuite extends
-//  LeveldbPerformanceSpec with
-//  RoutingPerformanceSpec with
-//  YggdrasilPerformanceSpec with
-  YggdrasilStartupErrorSpec {
-
-}
+  LeveldbPerformanceSpec with
+  RoutingPerformanceSpec with
+  YggdrasilPerformanceSpec //with
+//  YggdrasilStartupErrorSpec //with
+//  YggdrasilProfilingSpec

@@ -23,9 +23,10 @@ import java.util.concurrent.atomic.AtomicInteger
 trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   "routing actor" should {
     
-    "route 100K elements in 5s".performBatch(100000, 5000) { inserts =>
-
+    "route" in { 
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
+
+      val inserts = 100000
 
       val system = ActorSystem("routing_actor_test")
 
@@ -45,9 +46,6 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       val barrier = new CountDownLatch(1)
  
-      val ingestActor: ActorRef = 
-        system.actorOf(Props(new MockIngestActor(inserts / batchSize, barrier, batch)), "mock_shard_ingest")
-     
       val metadataActor: ActorRef = 
         system.actorOf(Props(new MockMetadataActor()), "mock_metadata_actor")
 
@@ -58,21 +56,26 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
         system.actorOf(Props(new MockProjectionActors(projectionActor)), "mock_projections_actor")
 
       val routingTable: RoutingTable = AltSingleColumnProjectionRoutingTable
+      
+      val ingestActor: ActorRef = 
+        system.actorOf(Props(new MockIngestActor(inserts / batchSize, barrier, batch)), "mock_shard_ingest")
       val routingActor: ActorRef = 
         system.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionActors, metadataActor, system.scheduler, Duration(5, "millis"))), "router")
-    
-      val start = System.nanoTime
- 
-      routingActor ! CheckMessages
       
-      barrier.await
+      try { 
+        performBatch(inserts, 5000) { i =>
+        
+          routingActor ! CheckMessages
+          
+          barrier.await
 
-      val fut = routingActor ? ControlledStop
-      
-      Await.result(fut, Duration(60, "seconds"))      
-      
-      val finish = System.nanoTime
-      system.shutdown
+          val fut = routingActor ? ControlledStop
+          
+          Await.result(fut, Duration(60, "seconds"))      
+        }    
+      } finally {
+        system.shutdown
+      }
     }
   }
 }

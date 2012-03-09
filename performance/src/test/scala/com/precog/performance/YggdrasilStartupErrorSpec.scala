@@ -22,47 +22,43 @@ import scalaz._
 import Scalaz._
 
 trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
-  sequential 
-
-  val timeout = Duration(30, "seconds")
-  val tmpFile = File.createTempFile("insert_test", "_db")
- 
-  val config = Configuration.parse("""
-        precog {
-          kafka {
-            enabled = true 
-            topic {
-              events = central_event_store
-            }
-            consumer {
-              zk {
-                connect = devqclus03.reportgrid.com:2181 
-                connectiontimeout {
-                  ms = 1000000
-                }
-              }
-              groupid = shard_consumer
-            }
-          }
-        }
-        kafka {
-          batch {
-            host = devqclus03.reportgrid.com 
-            port = 9092
-            topic = central_event_store          }
-        }
-        zookeeper {
-          hosts = devqclus03.reportgrid.com:2181
-          basepath = [ "com", "precog", "ingest", "v1" ]          prefix = test
-        } 
-      """)  
-
-  step {    
-    tmpFile.delete
-    tmpFile.mkdirs
-  }
 
   "yggdrasil" should {
+    sequential 
+
+    val timeout = Duration(30, "seconds")
+    val tmpDir = newTempDir 
+   
+    val config = Configuration.parse("""
+          precog {
+            kafka {
+              enabled = true 
+              topic {
+                events = central_event_store
+              }
+              consumer {
+                zk {
+                  connect = devqclus03.reportgrid.com:2181 
+                  connectiontimeout {
+                    ms = 1000000
+                  }
+                }
+                groupid = shard_consumer
+              }
+            }
+          }
+          kafka {
+            batch {
+              host = devqclus03.reportgrid.com 
+              port = 9092
+              topic = central_event_store          }
+          }
+          zookeeper {
+            hosts = devqclus03.reportgrid.com:2181
+            basepath = [ "com", "precog", "ingest", "v1" ]          prefix = test
+          } 
+        """)  
+
     def insert(shard: TestShard, path: Path, batchSize: Int, batches: Int) {
 
       val batch = new Array[EventMessage](batchSize)
@@ -84,24 +80,28 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
       }
     }
 
-    "insert 10K elements in 7s".performBatch(1000, 1000) { i =>
-      val batchSize = 1000
- 
-      val shard = new TestShard(config, tmpFile)
+    "insert" in {
+      val shard = new TestShard(config, tmpDir)
       Await.result(shard.actorsStart, timeout)
-      insert(shard, Path("/test/large/"), batchSize, i / batchSize)   
-      Await.result(shard.actorsStop, timeout)
+      val batchSize = 1000
+      val elements = 10000
+     
+      try { 
+        insert(shard, Path("/test/large/"), batchSize, elements / batchSize)
+      } finally {
+        Await.result(shard.actorsStop, timeout)
+      }
     }
 
     "not fail during startup" in {
-      val shard = new TestShard(config, tmpFile)
+      val shard = new TestShard(config, tmpDir)
       val executor = new TestQueryExecutor(config, shard)
       val t = new Thread() {
         override def run() {
           val limit = 100
           var cnt = 0 
           while(cnt < limit) {
-            val result = executor.execute("token", "count(load(//test/small1))")
+            val result = executor.execute("token", "count(load(//test/large))")
             cnt += 1
           }
         }
@@ -113,16 +113,10 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
       success
     }
 
+    "cleanup" in {
+      cleanupTempDir(tmpDir)
+      success
+    }
   }
 
-  step {
-    def delDir(dir : File) {
-      dir.listFiles.foreach {
-        case d if d.isDirectory => delDir(d)
-        case f => f.delete()
-      }
-      dir.delete()
-    }
-    delDir(tmpFile)
-  }
 }
