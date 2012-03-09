@@ -2,6 +2,8 @@ package com.precog.yggdrasil.shard
 
 import org.specs2._
 import org.specs2.mutable.Specification
+import org.specs2.specification.AfterExample
+import org.specs2.specification.BeforeExample
 import org.scalacheck._
 
 import blueeyes.json.JPath
@@ -23,9 +25,18 @@ import akka.pattern.ask
 import akka.util._
 import akka.util.duration._
 import akka.dispatch._
+import akka.testkit._
 
-class ShardMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage {
- 
+class ShardMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample {
+
+  implicit var actorSystem: ActorSystem = null 
+  def before() {
+    actorSystem = ActorSystem("test")
+  }
+  def after() {
+    actorSystem.shutdown
+  }
+
   def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
     def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
       case Event(path, tokenId, data, _) => data.flattenWithPath.map {
@@ -85,19 +96,15 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
     "return all selectors for a given path" ! check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
+      val event = sample(0)
 
-      val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)), "metadata_test")
+      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
 
-      val fut = actor ? FindSelectors(sample(0).path)
-      
+      val fut = actor ? FindSelectors(event.path)
 
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[JPath]].toSet
       
-      system.shutdown
-      while(!system.isTerminated) { Thread.sleep(100) }
-     
-      val expected = extractSelectorsFor(sample(0).path)(sample)
+      val expected = extractSelectorsFor(event.path)(sample)
       
       result must_== expected
 
@@ -105,19 +112,15 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
     "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
+      val event = sample(0)
 
-      val system = ActorSystem("metadata_test_system")
-      val actor = system.actorOf(Props(new ShardMetadataActor(metadata, VectorClock.empty)), "metadata_test")
+      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
 
-      val fut = actor ? FindDescriptors(sample(0).path, sample(0).data.flattenWithPath.head._1)
+      val fut = actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)
 
       val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]]
-      
-      system.shutdown
-     
-      while(!system.isTerminated) { Thread.sleep(100) }
 
-      val expected = extractMetadataFor(sample(0).path, sample(0).data.flattenWithPath.head._1)(sample)
+      val expected = extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
     
       result must_== expected
 
