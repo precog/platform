@@ -78,21 +78,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
 
   def die(x: => Ops#X) = throw x
 
-  case class LimitList[A](values: List[A])
-
-  implicit def arbLimitList[A: Gen](size: Int): Arbitrary[LimitList[A]] = Arbitrary {
-    for {
-      i <- choose(0, size)
-      l <- listOfN(i, implicitly[Gen[A]])
-    } yield LimitList(l)
-  }
-
   "sort" should {
-    implicit val arbChunk: Gen[Vector[SEvent]] = chunk(3, 3, 2)
-    implicit val SEventOrder: Order[SEvent] = Order[List[Long]].contramap((_: SEvent)._1.toList)
-    implicit val SEventOrdering = SEventOrder.toScalaOrdering
-    implicit val arbLL = arbLimitList[Vector[SEvent]](5)
-
     "sort values" in check {
       (ll: LimitList[Vector[SEvent]]) => {
         val events = ll.values

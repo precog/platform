@@ -20,15 +20,12 @@
 package com.precog.daze
 
 import akka.actor.ActorSystem
-import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
 import akka.util.Timeout
 import akka.util.duration._
 
-import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
-import blueeyes.json.JsonParser
 
 import com.precog.common._
 import com.precog.common.util._
@@ -41,14 +38,14 @@ import SValue._
 import java.io.File
 import scalaz.effect._
 import scalaz.iteratee._
-import scalaz.std.AllInstances._
+import scalaz.std.list._
 import Iteratee._
 
-import scala.collection.immutable.SortedMap
-import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
+import org.specs2.ScalaCheck
+import ArbitrarySValue._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent with ScalaCheck {
   type X = Throwable
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
@@ -59,7 +56,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
   type YggConfig = DiskMemoizationConfig 
   object yggConfig extends DiskMemoizationConfig {
     val memoizationBufferSize = 10
-    val memoizationWorkDir = new File("/tmp")
+    val memoizationWorkDir = IOUtils.createTmpDir("memotest")
     val memoizationSerialization = BinaryProjectionSerialization
   }
 
@@ -70,42 +67,24 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
   "memoization" should {
     "ensure that results are not recomputed" in {
       withMemoizationContext { ctx =>
-        val (descriptor, projection) = Await.result(
-          for {
-            descriptors <- storage.userMetadataView(testUID).findProjections(dataPath, JPath(".cpm"))
-            val descriptor = descriptors.toSeq.head._1
-            projection <- storage.projection(descriptor, timeout)
-          } yield {
-            (descriptor, projection)
-          },
-          intToDurationInt(30).seconds
-        )
+        @volatile var i = 0;
+        check { (ll: LimitList[Vector[SEvent]]) => 
+          synchronized { i += 1 } 
+          val events: List[Vector[SEvent]] = ll.values
+          val enum = enumPStream[X, Vector[SEvent], IO](events.toStream)
 
-        val expected = storage.sampleData.map(_ \ "cpm") map {
-          case JInt(v) => v.toLong * 2
-        }
+          ctx.memoizing[X, Vector[SEvent]](i) must beLike {
+            case Left(f) => 
+              val results: List[Vector[SEvent]] = (f(consume[X, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO
 
-        val enum = projection.getAllPairs(System.currentTimeMillis + 10000) map { _ map {
-          case (ids, values) => (ids, SLong(values(0).asInstanceOf[CNum].value.toLong * 2))
-        } }
-
-        ctx.memoizing[X, Vector[SEvent]](0) must beLike {
-          case Left(f) => 
-            (
-              (f(consume[X, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
-                case (_, v) => v.mapLongOr(-1L)(identity[Long])
-              } must_== expected
-            ) and (
-              ctx.memoizing[X, Vector[SEvent]](0) must beLike {
-                case Right(d) => 
-                  (
-                    (consume[X, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO.flatten map {
-                      //case (_, v) => v.mapBigDecimalOr(-1L)(v => v.toLong)
-                      case (_, v) => v.mapLongOr(-1L)(v => v.toLong) // TODO: re-fix this for BigDecimal if that's really what it's supposed to be
-                    } must_== expected
-                  ) 
+              results must_== events and {
+                ctx.memoizing[X, Vector[SEvent]](i) must beLike {
+                  case Right(d) => 
+                    val results2: List[Vector[SEvent]] = (consume[X, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO
+                    results2 must_== events
+                }
               }
-            )
+          }
         }
       }
     }

@@ -77,7 +77,7 @@ object IOUtils {
     dir.delete()
   }
 
-  def createTmpDir(prefix: String) {
+  def createTmpDir(prefix: String): File = {
     val tmp = File.createTempFile(prefix, "tmp")
     tmp.delete
     tmp.mkdirs
