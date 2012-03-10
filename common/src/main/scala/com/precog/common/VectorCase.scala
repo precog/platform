@@ -73,7 +73,7 @@ private[precog] object VectorCase {
 //    def apply(from: Traversable[_]) = newBuilder[A]
 //  }
   
-  def empty[A] = VectorN[A](Vector.empty)
+  def empty[A]: VectorCase[A] = Vector0
   
   def newBuilder[A]: Builder[A, VectorCase[A]] = new Builder[A, VectorCase[A]] { this: Builder[A, VectorCase[A]] =>
     val small = new ArrayBuffer[A](4)

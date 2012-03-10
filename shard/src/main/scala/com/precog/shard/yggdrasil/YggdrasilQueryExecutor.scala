@@ -100,7 +100,7 @@ trait YggdrasilQueryExecutorComponent {
         } 
       """)  
       val sortWorkDir = scratchDir
-      val chunkSerialization = SimpleProjectionSerialization
+      val chunkSerialization = BinaryProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
     }

@@ -37,7 +37,7 @@ import java.io._
 import com.precog.common.VectorCase
 import com.precog.common.util.IOUtils
 
-import Generators._
+import ArbitrarySValue._
 
 object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
   override val defaultPrettyParams = Pretty.Params(2)
@@ -52,7 +52,6 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
       implicit val arbStream = listOfN(3, arbitrary[Vector[SEvent]]) map { l => l.toStream } 
 
       check { (s: Stream[Vector[SEvent]]) =>
-        //println(Generators.svcount)
         val expected = s.toList
 
         val file = File.createTempFile("test", "ygg")

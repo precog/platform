@@ -86,7 +86,7 @@ object SBTConsole {
 
       lazy val flatMapTimeout = controlTimeout
       lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      lazy val chunkSerialization = SimpleProjectionSerialization
+      lazy val chunkSerialization = BinaryProjectionSerialization
       lazy val sortWorkDir = scratchDir
       lazy val memoizationBufferSize = sortBufferSize
       lazy val memoizationWorkDir = scratchDir
