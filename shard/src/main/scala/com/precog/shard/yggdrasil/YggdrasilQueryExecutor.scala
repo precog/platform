@@ -4,7 +4,6 @@ package yggdrasil
 
 import blueeyes.json.JsonAST._
 
-import common._
 import daze._
 
 import quirrel.Compiler
@@ -13,8 +12,6 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-import com.precog.common.util._
-import com.precog.common.kafka._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 
@@ -25,10 +22,11 @@ import akka.util.Duration
 import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
+
 import scalaz.{Success, Failure, Validation}
+import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
-import scalaz.Validation._
 
 import org.streum.configrity.Configuration
 
@@ -96,7 +94,7 @@ trait YggdrasilQueryExecutorComponent {
 
         state map { yState => new YggdrasilQueryExecutor {
           trait Storage extends ActorYggShard with ProductionActorEcosystem
-          lazy val actorSystem = ActorSystem("akka_ingest_server")
+          lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
           val yggConfig = yConfig
 
