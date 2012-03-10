@@ -186,7 +186,7 @@ object VectorClock extends VectorClockSerialization {
   def empty = apply(Map.empty)
 }
 
-class ZookeeperSystemCoordination(zkHosts: String, 
+class ZookeeperSystemCoordination(private val zkc: ZkClient, 
                       basePaths: Seq[String],
                       prefix: String) extends SystemCoordination with Logging {
 
@@ -210,7 +210,6 @@ class ZookeeperSystemCoordination(zkHosts: String,
   
   lazy val shardCheckpointBase = makeBase(shardCheckpointBasePaths) 
 
-  private val zkc = new ZkClient(zkHosts)
 
   def jvalueToBytes(jval: JValue): Array[Byte] = Printer.compact(Printer.render(jval)).getBytes
 
@@ -356,12 +355,17 @@ class ZookeeperSystemCoordination(zkHosts: String,
 
 object ZookeeperSystemCoordination {
 
+  def apply(zkHosts: String, basePaths: Seq[String], prefix: String) = {
+    val zkc = new ZkClient(zkHosts)
+    new ZookeeperSystemCoordination(zkc, basePaths, prefix)
+  }
+
   val prefix = "prodId-"
   val paths = List("com", "precog", "ingest", "v1")
 
   val testHosts = "localhost:2181"
-  def testZookeeperSystemCoordination(hosts: String = testHosts) = new ZookeeperSystemCoordination(hosts, "test" :: paths, prefix)
+  def testZookeeperSystemCoordination(hosts: String = testHosts) = ZookeeperSystemCoordination(hosts, "test" :: paths, prefix)
 
   val prodHosts = "localhost:2181"
-  def prodZookeeperSystemCoordination(hosts: String = prodHosts) = new ZookeeperSystemCoordination(hosts, paths, prefix)
+  def prodZookeeperSystemCoordination(hosts: String = prodHosts) = ZookeeperSystemCoordination(hosts, paths, prefix)
 }
