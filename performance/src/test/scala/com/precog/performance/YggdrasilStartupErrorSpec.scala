@@ -27,36 +27,8 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
     val timeout = Duration(30, "seconds")
     val tmpDir = newTempDir 
    
-    val config = Configuration.parse("""
-          precog {
-            kafka {
-              enabled = true 
-              topic {
-                events = central_event_store
-              }
-              consumer {
-                zk {
-                  connect = devqclus03.reportgrid.com:2181 
-                  connectiontimeout {
-                    ms = 1000000
-                  }
-                }
-                groupid = shard_consumer
-              }
-            }
-          }
-          kafka {
-            batch {
-              host = devqclus03.reportgrid.com 
-              port = 9092
-              topic = central_event_store          }
-          }
-          zookeeper {
-            hosts = devqclus03.reportgrid.com:2181
-            basepath = [ "com", "precog", "ingest", "v1" ]          prefix = test
-          } 
-        """)  
-
+    val config = Configuration(Map.empty[String, String])
+    
     def insert(shard: TestShard, path: Path, batchSize: Int, batches: Int) {
 
       val batch = new Array[EventMessage](batchSize)
@@ -76,6 +48,8 @@ trait YggdrasilStartupErrorSpec extends Specification with PerformanceSpec {
         Await.result(result, timeout)
         b += 1
       }
+
+      shard.waitForRoutingActorIdle
     }
 
     "insert" in {

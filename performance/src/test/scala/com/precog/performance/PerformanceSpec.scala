@@ -38,8 +38,8 @@ trait PerformanceSpec extends ExamplesFactory {
     System.nanoTime - start
   }
 
-  def newTempDir(): File = IOUtils.createTmpDir "preformance_test"
+  def newTempDir(): File = IOUtils.createTmpDir("preformance_test")
 
-  def cleanupTempDir(dir: File) = IOUtils.recursiveDelete dir
+  def cleanupTempDir(dir: File) = IOUtils.recursiveDelete(dir)
 
 }

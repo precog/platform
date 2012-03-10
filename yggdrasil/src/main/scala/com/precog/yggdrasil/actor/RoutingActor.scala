@@ -33,6 +33,7 @@ object RoutingActor {
 }
 
 case object ControlledStop
+case object Restart 
 case class AwaitShutdown(replyTo: ActorRef)
 
 class RoutingActor(routingTable: RoutingTable, ingestActor: Option[ActorRef], projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
@@ -42,7 +43,11 @@ class RoutingActor(routingTable: RoutingTable, ingestActor: Option[ActorRef], pr
   private var inShutdown = false
 
   def receive = {
-    
+
+    case Restart => 
+      inShutdown = false
+      sender ! ()
+
     case ControlledStop =>
       inShutdown = true 
       self ! AwaitShutdown(sender)

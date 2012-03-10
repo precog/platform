@@ -28,37 +28,7 @@ trait YggdrasilProfilingSpec extends Specification with PerformanceSpec {
 
     val timeout = Duration(5000, "seconds")
 
-    val config = Configuration.parse("""
-          precog {
-            kafka {
-              enabled = true 
-              topic {
-                events = central_event_store
-              }
-              consumer {
-                zk {
-                  connect = devqclus03.reportgrid.com:2181 
-                  connectiontimeout {
-                    ms = 1000000
-                  }
-                }
-                groupid = shard_consumer
-              }
-            }
-          }
-          kafka {
-            batch {
-              host = devqclus03.reportgrid.com 
-              port = 9092
-              topic = central_event_store
-            }
-          }
-          zookeeper {
-            hosts = devqclus03.reportgrid.com:2181
-            basepath = [ "com", "precog", "ingest", "v1" ]
-            prefix = test
-          } 
-        """)  
+    val config = Configuration(Map.empty[String, String])
     val tmpDir = newTempDir() 
     lazy val shard = new TestShard(config, tmpDir)
     lazy val executor = new TestQueryExecutor(config, shard)
@@ -86,6 +56,8 @@ trait YggdrasilProfilingSpec extends Specification with PerformanceSpec {
         Await.result(result, timeout)
         b += 1
       }
+
+      shard.waitForRoutingActorIdle
     }
 
 //    "insert" in {
@@ -156,7 +128,7 @@ trait YggdrasilProfilingSpec extends Specification with PerformanceSpec {
 //          threads.foreach{ _.start }
 //          threads.foreach{ _.join }
 //      } 
-//    }.pendingUntilFixed
+//    }
     
     "cleanup" in {
       Await.result(shard.actorsStop, timeout) 
