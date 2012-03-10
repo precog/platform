@@ -1,4 +1,6 @@
-package com.precog.yggdrasil.shard
+package com.precog
+package yggdrasil
+package actor
 
 import akka.actor._
 import akka.dispatch._
@@ -9,8 +11,6 @@ import akka.pattern.gracefulStop
 
 import com.precog.common.util._
 import com.precog.common.kafka._
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 

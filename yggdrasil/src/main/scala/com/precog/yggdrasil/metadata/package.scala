@@ -5,7 +5,7 @@ import com.precog.common._
 import scalaz.effect._
 import scala.collection.mutable
 
-package object shard {
+package object metadata {
   
   type MetadataMap = Map[MetadataType, Metadata]
   

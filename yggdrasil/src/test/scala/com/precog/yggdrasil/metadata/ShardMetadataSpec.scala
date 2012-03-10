@@ -1,4 +1,7 @@
-package com.precog.yggdrasil.shard
+package com.precog.yggdrasil
+package metadata
+
+import actor._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -10,8 +13,6 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import org.scalacheck.Gen._
-
-import com.precog.yggdrasil._
 
 import com.precog.common._
 import com.precog.common.util._

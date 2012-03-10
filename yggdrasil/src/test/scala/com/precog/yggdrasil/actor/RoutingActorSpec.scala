@@ -1,4 +1,4 @@
-import com.precog.yggdrasil.kafka
+import com.precog.yggdrasil.actor
 
 import org.specs2.mutable._
 

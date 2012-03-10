@@ -1,10 +1,16 @@
 package com.precog
 
 import scalaz.{Order,Ordering}
+import scalaz.effect.IO
+
+import java.io.File
 
 import com.precog.common.VectorCase
 
 package object yggdrasil {
+  type ProjectionDescriptorIO = ProjectionDescriptor => IO[Unit] 
+  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
+  
   type Identity = Long
   type Identities = VectorCase[Identity]
   type SEvent = (Identities, SValue)

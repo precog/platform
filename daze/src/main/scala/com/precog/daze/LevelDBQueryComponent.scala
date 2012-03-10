@@ -5,9 +5,8 @@ import scala.annotation.tailrec
 
 import com.precog.common.Path
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.kafka._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.leveldb._
-import com.precog.yggdrasil.shard._
 
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future

@@ -1,26 +1,12 @@
-package com.precog.yggdrasil
-package shard
+package com.precog
+package yggdrasil
+package actor 
 
-import kafka._
-
-import com.precog.common._
-import com.precog.common.kafka._
-import com.precog.common.util._
-
-import akka.actor.ActorRef
-import akka.dispatch.MessageDispatcher
+import com.precog.common.util.{YggCheckpoint, VectorClock, SystemCoordination}
 
 import com.weiglewilczek.slf4s.Logging
 
-import java.util.Properties
-
-import _root_.kafka.consumer._
-import _root_.kafka.message._
-
-import org.streum.configrity.JProperties
-
-import scalaz._
-import Scalaz._
+import scalaz.{Success, Failure}
 
 trait YggCheckpoints {
 

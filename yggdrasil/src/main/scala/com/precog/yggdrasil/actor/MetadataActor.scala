@@ -1,104 +1,17 @@
 package com.precog.yggdrasil
-package shard
+package actor 
 
-import kafka._
+import metadata._
 
 import com.precog.common._
 import com.precog.common.util._
-import com.precog.common.security._
 
-import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.JPath
 
-import akka.actor.{IO => _, _}
-import akka.actor.Actor._
-import akka.pattern.ask
-import akka.routing._
-import akka.dispatch.Future
-import akka.dispatch.MessageDispatcher
-import akka.util.Timeout
-import akka.util.duration._
+import akka.actor.Actor
+import akka.actor.ActorRef
 
-import scala.collection.mutable
-import scala.collection.immutable.ListMap
-import scala.collection.immutable.Set
-
-import scalaz._
-import scalaz.syntax
-import scalaz.effect._
 import scalaz.Scalaz._
-
-import com.weiglewilczek.slf4s.Logging
-
-trait StorageMetadata {
-
-  implicit val dispatcher: MessageDispatcher
-
-  def findSelectors(path: Path): Future[Seq[JPath]]
-
-  def findProjections(path: Path): Future[Map[ProjectionDescriptor, ColumnMetadata]] = {
-    findSelectors(path).flatMap { selectors => 
-      Future.traverse( selectors )( findProjections(path, _) ) map { _.reduce(_ ++ _) }
-    }
-  }
-
-  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
-
-  def findProjections(path: Path, selector: JPath, valueType: SType): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
-    findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
-
-  def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
-    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
-  }
-}
-
-trait MetadataView extends StorageMetadata
-
-class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
-  def findSelectors(path: Path) = metadata.findSelectors(path)
-  def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
-}
-
-class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
-  
-  def findSelectors(path: Path) = {
-    metadata.findSelectors(path) flatMap { selectors =>
-      Future.traverse(selectors) { selector =>
-        findProjections(path, selector) map { result =>
-          if(result.isEmpty) List.empty else List(selector)
-        }
-      } map { _.flatten }
-    }
-  }
-
-  def findProjections(path: Path, selector: JPath) = {
-    metadata.findProjections(path, selector) map { _.filter {
-        case (key, value) =>
-          value forall { 
-            case (colDesc, _) => 
-              val uids = colDesc.authorities.uids
-              accessControl.mayAccessData(uid, path, uids, DataQuery)
-          }
-      }
-    }
-  }
-}
-
-class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
-
-  implicit val serviceTimeout: Timeout = 10 seconds
- 
-  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
-
-  def findProjections(path: Path, selector: JPath) = 
-    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
-
-  def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
-
-}
 
 class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) extends Actor {
 
@@ -201,19 +114,3 @@ case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAct
 
 case class UpdateMetadata(inserts: Seq[InsertComplete]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
-
-class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: MetadataIO) extends Actor with Logging {
-  def receive = {
-    case SaveMetadata(metadata, messageClock) => 
-      logger.debug("Syncing metadata")
-      metadata.toList.map {
-        case (pd, md) => metadataIO(pd, md)
-      }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
-      logger.debug("Registering metadata checkpoint: " + messageClock)
-      checkpoints.metadataPersisted(messageClock)
-  }
-}
-
-sealed trait MetadataSerializationAction
-
-case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock) extends MetadataSerializationAction

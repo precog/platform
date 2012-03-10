@@ -5,8 +5,6 @@ import org.specs2.mutable.Specification
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.kafka._
-import com.precog.yggdrasil.shard._
 
 import akka.actor._
 import akka.pattern.ask

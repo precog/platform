@@ -1,7 +1,6 @@
 package com.precog.daze
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.shard._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 

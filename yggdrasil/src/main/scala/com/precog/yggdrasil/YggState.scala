@@ -1,5 +1,6 @@
 package com.precog.yggdrasil
-package shard
+
+import metadata._
 
 import com.precog.common._
 import com.precog.common.util.IOUtils
@@ -22,7 +23,6 @@ import scalaz.syntax.biFunctor._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 import scalaz.effect.IO
-
 
 case class YggState(
   dataDir: File,
