@@ -20,10 +20,12 @@ package object yggdrasil {
     def apply(id: Identities, sv: SValue): SEvent = (id, sv)
   }
 
+  //TODO: should this not just be an Order[Identities]
   implicit def identityOrder(ids1: Identities, ids2: Identities): Ordering = 
-    prefixIdentityOrder(ids1, ids2, ids1.size min ids2.size)
+    prefixIdentityOrder(ids1, ids2, ids1.length min ids2.length)
 
-  implicit def prefixIdentityOrder(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
+  //TODO: This makes no sense as an implicit function
+  def prefixIdentityOrder(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
     var result: Ordering = Ordering.EQ
     var i = 0
     while (i < prefixLength && (result eq Ordering.EQ)) {
@@ -40,6 +42,7 @@ package object yggdrasil {
     result
   }
 
+  //TODO: This should use Order#contramap
   implicit def combinedIdentitiesOrder[A, B](p1: (Identities, A), p2: (Identities, B)): Ordering = {
     identityOrder(p1._1, p2._1)
   }
