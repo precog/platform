@@ -24,9 +24,11 @@ import org.specs2.mutable.Specification
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
 import com.precog.shard.yggdrasil._
 
 import akka.actor.ActorSystem
+import akka.pattern.ask
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
 import akka.util.Timeout
@@ -45,38 +47,8 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
 
   val timeout = Duration(5000, "seconds")
 
-  val config = Configuration.parse("""
-        precog {
-          kafka {
-            enabled = true 
-            topic {
-              events = central_event_store
-            }
-            consumer {
-              zk {
-                connect = devqclus03.reportgrid.com:2181 
-                connectiontimeout {
-                  ms = 1000000
-                }
-              }
-              groupid = shard_consumer
-            }
-          }
-        }
-        kafka {
-          batch {
-            host = devqclus03.reportgrid.com 
-            port = 9092
-            topic = central_event_store
-          }
-        }
-        zookeeper {
-          hosts = devqclus03.reportgrid.com:2181
-          basepath = [ "com", "precog", "ingest", "v1" ]
-          prefix = test
-        } 
-      """)  
-  
+  val config = Configuration(Map.empty[String, String]) 
+
   val tmpDir = newTempDir() 
   lazy val shard = new TestShard(config, tmpDir)
   lazy val executor = new TestQueryExecutor(config, shard)
@@ -104,8 +76,11 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
         }
         val result = shard.storeBatch(batch, timeout)
         Await.result(result, timeout)
+        
         b += 1
       }
+      
+      shard.waitForRoutingActorIdle
     }
 
     "insert" in {
@@ -202,4 +177,11 @@ class TestShard(config: Configuration, dataDir: File) extends ActorYggShard with
     lazy val config = TestShard.this.config
   }
   lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
+
+  def waitForRoutingActorIdle() {
+    val td = Duration(5000, "seconds")
+    implicit val to = new Timeout(td)
+    Await.result(routingActor ? ControlledStop, td)
+    Await.result(routingActor ? Restart, td)
+  }
 }
