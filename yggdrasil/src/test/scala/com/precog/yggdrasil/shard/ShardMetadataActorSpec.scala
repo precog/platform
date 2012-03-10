@@ -1,7 +1,6 @@
 package com.precog.yggdrasil
 package shard
 
-import com.precog.analytics.Path
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._

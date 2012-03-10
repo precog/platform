@@ -21,7 +21,7 @@ import com.weiglewilczek.slf4s.Logger
 import scalaz.Scalaz._
 import scalaz.{Validation, Success, Failure}
 
-import com.precog.analytics.Path
+import com.precog.common.Path
 import com.precog.common.security._
 
 class TokenRequiredService[A, B](tokenManager: TokenManager, val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 

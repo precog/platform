@@ -1,7 +1,6 @@
 package com.precog.yggdrasil
 package leveldb
 
-import com.precog.analytics.Path
 import com.precog.common._ 
 import com.precog.util._ 
 import com.precog.util.Bijection._

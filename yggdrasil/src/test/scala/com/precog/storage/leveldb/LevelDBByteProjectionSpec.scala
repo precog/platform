@@ -14,7 +14,6 @@ import scala.collection.immutable.ListMap
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.shard._
 import com.precog.common._
-import com.precog.analytics.Path
 import com.precog.common.util._
 
 import LevelDBByteProjectionSpec._

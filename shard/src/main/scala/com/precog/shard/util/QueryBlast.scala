@@ -8,7 +8,7 @@ package com.precog.shard.util
 import akka.dispatch.{Future, Await}
 import akka.util.duration._
 
-import com.precog.analytics.Path
+import com.precog.common.Path
 import com.precog.common.security._
 
 import blueeyes.core.http.HttpResponse

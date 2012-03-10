@@ -15,10 +15,9 @@ import scalaz.syntax.traverse._
 import scalaz.syntax.monad._
 import IterateeT._
 
-import com.precog.analytics.Path
 import com.precog.yggdrasil._
 import com.precog.util._
-import com.precog.common.VectorCase
+import com.precog.common.{Path, VectorCase}
 
 trait EvaluationContext {
   type Context

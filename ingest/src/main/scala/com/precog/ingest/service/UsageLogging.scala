@@ -10,15 +10,9 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.persistence.cache._
 
-import IngestService._
-//import com.precog.api.ReportGridTrackingClient
-//import com.precog.api.Trackable
-//import rosetta.json.blueeyes._
-
 import java.util.concurrent.TimeUnit
 import scalaz.Semigroup
 
-import com.precog.analytics._
 import com.precog.common._
 
 trait UsageLogging {

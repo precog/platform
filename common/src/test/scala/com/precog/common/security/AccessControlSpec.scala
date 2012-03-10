@@ -1,6 +1,5 @@
-package com.precog.common.security
-
-import com.precog.analytics.Path
+package com.precog.common
+package security
 
 import org.specs2.mutable._
 

@@ -1,4 +1,4 @@
-package com.precog.analytics
+package com.precog.common
 
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck

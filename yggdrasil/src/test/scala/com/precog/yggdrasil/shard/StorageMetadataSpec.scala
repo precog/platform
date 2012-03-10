@@ -2,7 +2,6 @@ package com.precog.yggdrasil
 package shard
 
 import com.precog.common._
-import com.precog.analytics._
 
 import org.specs2.mutable.Specification
 

@@ -3,8 +3,6 @@ package shard
 
 import com.precog.common._
 
-import com.precog.analytics.Path
-
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 

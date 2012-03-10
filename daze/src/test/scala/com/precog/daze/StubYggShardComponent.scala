@@ -10,7 +10,6 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
-import com.precog.analytics._
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.util._

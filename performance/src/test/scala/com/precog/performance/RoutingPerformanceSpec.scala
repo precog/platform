@@ -2,7 +2,6 @@ package com.precog.performance
 
 import org.specs2.mutable.Specification
 
-import com.precog.analytics.Path
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._

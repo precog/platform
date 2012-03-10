@@ -1,4 +1,4 @@
-package com.precog.analytics
+package com.precog.common
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._

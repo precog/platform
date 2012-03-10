@@ -1,8 +1,7 @@
 package com.precog.daze
 
-import com.precog.common.VectorCase
+import com.precog.common.{Path, VectorCase}
 import com.precog.yggdrasil._
-import com.precog.analytics.Path
 
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
