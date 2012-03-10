@@ -1,5 +1,5 @@
 package com.precog.yggdrasil
-package actor 
+package actor
 
 import com.precog.common._
 
@@ -7,6 +7,7 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
 
 import org.specs2.mutable._
+import org.specs2.matcher.{Matcher, MatchResult, Expectable}
 
 import scala.collection.immutable.ListMap
 
