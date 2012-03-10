@@ -27,7 +27,6 @@ import scala.collection.mutable.ListBuffer
 import java.util.Properties
 import java.io.{File, FileReader}
 
-import com.precog.analytics.Path
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.util.RealisticIngestMessage

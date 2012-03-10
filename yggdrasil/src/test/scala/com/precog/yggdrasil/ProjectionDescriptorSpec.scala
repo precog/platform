@@ -27,7 +27,6 @@ import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
-import com.precog.analytics.Path
 import com.precog.common._
 
 import scala.collection.immutable.ListMap

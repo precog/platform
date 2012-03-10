@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package util
 
+import com.precog.common.Path
 import com.precog.yggdrasil.leveldb._
 
 import org.iq80.leveldb._
@@ -32,8 +33,6 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
-
-import com.precog.analytics.Path
 
 object YggUtils {
 

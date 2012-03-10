@@ -24,7 +24,6 @@ import kafka._
 
 import com.precog.common._
 import com.precog.common.security._
-import com.precog.analytics._
 import com.precog.common.util._
 
 import java.util.Properties

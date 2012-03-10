@@ -21,7 +21,7 @@ package com.precog
 package yggdrasil
 
 import leveldb._
-import com.precog.analytics.Path
+import com.precog.common.Path
 
 import com.precog.common.VectorCase
 

@@ -19,8 +19,8 @@
  */
 package com.precog.daze
 
-import com.precog.analytics.Path
 import com.precog.yggdrasil.SEvent
+import com.precog.common.Path
 
 import akka.dispatch.ExecutionContext
 

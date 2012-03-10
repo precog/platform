@@ -17,9 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.shard
-package kafka
+package com.precog
+package shard
 
-import yggdrasil._
+import common.security.StaticTokenManager
+import ingest.service.NullUsageLogging
+import shard.yggdrasil.YggdrasilQueryExecutorComponent
 
-object KafkaShardWebapp extends ShardWebapp with YggdrasilQueryExecutorComponent
+import blueeyes.BlueEyesServer
+import blueeyes.util.Clock
+
+import org.streum.configrity.Configuration
+
+trait KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent {
+  
+  val clock = Clock.System
+
+  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
+  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+
+}

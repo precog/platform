@@ -30,8 +30,6 @@ import blueeyes.json.JsonAST._
 
 import org.scalacheck.Gen._
 
-import com.precog.analytics.Path
-
 import com.precog.yggdrasil._
 
 import com.precog.common._

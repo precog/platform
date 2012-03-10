@@ -31,8 +31,6 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import com.precog.analytics._
-
 import scalaz._
 import Scalaz._
 

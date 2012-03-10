@@ -17,7 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.util
+package com.precog.common
+package util
+
+import security.StaticTokenManager
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -27,10 +30,6 @@ import blueeyes.json.JPath
 import org.scalacheck._
 import Gen._
 import Arbitrary.arbitrary
-
-import com.precog.common._
-import com.precog.analytics.Token
-import com.precog.analytics.Path
 
 trait ArbitraryIngestMessage extends ArbitraryJValue {
   import JsonAST._
@@ -78,7 +77,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, Token.Root.tokenId)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, StaticTokenManager.rootUID)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)

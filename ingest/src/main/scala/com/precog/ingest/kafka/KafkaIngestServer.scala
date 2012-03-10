@@ -20,20 +20,32 @@
 package com.precog.ingest
 package kafka
 
+import blueeyes.BlueEyesServer
+import blueeyes.util.Clock
+
 import akka.util.Timeout
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
+import com.precog.ingest.service._
 import com.precog.common.util.ZookeeperSystemCoordination
+import com.precog.common.security.StaticTokenManager
 
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicInteger
 
 import java.net.InetAddress
 
-import scalaz.NonEmptyList
-
 import org.streum.configrity.Configuration
+
+object KafkaIngestServer extends BlueEyesServer with IngestService with KafkaEventStoreComponent {
+
+  val clock = Clock.System
+
+  def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
+
+  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+
+}
 
 trait KafkaEventStoreComponent {
 
@@ -76,4 +88,3 @@ trait KafkaEventStoreComponent {
 
 }
 
-object KafkaIngestServer extends IngestServer with KafkaEventStoreComponent

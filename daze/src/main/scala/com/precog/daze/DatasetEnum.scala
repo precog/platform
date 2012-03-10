@@ -24,7 +24,6 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 
 import com.precog.yggdrasil._
-import com.precog.analytics.Path
 
 import scalaz.{Identity => _, _}
 import scalaz.effect._

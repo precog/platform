@@ -53,11 +53,9 @@ import org.scalacheck.Gen._
 import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
 
-import com.precog.analytics.Path
 import com.precog.daze._
+import com.precog.common.Path
 import com.precog.common.security._
-//import com.precog.api.{ReportGridConfig, ReportGridClient, HttpClient, Server} 
-//import com.precog.api.blueeyes.ReportGrid
 import com.precog.ct._
 import com.precog.ct.Mult._
 import com.precog.ct.Mult.MDouble._
@@ -66,8 +64,6 @@ import service._
 import BijectionsChunkJson._
 import BijectionsChunkString._
 import BijectionsChunkFutureJson._
-
-//import rosetta.json.blueeyes._
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat

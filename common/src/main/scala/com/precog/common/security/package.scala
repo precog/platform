@@ -20,7 +20,6 @@
 package com.precog.common
 
 import blueeyes.json.JPath
-import com.precog.analytics.Path
 
 package object security {
   

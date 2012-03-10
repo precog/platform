@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package shard 
 
-import com.precog.analytics._
 import com.precog.common._
 
 import blueeyes.json.JPath

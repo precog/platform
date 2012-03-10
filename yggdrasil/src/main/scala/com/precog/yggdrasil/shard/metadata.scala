@@ -25,7 +25,6 @@ import kafka._
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.common.security._
-import com.precog.analytics.Path
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._

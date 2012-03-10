@@ -17,10 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.security
+package com.precog.common
+package security
 
 import blueeyes.json.JPath
-import com.precog.analytics.Path
 
 trait AccessControl {
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Boolean

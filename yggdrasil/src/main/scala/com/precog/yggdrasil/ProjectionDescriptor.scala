@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 
 import com.precog.common._
-import com.precog.analytics.Path
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._

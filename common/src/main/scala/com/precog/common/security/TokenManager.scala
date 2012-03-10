@@ -17,9 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.security
-
-import com.precog.analytics.Path
+package com.precog.common
+package security
 
 trait TokenManagerComponent {
   def tokenManager: TokenManager
