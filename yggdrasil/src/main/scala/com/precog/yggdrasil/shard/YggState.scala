@@ -2,7 +2,7 @@ package com.precog.yggdrasil
 package shard
 
 import com.precog.common._
-import com.precog.yggdrasil.util.IOUtils
+import com.precog.common.util.IOUtils
 
 import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._

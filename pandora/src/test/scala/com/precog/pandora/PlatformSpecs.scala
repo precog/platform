@@ -30,6 +30,9 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
+
 class PlatformSpecs extends Specification
     with Compiler
     with LineErrors
@@ -38,12 +41,15 @@ class PlatformSpecs extends Specification
     with Evaluator
     with MemoryDatasetConsumer 
     with OperationsAPI
-    with AkkaIngestServer 
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
     with DiskMemoizationComponent { platformSpecs =>
 
   lazy val controlTimeout = Duration(15, "seconds")      // it's just unreasonable to run tests longer than this
+  
+  lazy val actorSystem = ActorSystem("platform_specs_actor_system")
+  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
   trait YggConfig extends 
     BaseConfig with 
     YggEnumOpsConfig with 

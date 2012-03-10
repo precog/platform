@@ -1,4 +1,4 @@
-package com.precog.yggdrasil.util
+package com.precog.common.util
 
 import java.io._
 import java.util.Properties
@@ -49,6 +49,22 @@ object IOUtils {
       Success(())
     }
   }
+
+  def recursiveDelete(dir: File) {
+    dir.listFiles.foreach {
+      case d if d.isDirectory => recursiveDelete(d)
+      case f => f.delete()
+    }   
+    dir.delete()
+  }
+
+  def createTmpDir(prefix: String) {
+    val tmp = File.createTempFile(prefix, "tmp")
+    tmp.delete
+    tmp.mkdirs
+    tmp 
+  }
+
 }
 
 // vim: set ts=4 sw=4 et:

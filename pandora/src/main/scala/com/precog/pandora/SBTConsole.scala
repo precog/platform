@@ -1,5 +1,8 @@
 package com.precog.pandora
 
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
+
 import com.codecommit.gll.LineStream
 
 import com.precog._
@@ -27,7 +30,6 @@ object SBTConsole {
                   with Evaluator 
                   with MemoryDatasetConsumer 
                   with OperationsAPI 
-                  with AkkaIngestServer 
                   with YggdrasilEnumOpsComponent 
                   with LevelDBQueryComponent 
                   with DiskMemoizationComponent 
@@ -53,8 +55,10 @@ object SBTConsole {
     import org.streum.configrity.Configuration
     import org.streum.configrity.io.BlockFormat
 
-    lazy val controlTimeout = Duration(30, "seconds")
+    lazy val actorSystem = ActorSystem("sbt_console_actor_system")
+    implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
+    lazy val controlTimeout = Duration(30, "seconds")
 
     object yggConfig extends YggConfig {
       lazy val config = Configuration parse {
