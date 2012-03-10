@@ -51,20 +51,9 @@ trait KafkaEventStoreComponent {
 
   implicit def defaultFutureDispatch: MessageDispatcher
 
-  def eventStoreFactory(eventConfig: Configuration): EventStore = {
-    val localTopic = getConfig(eventConfig, "local.topic")
-    val localBroker = getConfig(eventConfig, "local.broker")
-    
-    val centralTopic = getConfig(eventConfig, "central.topic")
-    val centralZookeeperHosts = getConfig(eventConfig, "central.zookeeperHosts")
+  def eventStoreFactory(config: Configuration): EventStore = {
 
-    val localConfig = new Properties()
-    localConfig.put("broker.list", localBroker)
-    localConfig.put("serializer.class", "com.precog.ingest.kafka.KafkaEventCodec")
-    
-    val centralConfig = new Properties()
-    centralConfig.put("zk.connect", centralZookeeperHosts)
-    centralConfig.put("serializer.class", "com.precog.ingest.kafka.KafkaIngestMessageCodec")
+    val centralZookeeperHosts = getConfig(config, "central.zk.connect")
 
     val coordination = ZookeeperSystemCoordination.testZookeeperSystemCoordination(centralZookeeperHosts)
 
@@ -72,8 +61,11 @@ trait KafkaEventStoreComponent {
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)
 
-    val eventStore = new LocalKafkaEventStore(localTopic, localConfig)
-    val relayAgent = new KafkaRelayAgent(eventIdSeq, localTopic, localConfig, centralTopic, centralConfig)
+    val localConfig = config.detach("local")
+    val centralConfig = config.detach("central")
+
+    val eventStore = new LocalKafkaEventStore(localConfig)
+    val relayAgent = new KafkaRelayAgent(eventIdSeq, localConfig, centralConfig)
 
     new EventStore {
       def save(event: Event, timeout: Timeout) = eventStore.save(event, timeout)
