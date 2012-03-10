@@ -20,9 +20,8 @@
 package com.precog.ingest
 package kafka
 
-import java.util.Properties
-import java.util.concurrent.atomic.AtomicInteger
-import java.nio.ByteBuffer
+import com.precog.common._
+
 import java.nio.charset.Charset
 import java.nio.charset.CharsetDecoder
 import java.nio.charset.CharsetEncoder
@@ -30,40 +29,12 @@ import java.nio.charset.CharsetEncoder
 import scalaz._
 import Scalaz._
 
-import org.scalacheck.Gen._
-
-import _root_.kafka.consumer._
 import _root_.kafka.message._
 import _root_.kafka.serializer._
 
-import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
-
-import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.xschema.Extractor._
-
-import com.precog.common._
-
-class KafkaIngestMessageRecievers(receivers: Map[MailboxAddress, List[IngestMessageReceiver]]) {
-  def find(address: MailboxAddress) = receivers(address)
-}
-
-class KafkaIngestMessageReceiver(topic: String, config: Properties) extends IngestMessageReceiver {
-  config.put("autocommit.enable", "false")
-  
-  val connector = Consumer.create(new ConsumerConfig(config))
-  val streams = connector.createMessageStreams[IngestMessage](Map(topic -> 1), new KafkaIngestMessageCodec)  
-  val stream = streams(topic)(0)
-  val itr = stream.iterator
-  
-  def hasNext() = itr.hasNext
-  def next() = itr.next
-  def sync() = connector.commitOffsets
-}
 
 // This could be made more efficient by writing a custom message class that bootstraps from
 // a ByteBuffer, but this was the quick and dirty way to get moving

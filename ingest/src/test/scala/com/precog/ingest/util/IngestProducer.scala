@@ -157,7 +157,6 @@ object WebappIngestProducer {
   def main(args: Array[String]) =  new WebappIngestProducer(args).run()
 }
 
-
 object JsonLoader extends App {
   def usage() {
     println(
@@ -238,45 +237,4 @@ serviceUrl - base url for web application (default: http://localhost:30050/vfs/)
   """
 
   override def close(): Unit = AkkaDefaults.actorSystem.shutdown
-}
-
-object DirectIngestProducer {
-  def main(args: Array[String]) = new DirectIngestProducer(args).run()
-}
-
-class DirectIngestProducer(args: Array[String]) extends IngestProducer(args) {
-  implicit val actorSystem = ActorSystem("direct_ingest")
-
-  lazy val testTopic = config.getProperty("topicId", "test-topic-1")
-  lazy val zookeeperHosts = config.getProperty("zookeeperHosts", "127.0.0.1:2181")
-  lazy val store = kafkaStore(testTopic)
-
-  def send(event: Event, timeout: Timeout) {
-    store.save(event, timeout)
-  }
-
-  def kafkaStore(topic: String): KafkaEventStore = {
-    val props = new Properties()
-    props.put("zk.connect", zookeeperHosts) 
-    props.put("serializer.class", "com.precog.ingest.api.IngestMessageCodec")
-  
-    val defaultAddresses = NonEmptyList(MailboxAddress(0))
-
-    val routeTable = new ConstantRouteTable(defaultAddresses)
-    val messaging = new KafkaMessaging(topic, props)
-
-    val producerId = 0
-
-    new KafkaEventStore(new EventRouter(routeTable, messaging), producerId)
-  }
-  
-  override def usageMessage = super.usageMessage + """
-topicId - kafka topic to publish events to (default: test-topic-1 )
-zookeeperHosts - comma delimeted list of zookeeper hosts (default: 127.0.0.1:2181)
-  """
-
-  override def close() {
-    Await.result(store.stop, 10 seconds)
-    actorSystem.shutdown
-  }
 }
