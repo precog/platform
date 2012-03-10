@@ -17,14 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-import com.precog.yggdrasil.kafka
+package com.precog.yggdrasil
 
-import org.specs2.mutable._
+import com.precog.common._
 
-object RoutingActorSpec extends Specification {
-  "routing actor" should {
-    "sending metadata updates when inserts are complete" in {
-      todo
-    }
+import scalaz.effect._
+import scala.collection.mutable
+
+package object metadata {
+  
+  type MetadataMap = Map[MetadataType, Metadata]
+  
+  type MetadataIO = (ProjectionDescriptor, ColumnMetadata) => IO[Unit]
+
+  type ColumnMetadata = Map[ColumnDescriptor, MetadataMap]
+
+  object ColumnMetadata {
+    val Empty = Map.empty[ColumnDescriptor, MetadataMap]
   }
+
 }

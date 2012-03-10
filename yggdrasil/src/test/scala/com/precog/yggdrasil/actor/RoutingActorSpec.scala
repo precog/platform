@@ -17,23 +17,14 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
+import com.precog.yggdrasil.actor
 
-import com.precog.common._
+import org.specs2.mutable._
 
-import scalaz.effect._
-import scala.collection.mutable
-
-package object shard {
-  
-  type MetadataMap = Map[MetadataType, Metadata]
-  
-  type MetadataIO = (ProjectionDescriptor, ColumnMetadata) => IO[Unit]
-
-  type ColumnMetadata = Map[ColumnDescriptor, MetadataMap]
-
-  object ColumnMetadata {
-    val Empty = Map.empty[ColumnDescriptor, MetadataMap]
+object RoutingActorSpec extends Specification {
+  "routing actor" should {
+    "sending metadata updates when inserts are complete" in {
+      todo
+    }
   }
-
 }

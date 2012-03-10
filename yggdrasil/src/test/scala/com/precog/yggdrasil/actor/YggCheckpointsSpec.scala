@@ -18,7 +18,7 @@
  *
  */
 package com.precog.yggdrasil
-package shard
+package actor 
 
 import org.specs2.mutable._
 

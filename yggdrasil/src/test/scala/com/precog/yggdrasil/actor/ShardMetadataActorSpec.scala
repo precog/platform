@@ -18,12 +18,13 @@
  *
  */
 package com.precog.yggdrasil
-package shard
+package actor 
+
+import metadata._
 
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.kafka._
 
 import blueeyes.json.JPath
 

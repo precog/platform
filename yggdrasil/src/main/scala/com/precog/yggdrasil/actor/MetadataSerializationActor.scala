@@ -18,12 +18,31 @@
  *
  */
 package com.precog.yggdrasil
+package actor
 
-import scalaz.effect.IO
+import metadata._
 
-import java.io.File
+import com.precog.common.util._
 
-package object kafka {
-  type ProjectionDescriptorIO = ProjectionDescriptor => IO[Unit] 
-  type ProjectionDescriptorLocator = ProjectionDescriptor => IO[File]
+import akka.actor.Actor
+
+import scalaz.effect._
+import scalaz.Scalaz._
+
+import com.weiglewilczek.slf4s.Logging
+
+class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataIO: MetadataIO) extends Actor with Logging {
+  def receive = {
+    case SaveMetadata(metadata, messageClock) => 
+      logger.debug("Syncing metadata")
+      metadata.toList.map {
+        case (pd, md) => metadataIO(pd, md)
+      }.sequence[IO, Unit].map(_ => ()).unsafePerformIO
+      logger.debug("Registering metadata checkpoint: " + messageClock)
+      checkpoints.metadataPersisted(messageClock)
+  }
 }
+
+sealed trait MetadataSerializationAction
+
+case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock) extends MetadataSerializationAction

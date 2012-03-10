@@ -25,10 +25,8 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
 import akka.util.Duration
 
-import com.precog.yggdrasil.SValue
-import com.precog.yggdrasil.BaseConfig
-import com.precog.yggdrasil.BinaryProjectionSerialization
-import com.precog.yggdrasil.shard._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.actor._
 import com.precog.common.kafka._
 import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._

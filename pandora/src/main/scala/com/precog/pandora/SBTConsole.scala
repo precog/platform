@@ -25,8 +25,8 @@ import akka.dispatch.ExecutionContext
 import com.codecommit.gll.LineStream
 
 import com.precog._
-import com.precog.yggdrasil.shard._
-import com.precog.common.kafka._
+
+import common.kafka._
 
 import daze._
 import daze.util._
@@ -39,7 +39,7 @@ import quirrel.parser._
 import quirrel.typer._
 
 import yggdrasil._
-import yggdrasil.shard._
+import yggdrasil.actor._
 
 object SBTConsole {
   trait Platform  extends Compiler 

@@ -17,8 +17,9 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
-package shard 
+package com.precog
+package yggdrasil
+package actor
 
 import com.precog.common._
 

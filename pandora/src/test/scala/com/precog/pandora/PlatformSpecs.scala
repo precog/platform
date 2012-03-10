@@ -34,7 +34,7 @@ import quirrel.parser._
 import quirrel.typer._
 
 import yggdrasil._
-import yggdrasil.shard._
+import yggdrasil.actor._
 
 import org.specs2.mutable._
   

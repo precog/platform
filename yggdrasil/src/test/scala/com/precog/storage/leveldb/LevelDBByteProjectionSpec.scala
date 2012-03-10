@@ -31,7 +31,7 @@ import org.specs2.mutable.Specification
 import scala.collection.immutable.ListMap
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.shard._
+import com.precog.yggdrasil.actor._
 import com.precog.common._
 import com.precog.common.util._
 

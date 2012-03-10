@@ -32,7 +32,7 @@ import quirrel.parser._
 import quirrel.typer._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.shard._
+import com.precog.yggdrasil.actor._
 
 import akka.actor.ActorSystem
 import akka.dispatch._

@@ -18,7 +18,9 @@
  *
  */
 package com.precog.yggdrasil
-package shard
+package metadata 
+
+import actor._
 
 import com.precog.common._
 
