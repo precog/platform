@@ -35,11 +35,18 @@ services {
       eventStore {
         local {
           topic = "local_event_cache"
-          broker = "0:127.0.0.1:9082"
+          broker {
+            host = "localhost"
+            port = 9082
+          }
+          serializer.class = "com.precog.ingest.kafka.KafkaEventCodec"
         }
         central {
           topic = "central_event_store"
-          zookeeperHosts = "devqclus03.reportgrid.com:2181"
+          zk {
+            connect = "devqclus03.reportgrid.com:2181"
+          }
+          serializer.class = "com.precog.ingest.kafka.KafkaIngestMessageCodec"
         }
       }
 

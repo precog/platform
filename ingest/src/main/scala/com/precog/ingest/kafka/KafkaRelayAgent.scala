@@ -18,13 +18,21 @@ import _root_.kafka.consumer._
 import _root_.kafka.producer._
 import _root_.kafka.message._
 
-class KafkaRelayAgent(eventIdSeq: EventIdSequence, localTopic: String, localConfig: Properties, centralTopic: String, centralConfig: Properties)(implicit dispatcher: MessageDispatcher) extends Logging {
+import org.streum.configrity.{Configuration, JProperties}
+
+class KafkaRelayAgent(eventIdSeq: EventIdSequence, localConfig: Configuration, centralConfig: Configuration)(implicit dispatcher: MessageDispatcher) extends Logging {
+
+  lazy private val localTopic = localConfig[String]("topic")
+  lazy private val centralTopic = centralConfig[String]("topic")
 
   lazy private val eventCodec = new KafkaEventCodec
-  lazy private val producer = new Producer[String, EventMessage](new ProducerConfig(centralConfig))
+  lazy private val centralProperties = JProperties.configurationToProperties(centralConfig)
+  lazy private val producer = new Producer[String, EventMessage](new ProducerConfig(centralProperties))
 
   lazy private val consumer = {
-    new KafkaMessageConsumer("localhost", 9082, localTopic)(relayMessages _)
+    val hostname = localConfig[String]("broker.host", "localhost")
+    val port = localConfig[String]("broker.port", "9082").toInt
+    new KafkaMessageConsumer(hostname, port, localTopic)(relayMessages _)
   }
 
   def start() = consumer.start(eventIdSeq.getLastOffset)

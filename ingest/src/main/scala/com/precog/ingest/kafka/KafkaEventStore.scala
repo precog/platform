@@ -21,6 +21,8 @@ import Scalaz._
 
 import _root_.kafka.producer._
 
+import org.streum.configrity.{Configuration, JProperties}
+
 class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 0)(implicit dispatcher: MessageDispatcher) extends EventStore {
   private val nextEventId = new AtomicInteger(firstEventId)
   
@@ -34,9 +36,18 @@ class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 
   def stop(): Future[Unit] = router.close
 }
 
-class LocalKafkaEventStore(localTopic: String, localConfig: Properties)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {
+class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {
   
-  private val producer = new Producer[String, Event](new ProducerConfig(localConfig))
+  private val localTopic = config[String]("topic")
+  private val localProperties = {
+    val props = JProperties.configurationToProperties(config)
+    val host = config[String]("broker.host")
+    val port = config[Int]("broker.port")
+    props.set("0:%s:%d".format(host, port))
+    props
+  }
+
+  private val producer = new Producer[String, Event](new ProducerConfig(localProperties))
 
   def start(): Future[Unit] = Future { () } 
 
