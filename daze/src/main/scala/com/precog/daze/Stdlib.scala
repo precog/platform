@@ -28,9 +28,9 @@ trait ImplLibrary extends Library {
   def _lib2: Set[BIF2] = Set()
 }
 
-trait Stdlib extends TimeLib
+trait Stdlib extends Timelib
 
-trait TimeLib extends ImplLibrary {
+trait Timelib extends ImplLibrary {
   override def _lib1 = super._lib1 ++ Set(
     GetMillis,
     TimeZone,

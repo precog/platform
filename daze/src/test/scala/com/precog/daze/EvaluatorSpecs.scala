@@ -36,7 +36,7 @@ class EvaluatorSpecs extends Specification
     with StubOperationsAPI 
     with TestConfigComponent 
     with DiskMemoizationComponent 
-    with TimeLib { self =>
+    with Timelib { self =>
     
 
   import Function._
