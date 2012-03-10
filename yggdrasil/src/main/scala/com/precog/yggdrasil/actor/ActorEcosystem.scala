@@ -139,7 +139,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   private lazy val metadataSyncCancel = actorSystem.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
   
   private lazy val systemCoordination = {
-    new ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.zookeeperBase, yggConfig.zookeeperPrefix) 
+    ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.zookeeperBase, yggConfig.zookeeperPrefix) 
   }
   
   private lazy val checkpoints = new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
