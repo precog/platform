@@ -64,39 +64,9 @@ trait YggdrasilQueryExecutorConfig extends
 trait YggdrasilQueryExecutorComponent {
   import blueeyes.json.xschema.Extractor
 
-  def loadConfig: IO[YggdrasilQueryExecutorConfig] = IO { 
+  private def wrapConfig(wrappedConfig: Configuration) = {
     new YggdrasilQueryExecutorConfig {
-      val config = Configuration.parse("""
-        precog {
-          kafka {
-            enabled = true 
-            topic {
-              events = central_event_store
-            }
-            consumer {
-              zk {
-                connect = devqclus03.reportgrid.com:2181 
-                connectiontimeout {
-                  ms = 1000000
-                }
-              }
-              groupid = shard_consumer
-            }
-          }
-        }
-        kafka {
-          batch {
-            host = devqclus03.reportgrid.com 
-            port = 9092
-            topic = central_event_store
-          }
-        }
-        zookeeper {
-          hosts = devqclus03.reportgrid.com:2181
-          basepath = [ "com", "precog", "ingest", "v1" ]
-          prefix = test
-        } 
-      """)  
+      val config = wrappedConfig 
       val sortWorkDir = scratchDir
       val chunkSerialization = BinaryProjectionSerialization
       val memoizationBufferSize = sortBufferSize
@@ -104,12 +74,10 @@ trait YggdrasilQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(queryExecutorConfig: Configuration): QueryExecutor = queryExecutorFactory()
-  
-  def queryExecutorFactory(): QueryExecutor = {
+  def queryExecutorFactory(config: Configuration): QueryExecutor = {
+    val yConfig = wrapConfig(config)
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
-      for( yConfig <- loadConfig;
-           state   <- YggState.restore(yConfig.dataDir) ) yield {
+      for( state <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => new YggdrasilQueryExecutor {
           trait Storage extends ActorYggShard with ProductionActorEcosystem
