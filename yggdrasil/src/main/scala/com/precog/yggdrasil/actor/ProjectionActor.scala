@@ -31,6 +31,7 @@ import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s._
 
+import scala.annotation.tailrec
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 
@@ -61,6 +62,18 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
 
   var refCount = 0
 
+  def insertAll(batch: Seq[ProjectionInsert]) = {
+    @tailrec def step(iter: Iterator[ProjectionInsert]) {
+      if (iter.hasNext) {
+        val insert = iter.next
+        projection.insert(insert.identities, insert.values).unsafePerformIO
+        step(iter)
+      }
+    }
+
+    step(batch.iterator)
+  }
+
   def receive = {
     case Stop => //close the db
       if(refCount == 0) {
@@ -81,12 +94,7 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
       sender ! ()
     
     case ProjectionBatchInsert(inserts) =>
-      var i = 0
-      while(i < inserts.length) {
-        val insert = inserts(i)
-        projection.insert(insert.identities, insert.values).unsafePerformIO
-        i += 1
-      }
+      insertAll(inserts)
       sender ! ()
 
     case ProjectionGet => 
