@@ -36,7 +36,7 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
         startup {
           import context._
 
-          val queryExecutor = queryExecutorFactory(config.detach("query_executor"))
+          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"))
 
           val theTokenManager = tokenManagerFactory(config.detach("security"))
 
