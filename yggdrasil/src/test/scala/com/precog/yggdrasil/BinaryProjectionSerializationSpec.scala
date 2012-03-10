@@ -35,6 +35,7 @@ import org.scalacheck.Gen._
 
 import java.io._
 import com.precog.common.VectorCase
+import com.precog.common.util.IOUtils
 
 import Generators._
 
@@ -57,6 +58,8 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
         val file = File.createTempFile("test", "ygg")
         val written = (fs.writer[Unit, IO](file) &= enumStream[Unit, Vector[SEvent], IO](s)).run(x => sys.error(x.toString)).unsafePerformIO
         val read = (consume[Unit, Vector[SEvent], IO, List] &= fs.reader[Unit](written).apply[IO]).run(x => sys.error(x.toString)).unsafePerformIO
+      
+        file.delete
 
         read must_== expected
       }
@@ -76,7 +79,9 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
       val file = File.createTempFile("test", "ygg")
       val written = (fs.writer[Unit, IO](file) &= enumStream[Unit, Vector[SEvent], IO](s)).run(x => sys.error(x.toString)).unsafePerformIO
       val read = (consume[Unit, Vector[SEvent], IO, List] &= fs.reader[Unit](written).apply[IO]).run(x => sys.error(x.toString)).unsafePerformIO 
-
+      
+      file.delete
+      
       read must_== expected
     }
   }
@@ -84,8 +89,9 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
    
   "writeElement" should {
     "read an SObject" in {
-      val out = new DataOutputStream(new FileOutputStream("test"))
-      val in = new DataInputStream(new FileInputStream("test"))
+      val file = File.createTempFile("test", "ygg")
+      val out = new DataOutputStream(new FileOutputStream(file))
+      val in = new DataInputStream(new FileInputStream(file))
 
       val fs = new BinaryProjectionSerialization {
         def chunkSize = 100
@@ -95,6 +101,8 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
       val write = fs.writeElement(out, ev).unsafePerformIO
       val read = fs.readElement(in).unsafePerformIO getOrElse None
 
+      file.delete
+
       read must_== ev 
 
     }
@@ -102,8 +110,9 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
 
   "writeElement" should {
     "read an SArray" in {
-      val out = new DataOutputStream(new FileOutputStream("test"))
-      val in = new DataInputStream(new FileInputStream("test"))
+      val file = File.createTempFile("test", "ygg")
+      val out = new DataOutputStream(new FileOutputStream(file))
+      val in = new DataInputStream(new FileInputStream(file))
 
       val fs = new BinaryProjectionSerialization {
         def chunkSize = 100
@@ -112,6 +121,8 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
 
       val write = fs.writeElement(out, ev).unsafePerformIO
       val read = fs.readElement(in).unsafePerformIO getOrElse None
+      
+      file.delete
 
       read must_== ev
 
@@ -120,8 +131,9 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
   
   "writeElement" should {
     "read an SEmptyArray" in {
-      val out = new DataOutputStream(new FileOutputStream("test"))
-      val in = new DataInputStream(new FileInputStream("test"))
+      val file = File.createTempFile("test", "ygg")
+      val out = new DataOutputStream(new FileOutputStream(file))
+      val in = new DataInputStream(new FileInputStream(file))
 
       val fs = new BinaryProjectionSerialization {
         def chunkSize = 100
@@ -130,6 +142,8 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
 
       val write = fs.writeElement(out, ev).unsafePerformIO
       val read = fs.readElement(in).unsafePerformIO getOrElse None
+      
+      file.delete
 
       read must_== ev
 
