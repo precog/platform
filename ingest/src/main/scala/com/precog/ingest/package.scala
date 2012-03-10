@@ -36,7 +36,7 @@ package object ingest {
     def send(address: MailboxAddress, msg: EventMessage): Future[Unit]
     def close(): Future[Unit]
   }
- 
+
   trait IngestMessageReceivers {
     def find(address: MailboxAddress): List[IngestMessageReceiver]
   }
