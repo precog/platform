@@ -20,6 +20,8 @@
 package com.precog
 package pandora
 
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
 import akka.util.Duration
 
@@ -249,25 +251,26 @@ object Console extends App {
   }
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
-    yconfig <- loadConfig(args.headOption) 
-    shard  <- YggState.restore(yconfig.dataDir) 
+    replConfig <- loadConfig(args.headOption) 
+    replState <- YggState.restore(replConfig.dataDir) 
   } yield {
-    shard map { shardState => 
+    replState map { shardState => 
       new REPL 
-          with AkkaIngestServer 
           with YggdrasilEnumOpsComponent
           with LevelDBQueryComponent
           with DiskMemoizationComponent
           with Lifecycle { self =>
 
+        lazy val actorSystem = ActorSystem("repl_actor_system")
+        implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
         type YggConfig = REPLConfig
-        override def rootConfig = yconfig.config 
-        val yggConfig = yconfig
+        val yggConfig = replConfig
 
         type Storage = ActorYggShard
         object storage extends ActorYggShard with StandaloneActorEcosystem {
           type YggConfig = REPLConfig
-          lazy val yggConfig = yconfig
+          lazy val yggConfig = replConfig
           lazy val yggState = shardState
         }
 
@@ -275,19 +278,10 @@ object Console extends App {
 
         object query extends QueryAPI 
 
-        def startup = IO {
-          // start ingest server
-          Await.result(start, controlTimeout)
-          // start storage shard 
-          Await.result(storage.actorsStart, controlTimeout)
-        }
+        def startup = IO { Await.result(storage.actorsStart, controlTimeout) }
 
-        def shutdown = IO {
-          // stop storaget shard
-          Await.result(storage.actorsStop, controlTimeout)
-          // stop ingest server
-          Await.result(stop, controlTimeout)
-
+        def shutdown = IO { 
+          Await.result(storage.actorsStop, controlTimeout) 
           actorSystem.shutdown
         }
       }

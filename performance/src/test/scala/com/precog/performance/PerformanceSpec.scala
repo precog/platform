@@ -19,6 +19,8 @@
  */
 package com.precog.performance
 
+import com.precog.common.util.IOUtils
+
 import org.specs2.mutable.Specification
 import org.specs2.specification._
 import org.specs2.execute._
@@ -55,19 +57,8 @@ trait PerformanceSpec extends ExamplesFactory {
     System.nanoTime - start
   }
 
-  def newTempDir(): File = {
-    val tmp = File.createTempFile("performance_test", "tmp")
-    tmp.delete
-    tmp.mkdirs
-    tmp
-  }
+  def newTempDir(): File = IOUtils.createTmpDir "preformance_test"
 
-  def cleanupTempDir(dir: File) {
-    dir.listFiles.foreach {
-      case d if d.isDirectory => cleanupTempDir(d)
-      case f => f.delete()
-    }   
-    dir.delete()
-  }
+  def cleanupTempDir(dir: File) = IOUtils.recursiveDelete dir
 
 }
