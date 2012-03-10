@@ -66,7 +66,7 @@ class PlatformSpecs extends Specification
     lazy val flatMapTimeout = Duration(100, "seconds")
     lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     lazy val sortWorkDir = scratchDir
-    lazy val chunkSerialization = SimpleProjectionSerialization
+    lazy val chunkSerialization = BinaryProjectionSerialization
     lazy val memoizationBufferSize = sortBufferSize
     lazy val memoizationWorkDir = scratchDir
     lazy val maxEvalDuration = controlTimeout

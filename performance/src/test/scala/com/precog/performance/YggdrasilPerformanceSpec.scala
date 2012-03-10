@@ -164,7 +164,7 @@ class TestQueryExecutor(config: Configuration, testShard: TestShard) extends Ygg
   lazy val yggConfig = new YggdrasilQueryExecutorConfig {
       val config = TestQueryExecutor.this.config
       val sortWorkDir = scratchDir
-      val chunkSerialization = SimpleProjectionSerialization
+      val chunkSerialization = BinaryProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
       override lazy val flatMapTimeout: Duration = 5000 seconds

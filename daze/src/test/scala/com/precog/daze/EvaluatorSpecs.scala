@@ -23,7 +23,7 @@ trait TestConfigComponent {
   class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
-    def chunkSerialization = SimpleProjectionSerialization
+    def chunkSerialization = BinaryProjectionSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds

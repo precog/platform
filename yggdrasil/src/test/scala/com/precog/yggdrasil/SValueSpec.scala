@@ -9,12 +9,14 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary._
 
-object Generators {
-  //@volatile var svcount = 0
-
+object ArbitrarySValue {
   def svalue(depth: Int): Gen[SValue] = {
-    //synchronized { svcount += 1 }
-    if (depth <= 0) sleaf else oneOf(sobject(depth), sarray(depth), sleaf)
+    if (depth <= 0) sleaf 
+    else oneOf(1, 2, 3) flatMap { //it's much faster to lazily compute the subtrees
+      case 1 => sobject(depth)
+      case 2 => sarray(depth)
+      case 3 => sleaf
+    }
   }
 
   def sobject(depth: Int): Gen[SValue] = {

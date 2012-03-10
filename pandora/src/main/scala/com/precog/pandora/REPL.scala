@@ -8,7 +8,7 @@ import akka.util.Duration
 
 import com.precog.yggdrasil.SValue
 import com.precog.yggdrasil.BaseConfig
-import com.precog.yggdrasil.SimpleProjectionSerialization
+import com.precog.yggdrasil.BinaryProjectionSerialization
 import com.precog.yggdrasil.shard._
 import com.precog.common.kafka._
 import blueeyes.json.Printer._
@@ -221,7 +221,7 @@ object Console extends App {
     val flatMapTimeout = controlTimeout
     val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val sortWorkDir = scratchDir
-    val chunkSerialization = SimpleProjectionSerialization
+    val chunkSerialization = BinaryProjectionSerialization
     val memoizationBufferSize = sortBufferSize
     val memoizationWorkDir = scratchDir
     val maxEvalDuration = controlTimeout

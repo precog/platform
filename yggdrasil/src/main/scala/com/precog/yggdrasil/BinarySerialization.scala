@@ -26,8 +26,6 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   final val HeaderFlag = 0
   final val EventFlag = 1
 
-  def chunkSize: Int
-  
   def writeElement(out: DataOutputStream, ev: Vector[SEvent]): IO[Unit] = {
     val (_, result) = ev.foldLeft((Option.empty[Header], IO(out.writeInt(ev.size)))) {
       case ((oldHeader, io), (ids, sv)) => {
@@ -202,3 +200,4 @@ trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   }
 }
 
+object BinaryProjectionSerialization extends BinaryProjectionSerialization

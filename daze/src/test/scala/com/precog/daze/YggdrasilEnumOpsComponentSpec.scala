@@ -14,6 +14,7 @@ import org.specs2.matcher.ThrownMessages
 import org.specs2.mutable.{BeforeAfter,Specification}
 import org.specs2.specification.Scope
 import org.scalacheck.{Arbitrary,Gen}
+import Gen._
 import com.weiglewilczek.slf4s.Logging
 
 import scalaz._
@@ -21,6 +22,7 @@ import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import scalaz.std.string._
+import scalaz.std.iterable._
 import scalaz.std.anyVal._
 import scalaz.syntax.order._
 import scalaz.syntax.semigroup._
@@ -28,9 +30,10 @@ import Ordering._
 import Iteratee._
 import MonadPartialOrder._
 
+import ArbitrarySValue._
 import com.precog.common.VectorCase
 
-class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging {
+class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging with ScalaCheck {
   type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
 
@@ -39,12 +42,12 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   val timeout = intToDurationInt(30).seconds
 
   object yggConfig extends YggConfig {
-    def sortBufferSize = 10
-    def sortWorkDir = sys.error("not used")
+    def sortBufferSize = 6
+    def sortWorkDir = new java.io.File("/tmp")
     def flatMapTimeout = timeout
   }
 
-  implicit val chunkSerialization = SimpleProjectionSerialization
+  implicit val chunkSerialization = BinaryProjectionSerialization
   val memoizationContext = MemoizationContext.Noop
   object ops extends Ops
 
@@ -56,13 +59,30 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
 
   def die(x: => Ops#X) = throw x
 
-  "sort" should {
-    "sort values" in {
-      implicit val SEventOrder: Order[SEvent] = Order[String].contramap((_: SEvent)._2.mapStringOr("")(a => a))
-      val enumP = enumPStream[Ops#X, Vector[SEvent], IO](Stream(Vector(SEvent(VectorCase(), SString("2")), SEvent(VectorCase(), SString("3"))), Vector(SEvent(VectorCase(), SString("1")))))
-      val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
+  case class LimitList[A](values: List[A])
 
-      (consume[Ops#X, Vector[SEvent], IO, List] &= sorted[IO]).run(die _).unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("1", "2", "3")
+  implicit def arbLimitList[A: Gen](size: Int): Arbitrary[LimitList[A]] = Arbitrary {
+    for {
+      i <- choose(0, size)
+      l <- listOfN(i, implicitly[Gen[A]])
+    } yield LimitList(l)
+  }
+
+  "sort" should {
+    implicit val arbChunk: Gen[Vector[SEvent]] = chunk(3, 3, 2)
+    implicit val SEventOrder: Order[SEvent] = Order[List[Long]].contramap((_: SEvent)._1.toList)
+    implicit val SEventOrdering = SEventOrder.toScalaOrdering
+    implicit val arbLL = arbLimitList[Vector[SEvent]](5)
+
+    "sort values" in check {
+      (ll: LimitList[Vector[SEvent]]) => {
+        val events = ll.values
+        val enumP = enumPStream[Ops#X, Vector[SEvent], IO](events.toStream)
+        val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
+        val result = (consume[Ops#X, Vector[SEvent], IO, List] &= sorted[IO]).run(die _).unsafePerformIO.flatten 
+        
+        result must_== events.flatten.sorted
+      }
     }
   }
 
@@ -86,6 +106,11 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
         case (List(SLong(1)), enum) => (consume[Ops#X, Vector[SEvent], IO, List] &= Await.result(enum.fenum, timeout).apply[IO]).run(die _).unsafePerformIO.flatten.flatMap(_._2.asString) must_== List("3", "1")
       }
     }
+
+    "group arbitrary values" in todo
+    // scalacheck: generate an arbitrary list of events where each value is from a single small distribution.
+    // use .groupBy to determine a grouping, and ensure that the grouped enumerators when run produce the
+    // same distribution
   }
 }
 

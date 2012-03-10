@@ -95,7 +95,11 @@ object SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
       else               acc
     }
 
-    val slurped = readChunk(Vector(), in.readInt())
-    if (slurped.size == 0) None else Some(slurped)
+    try {
+      val slurped = readChunk(Vector(), in.readInt())
+      if (slurped.size == 0) None else Some(slurped)
+    } catch {
+      case ex: EOFException => None
+    }
   }
 }
