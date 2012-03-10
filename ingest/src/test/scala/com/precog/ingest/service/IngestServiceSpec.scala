@@ -3,51 +3,37 @@ package service
 
 import kafka._
 
-import blueeyes._
-import blueeyes.core.data._
-import blueeyes.core.http._
-import blueeyes.core.http.HttpStatusCodes._
-import blueeyes.core.service.test.BlueEyesServiceSpecification
-import blueeyes.concurrent.test._
-import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.xschema.JodaSerializationImplicits._
-import blueeyes.json.xschema.DefaultSerialization._
-import blueeyes.json.JPathImplicits._
-import blueeyes.persistence.mongo.{Mongo, RealMongo, MockMongo, MongoCollection, Database}
-import blueeyes.util.metrics.Duration._
-import blueeyes.util.Clock
-import MimeTypes._
-
-import akka.actor.ActorSystem
-import akka.dispatch.Await
-import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
-import akka.util.Duration
-
-import org.joda.time._
+import com.precog.daze._
+import com.precog.common.Path
+import com.precog.common.security._
 
 import org.specs2.mutable.Specification
 import org.specs2.specification._
 import org.scalacheck.Gen._
-import scalaz.{Success, NonEmptyList}
-import scalaz.Scalaz._
 
-import com.precog.daze._
-import com.precog.common.Path
-import com.precog.common.security._
-import com.precog.ct._
-import com.precog.ct.Mult._
-import com.precog.ct.Mult.MDouble._
-import service._
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
+import akka.util.Duration
 
-import BijectionsChunkJson._
-import BijectionsChunkString._
-import BijectionsChunkFutureJson._
+import org.joda.time._
 
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
+
+import scalaz.{Success, NonEmptyList}
+import scalaz.Scalaz._
+
+import blueeyes.concurrent.test._
+
+import blueeyes.core.data._
+import blueeyes.core.service.test.BlueEyesServiceSpecification
+import blueeyes.core.http.MimeTypes
+import blueeyes.core.http.MimeTypes._
+
+import blueeyes.json.JsonAST._
+
+import blueeyes.util.Clock
+
 
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
@@ -62,6 +48,8 @@ trait TestTokens {
 }
 
 trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens {
+
+  import BijectionsChunkJson._
 
   val requestLoggingData = """
     requestLog {
