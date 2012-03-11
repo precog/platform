@@ -64,7 +64,7 @@ class PlatformSpecs extends Specification
     with LevelDBQueryComponent 
     with DiskMemoizationComponent { platformSpecs =>
 
-  lazy val controlTimeout = Duration(15, "seconds")      // it's just unreasonable to run tests longer than this
+  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
   lazy val actorSystem = ActorSystem("platform_specs_actor_system")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
