@@ -74,7 +74,7 @@ class SystemEventIdSequence(agent: String, coordination: SystemCoordination, blo
   }
 
   private def refill(offset: Long): InternalState = {
-    coordination.renewEventRelayState(agent, currentRelayState(offset), blockSize) match {
+    coordination.renewEventRelayState(agent, offset, state.block.producerId, blockSize) match {
       case Success(ers @ EventRelayState(_,_,_)) => InternalState(ers)
       case Failure(e)                            => sys.error("Error trying to renew relay agent: " + e)
     }
