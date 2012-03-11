@@ -35,7 +35,7 @@ trait ActorYggShard extends YggShard with ActorEcosystem {
 
   lazy implicit val dispatcher = actorSystem.dispatcher
 
-  private val metadata: StorageMetadata = new ShardMetadata(metadataActor)
+  private lazy val metadata: StorageMetadata = new ShardMetadata(metadataActor)
   
   def userMetadataView(uid: String): MetadataView = new UserMetadataView(uid, UnlimitedAccessControl, metadata)
   
