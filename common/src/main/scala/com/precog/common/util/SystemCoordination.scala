@@ -26,7 +26,7 @@ trait SystemCoordination {
   def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState]
   def unregisterRelayAgent(agent: String, state: EventRelayState): Unit
 
-  def renewEventRelayState(agent: String, state: EventRelayState, blockSize: Int): Validation[Error, EventRelayState]
+  def renewEventRelayState(agent: String, offset: Long, producerId: Int, blockSize: Int): Validation[Error, EventRelayState]
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] 
 
   def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint]
@@ -246,27 +246,50 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
     }.getOrElse(sys.error("Unable to get new producer sequence block"))
   }
 
-  def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState] = {
-    val agentPath = relayAgentPath(agent)
-    val state = if(relayAgentExists(agent)) {
-      val bytes = zkc.readData(agentPath).asInstanceOf[Array[Byte]]
-      val jvalue = JsonParser.parse(new String(bytes)) //TODO: Specify an encoding here and wherever this is written
-      val state = jvalue.validated[EventRelayState]
-      logger.debug("%s: RESTORED".format(state))
-      state
+  val defaultRetries = 20
+  val defaultDelay = 1000
+
+  private def acquireActivePath(base: String, retries: Int = defaultRetries, delay: Int = defaultDelay): Validation[Error, Unit] = {
+    val activePath = base + delimeter + active
+    if(retries < 0) {
+      Failure(Invalid("Unable to acquire relay agent lock"))
     } else {
-      val producerId = acquireProducerId()
-      val block = acquireIdSequenceBlock(producerId, blockSize)
-      val initialState = EventRelayState(0, block.firstSequenceId, block)
-      zkc.createPersistent(relayAgentBase, true)
-      zkc.createPersistent(agentPath, jvalueToBytes(initialState.serialize))
-      logger.debug("%s: NEW".format(initialState))
-      Success(initialState)
+      if(!zkc.exists(activePath)) {
+        if(!zkc.exists(base)) { 
+          zkc.createPersistent(base, true)
+        }
+        zkc.createEphemeral(activePath)
+        Success(())
+      } else {
+        Thread.sleep(delay)
+        logger.debug("Active path [%s] already registered, retrying in case of stale registration.".format(base))
+        acquireActivePath(base, retries - 1, delay)
+      }
     }
-    state.foreach { _ =>
-      zkc.createEphemeral(relayAgentActivePath(agent))
+  }
+
+  def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState] = {
+    
+    val agentPath = relayAgentPath(agent)
+
+    acquireActivePath(agentPath) flatMap { _ =>
+      val bytes = zkc.readData(agentPath).asInstanceOf[Array[Byte]]
+      if(bytes != null && bytes.length != 0) {
+        val jvalue = JsonParser.parse(new String(bytes)) //TODO: Specify an encoding here and wherever this is written
+        val state = jvalue.validated[EventRelayState]
+        logger.debug("%s: RESTORED".format(state))
+        state
+      } else {
+        val producerId = acquireProducerId()
+        val block = acquireIdSequenceBlock(producerId, blockSize)
+        val initialState = EventRelayState(0, block.firstSequenceId, block)
+        zkc.updateDataSerialized(relayAgentPath(agent), new DataUpdater[Array[Byte]] {
+          def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(initialState.serialize)
+        })
+        logger.debug("%s: NEW".format(initialState))
+        Success(initialState)
+      }
     }
-    state
   }
 
   private def relayAgentPath(agent: String): String = relayAgentBase + delimeter + agent 
@@ -279,9 +302,9 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
     zkc.delete(relayAgentActivePath(agent))
   }
  
-  def renewEventRelayState(agent: String, state: EventRelayState, blockSize: Int): Validation[Error, EventRelayState] = {
-    val block = acquireIdSequenceBlock(state.idSequenceBlock.producerId, blockSize)
-    val newState = state.copy(state.offset, block.firstSequenceId, block)
+  def renewEventRelayState(agent: String, offset: Long, producerId: Int, blockSize: Int): Validation[Error, EventRelayState] = {
+    val block = acquireIdSequenceBlock(producerId, blockSize)
+    val newState = EventRelayState(offset, block.firstSequenceId, block)
     logger.debug("%s: RENEWAL".format(newState))
     saveEventRelayState(agent, newState)
   }
@@ -296,23 +319,23 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
   def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint] = {
     val checkpointPath = shardCheckpointPath(shard)
-    val checkpoint = if(shardCheckpointExists(shard)) {
+
+    acquireActivePath(checkpointPath) flatMap { _ =>
       val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
-      val jvalue = JsonParser.parse(new String(bytes))
-      val checkpoint = jvalue.validated[YggCheckpoint]
-      logger.debug("%s: RESTORED".format(checkpoint))
-      checkpoint 
-    } else {
-      val initialCheckpoint = YggCheckpoint.empty 
-      zkc.createPersistent(shardCheckpointBase, true)
-      zkc.createPersistent(checkpointPath, jvalueToBytes(initialCheckpoint.serialize))
-      logger.debug("%s: NEW".format(initialCheckpoint))
-      Success(initialCheckpoint)
+      if(bytes != null && bytes.length != 0) {
+        val jvalue = JsonParser.parse(new String(bytes))
+        val checkpoint = jvalue.validated[YggCheckpoint]
+        logger.debug("%s: RESTORED".format(checkpoint))
+        checkpoint 
+      } else {
+        val initialCheckpoint = YggCheckpoint.empty 
+        zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
+          def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(initialCheckpoint.serialize)
+        })
+        logger.debug("%s: NEW".format(initialCheckpoint))
+        Success(initialCheckpoint)
+      }
     }
-    checkpoint.foreach { _ =>
-      zkc.createEphemeral(shardCheckpointActivePath(shard))
-    }
-    checkpoint
   }
 
   def shardCheckpointExists(shard: String): Boolean = zkc.exists(shardCheckpointPath(shard))
