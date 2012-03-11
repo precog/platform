@@ -35,7 +35,7 @@ object PlatformBuild extends Build {
                       "Sonatype Snapshots"                at "https://oss.sonatype.org/content/repositories/snapshots/"),
 
     credentials += Credentials(Path.userHome / ".ivy2" / ".rgcredentials"),
-    parallelExecution in Test := false,
+
     publishTo <<= (version) { version: String =>
       val nexus = "http://nexus.reportgrid.com/content/repositories/"
       if (version.trim.endsWith("SNAPSHOT")) Some("snapshots" at nexus+"snapshots/") 
