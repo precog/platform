@@ -62,21 +62,23 @@ trait SValueGenerators {
     listOfN(size, sevent(idCount, vdepth)) map { l => Vector(l: _*) }
 }
 
-object ArbitrarySValue extends SValueGenerators {
-  case class LimitList[A](values: List[A])
+case class LimitList[A](values: List[A])
 
-  implicit def arbLimitList[A: Gen](size: Int): Arbitrary[LimitList[A]] = Arbitrary {
-    for {
-      i <- choose(0, size)
-      l <- listOfN(i, implicitly[Gen[A]])
-    } yield LimitList(l)
-  }
+object LimitList {
+  def genLimitList[A: Gen](size: Int): Gen[LimitList[A]] = for {
+    i <- choose(0, size)
+    l <- listOfN(i, implicitly[Gen[A]])
+  } yield LimitList(l)
+}
+
+trait ArbitrarySValue extends SValueGenerators {
+  def genChunks(size: Int): Gen[LimitList[Vector[SEvent]]]
 
   implicit val SEventIdentityOrder: Order[SEvent] = Order[List[Long]].contramap((_: SEvent)._1.toList)
   implicit val SEventOrdering = SEventIdentityOrder.toScalaOrdering
 
   implicit val SEventGen: Gen[Vector[SEvent]] = chunk(3, 3, 2)
-  implicit val ArbitraryChunks = arbLimitList[Vector[SEvent]](5)
+  implicit val ArbitraryChunks = Arbitrary(genChunks(5))
 }
 
 

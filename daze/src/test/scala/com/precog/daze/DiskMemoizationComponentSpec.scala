@@ -23,9 +23,8 @@ import Iteratee._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
-import ArbitrarySValue._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent with ScalaCheck {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
   type X = Throwable
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
@@ -43,6 +42,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
   object storage extends Storage
 
   val testUID = "testUID"
+  def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) 
 
   "memoization" should {
     "ensure that results are not recomputed" in {

@@ -18,10 +18,10 @@ import java.io._
 import com.precog.common.VectorCase
 import com.precog.common.util.IOUtils
 
-import ArbitrarySValue._
-
-object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
+object BinaryProjectionSerializationSpec extends Specification with ScalaCheck with ArbitrarySValue {
   override val defaultPrettyParams = Pretty.Params(2)
+
+  def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) 
 
   "serializing an arbitrary projection" should {
     "deserialize to the same projection" in {
