@@ -40,7 +40,7 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
   }
 
-  object storage extends Storage
+  val storage = new Storage { }
 
   object query extends QueryAPI
 

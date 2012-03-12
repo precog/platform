@@ -247,7 +247,7 @@ object Console extends App {
         val yggConfig = replConfig
 
         type Storage = ActorYggShard
-        object storage extends ActorYggShard with StandaloneActorEcosystem {
+        val storage = new ActorYggShard with StandaloneActorEcosystem {
           type YggConfig = REPLConfig
           lazy val yggConfig = replConfig
           lazy val yggState = shardState
