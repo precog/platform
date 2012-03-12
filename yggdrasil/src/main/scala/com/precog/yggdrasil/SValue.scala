@@ -195,7 +195,7 @@ trait SValue {
       bool = b => "SBool(" + b + ")",
       long = l => "SLong(" + l + ")",
       double = d => "SDouble(" + d + ")",
-      num  = n => "SNumeric(" + n + ")",
+      num  = n => "SDecimal(" + n + ")",
       nul  = "SNull"
     )
 }
@@ -300,16 +300,30 @@ trait SValueInstances {
   }
 }
 
-object SValue extends SValueInstances {
+object SValue extends SValueInstances with BigIntHelpers {
+  // Note this conversion has a peer for CValues that should always be changed
+  // in conjunction with this mapping.
+  @inline
   def fromJValue(jv: JValue): SValue = jv match {
     case JObject(fields) => SObject(fields map { case JField(name, v) => (name, fromJValue(v)) } toMap)
     case JArray(elements) => SArray(Vector(elements map fromJValue: _*))
-    case JInt(i) => SDecimal(BigDecimal(i))
+    case JInt(i) => convertBigInt(i)
     case JDouble(d) => SDouble(d)
     case JString(s) => SString(s)
     case JBool(s) => SBoolean(s)
     case JNull => SNull
     case _ => sys.error("Fix JValue")
+  }
+
+  @inline
+  private def convertBigInt(i: BigInt): SValue = {
+    if(i.isValidInt) {
+      SInt(i.intValue)
+    } else if(isValidLong(i)) {
+      SLong(i.longValue)
+    } else {
+      SDecimal(BigDecimal(i))
+    }
   }
 
   def apply(selector: JPath, cv: CValue): SValue = {
@@ -421,16 +435,64 @@ trait ColumnTypeSerialization {
   }
 }
 
-object ColumnType extends ColumnTypeSerialization {
-  def forValue(jval: JValue): Option[ColumnType] = jval match {
+trait BigIntHelpers {
+  
+  private val MAX_LONG = BigInt(Long.MaxValue)
+  private val MIN_LONG = BigInt(Long.MinValue)
+  
+  @inline
+  protected final def isValidLong(i: BigInt): Boolean = {
+    MIN_LONG <= i && i <= MAX_LONG
+  }
+
+}
+
+object ColumnType extends ColumnTypeSerialization with BigIntHelpers {
+
+  // Note this conversion has a peer for SValues that should always be changed
+  // in conjunction with this mapping.
+  @inline
+  final def toCValue(jval: JValue): CValue = jval match {
+    case JString(s) => CString(s)
+    case JInt(i) => sizedIntCValue(i)
+    case JDouble(d) => CDouble(d)
+    case JBool(b) => CBoolean(b)
+    case JNull => CNull
+    case _ => sys.error("unpossible")
+  }
+
+  @inline
+  final def forValue(jval: JValue): Option[ColumnType] = jval match {
     case JBool(_)   => Some(SBoolean)
-    case JInt(_)    => Some(SDecimalArbitrary)
+    case JInt(bi)   => Some(sizedIntColumnType(bi))
     case JDouble(_) => Some(SDouble)
     case JString(_) => Some(SStringArbitrary)
     case JNull      => Some(SNull)
     case JArray(Nil) => Some(SEmptyArray)
     case JObject(Nil) => Some(SEmptyObject)
     case _          => None
+  }
+
+  @inline
+  private final def sizedIntCValue(bi: BigInt): CValue = {
+    if(bi.isValidInt) {
+      CInt(bi.intValue)
+    } else if(isValidLong(bi)) {
+      CLong(bi.longValue)
+    } else {
+      CNum(BigDecimal(bi))
+    }
+  }
+
+  @inline
+  private final def sizedIntColumnType(bi: BigInt): ColumnType = {
+   if(bi.isValidInt) {
+      SInt 
+    } else if(isValidLong(bi)) {
+      SLong
+    } else {
+      SDecimalArbitrary
+    }   
   }
 }
 
