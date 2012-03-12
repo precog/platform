@@ -47,7 +47,7 @@ trait TestTokens {
   val TrackingToken = lookup(usageUID).get
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with LocalMongo with TestTokens {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens {
 
   import BijectionsChunkJson._
 
@@ -58,7 +58,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     }
   """
 
-  override val configuration = "services { ingest { v1 { " + requestLoggingData + mongoConfigFileData + " } } }"
+  override val configuration = "services { ingest { v1 { " + requestLoggingData + " } } }"
 
 
   def tokenManagerFactory(config: Configuration) = StaticTokenManager 
@@ -89,98 +89,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
   "Ingest Service" should {
-    "abc123" must_== "abc123"
+    todo 
   }
-}
-
-trait LocalMongo extends Specification {
-  val eventsName = "testev" + scala.util.Random.nextInt(10000)
-  val indexName =  "testix" + scala.util.Random.nextInt(10000)
-
-  def mongoConfigFileData = """
-    eventsdb {
-      database = "%s"
-      servers  = ["127.0.0.1:27017"]
-    }
-
-    indexdb {
-      database = "%s"
-      servers  = ["127.0.0.1:27017"]
-    }
-
-    tokens {
-      collection = "tokens"
-    }
-
-    variable_series {
-      collection = "variable_series"
-      time_to_idle_millis = 100
-      time_to_live_millis = 100
-
-      initial_capacity = 100
-      maximum_capacity = 100
-    }
-
-    variable_value_series {
-      collection = "variable_value_series"
-
-      time_to_idle_millis = 100
-      time_to_live_millis = 100
-
-      initial_capacity = 100
-      maximum_capacity = 100
-    }
-
-    variable_values {
-      collection = "variable_values"
-
-      time_to_idle_millis = 100
-      time_to_live_millis = 100
-
-      initial_capacity = 100
-      maximum_capacity = 100
-    }
-
-    variable_children {
-      collection = "variable_children"
-
-      time_to_idle_millis = 100
-      time_to_live_millis = 100
-
-      initial_capacity = 100
-      maximum_capacity = 100
-    }
-
-    path_children {
-      collection = "path_children"
-
-      time_to_idle_millis = 100
-      time_to_live_millis = 100
-
-      initial_capacity = 100
-      maximum_capacity = 100
-    }
-
-    log {
-      level   = "warning"
-      console = true
-    }
-  """.format(eventsName, indexName)
-
-  // We need to remove the databases used from Mongo after we're done
-  def cleanupDb = Step {
-    try {
-      val conn = new com.mongodb.Mongo("localhost")
-
-      conn.getDB(eventsName).dropDatabase()
-      conn.getDB(indexName).dropDatabase()
-
-      conn.close()
-    } catch {
-      case t => println("Error on DB cleanup: " + t.getMessage)
-    }
-  }
-
-  override def map(fs : => Fragments) = super.map(fs) ^ cleanupDb
-
 }
