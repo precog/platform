@@ -50,12 +50,21 @@ import Ordering._
 import Iteratee._
 import MonadPartialOrder._
 
-import ArbitrarySValue._
 import com.precog.common.VectorCase
 
-class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging with ScalaCheck {
+class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging with ScalaCheck with ArbitrarySValue{
   type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
+
+  def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) map { ll =>
+    val (_, acc) = ll.values.foldLeft((Set.empty[Identities], List.empty[Vector[SEvent]])) {
+      case ((allIds, acc), v) => 
+        val _allIds = allIds ++ v.map(_._1)
+        (_allIds, v.filterNot { case (id, _) => allIds.contains(id) } :: acc)
+    }
+
+    LimitList(acc)
+  }
 
   implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
@@ -80,18 +89,16 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
   def die(x: => Ops#X) = throw x
 
   "sort" should {
-      "sort values" in { Pending("INTERMITTENT FAILURE") }
-//    "sort values" in check {
-//      (ll: LimitList[Vector[SEvent]]) => {
-//        val events = ll.values
-//        val enumP = enumPStream[Ops#X, Vector[SEvent], IO](events.toStream)
-//        val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
-//        val result = (consume[Ops#X, Vector[SEvent], IO, List] &= sorted[IO]).run(die _).unsafePerformIO.flatten 
-//        
-//        result must_== events.flatten.sorted
-//      }
-//    }
-
+    "sort values" in check {
+      (ll: LimitList[Vector[SEvent]]) => {
+        val events = ll.values
+        val enumP = enumPStream[Ops#X, Vector[SEvent], IO](events.toStream)
+        val sorted = Await.result(ops.sort(DatasetEnum(Future(enumP)), None).fenum, timeout)
+        val result = (consume[Ops#X, Vector[SEvent], IO, List] &= sorted[IO]).run(die _).unsafePerformIO.flatten 
+        
+        result must_== events.flatten.sorted
+      }
+    }
   }
 
   "group" should {
