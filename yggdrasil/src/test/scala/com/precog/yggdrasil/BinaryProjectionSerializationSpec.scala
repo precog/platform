@@ -49,7 +49,7 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck {
       }
 
       implicit val arbChunk: Arbitrary[Vector[SEvent]] = Arbitrary(chunk(100, 3, 2))
-      implicit val arbStream = listOfN(3, arbitrary[Vector[SEvent]]) map { l => l.toStream } 
+      implicit val arbStream = Arbitrary(listOfN(3, arbitrary[Vector[SEvent]]) map { l => l.toStream } )
 
       check { (s: Stream[Vector[SEvent]]) =>
         val expected = s.toList

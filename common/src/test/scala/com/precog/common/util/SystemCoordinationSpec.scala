@@ -209,7 +209,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       if(zookeeperAvailable()) Some(factory) else None
     }
 
-    private val offline = new Pending("SKIP - ZOOKEEPER NOT AVAILABLE")
+    private val offline = new Skipped("SKIP - ZOOKEEPER NOT AVAILABLE")
 
     private def cleanup() {
       clients.foreach{ _.close }
