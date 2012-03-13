@@ -61,7 +61,7 @@ trait REPL extends LineErrors
     with ProvenanceChecker
     with Emitter
     with Evaluator
-    with StdLib
+    with Stdlib
     with MemoryDatasetConsumer 
     with OperationsAPI {
 
