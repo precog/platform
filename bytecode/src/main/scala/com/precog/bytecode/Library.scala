@@ -43,5 +43,8 @@ trait Library {
   type BIF2 <: BuiltInFunc2
 
   def lib1: Set[BIF1] 
-  def lib2: Set[BIF2] 
+  def lib2: Set[BIF2]
+  def lib: Set[BIF1]
 }
+
+

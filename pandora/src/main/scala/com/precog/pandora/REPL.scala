@@ -62,6 +62,7 @@ trait REPL extends LineErrors
     with Emitter
     with Evaluator
     with Stdlib
+    with GenLibrary
     with MemoryDatasetConsumer 
     with OperationsAPI {
 
