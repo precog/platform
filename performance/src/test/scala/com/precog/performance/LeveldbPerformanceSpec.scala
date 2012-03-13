@@ -11,7 +11,9 @@ import org.fusesource.leveldbjni.DataWidth
 import java.io.File
 import java.nio.ByteBuffer
 
-trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
+import com.weiglewilczek.slf4s.Logging
+
+trait LeveldbPerformanceSpec extends Specification with PerformanceSpec with Logging {
 
   "leveldb" should {
     sequential
@@ -36,8 +38,8 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
             keyBuf.clear
             valueBuf.clear
 
-            keyBuf.put(cnt)
-            valueBuf.put(i-cnt)
+            keyBuf.putLong(cnt)
+            valueBuf.putLong(i-cnt)
 
             db.put(key, value)
             cnt += 1
@@ -83,14 +85,52 @@ trait LeveldbPerformanceSpec extends Specification with PerformanceSpec {
           val iter = db.iterator.asInstanceOf[JniDBIterator]
           iter.seekToFirst
 
-          val chunkBuffer = ByteBuffer.allocate(chunkSize)
+          val keyBuffer = ByteBuffer.allocate(chunkSize)
+          val valBuffer = ByteBuffer.allocate(chunkSize)
 
           while(iter.hasNext) {
-            val chunkItr = iter.nextChunk(chunkBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
+            val chunkItr = iter.nextChunk(keyBuffer, valBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
             while(chunkItr.hasNext) {
               val kvPair = chunkItr.next()
               val key = kvPair.getKey
               val value = kvPair.getValue 
+            }
+          }
+
+          iter.close
+        }
+      } finally {
+        db.close
+      }
+    }
+
+    "read optimal" in {
+      import org.fusesource.leveldbjni.internal.JniDBIterator
+      val createOptions = (new Options).createIfMissing(true).blockSize(64 * 1024)
+      val db: DB = factory.open(tmpDir, createOptions)
+     
+      val chunkSize = 64 * 1024
+
+      val keyBuffer = ByteBuffer.allocate(chunkSize)
+      val valBuffer = ByteBuffer.allocate(chunkSize)
+
+      try {
+        performBatch(1000000, 1000) { i =>  
+          val iter = db.iterator.asInstanceOf[JniDBIterator]
+          iter.seekToFirst
+
+          while(iter.hasNext) {
+            val start = System.currentTimeMillis
+            var count = iter.nextChunk(keyBuffer, valBuffer, DataWidth.FIXED(8), DataWidth.FIXED(8)).getSize
+            val end = System.currentTimeMillis
+
+            logger.trace("Chunk retrieved %d values in %dms".format(count, (end - start)))
+
+            while(count > 0) {
+              val key = keyBuffer.getLong
+              val value = valBuffer.getLong
+
+              count -= 1
             }
           }
 
