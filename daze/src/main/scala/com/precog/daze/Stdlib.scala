@@ -8,7 +8,7 @@ import yggdrasil._
 import org.joda.time._
 import org.joda.time.format._
 
-trait ImplLibrary extends Library {
+trait GenOpcode extends Library {
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class BIF1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends BuiltInFunc1 {
     val operation: PartialFunction[SValue, SValue]
@@ -20,7 +20,9 @@ trait ImplLibrary extends Library {
     val operation: PartialFunction[(SValue, SValue), SValue]
     val operandType: (Option[SType], Option[SType])
   }
+}
 
+trait ImplLibrary extends Library {
   lazy val lib1 = _lib1
   lazy val lib2 = _lib2
 
@@ -30,7 +32,7 @@ trait ImplLibrary extends Library {
 
 trait Stdlib extends Timelib
 
-trait Timelib extends ImplLibrary {
+trait Timelib extends GenOpcode with ImplLibrary {
   override def _lib1 = super._lib1 ++ Set(
     GetMillis,
     TimeZone,
