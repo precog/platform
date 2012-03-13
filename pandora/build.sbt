@@ -19,8 +19,7 @@ libraryDependencies ++= Seq(
   "org.sonatype.jline"      % "jline"       % "2.5",
   "org.specs2" %% "specs2"  % "1.8"         % "test",
   "org.scala-tools.testing" %% "scalacheck" % "1.9")
-  
-  
+
 mainClass := Some("com.precog.pandora.Console")
 
 mainTest := "com.precog.pandora.PlatformSpecs"
