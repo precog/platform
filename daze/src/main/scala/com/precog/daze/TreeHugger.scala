@@ -17,23 +17,43 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "daze"
+package com.precog
+package daze
 
-version := "0.0.1-SNAPSHOT"
+import treehugger.forest._
+import definitions._
+import treehuggerDSL._
 
-organization := "com.precog"
+import java.io._
 
-scalaVersion := "2.9.1"
+trait UsefulStuff {
+  val str: String
+}
 
-resolvers ++= Seq(
-  "Scala-Tools Maven2 Snapshots Repository" at "http://scala-tools.org/repo-snapshots",
-  "sonatype" at "https://oss.sonatype.org/content/groups/public")
+object Code {
+}
 
-scalacOptions ++= Seq("-deprecation", "-g:none")
-
-libraryDependencies ++= Seq(
-  "org.specs2" %% "specs2" % "1.8" % "test",
-  "org.scala-tools.testing" %% "scalacheck" % "1.9",
-  "com.eed3si9n" %% "treehugger" % "0.1.2")
+class Code extends UsefulStuff {
+  val packages = 
+    (IMPORT("bytecode.Library")
+    ) inPackage("daze") inPackage("com.precog") 
   
-logBuffered := false       // gives us incremental output from Specs2
+  val trait1 = {
+    TRAITDEF("GeneratedLib") withParents("ImplLibrary"):= BLOCK(
+      VAL("operandType") := SOME(ID("SDecimal")))
+  }
+
+  val trees = packages :: trait1 :: Nil
+
+  val str: String = treeToString(trees: _*) //eventually will concatate all trees into a single Tree, which can then be printed as a String
+
+  val file = File.createTempFile("functions", "math")
+  val writer = new FileWriter(file)
+
+  writer.write(str)
+  writer.close()
+}
+
+
+
+  
