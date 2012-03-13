@@ -13,12 +13,12 @@ trait Genlib extends Library {
 }
 
 trait GenLibrary extends GenOpcode with Genlib {
-  override def _lib = super._lib ++ Set(Foo)
+  override def _lib = super._lib ++ Set(Abs)
 
-  object Foo extends BIF1(Vector(), "foo") {
+  object Abs extends BIF1(Vector(), "abs") {
     val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(num + 1)
+      case SDecimal(num) => SDecimal(Math.abs(num.toDouble))
     }
   }
 }
