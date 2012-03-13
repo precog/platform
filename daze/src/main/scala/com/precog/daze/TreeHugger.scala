@@ -46,8 +46,9 @@ class Code extends UsefulStuff {
   val trees = packages :: trait1 :: Nil
 
   val str: String = treeToString(trees: _*) //eventually will concatate all trees into a single Tree, which can then be printed as a String
-
-  val file = File.createTempFile("functions", "math")
+  
+  
+  val file = File.createNewFile()
   val writer = new FileWriter(file)
 
   writer.write(str)
