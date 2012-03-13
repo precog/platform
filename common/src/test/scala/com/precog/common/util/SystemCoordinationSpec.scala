@@ -198,7 +198,6 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         val client = factory()
         var result = client != null 
         client.close
-        println("result")
         result
       } catch {
         case ex => false

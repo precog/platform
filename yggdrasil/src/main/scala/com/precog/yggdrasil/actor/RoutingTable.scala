@@ -54,16 +54,6 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
   }
 
   @inline
-  private final def toCValue(jval: JValue): CValue = jval match {
-    case JString(s) => CString(s)
-    case JInt(i) => CNum(BigDecimal(i))
-    case JDouble(d) => CDouble(d)
-    case JBool(b) => CBoolean(b)
-    case JNull => CNull
-    case _ => sys.error("unpossible")
-  }
-
-  @inline
   private final def toProjectionData(msg: EventMessage, sel: JPath, value: JValue): ProjectionData = {
     val authorities = Set.empty + msg.event.tokenId
     val colDesc = ColumnDescriptor(msg.event.path, sel, ColumnType.forValue(value).get, Authorities(authorities))
@@ -73,7 +63,7 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
 
     val projDesc = ProjectionDescriptor.trustedApply(1, map, seq)
     val identities = Vector1(msg.eventId.uid)
-    val values = Vector1(toCValue(value))
+    val values = Vector1(ColumnType.toCValue(value))
     val metadata = msg.event.metadata.get(sel).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
     ProjectionData(projDesc, identities, values, metadata)
   }

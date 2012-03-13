@@ -61,6 +61,7 @@ trait REPL extends LineErrors
     with ProvenanceChecker
     with Emitter
     with Evaluator
+    with Stdlib
     with MemoryDatasetConsumer 
     with OperationsAPI {
 
@@ -266,7 +267,7 @@ object Console extends App {
         val yggConfig = replConfig
 
         type Storage = ActorYggShard
-        object storage extends ActorYggShard with StandaloneActorEcosystem {
+        val storage = new ActorYggShard with StandaloneActorEcosystem {
           type YggConfig = REPLConfig
           lazy val yggConfig = replConfig
           lazy val yggState = shardState

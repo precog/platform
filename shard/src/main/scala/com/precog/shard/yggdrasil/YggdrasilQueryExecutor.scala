@@ -87,7 +87,7 @@ trait YggdrasilQueryExecutorComponent {
 
           object ops extends Ops 
           object query extends QueryAPI 
-          object storage extends Storage {
+          val storage = new Storage {
             type YggConfig = YggdrasilQueryExecutorConfig
             lazy val yggConfig = yConfig
             lazy val yggState = yState

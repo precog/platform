@@ -94,7 +94,7 @@ class PlatformSpecs extends Specification
   lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
   type Storage = ActorYggShard
-  object storage extends ActorYggShard with StandaloneActorEcosystem {
+  val storage = new ActorYggShard with StandaloneActorEcosystem {
     type YggConfig = platformSpecs.YggConfig
     lazy val yggConfig = platformSpecs.yggConfig
     lazy val yggState = shardState 
