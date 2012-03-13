@@ -39,7 +39,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
     val memoizationSerialization = BinaryProjectionSerialization
   }
 
-  object storage extends Storage
+  val storage = new Storage { }
 
   val testUID = "testUID"
   def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) 

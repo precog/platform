@@ -77,7 +77,7 @@ object SBTConsole {
     val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
     
     type Storage = ActorYggShard
-    object storage extends ActorYggShard with StandaloneActorEcosystem {
+    val storage = new ActorYggShard with StandaloneActorEcosystem {
       type YggConfig = console.YggConfig
       val yggConfig = console.yggConfig
       val yggState = shardState
