@@ -154,8 +154,6 @@ trait Binder extends parser.AST with Library {
       
       case Paren(_, child) => loop(child, env)
     }
-  //  loop(tree, ((libsUnary.map { _.map(StdlibBuiltIn1) }.flatten) ++ (libsBinary.map { _.map(StdlibBuiltIn2) }.flatten) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
-  //} 
 
     loop(tree, (genlib1.map(StdlibBuiltIn1) ++ genlib2.map(StdlibBuiltIn2) ++ lib1.map(StdlibBuiltIn1) ++ lib2.map(StdlibBuiltIn2) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
