@@ -136,7 +136,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (genlib1.map(StdlibBuiltIn1) ++ genlib2.map(StdlibBuiltIn2) ++ lib1.map(StdlibBuiltIn1) ++ lib2.map(StdlibBuiltIn2) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (mathlib1.map(StdlibBuiltIn1) ++ mathlib2.map(StdlibBuiltIn2) ++ lib1.map(StdlibBuiltIn1) ++ lib2.map(StdlibBuiltIn2) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
