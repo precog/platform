@@ -6,11 +6,7 @@ import blueeyes.json.JsonAST._
 
 import daze._
 
-import quirrel.Compiler
-import quirrel.LineErrors
-import quirrel.emitter._
-import quirrel.parser._
-import quirrel.typer._
+import pandora.ParseEvalStack
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -85,15 +81,7 @@ trait YggdrasilQueryExecutorComponent {
 
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
-    with LineErrors
-    with Compiler
-    with Parser
-    with TreeShaker
-    with ProvenanceChecker
-    with Emitter
-    with Evaluator
-    with MemoryDatasetConsumer
-    with OperationsAPI
+    with ParseEvalStack
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
     with DiskMemoizationComponent 

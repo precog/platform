@@ -36,16 +36,7 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends LineErrors
-    with Parser
-    with TreeShaker
-    with ProvenanceChecker
-    with Emitter
-    with Evaluator
-    with Stdlib
-    with Genlib
-    with MemoryDatasetConsumer 
-    with OperationsAPI {
+trait REPL extends ParseEvalStack with Genlib {
 
   val dummyUID = "dummyUID"
 
