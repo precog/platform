@@ -25,7 +25,6 @@ import yggdrasil.actor._
 object SBTConsole {
   
   trait Platform  extends ParseEvalStack 
-                  with Genlib
                   with YggdrasilEnumOpsComponent 
                   with LevelDBQueryComponent 
                   with DiskMemoizationComponent 
