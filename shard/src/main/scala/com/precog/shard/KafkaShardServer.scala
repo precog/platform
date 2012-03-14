@@ -29,7 +29,7 @@ import blueeyes.util.Clock
 
 import org.streum.configrity.Configuration
 
-trait KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent {
+object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent {
   
   val clock = Clock.System
 

@@ -53,13 +53,7 @@ import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
 class PlatformSpecs extends Specification
-    with Compiler
-    with LineErrors
-    with ProvenanceChecker
-    with Emitter
-    with Evaluator
-    with MemoryDatasetConsumer 
-    with OperationsAPI
+    with ParseEvalStack
     with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
     with DiskMemoizationComponent { platformSpecs =>
