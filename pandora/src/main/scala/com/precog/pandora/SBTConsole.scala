@@ -28,6 +28,8 @@ object SBTConsole {
                   with ProvenanceChecker 
                   with Emitter 
                   with Evaluator 
+                  with Stdlib
+                  with Genlib
                   with MemoryDatasetConsumer 
                   with OperationsAPI 
                   with YggdrasilEnumOpsComponent 

@@ -4,7 +4,7 @@ package daze
 import org.specs2.mutable._
 import bytecode._
 
-object DAGSpecs extends Specification with DAG with Timelib with GenLibrary {
+object DAGSpecs extends Specification with DAG with Timelib with Genlib {
   import instructions._
   import dag._
   
