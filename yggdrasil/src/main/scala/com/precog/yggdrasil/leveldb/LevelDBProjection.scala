@@ -182,7 +182,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
         _ => bufferQueue.put((ByteBuffer.allocate(chunkSize), ByteBuffer.allocate(chunkSize)))
       }
       
-      val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize)
+      val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize + 1)
 
       val running = new AtomicBoolean(true)
 
@@ -202,11 +202,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           }
         }
 
-        if (running.get) {
-          chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
-        } else {
-          chunkQueue.offer(eofInput) // To be safe
-        }
+        chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
 
         iterator.close()
       }
