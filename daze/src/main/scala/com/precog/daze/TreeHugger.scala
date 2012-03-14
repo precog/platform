@@ -42,13 +42,8 @@ class Code extends UsefulStuff {
     val BIF1: ClassSymbol = RootClass.newClass("Set[BIF1]")
     val BIF2: ClassSymbol = RootClass.newClass("Set[BIF2]")
   }
-
-  val import1 = IMPORT("bytecode.Library")
-  val import3 = IMPORT("bytecode.BuiltInFunc1")
-  val import5 = IMPORT("java.lang.Math")
-  val import4 = IMPORT("bytecode.BuiltInFunc2")
-  val import2 = IMPORT("yggdrasil._") inPackage("daze") inPackage("com.precog") 
-
+  
+  val imports = BLOCK(IMPORT("bytecode.Library") :: IMPORT("bytecode.BuiltInFunc1") :: IMPORT("java.lang.Math") :: IMPORT("java.lang.String") :: IMPORT("bytecode.BuiltInFunc2") :: IMPORT("yggdrasil._") :: Nil: _*) inPackage("daze") inPackage("com.precog")
 
   val methods: Array[String] = classOf[Math].getMethods.map(_.getName)
   val parameters = classOf[Math].getMethods.map(_.getParameterTypes)
@@ -63,17 +58,17 @@ class Code extends UsefulStuff {
  
   val trait1: Tree = {
     TRAITDEF("GenLibrary") withParents("Library") := BLOCK(
-      LAZYVAL("genlib1") := REF("_genlib1"),
-      LAZYVAL("genlib2") := REF("_genlib2"),
-      DEF("_genlib1", sym.BIF1) := REF("Set()"),
-      DEF("_genlib2", sym.BIF2) := REF("Set()")
+      LAZYVAL("mathlib1") := REF("_mathlib1"),
+      LAZYVAL("mathlib2") := REF("_mathlib2"),
+      DEF("_mathlib1", sym.BIF1) := REF("Set()"),
+      DEF("_mathlib2", sym.BIF2) := REF("Set()")
     ) 
   }
 
   def trait2: Tree = {
     TRAITDEF("Genlib") withParents("GenOpcode", "GenLibrary") := BLOCK(
-      (DEF("_genlib1") withFlags(Flags.OVERRIDE) := REF("super._genlib1") SEQ_++ (sym.Set UNAPPLY(ID(m1)))) ::
-      (DEF("_genlib2") withFlags(Flags.OVERRIDE) := REF("super._genlib2") SEQ_++ (sym.Set UNAPPLY(ID(m2)))) :: 
+      (DEF("_mathlib1") withFlags(Flags.OVERRIDE) := REF("super._mathlib1") SEQ_++ (sym.Set UNAPPLY(ID(m1)))) ::
+      (DEF("_mathlib2") withFlags(Flags.OVERRIDE) := REF("super._mathlib2") SEQ_++ (sym.Set UNAPPLY(ID(m2)))) :: 
       methodsAll: _*
     )
   }
@@ -96,7 +91,7 @@ class Code extends UsefulStuff {
   val methodsTwoGen = methodsTwo map { x => objects2(x) }
   val methodsAll = methodsOneGen ++ methodsTwoGen
 
-  val trees = import2 :: import3 :: import4 :: import5 :: import1 :: trait1 :: trait2 :: Nil 
+  val trees = imports :: trait1 :: trait2 :: Nil 
 
   val str: String = treeToString(trees: _*) 
 

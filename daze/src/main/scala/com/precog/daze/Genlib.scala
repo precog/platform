@@ -21,20 +21,26 @@ package com.precog
 
 package daze
 
-import yggdrasil._
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
-import java.lang.Math
 import bytecode.Library
+
+import bytecode.BuiltInFunc1
+
+import java.lang.Math
+
+import java.lang.String
+
+import bytecode.BuiltInFunc2
+
+import yggdrasil._
 trait GenLibrary extends Library {
-  lazy val genlib1 = _genlib1
-  lazy val genlib2 = _genlib2
-  def _genlib1: Set[BIF1] = Set()
-  def _genlib2: Set[BIF2] = Set()
+  lazy val mathlib1 = _mathlib1
+  lazy val mathlib2 = _mathlib2
+  def _mathlib1: Set[BIF1] = Set()
+  def _mathlib2: Set[BIF2] = Set()
 }
 trait Genlib extends GenOpcode with GenLibrary {
-  override def _genlib1 = super._genlib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
-  override def _genlib2 = super._genlib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)
+  override def _mathlib1 = super._mathlib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
+  override def _mathlib2 = super._mathlib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)
   object sinh extends BIF1(Vector("std", "math"), "sinh") {
     val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
