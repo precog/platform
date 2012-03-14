@@ -44,7 +44,8 @@ trait Library {
 
   def lib1: Set[BIF1] 
   def lib2: Set[BIF2]
-  def lib: Set[BIF1]
+  def genlib1: Set[BIF1]
+  def genlib2: Set[BIF2]
 }
 
 
