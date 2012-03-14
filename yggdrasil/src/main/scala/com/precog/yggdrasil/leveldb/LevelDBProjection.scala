@@ -183,35 +183,92 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     import MO._
     import MO.MG.bindSyntax._
 
-    new EnumeratorT[X, Vector[E], F] { self =>
-      import org.fusesource.leveldbjni.internal.JniDBIterator
-      import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
+    import java.util.concurrent.{ArrayBlockingQueue,TimeUnit}
+    import java.util.concurrent.atomic.AtomicBoolean
+    import org.fusesource.leveldbjni.internal.JniDBIterator
+    import org.fusesource.leveldbjni.KeyValueChunk
+    import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
 
-      def apply[A] = {
-        val iterIO  = IO(idIndexFile.iterator) map { i => i.seekToFirst; i.asInstanceOf[JniDBIterator] }
+    val readAheadSize = 2 // TODO: Make configurable
+    val readPollTime = 100l
 
-        def step(s : StepT[X, Vector[E], F, A], iterF: F[JniDBIterator], keyBuffer: ByteBuffer, valBuffer: ByteBuffer): IterateeT[X, Vector[E], F, A] = {
-          @inline def _done = iterateeT[X, Vector[E], F, A](iterF.flatMap(iter => MO.promote(IO(iter.close))) >> s.pointI.value)
 
-          @inline def next(iter: JniDBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A], keyBuffer: ByteBuffer, valBuffer: ByteBuffer) = if (iter.hasNext) {
-            val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
-            val chunkIter: java.util.Iterator[KeyValuePair] = iter.nextChunk(keyBuffer, valBuffer, DataWidth.VARIABLE, DataWidth.VARIABLE).getIterator
-            while (chunkIter.hasNext) {
-              val kvPair = chunkIter.next()
-              buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
-            }
-            val chunk = Vector(buffer: _*)
-            k(elInput(chunk)) >>== (s => step(s, MO.MG.point(iter), keyBuffer, valBuffer))
-          } else {
-            _done
+    class ChunkReader(iterator: JniDBIterator) extends Thread {
+      val bufferQueue = new ArrayBlockingQueue[Pair[ByteBuffer,ByteBuffer]](readAheadSize) // Need a key and value buffer for each readahead
+
+      // pre-fill the buffer queue
+      (1 to readAheadSize).foreach {
+        _ => bufferQueue.put((ByteBuffer.allocate(chunkSize), ByteBuffer.allocate(chunkSize)))
+      }
+      
+      val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize + 1)
+
+      val running = new AtomicBoolean(true)
+
+      override def run() {
+        while (running.get && iterator.hasNext) {
+          var buffers : Pair[ByteBuffer,ByteBuffer] = null
+          while (running.get && buffers == null) {
+            buffers = bufferQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
           } 
+
+          if (buffers != null) {
+            val chunk = elInput(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
+
+            while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
+              // Noop
+            }
+          }
+        }
+
+        chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
+
+        iterator.close()
+      }
+    }
+
+    new EnumeratorT[X, Vector[E], F] { self =>
+      def apply[A] = {
+        val iterIO : IO[ChunkReader] = IO(idIndexFile.iterator) map { i => i.seekToFirst; val reader = new ChunkReader(i.asInstanceOf[JniDBIterator]); reader.start(); reader }
+
+        def step(s : StepT[X, Vector[E], F, A], ioF: F[ChunkReader]): IterateeT[X, Vector[E], F, A] = {
+          @inline def _done = iterateeT[X, Vector[E], F, A](ioF.flatMap(reader => MO.promote(IO(reader.running.set(false)))) >> s.pointI.value)
+
+          @inline def next(k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A], reader: ChunkReader) = {
+            val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
+            val chunkInput : Input[KeyValueChunk] = reader.chunkQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
+            val _empty = k(emptyInput) >>== (s => step(s, MO.MG.point(reader)))
+
+
+            if (chunkInput == null) {
+              _empty
+            } else {
+              chunkInput.fold(
+                empty = _empty,
+                el = chunk => {
+                  val chunkIter: java.util.Iterator[KeyValuePair] = chunk.getIterator()
+                  while (chunkIter.hasNext) {
+                      val kvPair = chunkIter.next()
+                    buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
+                  }
+                  val outChunk = Vector(buffer: _*)
+
+                  // return the backing buffers for the next readahead
+                  reader.bufferQueue.put((chunk.keyData, chunk.valueData))
+
+                  k(elInput(outChunk)) >>== (s => step(s, MO.MG.point(reader)))
+                },
+                eof = _done
+              )
+            }
+          }
 
           s.fold(
             cont = k => {
               if (System.currentTimeMillis >= expiresAt) {
-                iterateeT(iterF.flatMap(iter => MO.promote(IO(iter.close))) >> Monad[F].point(StepT.serr[X, Vector[E], F, A](new TimeoutException("Iteration expired"))))
+                iterateeT(ioF.flatMap(reader => MO.promote(IO(reader.running.set(false)))) >>  Monad[F].point(StepT.serr[X, Vector[E], F, A](new TimeoutException("Iteration expired"))))
               } else {
-                iterateeT(iterF flatMap (next(_, k, keyBuffer, valBuffer).value))
+                iterateeT(ioF.flatMap(reader => next(k, reader).value))
               }
             },
             done = (_, _) => _done,
@@ -219,9 +276,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           )
         }
 
-        val keyBuffer = ByteBuffer.allocate(chunkSize)
-        val valBuffer = ByteBuffer.allocate(chunkSize)
-        step(_, MO.promote(iterIO), keyBuffer, valBuffer)
+        step(_, MO.promote(iterIO))
       }
     }
   }
