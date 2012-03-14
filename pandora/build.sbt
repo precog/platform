@@ -107,7 +107,7 @@ initialCommands in console := """
   | import quirrel.typer._
   | 
   | import yggdrasil._
-  | import yggdrasil.shard._
+  | import yggdrasil.actor._
   | import SBTConsole.platform
   | """.stripMargin
   
