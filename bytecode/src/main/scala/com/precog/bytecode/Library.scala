@@ -27,9 +27,6 @@ trait Library {
   def lib2: Set[BIF2]
   def genlib1: Set[BIF1]
   def genlib2: Set[BIF2]
-
-  val libsUnary = Set(lib1, genlib1)
-  val libsBinary = Set(lib2, genlib2)
 }
 
 
