@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.streum.configrity.Configuration
 
 import blueeyes.json.JPath
+import blueeyes.json.Printer
 import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
@@ -60,11 +61,14 @@ object ShardTestInit extends App {
 
     json match {
       case JArray(elements) => 
-        shard.storeBatch(elements.map{ value =>
+        val fut = shard.storeBatch(elements.map{ value =>
+          println(Printer.compact(Printer.render(value)))
           EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), StaticTokenManager.rootUID, value, emptyMetadata))
         }, timeout)
+        Await.result(fut, Duration(30, "seconds")) 
       case single           =>
-        shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), StaticTokenManager.rootUID, single, emptyMetadata)), timeout)
+        val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), StaticTokenManager.rootUID, single, emptyMetadata)), timeout)
+        Await.result(fut, Duration(30, "seconds")) 
     } 
   }
 

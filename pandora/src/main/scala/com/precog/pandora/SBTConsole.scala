@@ -23,13 +23,7 @@ import yggdrasil._
 import yggdrasil.actor._
 
 object SBTConsole {
-  trait Platform  extends Compiler 
-                  with LineErrors 
-                  with ProvenanceChecker 
-                  with Emitter 
-                  with Evaluator 
-                  with MemoryDatasetConsumer 
-                  with OperationsAPI 
+  trait Platform  extends ParseEvalStack 
                   with YggdrasilEnumOpsComponent 
                   with LevelDBQueryComponent 
                   with DiskMemoizationComponent 
