@@ -201,7 +201,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
         _ => bufferQueue.put((ByteBuffer.allocate(chunkSize), ByteBuffer.allocate(chunkSize)))
       }
       
-      val chunkQueue  = new ArrayBlockingQueue[Option[KeyValueChunk]](readAheadSize)
+      val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize)
 
       val running = new AtomicBoolean(true)
 
@@ -213,7 +213,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           } 
 
           if (buffers != null) {
-            val chunk = Some(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
+            val chunk = elInput(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
 
             while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
               // Noop
@@ -221,7 +221,11 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
           }
         }
 
-        chunkQueue.put(None)
+        if (running.get) {
+          chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
+        } else {
+          chunkQueue.offer(eofInput) // To be safe
+        }
 
         iterator.close()
       }
@@ -236,24 +240,30 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
           @inline def next(k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A], reader: ChunkReader) = {
             val buffer = new ArrayBuffer[E](chunkSize / 8) // Assume longs as a *very* rough target
-            val chunkOpt : Option[KeyValueChunk] = reader.chunkQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
+            val chunkInput : Input[KeyValueChunk] = reader.chunkQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
+            val _empty = k(emptyInput) >>== (s => step(s, MO.MG.point(reader)))
 
-            if (chunkOpt == null) {
-              k(emptyInput) >>== (s => step(s, MO.MG.point(reader)))
+
+            if (chunkInput == null) {
+              _empty
             } else {
-              chunkOpt.map { chunk => {
-                val chunkIter: java.util.Iterator[KeyValuePair] = chunk.getIterator()
-                while (chunkIter.hasNext) {
-                  val kvPair = chunkIter.next()
-                  buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
-                }
-                val outChunk = Vector(buffer: _*)
+              chunkInput.fold(
+                empty = _empty,
+                el = chunk => {
+                  val chunkIter: java.util.Iterator[KeyValuePair] = chunk.getIterator()
+                  while (chunkIter.hasNext) {
+                      val kvPair = chunkIter.next()
+                    buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
+                  }
+                  val outChunk = Vector(buffer: _*)
 
-                // return the backing buffers for the next readahead
-                reader.bufferQueue.put((chunk.keyData, chunk.valueData))
+                  // return the backing buffers for the next readahead
+                  reader.bufferQueue.put((chunk.keyData, chunk.valueData))
 
-                k(elInput(outChunk)) >>== (s => step(s, MO.MG.point(reader)))
-              }}.getOrElse(_done)
+                  k(elInput(outChunk)) >>== (s => step(s, MO.MG.point(reader)))
+                },
+                eof = _done
+              )
             }
           }
 
