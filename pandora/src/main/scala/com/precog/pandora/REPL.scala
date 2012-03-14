@@ -55,7 +55,7 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends ParseEvalStack with Genlib {
+trait REPL extends ParseEvalStack {
 
   val dummyUID = "dummyUID"
 
