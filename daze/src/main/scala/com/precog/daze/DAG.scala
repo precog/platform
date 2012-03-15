@@ -220,10 +220,17 @@ trait DAG extends Instructions {
         case Merge => {
           val eitherTails = (roots, splits) match {
             case (child :: rootsTail, OpenSplit(loc2, parent :: roots2) :: splitsTail) => {
-              if (roots2.tails contains rootsTail)
+              val origSet = Set(roots2 map { new IdentityContainer(_) }: _*)
+              val resultSet = Set(rootsTail map { new IdentityContainer(_) }: _*)
+              
+              if ((origSet & resultSet).size == resultSet.size)
                 Right((Split(loc2, parent, child) :: (rootsTail map adjustSplits(-1)), splitsTail))
-              else
+              else {
+                println(origSet)
+                println(resultSet)
+                println(origSet & resultSet)
                 Left(MergeWithUnmatchedTails)
+              }
             }
             
             case (_, Nil) => Left(UnmatchedMerge)
@@ -314,6 +321,18 @@ trait DAG extends Instructions {
     } else {
       findFirstRoot(None, stream).right flatMap { case (root, tail) => loop(root.loc, root :: Nil, Nil, tail) }
     }
+  }
+  
+  private class IdentityContainer(private val self: AnyRef) {
+    
+    override def equals(that: Any) = that match {
+      case c: IdentityContainer => c.self eq self
+      case _ => false
+    }
+    
+    override def hashCode = System.identityHashCode(self)
+    
+    override def toString = self.toString
   }
   
   private case class OpenSplit(loc: Line, roots: List[DepGraph])
