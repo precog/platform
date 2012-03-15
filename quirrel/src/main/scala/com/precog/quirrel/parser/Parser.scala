@@ -186,14 +186,13 @@ trait Parser extends RegexParsers with Filters with AST {
       'comp, 'neg,
       'mul, 'div,
       'add, 'sub,
+      'union, 'intersect,
       'lt, 'lteq, 'gt, 'gteq,
       'eq, 'noteq,
       'and, 'or,
       'with,
       'new,
       'where,
-      'union,
-      'intersect,
       'relate,
       'let)
       

@@ -1061,6 +1061,42 @@ class EvaluatorSpecs extends Specification
       result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
     }
     
+    "compute the iunion of two homogeneous sets" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, IUnion,
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        
+      val result = testEval(input)
+      
+      result must haveSize(10)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toDouble
+      }
+      
+      result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
+    }
+    
+    "compute the iintersect of two homogeneous sets" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, IIntersect,
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        
+      val result = testEval(input)
+      
+      result must haveSize(0)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toDouble
+      }
+      
+      result2 must beEmpty
+    }
+    
     "compute the vunion of two homogeneous sets" in {
       val line = Line(0, "")
       
@@ -1097,7 +1133,7 @@ class EvaluatorSpecs extends Specification
       result2 must contain(42, 77)
     }
     
-    // TODO tests for iunion and iintersect
+    
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
