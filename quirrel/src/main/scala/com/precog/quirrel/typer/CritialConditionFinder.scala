@@ -80,13 +80,19 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         }
       }
       
-      case Operation(_, left, "where", right) => {
+      case Where(_, left, right) => {
         val leftMap = loop(root, left, currentWhere)
         val rightMap = loop(root, right, Some(right))
         merge(leftMap, rightMap)
       }
       
-      case Operation(_, left, _, right) =>
+      case With(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+      
+      case Union(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+      
+      case Intersect(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case Add(_, left, right) =>
@@ -197,7 +203,13 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       paramRef || defRef
     }
     
-    case Operation(_, left, _, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+    case Where(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+
+    case With(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+
+    case Union(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+
+    case Intersect(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Add(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     

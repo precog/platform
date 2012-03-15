@@ -72,7 +72,7 @@ object CriticalConditionFinderSpecs extends Specification
         case Condition(Add(_, TicVar(_, "'b"), NumLit(_, "24"))) => ok
       }
       sorted(1) must beLike {
-        case Condition(Operation(_, Add(_, NumLit(_, "12"), TicVar(_, "'b")), "where", Add(_, TicVar(_, "'b"), NumLit(_, "24")))) => ok
+        case Condition(Where(_, Add(_, NumLit(_, "12"), TicVar(_, "'b")), Add(_, TicVar(_, "'b"), NumLit(_, "24")))) => ok
       }
     }
     

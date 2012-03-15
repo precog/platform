@@ -309,7 +309,40 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         back ++ errors
       }
       
-      case Operation(_, left, _, right) => {
+      case Where(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }      
+      case With(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }      
+      case Union(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }      
+      case Intersect(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
@@ -560,7 +593,22 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }
     }
     
-    case Operation(_, left, _, right) => {
+    case Where(_, left, right) => {
+      val leftProv = computeResultProvenance(left, relations, varAssumptions)
+      val rightProv = computeResultProvenance(right, relations, varAssumptions)
+      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
+    }    
+    case With(_, left, right) => {
+      val leftProv = computeResultProvenance(left, relations, varAssumptions)
+      val rightProv = computeResultProvenance(right, relations, varAssumptions)
+      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
+    }    
+    case Union(_, left, right) => {
+      val leftProv = computeResultProvenance(left, relations, varAssumptions)
+      val rightProv = computeResultProvenance(right, relations, varAssumptions)
+      unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
+    }    
+    case Intersect(_, left, right) => {
       val leftProv = computeResultProvenance(left, relations, varAssumptions)
       val rightProv = computeResultProvenance(right, relations, varAssumptions)
       unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance

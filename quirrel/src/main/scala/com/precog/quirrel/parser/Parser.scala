@@ -93,7 +93,11 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
     | namespacedId ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }  
-    | expr ~ operations ~ expr ^# Operation
+
+    | expr ~ """where\b""".r ~ expr     ^# { (loc, e1, _, e2) => Where(loc, e1, e2) }
+    | expr ~ """with\b""".r ~ expr      ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
+    | expr ~ """union\b""".r ~ expr     ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
+    | expr ~ """intersect\b""".r ~ expr ^# { (loc, e1, _, e2) => Intersect(loc, e1, e2) }
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
     | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
@@ -172,9 +176,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | "false" ^^^ false
   )
   
-  private lazy val keywords = "new|true|false|where|with|neg".r
-  
-  private lazy val operations = """(where|with)\b""".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|neg".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
@@ -187,9 +189,11 @@ trait Parser extends RegexParsers with Filters with AST {
       'lt, 'lteq, 'gt, 'gteq,
       'eq, 'noteq,
       'and, 'or,
-      'op,
+      'with,
       'new,
       'where,
+      'union,
+      'intersect,
       'relate,
       'let)
       
@@ -206,8 +210,10 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('noteq <)
     & ('and <)
     & ('or <)
-    & ('op <)
+    & ('with <)
     & ('where <)
+    & ('union <)
+    & ('intersect <)
     & ('relate <>)
     & (arrayDefDeref _)
   )
@@ -317,7 +323,10 @@ trait Parser extends RegexParsers with Filters with AST {
     // %%
     
     private lazy val op = (
-        operations
+        "where"
+      | "with"
+      | "union"
+      | "intersect"
       | "+"
       | "-"
       | "*"

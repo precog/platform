@@ -250,14 +250,27 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         // TODO we're relying on the fact that we *don't* need to preserve sane identities!
         val back = ops.cogroup(leftEnum, rightEnum) collect {
           case Left3(sev)  if instr == VUnion => sev
-          case Middle3((sev1, _))             => sev1
+          case Middle3((sev1, _))             => sev1  //todo: this is incorrect because if there are duplicate Middle3(_, _), sev1 gets collected twice 
           case Right3(sev) if instr == VUnion => sev
         }
         
         Right(back)
       }
       
-      // TODO IUnion and IIntersect
+      case Join(_, instr @ (IUnion | IIntersect), left, right) => {
+        implicit val sortOfIdThenValueOrder = IdsThenValuesOrder
+
+        val leftEnum = ops.sort(maybeRealize(loop(left, roots, ctx), ctx), None)
+        val rightEnum = ops.sort(maybeRealize(loop(right, roots, ctx), ctx), None)
+
+        val back = ops.cogroup(leftEnum, rightEnum) collect {
+          case Left3(sev)  if instr == IUnion => sev
+          case Middle3((sev1, _))             => sev1  //todo: see above case Middle3(_, _)
+          case Right3(sev) if instr == IUnion => sev
+        }
+
+        Right(back)
+      }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
@@ -597,6 +610,126 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
    * In other words, this is sufficient for union, intersect, match, etc, but is
    * not actually going to give you sane answers if you 
    */
+  
+  private object IdsThenValuesOrder extends Order[SEvent] {
+    def order(e1: SEvent, e2: SEvent) = {
+      orderIdsThenValues(e1, e2) 
+    }
+
+    private def orderIdsThenValues(e1: SEvent, e2: SEvent): Ordering = {
+      val (id1, sv1) = e1
+      val (id2, sv2) = e2
+
+      if (identityOrder(id1, id2) eq Ordering.EQ) orderValues(sv1, sv2)
+      else identityOrder(id1, id2)
+    }
+  }
+ 
+  private def orderValues(sv1: SValue, sv2: SValue): Ordering = {
+    val to1 = typeOrdinal(sv1)
+    val to2 = typeOrdinal(sv2)
+    
+    if (to1 == to2) {
+      (sv1, sv2) match {
+        case (SBoolean(b1), SBoolean(b2)) => Ordering.fromInt(boolOrdinal(b1) - boolOrdinal(b2))
+        
+        case (SLong(l1), SLong(l2)) => {
+          if (l1 < l2)
+            Ordering.LT
+          else if (l1 == l2)
+            Ordering.EQ
+          else
+            Ordering.GT
+        }
+        
+        case (SDouble(d1), SDouble(d2)) => {
+          if (d1 < d2)
+            Ordering.LT
+          else if (d1 == d2)
+            Ordering.EQ
+          else
+            Ordering.GT
+        }
+        
+        case (SDecimal(d1), SDecimal(d2)) => {
+          if (d1 < d2)
+            Ordering.LT
+          else if (d1 == d2)
+            Ordering.EQ
+          else
+            Ordering.GT
+        }
+        
+        case (SString(str1), SString(str2)) => {
+          if (str1 < str2)
+            Ordering.LT
+          else if (str1 == str2)
+            Ordering.EQ
+          else
+            Ordering.GT
+        }
+        
+        case (SArray(arr1), SArray(arr2)) => {
+          if (arr1.length < arr2.length) {
+            Ordering.LT
+          } else if (arr1.length == arr2.length) {
+            val orderings = arr1.view zip arr2.view map {
+              case (sv1, sv2) => orderValues(sv1, sv2)
+            }
+            
+            (orderings dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
+          } else {
+            Ordering.GT
+          }
+        }
+        
+        case (SObject(obj1), SObject(obj2)) => {
+          if (obj1.size < obj2.size) {
+            Ordering.LT
+          } else if (obj1.size == obj2.size) {
+            val pairs1 = obj1.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
+            val pairs2 = obj2.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
+            
+            val comparisons = pairs1 zip pairs2 map {
+              case ((k1, _), (k2, _)) if k1 < k2 => Ordering.LT
+              case ((k1, _), (k2, _)) if k1 == k2 => Ordering.EQ
+              case ((k1, _), (k2, _)) if k1 > k2 => Ordering.GT
+            }
+            
+            val netKeys = (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
+            
+            if (netKeys == Ordering.EQ) {
+              val comparisons = pairs1 zip pairs2 map {
+                case ((_, v1), (_, v2)) => orderValues(v1, v2)
+              }
+              
+              (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
+            } else {
+              netKeys
+            }
+          } else {
+            Ordering.GT
+          }
+        }
+      }
+    } else {
+      Ordering.fromInt(to1 - to2)
+    }
+  }
+
+
+  private def typeOrdinal(sv: SValue) = sv match {
+    case SBoolean(_) => 0
+    case SLong(_) => 1
+    case SDouble(_) => 2
+    case SDecimal(_) => 3
+    case SString(_) => 4
+    case SArray(_) => 5
+    case SObject(_) => 6
+  }
+  
+  private def boolOrdinal(b: Boolean) = if (b) 1 else 0
+
   private object ValuesOrder extends Order[SEvent] {
     def order(e1: SEvent, e2: SEvent) = {
       val (_, sv1) = e1
@@ -604,109 +737,5 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
       
       orderValues(sv1, sv2)
     }
-    
-    private def orderValues(sv1: SValue, sv2: SValue): Ordering = {
-      val to1 = typeOrdinal(sv1)
-      val to2 = typeOrdinal(sv2)
-      
-      if (to1 == to2) {
-        (sv1, sv2) match {
-          case (SBoolean(b1), SBoolean(b2)) => Ordering.fromInt(boolOrdinal(b1) - boolOrdinal(b2))
-          
-          case (SLong(l1), SLong(l2)) => {
-            if (l1 < l2)
-              Ordering.LT
-            else if (l1 == l2)
-              Ordering.EQ
-            else
-              Ordering.GT
-          }
-          
-          case (SDouble(d1), SDouble(d2)) => {
-            if (d1 < d2)
-              Ordering.LT
-            else if (d1 == d2)
-              Ordering.EQ
-            else
-              Ordering.GT
-          }
-          
-          case (SDecimal(d1), SDecimal(d2)) => {
-            if (d1 < d2)
-              Ordering.LT
-            else if (d1 == d2)
-              Ordering.EQ
-            else
-              Ordering.GT
-          }
-          
-          case (SString(str1), SString(str2)) => {
-            if (str1 < str2)
-              Ordering.LT
-            else if (str1 == str2)
-              Ordering.EQ
-            else
-              Ordering.GT
-          }
-          
-          case (SArray(arr1), SArray(arr2)) => {
-            if (arr1.length < arr2.length) {
-              Ordering.LT
-            } else if (arr1.length == arr2.length) {
-              val orderings = arr1.view zip arr2.view map {
-                case (sv1, sv2) => orderValues(sv1, sv2)
-              }
-              
-              (orderings dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-            } else {
-              Ordering.GT
-            }
-          }
-          
-          case (SObject(obj1), SObject(obj2)) => {
-            if (obj1.size < obj2.size) {
-              Ordering.LT
-            } else if (obj1.size == obj2.size) {
-              val pairs1 = obj1.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
-              val pairs2 = obj2.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
-              
-              val comparisons = pairs1 zip pairs2 map {
-                case ((k1, _), (k2, _)) if k1 < k2 => Ordering.LT
-                case ((k1, _), (k2, _)) if k1 == k2 => Ordering.EQ
-                case ((k1, _), (k2, _)) if k1 > k2 => Ordering.GT
-              }
-              
-              val netKeys = (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-              
-              if (netKeys == Ordering.EQ) {
-                val comparisons = pairs1 zip pairs2 map {
-                  case ((_, v1), (_, v2)) => orderValues(v1, v2)
-                }
-                
-                (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-              } else {
-                netKeys
-              }
-            } else {
-              Ordering.GT
-            }
-          }
-        }
-      } else {
-        Ordering.fromInt(to1 - to2)
-      }
-    }
-    
-    private def typeOrdinal(sv: SValue) = sv match {
-      case SBoolean(_) => 0
-      case SLong(_) => 1
-      case SDouble(_) => 2
-      case SDecimal(_) => 3
-      case SString(_) => 4
-      case SArray(_) => 5
-      case SObject(_) => 6
-    }
-    
-    private def boolOrdinal(b: Boolean) = if (b) 1 else 0
   }
 }

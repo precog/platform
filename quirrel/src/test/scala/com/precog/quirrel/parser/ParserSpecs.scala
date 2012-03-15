@@ -348,13 +348,23 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "accept an infix operation" >> {
       "where" >> {
         parse("1 where 2") must beLike {
-          case Operation(_, NumLit(_, "1"), "where", NumLit(_, "2")) => ok
+          case Where(_, NumLit(_, "1"), NumLit(_, "2")) => ok
         }
       }
       
       "with" >> {
         parse("1 with 2") must beLike {
-          case Operation(_, NumLit(_, "1"), "with", NumLit(_, "2")) => ok
+          case With(_, NumLit(_, "1"), NumLit(_, "2")) => ok
+        }
+      }
+      "union" >> {
+        parse("1 union 2") must beLike {
+          case Union(_, NumLit(_, "1"), NumLit(_, "2")) => ok
+        }
+      }
+      "intersect" >> {
+        parse("1 intersect 2") must beLike {
+          case Intersect(_, NumLit(_, "1"), NumLit(_, "2")) => ok
         }
       }
     }
@@ -637,12 +647,12 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "favor new over where" in {
-      parse("new a where b") must beLike { case Operation(_, New(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), "where", Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
+      parse("new a where b") must beLike { case Where(_, New(_, Dispatch(_, Identifier(Vector(), "a"), Vector())), Dispatch(_, Identifier(Vector(), "b"), Vector())) => ok }
     }
     
     "favor where over relate" in {
-      parse("a where b ~ c d") must beLike { case Relate(_, Operation(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), "where", Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector()), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
-      parse("a ~ b where c d") must beLike { case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Operation(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), "where", Dispatch(_, Identifier(Vector(), "c"), Vector())), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
+      parse("a where b ~ c d") must beLike { case Relate(_, Where(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector()), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
+      parse("a ~ b where c d") must beLike { case Relate(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Where(_, Dispatch(_, Identifier(Vector(), "b"), Vector()), Dispatch(_, Identifier(Vector(), "c"), Vector())), Dispatch(_, Identifier(Vector(), "d"), Vector())) => ok }
     }
   }
   
@@ -696,7 +706,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "associate where to the left" in {
-      parse("a where b where c") must beLike { case Operation(_, Operation(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), "where", Dispatch(_, Identifier(Vector(), "b"), Vector())), "where", Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
+      parse("a where b where c") must beLike { case Where(_, Where(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
   }
   
@@ -861,7 +871,19 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
       
       parse("1 where \"a\"") must beLike {
-        case Operation(_, NumLit(_, "1"), "where", StrLit(_, "a")) => ok
+        case Where(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 with \"a\"") must beLike {
+        case With(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 union \"a\"") must beLike {
+        case Union(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }
+      
+      parse("1 intersect \"a\"") must beLike {
+        case Intersect(_, NumLit(_, "1"), StrLit(_, "a")) => ok
       }
     }
   }
@@ -895,6 +917,16 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       "with" >> {
         parse("withfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "withfoo"), Vector()) => ok
+        }
+      }      
+      "union" >> {
+        parse("unionfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "unionfoo"), Vector()) => ok
+        }
+      }      
+      "intersect" >> {
+        parse("intersectfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
         }
       }
     }
@@ -948,7 +980,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
   }
-  
+
   val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {
@@ -962,4 +994,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
   } else {
     "specification examples" >> skipped
   }
+
+
+
 }

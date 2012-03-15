@@ -2303,7 +2303,7 @@ object ProvenanceSpecs extends Specification
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
     
-    "propagate through operation" in {
+    "propagate through where" in {
       {
         val tree = compile("(load(//a) + load(//b)) where 42")
         tree.provenance mustEqual NullProvenance
@@ -2312,6 +2312,48 @@ object ProvenanceSpecs extends Specification
       
       {
         val tree = compile("42 + (load(//a) where load(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
+    "propagate through with" in {
+      {
+        val tree = compile("(load(//a) + load(//b)) with 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = compile("42 + (load(//a) with load(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
+    "propagate through union" in {
+      {
+        val tree = compile("(load(//a) + load(//b)) union 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = compile("42 + (load(//a) union load(//b))")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+    }
+    
+    "propagate through intersect" in {
+      {
+        val tree = compile("(load(//a) + load(//b)) intersect 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
+      
+      {
+        val tree = compile("42 + (load(//a) intersect load(//b))")
         tree.provenance mustEqual NullProvenance
         tree.errors mustEqual Set(OperationOnUnrelatedSets)
       }

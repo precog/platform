@@ -35,6 +35,8 @@ trait BytecodeReader extends Reader {
 
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
+  private lazy val mathlib1Ops: Map[Int, BuiltInFunction1Op] = mathlib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
+  private lazy val mathlib2Ops: Map[Int, BuiltInFunction2Op] = mathlib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
     val version = buffer.getInt()

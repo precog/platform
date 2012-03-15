@@ -149,12 +149,36 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         }
       }
       
-      "operation" >> {
-        val tree = Operation(LineStream(), NumLit(LineStream(), "1"), "where", NumLit(LineStream(), "2"))
+      "where" >> {
+        val tree = Where(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
         bindRoot(tree, tree)
         
         shakeTree(tree) must beLike {
-          case Operation(LineStream(), NumLit(LineStream(), "1"), "where", NumLit(LineStream(), "2")) => ok
+          case Where(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
+        }
+      }      
+      "with" >> {
+        val tree = With(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case With(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
+        }
+      }      
+      "union" >> {
+        val tree = Union(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case Union(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
+        }
+      }      
+      "intersect" >> {
+        val tree = Intersect(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case Intersect(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
         }
       }
       
@@ -618,46 +642,46 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       result.errors mustEqual Set(UnusedTicVariable("'b"))
     }
     
-    "eliminate let when not found in scope in operation" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Operation(LineStream(), NumLit(LineStream(), "24"), "where", NumLit(LineStream(), "25")))
+    "eliminate let when not found in scope in where" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
       result must beLike {
-        case Operation(LineStream(), NumLit(LineStream(), "24"), "where", NumLit(LineStream(), "25")) => ok
+        case Where(LineStream(), NumLit(LineStream(), "24"), NumLit(LineStream(), "25")) => ok
       }
       
       result.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
     }
     
-    "preserve let when found in scope in operation" in {
+    "preserve let when found in scope in where" in {
       {
-        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Operation(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), "where", NumLit(LineStream(), "24")))
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "24")))
         bindRoot(tree, tree)
         
         val result = shakeTree(tree)
         result must beLike {
-          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Operation(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), "where", NumLit(LineStream(), "24"))) => ok
+          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()), NumLit(LineStream(), "24"))) => ok
         }
         
         result.errors must beEmpty
       }
       
       {
-        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Operation(LineStream(), NumLit(LineStream(), "24"), "where", Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())))
+        val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), NumLit(LineStream(), "24"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())))
         bindRoot(tree, tree)
         
         val result = shakeTree(tree)
         result must beLike {
-          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Operation(LineStream(), NumLit(LineStream(), "24"), "where", Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))) => ok
+          case Let(LineStream(), Identifier(Vector(), "a"), Vector(), NumLit(LineStream(), "42"), Where(LineStream(), NumLit(LineStream(), "24"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))) => ok
         }
         
         result.errors must beEmpty
       }
     }
     
-    "detect unused tic-variable in operation" in {
-      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a", "'b"), Operation(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), "where", NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
+    "detect unused tic-variable in where" in {
+      val tree = Let(LineStream(), Identifier(Vector(), "a"), Vector("'a", "'b"), Where(LineStream(), Add(LineStream(), TicVar(LineStream(), "'a"), NumLit(LineStream(), "42")), NumLit(LineStream(), "24")), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector()))
       bindRoot(tree, tree)
       
       val result = shakeTree(tree)
