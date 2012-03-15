@@ -90,7 +90,16 @@ trait Binder extends parser.AST with Library {
         }
       }
       
-      case Operation(_, left, _, right) =>
+      case Where(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+      
+      case With(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+      
+      case Union(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+      
+      case Intersect(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
       case Add(_, left, right) =>

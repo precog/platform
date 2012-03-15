@@ -411,18 +411,18 @@ trait Emitter extends AST
               notImpl(expr)
           }
         
-        case ast.Operation(loc, left, op, right) => 
-          // to be refactored (!)
-          op match {
-            case "where" => 
-              emitFilter(left, right, 0, None)
-            
-            case "with" =>
-              emitMap(left, right, JoinObject)
+        case ast.Where(loc, left, right) =>
+          emitFilter(left, right, 0, None)
 
-            case _ => notImpl(expr)
-          }
-        
+        case ast.With(loc, left, right) =>
+          emitMap(left, right, JoinObject)
+
+        case ast.Union(loc, left, right) =>
+          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  //todo include provenance
+
+        case ast.Intersect(loc, left, right) =>
+          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  //todo include provenance
+
         case ast.Add(loc, left, right) => 
           emitMap(left, right, Add)
         

@@ -313,16 +313,64 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }
     
-    "forward binding through operation" in {
+    "forward binding through where" in {
       {
-        val e @ Let(_, _, _, _, Operation(_, d: Dispatch, _, _)) = parse("a := 42 a where 1")
+        val e @ Let(_, _, _, _, Where(_, d: Dispatch, _)) = parse("a := 42 a where 1")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
-        val e @ Let(_, _, _, _, Operation(_, _, _, d: Dispatch)) = parse("a := 42 1 where a")
+        val e @ Let(_, _, _, _, Where(_, _, d: Dispatch)) = parse("a := 42 1 where a")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through with" in {
+      {
+        val e @ Let(_, _, _, _, With(_, d: Dispatch, _)) = parse("a := 42 a with 1")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, With(_, _, d: Dispatch)) = parse("a := 42 1 with a")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through union" in {
+      {
+        val e @ Let(_, _, _, _, Union(_, d: Dispatch, _)) = parse("a := 42 a union 1")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, Union(_, _, d: Dispatch)) = parse("a := 42 1 union a")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through where" in {
+      {
+        val e @ Let(_, _, _, _, Intersect(_, d: Dispatch, _)) = parse("a := 42 a intersect 1")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, Intersect(_, _, d: Dispatch)) = parse("a := 42 1 intersect a")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty

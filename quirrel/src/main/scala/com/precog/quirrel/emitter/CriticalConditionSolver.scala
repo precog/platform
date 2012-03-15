@@ -72,7 +72,16 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       actualErrors ++ ourErrors
     }
     
-    case Operation(_, left, _, right) =>
+    case Where(_, left, right) =>
+      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+    
+    case With(_, left, right) =>
+      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+    
+    case Union(_, left, right) =>
+      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+    
+    case Intersect(_, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
     case Add(_, left, right) =>
