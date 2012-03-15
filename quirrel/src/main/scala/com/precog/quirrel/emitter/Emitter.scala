@@ -421,7 +421,7 @@ trait Emitter extends AST
           emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  //todo include provenance
 
         case ast.Intersect(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  //todo include provenance
+          emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect)  //todo include provenance
 
         case ast.Add(loc, left, right) => 
           emitMap(left, right, Add)

@@ -314,23 +314,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }      
       case Union(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        val result = combineProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
         if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
+          back + Error(expr, UnionValues)
         else
           back
       }      
       case Intersect(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        val result = combineProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
+       
+       if (!result.isDefined)
+          back + Error(expr, IntersectValues)
         else
           back
       }
@@ -714,6 +714,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case _ => None
   }
+
+  private def combineProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+    case (ValueProvenance, p) => None
+    case (p, ValueProvenance) => None
+
+    case (NullProvenance, p) => Some(NullProvenance)
+    case (p, NullProvenance) => Some(NullProvenance)
+
+    case (p1, p2) => Some(UnionProvenance(p1, p2))
+  }
+
   
   private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
     // not actually DFS, but that's alright since we can't have cycles

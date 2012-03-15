@@ -51,6 +51,14 @@ case object OperationOnUnrelatedSets extends ErrorType {
   override def toString = "cannot perform operation on unrelated sets"
 }
 
+case object UnionValues extends ErrorType {
+  override def toString = "cannot perform union with a value"
+}
+
+case object IntersectValues extends ErrorType {
+  override def toString = "cannot perform intersect with a value"
+}
+
 case object AlreadyRelatedSets extends ErrorType {
   override def toString = "cannot relate sets that are already related"
 }
