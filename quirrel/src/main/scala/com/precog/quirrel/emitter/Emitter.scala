@@ -437,10 +437,10 @@ trait Emitter extends AST
           emitMap(left, right, JoinObject)
 
         case ast.Union(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  //todo include provenance
+          emitExpr(left) >> emitExpr(right) >> emitInstr(IUnion)  
 
         case ast.Intersect(loc, left, right) =>
-          emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect)  //todo include provenance
+          emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect) 
 
         case ast.Add(loc, left, right) => 
           emitMap(left, right, Add)

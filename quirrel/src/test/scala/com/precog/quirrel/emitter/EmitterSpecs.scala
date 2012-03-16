@@ -84,12 +84,40 @@ object EmitterSpecs extends Specification
           PushNum("23.23123")))
     }
 
-    "emit cross-join of two withed loads with value provenance" in {
+    "emit filter of two where'd loads with value provenance" in {
+      testEmit("5 where 2")(
+        Vector(
+          PushNum("5"),
+          PushNum("2"),
+          FilterCross(0, None)))
+    }
+
+    "emit cross-join of two with'ed loads with value provenance" in {
       testEmit("5 with 2")(
         Vector(
           PushNum("5"),
           PushNum("2"),
           Map2Cross(JoinObject)))
+    }
+
+    "emit instruction for two unioned loads" in {
+      testEmit("""load("foo") union load("bar")""")(
+        Vector(
+          PushString("foo"),
+          LoadLocal(Het),
+          PushString("bar"),
+          LoadLocal(Het),
+          IUnion))
+    }    
+    
+    "emit instruction for two intersected loads" in {
+      testEmit("""load("foo") intersect load("bar")""")(
+        Vector(
+          PushString("foo"),
+          LoadLocal(Het),
+          PushString("bar"),
+          LoadLocal(Het),
+          IIntersect))
     }
 
     "emit cross-addition of two added loads with value provenance" in {
