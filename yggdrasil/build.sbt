@@ -15,6 +15,8 @@ fork := true
 // For now, skip column specs because SBT will die a horrible, horrible death
 testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 
+parallelExecution in test := false
+
 libraryDependencies ++= Seq(
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0",
