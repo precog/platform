@@ -472,6 +472,15 @@ case class JoinRowIterator(left: RowIterator, right: RowIterator, identityPrefix
           }
           case GT => advance(i)
         }
+      } else if (repeats > 0) {
+        right.retreat(repeats + 1); repeats = 0;
+        if (left.advance(1)) {
+          compareIds(0) match {
+            case EQ => advance(i - 1)
+            case LT => advanceLeft && (compareIds(0) == EQ || advance(i))
+            case GT => advance(i)
+          }
+        } else false
       } else false
     }
   }
@@ -517,6 +526,15 @@ case class JoinRowIterator(left: RowIterator, right: RowIterator, identityPrefix
           }
           case LT => retreat(i)
         }
+      } else if (retreatRepeats > 0) {
+        right.advance(retreatRepeats + 1); retreatRepeats = 0;
+        if (left.retreat(1)) {
+          compareIds(0) match {
+            case EQ => retreat(i - 1)
+            case GT => retreatLeft && (compareIds(0) == EQ || retreat(i))
+            case LT => retreat(i)
+          }
+        } else false
       } else false
     }
   }
