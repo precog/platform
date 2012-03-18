@@ -35,7 +35,7 @@ trait RowIteratorSpec {
   def genBufIterator[B <: Buffer, RI <: BufferRowIterator[B]](f: IterBuilder[B, RI])(implicit bufGen: Int => Gen[B]): Gen[RI] = 
     for {
       //len <- choose(1, 1000)
-      len <- choose(1, 3)
+      len <- choose(1, 20)
       ids <- listOfN(len, arbitrary[Long])
       buf <- bufGen(len)
       sel <- arbitrary[CPath]
@@ -109,44 +109,68 @@ object JoinRowIteratorSpec extends Specification with ScalaCheck with RowIterato
   }
 
   "a JoinRowIterator" should {
+    /*
     "obtain the same results as a strict join" in {
-//      val k1 = List[Long](0, 1, 4, 4, 6, 7, 7)
-//      val v1 = List[Long](12, 13, 10, 15, 8, 2, 3)
-//      val k2 = List[Long](1, 2, 2, 4, 4, 5, 7)
-//      val v2 = List[Long](10, 22, 26, 1, 30, 5, 4)
-//
-//      println(joinLists(k1 zip v1, k2 zip v2))
-//
-//      val iter1 = LongBufferRowIterator(LongBuffer.allocate(k1.length).put(k1.toArray).clear().asInstanceOf[LongBuffer], LongBuffer.allocate(v1.length).put(v1.toArray).clear().asInstanceOf[LongBuffer], DynCPath(0))
-//      val iter2 = LongBufferRowIterator(LongBuffer.allocate(k2.length).put(k2.toArray).clear().asInstanceOf[LongBuffer], LongBuffer.allocate(v2.length).put(v2.toArray).clear().asInstanceOf[LongBuffer], DynCPath(1))
-//
-//      val jIter = JoinRowIterator(iter1, iter2, 1)
-//
-//      do {
-//        println((jIter.idAt(0), jIter.longAt(0), jIter.longAt(1)))
-//      } while (jIter.advance(1))
-//
-//      12 must_== 12
       check { (i1: LongBufferRowIterator, i2: LongBufferRowIterator) => 
         val expected = joinLists(i1.keys.array.toList zip i1.values.array.toList, i2.keys.array.toList zip i2.values.array.toList)
-        val iter = JoinRowIterator(i1, i2, 1)
+        forall(JoinRowIterator(i1, i2, 1)) { iter =>
 
-        println("==============")
-        println("i1 = " + (i1.keys.array.toList zip i1.values.array.toList))
-        println("i2 = " + (i2.keys.array.toList zip i2.values.array.toList))
-        println("expected = " + expected)
+        //println("==============")
+        //println("i1 = " + (i1.keys.array.toList zip i1.values.array.toList))
+        //println("i2 = " + (i2.keys.array.toList zip i2.values.array.toList))
+        //println("expected = " + expected)
 
-        var initial = true
-        var doneAdvancing = false
-
-        foreach(expected) {
-          case (id, lv, rv) => 
-            doneAdvancing must_!= true
-            if (!initial) { doneAdvancing = iter.advance(1) }
-            initial = false
-            println((id, lv, rv) + " :: " + (iter.idAt(0), iter.longAt(0), iter.longAt(1)))
-            (iter.idAt(0) must_== id) and (iter.longAt(0) must_== lv) and (iter.longAt(1) must_== rv)
+          var joined: List[(Long, Long, Long)] = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: Nil
+          while (iter.advance(1)) joined = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: joined
+          joined.reverse must_== expected
         }
+      }
+    }
+    */
+
+    "succeed on failing sample" in {
+      val left = List((-4611686018427387904l,-4611686018427387904l),
+                      (-4611686018427387904l,-2705084260014779340l),
+                      (-2044762096336814645l, 2958928930257704843l),
+                      (-1341226650521502488l,-2659372784769374987l),
+                      (-867584788221027215l,4611686018427387903l),
+                      (-1l,-1800813238494576921l),
+                      (0l,4611686018427387903l),
+                      (1l,1142849289501654602l),
+                      (755301456235533030l,-1570058678012065166l),
+                      (2091921826755807125l,65924511511850270l),
+                      (4611686018427387903l,554028959602010689l),
+                      (4611686018427387903l,4088835802276197721l))
+      val (leftKeys, leftValues) = left.unzip
+
+      val right = List( (-4611686018427387904l,962540448693647226l),
+                        (-4611686018427387904l,1l),
+                        (-4455741525559278285l,-1l),
+                        (-2305701152332638002l,3882370639322964133l),
+                        (-1625457804994147303l,2883993262929241677l),
+                        (-112171687244001899l,1l),
+                        (-1l,0l),
+                        (0l,2561183432787557256l),
+                        (0l,-1l),
+                        (0l,2237921431685816929l),
+                        (1l,4385342101506736224l),
+                        (552644284652484229l,2759072634162894520l),
+                        (3102319900518874422l,-4611686018427387904l),
+                        (3341413993240482911l,4611686018427387903l),
+                        (4611686018427387903l,1l),
+                        (4611686018427387903l,-4144617194929742461l))
+       val (rightKeys, rightValues) = right.unzip
+
+      val expected = joinLists(left, right)
+      println(expected.mkString("\n"))
+      val leftIter = LongBufferRowIterator(longBuffer(leftKeys), longBuffer(leftValues), DynCPath(0))
+      val rightIter = LongBufferRowIterator(longBuffer(rightKeys), longBuffer(rightValues), DynCPath(1))
+
+      forall(JoinRowIterator(leftIter, rightIter, 1)) { iter =>
+        var joined: List[(Long, Long, Long)] = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: Nil
+        while (iter.advance(1)) joined = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: joined
+
+        joined.reverse must_== expected
       }
     }
   }

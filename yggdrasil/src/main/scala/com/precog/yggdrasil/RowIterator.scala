@@ -4,16 +4,9 @@ import java.nio._
 import scala.annotation.tailrec
 import scalaz.Ordering
 import scalaz.Ordering._
+import scalaz.syntax.std.allV._
 
-trait RowIterator { self =>
-  def idCount: Int
-  def valueCount: Int 
-  def structure: Seq[(CPath, CType)]
-
-  def advance(i: Int): Boolean
-
-  private[yggdrasil] def retreat(i: Int): Boolean
-
+trait RowState {
   def stringAt(i: Int): String
   def boolAt(i: Int): Boolean
   def intAt(i: Int): Int
@@ -25,6 +18,20 @@ trait RowIterator { self =>
   def valueAt(i: Int): CValue
   def idAt(i: Int): Long
   def typeAt(i: Int): CType
+}
+
+trait RowIterator extends RowState { self =>
+  def idCount: Int
+  def valueCount: Int 
+  def structure: Seq[(CPath, CType)]
+  def mark: Unit
+  def unmark: Unit
+  def marked: Boolean
+  def reset: Unit
+
+  def advance(i: Int): Boolean
+
+  private[yggdrasil] def retreat(i: Int): Boolean
 
   def append(iter: RowIterator) = new RefRowIterator {
     var ref = self
@@ -116,6 +123,10 @@ abstract class BufferRowIterator[B <: Buffer](val ctype: CType) extends RowItera
   final val valueCount = 1
   lazy val structure = Seq((selector, ctype))
 
+  private var markIndex = -1
+  def mark = markIndex = values.position
+  def reset = if (markIndex >= 0) values.position(markIndex)
+
   final def advance(i: Int) = ((keys.position + i) < keys.limit) && ((values.position + i) < values.limit) && {
     keys.position(keys.position + i)
     values.position(values.position + i)
@@ -143,6 +154,7 @@ case class BoolBufferRowIterator(keys: LongBuffer, values: ByteBuffer, selector:
   final def floatAt(i: Int): Float = typeError(CFloat)
   final def doubleAt(i: Int): Double = typeError(CDouble)
   final def numAt(i: Int): BigDecimal = typeError(CNum)
+  override def toString = (keys.array zip values.array).mkString("[", ", ", "]")
 }
 
 case class IntBufferRowIterator(keys: LongBuffer, values: IntBuffer, selector: CPath) extends BufferRowIterator[IntBuffer](CInt) {
@@ -155,6 +167,7 @@ case class IntBufferRowIterator(keys: LongBuffer, values: IntBuffer, selector: C
   final def floatAt(i: Int): Float = intAt(i)
   final def doubleAt(i: Int): Double = intAt(i)
   final def numAt(i: Int) = BigDecimal(intAt(i))
+  override def toString = (keys.array zip values.array).mkString("[", ", ", "]")
 }
 
 case class LongBufferRowIterator(keys: LongBuffer, values: LongBuffer, selector: CPath) extends BufferRowIterator[LongBuffer](CLong) {
@@ -167,6 +180,7 @@ case class LongBufferRowIterator(keys: LongBuffer, values: LongBuffer, selector:
   final def floatAt(i: Int): Float = longAt(i)
   final def doubleAt(i: Int): Double = longAt(i)
   final def numAt(i: Int) = BigDecimal(longAt(i))
+  override def toString = (keys.array zip values.array).mkString("[", ", ", "]")
 }
 
 trait RefRowIterator extends RowIterator {
@@ -412,11 +426,10 @@ case class ZipRowIterator(left: RowIterator, right: RowIterator) extends RowIter
   final def typeAt(i: Int): CType     = if (i < leftSize) left.typeAt(i)   else right.typeAt(i - leftSize)
 }
 
-case class JoinRowIterator(left: RowIterator, right: RowIterator, identityPrefix: Int) extends RowIterator {
+class JoinRowIterator private (left: RowIterator, right: RowIterator, identityPrefix: Int) extends RowIterator {
   //constructor
-  private var repeats = 0
+  private var eqCount = 0
   private var retreatRepeats = 0
-  advanceLeft && (compareIds(0) == EQ || advance(1));
 
   final val idCount: Int = left.idCount + right.idCount - identityPrefix
   final val structure: Seq[(CPath, CType)] = left.structure ++ right.structure
@@ -425,120 +438,83 @@ case class JoinRowIterator(left: RowIterator, right: RowIterator, identityPrefix
   private val leftSize = left.valueCount
   private val leftIdSize = left.idCount
 
-  @tailrec final def compareIds(i: Int): Ordering = {
-    if (i >= identityPrefix) EQ
-    else if (left.idAt(i) < right.idAt(i)) LT
-    else if (left.idAt(i) > right.idAt(i)) GT
-    else compareIds(i + 1)
+  final def matched = compareIds == EQ
+  final def compareIds: Ordering = {
+    @tailrec def compare(i: Int): Ordering = {
+      if (i >= identityPrefix) EQ
+      else if (left.idAt(i) < right.idAt(i)) LT
+      else if (left.idAt(i) > right.idAt(i)) GT
+      else compare(i + 1)
+    }
+
+    compare(0)
   }
 
   @tailrec private final def advanceLeft: Boolean = {
-    (compareIds(0) != LT) || (left.advance(1) && advanceLeft)
+    (compareIds != LT) || (left.advance(1) && advanceLeft)
   }
 
   @tailrec final def advance(i: Int): Boolean = {
     (i == 0) || {
       if (right.advance(1)) {
-        compareIds(0) match {
-          case EQ => repeats += 1; advance(i - 1)
-          case LT => {
-            right.retreat(repeats + 1); repeats = 0;
+        compareIds match {
+          case EQ => eqCount += 1; advance(i - 1)
+          case LT => 
+            right.retreat(eqCount + 1); eqCount = 0;
             if (left.advance(1)) {
-              compareIds(0) match {
-                case EQ => advance(i - 1)
-                case LT => advanceLeft && (compareIds(0) == EQ || advance(i))
+              compareIds match {
+                case EQ => eqCount + 1; advance(i - 1)
+                case LT => advanceLeft && matched && advance(i - 1)
                 case GT => advance(i)
               }
             } else false
-          }
+          
           case GT => advance(i)
         }
-      } else if (repeats > 0) {
-        right.retreat(repeats + 1); repeats = 0;
+      } else {
         if (left.advance(1)) {
-          compareIds(0) match {
-            case EQ => advance(i - 1)
-            case LT => advanceLeft && (compareIds(0) == EQ || advance(i))
-            case GT => advance(i)
+          compareIds match {
+            case EQ => right.retreat(eqCount); eqCount = 0; advance(i - 1)
+            case LT => advanceLeft && (matched && advance(i - 1))
+            case GT => false 
           }
         } else false
-      } else false
+      }
     }
   }
 
-//  @tailrec final def advance(i: Int): Boolean = {
-//    (i == 0) || { 
-//      right.advance(1) && {
-//        compareIds(0) match {
-//          case EQ => repeats += 1; advance(i - 1)
-//          case LT => right.retreat(repeats + 1); repeats = 0; false
-//          case GT => advance(i)
-//        }
-//      }
-//    } || {
-//      left.advance(1) && {
-//        compareIds(0) match {
-//          case EQ => advance(i - 1)
-//          case LT => advanceLeft && (compareIds(0) == EQ || advance(i))
-//          case GT => advance(i)
-//        }
-//      }
-//    }
-//  }
-
   @tailrec private final def retreatLeft: Boolean = {
-    (compareIds(0) != GT) || (left.retreat(1) && retreatLeft)
+    (compareIds != GT) || (left.retreat(1) && retreatLeft)
   }
 
   @tailrec final def retreat(i: Int): Boolean = {
     (i == 0) || {
       if (right.retreat(1)) {
-        compareIds(0) match {
+        compareIds match {
           case EQ => retreatRepeats += 1; retreat(i - 1)
           case GT => {
             right.advance(retreatRepeats + 1); retreatRepeats = 0;
             if (left.retreat(1)) {
-              compareIds(0) match {
+              compareIds match {
                 case EQ => retreat(i - 1)
-                case GT => retreatLeft && (compareIds(0) == EQ || retreat(i))
+                case GT => retreatLeft && matched && retreat(i - 1)
                 case LT => retreat(i)
               }
             } else false
           }
           case LT => retreat(i)
         }
-      } else if (retreatRepeats > 0) {
-        right.advance(retreatRepeats + 1); retreatRepeats = 0;
+      } else  {
         if (left.retreat(1)) {
-          compareIds(0) match {
-            case EQ => retreat(i - 1)
-            case GT => retreatLeft && (compareIds(0) == EQ || retreat(i))
-            case LT => retreat(i)
+          compareIds match {
+            case EQ => right.advance(retreatRepeats); retreatRepeats = 0; retreat(i - 1)
+            case GT => retreatLeft && matched && retreat(i - 1)
+            case LT => false
           }
         } else false
-      } else false
+      }
     }
   }
-
-//  @tailrec final def retreat(i: Int): Boolean = {
-//    (i == 0) || { 
-//      right.retreat(1) && {
-//        compareIds(0) match {
-//          case EQ => retreatRepeats += 1; retreat(i - 1)
-//          case GT => right.advance(retreatRepeats + 1); retreatRepeats = 0; false
-//          case LT => retreat(i)
-//        }
-//      }
-//    } || {
-//      left.retreat(1) && {
-//        compareIds(0) match {
-//          case EQ => retreat(i - 1)
-//          case GT => retreatLeft && (compareIds(0) == EQ || retreat(i))
-//          case LT => retreat(i)
-//        }
-//      }
-//    }
-//  }
 
   def stringAt(i: Int): String  = if (i < leftSize) left.stringAt(i) else right.stringAt(i - leftSize)
   def boolAt(i: Int): Boolean   = if (i < leftSize) left.boolAt(i) else right.boolAt(i - leftSize)
@@ -551,4 +527,11 @@ case class JoinRowIterator(left: RowIterator, right: RowIterator, identityPrefix
   def valueAt(i: Int): CValue = if (i < leftSize) left.valueAt(i) else right.valueAt(i - leftSize)
   def idAt(i: Int): Long = if (i < leftIdSize) left.idAt(i) else right.idAt(identityPrefix + (i - leftIdSize))
   def typeAt(i: Int): CType = if (i < leftSize) left.typeAt(i) else right.typeAt(i - leftSize)
+}
+
+object JoinRowIterator {
+  def apply(left: RowIterator, right: RowIterator, identityPrefix: Int): Option[JoinRowIterator] = {
+    val iter = new JoinRowIterator(left, right, identityPrefix) 
+    (iter.matched || (iter.advanceLeft && iter.matched) || iter.advance(1)).option(iter)
+  }
 }
