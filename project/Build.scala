@@ -23,29 +23,32 @@ object PlatformBuild extends Build {
       else                                   Some("releases"  at nexus+"releases/")
     }
   )
+  
+  val commonSettings = Seq(
+    scalacOptions ++= Seq("-optimise"))
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, pandora, util, common)
   
-  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings : _*)
-  lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings: _*)
+  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*)
+  lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings ++ commonSettings: _*)
 
-  lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings: _*)
-  lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
+  lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings ++ commonSettings: _*)
+  lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings ++ commonSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
   
-  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings : _*) dependsOn (common, bytecode, yggdrasil % "compile->compile;test->test", util)
+  lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings ++ commonSettings: _*) dependsOn (common, bytecode, yggdrasil % "compile->compile;test->test", util)
   
   val pandoraSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings : _*) dependsOn (quirrel, daze, yggdrasil, ingest)
+  lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings ++ commonSettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest)
   
-  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings : _*).dependsOn(common % "compile->compile;test->test", util)
+  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test", util)
   
   val ingestSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
+  lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
 
   val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
+  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
   
-  lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings : _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
+  lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
   val dist = TaskKey[Unit]("dist", "builds dist")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")
