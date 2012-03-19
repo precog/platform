@@ -412,6 +412,7 @@ object ProvenanceSpecs extends Specification
         tree.provenance mustEqual StaticProvenance("/foo")
         tree.errors must beEmpty
       }
+
     }
     
     "identify dispatch to value-modified identity function by parameter" in {
@@ -663,6 +664,20 @@ object ProvenanceSpecs extends Specification
         tree.errors must beEmpty
       }
     }  
+
+    "accept user-defined union and intersect" in {
+      {
+        val tree = compile("foo := load(//baz) union load(//bar) foo")
+        tree.provenance must beLike { case UnionProvenance(_, _) => ok }
+        tree.errors must beEmpty
+      }
+      {
+        val tree = compile("foo := load(//baz) intersect load(//bar) foo")
+        tree.provenance must beLike { case UnionProvenance(_, _) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
     "identify intersect according to its children" in {
       {
         val tree = compile("1 intersect 2")
