@@ -586,6 +586,32 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       decorate(Vector(Line(0, ""), PushTrue, instructions.Split, PushFalse, Merge)) mustEqual Left(MergeWithUnmatchedTails)
     }
     
+    "accept merge with reduced (but reordered) stack" in {
+      val line = Line(0, "")
+      
+      val result = decorate(Vector(
+        line,
+        PushTrue,
+        PushFalse,
+        PushNum("42"),
+        instructions.Split,
+        Swap(1),
+        Swap(2),
+        VUnion,
+        Merge,
+        VIntersect))
+        
+      val expect = Join(line, VIntersect,
+        Root(line, PushFalse),
+        dag.Split(line,
+          Root(line, PushNum("42")),
+          Join(line, VUnion,
+            SplitRoot(line, 0),
+            Root(line, PushTrue))))
+        
+      result mustEqual Right(expect)
+    }
+    
     "reject unmatched merge" in {
       decorate(Vector(Line(0, ""), PushTrue, Merge)) mustEqual Left(UnmatchedMerge)
     }
