@@ -43,7 +43,7 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
     val props = JProperties.configurationToProperties(config)
     val host = config[String]("broker.host")
     val port = config[Int]("broker.port")
-    props.set("0:%s:%d".format(host, port))
+    props.setProperty("broker.list", "0:%s:%d".format(host, port))
     props
   }
 
