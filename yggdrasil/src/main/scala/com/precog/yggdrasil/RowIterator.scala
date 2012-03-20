@@ -26,6 +26,12 @@ import scalaz.Ordering._
 import scalaz.syntax.std.allV._
 
 trait RowState {
+  import TableChunk.TableChunkSchema
+  val schema: TableChunkSchema
+
+  val idCount: Int
+  val valueCount: Int 
+
   def stringAt(i: Int): String
   def boolAt(i: Int): Boolean
   def intAt(i: Int): Int
@@ -39,18 +45,39 @@ trait RowState {
   def typeAt(i: Int): CType
 }
 
+object RowIterator {
+  import TableChunk.TableChunkSchema
+  
+  def empty(emptySchema: TableChunkSchema) = new RowIterator {
+    final val schema = emptySchema
+    final val isValid = false
+    final def advance(i: Int) = false
+    //final def retreat(i: Int) = false
+    final val valueCount = 0
+    final val idCount = 0
+
+    @inline final private def error = sys.error("Cannot access an empty RowIterator")
+
+    final def stringAt(i: Int): String = error
+    final def boolAt(i: Int): Boolean = error
+    final def intAt(i: Int): Int = error
+    final def longAt(i: Int): Long = error
+    final def floatAt(i: Int): Float = error
+    final def doubleAt(i: Int): Double = error
+    final def numAt(i: Int): BigDecimal = error
+
+    final def valueAt(i: Int): CValue = error
+    final def idAt(i: Int): Long = error
+    final def typeAt(i: Int): CType = error
+  }
+}
+
 trait RowIterator extends RowState { self =>
-  def idCount: Int
-  def valueCount: Int 
-  def structure: Seq[(CPath, CType)]
-  def mark: Unit
-  def unmark: Unit
-  def marked: Boolean
-  def reset: Unit
+  def isValid: Boolean
 
   def advance(i: Int): Boolean
 
-  private[yggdrasil] def retreat(i: Int): Boolean
+  //private[yggdrasil] def retreat(i: Int): Boolean
 
   def append(iter: RowIterator) = new RefRowIterator {
     var ref = self
@@ -77,22 +104,22 @@ trait RowIterator extends RowState { self =>
       innerAdvance(i)
     }
 
-    override private[yggdrasil] def retreat(i: Int) = {
-      if (pastCutover > 0 && i >= pastCutover) {
-        ref.retreat(pastCutover);
-        ref = self
-        val ret = ref.retreat(i - pastCutover);
-        pastCutover = 0
-        ret
-      } else {
-        if (pastCutover > 0) pastCutover -= i
-        ref.retreat(i)
-      }
-    }
+//    override private[yggdrasil] def retreat(i: Int) = {
+//      if (pastCutover > 0 && i >= pastCutover) {
+//        ref.retreat(pastCutover);
+//        ref = self
+//        val ret = ref.retreat(i - pastCutover);
+//        pastCutover = 0
+//        ret
+//      } else {
+//        if (pastCutover > 0) pastCutover -= i
+//        ref.retreat(i)
+//      }
+//    }
   }
 
   def apply(i: Int, cf: CFunction1): RowIterator = {
-    (structure(i)._2, cf) match {
+    (schema(i)._2, cf) match {
       case (CString, f: StringCF1) => StringRowIterator(self, f, i)
       case (CBoolean, f: BoolCF1) => BoolRowIterator(self, f, i)
       case (CInt, f: IntCF1) => IntRowIterator(self, f, i)
@@ -111,7 +138,7 @@ trait RowIterator extends RowState { self =>
   }
 
   def apply(i: Int, j: Int, cpath: CPath, cf: CFunction2): RowIterator = {
-    (structure(i)._2, structure(j)._2, cf) match {
+    (schema(i)._2, schema(j)._2, cf) match {
       case (CString, CString, f: StringCF2) => StringApplyIterator(self, cpath, f, i, j)
       case (CBoolean, CBoolean, f: BoolCF2) => BoolApplyIterator(self, cpath, f, i, j)
       case (CInt, CInt, f: IntCF2) => IntApplyIterator(self, cpath, f, i, j)
@@ -138,9 +165,11 @@ abstract class BufferRowIterator[B <: Buffer](val ctype: CType) extends RowItera
 
   private final val startPosition: Int = keys.position
 
+  final def isValid = keys.remaining > 0
+
   final val idCount = 1
   final val valueCount = 1
-  lazy val structure = Seq((selector, ctype))
+  lazy val schema = Seq((selector, ctype))
 
   private var markIndex = -1
   def mark = markIndex = values.position
@@ -152,11 +181,11 @@ abstract class BufferRowIterator[B <: Buffer](val ctype: CType) extends RowItera
     true
   }
 
-  final private[yggdrasil] def retreat(i: Int) = ((keys.position - i) > startPosition) && {
-    keys.position(keys.position - i)
-    values.position(values.position - i)
-    true
-  }
+//  final private[yggdrasil] def retreat(i: Int) = ((keys.position - i) > startPosition) && {
+//    keys.position(keys.position - i)
+//    values.position(values.position - i)
+//    true
+//  }
 
   final def idAt(i: Int): Long = keys.get(keys.position)
   final def typeAt(i: Int): CType = ctype
@@ -205,12 +234,14 @@ case class LongBufferRowIterator(keys: LongBuffer, values: LongBuffer, selector:
 trait RefRowIterator extends RowIterator {
   def ref: RowIterator 
 
+  final def isValid = ref.isValid
+
   final def idCount: Int = ref.idCount
-  final def structure: Seq[(CPath, CType)] = ref.structure
+  final val schema: Seq[(CPath, CType)] = ref.schema
   final def valueCount = ref.valueCount
 
   def advance(i: Int) = ref.advance(i)
-  private[yggdrasil] def retreat(i: Int) = ref.retreat(i)
+  //private[yggdrasil] def retreat(i: Int) = ref.retreat(i)
 
   final def valueAt(i: Int): CValue = ref.valueAt(i)
   final def idAt(i: Int): Long = ref.idAt(i)
@@ -226,14 +257,16 @@ trait RefRowIterator extends RowIterator {
 }
 
 abstract class ApplyRowIterator(selector: CPath, ctype: CType) extends RowIterator {
-  def ref: RowIterator 
+  def ref: RowIterator
+
+  final def isValid = ref.isValid
 
   final def idCount: Int = ref.idCount
-  final val structure: Seq[(CPath, CType)] = Vector((selector, ctype))
+  final val schema: Seq[(CPath, CType)] = Vector((selector, ctype))
   final def valueCount = ref.valueCount
 
   def advance(i: Int) = ref.advance(i)
-  private[yggdrasil] def retreat(i: Int) = ref.retreat(i)
+  //private[yggdrasil] def retreat(i: Int) = ref.retreat(i)
 
   final def idAt(i: Int): Long = ref.idAt(i)
   final def typeAt(i: Int): CType = ctype
@@ -424,13 +457,14 @@ case class NumPApplyIterator(ref: RowIterator, selector: CPath, f: NumPCF2, arg1
 
 
 case class ZipRowIterator(left: RowIterator, right: RowIterator) extends RowIterator {
+  final def isValid = left.isValid 
   final val idCount = left.idCount + right.idCount
-  final val structure = left.structure ++ right.structure
+  final val schema = left.schema ++ right.schema
   final val valueCount = left.valueCount + right.valueCount
   private val leftSize = left.valueCount
 
   final def advance(i: Int) = left.advance(i) && right.advance(i)
-  final private[yggdrasil] def retreat(i: Int) = { left.retreat(i) ; right.retreat(i) }
+  //final private[yggdrasil] def retreat(i: Int) = { left.retreat(i) ; right.retreat(i) }
 
   final def stringAt(i: Int): String  = if (i < leftSize) left.stringAt(i) else right.stringAt(i - leftSize)
   final def boolAt(i: Int): Boolean   = if (i < leftSize) left.boolAt(i)   else right.boolAt(i - leftSize)
@@ -445,112 +479,112 @@ case class ZipRowIterator(left: RowIterator, right: RowIterator) extends RowIter
   final def typeAt(i: Int): CType     = if (i < leftSize) left.typeAt(i)   else right.typeAt(i - leftSize)
 }
 
-class JoinRowIterator private (left: RowIterator, right: RowIterator, identityPrefix: Int) extends RowIterator {
-  //constructor
-  private var eqCount = 0
-  private var retreatRepeats = 0
-
-  final val idCount: Int = left.idCount + right.idCount - identityPrefix
-  final val structure: Seq[(CPath, CType)] = left.structure ++ right.structure
-  final val valueCount = structure.length
-
-  private val leftSize = left.valueCount
-  private val leftIdSize = left.idCount
-
-  final def matched = compareIds == EQ
-  final def compareIds: Ordering = {
-    @tailrec def compare(i: Int): Ordering = {
-      if (i >= identityPrefix) EQ
-      else if (left.idAt(i) < right.idAt(i)) LT
-      else if (left.idAt(i) > right.idAt(i)) GT
-      else compare(i + 1)
-    }
-
-    compare(0)
-  }
-
-  @tailrec private final def advanceLeft: Boolean = {
-    (compareIds != LT) || (left.advance(1) && advanceLeft)
-  }
-
-  @tailrec final def advance(i: Int): Boolean = {
-    (i == 0) || {
-      if (right.advance(1)) {
-        compareIds match {
-          case EQ => eqCount += 1; advance(i - 1)
-          case LT => 
-            right.retreat(eqCount + 1); eqCount = 0;
-            if (left.advance(1)) {
-              compareIds match {
-                case EQ => eqCount + 1; advance(i - 1)
-                case LT => advanceLeft && matched && advance(i - 1)
-                case GT => advance(i)
-              }
-            } else false
-          
-          case GT => advance(i)
-        }
-      } else {
-        if (left.advance(1)) {
-          compareIds match {
-            case EQ => right.retreat(eqCount); eqCount = 0; advance(i - 1)
-            case LT => advanceLeft && (matched && advance(i - 1))
-            case GT => false 
-          }
-        } else false
-      }
-    }
-  }
-
-  @tailrec private final def retreatLeft: Boolean = {
-    (compareIds != GT) || (left.retreat(1) && retreatLeft)
-  }
-
-  @tailrec final def retreat(i: Int): Boolean = {
-    (i == 0) || {
-      if (right.retreat(1)) {
-        compareIds match {
-          case EQ => retreatRepeats += 1; retreat(i - 1)
-          case GT => {
-            right.advance(retreatRepeats + 1); retreatRepeats = 0;
-            if (left.retreat(1)) {
-              compareIds match {
-                case EQ => retreat(i - 1)
-                case GT => retreatLeft && matched && retreat(i - 1)
-                case LT => retreat(i)
-              }
-            } else false
-          }
-          case LT => retreat(i)
-        }
-      } else  {
-        if (left.retreat(1)) {
-          compareIds match {
-            case EQ => right.advance(retreatRepeats); retreatRepeats = 0; retreat(i - 1)
-            case GT => retreatLeft && matched && retreat(i - 1)
-            case LT => false
-          }
-        } else false
-      }
-    }
-  }
-
-  def stringAt(i: Int): String  = if (i < leftSize) left.stringAt(i) else right.stringAt(i - leftSize)
-  def boolAt(i: Int): Boolean   = if (i < leftSize) left.boolAt(i) else right.boolAt(i - leftSize)
-  def intAt(i: Int): Int        = if (i < leftSize) left.intAt(i) else right.intAt(i - leftSize)
-  def longAt(i: Int): Long      = if (i < leftSize) left.longAt(i) else right.longAt(i - leftSize)
-  def floatAt(i: Int): Float    = if (i < leftSize) left.floatAt(i) else right.floatAt(i - leftSize)
-  def doubleAt(i: Int): Double  = if (i < leftSize) left.doubleAt(i) else right.doubleAt(i - leftSize)
-  def numAt(i: Int): BigDecimal = if (i < leftSize) left.numAt(i) else right.numAt(i - leftSize)
-
-  def valueAt(i: Int): CValue = if (i < leftSize) left.valueAt(i) else right.valueAt(i - leftSize)
-  def idAt(i: Int): Long = if (i < leftIdSize) left.idAt(i) else right.idAt(identityPrefix + (i - leftIdSize))
-  def typeAt(i: Int): CType = if (i < leftSize) left.typeAt(i) else right.typeAt(i - leftSize)
-}
-
-object JoinRowIterator {
-  def apply(left: RowIterator, right: RowIterator, identityPrefix: Int): Option[JoinRowIterator] = {
-    val iter = new JoinRowIterator(left, right, identityPrefix) 
-    (iter.matched || (iter.advanceLeft && iter.matched) || iter.advance(1)).option(iter)
-  }
-}
+//class JoinRowIterator private (left: RowIterator, right: RowIterator, identityPrefix: Int) extends RowIterator {
+//  //constructor
+//  private var eqCount = 0
+//  private var retreatRepeats = 0
+//
+//  final val idCount: Int = left.idCount + right.idCount - identityPrefix
+//  final val schema: Seq[(CPath, CType)] = left.schema ++ right.schema
+//  final val valueCount = schema.length
+//
+//  private val leftSize = left.valueCount
+//  private val leftIdSize = left.idCount
+//
+//  final def matched = compareIds == EQ
+//  final def compareIds: Ordering = {
+//    @tailrec def compare(i: Int): Ordering = {
+//      if (i >= identityPrefix) EQ
+//      else if (left.idAt(i) < right.idAt(i)) LT
+//      else if (left.idAt(i) > right.idAt(i)) GT
+//      else compare(i + 1)
+//    }
+//
+//    compare(0)
+//  }
+//
+//  @tailrec private final def advanceLeft: Boolean = {
+//    (compareIds != LT) || (left.advance(1) && advanceLeft)
+//  }
+//
+//  @tailrec final def advance(i: Int): Boolean = {
+//    (i == 0) || {
+//      if (right.advance(1)) {
+//        compareIds match {
+//          case EQ => eqCount += 1; advance(i - 1)
+//          case LT => 
+//            right.retreat(eqCount + 1); eqCount = 0;
+//            if (left.advance(1)) {
+//              compareIds match {
+//                case EQ => eqCount + 1; advance(i - 1)
+//                case LT => advanceLeft && matched && advance(i - 1)
+//                case GT => advance(i)
+//              }
+//            } else false
+//          
+//          case GT => advance(i)
+//        }
+//      } else {
+//        if (left.advance(1)) {
+//          compareIds match {
+//            case EQ => right.retreat(eqCount); eqCount = 0; advance(i - 1)
+//            case LT => advanceLeft && (matched && advance(i - 1))
+//            case GT => false 
+//          }
+//        } else false
+//      }
+//    }
+//  }
+//
+//  @tailrec private final def retreatLeft: Boolean = {
+//    (compareIds != GT) || (left.retreat(1) && retreatLeft)
+//  }
+//
+//  @tailrec final def retreat(i: Int): Boolean = {
+//    (i == 0) || {
+//      if (right.retreat(1)) {
+//        compareIds match {
+//          case EQ => retreatRepeats += 1; retreat(i - 1)
+//          case GT => {
+//            right.advance(retreatRepeats + 1); retreatRepeats = 0;
+//            if (left.retreat(1)) {
+//              compareIds match {
+//                case EQ => retreat(i - 1)
+//                case GT => retreatLeft && matched && retreat(i - 1)
+//                case LT => retreat(i)
+//              }
+//            } else false
+//          }
+//          case LT => retreat(i)
+//        }
+//      } else  {
+//        if (left.retreat(1)) {
+//          compareIds match {
+//            case EQ => right.advance(retreatRepeats); retreatRepeats = 0; retreat(i - 1)
+//            case GT => retreatLeft && matched && retreat(i - 1)
+//            case LT => false
+//          }
+//        } else false
+//      }
+//    }
+//  }
+//
+//  def stringAt(i: Int): String  = if (i < leftSize) left.stringAt(i) else right.stringAt(i - leftSize)
+//  def boolAt(i: Int): Boolean   = if (i < leftSize) left.boolAt(i) else right.boolAt(i - leftSize)
+//  def intAt(i: Int): Int        = if (i < leftSize) left.intAt(i) else right.intAt(i - leftSize)
+//  def longAt(i: Int): Long      = if (i < leftSize) left.longAt(i) else right.longAt(i - leftSize)
+//  def floatAt(i: Int): Float    = if (i < leftSize) left.floatAt(i) else right.floatAt(i - leftSize)
+//  def doubleAt(i: Int): Double  = if (i < leftSize) left.doubleAt(i) else right.doubleAt(i - leftSize)
+//  def numAt(i: Int): BigDecimal = if (i < leftSize) left.numAt(i) else right.numAt(i - leftSize)
+//
+//  def valueAt(i: Int): CValue = if (i < leftSize) left.valueAt(i) else right.valueAt(i - leftSize)
+//  def idAt(i: Int): Long = if (i < leftIdSize) left.idAt(i) else right.idAt(identityPrefix + (i - leftIdSize))
+//  def typeAt(i: Int): CType = if (i < leftSize) left.typeAt(i) else right.typeAt(i - leftSize)
+//}
+//
+//object JoinRowIterator {
+//  def apply(left: RowIterator, right: RowIterator, identityPrefix: Int): Option[JoinRowIterator] = {
+//    val iter = new JoinRowIterator(left, right, identityPrefix) 
+//    (iter.matched || (iter.advanceLeft && iter.matched) || iter.advance(1)).option(iter)
+//  }
+//}
