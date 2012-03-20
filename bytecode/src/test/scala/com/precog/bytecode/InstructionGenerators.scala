@@ -190,6 +190,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
 
   private lazy val genReduction = oneOf(
     Count,
+    GeometricMean
     
     Mean,
     Median,
@@ -199,7 +200,9 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     Min,
     
     StdDev,
-    Sum)
+    Sum,
+    SumSq,
+    Variance)
     
   private lazy val genPredicate = listOf(genPredicateInstr) map { xs => Vector(xs: _*) }
   

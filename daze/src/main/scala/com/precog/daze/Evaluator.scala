@@ -24,6 +24,8 @@ import org.joda.time._
 import org.joda.time.format._
 import org.joda.time.DateTimeZone
 
+import java.lang.Math._
+
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
 
@@ -65,7 +67,7 @@ trait MemoizingEvaluationContext extends EvaluationContext with MemoizationCompo
   }
 }
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with GenOpcode with ImplLibrary with GenLibrary { self =>
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with GenOpcode with ImplLibrary with GenLibrary with Timelib { self =>
   type X = QueryAPI#X
 
   import Function._
@@ -134,6 +136,17 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         })
       }
 
+      case Operate(_, BuiltInFunction1Op(Distinct), parent) => {
+        implicit val order = ValuesOrder
+
+        val enum = maybeRealize(loop(parent, roots, ctx), ctx)
+        val result = ops.sort(enum, None).uniq map {
+          case (_, sv) => (VectorCase.empty[Identity], sv)
+        }
+
+        Right(result.uniq)
+      }
+      
       case Operate(_, BuiltInFunction1Op(f), parent) => {
         val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>
@@ -164,6 +177,18 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
             }
           }
           
+          case GeometricMean => {
+            val pairs = mapped.reduce(None: Option[(BigDecimal, BigDecimal)]) {
+              case (None, SDecimal(v)) => Some((1, v))
+              case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc * v))
+              case (acc, _) => acc
+            }
+            
+            pairs map {
+              case (c, v) => SDecimal(Math.pow(v.toDouble, 1 / c.toDouble))
+            }
+          }          
+
           case Mean => {
             val pairs = mapped.reduce(None: Option[(BigDecimal, BigDecimal)]) {
               case (None, SDecimal(v)) => Some((1, v))
@@ -175,6 +200,42 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
               case (c, v) => SDecimal(v / c)
             }
           }
+
+          //case Median => {
+          //  val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
+          //    case (None, SDecimal(v)) => Some((1, v, v))
+          //    case (Some((count, min, max)), SDecimal(v)) if v > max => Some((count + 1, min, v))
+          //    case (Some((count, min, max)), SDecimal(v)) if v < min => Some((count + 1, v, max))
+          //    case (acc, _) => acc
+          //  }
+
+          //  stats map { case (count, min, max) => Array(count, min, max) }
+
+          //  val buckets = math.ceil(math.log(count + 1) + 1)
+          //  val increment = ((max - min) / buckets) + 1
+          //  val partition = (0 to buckets - 1) map (min + (increment * _))
+
+          //  def findIndex(num: BigDecimal) = partition.indexWhere(num <=)
+
+          //  val arr = Array[Int](buckets)
+
+          //  mapped.reduce(None: Option[Array[Int]]) {
+          //    case (None, SDecimal(v)) => { 
+          //      arr(findIndex(v)) += 1
+          //      Some(arr) 
+          //    }
+          //    case (Some(arr), SDecimal(v)) => { 
+          //      arr(findIndex(v)) += 1
+          //      Some(arr) 
+          //    }
+          //    case (acc, _) => acc
+          //  }
+
+          //  val totals = arr.scanLeft(0)(_+_).drop(1)
+          //  val medianBucket = totals.indexWhere((count / 2) <)
+
+          //  SDecimal(medianBucket)
+          //}
           
           case Max => {
             mapped.reduce(None: Option[SValue]) {
@@ -211,6 +272,26 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
               case (None, sv @ SDecimal(_)) => Some(sv)
               case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
               case (acc, _) => acc
+            }
+          }               
+
+          case SumSq => {
+            mapped.reduce(None: Option[SValue]) {
+              case (None, SDecimal(v)) => Some(SDecimal(v * v))
+              case (Some(SDecimal(sumsq)), SDecimal(v)) => Some(SDecimal(sumsq + (v * v)))
+              case (acc, _) => acc
+            }
+          }          
+
+          case Variance => {
+            val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
+              case (None, SDecimal(v)) => Some((1, v, v * v))
+              case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
+              case (acc, _) => acc
+            }
+
+            stats map {
+              case (count, sum, sumsq) => SDecimal((sumsq - (sum * (sum / count))) / count)
             }
           }
         }

@@ -130,6 +130,9 @@ trait BytecodeReader extends Reader {
         
         case 0x06 => Some(StdDev)
         case 0x07 => Some(Sum)
+        case 0x08 => Some(Variance)
+        case 0x09 => Some(GeometricMean)
+        case 0x10 => Some(SumSq)
         
         case _ => None
       }
