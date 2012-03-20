@@ -18,6 +18,7 @@ testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 parallelExecution in test := false
 
 libraryDependencies ++= Seq(
+  "commons-primitives"          %  "commons-primitives" % "1.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0" % "test",
