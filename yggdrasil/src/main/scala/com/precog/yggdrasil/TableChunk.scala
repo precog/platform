@@ -145,135 +145,7 @@ trait Table {
   def iterator: Iterator[TableChunk]
 }
 
-def join(table1: Table, table2: Table)(implicit order: Order[RowState]): Table = {
-  def cartesian(left: TableChunkBuffer, right: TableChunkBuffer, result: TableChunkBuffer) {
-    val leftIter = left.iterator
-    
-    var leftHasMore = true
-    var rightHasMore = true
-
-    while (leftHasMore) {
-      rightHasMore = true
-      val rightIter = right.iterator
-      
-      while (rightHasMore) {
-        result.append(leftIter, rightIter)
-        rightHasMore = rightIter.advance
-      }
-
-      leftHasMore = leftIter.advance
-    }
-
-    // Finished with this data, so reset the buffers
-    left.clear
-    right.clear 
-  }
-
-  def join0(t1: Iterator[TableChunk], t2: Iterator[TableChunk], state: CogroupState): (TableChunk,CogroupState) = {
-    state match {
-      case ReadBoth(leftBuffer: TableChunkBuffer, rightBuffer: TableChunkBuffer) => {
-        if (t1.hasNext && t2.hasNext) {
-          val chunk1 = t1.next
-          val chunk2 = t2.next
-
-          leftBuffer.clear
-          rightBuffer.clear
-          val it1: RowIterator = chunk1.iterator
-          val it2: RowIterator = chunk2.iterator
-
-          val resultBuffer = TableChunkBuffer(it1.schema ++ it2.schema)
-
-          var leftHasMore = true
-          var rightHasMore = true
-
-          while (leftHasMore && rightHasMore) {          
-            order.order(it1, it2) match {
-              case EQ => {
-                // Read in as much of the span on either side as possible
-                leftBuffer.append(it1)
-                rightBuffer.append(it2)
-                
-                leftHasMore = it1.advance
-                while (leftHasMore && order.order(it1, it2) == EQ) {
-                  leftBuffer.append(it1)
-                  leftHasMore = it1.advance
-                }
-
-                val leftBufIter = leftBuffer.iterator
-
-                rightHasMore = it2.advance
-                while (rightHasMore && order.order(leftBufIter, it2) == EQ) {
-                  rightBuffer.append(it2)
-                  rightHasMore = it2.advance
-                }
-
-                if (leftHasMore && rightHasMore) {
-                  // can do an immediate cartesian here because we found complete spans withing the two sides (hit no boundaries)
-                  cartesian(leftBuffer, rightBuffer, resultBuffer)
-                }
-              }
-              case LT => leftHasMore = it1.advance
-              case GT => rightHasMore = it2.advance
-            }
-          }
-
-          /* At this point we've either run out of inputs on the left or right. Depending on where we have remaining input we
-           * need to create a new CogroupState based on the buffers. */
-          if (leftHasMore) {
-            // we ran out on the right. Need to Pull the rest of the left into the buffer and set state to read a new right
-          do {
-            leftBuffer.append(leftIter)
-          } while (leftIter.advance)
-
-            (resultBuffer, ReadRight(leftBuffer, rightBuffer))
-          } else if (rightHasMore) {
-          do {
-            rightBuffer.append(rightIter)
-          } while (rightIter.advance)
-
-            (resultBuffer, ReadLeft(leftBuffer, rightBuffer))
-          } else {
-            // How did we get here???
-            sys.error("Exhausted both inputs simultaneously")
-          }
-        }
-      } else {
-        (TableChunk.empty(...), Exhausted)
-      }
-      case ReadLeft(leftBuffer, rightBuffer) => {
-        if (t1.hasNext) {
-          val it1 = t1.next.iterator
-
-          if (leftBuffer.length > 0) {
-            order.order(leftBuffer.last, it1) match {
-              case EQ => {
-                
-              }
-              case LT => {
-                
-              }
-              case GT => sys.error("Unsorted inputs")
-            }
-          } else {
-
-          }
-        } else {
-
-        }
-      }
-      case ReadRight(leftBuffer, rightBuffer) => {
-        if (t2.hasNext) {
-
-        } else {
-
-        }
-      }
-    }
-
-  join0(table1.iterator, table2.iterator, ReadBothEmpty)
-}
-
-
+object TableOps {
   def join[X, F[_]](implicit M: Monad[F], order: Order[RowIterator]): Enumeratee2T[X, TableChunk, TableChunk, TableChunk, F] =
     new Enumeratee2T[X, TableChunk, TableChunk, TableChunk, F] {
       type ContFunc[A] = Input[TableChunk] => IterateeT[X, TableChunk, F, A]
@@ -307,6 +179,28 @@ def join(table1: Table, table2: Table)(implicit order: Order[RowState]): Table =
       def innerGroup(resultBuffer: TableChunkBuffer, leftIter: RowIterator, leftBuffer: TableChunkBuffer, rightIter: RowIterator, rightBuffer: TableChunkBuffer, order: Order[RowIterator]): (TableChunk, CogroupState) = {
         var leftHasMore = true
         var rightHasMore = true
+
+        // If we have existing spans, see if we can continue filling them
+        if (! leftBuffer.isEmpty) {
+          val leftCompareIter = leftBuffer.iterator
+
+          while (rightHasMore && order.order(leftCompareIter, rightIter) == EQ) {
+            rightBuffer.append(rightIter)
+            rightHasMore = rightIter.advance
+          }
+
+          val rightCompareIter = rightBuffer.iterator
+
+          while (leftHasMore && order.order(rightCompareIter, leftIter) == EQ) {
+            leftBuffer.append(leftIter)
+            leftHasMore = leftIter.advance
+          }
+
+          if (leftHasMore && rightHasMore) {
+            // can do an immediate cartesian here because we found complete spans withing the two sides (hit no boundaries)
+            cartesian(leftBuffer, rightBuffer, resultBuffer)
+          }
+        }
 
         while (leftHasMore && rightHasMore) {          
           order.order(leftIter, rightIter) match {
@@ -381,11 +275,7 @@ def join(table1: Table, table2: Table)(implicit order: Order[RowState]): Table =
         }
       }
 
-      def readBoth[A](s: StepM[A], contf: ContFunc[A], leftBuffer: TableChunkBuffer, rightBuffer: TableChunkBuffer, order: Order[RowIterator]): IterateeT[X, TableChunk, IterateeM, StepM[A]] = 
-        for {
-          leftOpt  <- head[X, TableChunk, IterateeM]
-          rightOpt <- head[X, TableChunk, F].liftI[TableChunk]
-        } yield {
+       def process[A](s: StepM[A], contf: ContFunc[A], leftOpt: Option[TableChunk], leftBuffer: TableChunkBuffer, rightOpt: Option[TableChunk], rightBuffer: TableChunkBuffer, order: Order[RowIterator]): IterateeT[X, TableChunk, IterateeM, StepM[A]] = 
           val _done = done[X, TableChunk, IterateeM, StepM[A]](s, eofInput)
           def _exhaustedCartesian = {
             val results = TableChunkBuffer(leftBuffer.schema ++ rightBuffer.schema)
@@ -396,53 +286,49 @@ def join(table1: Table, table2: Table)(implicit order: Order[RowState]): Table =
             // We're finished when we hit EOF on a side and we don't have a span to process on that side
             case (None, true, _, _) => _done
             case (_, _, None, true) => _done
+
             // Next simplest case: EOF on both sides, but spans on both sides
             case (None, false, None, false) => _exhaustedCartesian
+
             // No spans on either side, just run the iterators to produce result + new state
-            case (Some(left), true, Some(right), true) => {
+            // EOF + span on one side, chunk on the other means check to see if it matches and fill its span if it does, then cross the spans if they're both non-empty
+            case (None, false, Some(right), _) => runOneSide(contf, right.iterator, rightBuffer, leftBuffer, ReadRight(leftBuffer, None, rightBuffer))
+            case (Some(left), _, None, false) => runOneSide(contf, left.iterator, leftBuffer, rightBuffer, ReadLeft(leftBuffer, rightBuffer, None))
+
+            // In all other cases, run innerGroup to complete any existing spans and compute new state
+            case (Some(left), _, Some(right), _) => {
               val resultBuffer = TableChunkBuffer(left.schema ++ right.schema)
 
               val (result, nextState) = innerGroup(resultBuffer, left.iterator,  leftBuffer, right.iterator, rightBuffer, order)
 
-              iterateeT[X, TableChunk, IterateeM, StepM[A]](contf(elInput(result) >>== (step(_, nextState, order).value)))
+              iterateeT[X, TableChunk, IterateeM, StepM[A]](contf(if (result.isEmpty) emptyInput else elInput(result)) >>== (step(_, nextState, order).value)))
             }
-            // EOF + span on one side, chunk on the other means check to see if it matches and fill its span if it does, then cross the spans if they're both non-empty
-            case (true, false, false, _) => runOneSide(contf, rightOpt.get.iterator, rightBuffer, leftBuffer, ReadRight(leftBuffer, None, rightBuffer))
-            case (false, _, true, false) => runOneSide(contf, leftOpt.get.iterator, leftBuffer, rightBuffer, ReadLeft(leftBuffer, rightBuffer, None))
-            
           } 
-        }
-
-      def readLeft[A](s: StepM[A], contf: ContFunc[A], state: CogroupState, order: Order[RowIterator]): IterateeT[X, TableChunk, IterateeM, StepM[A]] = 
-        for {
-          leftOpt  <- head[X, TableChunk, IterateeM]
-          a <- matchOuter[A](s, contf, orderJ, orderK)(outerGroup(leftOpt, Some(Vector()), buffers, orderJ, orderK)) // Need to pass an empty buffer on right since this isn't terminal
-        } yield a
-
-      def readRight[A](s: StepM[A], contf: ContFunc[A], state: CogroupState, order: Order[RowIterator]): IterateeT[X, TableChunk, IterateeM, StepM[A]] = 
-        for {
-          rightOpt <- head[X, TableChunk, F].liftI[TableChunk]
-          a <- matchOuter[A](s, contf, orderJ, orderK)(outerGroup(Some(Vector()), rightOpt, buffers, orderJ, orderK)) // Need to pass en empty buffer on the left since it isn't terminal
-        } yield a
-
-      def matchOuter[A](s: StepM[A], contf: ContFunc[A], orderJ: Order[J], orderK: Order[K]): PartialFunction[Option[(TableChunk, CogroupState)], IterateeT[X, TableChunk, IterateeM, StepM[A]]] = {
-        case Some((newChunk,newState)) => {
-          iterateeT[X, TableChunk, IterateeM, StepM[A]](contf(elInput(newChunk)) >>== (step(_, newState, order).value))
-        }
-        case None => done[X, TableChunk, IterateeM, StepM[A]](s, eofInput)
-      }
 
       def step[A](s: StepM[A], state: CogroupState, order: Order[RowIterator]): IterateeT[X, TableChunk, IterateeM, StepM[A]] = {
-        // TODO: Only allocate when needed
-        val resultBuffer = TableChunkBuffer(state.leftBuffer.schema ++ state.rightBuffer.schema)
-
         s.fold[IterateeT[X, TableChunk, IterateeM, StepM[A]]](
           cont = contf => {
             // Conditionally read from both sides based on state
             state match {
               case Exhausted => done[X, TableChunk, IterateeM, StepM[A]](s, eofInput)
-              case ReadBoth(lb, rb) => readBoth[A](s, contf, lb, rb, order)
-
+              case ReadBoth(leftBuffer, rightBuffer) => {
+                for {
+                  leftOpt  <- head[X, TableChunk, IterateeM]
+                  rightOpt <- head[X, TableChunk, F].liftI[TableChunk]
+                  a        <- process(s, contf, leftOpt, leftBuffer, rightOpt, rightBuffer, order)
+                } yield a
+              }
+              case ReadLeft(leftBuffer, rightBuffer, rightRemain) => {
+                for {
+                  leftOpt  <- head[X, TableChunk, IterateeM]
+                  a        <- process(s, contf, leftOpt, leftBuffer, rightRemain, rightBuffer, order)
+                } yield a                
+              }
+              case ReadRight(leftBuffer, leftRemain, rightBuffer) => {
+                for {
+                  rightOpt <- head[X, TableChunk, F].liftI[TableChunk]
+                  a        <- process(s, contf, leftRemain, leftBuffer, rightOpt, rightBuffer, order)
+                } yield a
               }
             }
           },
