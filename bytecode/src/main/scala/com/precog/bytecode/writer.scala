@@ -122,6 +122,9 @@ trait BytecodeWriter extends Writer with Version {
       
       case StdDev => 0x06
       case Sum => 0x07
+      case Variance => 0x08
+      case GeometricMean => 0x09
+      case SumSq => 0x10
     }
     
     def typeNum(tpe: Type) = tpe match {

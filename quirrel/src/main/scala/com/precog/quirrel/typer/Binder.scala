@@ -8,17 +8,20 @@ trait Binder extends parser.AST with Library {
   import ast._
 
   object BuiltIns {
-    val Count   = BuiltIn(Identifier(Vector(), "count"), 1, true)
-    val Load    = BuiltIn(Identifier(Vector(), "load"), 1, false)
-    val Max     = BuiltIn(Identifier(Vector(), "max"), 1, true)
-    val Mean    = BuiltIn(Identifier(Vector(), "mean"), 1, true)
-    val Median  = BuiltIn(Identifier(Vector(), "median"), 1, true)
-    val Min     = BuiltIn(Identifier(Vector(), "min"), 1, true)
-    val Mode    = BuiltIn(Identifier(Vector(), "mode"), 1, true)
-    val StdDev  = BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
-    val Sum     = BuiltIn(Identifier(Vector(), "sum"), 1, true)
+    val Count          = BuiltIn(Identifier(Vector(), "count"), 1, true)
+    val GeometricMean  = BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
+    val Load           = BuiltIn(Identifier(Vector(), "load"), 1, false)
+    val Max            = BuiltIn(Identifier(Vector(), "max"), 1, true)
+    val Mean           = BuiltIn(Identifier(Vector(), "mean"), 1, true)
+    val Median         = BuiltIn(Identifier(Vector(), "median"), 1, true)
+    val Min            = BuiltIn(Identifier(Vector(), "min"), 1, true)
+    val Mode           = BuiltIn(Identifier(Vector(), "mode"), 1, true)
+    val StdDev         = BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
+    val Sum            = BuiltIn(Identifier(Vector(), "sum"), 1, true)
+    val SumSq          = BuiltIn(Identifier(Vector(), "sumSq"), 1, true)
+    val Variance       = BuiltIn(Identifier(Vector(), "variance"), 1, true)
 
-    val all = Set(Count, Load, Max, Mean, Median, Min, Mode, StdDev, Sum)
+    val all = Set(Count, GeometricMean, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, SumSq, Variance)
   }
 
   override def bindNames(tree: Expr) = {

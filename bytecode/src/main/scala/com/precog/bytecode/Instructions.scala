@@ -174,6 +174,7 @@ trait Instructions extends Library {
     sealed trait Reduction
     
     case object Count extends Reduction
+    case object GeometricMean extends Reduction
     
     case object Mean extends Reduction
     case object Median extends Reduction
@@ -184,6 +185,8 @@ trait Instructions extends Library {
     
     case object StdDev extends Reduction
     case object Sum extends Reduction
+    case object SumSq extends Reduction
+    case object Variance extends Reduction
 
     sealed trait Type
     

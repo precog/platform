@@ -67,7 +67,8 @@ trait DAGPrinter extends DAG {
   
   private def showReduction(red: Reduction) = red match {
     case Count => "count"
-    
+    case GeometricMean => "geometricMean"
+
     case Mean => "mean"
     case Median => "median"
     case Mode => "mode"
@@ -77,6 +78,8 @@ trait DAGPrinter extends DAG {
     
     case StdDev => "stdDev"
     case Sum => "sum"
+    case SumSq => "sumSq"
+    case Variance => "variance"
   }
   
   private def showOp(op: BinaryOperation) = op match {

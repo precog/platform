@@ -332,6 +332,11 @@ trait Emitter extends AST
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Count))
             
+            case BuiltIn(BuiltIns.GeometricMean.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(GeometricMean))
+            
             case BuiltIn(BuiltIns.Max.name, arity, _) =>
               assert(arity == 1)
 
@@ -366,6 +371,16 @@ trait Emitter extends AST
               assert(arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
+
+            case BuiltIn(BuiltIns.SumSq.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(SumSq))
+
+            case BuiltIn(BuiltIns.Variance.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(Reduce(Variance))
 
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
