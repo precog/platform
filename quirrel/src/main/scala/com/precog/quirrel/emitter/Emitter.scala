@@ -12,7 +12,7 @@ trait Emitter extends AST
     with Instructions
     with Binder
     with ProvenanceChecker
-    with CriticalConditionSolver {
+    with GroupSolver {
   
   import instructions._
   
@@ -21,21 +21,22 @@ trait Emitter extends AST
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
-  private case class Mark(index: Int) { self =>
-    def insert(insertIdx: Int, length: Int): Mark = copy(index = self.index + (if (insertIdx < index) length else 0))
+  private case class Mark(index: Int, offset: Int) { self =>
+    def insert(insertIdx: Int, length: Int): Mark =
+      copy(index = self.index + (if (insertIdx < index) length else 0))
   }
 
   private sealed trait MarkType
   private case class MarkExpr(expr: Expr) extends MarkType
   private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
   private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
+  private case class MarkGroup(op: ast.Operation) extends MarkType
 
   private case class Emission private (
-    bytecode: Vector[Instruction] = Vector.empty,
-    ticVars:  Map[ast.Let, Seq[(String, EmitterState)]] = Map.empty,
-    marks:    Map[MarkType, Mark] = Map.empty,
-    curLine:  Option[(Int, String)] = None
-  )
+    bytecode: Vector[Instruction] = Vector(),
+    marks: Map[MarkType, Mark] = Map(),
+    curLine: Option[(Int, String)] = None,
+    buckets: Map[ast.Operation, Set[Expr]] = Map())
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -63,23 +64,6 @@ trait Emitter extends AST
 
     def emitInstr(i: Instruction): EmitterState = insertInstrAt(i, -1)
 
-    def emitTicVar(let: ast.Let, name: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      if (e.marks.contains(MarkTicVar(let, name))) {
-        // We've seen this tic var before, DUP it:
-        emitDup(MarkTicVar(let, name))(e)
-      } else {
-        // Must emit bytecode for the tic var and mark it so we can DUP it
-        // in the future:
-        val state = e.ticVars(let).find(_._1 == name).map(_._2).get
-
-        emitAndMark(MarkTicVar(let, name))(state)(e)
-      }
-    }
-
-    def setTicVars(let: ast.Let, values: Seq[(String, EmitterState)])(f: EmitterState): EmitterState = {
-      applyTicVars(let, values) >> f >> unapplyTicVars(let)
-    }
-
     def emitOrDup(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       if (e.marks.contains(markType))
         emitDup(markType)(e) 
@@ -106,34 +90,59 @@ trait Emitter extends AST
       })._1
     }
 
-    private def applyTicVars(let: ast.Let, values: Seq[(String, EmitterState)]): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(ticVars = e.ticVars + (let -> values)))     // TODO should be a stack (for multiple dispatches to the same cf)
-    }
-
-    private def unapplyTicVars(let: ast.Let): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(ticVars = e.ticVars - let)) // TODO: Remove marks
-    }
-
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
     private def emitAndMark(markType: MarkType)(f: EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
         case (_, e) =>
-          val mark = Mark(e.bytecode.length)
+          val mark = Mark(e.bytecode.length, 0)
         
           ((), e.copy(marks = e.marks + (markType -> mark)))
       }
     }
-
+    
+    private def markTicVar(let: ast.Let, name: String, offset: Int): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      ((), e.copy(marks = e.marks + (MarkTicVar(let, name) -> Mark(e.bytecode.length, offset))))
+    }
+    
+    private def markAllGroups(bucket: Bucket, offset: Int, seen: Set[ast.Operation]): (EmitterState, Int, Set[ast.Operation]) = bucket match {
+      case UnionBucket(left, right) => {
+        val (state1, offset1, seen1) = markAllGroups(left, offset, seen)
+        val (state2, offset2, seen2) = markAllGroups(right, offset1, seen1)
+        (state1 >> state2, offset2, seen2)
+      }
+      
+      case IntersectBucket(left, right) => {
+        val (state1, offset1, seen1) = markAllGroups(left, offset, seen)
+        val (state2, offset2, seen2) = markAllGroups(right, offset1, seen1)
+        (state1 >> state2, offset2, seen2)
+      }
+      
+      case Group(origin, _, _, extras) if !seen(origin) => {
+        val state = StateT.apply[Id, Emission, Unit] { e =>
+          val e2 = e.copy(
+            marks = e.marks + (MarkGroup(origin) -> Mark(e.bytecode.length, offset)),
+            buckets = e.buckets + (origin -> extras))
+            
+          ((), e2)
+        }
+        
+        (state, offset + 1, seen + origin)
+      }
+      
+      case _ => (mzero[EmitterState], offset, seen)
+    }
+    
     // Dup's previously marked bytecode:
     private def emitDup(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val mark = e.marks(markType)
-
-      val insertIdx = mark.index
+      val Mark(insertIdx, offset) = e.marks(markType)
 
       val stackSizes = operandStackSizes(e.bytecode)
 
-      val insertStackSize = stackSizes(mark.index)
+      val insertStackSize = stackSizes(insertIdx)
       val finalStackSize  = stackSizes(e.bytecode.length) + 1 // Add the DUP
+      
+      val pullUp = (1 to offset) map Swap
+      val pushDown = (1 to (offset + 1)).reverse map Swap
 
       // Save the value by pushing it to the tail of the stack:
       val saveSwaps = if (insertStackSize == 1)
@@ -147,8 +156,8 @@ trait Emitter extends AST
       else
         (1 until finalStackSize) map Swap
 
-      (insertInstrAt(Dup +: saveSwaps, insertIdx) >> 
-      insertInstrAt(restoreSwaps, e.bytecode.length + 1 + saveSwaps.length)).apply(e)
+      (insertInstrAt((pullUp :+ Dup) ++ pushDown ++ saveSwaps, insertIdx) >> 
+        insertInstrAt(restoreSwaps, e.bytecode.length + pullUp.length + 1 + pushDown.length + saveSwaps.length))(e)
     }
     
     def emitConstraints(expr: Expr): EmitterState = {
@@ -198,17 +207,33 @@ trait Emitter extends AST
       emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, depth, pred)
     }
     
+    def origins(bucket: Bucket): Set[ast.Operation] = bucket match {
+      case UnionBucket(left, right) => origins(left) ++ origins(right)
+      case IntersectBucket(left, right) => origins(left) ++ origins(right)
+      case Group(origin, _, _, _) => Set(origin)
+    }
+    
+    def emitBucket(bucket: Bucket): EmitterState = bucket match {
+      case UnionBucket(left, right) =>
+        emitBucket(left) >> emitBucket(right) >> emitInstr(ZipBuckets(false))
+      
+      case IntersectBucket(left, right) =>
+        emitBucket(left) >> emitBucket(right) >> emitInstr(ZipBuckets(true))
+      
+      case Group(_, _, forest, _) => emitSolution(forest)
+    }
+    
+    // er...?
     def emitSolution(solution: Solution): EmitterState = solution match {
       case Conjunction(left, right) =>
-        emitSolution(left) >> emitSolution(right) >> emitInstr(VIntersect)
+        emitSolution(left) >> emitSolution(right) >> emitInstr(Map2Match(And))
       
       case Disjunction(left, right) =>
-        emitSolution(left) >> emitSolution(right) >> emitInstr(VUnion)
+        emitSolution(left) >> emitSolution(right) >> emitInstr(Map2Match(Or))
       
-      case Definition(expr) =>
-        emitExpr(expr)
+      case Definition(expr) => emitExpr(expr)
     }
-
+    
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
       emitLine(expr.loc.lineNum, expr.loc.line) >>
       (expr match {
@@ -223,9 +248,7 @@ trait Emitter extends AST
         
         case t @ ast.TicVar(loc, name) => 
           t.binding match {
-            case UserDef(let) =>
-              emitTicVar(let, name)
-
+            case UserDef(let) => emitDup(MarkTicVar(let, name))
             case _ => notImpl(expr)
           }
         
@@ -402,28 +425,41 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
-                  setTicVars(let, params.zip(actuals).map(t => t :-> emitExpr)) {
-                    if (actuals.length == n) {
-                      emitExpr(left)
-                    } else {
-                      val nameToSolutions = d.equalitySolutions.toSeq sortWith { (a, b) =>
-                        params.indexOf(a) < params.indexOf(b)
-                      }
-
-                      // Compute bytecode for every tic var:
-                      val ticVarStates = nameToSolutions.map {
-                        case (name, solution) =>
-                          (name, emitSolution(solution) >> emitInstr(Split))
-                      }
-
-                      // At the end we have to merge everything back together:
-                      val merges = reduce(Vector.fill(nameToSolutions.length)(emitInstr(Merge)))
-
-                      setTicVars(let, ticVarStates) {
-                        emitExpr(left) >> merges
-                      }
-                    } 
+                  val actualStates = params zip actuals map {
+                    case (name, expr) => emitAndMark(MarkTicVar(let, name))(emitExpr(expr))
                   }
+                  
+                  val body = if (actuals.length == n) {
+                    emitExpr(left)
+                  } else {
+                    val (buckets, bucketStates) = d.buckets.toSeq map {
+                      case pair @ (_, bucket) => (pair, emitBucket(bucket)) 
+                    } unzip
+                    
+                    val n = buckets.length.toShort
+                    val k = (buckets.length + (buckets map { _._2 } map origins map { _.size } sum)).toShort
+                    val split = emitInstr(Split(n, k))
+                    
+                    /*
+                     * Split
+                     *   <group22>
+                     *   <group21>
+                     *   <var2>
+                     *   <group11>
+                     *   <var1>
+                     */
+                    
+                    val (groups, _) = buckets.foldLeft((mzero[EmitterState], 0)) {
+                      case ((state, offset), (name, bucket)) => {
+                        val (state, offset2, _) = markAllGroups(bucket, offset + 1, Set())
+                        (markTicVar(let, name, offset) >> state, offset2)
+                      }
+                    }
+                    
+                    reduce(bucketStates) >> split >> groups >> emitExpr(left) >> emitInstr(Merge)
+                  }
+                  
+                  reduce(actualStates) >> body
                 }
               }
 
