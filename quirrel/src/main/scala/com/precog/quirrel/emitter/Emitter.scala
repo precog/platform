@@ -30,13 +30,13 @@ trait Emitter extends AST
   private case class MarkExpr(expr: Expr) extends MarkType
   private case class MarkTicVar(let: ast.Let, name: String) extends MarkType
   private case class MarkDispatch(let: ast.Let, actuals: Vector[Expr]) extends MarkType
-  private case class MarkGroup(op: ast.Operation) extends MarkType
+  private case class MarkGroup(op: ast.Where) extends MarkType
 
   private case class Emission private (
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
-    buckets: Map[ast.Operation, Set[Expr]] = Map())
+    buckets: Map[ast.Where, Set[Expr]] = Map())
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -104,7 +104,7 @@ trait Emitter extends AST
       ((), e.copy(marks = e.marks + (MarkTicVar(let, name) -> Mark(e.bytecode.length, offset))))
     }
     
-    private def markAllGroups(bucket: Bucket, offset: Int, seen: Set[ast.Operation]): (EmitterState, Int, Set[ast.Operation]) = bucket match {
+    private def markAllGroups(bucket: Bucket, offset: Int, seen: Set[ast.Where]): (EmitterState, Int, Set[ast.Where]) = bucket match {
       case UnionBucket(left, right) => {
         val (state1, offset1, seen1) = markAllGroups(left, offset, seen)
         val (state2, offset2, seen2) = markAllGroups(right, offset1, seen1)
@@ -207,7 +207,7 @@ trait Emitter extends AST
       emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, depth, pred)
     }
     
-    def origins(bucket: Bucket): Set[ast.Operation] = bucket match {
+    def origins(bucket: Bucket): Set[ast.Where] = bucket match {
       case UnionBucket(left, right) => origins(left) ++ origins(right)
       case IntersectBucket(left, right) => origins(left) ++ origins(right)
       case Group(origin, _, _, _) => Set(origin)

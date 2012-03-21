@@ -75,7 +75,16 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
       actualErrors ++ ourErrors
     }
     
-    case Operation(_, left, _, right) =>
+    case Where(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
+    
+    case With(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
+    
+    case Union(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
+    
+    case Intersect(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
     case Add(_, left, right) =>
@@ -245,5 +254,5 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
   
   case class UnionBucket(left: Bucket, right: Bucket) extends Bucket
   case class IntersectBucket(left: Bucket, right: Bucket) extends Bucket
-  case class Group(origin: Operation, target: Expr, forest: Solution, extras: Set[Expr]) extends Bucket
+  case class Group(origin: Where, target: Expr, forest: Solution, extras: Set[Expr]) extends Bucket
 }
