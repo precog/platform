@@ -38,14 +38,23 @@ object QuirrelConsole {
     def mathlib2 = Set()
   }
 
-  val compiler = new Parser with Binder with ProvenanceChecker with CriticalConditionSolver with Compiler with Emitter with LineErrors with EmptyLibrary {}
-
+  val compiler = new Parser
+    with Binder
+    with ProvenanceChecker
+    with CriticalConditionSolver
+    with GroupSolver
+    with Compiler
+    with Emitter
+    with LineErrors
+    with EmptyLibrary {}
 
   trait StubPhases extends Phases with RawErrors {
     def bindNames(tree: Expr) = Set()
     def checkProvenance(tree: Expr) = Set()
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
+    def findGroups(expr: Expr): Map[String, Set[GroupTree]] = Map()
     def solveCriticalConditions(expr: Expr) = Set()
+    def inferBuckets(expr: Expr) = Set()
   }
 
   val solver = new Solver with Parser with StubPhases {}
