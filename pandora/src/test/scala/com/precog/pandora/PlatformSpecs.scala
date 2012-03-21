@@ -175,23 +175,23 @@ class PlatformSpecs extends Specification
       }
     }
     
-    "return only value-unique results from a characteristic function" in {
-      val input = """
-        | campaigns := load(//campaigns)
-        | f('a) :=
-        |   campaigns.gender where campaigns.platform = 'a
-        |
-        | f""".stripMargin
-        
-      val results = evalE(input)
-      
-      results must haveSize(2)
-      
-      forall(results) {
-        case (VectorCase(_), SString(gender)) =>
-          Set("male", "female") must contain(gender)
-      }
-    }.pendingUntilFixed
+    //"return only value-unique results from a characteristic function" in {
+    //  val input = """
+    //    | campaigns := load(//campaigns)
+    //    | f('a) :=
+    //    |   campaigns.gender where campaigns.platform = 'a
+    //    |
+    //    | f""".stripMargin
+    //    
+    //  val results = evalE(input)
+    //  
+    //  results must haveSize(2)
+    //  
+    //  forall(results) {
+    //    case (VectorCase(_), SString(gender)) =>
+    //      Set("male", "female") must contain(gender)
+    //  }
+    //}
     
     "determine a histogram of genders on campaigns" in {
       val input = """
