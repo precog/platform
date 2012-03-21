@@ -221,13 +221,16 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
       result map { e => Right((Some(Definition(e)), Set[Expr]())) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
     }
     
+    case _ if containsAnotherTicVar(name)(expr) =>
+      Left(Set(Error(expr, GroupSetInvolvingMultipleParameters)))
+    
     case _ => Right((None, Set(expr)))
   }
   
   private def solveGroupForest(d: Dispatch, name: String, groups: Set[GroupTree]): (Set[Error], Option[Bucket]) = {
     if (groups exists { case Condition(_) => true case _ => false }) {
       val solutions = groups collect {
-        case Condition(expr) => (expr, solveCondition(name, expr))
+        case Condition(where) => (where, solveCondition(name, where.right))
       }
       
       // if it's None all the way down, then we already have the error
@@ -260,6 +263,11 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
   
   private def containsTicVar(name: String): Expr => Boolean = isSubtree {
     case TicVar(_, `name`) => true
+    case _ => false
+  }
+  
+  private def containsAnotherTicVar(name: String): Expr => Boolean = isSubtree {
+    case TicVar(_, name2) => name != name2
     case _ => false
   }
   
