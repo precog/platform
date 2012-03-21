@@ -20,6 +20,7 @@
 package com.precog.ingest
 package kafka
 
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.BlueEyesServer
 import blueeyes.util.Clock
 
@@ -43,13 +44,11 @@ object KafkaIngestServer extends BlueEyesServer with IngestService with KafkaEve
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
 
-  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+  def tokenManagerFactory(config: Configuration) = new StaticTokenManager
 
 }
 
-trait KafkaEventStoreComponent {
-
-  implicit def defaultFutureDispatch: MessageDispatcher
+trait KafkaEventStoreComponent extends AkkaDefaults {
 
   def eventStoreFactory(config: Configuration): EventStore = {
 
