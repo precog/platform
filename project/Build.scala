@@ -25,7 +25,7 @@ object PlatformBuild extends Build {
   )
   
   val commonSettings = Seq(
-    scalacOptions ++= Seq("-optimise"))
+    scalacOptions ++= Seq())
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, pandora, util, common)
   
