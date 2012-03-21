@@ -579,21 +579,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val rightProv = computeResultProvenance(right, relations, varAssumptions)
       unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
     }    
+   
     case With(_, left, right) => {
       val leftProv = computeResultProvenance(left, relations, varAssumptions)
       val rightProv = computeResultProvenance(right, relations, varAssumptions)
       unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
     }    
-    case Union(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      combineProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }    
-    case Intersect(_, left, right) => {
-      val leftProv = computeResultProvenance(left, relations, varAssumptions)
-      val rightProv = computeResultProvenance(right, relations, varAssumptions)
-      combineProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
-    }
+   
+    case Union(_, _, _) | Intersect(_, _, _) => body.provenance
     
     case Add(_, left, right) => {
       val leftProv = computeResultProvenance(left, relations, varAssumptions)

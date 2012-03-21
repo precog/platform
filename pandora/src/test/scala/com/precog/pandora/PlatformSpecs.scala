@@ -168,7 +168,7 @@ class PlatformSpecs extends Specification
       results must haveSize(46)
       
       forall(results) {
-        case (VectorCase(_, _), SObject(obj)) => {
+        case (VectorCase(_), SObject(obj)) => {
           obj must haveSize(5)
           obj must haveKey("gender")
         }
@@ -191,7 +191,7 @@ class PlatformSpecs extends Specification
         case (VectorCase(_), SString(gender)) =>
           Set("male", "female") must contain(gender)
       }
-    }
+    }.pendingUntilFixed
     
     "determine a histogram of genders on campaigns" in {
       val input = """
