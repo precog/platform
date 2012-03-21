@@ -207,44 +207,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
             }
           }
 
-          //case Median => {
-          //  val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
-          //    case (None, SDecimal(v)) => Some((1, v, v))
-          //    case (Some((count, min, max)), SDecimal(v)) if (v > max) & (count < 1000) => Some((count + 1, min, v))
-          //    case (Some((count, min, max)), SDecimal(v)) if (v < min) & (count < 1000) => Some((count + 1, v, max))
-          //    case (acc, _) => acc
-          //  }
-
-          //  stats map { 
-          //    case (count, min, max) => {
-          //      val buckets = math.ceil(math.log(count.toInt + 1) + 1).toInt
-          //      //println(buckets)
-          //      val increment = ((max - min) / buckets) + 1
-          //      val partition = (0 to buckets - 1) map (x => min + (increment * x))
-          //      val arr = Array[Int](buckets)
-          //      
-          //      def findIndex(num: BigDecimal) = partition.indexWhere(num <=)
-          //      
-          //      val array = mapped.reduce(None: Option[Array[Int]]) {
-          //        case (None, SDecimal(v)) => { 
-          //          arr(findIndex(v)) += 1
-          //          Some(arr) 
-          //        }
-          //        case (Some(arr), SDecimal(v)) => { 
-          //          arr(findIndex(v)) += 1
-          //          Some(arr) 
-          //        }
-          //        case (acc, _) => acc
-          //      }
-          //    
-          //      array map {
-          //        x => SDecimal(x.scanLeft(0)(_+_).drop(1).indexWhere((count.toInt / 2) <))
-          //      }
-          //      
-          //    }
-          //  }
-          //}
-
           case Max => {
             mapped.reduce(None: Option[SValue]) {
               case (None, SDecimal(v)) => Some(SDecimal(v))
@@ -262,11 +224,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
               case (acc, _) => acc
             }
           }          
-
-          //case Mode => {
-
-          //  }
-          //}
           
           case StdDev => {
             val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
