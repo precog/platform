@@ -7,7 +7,9 @@ import common.security._
 import daze._
 
 import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
 import blueeyes.BlueEyesServiceBuilder
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
@@ -17,14 +19,13 @@ import org.streum.configrity.Configuration
 
 case class IngestState(tokenManager: TokenManager, accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging)
 
-trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators { 
+trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
-
   def tokenManagerFactory(config: Configuration): TokenManager
   def eventStoreFactory(config: Configuration): EventStore
   def usageLoggingFactory(config: Configuration): UsageLogging 
@@ -38,6 +39,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           val eventStore = eventStoreFactory(config.detach("eventStore"))
           val theTokenManager = tokenManagerFactory(config.detach("security"))
           val accessControl = new TokenBasedAccessControl { 
+            val executionContext = defaultFutureDispatch
             val tokenManager = theTokenManager  
           }
 
@@ -54,7 +56,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("track") {
-                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout))
+                post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch))
               }
             }
           }

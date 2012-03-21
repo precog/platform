@@ -3,17 +3,26 @@ package security
 
 import org.specs2.mutable._
 
-object AccessControlSpec extends Specification with AccessControlTestValues {
-  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
+import akka.util.Duration
+import akka.dispatch.Future
+import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
+
+import blueeyes.bkka.AkkaDefaults
+
+import scalaz._
+
+object AccessControlSpec extends Specification with AccessControlTestValues with AccessControlHelpers with AkkaDefaults {
+  implicit val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
+    implicit val executionContext = defaultFutureDispatch
     val tokenConfig = accessControlTokenConfig
   }
-
 
   "access control" should {
     "control path access" in {
       "allow access" in {
-        val accessRoot = accessControl.mayAccessPath(rootUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(rootUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(rootUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(rootUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beTrue
         accessChild(PathRead) must beTrue
@@ -21,8 +30,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beTrue
       }
       "allow access via grant" in {
-        val accessRoot = accessControl.mayAccessPath(grantUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(grantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(grantUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(grantUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beTrue
         accessChild(PathRead) must beTrue
@@ -30,8 +39,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beTrue
       }
       "limit access to constrained perms" in {
-        val accessRoot = accessControl.mayAccessPath(childUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(childUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(childUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(childUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beTrue
@@ -39,8 +48,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beTrue
       }
       "limit access via grant" in {
-        val accessRoot = accessControl.mayAccessPath(limitedGrantUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(limitedGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(limitedGrantUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(limitedGrantUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beTrue
@@ -48,8 +57,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beTrue
       }
       "deny access to invalid uid" in {
-        val accessRoot = accessControl.mayAccessPath(invalidUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(invalidUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(invalidUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -57,8 +66,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when issuer uid is invalid" in {
-        val accessRoot = accessControl.mayAccessPath(invalidChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(invalidChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(invalidChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -66,8 +75,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access to invalid grant" in {
-        val accessRoot = accessControl.mayAccessPath(invalidGrantUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(invalidGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidGrantUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(invalidGrantUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -75,8 +84,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant issuer is invalid" in {
-        val accessRoot = accessControl.mayAccessPath(invalidGrantChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(invalidGrantChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidGrantChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(invalidGrantChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -84,8 +93,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access with no perms" in {
-        val accessRoot = accessControl.mayAccessPath(noPermsUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(noPermsUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(noPermsUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(noPermsUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -93,8 +102,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when issuer no longer has perms" in {
-        val accessRoot = accessControl.mayAccessPath(noPermsChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(noPermsChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(noPermsChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(noPermsChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -102,8 +111,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant issuer no longer has perms" in {
-        val accessRoot = accessControl.mayAccessPath(noPermsGrantUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(noPermsGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(noPermsGrantUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(noPermsGrantUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -111,8 +120,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when issuer may not share perms" in {
-        val accessRoot = accessControl.mayAccessPath(noShareChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(noShareChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(noShareChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(noShareChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -120,8 +129,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant issuer may not share perms" in {
-        val accessRoot = accessControl.mayAccessPath(noShareGrantUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(noShareGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(noShareGrantUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(noShareGrantUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -129,8 +138,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when expired" in {
-        val accessRoot = accessControl.mayAccessPath(expiredUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(expiredUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(expiredUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(expiredUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -138,8 +147,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant expired" in {
-        val accessRoot = accessControl.mayAccessPath(grantExpiredUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(grantExpiredUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(grantExpiredUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(grantExpiredUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -147,8 +156,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when issuer expired" in {
-        val accessRoot = accessControl.mayAccessPath(expiredChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(expiredChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(expiredChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(expiredChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -156,8 +165,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant issuer expired" in {
-        val accessRoot = accessControl.mayAccessPath(grantExpiredChildUID, "/", _: PathAccess)
-        val accessChild = accessControl.mayAccessPath(grantExpiredChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(grantExpiredChildUID, "/", _: PathAccess)
+        val accessChild = mayAccessPath(grantExpiredChildUID, "/child", _: PathAccess)
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -167,99 +176,96 @@ object AccessControlSpec extends Specification with AccessControlTestValues {
     }
     "control data access" in {
       "allow access" in {
-        accessControl.mayAccessData(rootUID, "/", Set(rootUID), DataQuery) must beTrue
-        accessControl.mayAccessData(rootUID, "/child", Set(rootUID), DataQuery) must beTrue
+        mayAccessData(rootUID, "/", Set(rootUID), DataQuery) must beTrue
+        mayAccessData(rootUID, "/child", Set(rootUID), DataQuery) must beTrue
       }
       "limit access" in {
-        accessControl.mayAccessData(childUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(childUID, "/child", Set(rootUID), DataQuery) must beTrue
+        mayAccessData(childUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(childUID, "/child", Set(rootUID), DataQuery) must beTrue
       }
       "deny access to invalid uid" in {
-        accessControl.mayAccessData(invalidUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(invalidUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(invalidUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(invalidUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access when issuer uid is invalid" in {
-        accessControl.mayAccessData(invalidChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(invalidChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(invalidChildUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(invalidChildUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access with no perms" in {
-        accessControl.mayAccessData(noDataPermsUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(noDataPermsUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataPermsUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataPermsUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access when issuer no longer has perms" in {
-        accessControl.mayAccessData(noDataPermsChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(noDataPermsChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataPermsChildUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataPermsChildUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access when issuer may not perms" in {
-        accessControl.mayAccessData(noDataShareChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(noDataShareChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataShareChildUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noDataShareChildUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access when expired" in {
-        accessControl.mayAccessData(expiredUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(expiredUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
       "deny access when issuer expired" in {
-        accessControl.mayAccessData(expiredChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        accessControl.mayAccessData(expiredChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredChildUID, "/", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredChildUID, "/child", Set(rootUID), DataQuery) must beFalse
       }
     }
   }
 }
 
-object AccessControlUseCasesSpec extends Specification with AccessControlTestValues {
+object AccessControlUseCasesSpec extends Specification with AccessControlTestValues with AccessControlHelpers with AkkaDefaults {
  
-  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
+  implicit val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
+    implicit val executionContext = defaultFutureDispatch
     val tokenConfig = useCaseTokenConfig
   }
 
   "access control" should {
     "handle proposed use cases" in {
       "addon grants sandboxed to user paths" in {
-        accessControl.mayAccessPath(customerUID, "/customer", PathRead) must beTrue
-        accessControl.mayAccessPath(customerUID, "/knownCustomer", PathRead) must beTrue
-        accessControl.mayAccessPath(customerUID, "/unknownCustomer", PathRead) must beFalse
+        mayAccessPath(customerUID, "/customer", PathRead) must beTrue
+        mayAccessPath(customerUID, "/knownCustomer", PathRead) must beTrue
+        mayAccessPath(customerUID, "/unknownCustomer", PathRead) must beFalse
 
-        accessControl.mayAccessData(customerUID, "/customer", Set(customerUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/customer", Set(customerUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID), DataQuery) must beTrue
 
-        accessControl.mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID, addonCustomerGrantUID), DataQuery) must beFalse
-        accessControl.mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID), DataQuery) must beFalse
-        accessControl.mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID, addonCustomerGrantUID), DataQuery) must beFalse
-        accessControl.mayAccessData(customerUID, "/unknownCustomer", Set(addonCustomerGrantUID), DataQuery) must beFalse
+        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID, addonCustomerGrantUID), DataQuery) must beFalse
+        mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID), DataQuery) must beFalse
+        mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID, addonCustomerGrantUID), DataQuery) must beFalse
+        mayAccessData(customerUID, "/unknownCustomer", Set(addonCustomerGrantUID), DataQuery) must beFalse
       }
       "addon grants can be passed to our customer's customers" in {
-        accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID), DataQuery) must beFalse
-        accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beFalse
+        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID), DataQuery) must beTrue
+        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonUID), DataQuery) must beTrue
+        mayAccessData(customersCustomerUID, "/customer", Set(customerUID), DataQuery) must beFalse
+        mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beFalse
       }
       "ability to access data created by an agent (child) of the granter" in {
-        accessControl.mayAccessData(customerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beTrue
-        accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beFalse
-        accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonAgentUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beTrue
+        mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beFalse
+        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonAgentUID), DataQuery) must beTrue
       }
       "ability to grant revokable public access" in {
-        accessControl.mayAccessData(customerUID, "/addon/public", Set(addonUID), DataQuery) must beTrue
+        mayAccessData(customerUID, "/addon/public", Set(addonUID), DataQuery) must beTrue
       }
     }
   }
 }
 
-object AccessControlIsolationSpec extends Specification with AccessControlTestValues {
+trait AccessControlHelpers {
 
-  val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
-    val tokenConfig = useCaseTokenConfig
+  val testTimeout = Duration(30, "seconds")
+
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess)(implicit ac: AccessControl): Boolean = {
+    Await.result(ac.mayAccessPath(uid, path, pathAccess), testTimeout)
   }
-
-  "access control" should {
-    "handle proposed use cases" in {
-      accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID), DataQuery) must beTrue
-      accessControl.mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonUID), DataQuery) must beTrue
-      accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID), DataQuery) must beFalse
-      accessControl.mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beFalse
-    }
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess)(implicit ac: AccessControl): Boolean = {
+    Await.result(ac.mayAccessData(uid, path, owners, dataAccess), testTimeout)
   }
 }
 
@@ -417,7 +423,8 @@ trait AccessControlTestValues {
   )
 }
 
-trait TestTokenManagerComponent extends TokenManagerComponent {
+trait TestTokenManagerComponent extends TokenManagerComponent with AkkaDefaults {
+
   def tokenConfig: List[(UID, Option[UID], Permissions, Set[UID], Boolean)]
 
   lazy val map = Map( tokenConfig map {
@@ -425,6 +432,10 @@ trait TestTokenManagerComponent extends TokenManagerComponent {
   }: _*)
 
   lazy val tokenManager = new TokenManager {
-    def lookup(uid: UID) = map.get(uid)
+    implicit val execContext = defaultFutureDispatch
+    def lookup(uid: UID) = Future(map.get(uid))(execContext)
+    def listChildren(parent: Token): Future[List[Token]] = sys.error("not available")
+    def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = sys.error("not available")
+    def deleteToken(token: Token): Future[Token] = sys.error("not available")
   }
 }
