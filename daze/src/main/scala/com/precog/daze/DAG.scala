@@ -459,6 +459,11 @@ trait DAG extends Instructions {
     // TODO propagate AOT value computation
     case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = instr match {
+        case IUnion | IIntersect => Vector(DynamicProvenance(Identity.nextInt()))
+        //{
+        //  val size = math.max(left.provenance.length, right.provenance.length)
+        //  (0 to size - 1).foldLeft(Vector.empty[dag.Provenance]) { case (acc, v) => acc :+ DynamicProvenance(Identity.nextInt()) } 
+        //}
         case _: Map2CrossRight => right.provenance ++ left.provenance
         case _: Map2Cross | _: Map2CrossLeft => left.provenance ++ right.provenance
         
