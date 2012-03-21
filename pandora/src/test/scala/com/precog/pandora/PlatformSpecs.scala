@@ -143,9 +143,9 @@ class PlatformSpecs extends Specification
         | b := new a
         |
         | a ~ b
-        |   { aa: a.campaign, bb: b.campaign }"""
+        |   { aa: a.campaign, bb: b.campaign }""".stripMargin
         
-      val results = evalE(input.stripMargin)
+      val results = evalE(input)
       
       results must haveSize(10000)
       
@@ -155,6 +155,24 @@ class PlatformSpecs extends Specification
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
+      }
+    }
+    
+    "return only value-unique results from a characteristic function" in {
+      val input = """
+        | campaigns := load(//campaigns)
+        | f('a) :=
+        |   campaigns.gender where campaigns.platform = 'a
+        |
+        | f""".stripMargin
+        
+      val results = evalE(input)
+      
+      results must haveSize(2)
+      
+      forall(results) {
+        case (VectorCase(_), SString(gender)) =>
+          Set("male", "female") must contain(gender)
       }
     }
     
