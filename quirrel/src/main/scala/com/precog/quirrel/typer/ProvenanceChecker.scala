@@ -722,7 +722,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (NullProvenance, p) => Some(NullProvenance)
     case (p, NullProvenance) => Some(NullProvenance)
 
-    case (p1, p2) => Some(UnionProvenance(p1, p2))
+    case (p1, p2) => Some(DynamicProvenance(currentId.incrementAndGet()))
   }
 
   

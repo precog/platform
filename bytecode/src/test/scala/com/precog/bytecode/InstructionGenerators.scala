@@ -171,7 +171,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
 
   private lazy val genReduction = oneOf(
     Count,
-    GeometricMean
+    GeometricMean,
     
     Mean,
     Median,

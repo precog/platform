@@ -156,6 +156,23 @@ class PlatformSpecs extends Specification
           obj must haveKey("bb")
         }
       }
+    }    
+
+    "use where on a unioned set" in {
+      val input = """
+        | a := load(//campaigns) union load(//clicks)
+        |   a where a.gender = "female" """.stripMargin
+        
+      val results = evalE(input)
+      
+      results must haveSize(46)
+      
+      forall(results) {
+        case (VectorCase(_, _), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must haveKey("gender")
+        }
+      }
     }
     
     "return only value-unique results from a characteristic function" in {
