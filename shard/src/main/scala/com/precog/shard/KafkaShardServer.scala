@@ -15,6 +15,6 @@ object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQ
   val clock = Clock.System
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+  def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
 
 }

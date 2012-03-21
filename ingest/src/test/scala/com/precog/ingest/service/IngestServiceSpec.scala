@@ -26,6 +26,7 @@ import scalaz.Scalaz._
 import blueeyes.concurrent.test._
 
 import blueeyes.core.data._
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.core.service.test.BlueEyesServiceSpecification
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
@@ -43,11 +44,11 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 
 trait TestTokens {
   import StaticTokenManager._
-  val TestToken = lookup(testUID).get
-  val TrackingToken = lookup(usageUID).get
+  val TestTokenUID = testUID
+  val TrackingTokenUID = usageUID
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults {
 
   import BijectionsChunkJson._
 
@@ -61,9 +62,9 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   override val configuration = "services { ingest { v1 { " + requestLoggingData + " } } }"
 
 
-  def tokenManagerFactory(config: Configuration) = StaticTokenManager 
+  def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
   
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingToken.uid) 
+  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingTokenUID) 
 
   val messaging = new CollectingMessaging
 
@@ -81,7 +82,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   }
 
   lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).
-                                     query("tokenId", TestToken.uid)
+                                     query("tokenId", TestTokenUID)
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
