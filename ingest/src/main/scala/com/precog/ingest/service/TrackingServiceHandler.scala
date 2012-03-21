@@ -61,24 +61,26 @@ class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStor
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>
-      if(accessControl.mayAccessPath(t.uid, p, PathWrite)) {
-        request.content map { futureContent =>
-          try { 
-            for {
-              event <- futureContent
-              _ <- eventStore.save(Event.fromJValue(p, event, t.uid), insertTimeout)
-            } yield {
-              // could return the eventId to the user?
-              HttpResponse[JValue](OK)
+      accessControl.mayAccessPath(t.uid, p, PathWrite) flatMap { mayAccess =>
+        if(mayAccess) {
+          request.content map { futureContent =>
+            try { 
+              for {
+                event <- futureContent
+                _ <- eventStore.save(Event.fromJValue(p, event, t.uid), insertTimeout)
+              } yield {
+                // could return the eventId to the user?
+                HttpResponse[JValue](OK)
+              }
+            } catch {
+              case ex => Future(HttpResponse[JValue](ServiceUnavailable))
             }
-          } catch {
-            case ex => Future(HttpResponse[JValue](ServiceUnavailable))
+          } getOrElse {
+            Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data."))))
           }
-        } getOrElse {
-          Future(HttpResponse[JValue](BadRequest, content=Some(JString("Missing event data."))))
+        } else {
+          Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to write at this location."))))
         }
-      } else {
-        Future(HttpResponse[JValue](Unauthorized, content=Some(JString("Your token does not have permissions to write at this location."))))
       }
     }
   }
