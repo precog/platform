@@ -70,7 +70,7 @@ trait StubYggShardComponent extends YggShardComponent {
       def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
     }
 
-    val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)
+    lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
 
     val projections: Map[ProjectionDescriptor, Projection[Dataset]] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
       case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {

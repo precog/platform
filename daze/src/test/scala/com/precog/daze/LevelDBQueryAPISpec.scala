@@ -47,7 +47,7 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
-class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent 
+trait StubLevelDBQueryComponent extends LevelDBQueryComponent 
 with StubYggShardComponent with IterableDatasetOpsComponent {
   trait YggConfig extends SortConfig with LevelDBQueryConfig with IterableDatasetOpsConfig {
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
@@ -66,10 +66,13 @@ with StubYggShardComponent with IterableDatasetOpsComponent {
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
 
   object yggConfig extends YggConfig
-  object storage extends Storage
 
   object query extends QueryAPI
   object ops extends Ops
+}
+
+class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
+  object storage extends Storage
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
@@ -86,5 +89,107 @@ with StubYggShardComponent with IterableDatasetOpsComponent {
   }
 }
 
+class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent {
+  object storage extends Storage {
+    override lazy val sampleData: Vector[JValue] = Vector(
+      JsonParser.parse("""[
+        {"foo": {
+          "bar": { "baz": 1 }
+        }},
+        {"foo": null}
+      ]""" ).asInstanceOf[JArray].elements: _*)
+  }
 
-// vim: set ts=4 sw=4 et:
+  "fullProjection" should {
+    "restore objects with null components" in {
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      
+      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+    }
+  }
+}
+
+class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponent {
+  object storage extends Storage {
+    override lazy val sampleData: Vector[JValue] = Vector(
+      JsonParser.parse( 
+        """[{
+         "event":"activated",
+         "currency":"USD",
+         "customer":{
+           "country":"CA",
+           "email":"john@fastspring.com",
+           "firstName":"John",
+           "lastName":"Smith",
+           "organization":"",
+           "zipcode":"11111"
+         },
+         "endDate":null,
+         "product":{
+           "name":"Subscription 1"
+         },
+         "quantity":1,
+         "regularPriceUsd":10,
+         "timestamp":{
+           "date":7,
+           "day":3,
+           "hours":0,
+           "minutes":0,
+           "month":2,
+           "seconds":0,
+           "time":1331078400000,
+           "timezoneOffset":0,
+           "year":112
+         }
+        },{
+         "event":"deactivated",
+         "currency":"USD",
+         "customer":{
+           "country":"US",
+           "email":"ryan@fastspring.com",
+           "firstName":"Ryan",
+           "lastName":"Dewell",
+           "organization":"",
+           "zipcode":"93101"
+         },
+         "endDate":{
+           "date":7,
+           "day":3,
+           "hours":0,
+           "minutes":0,
+           "month":2,
+           "seconds":0,
+           "time":1331078400000,
+           "timezoneOffset":0,
+           "year":112
+         },
+         "product":{
+           "name":"ABC Subscription"
+         },
+         "quantity":1,
+         "reason":"canceled",
+         "regularPriceUsd":9,
+         "timestamp":{
+           "date":7,
+           "day":3,
+           "hours":0,
+           "minutes":0,
+           "month":2,
+           "seconds":0,
+           "time":1331078400000,
+           "timezoneOffset":0,
+           "year":112
+         }
+        }]"""
+      ).asInstanceOf[JArray].elements: _*
+    )
+  }
+
+  "fullProjection" should {
+    "restore objects with null components" in {
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      
+      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+    }
+  }
+}
