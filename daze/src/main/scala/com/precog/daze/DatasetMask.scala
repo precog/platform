@@ -6,9 +6,9 @@ import scalaz.effect._
 
 import com.precog.yggdrasil._
 
-trait DatasetMask[X] {
-  def derefObject(field: String): DatasetMask[X] 
-  def derefArray(index: Int): DatasetMask[X]
-  def typed(tpe: SType): DatasetMask[X]
-  def realize(expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO]
+trait DatasetMask[Dataset[_]] {
+  def derefObject(field: String): DatasetMask[Dataset]
+  def derefArray(index: Int): DatasetMask[Dataset]
+  def typed(tpe: SType): DatasetMask[Dataset]
+  def realize(expiresAt: Long): Dataset[SValue]
 }

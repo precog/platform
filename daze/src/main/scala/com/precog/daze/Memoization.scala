@@ -70,13 +70,13 @@ object BufferingContext {
   }
 }
 
-trait MemoizationComponent {
+trait MemoEnvironment {
   type MemoContext <: MemoizationContext
 
   def withMemoizationContext[A](f: MemoContext => A): A
 }
 
-trait BufferingComponent {
+trait BufferingEnvironment {
   type MemoContext <: BufferingContext
 
   def withMemoizationContext[A](f: MemoContext => A): A

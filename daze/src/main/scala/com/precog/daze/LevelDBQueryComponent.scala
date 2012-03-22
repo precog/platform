@@ -27,11 +27,16 @@ trait LevelDBQueryConfig {
 trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent {
   type YggConfig <: LevelDBQueryConfig
   type Storage <: YggShard
+  type X = Throwable
 
   def storage: Storage
+  implicit def asyncContext: ExecutionContext
 
-  trait QueryAPI extends StorageEngineQueryAPI {
-    override def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = DatasetEnum(
+  type Dataset[E] = DatasetEnum[X, E, IO]
+
+  trait QueryAPI extends StorageEngineQueryAPI[Dataset] {
+    /*
+    override def fullProjection(userUID: String, path: Path, expiresAt: Long): DatasetEnum[X, SEvent, IO] = DatasetEnum(
       for {
         selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
         sources     <- Future.sequence(selectors map { s => storage.userMetadataView(userUID).findProjections(path, s) map { p => (s, p.keySet) } })
@@ -39,14 +44,14 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       } yield enumerator
     )
 
-    override def mask(userUID: String, path: Path): DatasetMask[X] = LevelDBDatasetMask(userUID, path, None, None) 
+    override def mask(userUID: String, path: Path): DatasetMask[Dataset] = LevelDBDatasetMask(userUID, path, None, None) 
 
-    private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[X] {
-      def derefObject(field: String): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
+    private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
+      def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
 
-      def derefArray(index: Int): DatasetMask[X] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
+      def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ index })
 
-      def typed(tpe: SType): DatasetMask[X] = copy(tpe = Some(tpe))
+      def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
       def realize(expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
         def assembleForSelector(selector: JPath, retrieval: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
@@ -144,7 +149,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case Nil => EnumeratorP.empty[X, Vector[SEvent], IO]
         }
       }
-
+    */
   }
 }
 // vim: set ts=4 sw=4 et:

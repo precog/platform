@@ -11,33 +11,41 @@ import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.monoid._
 import scalaz.syntax.monad._
+import scalaz.syntax.arrow._
+import scalaz.std.function._
+import scalaz.std.partialFunction._
 
 import Iteratee._
 
-case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], descriptor: Option[ProjectionDescriptor] = None) {
+case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[(Identities, E)], F]], descriptor: Option[ProjectionDescriptor] = None) {
+  /*
+  type Chunk[T] = Vector[(Identities, T)]
+
   def map[E2](f: E => E2): DatasetEnum[X, E2, F] = 
-    DatasetEnum(fenum map (_ map (_ map f)))
+    DatasetEnum(fenum map (_ map (_ map f.second)))
 
   def reduce[E2](b: Option[E2])(f: (Option[E2], E) => Option[E2]): DatasetEnum[X, E2, F] = DatasetEnum(
     fenum map { enum => 
-      new EnumeratorP[X, Vector[E2], F] {
-        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Vector[E2], G] = {
+      new EnumeratorP[X, Chunk[E2], F] {
+        def apply[G[_]](implicit MO: G |>=| F): EnumeratorT[X, Chunk[E2], G] = {
           import MO._
-          new EnumeratorT[X, Vector[E2], G] {
-            def apply[A] = (step: StepT[X, Vector[E2], G, A]) => {
-              def check(s: StepT[X, Vector[E], G, Option[E2]]): IterateeT[X, Vector[E2], G, A] = s.fold(
+          new EnumeratorT[X, Chunk[E2], G] {
+            def apply[A] = (step: StepT[X, Chunk[E2], G, A]) => {
+              def check(s: StepT[X, Chunk[E], G, Option[E2]]): IterateeT[X, Chunk[E2], G, A] = s.fold(
                 cont = k => k(eofInput) >>== { 
                   s => s.mapContOr(_ => sys.error("diverging iteratee"), check(s))
                 }
-                , done = (opt, _) => opt.map(v => step.mapCont(cf => cf(elInput(Vector(v))))).getOrElse(step.pointI)
+                , done = (opt, _) => opt.map(v => step.mapCont(cf => cf(elInput(Vector((Identities.Empty, v)))))).getOrElse(step.pointI)
                 , err  = x => err(x)
               )
 
-              val chunkFold: (Option[E2], Vector[E]) => Option[E2] = {
-                case (init, target) => target.foldLeft(init)(f)
+              val chunkFold: (Option[E2], Chunk[E]) => Option[E2] = {
+                case (init, chunk) => chunk.foldLeft(init) {
+                  case (acc, (_, v)) => f(acc, v)
+                }
               }
 
-              iterateeT((IterateeT.fold[X, Vector[E], G, Option[E2]](b)(chunkFold) &= enum[G]).value >>= (s => check(s).value))
+              iterateeT((IterateeT.fold[X, Chunk[E], G, Option[E2]](b)(chunkFold) &= enum[G]).value >>= (s => check(s).value))
             }
           }
         }
@@ -46,7 +54,7 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
   )
 
   def collect[E2](pf: PartialFunction[E, E2]): DatasetEnum[X, E2, F] = 
-    DatasetEnum(fenum map (_ map (_ collect pf)))
+    DatasetEnum(fenum map (_ map (_ collect pf.second)))
 
   def uniq(implicit ord: Order[E]): DatasetEnum[X, E, F] = 
     DatasetEnum(fenum map (_.uniqChunk))
@@ -68,9 +76,12 @@ case class DatasetEnum[X, E, F[_]](fenum: Future[EnumeratorP[X, Vector[E], F]], 
 
   def perform[B](f: F[B])(implicit m: Monad[F]): DatasetEnum[X, E, F] = 
     DatasetEnum(fenum map { enum => EnumeratorP.enumeratorPMonoid[X, Vector[E], F].append(enum, EnumeratorP.perform[X, Vector[E], F, B](f)) }, descriptor)
+
+  */
 }
 
 trait DatasetEnumOps {
+  /*
   def cogroup[X, F[_]](d1: DatasetEnum[X, SEvent, F], d2: DatasetEnum[X, SEvent, F])(implicit order: Order[SEvent], monad: Monad[F]): DatasetEnum[X, Either3[SEvent, (SEvent, SEvent), SEvent], F] = 
     DatasetEnum(for (en1 <- d1.fenum; en2 <- d2.fenum) yield cogroupEChunked[X, SEvent, SEvent, F](monad, order.order _, order, order).apply(en1, en2))
 
@@ -142,6 +153,8 @@ trait DatasetEnumOps {
   def group(d: DatasetEnum[X, SEvent, IO], memoId: Int, bufctx: BufferingContext)(keyFor: SEvent => Key)
            (implicit ord: Order[Key], fs: FileSerialization[Vector[SEvent]], kvs: FileSerialization[Vector[(Key, SEvent)]], asyncContext: ExecutionContext): 
            Future[EnumeratorP[X, (Key, DatasetEnum[X, SEvent, IO]), IO]] 
+
+  */
 }
 
 // vim: set ts=4 sw=4 et:

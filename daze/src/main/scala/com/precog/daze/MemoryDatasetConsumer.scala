@@ -18,20 +18,27 @@ trait DatasetConsumersConfig extends EvaluatorConfig {
 
 // TODO decouple this from the evaluator specifics
 trait MemoryDatasetConsumer extends Evaluator with YggConfigComponent {
+  type X = Throwable
+  type Dataset[E] = DatasetEnum[X, E, IO]
   type YggConfig <: DatasetConsumersConfig 
 
-  def consumeEval(userUID: String, graph: DepGraph): Validation[Throwable, Set[SEvent]] = {
+  def error(msg: String, ex: Throwable): X = new RuntimeException(msg, ex)
+
+  def consumeEval(userUID: String, graph: DepGraph): Validation[X, Set[SEvent]] = {
+    sys.error("tofix")
+    /*
     implicit val bind = Validation.validationMonad[Throwable]
-    val validated: Validation[Throwable, Validation[Throwable, Set[SEvent]]] = Validation.fromTryCatch {
+    val validated: Validation[X, Validation[X, Set[SEvent]]] = Validation.fromTryCatch {
       Await.result(
         eval(userUID, graph).fenum.map { (enum: EnumeratorP[X, Vector[SEvent], IO]) => 
-          (consume[X, Vector[SEvent], IO, Set] &= enum[IO]) map { s => success[Throwable, Set[SEvent]](s.flatten) } run { err => IO(failure(err)) } unsafePerformIO
+          (consume[X, Vector[SEvent], IO, Set] &= enum[IO]) map { s => success[X, Set[SEvent]](s.flatten) } run { err => IO(failure(err)) } unsafePerformIO
         },
         yggConfig.maxEvalDuration
       )
     } 
     
-    validated.fail.map(err => new RuntimeException("Timed out after " + yggConfig.maxEvalDuration + " in consumeEval", err): Throwable).validation.join
+    validated.fail.map(err => error("Timed out after " + yggConfig.maxEvalDuration + " in consumeEval", err)).validation.join
+    */
   }
 }
 
