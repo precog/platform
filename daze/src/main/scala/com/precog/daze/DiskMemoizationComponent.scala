@@ -41,7 +41,7 @@ trait DiskMemoizationConfig {
   def memoizationWorkDir: File
 }
 
-trait DiskMemoizationComponent extends YggConfigComponent with BufferingComponent { self =>
+trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironment { self =>
   type YggConfig <: DiskMemoizationConfig
 
   def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })

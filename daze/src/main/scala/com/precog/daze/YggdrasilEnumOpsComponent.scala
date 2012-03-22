@@ -45,9 +45,10 @@ trait YggEnumOpsConfig {
   def flatMapTimeout: Duration
 }
 
-trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsComponent {
+trait YggdrasilEnumOpsComponent extends YggConfigComponent { //with DatasetEnumOpsComponent {
   type YggConfig <: YggEnumOpsConfig
 
+  /*
   trait Ops extends DatasetEnumOps {
     def flatMap[E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
       DatasetEnum(d.fenum.map { e1 =>
@@ -278,6 +279,7 @@ trait YggdrasilEnumOpsComponent extends YggConfigComponent with DatasetEnumOpsCo
         }
       }
   }
+  */
 }
 
 // vim: set ts=4 sw=4 et:

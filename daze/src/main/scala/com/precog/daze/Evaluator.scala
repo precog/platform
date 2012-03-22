@@ -28,82 +28,91 @@ import java.lang.Math._
 
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
+import blueeyes.json.{JPathField, JPathIndex}
 
 import scalaz.{Identity => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.syntax.traverse._
 import scalaz.syntax.monad._
+import scalaz.std.list._
+import scalaz.std.partialFunction._
 import IterateeT._
 
 import com.precog.yggdrasil._
 import com.precog.util._
 import com.precog.common.{Path, VectorCase}
 
-trait EvaluationContext {
-  type Context
-
-  def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO]
+trait IdSource {
+  def nextId(): Long
 }
 
 trait EvaluatorConfig {
-  def chunkSerialization: FileSerialization[Vector[SEvent]]
+  def chunkSerialization: FileSerialization[SValue]
   def maxEvalDuration: akka.util.Duration
+  def idSource: IdSource
 }
 
-trait MemoizingEvaluationContext extends EvaluationContext with MemoizationComponent with YggConfigComponent {
-  type YggConfig <: EvaluatorConfig 
 
-  trait Context {
-    def memoizationContext: MemoContext
-    def expiration: Long
-  }
-
-  def withContext[X](f: Context => DatasetEnum[X, SEvent, IO]): DatasetEnum[X, SEvent, IO] = {
-    withMemoizationContext { memoContext => 
-      f(new Context { val memoizationContext = memoContext; val expiration = System.currentTimeMillis + yggConfig.maxEvalDuration.toMillis })
-      .perform(memoContext.cache.purge)
-    }
-  }
-}
-
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with GenOpcode with ImplLibrary with GenLibrary with Timelib { self =>
-  type X = QueryAPI#X
-
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoEnvironment 
+with ImplLibrary with Infixlib with YggConfigComponent { self =>
   import Function._
   
   import instructions._
   import dag._
 
+  type Dataset[E]
+  type YggConfig <: EvaluatorConfig 
+
+  trait Context {
+    def memoizationContext: MemoContext
+    def expiration: Long
+    def nextId(): Long
+  }
+
   implicit def asyncContext: akka.dispatch.ExecutionContext
+
+  implicit def extend[E <: AnyRef](d: Dataset[E]): DatasetExtensions[Dataset, E] = ops.extend(d)
+
+  def withContext(f: Context => Dataset[SValue]): Dataset[SValue] = {
+    withMemoizationContext { memoContext => 
+      val ctx = new Context { 
+        val memoizationContext = memoContext
+        val expiration = System.currentTimeMillis + yggConfig.maxEvalDuration.toMillis 
+        def nextId() = yggConfig.idSource.nextId()
+      }
+
+      f(ctx).perform(memoContext.cache.purge)
+    }
+  }
+
   lazy implicit val chunkSerialization = yggConfig.chunkSerialization
+
+  implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
-  def eval(userUID: String, graph: DepGraph): DatasetEnum[X, SEvent, IO] = {
-    def maybeRealize[X](result: Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]], ctx: Context): DatasetEnum[X, SEvent, IO] =
+  def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
+    def maybeRealize(result: Either[DatasetMask[Dataset], Dataset[SValue]], ctx: Context): Dataset[SValue] =
       (result.left map { _.realize(ctx.expiration) }).fold(identity, identity)
   
-    def loop(graph: DepGraph, roots: List[DatasetEnum[X, SEvent, IO]], ctx: Context): Either[DatasetMask[X], DatasetEnum[X, SEvent, IO]] = graph match {
+    def loop(graph: DepGraph, roots: List[Dataset[SValue]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
       case SplitRoot(_, depth) => Right(roots(depth))
       
       case Root(_, instr) =>
-        Right(ops.point(Vector((VectorCase.empty[Identity], graph.value.get))))    // TODO don't be stupid
+        Right(ops.point(graph.value.get))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, roots, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
-          case Some(_) => Right(ops.empty[X, SEvent, IO])
+          case Some(_) => Right(ops.empty[SValue])
           
           case None => {
-            implicit val order = identitiesOrder(parent.provenance.length)
-            
-            val result = ops.flatMap(maybeRealize(loop(parent, roots, ctx), ctx)) { 
-              case (_, SString(str)) => query.fullProjection(userUID, Path(str), ctx.expiration)
-              case _ => ops.empty[X, SEvent, IO]
-            }
-            
-            Right(ops.sort(result, None))
+            val loaded = maybeRealize(loop(parent, roots, ctx), ctx) collect { 
+              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
+            } 
+
+            Right(ops.flattenSorted(loaded, parent.provenance.length, IdGen.nextInt()))
           }
         }
       }
@@ -114,7 +123,7 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         val enum = maybeRealize(parentResTyped, ctx)
         
         Right(enum collect {
-          case (id, SBoolean(b)) => (id, SBoolean(!b))
+          case SBoolean(b) => SBoolean(!b)
         })
       }
       
@@ -124,18 +133,17 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         val enum = maybeRealize(parentResTyped, ctx)
         
         Right(enum collect {
-          case (id, SDecimal(d)) => (id, SDecimal(-d))
+          case SDecimal(d) => SDecimal(-d)
         })
       }
       
       case Operate(_, WrapArray, parent) => {
         val enum = maybeRealize(loop(parent, roots, ctx), ctx)
         
-        Right(enum map {
-          case (id, sv) => (id, SArray(Vector(sv)))
-        })
+        Right(enum map { sv => SArray(Vector(sv)) })
       }
 
+/*
       case Operate(_, BuiltInFunction1Op(Distinct), parent) => {  //TODO: this block should not require "uniq" to be used twice
         implicit val order = ValuesOrder
 
@@ -152,228 +160,180 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
 
         Right(thirdResult)
       }
+*/
       
       case Operate(_, BuiltInFunction1Op(f), parent) => {
+        implicit val pfArrow = partialFunctionInstance
         val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>
           f.operandType map mask.typed getOrElse mask
         }
-        val enum = maybeRealize(parentResTyped, ctx)
 
-        def opPerform(sev: SEvent): Option[SEvent] = {
-          val (id, sv) = sev
-          f.operation.lift(sv) map { sv => (id, sv) }
-        }
-
-        Right(enum collect unlift(opPerform))
+        Right(maybeRealize(parentResTyped, ctx) collect f.operation)
       }
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
         val enum = maybeRealize(loop(parent, roots, ctx), ctx)
         
-        val mapped = enum map {
-          case (_, sv) => sv
-        }
-        
         val reduced = red match {
-          case Count => {
-            mapped.reduce(Some(SDecimal(0))) {
-              case (Some(SDecimal(acc)), _) => Some(SDecimal(acc + 1))
-            }
-          }
+          case Count => ops.point(SDecimal(BigDecimal(enum.count)))
           
-          case GeometricMean => {
-            val pairs = mapped.reduce(None: Option[(BigDecimal, BigDecimal)]) {
-              case (None, SDecimal(v)) => Some((1, v))
-              case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc * v))
+          case Max => 
+            val max = enum.reduce(Option.empty[BigDecimal]) {
+              case (None, SDecimal(v)) => Some(v)
+              case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
+              case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
+              case (acc, _) => acc
+            }
+
+            max.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+          
+          case Min => 
+            val min = enum.reduce(Option.empty[BigDecimal]) {
+              case (None, SDecimal(v)) => Some(v)
+              case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
+              case (Some(v1), SDecimal(v2)) if v1 > v2 => Some(v2)
+              case (acc, _) => acc
+            }
+          
+            min.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+          
+          case Sum => 
+            val sum = enum.reduce(Option.empty[BigDecimal]) {
+              case (None, SDecimal(v)) => Some(v)
+              case (Some(sum), SDecimal(v)) => Some(sum + v)
+              case (acc, _) => acc
+            }
+
+            sum.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+
+          case Mean => 
+            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
+              case ((count, total), SDecimal(v)) => (count + 1, total + v)
+              case (total, _) => total
+            }
+            
+            if (count == BigDecimal(0)) ops.empty[SValue]
+            else ops.point(SDecimal(total / count))
+          
+          case GeometricMean => 
+            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
+              case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
               case (acc, _) => acc
             }
             
-            pairs map {
-              case (c, v) => SDecimal(Math.pow(v.toDouble, 1 / c.toDouble))
+            if (count == BigDecimal(0)) ops.empty[SValue]
+            else ops.point(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
+          
+          case SumSq => 
+            val sumsq = enum.reduce(Option.empty[BigDecimal]) {
+              case (None, SDecimal(v)) => Some(v * v)
+              case (Some(sumsq), SDecimal(v)) => Some(sumsq + (v * v))
+              case (acc, _) => acc
             }
-          }          
 
-          case Mean => {
-            val pairs = mapped.reduce(None: Option[(BigDecimal, BigDecimal)]) {
-              case (None, SDecimal(v)) => Some((1, v))
-              case (Some((count, acc)), SDecimal(v)) => Some((count + 1, acc + v))
+            sumsq.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+
+          case Variance => 
+            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
+              case (acc, _) => acc
+            }
+
+            if (count == BigDecimal(0)) ops.empty[SValue]
+            else ops.point(SDecimal((sumsq - (sum * (sum / count))) / count))
+
+          case StdDev => 
+            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
               case (acc, _) => acc
             }
             
-            pairs map {
-              case (c, v) => SDecimal(v / c)
-            }
-          }
-
-          case Max => {
-            mapped.reduce(None: Option[SValue]) {
-              case (None, SDecimal(v)) => Some(SDecimal(v))
-              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 >= v2 => Some(SDecimal(v1))
-              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 < v2 => Some(SDecimal(v2))
-              case (acc, _) => acc
-            }
-          }
-          
-          case Min => {
-            mapped.reduce(None: Option[SValue]) {
-              case (None, SDecimal(v)) => Some(SDecimal(v))
-              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 <= v2 => Some(SDecimal(v1))
-              case (Some(SDecimal(v1)), SDecimal(v2)) if v1 > v2 => Some(SDecimal(v2))
-              case (acc, _) => acc
-            }
-          }          
-          
-          case StdDev => {
-            val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
-              case (None, SDecimal(v)) => Some((1, v, v * v))
-              case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
-              case (acc, _) => acc
-            }
-            
-            stats map {
-              case (count, sum, sumsq) => SDecimal(sqrt(count * sumsq - sum * sum) / count)
-            }
-          }
-          
-          case Sum => {
-            mapped.reduce(None: Option[SValue]) {
-              case (None, sv @ SDecimal(_)) => Some(sv)
-              case (Some(SDecimal(acc)), SDecimal(v)) => Some(SDecimal(acc + v))
-              case (acc, _) => acc
-            }
-          }               
-
-          case SumSq => {
-            mapped.reduce(None: Option[SValue]) {
-              case (None, SDecimal(v)) => Some(SDecimal(v * v))
-              case (Some(SDecimal(sumsq)), SDecimal(v)) => Some(SDecimal(sumsq + (v * v)))
-              case (acc, _) => acc
-            }
-          }          
-
-          case Variance => {
-            val stats = mapped.reduce(None: Option[(BigDecimal, BigDecimal, BigDecimal)]) {
-              case (None, SDecimal(v)) => Some((1, v, v * v))
-              case (Some((count, sum, sumsq)), SDecimal(v)) => Some((count + 1, sum + v, sumsq + (v * v)))
-              case (acc, _) => acc
-            }
-
-            stats map {
-              case (count, sum, sumsq) => SDecimal((sumsq - (sum * (sum / count))) / count)
-            }
-          }
+            if (count == BigDecimal(0)) ops.empty[SValue]
+            else ops.point(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
-        Right(reduced map { sv => (VectorCase.empty[Identity], sv) })
+        Right(reduced)
       }
       
       case dag.Split(_, parent, child) => {
-        implicit val order = ValuesOrder
-        
         val splitEnum = maybeRealize(loop(parent, roots, ctx), ctx)
         
         lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
         lazy val volatileIds = volatileMemos map { _.memoId }
         
-        val result = ops.flatMap(ops.sort(splitEnum, None).uniq) {
-          case (_, sv) => {
-            val back = maybeRealize(loop(child, ops.point[X, SEvent, IO](Vector((VectorCase.empty[Identity], sv))) :: roots, ctx), ctx)
-            val actions = (volatileIds map ctx.memoizationContext.cache.expire).fold(IO {}) { _ >> _ }
-            back perform actions
+        val result: Dataset[SValue] = splitEnum.uniq flatMap { sv => 
+          maybeRealize(loop(child, ops.point(sv) :: roots, ctx), ctx) perform {
+            (volatileIds map ctx.memoizationContext.cache.expire).toList.sequence
           }
         }
         
-        val back: DatasetEnum[X, SEvent, IO] = ops.sort(result, None).uniq.zipWithIndex map {
-          case ((_, sv), id) => (VectorCase(id), sv)
-        }
-        
-        Right(back)
+        Right(result.uniq.identify(Some(ctx.nextId)))
       }
       
       case Join(_, instr @ (VUnion | VIntersect), left, right) => {
-        implicit val sortOfValueOrder = ValuesOrder
+        val leftEnum  = maybeRealize(loop(left, roots, ctx), ctx)
+        val rightEnum = maybeRealize(loop(right, roots, ctx), ctx)
         
-        val leftEnum = ops.sort(maybeRealize(loop(left, roots, ctx), ctx), None)
-        val rightEnum = ops.sort(maybeRealize(loop(right, roots, ctx), ctx), None)
-        
-        // TODO we're relying on the fact that we *don't* need to preserve sane identities!
-        val back = ops.cogroup(leftEnum, rightEnum) collect {
-          case Left3(sev)  if instr == VUnion => sev
-          case Middle3((sev1, _))             => sev1
-          case Right3(sev) if instr == VUnion => sev
-        }
-        
-        Right(back)
+        Right(
+          instr match {
+            case VUnion     => leftEnum.union(rightEnum, false)
+            case VIntersect => leftEnum.intersect(rightEnum, false)
+          }
+        )
       }
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
-        implicit val sortOfIdThenValueOrder = IdsThenValuesOrder
+        val leftEnum = maybeRealize(loop(left, roots, ctx), ctx)
+        val rightEnum = maybeRealize(loop(right, roots, ctx), ctx)
 
-        val leftEnum = ops.sort(maybeRealize(loop(left, roots, ctx), ctx), None)
-        val rightEnum = ops.sort(maybeRealize(loop(right, roots, ctx), ctx), None)
-
-        val back = ops.cogroup(leftEnum, rightEnum) collect {
-          case Left3(sev)  if instr == IUnion => sev
-          case Middle3((sev1, _))             => sev1 
-          case Right3(sev) if instr == IUnion => sev
-        }
-
-        Right(back)
+        Right(
+          instr match {
+            case VUnion     => leftEnum.union(rightEnum, true)
+            case VIntersect => leftEnum.intersect(rightEnum, true)
+          }
+        )
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
-          case sv2 @ SString(str) => {
-            val masked = loop(left, roots, ctx).left map { _ derefObject str }
-            
-            masked.right map { enum =>
-              enum collect {
-                unlift {
-                  case (ids, sv1) => binaryOp(DerefObject)(sv1, sv2) map { sv => (ids, sv) }
-                }
-              }
-            }
-          }
+          case SString(str) => 
+            loop(left, roots, ctx).fold(
+               mask => Left(mask derefObject str),
+               enum => Right(enum collect SValue.deref(JPathField(str)))
+            )
           
-          case _ => Right(ops.empty[X, SEvent, IO])
+          case _ => Right(ops.empty[SValue])
         }
       }
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value.get match {
-          case sv2 @ SDecimal(num) if num.isValidInt => {
-            val masked = loop(left, roots, ctx).left map { _ derefArray num.toInt }
-            
-            masked.right map { enum =>
-              enum collect {
-                unlift {
-                  case (ids, sv1) => binaryOp(DerefArray)(sv1, sv2) map { sv => (ids, sv) }
-                }
-              }
-            }
-          }
+          case SDecimal(num) if num.isValidInt => 
+            loop(left, roots, ctx).fold(
+              mask => Left(mask derefArray num.toInt),
+              enum => Right(enum collect SValue.deref(JPathIndex(num.toInt)))
+            )
           
-          case _ => Right(ops.empty[X, SEvent, IO])
+          case _ => Right(ops.empty[SValue])
         }
       }
       
       case Join(_, instr, left, right) => {
         lazy val length = sharedPrefixLength(left, right)
-        implicit lazy val order = identitiesOrder(length)
         
         val op = instr match {
-          case Map2Match(op) => op
-          case Map2Cross(op) => op
-          case Map2CrossLeft(op) => op
-          case Map2CrossRight(op) => op
+          case Map2Match(op) => binaryOp(op)
+          case Map2Cross(op) => binaryOp(op)
+          case Map2CrossLeft(op) => binaryOp(op)
+          case Map2CrossRight(op) => binaryOp(op)
         }
         
         val leftRes = loop(left, roots, ctx)
         val rightRes = loop(right, roots, ctx)
         
-        val (leftTpe, rightTpe) = binOpType(op)
+        val (leftTpe, rightTpe) = op.operandType
         
         val leftResTyped = leftRes.left map { mask =>
           leftTpe map mask.typed getOrElse mask
@@ -386,32 +346,17 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         val leftEnum = maybeRealize(leftResTyped, ctx)
         val rightEnum = maybeRealize(rightResTyped, ctx)
         
-        val (pairs, distinct) = instr match {
-          case Map2Match(op) => (leftEnum join rightEnum, true)
-          case Map2Cross(op) => (leftEnum crossLeft rightEnum, false)
-          case Map2CrossLeft(op)  => (leftEnum crossLeft  rightEnum, false)
-          case Map2CrossRight(op) => (leftEnum crossRight rightEnum, false)
-        }
-        
-        val back = pairs collect {
-          unlift {
-            case ((ids1, sv1), (ids2, sv2)) => {
-              val ids = if (distinct)
-                (ids1 ++ (ids2 drop length))
-              else
-                ids1 ++ ids2
-              
-              binaryOp(op)(sv1, sv2) map { sv => (ids, sv) }
-            }
+        Right(
+          instr match {
+            case Map2Match(_) => leftEnum.join(rightEnum, length) { op.operation }
+            case Map2Cross(_) | Map2CrossLeft(_) => leftEnum.crossLeft(rightEnum) { op.operation }
+            case Map2CrossRight(_) => leftEnum.crossRight(rightEnum) { op.operation }
           }
-        }
-        
-        Right(back)
+        )
       }
       
       case Filter(_, cross, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
-        implicit lazy val order = identitiesOrder(length)
         
         val targetRes = loop(target, roots, ctx)
         val booleanRes = loop(boolean, roots, ctx)
@@ -421,32 +366,21 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         val targetEnum = maybeRealize(targetRes, ctx)
         val booleanEnum = maybeRealize(booleanResTyped, ctx)
         
-        val (pairs, distinct) = cross match {
-          case None => (targetEnum join booleanEnum, true)
-          case Some(CrossNeutral) => (targetEnum crossLeft booleanEnum, false)
-          case Some(CrossLeft)  => (targetEnum crossLeft  booleanEnum, false)
-          case Some(CrossRight) => (targetEnum crossRight booleanEnum, false)
-        }
-        
-        val back = pairs collect {
-          case ((ids1, sv), (ids2, SBoolean(true))) => {
-            val ids = if (distinct)
-              (ids1 ++ (ids2 drop length))
-            else
-              ids1 ++ ids2
-            
-            (ids, sv)
+        Right(
+          cross match {
+            case None => targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }
+            case Some(CrossNeutral) => targetEnum.crossLeft(booleanEnum) { case (sv, STrue) => sv }
+            case Some(CrossLeft)    => targetEnum.crossLeft(booleanEnum) { case (sv, STrue) => sv }
+            case Some(CrossRight)   => targetEnum.crossRight(booleanEnum) { case (sv, STrue) => sv }
           }
-        }
-        
-        Right(back)
+        )
       }
       
       case s @ Sort(parent, indexes) => 
-        loop(parent, roots, ctx).right map { enum => sortByIdentities(enum, indexes, s.memoId, ctx.memoizationContext) }
+        loop(parent, roots, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
       
       case m @ Memoize(parent, _) =>
-        loop(parent, roots, ctx).right map { enum => ops.memoize(enum, m.memoId, ctx.memoizationContext) }
+        loop(parent, roots, ctx).right map { _.memoize(m.memoId) }
     }
     
     withContext { ctx =>
@@ -454,43 +388,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     }
   }
 
-  protected def sortByIdentities(enum: DatasetEnum[X, SEvent, IO], indexes: Vector[Int], memoId: Int, ctx: MemoizationContext): DatasetEnum[X, SEvent, IO] = {
-    implicit val order: Order[SEvent] = new Order[SEvent] {
-      def order(e1: SEvent, e2: SEvent): Ordering = {
-        val (ids1, _) = e1
-        val (ids2, _) = e2
-        
-        val left = indexes map ids1
-        val right = indexes map ids2
-        
-        (left zip right).foldLeft[Ordering](Ordering.EQ) {
-          case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
-          case (acc, _) => acc
-        }
-      }
-    }
-    
-    ops.sort(enum, Some((memoId, ctx))) map {
-      case (ids, sv) => {
-        val (first, second) = ids.zipWithIndex partition {
-          case (_, i) => indexes contains i
-        }
-    
-        val prefix = first sortWith {
-          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
-        }
-        
-        val (back, _) = (prefix ++ second).unzip
-        (VectorCase.fromSeq(back), sv)
-      }
-    }
-  }
-
-  private def unlift[A, B](f: A => Option[B]): PartialFunction[A, B] = new PartialFunction[A, B] {
-    def apply(a: A) = f(a).get
-    def isDefinedAt(a: A) = f(a).isDefined
-  }
-  
   /**
    * Newton's approximation to some number of iterations (by default: 50).
    * Ported from a Java example found here: http://www.java2s.com/Code/Java/Language-Basics/DemonstrationofhighprecisionarithmeticwiththeBigDoubleclass.htm
@@ -514,279 +411,38 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
     approx take k last
   }
   
-  private def binOpType(op: BinaryOperation): (Option[SType], Option[SType]) = op match {
-    case Add | Sub | Mul | Div | Lt | LtEq | Gt | GtEq =>
-      (Some(SDecimal), Some(SDecimal))
-    
-    case Eq | NotEq => (None, None)
-    
-    case Or | And => (Some(SBoolean), Some(SBoolean))
-    
-    case WrapObject => (Some(SString), None)
-    
-    case JoinObject => (Some(SObject), Some(SObject))
-    
-    case JoinArray => (Some(SArray), Some(SArray))
-    
-    case ArraySwap => (Some(SArray), Some(SDecimal))
-    
-    case DerefObject => (Some(SObject), Some(SString))
-    
-    case DerefArray => (Some(SObject), Some(SDecimal))
-
-    case BuiltInFunction2Op(f) => f.operandType
-  }
-  
-  private def unOpType(op: UnaryOperation): Option[SType] = op match { //where is the function used?
-    case instructions.New    => None
-    case Comp                => Some(SBoolean)
-    case Neg                 => Some(SDecimal)
-    case WrapArray           => None
-    case BuiltInFunction1Op(f) => f.operandType
-  }
-
-  private def binaryOp(op: BinaryOperation): (SValue, SValue) => Option[SValue] = {
-    import Function._
-    
-    def add(left: BigDecimal, right: BigDecimal): Option[BigDecimal] = Some(left + right)
-    def sub(left: BigDecimal, right: BigDecimal): Option[BigDecimal] = Some(left - right)
-    def mul(left: BigDecimal, right: BigDecimal): Option[BigDecimal] = Some(left * right)
-    
-    def div(left: BigDecimal, right: BigDecimal): Option[BigDecimal] = {
-      if (right == 0)
-        None
-      else
-        Some(left / right)
-    }
-    
-    def lt(left: BigDecimal, right: BigDecimal): Option[Boolean] = Some(left < right)
-    def lteq(left: BigDecimal, right: BigDecimal): Option[Boolean] = Some(left <= right)
-    def gt(left: BigDecimal, right: BigDecimal): Option[Boolean] = Some(left > right)
-    def gteq(left: BigDecimal, right: BigDecimal): Option[Boolean] = Some(left >= right)
-    
-    def eq(left: SValue, right: SValue): Option[Boolean] = Some(left == right)
-    def neq(left: SValue, right: SValue): Option[Boolean] = Some(left != right)
-    
-    def and(left: Boolean, right: Boolean): Option[Boolean] = Some(left && right)
-    def or(left: Boolean, right: Boolean): Option[Boolean] = Some(left || right)
-    
-    def joinObject(left: Map[String, SValue], right: Map[String, SValue]) = Some(left ++ right)
-    def joinArray(left: Vector[SValue], right: Vector[SValue]) = Some(left ++ right)
-    
-    def coerceNumerics(pair: (SValue, SValue)): Option[(BigDecimal, BigDecimal)] = pair match {
-      case (SDecimal(left), SDecimal(right)) => Some((left, right))
-      case _ => None
-    }
-    
-    def coerceBooleans(pair: (SValue, SValue)): Option[(Boolean, Boolean)] = pair match {
-      case (SBoolean(left), SBoolean(right)) => Some((left, right))
-      case _ => None
-    }
-    
-    def coerceObjects(pair: (SValue, SValue)): Option[(Map[String, SValue], Map[String, SValue])] = pair match {
-      case (SObject(left), SObject(right)) => Some((left, right))
-      case _ => None
-    }
-    
-    def coerceArrays(pair: (SValue, SValue)): Option[(Vector[SValue], Vector[SValue])] = pair match {
-      case (SArray(left), SArray(right)) => Some((left, right))
-      case _ => None
-    }
-    
+  private def binaryOp(op: BinaryOperation): BIF2 = {
     op match {
-      case Add => untupled((coerceNumerics _) andThen { _ flatMap (add _).tupled map SDecimal })
-      case Sub => untupled((coerceNumerics _) andThen { _ flatMap (sub _).tupled map SDecimal })
-      case Mul => untupled((coerceNumerics _) andThen { _ flatMap (mul _).tupled map SDecimal })
-      case Div => untupled((coerceNumerics _) andThen { _ flatMap (div _).tupled map SDecimal })
+      case Add => Infix.Add
+      case Sub => Infix.Sub
+      case Mul => Infix.Mul
+      case Div => Infix.Div
       
-      case Lt => untupled((coerceNumerics _) andThen { _ flatMap (lt _).tupled map SBoolean })
-      case LtEq => untupled((coerceNumerics _) andThen { _ flatMap (lteq _).tupled map SBoolean })
-      case Gt => untupled((coerceNumerics _) andThen { _ flatMap (gt _).tupled map SBoolean })
-      case GtEq => untupled((coerceNumerics _) andThen { _ flatMap (gteq _).tupled map SBoolean })
+      case Lt   => Infix.Lt
+      case LtEq => Infix.LtEq
+      case Gt   => Infix.Gt
+      case GtEq => Infix.GtEq
       
-      case Eq => untupled((eq _).tupled andThen { _ map SBoolean })
-      case NotEq => untupled((neq _).tupled andThen { _ map SBoolean })
+      case Eq    => Infix.Eq
+      case NotEq => Infix.NotEq
       
-      case And => untupled((coerceBooleans _) andThen { _ flatMap (and _).tupled map SBoolean })
-      case Or => untupled((coerceBooleans _) andThen { _ flatMap (or _).tupled map SBoolean })
+      case And => Infix.And
+      case Or  => Infix.Or
       
-      case WrapObject => {
-        case (SString(key), value) => Some(SObject(Map(key -> value)))
-        case _ => None
-      }
+      case WrapObject => Infix.WrapObject
       
-      case JoinObject => untupled((coerceObjects _) andThen { _ flatMap (joinObject _).tupled map SObject })
-      case JoinArray => untupled((coerceArrays _) andThen { _ flatMap (joinArray _).tupled map SArray })
+      case JoinObject => Infix.JoinObject
+      case JoinArray  => Infix.JoinArray
       
-      case ArraySwap => {
-        case (SArray(arr), SDecimal(index)) if index.isValidInt => {
-          val i = index.toInt
-          if (i <= 0 || i >= arr.length) {
-            None
-          } else {
-            val (left, right) = arr splitAt i
-            Some(SArray(left.init ++ Vector(right.head, left.last) ++ right.tail))
-          }
-        }
-        
-        case _ => None
-      }
+      case ArraySwap  => Infix.ArraySwap
       
-      case DerefObject => {
-        case (SObject(obj), SString(key)) => obj get key
-        case _ => None
-      }
-      
-      case DerefArray => {
-        case (SArray(arr), SDecimal(index)) if index.isValidInt =>
-          arr.lift(index.toInt)
-        
-        case _ => None
-      }
+      case DerefObject => Infix.DerefObject
+      case DerefArray  => Infix.DerefArray
 
-      case BuiltInFunction2Op(f) => Function.untupled(f.operation.lift)
+      case BuiltInFunction2Op(f) => f
     }
   }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
-
-  private def identitiesOrder(prefixLength: Int): Order[SEvent] = new Order[SEvent] {
-    // very hot code!
-    def order(e1: SEvent, e2: SEvent) = prefixIdentityOrder(e1._1, e2._1, prefixLength)
-  }
-  
-  /**
-   * Implements a sort on event values that is ''stable'', but not coherant.
-   * In other words, this is sufficient for union, intersect, match, etc, but is
-   * not actually going to give you sane answers if you 
-   */
-  
-  private object IdsThenValuesOrder extends Order[SEvent] {
-    def order(e1: SEvent, e2: SEvent) = {
-      orderIdsThenValues(e1, e2) 
-    }
-
-    private def orderIdsThenValues(e1: SEvent, e2: SEvent): Ordering = {
-      val (id1, sv1) = e1
-      val (id2, sv2) = e2
-
-      if (identityOrder(id1, id2) eq Ordering.EQ) orderValues(sv1, sv2)
-      else identityOrder(id1, id2)
-    }
-  }
- 
-  private def orderValues(sv1: SValue, sv2: SValue): Ordering = {
-    val to1 = typeOrdinal(sv1)
-    val to2 = typeOrdinal(sv2)
-    
-    if (to1 == to2) {
-      (sv1, sv2) match {
-        case (SBoolean(b1), SBoolean(b2)) => Ordering.fromInt(boolOrdinal(b1) - boolOrdinal(b2))
-        
-        case (SLong(l1), SLong(l2)) => {
-          if (l1 < l2)
-            Ordering.LT
-          else if (l1 == l2)
-            Ordering.EQ
-          else
-            Ordering.GT
-        }
-        
-        case (SDouble(d1), SDouble(d2)) => {
-          if (d1 < d2)
-            Ordering.LT
-          else if (d1 == d2)
-            Ordering.EQ
-          else
-            Ordering.GT
-        }
-        
-        case (SDecimal(d1), SDecimal(d2)) => {
-          if (d1 < d2)
-            Ordering.LT
-          else if (d1 == d2)
-            Ordering.EQ
-          else
-            Ordering.GT
-        }
-        
-        case (SString(str1), SString(str2)) => {
-          if (str1 < str2)
-            Ordering.LT
-          else if (str1 == str2)
-            Ordering.EQ
-          else
-            Ordering.GT
-        }
-        
-        case (SArray(arr1), SArray(arr2)) => {
-          if (arr1.length < arr2.length) {
-            Ordering.LT
-          } else if (arr1.length == arr2.length) {
-            val orderings = arr1.view zip arr2.view map {
-              case (sv1, sv2) => orderValues(sv1, sv2)
-            }
-            
-            (orderings dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-          } else {
-            Ordering.GT
-          }
-        }
-        
-        case (SObject(obj1), SObject(obj2)) => {
-          if (obj1.size < obj2.size) {
-            Ordering.LT
-          } else if (obj1.size == obj2.size) {
-            val pairs1 = obj1.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
-            val pairs2 = obj2.toSeq sortWith { case ((k1, _), (k2, _)) => k1 < k2 }
-            
-            val comparisons = pairs1 zip pairs2 map {
-              case ((k1, _), (k2, _)) if k1 < k2 => Ordering.LT
-              case ((k1, _), (k2, _)) if k1 == k2 => Ordering.EQ
-              case ((k1, _), (k2, _)) if k1 > k2 => Ordering.GT
-            }
-            
-            val netKeys = (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-            
-            if (netKeys == Ordering.EQ) {
-              val comparisons = pairs1 zip pairs2 map {
-                case ((_, v1), (_, v2)) => orderValues(v1, v2)
-              }
-              
-              (comparisons dropWhile (Ordering.EQ ==) headOption) getOrElse Ordering.EQ
-            } else {
-              netKeys
-            }
-          } else {
-            Ordering.GT
-          }
-        }
-      }
-    } else {
-      Ordering.fromInt(to1 - to2)
-    }
-  }
-
-
-  private def typeOrdinal(sv: SValue) = sv match {
-    case SBoolean(_) => 0
-    case SLong(_) => 1
-    case SDouble(_) => 2
-    case SDecimal(_) => 3
-    case SString(_) => 4
-    case SArray(_) => 5
-    case SObject(_) => 6
-  }
-  
-  private def boolOrdinal(b: Boolean) = if (b) 1 else 0
-
-  private object ValuesOrder extends Order[SEvent] {
-    def order(e1: SEvent, e2: SEvent) = {
-      val (_, sv1) = e1
-      val (_, sv2) = e2
-      
-      orderValues(sv1, sv2)
-    }
-  }
 }

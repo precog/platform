@@ -20,15 +20,17 @@
 package com.precog
 package daze
 
-trait OperationsAPI extends StorageEngineQueryComponent with DatasetEnumOpsComponent
+trait OperationsAPI extends StorageEngineQueryComponent with DatasetOpsComponent 
 
 trait StorageEngineQueryComponent {
-  type QueryAPI <: StorageEngineQueryAPI 
+  type Dataset[E]
+  type QueryAPI <: StorageEngineQueryAPI[Dataset]
   def query: QueryAPI
 }
 
-trait DatasetEnumOpsComponent {
-  type Ops <: DatasetEnumOps
+trait DatasetOpsComponent {
+  type Dataset[E]
+  type Ops <: DatasetOps[Dataset]
   def ops: Ops
 }
 

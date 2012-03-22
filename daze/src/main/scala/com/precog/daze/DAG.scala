@@ -22,7 +22,7 @@ package daze
 
 import bytecode._
 
-import com.precog.util.Identity
+import com.precog.util.IdGen
 import com.precog.yggdrasil._
 
 import scala.collection.mutable
@@ -401,7 +401,7 @@ trait DAG extends Instructions {
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       override lazy val value = parent.value
       
@@ -415,7 +415,7 @@ trait DAG extends Instructions {
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
       lazy val provenance = parent match {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
-        case _ => Vector(DynamicProvenance(Identity.nextInt()))
+        case _ => Vector(DynamicProvenance(IdGen.nextInt()))
       }
       
       val isSingleton = false
@@ -447,7 +447,7 @@ trait DAG extends Instructions {
     }
     
     case class Split(loc: Line, parent: DepGraph, child: DepGraph) extends DepGraph {
-      lazy val provenance = Vector(DynamicProvenance(Identity.nextInt()))
+      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       lazy val isSingleton = parent.isSingleton && child.isSingleton
       
@@ -461,7 +461,7 @@ trait DAG extends Instructions {
       lazy val provenance = instr match {
         case IUnion | IIntersect => {
           val size = math.max(left.provenance.length, right.provenance.length)
-          (0 until size).foldLeft(Vector.empty[dag.Provenance]) { case (acc, _) => acc :+ DynamicProvenance(Identity.nextInt()) } 
+          (0 until size).foldLeft(Vector.empty[dag.Provenance]) { case (acc, _) => acc :+ DynamicProvenance(IdGen.nextInt()) } 
         }
         case _: Map2CrossRight => right.provenance ++ left.provenance
         case _: Map2Cross | _: Map2CrossLeft => left.provenance ++ right.provenance
@@ -508,7 +508,7 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      lazy val memoId = Identity.nextInt()
+      lazy val memoId = IdGen.nextInt()
       
       def isVariable(level: Int) = parent.isVariable(level)
       
@@ -521,7 +521,7 @@ trait DAG extends Instructions {
       lazy val provenance = parent.provenance
       lazy val isSingleton = parent.isSingleton
       
-      lazy val memoId = Identity.nextInt()
+      lazy val memoId = IdGen.nextInt()
       
       def isVariable(level: Int) = parent.isVariable(level)
       
