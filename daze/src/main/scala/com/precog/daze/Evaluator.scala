@@ -13,12 +13,10 @@ import blueeyes.json.{JPathField, JPathIndex}
 
 import scalaz.{Identity => _, _}
 import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.syntax.traverse._
-import scalaz.syntax.monad._
+//import scalaz.syntax.monad._
 import scalaz.std.list._
 import scalaz.std.partialFunction._
-import IterateeT._
 
 import com.precog.yggdrasil._
 import com.precog.util._
@@ -239,12 +237,12 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
       
       case dag.Split(_, parent, child) => {
-        val splitEnum = maybeRealize(loop(parent, roots, ctx), ctx)
+        val splitEnum: Dataset[SValue] = maybeRealize(loop(parent, roots, ctx), ctx)
         
         lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
         lazy val volatileIds = volatileMemos map { _.memoId }
         
-        val result: Dataset[SValue] = splitEnum.uniq flatMap { sv => 
+        val result: Dataset[SValue] = ops.extend[SValue](splitEnum).uniq flatMap { sv => 
           maybeRealize(loop(child, ops.point(sv) :: roots, ctx), ctx) perform {
             (volatileIds map ctx.memoizationContext.cache.expire).toList.sequence
           }

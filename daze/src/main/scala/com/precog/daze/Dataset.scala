@@ -25,7 +25,7 @@ trait DatasetExtensions[Dataset[_], A] {
   def value: Dataset[A]
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
-  def join[B, C](d2: Dataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C])(implicit order: (A, B) => Ordering): Dataset[C]
+  def join[B, C](d2: Dataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): Dataset[C]
 
   def crossLeft[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
@@ -38,7 +38,7 @@ trait DatasetExtensions[Dataset[_], A] {
   // value intersection discards identities
   def intersect(d2: Dataset[A], idIntersect: Boolean): Dataset[A]
 
-  def merge(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
+  //def merge(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
 
   def map[B](f: A => B): Dataset[B] 
 

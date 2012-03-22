@@ -163,7 +163,7 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
     }
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
-  def join[B, C](d2: Iterable[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C])(implicit order: (A, B) => Ordering): Iterable[C] = sys.error("todo")
+  def join[B, C](d2: Iterable[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): Iterable[C] = sys.error("todo")
 
 
   def crossLeft[B, C](d2: Iterable[B])(f: PartialFunction[(A, B), C]): Iterable[C] = 
@@ -223,12 +223,11 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
 
   def collect[B](pf: PartialFunction[A, B]): Iterable[B] = sys.error("todo")
 
-  def flattenSort[B](idPrefixLength: Int, memoId: Int)(implicit ev: A =:= Iterable[B]): Iterable[B] = sys.error("todo")
-
   def reduce[B](base: B)(f: (B, A) => B): B = sys.error("todo")
 
   def count: BigInt = sys.error("todo")
 
+  // uniq by value, discard identities - assume input not sorted
   def uniq: Iterable[A] = sys.error("todo")
 
   // identify(None) strips all identities
