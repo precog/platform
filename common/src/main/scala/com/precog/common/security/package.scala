@@ -211,6 +211,6 @@ package object security {
     }
   }
 
-  object Token extends TokenSerialization
+  object Token extends TokenSerialization with ((UID, Option[UID], Permissions, Set[UID], Boolean) => Token)
 
 }

@@ -1775,6 +1775,25 @@ class EvaluatorSpecs extends Specification
         }
       }
     }
+
+    "set-reduce homogenous sets" >> {
+      "distinct" >> {
+        val line = Line(0, "")
+        
+        val input = dag.SetReduce(line, Distinct,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
+      }
+    }
     
     "reduce homogeneous sets" >> {
       "count" >> {

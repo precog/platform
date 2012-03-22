@@ -158,6 +158,14 @@ class PlatformSpecs extends Specification
       }
     }    
 
+    "perform distinct" in {
+      val input = """
+        | a := load(//campaigns)
+        |   distinct(a.gender)""".stripMargin
+
+      eval(input) mustEqual Set(SString("female"), SString("male"))   
+    }
+
     "use where on a unioned set" in {
       val input = """
         | a := load(//campaigns) union load(//clicks)

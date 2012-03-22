@@ -52,6 +52,11 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     "parse out reduce" in {
       val result = decorate(Vector(Line(0, ""), PushTrue, instructions.Reduce(Count)))
       result mustEqual Right(dag.Reduce(Line(0, ""), Count, Root(Line(0, ""), PushTrue)))
+    }    
+
+    "parse out set-reduce" in {
+      val result = decorate(Vector(Line(0, ""), PushTrue, instructions.SetReduce(Distinct)))
+      result mustEqual Right(dag.SetReduce(Line(0, ""), Distinct, Root(Line(0, ""), PushTrue)))
     }
     
     "parse a single-level split" in {
@@ -319,6 +324,11 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       
       "reduce" >> {     // similar to map1, only one underflow case!
         val instr = instructions.Reduce(Count)
+        decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
+      }      
+
+      "set-reduce" >> {     // similar to map1, only one underflow case!
+        val instr = instructions.SetReduce(Distinct)
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       

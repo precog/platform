@@ -25,6 +25,9 @@ trait CrossOrdering extends DAG {
         case Operate(loc, op, parent) =>
           Operate(loc, op, memoized(parent))
         
+        case dag.SetReduce(loc, red, parent) =>
+          dag.SetReduce(loc, red, memoized(parent))
+                
         case dag.Reduce(loc, red, parent) =>
           dag.Reduce(loc, red, memoized(parent))
         

@@ -198,15 +198,22 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             else
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
-          
+
+          case BuiltIn(BuiltIns.Distinct.name, arity, _) => {
+            if (exprs.length == arity)
+              (DynamicProvenance(currentId.incrementAndGet()), Set())
+            else
+              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+          }
+
           case BuiltIn(_, arity, true) => {
             if (exprs.length == arity)
               (ValueProvenance, Set())     
             else
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
-
           case BuiltIn(_, arity, false) => checkMappedFunction(arity)
+
           case StdlibBuiltIn1(_) => checkMappedFunction(1)
           case StdlibBuiltIn2(_) => checkMappedFunction(2)
           
@@ -314,7 +321,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }      
       case Union(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = combineProvenance(relations)(left.provenance, right.provenance)
+        val result = unifyUnionProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
@@ -325,7 +332,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       }      
       case Intersect(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = combineProvenance(relations)(left.provenance, right.provenance)
+        val result = unifyUnionProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
        
@@ -708,7 +715,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case _ => None
   }
 
-  private def combineProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+  private def unifyUnionProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (ValueProvenance, p) => None
     case (p, ValueProvenance) => None
 

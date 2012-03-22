@@ -473,6 +473,13 @@ object EmitterSpecs extends Specification
           PushNum("1"),
           Reduce(Sum)))
     } 
+
+    "emit distinct set-reduction" in {
+      testEmit("distinct(1)")(
+        Vector(
+          PushNum("1"),
+          SetReduce(Distinct)))
+    } 
     
     "emit unary non-reduction" in {
       val f = lib1.head
