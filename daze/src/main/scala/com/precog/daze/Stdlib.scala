@@ -81,9 +81,7 @@ trait Timelib extends GenOpcode with ImplLibrary {
     TimeWithZone,
     TimeWithoutZone,
     HourMinute,
-    HourMinuteSecond,
-
-    Distinct
+    HourMinuteSecond
   )
 
   override def _lib2 = super._lib2 ++ Set(
@@ -109,13 +107,6 @@ trait Timelib extends GenOpcode with ImplLibrary {
     try { DateTimeZone.forID(str); true
     } catch {
       case e:IllegalArgumentException => { false }
-    }
-  }
-
-  object Distinct extends BIF1(Vector(), "distinct") {
-    val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(time) => SString(time)
     }
   }
 

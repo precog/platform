@@ -57,6 +57,13 @@ object ProvenanceSpecs extends Specification
         }
         tree.errors must beEmpty
       }
+      {
+        val tree = parse("a := 1 (distinct(1))")
+        tree.provenance must beLike {
+          case DynamicProvenance(_) => ok
+        }
+        tree.errors must beEmpty
+      }
     }
     
     "preserve provenance through let for unquantified function" in {
@@ -307,6 +314,15 @@ object ProvenanceSpecs extends Specification
         val tree = compile("sum(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
+      }
+    }
+
+    "identify built-in set-reduce dispatch" in {
+      {
+        val tree = compile("distinct(load(//foo))")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+       
       }
     }
 
@@ -1567,6 +1583,26 @@ object ProvenanceSpecs extends Specification
         
         {
           val tree = compile("sum(1, 2, 3)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 3))
+        }
+      }      
+
+      "distinct" >> {
+        {
+          val tree = compile("distinct")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 0))
+        }
+        
+        {
+          val tree = compile("distinct(1, 2)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        
+        {
+          val tree = compile("distinct(1, 2, 3)")
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 3))
         }

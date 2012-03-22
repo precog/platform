@@ -401,6 +401,11 @@ trait Emitter extends AST
 
               emitExpr(actuals.head) >> emitInstr(Reduce(Variance))
 
+            case BuiltIn(BuiltIns.Distinct.name, arity, _) =>
+              assert(arity == 1)
+
+              emitExpr(actuals.head) >> emitInstr(SetReduce(Distinct))
+
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
 

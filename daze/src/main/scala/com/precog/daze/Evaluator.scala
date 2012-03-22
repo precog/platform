@@ -107,6 +107,23 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
           }
         }
       }
+
+      case dag.SetReduce(_, Distinct, parent) => {  //TODO: this block should not require "uniq" to be used twice
+        implicit val order = ValuesOrder
+
+        val enum = maybeRealize(loop(parent, roots, ctx), ctx)
+        val result = ops.sort(enum, None).uniq map {
+          case (_, sv) => (VectorCase.empty[Identity], sv)
+        }
+        
+        val secondResult = result.uniq
+
+        val thirdResult = ops.sort(secondResult, None).zipWithIndex map {
+          case ((_, sv), id) => (VectorCase(id), sv)
+        }
+
+        Right(thirdResult)
+      }
       
       case Operate(_, Comp, parent) => {
         val parentRes = loop(parent, roots, ctx)
@@ -136,23 +153,6 @@ trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI 
         })
       }
 
-      case Operate(_, BuiltInFunction1Op(Distinct), parent) => {  //TODO: this block should not require "uniq" to be used twice
-        implicit val order = ValuesOrder
-
-        val enum = maybeRealize(loop(parent, roots, ctx), ctx)
-        val result = ops.sort(enum, None).uniq map {
-          case (_, sv) => (VectorCase.empty[Identity], sv)
-        }
-        
-        val secondResult = result.uniq
-
-        val thirdResult = ops.sort(secondResult, None).zipWithIndex map {
-          case ((_, sv), id) => (VectorCase(id), sv)
-        }
-
-        Right(thirdResult)
-      }
-      
       case Operate(_, BuiltInFunction1Op(f), parent) => {
         val parentRes = loop(parent, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>

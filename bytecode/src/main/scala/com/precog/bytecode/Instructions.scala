@@ -97,6 +97,8 @@ trait Instructions extends Library {
     
     case class Reduce(red: Reduction) extends Instruction
     
+    case class SetReduce(red: SetReduction) extends Instruction
+    
     case object VUnion extends Instruction with JoinInstr
     case object VIntersect extends Instruction with JoinInstr
     
@@ -127,7 +129,7 @@ trait Instructions extends Library {
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
     
-    
+    sealed trait SetReduction
     sealed trait UnaryOperation
     sealed trait BinaryOperation
     
@@ -156,7 +158,9 @@ trait Instructions extends Library {
 
     case class BuiltInFunction1Op(op: BIF1) extends UnaryOperation
     case class BuiltInFunction2Op(op: BIF2) extends BinaryOperation
-    
+
+    case object Distinct extends SetReduction
+
     case object Add extends BinaryOperation with PredicateInstr with PredicateOp
     case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
     case object Mul extends BinaryOperation with PredicateInstr with PredicateOp
