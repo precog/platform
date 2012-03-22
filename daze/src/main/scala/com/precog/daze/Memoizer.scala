@@ -48,6 +48,13 @@ trait Memoizer extends DAG {
               Memoize(Reduce(loc, red, memoize(parent)), refs)
             else
               Reduce(loc, red, memoize(parent))
+          }          
+
+          case SetReduce(loc, red, parent) => {
+            if (refs > MemoThreshold)
+              Memoize(SetReduce(loc, red, memoize(parent)), refs)
+            else
+              SetReduce(loc, red, memoize(parent))
           }
           
           case Split(loc, parent, child) => {
@@ -112,6 +119,9 @@ trait Memoizer extends DAG {
       increment(countRefs(parent), parent, 1)
     
     case Reduce(_, _, parent) =>
+      increment(countRefs(parent), parent, 1)
+        
+    case SetReduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
     
     case Split(_, parent, child) =>
