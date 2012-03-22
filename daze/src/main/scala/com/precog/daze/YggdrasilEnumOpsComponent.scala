@@ -48,6 +48,8 @@ trait YggEnumOpsConfig {
 trait YggdrasilEnumOpsComponent extends YggConfigComponent { //with DatasetEnumOpsComponent {
   type YggConfig <: YggEnumOpsConfig
 
+  type Dataset[E] = DatasetEnum[Throwable, E, IO]
+
   /*
   trait Ops extends DatasetEnumOps {
     def flatMap[E1, E2, F[_]](d: DatasetEnum[X, E1, F])(f: E1 => DatasetEnum[X, E2, F])(implicit M: Monad[F], asyncContext: ExecutionContext): DatasetEnum[X, E2, F] = 
