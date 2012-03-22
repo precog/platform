@@ -245,9 +245,6 @@ trait DAG extends Instructions {
               if ((origSet & resultSet).size == resultSet.size)
                 Right((Split(loc2, parent, child) :: (rootsTail map adjustSplits(-1)), splitsTail))
               else {
-                println(origSet)
-                println(resultSet)
-                println(origSet & resultSet)
                 Left(MergeWithUnmatchedTails)
               }
             }
