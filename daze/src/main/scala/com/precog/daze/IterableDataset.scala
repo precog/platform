@@ -250,7 +250,7 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
   def uniq: Iterable[A] = sys.error("todo")
 
   // identify(None) strips all identities
-  def identify(baseId: Option[Long]): Iterable[A] = sys.error("todo")
+  def identify(baseId: Option[() => Long]): Iterable[A] = sys.error("todo")
 
   def sortByIds(memoId: Int)(cm: Manifest[A], fs: FileSerialization[A]): Iterable[A] = sys.error("todo")
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): Iterable[A] = sys.error("todo")

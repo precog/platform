@@ -52,6 +52,9 @@ trait DAG extends Instructions {
         case Reduce(loc, red, parent) =>
           Reduce(loc, red, adjustSplits(delta)(parent))
         
+        case SetReduce(loc, red, parent) =>
+          SetReduce(loc, red, adjustSplits(delta)(parent))
+        
         case Split(loc, parent, child) =>
           Split(loc, adjustSplits(delta)(parent), adjustSplits(delta)(child))
         
@@ -227,6 +230,15 @@ trait DAG extends Instructions {
           }
           
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        }        
+
+        case instr @ instructions.SetReduce(red) => {
+          val eitherRoots = roots match {
+            case hd :: tl => Right(SetReduce(loc, red, hd) :: tl)
+            case _ => Left(StackUnderflow(instr))
+          }
+          
+          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
         }
         
         case instructions.Split => {
@@ -245,9 +257,6 @@ trait DAG extends Instructions {
               if ((origSet & resultSet).size == resultSet.size)
                 Right((Split(loc2, parent, child) :: (rootsTail map adjustSplits(-1)), splitsTail))
               else {
-                println(origSet)
-                println(resultSet)
-                println(origSet & resultSet)
                 Left(MergeWithUnmatchedTails)
               }
             }
@@ -404,6 +413,16 @@ trait DAG extends Instructions {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       override lazy val value = parent.value
+      
+      lazy val isSingleton = parent.isSingleton
+      
+      def isVariable(level: Int) = parent.isVariable(level)
+      
+      lazy val findMemos = parent.findMemos
+    }    
+
+    case class SetReduce(loc: Line, red: SetReduction, parent: DepGraph) extends DepGraph {
+      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       lazy val isSingleton = parent.isSingleton
       

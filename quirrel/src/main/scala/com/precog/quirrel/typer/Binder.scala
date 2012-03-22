@@ -40,7 +40,9 @@ trait Binder extends parser.AST with Library {
     val SumSq          = BuiltIn(Identifier(Vector(), "sumSq"), 1, true)
     val Variance       = BuiltIn(Identifier(Vector(), "variance"), 1, true)
 
-    val all = Set(Count, GeometricMean, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, SumSq, Variance)
+    val Distinct       = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
+
+    val all = Set(Count, GeometricMean, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, SumSq, Variance, Distinct)
   }
 
   override def bindNames(tree: Expr) = {

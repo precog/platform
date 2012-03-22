@@ -45,9 +45,16 @@ trait TokenManager {
   implicit def execContext: ExecutionContext
 
   def lookup(uid: UID): Future[Option[Token]]
+  def lookupDeleted(uid: UID): Future[Option[Token]]
   def listChildren(parent: Token): Future[List[Token]]
   def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]]
   def deleteToken(token: Token): Future[Token]
+
+  private def newUUID() = java.util.UUID.randomUUID().toString.toUpperCase
+
+  def issueNew(issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = {
+    issueNew(newUUID(), issuer, permissions, grants, expired)
+  }
 
   def listDescendants(parent: Token): Future[List[Token]] = {
     listChildren(parent) flatMap { c =>
@@ -72,14 +79,15 @@ trait TokenManager {
   }
 }
 
-class MongoTokenManager(database: Database, collection: String, timeout: Timeout)(implicit val execContext: ExecutionContext) extends TokenManager {
+class MongoTokenManager(private[security] val database: Database, collection: String, deleted: String, timeout: Timeout)(implicit val execContext: ExecutionContext) extends TokenManager {
 
   private implicit val impTimeout = timeout
 
-  def lookup(uid: UID): Future[Option[Token]] = sys.error("todo")
+  def lookup(uid: UID): Future[Option[Token]] = find(uid, collection) 
+  def lookupDeleted(uid: UID): Future[Option[Token]] = find(uid, deleted) 
 
-  private def find(uid: UID) = database {
-    selectOne().from(collection).where("uid" === uid)
+  private def find(uid: UID, col: String) = database {
+    selectOne().from(col).where("uid" === uid)
   }.map{
     _.map(_.deserialize[Token])
   }
@@ -95,12 +103,21 @@ class MongoTokenManager(database: Database, collection: String, timeout: Timeout
   }
 
   def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = {
-    val newToken = Token(uid, issuer, permissions, grants, expired)
-    val newTokenSerialized = newToken.serialize.asInstanceOf[JObject]
-    database(insert(newTokenSerialized).into(collection)) map (_ => newToken.success)
+    lookup(uid) flatMap { 
+      case Some(_) => Future("A token with this id already exists.".fail)
+      case None    =>
+        val newToken = Token(uid, issuer, permissions, grants, expired)
+        val newTokenSerialized = newToken.serialize.asInstanceOf[JObject]
+        database(insert(newTokenSerialized).into(collection)) map (_ => newToken.success)
+    }
   }
 
-  def deleteToken(token: Token): Future[Token] = sys.error("todo")
+  def deleteToken(token: Token): Future[Token] = for {
+    _ <- database(insert(token.serialize.asInstanceOf[JObject]).into(deleted))
+    _ <- database(remove.from(collection).where("uid" === token.uid))
+  } yield {
+    token
+  }
 }
 
 class CachingTokenManager(delegate: TokenManager, settings: CacheSettings[String, Token] = CachingTokenManager.defaultSettings)(implicit val execContext: ExecutionContext) extends TokenManager {
@@ -112,6 +129,8 @@ class CachingTokenManager(delegate: TokenManager, settings: CacheSettings[String
       case sm @Some(t) => Future(sm: Option[Token])
       case None        => delegate.lookup(uid).map{ ot => ot ->- { _.foreach{ t => tokenCache.put(uid, t) }}}
     }
+  
+  def lookupDeleted(uid: UID): Future[Option[Token]] = delegate.lookupDeleted(uid)
   
   def listChildren(parent: Token): Future[List[Token]] = 
     delegate.listChildren(parent) 
@@ -133,6 +152,7 @@ class StaticTokenManager(implicit val execContext: ExecutionContext) extends Tok
   import StaticTokenManager._
   
   def lookup(uid: UID) = Future(map.get(uid))
+  def lookupDeleted(uid: UID) = Future(None)
   
   def listChildren(parent: Token): Future[List[Token]] = Future {
     map.values.filter( _.issuer match {
@@ -180,7 +200,7 @@ object StaticTokenManager {
       MayAccessData(Subtree(Path(path)), OwnerAndDescendants(owner), DataQuery, mayShare)
     )
 
-  private val config = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
+  val config = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
     (rootUID, None, standardAccountPerms("/", rootUID, true), Set(), false),
     (publicUID, Some(rootUID), publishPathPerms("/public", rootUID, true), Set(), false),
     (testUID, Some(rootUID), standardAccountPerms("/unittest", testUID, true), Set(), false),
@@ -189,8 +209,6 @@ object StaticTokenManager {
     (cust2UID, Some(rootUID), standardAccountPerms("/user2", cust2UID, true), Set(publicUID), false)
   )
 
-  private var map = Map( config map {
-    case (uid, issuer, perms, grants, canShare) => (uid -> Token(uid, issuer, perms, grants, canShare))
-  }: _*)
+  private var map = Map(config map Token.tupled map { t => (t.uid, t) }: _*)
 
 }

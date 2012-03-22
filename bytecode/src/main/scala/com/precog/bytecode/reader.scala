@@ -71,6 +71,10 @@ trait BytecodeReader extends Reader {
       lazy val num = tableEntry flatMap readNum
       
       lazy val tableInt = tableEntry flatMap readInt
+
+      lazy val setReduction: Option[SetReduction] = (code & 0xFF) match {
+        case 0x00 => Some(Distinct)
+      }
       
       lazy val unOp: Option[UnaryOperation] = (code & 0xFF) match {
         case 0x40 => Some(Comp)
@@ -151,6 +155,7 @@ trait BytecodeReader extends Reader {
         case 0x06 => binOp map Map2CrossRight
         
         case 0x08 => reduction map Reduce
+        case 0x09 => setReduction map SetReduce
         
         case 0x10 => Some(VUnion)
         case 0x11 => Some(VIntersect)

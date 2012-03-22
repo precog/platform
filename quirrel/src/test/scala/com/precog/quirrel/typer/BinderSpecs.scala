@@ -236,6 +236,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
+      }      
+
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("distinct := 1 distinct")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
       }
     }
     
@@ -671,6 +678,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val d @ Dispatch(_, _, _) = parse("sum")
       d.binding mustEqual BuiltIn(Identifier(Vector(), "sum"), 1, true)
       d.isReduction mustEqual true
+      d.errors must beEmpty
+    }    
+
+    "bind distinct" in {
+      val d @ Dispatch(_, _, _) = parse("distinct")
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "distinct"), 1, false)
+      d.isReduction mustEqual false
       d.errors must beEmpty
     }
   }

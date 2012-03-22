@@ -72,7 +72,7 @@ trait DatasetExtensions[Dataset[_], A] {
   def uniq: Dataset[A]
 
   // identify(None) strips all identities
-  def identify(baseId: Option[Long]): Dataset[A]
+  def identify(baseId: Option[() => Long]): Dataset[A]
 
   def sortByIds(memoId: Int)(cm: Manifest[A], fs: FileSerialization[A]): Dataset[A]
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): Dataset[A]
