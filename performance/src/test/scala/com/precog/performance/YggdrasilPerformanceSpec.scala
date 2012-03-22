@@ -65,6 +65,65 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
   }
 
   "yggdrasil" should {
+    "insert" in {
+      performBatch(10000, 7000) { i =>
+        val batchSize = 1000
+        insert(shard, Path("/test/large/"), 0, batchSize, i / batchSize)   
+      }
+    }
+    
+    "read large" in {
+      performBatch(10000, 4000) { i =>
+        val result = executor.execute("token", "count(load(//test/large))") 
+        result match {
+          case Success(jval) => 
+          case Failure(e) => new RuntimeException("Query result failure")
+        }
+      }
+    }
+    
+    "read small" in {
+      insert(shard, Path("/test/small1"), 1, 100, 1)
+      
+      performBatch(100, 5000) { i =>
+        var cnt = 0
+        while(cnt < i) {
+          val result = executor.execute("token", "count(load(//test/small1))") 
+          result match {
+            case Success(jval) =>
+            case Failure(e) => new RuntimeException("Query result failure")
+          }
+          cnt += 1
+        }
+      }
+    }
+    
+    "multi-thread read" in {
+      insert(shard, Path("/test/small2"), 2, 100, 1)
+      val threadCount = 10 
+
+      performBatch(10, 2500) { i =>
+        val threads = (0.until(threadCount)) map { _ =>
+          new Thread {
+            override def run() {
+              var cnt = 0
+              while(cnt < i) {
+                val result = executor.execute("token", "count(load(//test/small2))") 
+                result match {
+                  case Success(jval) =>
+                  case Failure(e) => new RuntimeException("Query result failure")
+                }
+                cnt += 1
+              }
+            }
+          } 
+        }
+        
+        threads.foreach{ _.start }
+        threads.foreach{ _.join }
+      } 
+    }
+
     "handle null scenario" in {
       val nullReal = """
 [{
@@ -146,18 +205,11 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           }
         case _ => sys.error("Unexpected parse result")
       }
-      Await.result(shard.storeBatch(msgs), timeout)
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
 
       val result = executor.execute("token", "load(//test/null)")
-      result match {
-        case Success(JArray(vals)) =>
-          if(vals.size == 2) success else failure
-        case Success(res) =>
-          println(res)
-          failure
-        case Failure(err) =>
-          println(err)
-          failure
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
       }
     }
 
@@ -242,79 +294,12 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
           }
         case _ => sys.error("Unexpected parse result")
       }
-      Await.result(shard.storeBatch(msgs), timeout)
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
       
       val result = executor.execute("token", "load(//test/mixed)")
-      result match {
-        case Success(JArray(vals)) =>
-          if(vals.size == 2) success else failure
-        case Success(res) =>
-          println(res)
-          failure
-        case Failure(err) =>
-          println(err)
-          failure
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
       }
-    }
-
-    "insert" in {
-      performBatch(10000, 7000) { i =>
-        val batchSize = 1000
-        insert(shard, Path("/test/large/"), 0, batchSize, i / batchSize)   
-      }
-    }
-    
-    "read large" in {
-      performBatch(10000, 4000) { i =>
-        val result = executor.execute("token", "count(load(//test/large))") 
-        result match {
-          case Success(jval) => 
-          case Failure(e) => new RuntimeException("Query result failure")
-        }
-      }
-    }
-    
-    "read small" in {
-      insert(shard, Path("/test/small1"), 1, 100, 1)
-      
-      performBatch(100, 5000) { i =>
-        var cnt = 0
-        while(cnt < i) {
-          val result = executor.execute("token", "count(load(//test/small1))") 
-          result match {
-            case Success(jval) =>
-            case Failure(e) => new RuntimeException("Query result failure")
-          }
-          cnt += 1
-        }
-      }
-    }
-    
-    "multi-thread read" in {
-      insert(shard, Path("/test/small2"), 2, 100, 1)
-      val threadCount = 10 
-      
-
-      performBatch(10, 2500) { i =>
-        val threads = (0.until(threadCount)) map { _ =>
-          new Thread {
-            override def run() {
-              var cnt = 0
-              while(cnt < i) {
-                val result = executor.execute("token", "count(load(//test/small2))") 
-                result match {
-                  case Success(jval) =>
-                  case Failure(e) => new RuntimeException("Query result failure")
-                }
-                cnt += 1
-              }
-            }
-          } 
-        }
-        
-        threads.foreach{ _.start }
-        threads.foreach{ _.join }
-      } 
     }
   }
 
