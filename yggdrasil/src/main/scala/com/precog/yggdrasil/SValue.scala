@@ -439,7 +439,7 @@ object ColumnType extends ColumnTypeSerialization with BigIntHelpers {
     case JDouble(d) => CDouble(d)
     case JBool(b) => CBoolean(b)
     case JNull => CNull
-    case _ => sys.error("unpossible")
+    case _ => sys.error("unpossible: " + jval.getClass.getName)
   }
 
   @inline
