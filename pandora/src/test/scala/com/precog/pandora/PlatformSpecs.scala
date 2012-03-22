@@ -372,6 +372,14 @@ class PlatformSpecs extends Specification
           val result = eval(input)
           result must haveSize(5)
       }
+      
+      "should merge objects without timing out" >> {
+        val input = """
+           load(//richie1/test) 
+        """.stripMargin
+
+        eval(input) must not(throwA[Throwable])
+      }.pendingUntilFixed
 
       // times out...
       /* "handle chained characteristic functions" in {
