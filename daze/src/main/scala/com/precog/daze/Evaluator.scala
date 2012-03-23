@@ -85,8 +85,10 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
     }
   }
 
-  lazy implicit val chunkSerialization = yggConfig.chunkSerialization
-
+  implicit lazy val chunkSerialization = yggConfig.chunkSerialization
+  
+  implicit def eventSerialization: FileSerialization[(Identities, SValue)]      // TODO remove!
+  
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
@@ -117,7 +119,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
 
       case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, roots, ctx), ctx).uniq.identify(Some(() => ctx.nextId())))
+        Right(maybeRealize(loop(parent, roots, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt()))
       }
       
       case Operate(_, Comp, parent) => {
@@ -247,13 +249,13 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
         lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
         lazy val volatileIds = volatileMemos map { _.memoId }
         
-        val result: Dataset[SValue] = ops.extend[SValue](splitEnum).uniq flatMap { sv => 
+        val result: Dataset[SValue] = ops.extend[SValue](splitEnum).uniq(() => ctx.nextId(), IdGen.nextInt()) flatMap { sv => 
           maybeRealize(loop(child, ops.point(sv) :: roots, ctx), ctx) perform {
             (volatileIds map ctx.memoizationContext.cache.expire).toList.sequence
           }
         }
         
-        Right(result.uniq.identify(Some(ctx.nextId)))
+        Right(result.uniq(() => ctx.nextId(), IdGen.nextInt()))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
