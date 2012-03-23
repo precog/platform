@@ -70,7 +70,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
   
   implicit def eventSerialization: FileSerialization[(Identities, SValue)]      // TODO remove!
   
-  implicit def keyValueSerialization: FileSerialization[(SValue, Dataset[SValue])]    // TODO remove!
+  implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]    // TODO remove!
   
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   

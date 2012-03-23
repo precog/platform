@@ -14,13 +14,23 @@ import scalaz.iteratee._
 import scalaz.syntax.monad._
 import Iteratee._
 
+trait SortSerialization[E <: AnyRef] {
+  def iStream(file: File) = new DataInputStream(new GZIPInputStream(new FileInputStream(file)))
+  def oStream(file: File) = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(file)))
+
+  def write(out: DataOutputStream, values: Array[E]): Unit
+  def reader(in: DataInputStream): Iterator[E]
+}
+
 trait FileSerialization[E] {
   def iStream(file: File) = new DataInputStream(new GZIPInputStream(new FileInputStream(file)))
   def oStream(file: File) = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(file)))
 
   def writeElement(out: DataOutputStream, ev: E): IO[Unit]
   def readElement(in: DataInputStream): IO[Option[E]]
+}
 
+trait IterateeFileSerialization[E] extends FileSerialization[E]{
   def reader[X](file: File): EnumeratorP[X, E, IO] = new EnumeratorP[X, E, IO] {
     def apply[G[_]](implicit MO: G |>=| IO): EnumeratorT[X, E, G] = {
       import MO._
@@ -65,7 +75,7 @@ object FileSerialization {
 }
 
 import yggdrasil._
-object SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
+trait SimpleProjectionSerialization extends FileSerialization[Vector[SEvent]] {
   import blueeyes.json._
   import blueeyes.json.JsonDSL._
 

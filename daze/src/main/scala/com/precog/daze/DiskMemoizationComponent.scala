@@ -33,7 +33,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironm
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
 
-    private def memoizer[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
+    private def memoizer[X, E, F[_]](memoId: Int)(implicit fs: IterateeFileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
       import MO._
 
       def consume(i: Int, acc: Vector[E]): IterateeT[X, E, F, Either[Vector[E], File]] = {
@@ -50,7 +50,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironm
       consume(0, Vector.empty[E])
     }
 
-    def buffering[X, E, F[_]](memoId: Int)(implicit fs: FileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = ctx.synchronized {
+    def buffering[X, E, F[_]](memoId: Int)(implicit fs: IterateeFileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = ctx.synchronized {
       import MO._
       memoCache.get(memoId) match {
         case Some(Left(vector)) => 
@@ -71,7 +71,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironm
       }
     }
 
-    def memoizing[X, E](memoId: Int)(implicit fs: FileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
+    def memoizing[X, E](memoId: Int)(implicit fs: IterateeFileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
       memoCache.get(memoId) match {
         case Some(Left(vector)) => 
           Right(EnumeratorP.enumPStream[X, E, IO](vector.toStream))
