@@ -334,6 +334,11 @@ object SValue extends SValueInstances with BigIntHelpers {
     }
   }
 
+  //TODO: Optimize
+  def deref(selector: JPath): PartialFunction[SValue, SValue] = {
+    case sv if (sv \ selector).isDefined => (sv \ selector).get
+  }
+
   def asJSON(sv: SValue): String = sv.fold(
     obj = { obj =>
       val contents = obj mapValues asJSON map {
@@ -548,17 +553,40 @@ case object SStringArbitrary extends ColumnType {
 
 case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def format = FixedWidth(1)
-  def apply(v: Boolean) = new SValue {
-    def fold[A](
-      obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
-      str:    String => A, bool:   Boolean => A,
-      long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
-      nul:    => A
-    ) = bool(v)
-  }
+  def apply(v: Boolean) = if (v) STrue else SFalse
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
   override def toString(): String = "SBoolean"
 }
+
+sealed trait SBooleanValue extends SValue {
+  def &&(bool: SBooleanValue): SBooleanValue
+  def ||(bool: SBooleanValue): SBooleanValue
+}
+
+case object STrue extends SValue with SBooleanValue {
+  def fold[A](
+    obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
+    str:    String => A, bool:   Boolean => A,
+    long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
+    nul:    => A
+  ) = bool(true)
+
+  def &&(bool: SBooleanValue): SBooleanValue = bool
+  def ||(bool: SBooleanValue): SBooleanValue = this
+}
+
+case object SFalse extends SValue with SBooleanValue {
+  def fold[A](
+    obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
+    str:    String => A, bool:   Boolean => A,
+    long:   Long => A,   double: Double => A,  num:    BigDecimal => A,
+    nul:    => A
+  ) = bool(false)
+
+  def &&(bool: SBooleanValue): SBooleanValue = this
+  def ||(bool: SBooleanValue): SBooleanValue = bool
+}
+
 
 case object SInt extends ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
