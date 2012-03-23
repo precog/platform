@@ -28,7 +28,6 @@ package object yggdrasil {
   implicit def identityOrder(ids1: Identities, ids2: Identities): Ordering = 
     prefixIdentityOrder(ids1, ids2, ids1.length min ids2.length)
 
-  //TODO: This makes no sense as an implicit function
   def prefixIdentityOrder(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
     var result: Ordering = Ordering.EQ
     var i = 0
