@@ -222,10 +222,10 @@ trait DAG extends Instructions {
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
         }
         
-        case instructions.Split => {
+        case s @ instructions.Split(n, _) => {
           roots match {
             case hd :: tl => loop(loc, SplitRoot(loc, 0) :: (tl map adjustSplits(1)), OpenSplit(loc, roots) :: splits, stream.tail)
-            case _ => Left(StackUnderflow(instructions.Split))
+            case _ => Left(StackUnderflow(s))
           }
         }
         
