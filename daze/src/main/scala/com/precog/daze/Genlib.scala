@@ -13,15 +13,12 @@ import java.lang.String
 import bytecode.BuiltInFunc2
 
 import yggdrasil._
-trait GenLibrary extends Library {
-  lazy val mathlib1 = _mathlib1
-  lazy val mathlib2 = _mathlib2
-  def _mathlib1: Set[BIF1] = Set()
-  def _mathlib2: Set[BIF2] = Set()
-}
-trait Genlib extends GenOpcode with GenLibrary {
-  override def _mathlib1 = super._mathlib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
-  override def _mathlib2 = super._mathlib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)
+
+trait Genlib extends GenOpcode with ImplLibrary{
+  override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
+
+  override def _lib2 = super._lib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)
+
   object sinh extends BIF1(Vector("std", "math"), "sinh") {
     val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
