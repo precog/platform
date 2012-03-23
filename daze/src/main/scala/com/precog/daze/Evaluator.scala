@@ -110,7 +110,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
-            Right(ops.flattenSorted(loaded, parent.provenance.length, IdGen.nextInt()))
+            Right(ops.flattenAndIdentify(loaded, ctx.nextId(), IdGen.nextInt()))
           }
         }
       }
@@ -255,17 +255,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
         Right(result.uniq.identify(Some(ctx.nextId)))
       }
       
-      case Join(_, instr @ (VUnion | VIntersect), left, right) => {
-        val leftEnum  = maybeRealize(loop(left, roots, ctx), ctx)
-        val rightEnum = maybeRealize(loop(right, roots, ctx), ctx)
-        
-        Right(
-          instr match {
-            case VUnion     => leftEnum.union(rightEnum, false)
-            case VIntersect => leftEnum.intersect(rightEnum, false)
-          }
-        )
-      }
+      // VUnion and VIntersect removed, TODO: remove from bytecode
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
         val leftEnum = maybeRealize(loop(left, roots, ctx), ctx)
@@ -273,8 +263,8 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
 
         Right(
           instr match {
-            case VUnion     => leftEnum.union(rightEnum, true)
-            case VIntersect => leftEnum.intersect(rightEnum, true)
+            case IUnion     => leftEnum.union(rightEnum, Some(() => ctx.nextId()))
+            case IIntersect => leftEnum.intersect(rightEnum)
           }
         )
       }
