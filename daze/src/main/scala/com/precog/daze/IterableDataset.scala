@@ -402,10 +402,30 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
   def count: BigInt = value.iterable.size
 
   // uniq by value, discard identities - assume input not sorted
-  def uniq(nextId: => Long)(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
+  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = IterableDataset[A](new Iterable[(Identities,A)] {
+    def iterator: Iterator[(Identities,A)] = new Iterator[(Identities,A)]{
+      private[this] var _next: A = null
+
+      val sorted = sortByValue(memoId).iterable.iterator
+
+      // pre-advance
+      if (sorted.hasNext) {
+        _next = sorted.next._2
+      }
+
+      def hasNext = _next ne null
+      def next = {
+        val temp = (VectorCase(nextId()), _next)
+        if (sorted.hasNext) {
+          _next = sorted.next._2
+        }
+        temp
+      }
+    }
+  })
 
   // identify(None) strips all identities
-  def identify(baseId: Option[() => Long]): IterableDataset[A] = sys.error("todo")
+  def identify(baseId: Option[() => Identity]): IterableDataset[A] = sys.error("todo")
 
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
   /*
