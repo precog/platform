@@ -21,11 +21,11 @@ package com.precog
 package daze
 
 import yggdrasil.FileSerialization
-import scalaz._
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
-  implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, A]
+  implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
 
   def empty[A]: Dataset[A] 
 

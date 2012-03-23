@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import yggdrasil.FileSerialization
+import yggdrasil._
 import scala.annotation.tailrec
 import scalaz._
 import scalaz.Ordering._
@@ -36,17 +36,19 @@ case class IterableDataset[A](iterable: Iterable[(Identities, A)]) extends Itera
   def iterator: Iterator[A] = iterable.map(_._2).iterator
 }
 
-trait IterableDatasetOps extends DatasetOps[IterableDataset] {
-  implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, A] = new IterableDatasetExtensions[A](d)
+case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
 
-  def empty[A]: IterableDataset[A] = IterableDataset.empty[A]
+trait IterableDatasetOps extends DatasetOps[IterableDataset, IterableGrouping] {
+  implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = new IterableDatasetExtensions[A](d)
 
-  def point[A](value: A): IterableDataset[A] = IterableDataset(value)
+  def empty[A]: IterableDataset[A] = IterableDataset(Iterable.empty[(Identities, A)])
+
+  def point[A](value: A): IterableDataset[A] = IterableDataset(Iterable((Identities.Empty, value)))
 
   def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A]
 }
 
-class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends DatasetExtensions[IterableDataset, A] {
+class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   /*
   def cogroup[B, C](d2: IterableDataset[B])(f: CogroupF[A, B, C])(implicit order: (A, B) => Ordering) = IterableDataset[C](
     new Iterable[(Identities, C)] {
@@ -346,7 +348,7 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
         val left = value.iterable.iterator
         var right: Iterator[R] = null.asInstanceOf[Iterator[R]]
 
-        new Iterator[C] {
+        new Iterator[(Identities, C)] {
           private var leftElement: L = null.asInstanceOf[L]
           private var _next: (Identities, C) = precomputeNext()
 
@@ -370,7 +372,7 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
               }
             } else if (left.hasNext) {
               leftElement = left.next
-              right = d2.iterator
+              right = d2.iterable.iterator
               if (right.hasNext) precomputeNext() else null.asInstanceOf[(Identities, C)]
             } else {
               null.asInstanceOf[(Identities, C)]
@@ -385,17 +387,17 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
     new IterableDatasetExtensions(d2).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then sort -u by identities
-  def paddedMerge(d2: Dataset[A], nextId: => Long): Dataset[A]
+  def paddedMerge(d2: IterableDataset[A], nextId: => Long): IterableDataset[A]
 
   def union(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
   def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
-  def map[B](f: A => B): IterableDataset[B]  = value.iterable.map { case (i, v) => (i, f(v)) }
+  def map[B](f: A => B): IterableDataset[B]  = IterableDataset(value.iterable.map { case (i, v) => (i, f(v)) })
 
   def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = sys.error("todo")
 
-  def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.reduce(f)
+  def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.foldLeft(base)(f)
 
   def count: BigInt = value.iterable.size
 

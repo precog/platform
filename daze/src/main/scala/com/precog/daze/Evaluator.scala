@@ -60,6 +60,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
   import dag._
 
   type Dataset[E]
+  type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
   trait Context {
@@ -70,7 +71,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  implicit def extend[E <: AnyRef](d: Dataset[E]): DatasetExtensions[Dataset, E] = ops.extend(d)
+  implicit def extend[E <: AnyRef](d: Dataset[E]): DatasetExtensions[Dataset, Grouping, E] = ops.extend(d)
 
   def withContext(f: Context => Dataset[SValue]): Dataset[SValue] = {
     withMemoizationContext { memoContext => 
