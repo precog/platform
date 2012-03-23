@@ -75,8 +75,8 @@ trait Evaluator extends DAG
 
   implicit lazy val chunkSerialization = yggConfig.chunkSerialization
   
-  implicit def eventSerialization: FileSerialization[(Identities, SValue)]      // TODO remove!
-  
+  implicit def valueSerialization: SortSerialization[SValue]      // TODO remove!
+  implicit def eventSerialization: SortSerialization[(Identities, SValue)]      // TODO remove!
   implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]    // TODO remove!
   
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
@@ -192,7 +192,7 @@ trait Evaluator extends DAG
       }
 
       case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, assume, roots, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt()))
+        Right(maybeRealize(loop(parent, assume, roots, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext))
       }
       
       case Operate(_, Comp, parent) => {
