@@ -13,7 +13,8 @@ trait DatasetOps[Dataset[_], Grouping[_, _]] {
   def point[A](value: A): Dataset[A] 
 
   // used for load - concatenate inner datasets and assign new identities
-  def flattenAndIdentify[A](d: Dataset[Dataset[A]], nextId: => Long, memoId: Int): Dataset[A]
+  // ordering is irrelevant since the new identities will be in ascending order
+  def flattenAndIdentify[A](d: Dataset[Dataset[A]], nextId: => Long): Dataset[A]
 }
   
 // groups have no identities
@@ -45,8 +46,8 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   // concatenate identities
   def crossRight[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
-  // pad identities to the longest side, then sort -u by identities
-  def paddedMerge(d2: Dataset[A], nextId: => Long): Dataset[A]
+  // pad identities to the longest side, then sort -u by all identities
+  def paddedMerge(d2: Dataset[A], nextId: => Long, memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identities, A)]: Dataset[A]
 
   // merge sorted uniq by identities and values
   def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
@@ -71,17 +72,14 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
 
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): Dataset[A]
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identites, A)]): Dataset[A]
   
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
 
+  // for each value, calculate the key for that value
   def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, Dataset[A])]): Grouping[K, Dataset[A]]
 
   def perform(io: IO[_]): Dataset[A]
 }
-
-
-
-
 
 // vim: set ts=4 sw=4 et:
