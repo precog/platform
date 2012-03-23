@@ -49,7 +49,7 @@ trait ImplLibrary extends Library {
   def _lib2: Set[BIF2] = Set()
 }
 
-trait Stdlib extends Timelib
+trait Stdlib extends Timelib with Genlib with Stringlib
 
 trait Timelib extends GenOpcode with ImplLibrary {
   override def _lib1 = super._lib1 ++ Set(
