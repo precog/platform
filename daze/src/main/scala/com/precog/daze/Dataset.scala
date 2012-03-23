@@ -96,7 +96,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
 
   // for each value, calculate the key for that value
-  def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, Dataset[A])]): Grouping[K, Dataset[A]]
+  def group[K](memoId: Int)(keyFor: A => Dataset[K])(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, Dataset[A])]): Grouping[K, Dataset[A]]
 
   def perform(io: IO[_]): Dataset[A]
 }
