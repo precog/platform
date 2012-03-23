@@ -50,10 +50,15 @@ trait Instructions extends Library {
       case FilterCrossLeft(_, None) => (2, 1)
       case FilterCrossRight(_, None) => (2, 1)
       
-      case Split => (1, 1)
+      case Bucket => (2, 1)
+      case MergeBuckets(_) => (2, 1)
+      case ZipBuckets => (2, 1)
+      
+      case Split(n, k) => (n, k)
       case Merge => (1, 1)
       
       case Dup => (1, 2)
+      case Drop => (1, 0)
       case Swap(depth) => (depth + 1, depth + 1)
       
       case Line(_, _) => (0, 0)
@@ -71,12 +76,6 @@ trait Instructions extends Library {
     def predicateStackDelta: (Int, Int) = self match {
       case FilterMatch(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
       case FilterCross(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
-      case _ => (0, 0)
-    }
-
-    def vmStackDelta: (Int, Int) = self match {
-      case Split => (0, 1)
-      case Merge => (1, 0)
       case _ => (0, 0)
     }
   }
@@ -105,7 +104,11 @@ trait Instructions extends Library {
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr
     
-    case object Split extends Instruction
+    case object Bucket extends Instruction
+    case class MergeBuckets(and: Boolean) extends Instruction
+    case object ZipBuckets extends Instruction
+    
+    case class Split(n: Short, k: Short) extends Instruction
     case object Merge extends Instruction
     
     case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
@@ -114,6 +117,7 @@ trait Instructions extends Library {
     case class FilterCrossRight(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
     
     case object Dup extends Instruction
+    case object Drop extends Instruction
     case class Swap(depth: Int) extends Instruction with DataInstr
     
     case class Line(num: Int, text: String) extends Instruction with DataInstr

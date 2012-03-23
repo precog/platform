@@ -26,6 +26,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   import Function._
   import Utils._
   import ast._
+  import condition._
 
   private val currentId = new AtomicInteger(0)
   private val commonIds = new AtomicReference[Map[ExprWrapper, Int]](Map())
@@ -762,7 +763,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     dfs(Set())(from)
   }
   
-  private def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
+  // needed in the emitter
+  private[quirrel] def unifyProvenanceAssumingRelated(p1: Provenance, p2: Provenance) = (p1, p2) match {
     case (StaticProvenance(path1), StaticProvenance(path2)) if path1 == path2 => 
       StaticProvenance(path1)
     
