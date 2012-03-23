@@ -24,12 +24,6 @@ import yggdrasil.FileSerialization
 import scalaz._
 import scalaz.effect._
 
-abstract class CogroupF[A, B, C](final val join: Boolean) {
-  def left(a: A): C
-  def both(a: A, b: B): C
-  def right(b: B): C
-}
-
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
   implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, A]
 
@@ -70,11 +64,11 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   // concatenate identities
   def crossRight[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
-  // merge sorted uniq by identities and values
-  def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
-
   // pad identities to the longest side, then sort -u by identities
   def paddedMerge(d2: Dataset[A], nextId: => Long): Dataset[A]
+
+  // merge sorted uniq by identities and values
+  def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
 
   // inputs are sorted in identity order - merge by identity, sorting any runs of equal identities
   // using the value ordering, equal identity, equal value are the only events that persist
@@ -89,7 +83,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: () => Long)(implicit order: Order[A]): Dataset[A]
+  def uniq(nextId: => Long)(implicit order: Order[A]): Dataset[A]
 
   // identify(None) strips all identities
   def identify(nextId: Option[() => Long]): Dataset[A]
