@@ -9,7 +9,7 @@ trait Memoizer extends DAG {
   val MemoThreshold = 1
   
   // TODO scale priority by cost
-  def memoized(graph: DepGraph): DepGraph = {
+  def memoize(graph: DepGraph): DepGraph = {
     val reftable = countRefs(graph)
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
