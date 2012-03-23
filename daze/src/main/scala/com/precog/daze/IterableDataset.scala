@@ -222,21 +222,39 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
 
   def merge(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
-  def map[B](f: A => B): IterableDataset[B]  = value.iterable.map { case (i, v) => (i, f(v)) }
-
-  def flatMap[B](f: A => IterableDataset[B]): IterableDataset[B] = sys.error("todo")
+  def map[B](f: A => B): IterableDataset[B]  = IterableDataset(value.iterable.map { case (i, v) => (i, f(v)) })
 
   def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = sys.error("todo")
 
-  def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.reduce(f)
+  def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.foldLeft(base)(f)
 
   def count: BigInt = value.iterable.size
 
   // uniq by value, discard identities - assume input not sorted
-  def uniq: IterableDataset[A] = sys.error("todo")
+  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = IterableDataset[A](new Iterable[(Identities,A)] {
+    def iterator: Iterator[(Identities,A)] = new Iterator[(Identities,A)]{
+      private[this] var _next: A = null
+
+      val sorted = sortByValue(memoId).iterable.iterator
+
+      // pre-advance
+      if (sorted.hasNext) {
+        _next = sorted.next._2
+      }
+
+      def hasNext = _next ne null
+      def next = {
+        val temp = (VectorCase(nextId()), _next)
+        if (sorted.hasNext) {
+          _next = sorted.next._2
+        }
+        temp
+      }
+    }
+  })
 
   // identify(None) strips all identities
-  def identify(baseId: Option[() => Long]): IterableDataset[A] = sys.error("todo")
+  def identify(baseId: Option[() => Identity]): IterableDataset[A] = sys.error("todo")
 
   def sortByIds(memoId: Int)(cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
