@@ -17,21 +17,49 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package pandora 
+package com.precog.daze
 
-import daze._
+import org.specs2.mutable._
 
-import quirrel._
-import quirrel.emitter._
-import quirrel.parser._
-import quirrel.typer._
+import com.precog.yggdrasil._
 
-trait ParseEvalStack extends Compiler
-    with LineErrors
-    with ProvenanceChecker
-    with Emitter
-    with Evaluator
-    with Stdlib
-    with MemoryDatasetConsumer 
-    with OperationsAPI
+import scalaz._
+import scalaz.effect._
+import scalaz.iteratee._
+import scalaz.std.list._
+import Iteratee._
+
+import com.precog.common.VectorCase
+import com.precog.util.IdGen
+
+class StringlibSpec extends Specification
+  with Evaluator
+  with StubOperationsAPI 
+  with TestConfigComponent 
+  with DiskMemoizationComponent 
+  with Stringlib { self =>
+    
+
+  import Function._
+  
+  import dag._
+  import instructions._
+
+  object ops extends Ops 
+  
+  val testUID = "testUID"
+
+  def testEval = consumeEval(testUID, _: DepGraph) match {
+    case Success(results) => results
+    case Failure(error) => throw error
+  }
+
+  "all string functions" should {
+    "validate input" in todo
+    "return failing validations for bad input" in todo
+  }
+
+  "the appropriate string function" should {
+    "determine length" in todo
+  }
+}
