@@ -48,7 +48,8 @@ trait MemoizingEvaluationContext extends EvaluationContext with MemoizationCompo
   }
 }
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with GenOpcode with ImplLibrary with Timelib { self =>
+trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoizingEvaluationContext with ImplLibrary { self =>
+
   type X = QueryAPI#X
 
   import Function._

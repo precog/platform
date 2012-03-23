@@ -14,7 +14,8 @@ import bytecode.BuiltInFunc2
 
 import yggdrasil._
 
-trait Genlib extends GenOpcode with ImplLibrary{
+trait Genlib extends ImplLibrary with GenOpcode {
+
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
 
   override def _lib2 = super._lib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)

@@ -2,7 +2,7 @@ package com.precog.util
 
 import java.util.concurrent.atomic.AtomicInteger
 
-object Identity {
+object IdGen {
   private[this] val currentId = new AtomicInteger(0)
   
   @inline
