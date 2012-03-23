@@ -76,8 +76,9 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
 
-  // for each value, calculate the key for that value
-  def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, Dataset[A])]): Grouping[K, Dataset[A]]
+  // for each value, calculate the keys for that value - this should be as singleton dataset
+  // sort by key then by the identity ordering of the input dataset
+  def group[K](memoId: Int)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, A)]): Grouping[K, Dataset[A]]
 
   def perform(io: IO[_]): Dataset[A]
 }
