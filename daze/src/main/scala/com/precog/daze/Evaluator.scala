@@ -33,8 +33,15 @@ trait EvaluatorConfig {
 }
 
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoEnvironment 
-with ImplLibrary with Infixlib with YggConfigComponent { self =>
+trait Evaluator extends DAG
+    with CrossOrdering
+    with Memoizer
+    with OperationsAPI
+    with MemoEnvironment
+    with ImplLibrary
+    with Infixlib
+    with YggConfigComponent { self =>
+  
   import Function._
   
   import instructions._
