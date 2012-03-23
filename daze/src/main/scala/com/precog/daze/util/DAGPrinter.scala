@@ -9,7 +9,7 @@ trait DAGPrinter extends DAG {
   import dag._
   
   def showDAG(root: DepGraph): String = {
-    def loop(root: DepGraph, split: List[String]): String = root match {
+    /* def loop(root: DepGraph, split: List[String]): String = root match {
       case SplitRoot(_, depth) => split.lift(depth) match {
         case Some(str) => "{%s}".format(str)
         case None => "<error>"
@@ -62,10 +62,12 @@ trait DAGPrinter extends DAG {
       case dag.Split(_, parent, child) => loop(child, loop(parent, split) :: split)
     }
     
-    loop(root, Nil)
+    loop(root, Nil) */
+    
+    sys.error("todo")
   }
   
-  private def showReduction(red: Reduction) = red match {
+  /* private def showReduction(red: Reduction) = red match {
     case Count => "count"
     case GeometricMean => "geometricMean"
 
@@ -108,5 +110,5 @@ trait DAGPrinter extends DAG {
     case DerefArray => "deref_array"
     
     case WrapObject => "wrap_object"
-  }
+  } */
 }

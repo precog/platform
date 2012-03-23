@@ -11,7 +11,7 @@ import akka.dispatch.{Await, Future}
 import akka.util.duration._
 import blueeyes.json.{JPathField, JPathIndex}
 
-import scalaz.{Identity => _, _}
+import scalaz.{Identity => _, NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.syntax.traverse._
 //import scalaz.syntax.monad._
@@ -33,8 +33,15 @@ trait EvaluatorConfig {
 }
 
 
-trait Evaluator extends DAG with CrossOrdering with Memoizer with OperationsAPI with MemoEnvironment 
-with ImplLibrary with Infixlib with YggConfigComponent { self =>
+trait Evaluator extends DAG
+    with CrossOrdering
+    with Memoizer
+    with OperationsAPI
+    with MemoEnvironment
+    with ImplLibrary
+    with Infixlib
+    with YggConfigComponent { self =>
+  
   import Function._
   
   import instructions._
@@ -66,21 +73,108 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
     }
   }
 
-  lazy implicit val chunkSerialization = yggConfig.chunkSerialization
-
+  implicit lazy val chunkSerialization = yggConfig.chunkSerialization
+  
+  implicit def eventSerialization: FileSerialization[(Identities, SValue)]      // TODO remove!
+  
+  implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]    // TODO remove!
+  
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Dataset[SValue]], ctx: Context): Dataset[SValue] =
       (result.left map { _.realize(ctx.expiration) }).fold(identity, identity)
   
-    def loop(graph: DepGraph, roots: List[Dataset[SValue]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
-      case SplitRoot(_, depth) => Right(roots(depth))
+    def computeGrouping(assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
+      case ZipBucketSpec(left, right) => {
+        val leftGroup = computeGrouping(assume, roots, ctx)(left)
+        val rightGroup = computeGrouping(assume, roots, ctx)(right)
+        ops.zipGroups(leftGroup, rightGroup)
+      }
+      
+      case _: MergeBucketSpec | _: SingleBucketSpec =>
+        ops.mapGrouping(computeMergeGrouping(assume, roots, ctx)(spec)) { a => NEL(a) }
+    }
+    
+    def computeMergeGrouping(assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
+      case ZipBucketSpec(_, _) => sys.error("Cannot merge_buckets following a zip_buckets")
+      
+      case MergeBucketSpec(left, right, and) => {
+        val leftGroup = computeMergeGrouping(assume, roots, ctx)(left)
+        val rightGroup = computeMergeGrouping(assume, roots, ctx)(right)
+        ops.mergeGroups(leftGroup, rightGroup, !and)
+      }
+      
+      case SingleBucketSpec(target, solution) => {
+        val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
+        val source: Dataset[SValue] = maybeRealize(loop(common, assume, roots, ctx), ctx)
+        
+        source.group[SValue](IdGen.nextInt()) { sv: SValue =>
+          maybeRealize(loop(solution, assume + (common -> ops.point(sv)), roots, ctx), ctx)
+        }
+      }
+    }
+    
+    def findCommonality(seen: Set[DepGraph])(graphs: DepGraph*): Option[DepGraph] = {
+      val (seen2, next, back) = graphs.foldLeft((seen, Set[DepGraph](), None: Option[DepGraph])) {
+        case (pair @ (_, _, Some(_)), _) => pair
+        
+        case ((seen, _, _), graph) if seen(graph) => (seen, Set(), Some(graph))
+        
+        case ((oldSeen, next, None), graph) => {
+          val seen = oldSeen + graph
+          
+          graph match {
+            case SplitParam(_, _) | SplitGroup(_, _, _) | Root(_, _) | dag.Split(_, _, _) =>
+              (seen, next, None)
+              
+            case dag.New(_, parent) =>
+              (seen, next + parent, None)
+            
+            case dag.SetReduce(_, _, parent) =>
+              (seen, next + parent, None)
+            
+            case dag.LoadLocal(_, _, parent, _) =>
+              (seen, next + parent, None)
+            
+            case Operate(_, _, parent) =>
+              (seen, next + parent, None)
+            
+            case dag.Reduce(_, _, parent) =>
+              (seen, next + parent, None)
+            
+            case Join(_, _, left, right) =>
+              (seen, next + left + right, None)
+            
+            case Filter(_, _, _, target, boolean) =>
+              (seen, next + target + boolean, None)
+            
+            case Sort(parent, _) =>
+              (seen, next + parent, None)
+            
+            case Memoize(parent, _) =>
+              (seen, next + parent, None)
+          }
+        }
+      }
+      
+      if (back.isDefined)
+        back
+      else
+        findCommonality(seen2)(next.toSeq: _*)
+    }
+  
+    def loop(graph: DepGraph, assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
+      case g if assume contains g => Right(assume(g))
+      
+      case s @ SplitParam(_, index) => Right(roots(s.parent)(index))
+      
+      case s @ SplitGroup(_, index, _) => Right(roots(s.parent)(index))
       
       case Root(_, instr) =>
         Right(ops.point(graph.value.get))    // TODO don't be stupid
       
-      case dag.New(_, parent) => loop(parent, roots, ctx)
+      case dag.New(_, parent) => loop(parent, assume, roots, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
@@ -88,7 +182,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
           case Some(_) => Right(ops.empty[SValue])
           
           case None => {
-            val loaded = maybeRealize(loop(parent, roots, ctx), ctx) collect { 
+            val loaded = maybeRealize(loop(parent, assume, roots, ctx), ctx) collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
@@ -98,11 +192,11 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
 
       case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, roots, ctx), ctx).uniq.identify(Some(() => ctx.nextId())))
+        Right(maybeRealize(loop(parent, assume, roots, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt()))
       }
       
       case Operate(_, Comp, parent) => {
-        val parentRes = loop(parent, roots, ctx)
+        val parentRes = loop(parent, assume, roots, ctx)
         val parentResTyped = parentRes.left map { _ typed SBoolean }
         val enum = maybeRealize(parentResTyped, ctx)
         
@@ -112,7 +206,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
       
       case Operate(_, Neg, parent) => {
-        val parentRes = loop(parent, roots, ctx)
+        val parentRes = loop(parent, assume, roots, ctx)
         val parentResTyped = parentRes.left map { _ typed SDecimal }
         val enum = maybeRealize(parentResTyped, ctx)
         
@@ -122,14 +216,14 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
       
       case Operate(_, WrapArray, parent) => {
-        val enum = maybeRealize(loop(parent, roots, ctx), ctx)
+        val enum = maybeRealize(loop(parent, assume, roots, ctx), ctx)
         
         Right(enum map { sv => SArray(Vector(sv)) })
       }
 
       case Operate(_, BuiltInFunction1Op(f), parent) => {
         implicit val pfArrow = partialFunctionInstance
-        val parentRes = loop(parent, roots, ctx)
+        val parentRes = loop(parent, assume, roots, ctx)
         val parentResTyped = parentRes.left map { mask =>
           f.operandType map mask.typed getOrElse mask
         }
@@ -139,7 +233,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
-        val enum = maybeRealize(loop(parent, roots, ctx), ctx)
+        val enum = maybeRealize(loop(parent, assume, roots, ctx), ctx)
         
         val reduced = red match {
           case Count => ops.point(SDecimal(BigDecimal(enum.count)))
@@ -222,26 +316,30 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
         Right(reduced)
       }
       
-      case dag.Split(_, parent, child) => {
-        val splitEnum: Dataset[SValue] = maybeRealize(loop(parent, roots, ctx), ctx)
-        
-        lazy val volatileMemos = child.findMemos filter { _ isVariable 0 }
-        lazy val volatileIds = volatileMemos map { _.memoId }
-        
-        val result: Dataset[SValue] = ops.extend[SValue](splitEnum).uniq flatMap { sv => 
-          maybeRealize(loop(child, ops.point(sv) :: roots, ctx), ctx) perform {
-            (volatileIds map ctx.memoizationContext.cache.expire).toList.sequence
+      case s @ dag.Split(_, specs, child) => {
+        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]]): Dataset[SValue] = {
+          val current = groupings.head
+          val rest = groupings.tail
+          
+          ops.flattenGroup(current, () => ctx.nextId()) { (key, groups) =>
+            val params2 = (ops.point(key) +: Vector(groups.toList: _*)) ++ params
+            
+            if (rest.isEmpty)
+              maybeRealize(loop(child, assume, roots + (s -> params2), ctx), ctx)
+            else
+              flattenAllGroups(rest, params2)
           }
         }
         
-        Right(result.uniq.identify(Some(ctx.nextId)))
+        val groupings = specs map computeGrouping(assume, roots, ctx)
+        Right(flattenAllGroups(groupings, Vector()))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
-        val leftEnum = maybeRealize(loop(left, roots, ctx), ctx)
-        val rightEnum = maybeRealize(loop(right, roots, ctx), ctx)
+        val leftEnum = maybeRealize(loop(left, assume, roots, ctx), ctx)
+        val rightEnum = maybeRealize(loop(right, assume, roots, ctx), ctx)
 
         Right(
           instr match {
@@ -254,7 +352,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
           case SString(str) => 
-            loop(left, roots, ctx).fold(
+            loop(left, assume, roots, ctx).fold(
                mask => Left(mask derefObject str),
                enum => Right(enum collect SValue.deref(JPathField(str)))
             )
@@ -266,7 +364,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value.get match {
           case SDecimal(num) if num.isValidInt => 
-            loop(left, roots, ctx).fold(
+            loop(left, assume, roots, ctx).fold(
               mask => Left(mask derefArray num.toInt),
               enum => Right(enum collect SValue.deref(JPathIndex(num.toInt)))
             )
@@ -285,8 +383,8 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
           case Map2CrossRight(op) => binaryOp(op)
         }
         
-        val leftRes = loop(left, roots, ctx)
-        val rightRes = loop(right, roots, ctx)
+        val leftRes = loop(left, assume, roots, ctx)
+        val rightRes = loop(right, assume, roots, ctx)
         
         val (leftTpe, rightTpe) = op.operandType
         
@@ -313,8 +411,8 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       case Filter(_, cross, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         
-        val targetRes = loop(target, roots, ctx)
-        val booleanRes = loop(boolean, roots, ctx)
+        val targetRes = loop(target, assume, roots, ctx)
+        val booleanRes = loop(boolean, assume, roots, ctx)
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
@@ -332,14 +430,14 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
       }
       
       case s @ Sort(parent, indexes) => 
-        loop(parent, roots, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
+        loop(parent, assume, roots, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
       
       case m @ Memoize(parent, _) =>
-        loop(parent, roots, ctx).right map { _.memoize(m.memoId) }
+        loop(parent, assume, roots, ctx).right map { _.memoize(m.memoId) }
     }
     
     withContext { ctx =>
-      maybeRealize(loop(memoize(orderCrosses(graph)), Nil, ctx), ctx)
+      maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), ctx)
     }
   }
 
