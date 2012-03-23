@@ -111,7 +111,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
-            Right(ops.flattenAndIdentify(loaded, ctx.nextId(), IdGen.nextInt()))
+            Right(ops.flattenAndIdentify(loaded, () => ctx.nextId()))
           }
         }
       }
@@ -264,7 +264,7 @@ with ImplLibrary with Infixlib with YggConfigComponent { self =>
 
         Right(
           instr match {
-            case IUnion     => leftEnum.union(rightEnum, Some(() => ctx.nextId()))
+            case IUnion     => leftEnum.union(rightEnum)
             case IIntersect => leftEnum.intersect(rightEnum)
           }
         )

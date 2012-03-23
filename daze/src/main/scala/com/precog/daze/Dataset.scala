@@ -20,8 +20,8 @@
 package com.precog
 package daze
 
-import yggdrasil.FileSerialization
-import scalaz.{NonEmptyList => NEL, _}
+import yggdrasil._
+import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
@@ -33,7 +33,7 @@ trait DatasetOps[Dataset[_], Grouping[_, _]] {
 
   // used for load - concatenate inner datasets and assign new identities
   // ordering is irrelevant since the new identities will be in ascending order
-  def flattenAndIdentify[A](d: Dataset[Dataset[A]], nextId: => Long): Dataset[A]
+  def flattenAndIdentify[A](d: Dataset[Dataset[A]], nextId: () => Identity): Dataset[A]
 }
   
 // groups have no identities
@@ -48,7 +48,7 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
 
   // the resulting Dataset[B] needs to be merged such that it is value-unique and has new identities
-  def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: => Long)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
+  def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
 
   def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
@@ -66,7 +66,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def crossRight[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
   // pad identities to the longest side, then sort -u by all identities
-  def paddedMerge(d2: Dataset[A], nextId: => Long, memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identities, A)]: Dataset[A]
+  def paddedMerge(d2: Dataset[A], nextId: () => Identity, memoId: Int)(implicit fs: FileSerialization[(Identities, A)]): Dataset[A]
 
   // merge sorted uniq by identities and values
   def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
@@ -84,14 +84,14 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: => Long)(implicit order: Order[A]): Dataset[A]
+  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): Dataset[A]
 
   // identify(None) strips all identities
-  def identify(nextId: Option[() => Long]): Dataset[A]
+  def identify(nextId: Option[() => Identity]): Dataset[A]
 
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identites, A)]): Dataset[A]
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identities, A)]): Dataset[A]
   
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
 
