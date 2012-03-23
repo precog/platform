@@ -20,8 +20,9 @@
 package com.precog
 package daze
 
-import yggdrasil._
-import common.VectorCase
+import com.precog.yggdrasil._
+import com.precog.common.VectorCase
+import com.precog.util._
 
 import scala.annotation.tailrec
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
@@ -48,17 +49,23 @@ case class IterableDataset[A](idCount: Int, iterable: Iterable[(Identities, A)])
 
 case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
 
-trait IterableDatasetOps extends DatasetOps[IterableDataset, IterableGrouping] {
-  implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = new IterableDatasetExtensions[A](d)
+trait IterableDatasetOpsComponent extends YggConfigComponent {
+  type YggConfig <: SortConfig
 
-  def empty[A](idCount: Int): IterableDataset[A] = IterableDataset(idCount, Iterable.empty[(Identities, A)])
+  trait IterableDatasetOps extends DatasetOps[IterableDataset, IterableGrouping] {
+    implicit def extend[A <: AnyRef](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
+      new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig))
 
-  def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
+    def empty[A](idCount: Int): IterableDataset[A] = IterableDataset(idCount, Iterable.empty[(Identities, A)])
 
-  def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A]
+    def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
+
+    def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A]
+  }
 }
 
-class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
+class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator]) 
+extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   type IA = (Identities, A)
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
@@ -258,8 +265,8 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
     )
   }
 
-  def crossRight[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
-    new IterableDatasetExtensions(d2).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
+  def crossRight[B <: AnyRef, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
+    new IterableDatasetExtensions(d2, iteratorSorting).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then merge and sort -u by identities
   def paddedMerge(d2: IterableDataset[A], nextId: () => Identity, memoId: Int)(implicit fs: FileSerialization[IA]): IterableDataset[A] = {
@@ -283,15 +290,13 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
 
   def count: BigInt = value.iterable.size
 
-  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = {
-    def sortByValue(values: Iterator[A]): Iterator[A] = {
-      sys.error("todo")
-    }
+  def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): IterableDataset[A] = {
+    val filePrefix = "uniq"
 
     IterableDataset[A](1, 
       new Iterable[IA] {
         def iterator: Iterator[IA] = new Iterator[IA]{
-          val sorted = sortByValue(value.iterator)
+          val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId, memoCtx)
 
           def hasNext = sorted.hasNext
           def next = (VectorCase(nextId()), sorted.next)
