@@ -32,8 +32,14 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-case class IterableDataset[A](iterable: Iterable[(Identities, A)]) extends Iterable[A] {
+case class IterableDataset[A](idCount: Int, iterable: Iterable[(Identities, A)]) extends Iterable[A] {
   def iterator: Iterator[A] = iterable.map(_._2).iterator
+
+  def padIdsTo(width: Int, nextId: => Long): IterableDataset[A] = {
+    @tailrec def padded(padTo: Int, ids: VectorCase[Long]) = if (padTo <= 0) ids else padded(padTo - 1, ids :+ nextId)
+
+    IterableDataset(width, iterable map { case (ids, a) => (padded(idCount - width, ids), a) }
+  }
 }
 
 case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
@@ -49,151 +55,9 @@ trait IterableDatasetOps extends DatasetOps[IterableDataset, IterableGrouping] {
 }
 
 class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
-  /*
-  def cogroup[B, C](d2: IterableDataset[B])(f: CogroupF[A, B, C])(implicit order: (A, B) => Ordering) = IterableDataset[C](
-    new Iterable[(Identities, C)] {
-      def iterator = {
-        val left  = value.iterable.iterator
-        val right = d2.iterable.iterator
-        
-        new Iterator[(Identities, C)] {
-          private var lastLeft: A = null.asInstanceOf[A]
-          private var lastRight: B = null.asInstanceOf[B]
-          private var state: CogroupState[B] = Step
-          private var bufIdx: Int = -1
-          private var _next: C = precomputeNext()
-
-          def hasNext: Boolean = _next != null
-          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
-
-          @tailrec def bufferRight(leftElement: A, acc: Vector[B]): (B, Vector[B]) = {
-            if (right.hasNext) {
-              val rightElement = right.next
-              order(leftElement, rightElement) match {
-                case EQ => bufferRight(leftElement, acc :+ rightElement)
-                case LT => (rightElement, acc)
-                case GT => sys.error("inputs on the right-hand side not sorted")
-              }
-            } else (null.asInstanceOf[B], acc)
-          }
-          
-          @tailrec private def precomputeNext(): C = {
-            state match {
-              case Step =>
-                val leftElement: A  = if (lastLeft  != null) lastLeft  else if (left.hasNext)  left.next  else null.asInstanceOf[A]
-                val rightElement: B = if (lastRight != null) lastRight else if (right.hasNext) right.next else null.asInstanceOf[B]
-
-                if (leftElement == null && rightElement == null) {
-                  null.asInstanceOf[C]
-                } else if (rightElement == null) {
-                  lastLeft = null.asInstanceOf[A]
-                  if (f.join) precomputeNext() else f.left(leftElement)
-                } else if (leftElement == null) {
-                  lastRight = null.asInstanceOf[B]
-                  if (f.join) precomputeNext() else f.right(rightElement)
-                } else {
-                  order(leftElement, rightElement) match {
-                    case EQ => 
-                      lastLeft  = leftElement
-                      lastRight = rightElement
-                      state = LastEqual
-                      f.both(lastLeft, lastRight)
-
-                    case LT => 
-                      lastLeft  = null.asInstanceOf[A]
-                      lastRight = rightElement
-                      if (f.join) precomputeNext() else f.left(leftElement)
-
-                    case GT =>
-                      lastLeft  = leftElement
-                      lastRight = null.asInstanceOf[B]
-                      if (f.join) precomputeNext() else f.right(rightElement)
-                  }
-                } 
-              
-              case LastEqual =>
-                if (right.hasNext) {
-                  val rightElement = right.next
-                  order(lastLeft, rightElement) match {
-                    case EQ => 
-                      // we have a run of at least two on the right, so just buffer and then drop into 
-                      // the cartesian state
-                      val (nextRight, bufferedRight) = bufferRight(lastLeft, Vector(lastRight, rightElement))
-                      // store the first element on the right beyond the end of the run; this reference will
-                      // not be modified until in the Step state again
-                      lastRight = nextRight
-                      state = Cartesian(bufferedRight)
-                      bufIdx = 1 // bufIdx will be incremented before the buffer is read
-                      f.both(lastLeft, rightElement)
-
-                    case LT => 
-                      state = RunLeft(rightElement)
-                      precomputeNext()
-
-                    case GT =>
-                      sys.error("inputs on the right-hand side not sorted")
-                  }
-                } else {
-                  state = Step
-                  lastLeft = null.asInstanceOf[A]
-                  precomputeNext()
-                }
-
-              case RunLeft(nextRight) =>
-                // lastLeft is >= lastRight and < nextRight
-                if (left.hasNext) {
-                  val leftElement = left.next
-                  order(leftElement, lastRight) match {
-                    case EQ => f.both(leftElement, lastRight)
-                    case LT => sys.error("inputs on the left-hand side not sorted")
-                    case GT => 
-                      lastLeft  = leftElement
-                      lastRight = nextRight
-                      state = Step
-                      precomputeNext()
-                  }
-                } else {
-                  lastLeft = null.asInstanceOf[A]
-                  lastRight = nextRight
-                  state = Step
-                  precomputeNext()
-                }
-                
-              case Cartesian(bufferedRight) => 
-                bufIdx += 1
-                if (bufIdx < bufferedRight.length) {
-                  f.both(lastLeft, bufferedRight(bufIdx))
-                } else {
-                  if (left.hasNext) {
-                    lastLeft = left.next
-                    bufIdx = 0
-                    order(lastLeft, bufferedRight(bufIdx)) match {
-                      case EQ => 
-                        f.both(lastLeft, bufferedRight(bufIdx))
-
-                      case LT => 
-                        sys.error("inputs on the left-hand side not sorted")
-
-                      case GT => 
-                        state = Step
-                        precomputeNext()
-                    }
-                  } else {
-                    state = Step
-                    lastLeft  = null.asInstanceOf[A]
-                    precomputeNext()
-                  }
-                }
-            }
-          }
-        }
-      }
-    }
-  )
-  */
-
   // join must drop a prefix of identities from d2 up to the shared prefix length
   def join[B, C](d2: IterableDataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): IterableDataset[C] = IterableDataset[C](
+    idCount + d2.idCount - sharedPrefixLength,
     new Iterable[(Identities, C)] {
       type L = (Identities, A)
       type R = (Identities, B)
@@ -340,6 +204,7 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
   )
 
   def crossLeft[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = IterableDataset[C](
+    idCount + d2.idCount,
     new Iterable[(Identities, C)] {
       type L = (Identities, A)
       type R = (Identities, B)
@@ -386,14 +251,20 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
   def crossRight[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
     new IterableDatasetExtensions(d2).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
-  // pad identities to the longest side, then sort -u by identities
-  def paddedMerge(d2: IterableDataset[A], nextId: => Long): IterableDataset[A]
+  // pad identities to the longest side, then merge and sort -u by identities
+  def paddedMerge(d2: IterableDataset[A], nextId: => Long): IterableDataset[A] = {
+    val (left, right) = if (idCount > d2.idCount) (value, d2.padIdsTo(idCount, nextId))
+                        else if (idCount < d2.idCount) (value.padIdsTo(idCount, nextId), d2)
+                        else (value, d2)
+    
+    left merge right
+  }
 
   def union(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
   def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
-  def map[B](f: A => B): IterableDataset[B]  = IterableDataset(value.iterable.map { case (i, v) => (i, f(v)) })
+  def map[B](f: A => B): IterableDataset[B] = IterableDataset(value.iterable.map { case (i, v) => (i, f(v)) })
 
   def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = sys.error("todo")
 
@@ -469,4 +340,147 @@ class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends Datase
   def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
 
+  /*
+  def cogroup[B, C](d2: IterableDataset[B])(f: CogroupF[A, B, C])(implicit order: (A, B) => Ordering) = IterableDataset[C](
+    new Iterable[(Identities, C)] {
+      def iterator = {
+        val left  = value.iterable.iterator
+        val right = d2.iterable.iterator
+        
+        new Iterator[(Identities, C)] {
+          private var lastLeft: A = null.asInstanceOf[A]
+          private var lastRight: B = null.asInstanceOf[B]
+          private var state: CogroupState[B] = Step
+          private var bufIdx: Int = -1
+          private var _next: C = precomputeNext()
+
+          def hasNext: Boolean = _next != null
+          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
+
+          @tailrec def bufferRight(leftElement: A, acc: Vector[B]): (B, Vector[B]) = {
+            if (right.hasNext) {
+              val rightElement = right.next
+              order(leftElement, rightElement) match {
+                case EQ => bufferRight(leftElement, acc :+ rightElement)
+                case LT => (rightElement, acc)
+                case GT => sys.error("inputs on the right-hand side not sorted")
+              }
+            } else (null.asInstanceOf[B], acc)
+          }
+          
+          @tailrec private def precomputeNext(): C = {
+            state match {
+              case Step =>
+                val leftElement: A  = if (lastLeft  != null) lastLeft  else if (left.hasNext)  left.next  else null.asInstanceOf[A]
+                val rightElement: B = if (lastRight != null) lastRight else if (right.hasNext) right.next else null.asInstanceOf[B]
+
+                if (leftElement == null && rightElement == null) {
+                  null.asInstanceOf[C]
+                } else if (rightElement == null) {
+                  lastLeft = null.asInstanceOf[A]
+                  if (f.join) precomputeNext() else f.left(leftElement)
+                } else if (leftElement == null) {
+                  lastRight = null.asInstanceOf[B]
+                  if (f.join) precomputeNext() else f.right(rightElement)
+                } else {
+                  order(leftElement, rightElement) match {
+                    case EQ => 
+                      lastLeft  = leftElement
+                      lastRight = rightElement
+                      state = LastEqual
+                      f.both(lastLeft, lastRight)
+
+                    case LT => 
+                      lastLeft  = null.asInstanceOf[A]
+                      lastRight = rightElement
+                      if (f.join) precomputeNext() else f.left(leftElement)
+
+                    case GT =>
+                      lastLeft  = leftElement
+                      lastRight = null.asInstanceOf[B]
+                      if (f.join) precomputeNext() else f.right(rightElement)
+                  }
+                } 
+              
+              case LastEqual =>
+                if (right.hasNext) {
+                  val rightElement = right.next
+                  order(lastLeft, rightElement) match {
+                    case EQ => 
+                      // we have a run of at least two on the right, so just buffer and then drop into 
+                      // the cartesian state
+                      val (nextRight, bufferedRight) = bufferRight(lastLeft, Vector(lastRight, rightElement))
+                      // store the first element on the right beyond the end of the run; this reference will
+                      // not be modified until in the Step state again
+                      lastRight = nextRight
+                      state = Cartesian(bufferedRight)
+                      bufIdx = 1 // bufIdx will be incremented before the buffer is read
+                      f.both(lastLeft, rightElement)
+
+                    case LT => 
+                      state = RunLeft(rightElement)
+                      precomputeNext()
+
+                    case GT =>
+                      sys.error("inputs on the right-hand side not sorted")
+                  }
+                } else {
+                  state = Step
+                  lastLeft = null.asInstanceOf[A]
+                  precomputeNext()
+                }
+
+              case RunLeft(nextRight) =>
+                // lastLeft is >= lastRight and < nextRight
+                if (left.hasNext) {
+                  val leftElement = left.next
+                  order(leftElement, lastRight) match {
+                    case EQ => f.both(leftElement, lastRight)
+                    case LT => sys.error("inputs on the left-hand side not sorted")
+                    case GT => 
+                      lastLeft  = leftElement
+                      lastRight = nextRight
+                      state = Step
+                      precomputeNext()
+                  }
+                } else {
+                  lastLeft = null.asInstanceOf[A]
+                  lastRight = nextRight
+                  state = Step
+                  precomputeNext()
+                }
+                
+              case Cartesian(bufferedRight) => 
+                bufIdx += 1
+                if (bufIdx < bufferedRight.length) {
+                  f.both(lastLeft, bufferedRight(bufIdx))
+                } else {
+                  if (left.hasNext) {
+                    lastLeft = left.next
+                    bufIdx = 0
+                    order(lastLeft, bufferedRight(bufIdx)) match {
+                      case EQ => 
+                        f.both(lastLeft, bufferedRight(bufIdx))
+
+                      case LT => 
+                        sys.error("inputs on the left-hand side not sorted")
+
+                      case GT => 
+                        state = Step
+                        precomputeNext()
+                    }
+                  } else {
+                    state = Step
+                    lastLeft  = null.asInstanceOf[A]
+                    precomputeNext()
+                  }
+                }
+            }
+          }
+        }
+      }
+    }
+  )
+  */
+  
 // vim: set ts=4 sw=4 et:
