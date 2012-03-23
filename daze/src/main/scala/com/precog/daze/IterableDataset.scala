@@ -13,30 +13,34 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-trait IterableDatasetOps extends DatasetOps[Iterable] {
-  implicit def extend[A](d: Iterable[A]): DatasetExtensions[Iterable, A] = new IterableDatasetExtensions[A](d)
+trait IterableDatasetOps extends DatasetOps[IterableDataset] {
+  implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, A] = new IterableDatasetExtensions[A](d)
 
-  def empty[A]: Iterable[A] = Iterable.empty[A]
+  def empty[A]: IterableDataset[A] = IterableDataset.empty[A]
 
-  def point[A](value: A): Iterable[A] = Iterable(value)
+  def point[A](value: A): IterableDataset[A] = IterableDataset(value)
 }
 
-class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtensions[Iterable, A] {
-  def cogroup[B, C](d2: Iterable[B])(f: CogroupF[A, B, C])(implicit order: (A, B) => Ordering): Iterable[C] = 
-    new Iterable[C] {
+case class IterableDataset[A](iterable: Iterable[(Identities, A)]) extends Iterable[A] {
+  def iterator: Iterator[A] = iterable.map(_._2).iterator
+}
+
+class IterableDatasetExtensions[A](val value: IterableDataset[A]) extends DatasetExtensions[IterableDataset, A] {
+  def cogroup[B, C](d2: IterableDataset[B])(f: CogroupF[A, B, C])(implicit order: (A, B) => Ordering) = IterableDataset[C](
+    new Iterable[(Identities, C)] {
       def iterator = {
-        val left  = value.iterator
-        val right = d2.iterator
+        val left  = value.iterable.iterator
+        val right = d2.iterable.iterator
         
-        new Iterator[C] {
+        new Iterator[(Identities, C)] {
           private var lastLeft: A = null.asInstanceOf[A]
           private var lastRight: B = null.asInstanceOf[B]
           private var state: CogroupState[B] = Step
           private var bufIdx: Int = -1
-          private var _next: C = precomputeNext
+          private var _next: C = precomputeNext()
 
           def hasNext: Boolean = _next != null
-          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext; temp }
+          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
 
           @tailrec def bufferRight(leftElement: A, acc: Vector[B]): (B, Vector[B]) = {
             if (right.hasNext) {
@@ -49,7 +53,7 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
             } else (null.asInstanceOf[B], acc)
           }
           
-          @tailrec private def precomputeNext: C = {
+          @tailrec private def precomputeNext(): C = {
             state match {
               case Step =>
                 val leftElement: A  = if (lastLeft  != null) lastLeft  else if (left.hasNext)  left.next  else null.asInstanceOf[A]
@@ -59,10 +63,10 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
                   null.asInstanceOf[C]
                 } else if (rightElement == null) {
                   lastLeft = null.asInstanceOf[A]
-                  if (f.join) precomputeNext else f.left(leftElement)
+                  if (f.join) precomputeNext() else f.left(leftElement)
                 } else if (leftElement == null) {
                   lastRight = null.asInstanceOf[B]
-                  if (f.join) precomputeNext else f.right(rightElement)
+                  if (f.join) precomputeNext() else f.right(rightElement)
                 } else {
                   order(leftElement, rightElement) match {
                     case EQ => 
@@ -74,12 +78,12 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
                     case LT => 
                       lastLeft  = null.asInstanceOf[A]
                       lastRight = rightElement
-                      if (f.join) precomputeNext else f.left(leftElement)
+                      if (f.join) precomputeNext() else f.left(leftElement)
 
                     case GT =>
                       lastLeft  = leftElement
                       lastRight = null.asInstanceOf[B]
-                      if (f.join) precomputeNext else f.right(rightElement)
+                      if (f.join) precomputeNext() else f.right(rightElement)
                   }
                 } 
               
@@ -100,7 +104,7 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
 
                     case LT => 
                       state = RunLeft(rightElement)
-                      precomputeNext
+                      precomputeNext()
 
                     case GT =>
                       sys.error("inputs on the right-hand side not sorted")
@@ -108,7 +112,7 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
                 } else {
                   state = Step
                   lastLeft = null.asInstanceOf[A]
-                  precomputeNext
+                  precomputeNext()
                 }
 
               case RunLeft(nextRight) =>
@@ -122,13 +126,13 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
                       lastLeft  = leftElement
                       lastRight = nextRight
                       state = Step
-                      precomputeNext
+                      precomputeNext()
                   }
                 } else {
                   lastLeft = null.asInstanceOf[A]
                   lastRight = nextRight
                   state = Step
-                  precomputeNext
+                  precomputeNext()
                 }
                 
               case Cartesian(bufferedRight) => 
@@ -148,12 +152,12 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
 
                       case GT => 
                         state = Step
-                        precomputeNext
+                        precomputeNext()
                     }
                   } else {
                     state = Step
                     lastLeft  = null.asInstanceOf[A]
-                    precomputeNext
+                    precomputeNext()
                   }
                 }
             }
@@ -161,25 +165,26 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
         }
       }
     }
+  )
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
-  def join[B, C](d2: Iterable[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): Iterable[C] = sys.error("todo")
+  def join[B, C](d2: IterableDataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): IterableDataset[C] = sys.error("todo")
 
 
-  def crossLeft[B, C](d2: Iterable[B])(f: PartialFunction[(A, B), C]): Iterable[C] = 
-    new Iterable[C] {
+  def crossLeft[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
+    new IterableDataset[C] {
       def iterator = {
         val left = value.iterator
         var right: Iterator[B] = null.asInstanceOf[Iterator[B]]
 
         new Iterator[C] {
           private var leftElement: A = null.asInstanceOf[A]
-          private var _next: C = precomputeNext
+          private var _next: C = precomputeNext()
 
           def hasNext = _next != null
-          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext; temp }
+          def next: C = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
 
-          @tailrec private def precomputeNext: C = {
+          @tailrec private def precomputeNext(): C = {
             if (leftElement != null) {
               if (right.hasNext) {
                 val tupled = (leftElement, right.next)
@@ -187,16 +192,16 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
                   f(tupled)
                 } else {
                   leftElement = null.asInstanceOf[A]
-                  precomputeNext
+                  precomputeNext()
                 }
               } else {
                 leftElement = null.asInstanceOf[A]
-                precomputeNext
+                precomputeNext()
               }
             } else if (left.hasNext) {
               leftElement = left.next
               right = d2.iterator
-              if (right.hasNext) precomputeNext else null.asInstanceOf[C]
+              if (right.hasNext) precomputeNext() else null.asInstanceOf[C]
             } else {
               null.asInstanceOf[C]
             }
@@ -205,38 +210,38 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
       }
     }
 
-  def crossRight[B, C](d2: Iterable[B])(f: PartialFunction[(A, B), C]): Iterable[C] = 
+  def crossRight[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
     new IterableDatasetExtensions(d2).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side on identity union
   // value union discards identities
-  def union(d2: Iterable[A], idUnion: Boolean): Iterable[A] = sys.error("todo")
+  def union(d2: IterableDataset[A], idUnion: Boolean): IterableDataset[A] = sys.error("todo")
 
   // value intersection discards identities
-  def intersect(d2: Iterable[A], idIntersect: Boolean): Iterable[A] = sys.error("todo")
+  def intersect(d2: IterableDataset[A], idIntersect: Boolean): IterableDataset[A] = sys.error("todo")
 
-  def merge(d2: Iterable[A])(implicit order: Order[A]): Iterable[A] = sys.error("todo")
+  def merge(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
-  def map[B](f: A => B): Iterable[B]  = sys.error("todo")
+  def map[B](f: A => B): IterableDataset[B]  = value.iterable.map { case (i, v) => (i, f(v)) }
 
-  def flatMap[B](f: A => Iterable[B]): Iterable[B] = sys.error("todo")
+  def flatMap[B](f: A => IterableDataset[B]): IterableDataset[B] = sys.error("todo")
 
-  def collect[B](pf: PartialFunction[A, B]): Iterable[B] = sys.error("todo")
+  def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = sys.error("todo")
 
-  def reduce[B](base: B)(f: (B, A) => B): B = sys.error("todo")
+  def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.reduce(f)
 
-  def count: BigInt = sys.error("todo")
+  def count: BigInt = value.iterable.size
 
   // uniq by value, discard identities - assume input not sorted
-  def uniq: Iterable[A] = sys.error("todo")
+  def uniq: IterableDataset[A] = sys.error("todo")
 
   // identify(None) strips all identities
-  def identify(baseId: Option[() => Long]): Iterable[A] = sys.error("todo")
+  def identify(baseId: Option[() => Long]): IterableDataset[A] = sys.error("todo")
 
-  def sortByIds(memoId: Int)(cm: Manifest[A], fs: FileSerialization[A]): Iterable[A] = sys.error("todo")
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): Iterable[A] = sys.error("todo")
+  def sortByIds(memoId: Int)(cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
   /*
-  protected def sortByIdentities(enum: Iterable[SEvent], indexes: Vector[Int], memoId: Int, ctx: MemoizationContext): Iterable[SEvent] = {
+  protected def sortByIdentities(enum: IterableDataset[SEvent], indexes: Vector[Int], memoId: Int, ctx: MemoizationContext): IterableDataset[SEvent] = {
     implicit val order: Order[SEvent] = new Order[SEvent] {
       def order(e1: SEvent, e2: SEvent): Ordering = {
         val (ids1, _) = e1
@@ -269,13 +274,13 @@ class IterableDatasetExtensions[A](val value: Iterable[A]) extends DatasetExtens
   }
   */
 
-  def sortByValue(memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): Iterable[A]  = sys.error("todo")
+  def sortByValue(memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
   
-  def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Iterable[A]  = sys.error("todo")
+  def memoize(memoId: Int)(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
 
-  def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, Iterable[A])]): Iterable[(K, Iterable[A])] = sys.error("todo")
+  def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, IterableDataset[A])]): IterableDataset[(K, IterableDataset[A])] = sys.error("todo")
 
-  def perform(io: IO[_]): Iterable[A] = sys.error("todo")
+  def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
 
 // vim: set ts=4 sw=4 et:
