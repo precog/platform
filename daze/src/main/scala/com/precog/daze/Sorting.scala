@@ -27,7 +27,7 @@ import scala.annotation.tailrec
 import scalaz._
 
 trait Sorting[Dataset[_]] {
-  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[E], cm: ClassManifest[E]): Dataset[E]
+  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Dataset[E]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {

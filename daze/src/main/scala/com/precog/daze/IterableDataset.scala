@@ -64,9 +64,8 @@ trait IterableDatasetOpsComponent extends YggConfigComponent {
   }
 }
 
-class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator]) 
+class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator])
 extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
-  type IA = (Identities, A)
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
   def join[B, C](d2: IterableDataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): IterableDataset[C] = {
@@ -104,12 +103,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             }
             
             @tailrec private def precomputeNext(): IC = {
-              @inline  def fapply(l: IA, r: IB): IC = {
-                val tupled = (l._2, r._2)
-                if (f.isDefinedAt(tupled)) (l._1 ++ r._1.drop(sharedPrefixLength), f(tupled))
-                else precomputeNext()
-              }
-
               state match {
                 case Step =>
                   val leftElement: IA  = if (lastLeft  != null) lastLeft  else if (left.hasNext)  left.next  else null.asInstanceOf[IA]
@@ -123,7 +116,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                         lastLeft  = leftElement
                         lastRight = rightElement
                         state = LastEqual
-                        fapply(lastLeft, lastRight)
+                        val (lid, lv) = lastLeft
+                        val (rid, rv) = lastRight
+                        val tupled = (lv, rv)
+
+                        if (f.isDefinedAt(tupled)) (lid ++ rid.drop(sharedPrefixLength), f(tupled))
+                        else precomputeNext()
 
                       case LT => 
                         lastLeft  = null.asInstanceOf[IA]
@@ -150,7 +148,13 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                         lastRight = nextRight
                         state = Cartesian(bufferedRight)
                         bufIdx = 1 // bufIdx will be incremented before the buffer is read
-                        fapply(lastLeft, rightElement)
+
+                        val (lid, lv) = lastLeft
+                        val (rid, rv) = rightElement
+                        val tupled = (lv, rv)
+
+                        if (f.isDefinedAt(tupled)) (lid ++ rid.drop(sharedPrefixLength), f(tupled))
+                        else precomputeNext()
 
                       case LT => 
                         state = RunLeft(rightElement)
@@ -170,8 +174,17 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   if (left.hasNext) {
                     val leftElement = left.next
                     order(leftElement, lastRight) match {
-                      case EQ => fapply(leftElement, lastRight)
-                      case LT => sys.error("inputs on the left-hand side not sorted")
+                      case EQ => 
+                        val (lid, lv) = leftElement
+                        val (rid, rv) = lastRight
+                        val tupled = (lv, rv)
+
+                        if (f.isDefinedAt(tupled)) (lid ++ rid.drop(sharedPrefixLength), f(tupled))
+                        else precomputeNext()
+
+                      case LT => 
+                        sys.error("inputs on the left-hand side not sorted")
+
                       case GT => 
                         lastLeft  = leftElement
                         lastRight = nextRight
@@ -188,14 +201,24 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                 case Cartesian(bufferedRight) => 
                   bufIdx += 1
                   if (bufIdx < bufferedRight.length) {
-                    fapply(lastLeft, bufferedRight(bufIdx))
+                    val (lid, lv) = lastLeft
+                    val (rid, rv) = bufferedRight(bufIdx)
+                    val tupled = (lv, rv)
+
+                    if (f.isDefinedAt(tupled)) (lid ++ rid.drop(sharedPrefixLength), f(tupled))
+                    else precomputeNext()
                   } else {
                     if (left.hasNext) {
                       lastLeft = left.next
                       bufIdx = 0
                       order(lastLeft, bufferedRight(bufIdx)) match {
                         case EQ => 
-                          fapply(lastLeft, bufferedRight(bufIdx))
+                          val (lid, lv) = lastLeft
+                          val (rid, rv) = bufferedRight(bufIdx)
+                          val tupled = (lv, rv)
+
+                          if (f.isDefinedAt(tupled)) (lid ++ rid.drop(sharedPrefixLength), f(tupled))
+                          else precomputeNext()
 
                         case LT => 
                           sys.error("inputs on the left-hand side not sorted")
@@ -297,9 +320,29 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
       new Iterable[IA] {
         def iterator: Iterator[IA] = new Iterator[IA]{
           val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId, memoCtx)
+          private var atStart = true
+          private var _next: A = precomputeNext()
 
-          def hasNext = sorted.hasNext
-          def next = (VectorCase(nextId()), sorted.next)
+          @tailrec private def precomputeNext(): A = {
+            if (sorted.hasNext) {
+              if (atStart) {
+                atStart = false
+                sorted.next
+              } else {
+                val tmp = sorted.next
+                if (order.order(_next, tmp) == EQ) precomputeNext() else tmp
+              }
+            } else {
+              null.asInstanceOf[A]
+            }
+          }
+
+          def hasNext = _next != null
+          def next = {
+            val result = (VectorCase(nextId()), _next)
+            _next = precomputeNext()
+            result
+          }
         }
       }
     )
@@ -308,14 +351,14 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   // identify(None) strips all identities
   def identify(baseId: Option[() => Identity]): IterableDataset[A] = sys.error("todo")
 
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[A]): IterableDataset[A] = sys.error("todo")
-  /*
-  protected def sortByIdentities(enum: IterableDataset[SEvent], indexes: Vector[Int], memoId: Int, ctx: MemoizationContext): IterableDataset[SEvent] = {
-    implicit val order: Order[SEvent] = new Order[SEvent] {
-      def order(e1: SEvent, e2: SEvent): Ordering = {
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = {
+    sys.error("todo")
+    /*
+    implicit val order: Order[IA] = new Order[SEvent] {
+      def order(e1: IA, e2: IA): Ordering = {
         val (ids1, _) = e1
         val (ids2, _) = e2
-        
+
         val left = indexes map ids1
         val right = indexes map ids2
         
@@ -340,12 +383,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
         (VectorCase.fromSeq(back), sv)
       }
     }
+    */
   }
-  */
 
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
 
-  def group[K](memoId: Int)(keyFor: A => K)(implicit ord: Order[K], fs: FileSerialization[A], kvs: FileSerialization[(K, IterableDataset[A])]): IterableDataset[(K, IterableDataset[A])] = sys.error("todo")
+  def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, A)]): IterableGrouping[K, IterableDataset[A]] = sys.error("todo")
 
   def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
