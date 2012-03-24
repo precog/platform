@@ -68,8 +68,8 @@ trait Evaluator extends DAG
   import instructions._
   import dag._
 
-  type Dataset[E]
-  type Grouping[K, A]
+  type Dataset[E] <: AnyRef
+  type Grouping[K, A] <: AnyRef
   type YggConfig <: EvaluatorConfig 
 
   trait Context {
@@ -109,7 +109,7 @@ trait Evaluator extends DAG
       }
       
       case _: MergeBucketSpec | _: SingleBucketSpec =>
-        ops.mapGrouping(computeMergeGrouping(assume, roots, ctx)(spec)) { a => NEL(a) }
+        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, roots, ctx)(spec)) { a => NEL(a) }
     }
     
     def computeMergeGrouping(assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {

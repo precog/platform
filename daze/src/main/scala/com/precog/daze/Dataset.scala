@@ -41,16 +41,16 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   // if isUnion, cogroup, merging datasets of the common key by the union operation
   // if !isUnion (intersect) retain where keys are equivalent, merging the inner datasets using the intersect operation
   // keep result in key order
-  def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]]
+  def mergeGroups[A <: AnyRef, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
 
   // intersect by key, concatenating the NELs
   // keep result in key order
-  def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
+  def zipGroups[A <: AnyRef, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
 
   // the resulting Dataset[B] needs to be merged such that it is value-unique and has new identities
-  def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
+  def flattenGroup[A <: AnyRef, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
 
-  def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
+  def mapGrouping[K, A <: AnyRef, B <: AnyRef](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
 
 trait CogroupF[A, B, C] {
