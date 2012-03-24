@@ -211,7 +211,7 @@ trait ByteProjection {
   def descriptor: ProjectionDescriptor
 
   def project(id: Identities, v: Seq[CValue]): (Array[Byte], Array[Byte]) 
-  def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E
+  def unproject(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue])
   def keyOrder: Order[Array[Byte]]
 }
 

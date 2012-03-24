@@ -195,7 +195,7 @@ trait LevelDBByteProjection extends ByteProjection {
     VectorCase.fromSeq(sorted.map(id => id._2))
   }
 
-  final def unproject[E](keyBytes: Array[Byte], valueBytes: Array[Byte])(f: (Identities, Seq[CValue]) => E): E = {
+  final def unproject(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue]) = {
     val identitiesInKey = ArrayBuffer[(Int,Long)]()
     val valuesInKey = ArrayBuffer[CValue]()
     val valueMembers = ArrayBuffer[CValue]()
@@ -213,7 +213,7 @@ trait LevelDBByteProjection extends ByteProjection {
     val values = mergeValues(valuesInKey, valueMembers)
     val identities = orderIdentities(identitiesInKey)
 
-    f(identities, values)
+    (identities, values)
   }
 
   final def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
