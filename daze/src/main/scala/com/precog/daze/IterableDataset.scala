@@ -51,21 +51,36 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
     def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
 
     def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A] = {
-      new IterableDataset[A] {
-        def iterator = {
-          private var _next: A = precomputeNext()
+      IterableDataset(
+        1,
+        new Iterable[IA] {
+          def iterator = new Iterator[IA] {
+            private var di = d.iterator
 
-          def hasNext = _next != null
+            private var _next = precomputeNext()
+            private var inner = if (!di.hasNext) null else di.next.iterator
 
-          def next = {
-            val temp = _next
+            def hasNext = _next != null
 
-            _next = precomputeNext()
+            def next() = {
+              val temp = _next
 
-            temp
+              _next = precomputeNext()
+
+              temp
+            }
+
+            @tailrec private final def precomputeNext() = {
+              if (inner.hasNext) {
+                val (_, sv) = inner.next()
+                (VectorCase(nextId), sv)
+              } else if (di.hasNext) {
+                inner = di.next.iterator
+                precomputeNext()
+              } else null
+            }
           }
-        }
-      }
+        })
     }
 
     def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]] = sys.error("todo")
@@ -316,8 +331,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     sys.error("todo")
   }
 
-  private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {
-    def order (x: IA, y: IA): Ordering = {
+  private implicit def orderIA(implicit order: Order[A]): Order[IA] = new Order[IA] {
+    def order(x: IA, y: IA): Ordering = {
       val idComp = IdentitiesOrder.order(x._1, y._1)
       if (idComp == EQ) {
         ord.order(x._2, y._2)
