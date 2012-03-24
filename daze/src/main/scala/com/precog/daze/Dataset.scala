@@ -68,7 +68,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   def crossRight[B <: AnyRef, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
   // pad identities to the longest side, then sort -u by all identities
-  def paddedMerge(d2: Dataset[A], nextId: () => Identity, memoId: Int)(implicit fs: FileSerialization[(Identities, A)]): Dataset[A]
+  def paddedMerge(d2: Dataset[A], nextId: () => Identity, memoId: Int)(implicit fs: SortSerialization[A]): Dataset[A]
 
   // merge sorted uniq by identities and values
   def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]

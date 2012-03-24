@@ -356,13 +356,20 @@ trait Evaluator extends DAG
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
         val leftEnum = maybeRealize(loop(left, assume, roots, ctx), ctx)
         val rightEnum = maybeRealize(loop(right, assume, roots, ctx), ctx)
-
-        Right(
-          instr match {
-            case IUnion     => leftEnum.union(rightEnum)
-            case IIntersect => leftEnum.intersect(rightEnum)
-          }
-        )
+        
+        val back = instr match {
+          case IUnion if left.provenance.length == right.provenance.length =>
+            leftEnum.union(rightEnum)
+          
+          // apparently Dataset tracks number of identities...
+          case IUnion if left.provenance.length != right.provenance.length =>
+            leftEnum.paddedMerge(rightEnum, () => ctx.nextId(), IdGen.nextInt())
+          
+          case IIntersect =>
+            leftEnum.intersect(rightEnum)
+        }
+        
+        Right(back)
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
