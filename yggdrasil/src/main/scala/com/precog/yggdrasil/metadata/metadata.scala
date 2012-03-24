@@ -65,7 +65,10 @@ trait StorageMetadata {
 
 sealed trait PathMetadata 
 case class PathRoot(children: Set[PathMetadata])
-case class PathValue(valueType: ColumnType, descriptors: Map[ProjectionDescriptor, ColumnMetadata]) extends PathMetadata
+case class PathValue(valueType: ColumnType, descriptors: Map[ProjectionDescriptor, ColumnMetadata]) extends PathMetadata {
+  def update(desc: ProjectionDescriptor, meta: ColumnMetadata) = 
+    PathValue(valueType, descriptors + (desc -> meta))
+}
 case class PathField(name: String, children: Set[PathMetadata]) extends PathMetadata
 case class PathIndex(idx: Int, children: Set[PathMetadata]) extends PathMetadata
 
