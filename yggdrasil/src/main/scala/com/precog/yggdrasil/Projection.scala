@@ -22,9 +22,7 @@ trait Sync[A] {
   def sync(a: A): IO[Validation[Throwable,Unit]]
 }
 
-trait Projection {
-  type Dataset[E]
-
+trait Projection[Dataset[_]] {
   def descriptor: ProjectionDescriptor
 
   def chunkSize: Int
