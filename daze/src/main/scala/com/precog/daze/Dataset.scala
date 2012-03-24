@@ -34,10 +34,18 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
 
+trait CogroupF[A, B, C] {
+  def left(a: A): C
+  def both(a: A, b: B): C
+  def right(b: B): C
+}
+
 trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   type IA = (Identities, A)
 
   def value: Dataset[A]
+
+  def cogroup[B, C](d2: Dataset[B])(f: CogroupF[A, B, C]): Dataset[C]
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
   def join[B, C](d2: Dataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): Dataset[C]
