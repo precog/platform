@@ -35,7 +35,7 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-case class IterableGrouping[K, NotTheSameAAsEverywhereElse](iterable: Iterable[(K, NotTheSameAAsEverywhereElse)])
+case class IterableGrouping[K, A](iterable: Iterable[(K, A)])
 
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: SortConfig
@@ -51,14 +51,15 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
     def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
 
     def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A] = {
+      type IA = (Identities, A)
       IterableDataset(
         1,
         new Iterable[IA] {
           def iterator = new Iterator[IA] {
             private var di = d.iterator
 
-            private var _next = precomputeNext()
-            private var inner = if (!di.hasNext) null else di.next.iterator
+            private var _next: IA = precomputeNext()
+            private var inner: Iterator[IA] = if (!di.hasNext) null else di.next.iterable.iterator
 
             def hasNext = _next != null
 
@@ -70,12 +71,12 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
               temp
             }
 
-            @tailrec private final def precomputeNext() = {
+            @tailrec private final def precomputeNext(): IA = {
               if (inner.hasNext) {
                 val (_, sv) = inner.next()
                 (VectorCase(nextId), sv)
               } else if (di.hasNext) {
-                inner = di.next.iterator
+                inner = di.next.iterable.iterator
                 precomputeNext()
               } else null
             }
@@ -331,7 +332,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     sys.error("todo")
   }
 
-  private implicit def orderIA(implicit order: Order[A]): Order[IA] = new Order[IA] {
+  private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {
     def order(x: IA, y: IA): Ordering = {
       val idComp = IdentitiesOrder.order(x._1, y._1)
       if (idComp == EQ) {
@@ -573,7 +574,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
               def hasNext = inner.hasNext
 
               def next = {
-                val (_, sv) = inner.next
+                val sv = inner.next
                 (VectorCase(newId()), sv)
               }
             }
@@ -591,7 +592,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
               def hasNext = inner.hasNext
 
               def next = {
-                val (_, sv) = inner.next
+                val sv = inner.next
                 (emptyVector, sv)
               }
             }
