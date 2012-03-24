@@ -48,7 +48,7 @@ trait IdSource {
 trait EvaluatorConfig {
   implicit def valueSerialization: SortSerialization[SValue]
   implicit def eventSerialization: SortSerialization[(Identities, SValue)]
-  implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]
+  implicit def keyValueSerialization: SortSerialization[(SValue, Identities, SValue)]
   def maxEvalDuration: akka.util.Duration
   def idSource: IdSource
 }

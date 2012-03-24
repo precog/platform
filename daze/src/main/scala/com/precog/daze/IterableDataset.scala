@@ -35,7 +35,7 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
+case class IterableGrouping[K, NotTheSameAAsEverywhereElse](iterable: Iterable[(K, NotTheSameAAsEverywhereElse)])
 
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: SortConfig
@@ -61,8 +61,9 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
   }
 }
 
-class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator])
+class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable])
 extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
+  private def extend(o: IterableDataset[A]) = new IterableDatasetExtensions(o, iteratorSorting)
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
   def join[B, C](d2: IterableDataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): IterableDataset[C] = {
@@ -494,7 +495,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     IterableDataset[A](1, 
       new Iterable[IA] {
         def iterator: Iterator[IA] = new Iterator[IA]{
-          val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId)
+          val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId).iterator
           private var atStart = true
           private var _next: A = precomputeNext()
 
@@ -528,14 +529,58 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = IterableDataset(
     value.idCount, 
-    new Iterable[IA] {
-      def iterator = iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
-    }
+    iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
   )
 
   def memoize(memoId: Int): IterableDataset[A] = sys.error("todo") //(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
 
-  def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, A)]): IterableGrouping[K, IterableDataset[A]] = sys.error("todo")
+  def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
+    implicit val kaOrder: Order[(K,Identities,A)] = new Order[(K,Identities,A)] {
+      def order(x: (K,Identities,A), y: (K,Identities,A)) = {
+        val kOrder = ord.order(x._1, y._1)
+        if (kOrder == Ordering.EQ) {
+          IdentitiesOrder.order(x._2, y._2)
+        } else kOrder
+      }
+    }
+
+    val withK = value.iterable.iterator.flatMap { case (i, a) => keyFor(a).iterator.map(k => (k, i, a)) }
+    val sorted: Iterator[(K,Identities,A)] = iteratorSorting.sort(withK, "group", memoId).iterator
+
+    IterableGrouping(new Iterable[(K, IterableDataset[A])] {
+      def iterator = new Iterator[(K, IterableDataset[A])] {
+        // Have to hold our "peek" over the entire outer iterator
+        var _next: (K, Identities, A) = sorted.next
+        var sameK = true
+
+        def hasNext = sorted.hasNext
+        def next: (K, IterableDataset[A]) = {  
+          val currentK = _next._1
+          sameK = true
+          
+          // Compute an IterableDataset that will run over sorted for all == K
+          val innerDS = IterableDataset[A](
+            value.idCount, 
+            new Iterable[(Identities,A)] {
+              def iterator = new Iterator[(Identities,A)] {
+                def hasNext = sameK
+                def next = {
+                  val tmp = _next
+                  _next = sorted.next
+                  sameK = ord.order(currentK, _next._1) == EQ
+                  (tmp._2, tmp._3)
+                }
+              }
+            }
+          )
+
+          val kChunkId = IdGen.nextInt()
+
+          (currentK, extend(innerDS).memoize(kChunkId))
+        }
+      }
+    })
+  }
 
   def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
