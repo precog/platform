@@ -44,7 +44,7 @@ package object yggdrasil {
   }
 
   //TODO: should this not just be an Order[Identities]
-  implicit def identityOrder(ids1: Identities, ids2: Identities): Ordering = 
+  def identityOrder(ids1: Identities, ids2: Identities): Ordering = 
     prefixIdentityOrder(ids1, ids2, ids1.length min ids2.length)
 
   def prefixIdentityOrder(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
@@ -65,15 +65,13 @@ package object yggdrasil {
   }
 
   //TODO: This should use Order#contramap
-  implicit def combinedIdentitiesOrder[A, B](p1: (Identities, A), p2: (Identities, B)): Ordering = {
+  def combinedIdentitiesOrder[A, B](p1: (Identities, A), p2: (Identities, B)): Ordering = {
     identityOrder(p1._1, p2._1)
   }
 
   implicit object IdentitiesOrder extends Order[Identities] {
     def order(i1: Identities, i2: Identities) = identityOrder(i1, i2)
   }
-
-  implicit val IdentitiesOrdering = IdentitiesOrder.toScalaOrdering
 
   implicit def tupledIdentitiesOrder[A]: Order[(Identities, A)] =
     IdentitiesOrder.contramap((_: (Identities, A))._1)

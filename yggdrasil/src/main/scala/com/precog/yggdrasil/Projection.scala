@@ -42,23 +42,23 @@ trait Sync[A] {
 }
 
 trait Projection {
-  type X = Throwable
+  type Dataset[E]
 
   def descriptor: ProjectionDescriptor
 
   def chunkSize: Int
 
-  def getAllPairs(expiresAt: Long) : IterableDataset[Seq[CValue]]
-//  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO]
+  def getAllPairs(expiresAt: Long) : Dataset[Seq[CValue]]
+//  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : Dataset[(Identities, CValue)]
 //
 //  def getAllIds(expiresAt: Long) : EnumeratorP[X, Vector[Identities], IO]
 //  def getAllValues(expiresAt: Long) : EnumeratorP[X, Vector[Seq[CValue]], IO]
 //
-//  def getColumnValues(path: Path, selector: JPath, expiresAt: Long): EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
+//  def getColumnValues(path: Path, selector: JPath, expiresAt: Long)(implicit F: Functor[Dataset]): Dataset[CValue] = {
 //    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
 //
 //    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && isEqualOrChild(selector, col.selector))
-//    getAllColumnPairs(columnIndex, expiresAt)
+//    getAllPairs(expiresAt).map(_(columnIndex))
 //  }
 
 //  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO]
