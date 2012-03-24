@@ -537,8 +537,6 @@ trait Emitter extends AST
                       case pair @ (name, bucket) => (pair, emitBucket(bucket))
                     } unzip
 
-                    sys.error(buckets.mkString("::"))
-                    
                     val n = buckets.length.toShort
                     val k = (buckets.length + (buckets map { _._2 } map origins map { _.size } sum)).toShort
                     val split = emitInstr(Split(n, k))
