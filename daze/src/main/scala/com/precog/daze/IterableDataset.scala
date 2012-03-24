@@ -279,9 +279,160 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     sys.error("todo")
   }
 
-  def union(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
+  private implicit def orderIA(implicit order: Order[A]): Order[IA] = new Order[IA] {
+    def order (x: IA, y: IA)): Ordering = {
+      val idComp = IdentitiesOrder.order(x._1, y._1)
+      if (idComp == EQ) {
+        order.order(x._2, y._2)
+      } else idComp
+    }
+  }
 
-  def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
+  def union(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = {
+    val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
+    val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
+
+    // TODO restarting
+
+    IterableDataset(
+      value.idCount,
+      new Iterable[A] {
+        def iterator = new Iterator[A] {
+          var _left: A = _
+          var _right: A = _
+
+          def left() = {
+            if (_left == null && sortedLeft.hasNext) {
+              _left = sortedLeft.next()
+            }
+            _left
+          }
+
+          def right() = {
+            if (_right == null && sortedRight.hasNext) {
+              _right = sortedRight.next()
+            }
+            _right
+          }
+
+          def hasNext = left() != null || right() != null
+
+          def next() = {
+            val lf = left()
+            val rt = right()
+
+            if (lf == null) {
+              val back = _right
+              _right = null
+              back
+            } else if (rt == null) {
+              val back = _left
+              _left = null
+              back
+            } else {
+              order(lf, rt) match {
+                case LT => {
+                  val back = _left
+                  _left = null
+                  back
+                }
+
+                case GT => {
+                  val back = _right
+                  _right = null
+                  back
+                }
+
+                case EQ => {
+                  val back = _left
+                  while (order(back, left()) == EQ) {
+                    _left = null
+                  }
+                  while (order(back, right()) == EQ) {
+                    _right = null
+                  }
+                  back
+                }
+              }
+            }
+          }
+        }
+      }
+    )
+  }
+
+  def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] =  {
+    val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
+    val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
+
+    // TODO restarting
+
+    IterableDataset(
+      value.idCount,
+      new Iterable[A] {
+        def iterator = new Iterator[A] {
+          // val sortedLeft = ...iterator
+          // val sortedRight = ...iterator
+          var _left = if (sortedLeft.hasNext) sortedLeft.next else null
+          var _right = if (sortedRight.hasNext) sortedRight.next else null
+          var _next = precomputeNext
+
+          def hasNext = _next != null
+
+          def next = {
+            val temp = _next
+
+            _next = precomputeNext
+
+            temp
+          }
+
+          @tailrec private def precomputeNext = {
+            if (_left == null || _right == null) {
+               null
+            } else {
+              order(_left, _right) match {
+                case EQ => 
+                  val temp = _left
+                  var stop = false
+
+                  while (order(_left, _right) == EQ && !stop) {
+                    if (!sortedLeft.hasNext) {
+                      _left = null
+                      stop = true
+                    }
+
+                    _left = sortedLeft.next
+                  }
+                  stop = false
+                  while (order(temp, _right) == EQ && !stop) {
+                    if (!sortedRight.hasNext) {
+                      _right = null
+                      stop = true
+                    }
+                    _right = sortedRight.next
+                  }
+
+                  temp
+
+                case LT =>
+                  while (order(_left, _right) == LT && sortedLeft.hasNext) {
+                    _left = sortedLeft.next
+                  }
+                  precomputeNext
+
+                case GT =>
+                  while (order(_left, _right) == GT && sortedRight.hasNext) {
+                    _right = sortedRight.next
+                  }
+                  precomputeNext
+              }
+            }
+          }
+        }
+      }
+    )
+  }
 
   def map[B](f: A => B): IterableDataset[B] = IterableDataset(value.idCount, value.iterable.map { case (i, v) => (i, f(v)) })
 
