@@ -8,8 +8,9 @@ import scala.collection.mutable.Builder
 import parser._
 import typer._
 
-trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solver {
+trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solver with Solutions {
   import ast._
+  import condition._
   
   override def solveCriticalConditions(tree: Expr): Set[Error] = tree match {
     case expr @ Let(_, _, _, left, right) =>
@@ -212,10 +213,4 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       for (s <- acc; v <- opt) yield s + v
     }
   }
-  
-  
-  sealed trait Solution
-  case class Conjunction(left: Solution, right: Solution) extends Solution
-  case class Disjunction(left: Solution, right: Solution) extends Solution
-  case class Definition(expr: Expr) extends Solution
 }

@@ -149,12 +149,17 @@ trait BytecodeReader extends Reader {
         case 0x17 => Some(FilterCrossLeft(depth, predicate))
         case 0x18 => Some(FilterCrossRight(depth, predicate))
         
-        case 0x1A => Some(Split)
-        case 0x1B => Some(Merge)
+        case 0x1A => Some(Bucket)
+        case 0x1B => Some(MergeBuckets((code & 0x01) == 1))
+        case 0x1C => Some(ZipBuckets)
+        
+        case 0x1D => Some(Split(depth, parameter.toShort))
+        case 0x1E => Some(Merge)
         
         // manipulative instructions
         
         case 0x20 => Some(Dup)
+        case 0x21 => Some(Drop)
         case 0x28 => tableInt map { _.toInt } map Swap     // TODO is this *supposed* to be like so?
         
         case 0x2A => lineInfo map tupled(Line)

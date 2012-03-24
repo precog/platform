@@ -13,7 +13,7 @@ trait StorageEngineQueryComponent {
 trait DatasetOpsComponent {
   type Dataset[E]
   type Grouping[K, A]
-  type Ops <: DatasetOps[Dataset, Grouping]
+  type Ops <: DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]
   def ops: Ops
 }
 

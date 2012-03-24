@@ -58,6 +58,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genIUnion,
     genIIntersect,
     
+    genBucket,
+    genMergeBuckets,
+    genZipBuckets,
+    
     genSplit,
     genMerge,
     
@@ -67,6 +71,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genFilterCrossRight,
     
     genDup,
+    genDrop,
     genSwap,
     
     genLine,
@@ -95,7 +100,15 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genIUnion = IUnion
   private lazy val genIIntersect = IIntersect
   
-  private lazy val genSplit = Split
+  private lazy val genBucket = Bucket
+  private lazy val genMergeBuckets = arbitrary[Boolean] map MergeBuckets
+  private lazy val genZipBuckets = ZipBuckets
+  
+  private lazy val genSplit = for {
+    n <- arbitrary[Short]
+    k <- arbitrary[Short]
+  } yield Split(n, k)
+  
   private lazy val genMerge = Merge
   
   private lazy val genFilterMatch = for {
@@ -119,6 +132,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   }
   
   private lazy val genDup = Dup
+  private lazy val genDrop = Drop
   private lazy val genSwap = arbitrary[Int] map Swap
   
   private lazy val genLine = for {
