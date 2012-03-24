@@ -13,6 +13,12 @@ package object util {
   }
 
   implicit def Order2JComparator[A](order: Order[A]): Order2JComparator[A] = new Order2JComparator(order)
+
+  def using[A, B](a: => A)(f: A => B)(implicit close: Close[A]): B = {
+    val result = f(a)
+    close.close(a)
+    result
+  }
 }
 
 

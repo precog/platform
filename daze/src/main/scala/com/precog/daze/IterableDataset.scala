@@ -274,9 +274,36 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = sys.error("todo")
 
-  def map[B](f: A => B): IterableDataset[B] = value.map(f)
+  def map[B](f: A => B): IterableDataset[B] = IterableDataset(value.idCount, value.iterable.map { case (i, v) => (i, f(v)) })
 
-  def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = sys.error("todo")
+  def collect[B](pf: PartialFunction[A, B]): IterableDataset[B] = {
+    type IB = (Identities, B)
+    IterableDataset[B](
+      value.idCount,
+      new Iterable[IB] {
+        def iterator = new Iterator[IB] {
+          val iterator = value.iterable.iterator
+          private var _next: IB = precomputeNext()
+
+          @tailrec def precomputeNext(): IB = {
+            if (iterator.hasNext) {
+              val (ids, b) = iterator.next
+              if (pf.isDefinedAt(b)) (ids, pf(b)) else precomputeNext()
+            } else {
+              null.asInstanceOf[IB]
+            }
+          }
+
+          def hasNext = _next != null
+          def next = {
+            val tmp = _next
+            _next = precomputeNext()
+            tmp
+          }
+        }
+      }
+    )
+  }
 
   def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.foldLeft(base)(f)
 
@@ -288,7 +315,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     IterableDataset[A](1, 
       new Iterable[IA] {
         def iterator: Iterator[IA] = new Iterator[IA]{
-          val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId, memoCtx)
+          val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId)
           private var atStart = true
           private var _next: A = precomputeNext()
 
@@ -320,40 +347,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   // identify(None) strips all identities
   def identify(baseId: Option[() => Identity]): IterableDataset[A] = sys.error("todo")
 
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = {
-    sys.error("todo")
-    /*
-    implicit val order: Order[IA] = new Order[SEvent] {
-      def order(e1: IA, e2: IA): Ordering = {
-        val (ids1, _) = e1
-        val (ids2, _) = e2
-
-        val left = indexes map ids1
-        val right = indexes map ids2
-        
-        (left zip right).foldLeft[Ordering](Ordering.EQ) {
-          case (Ordering.EQ, (i1, i2)) => Ordering.fromInt((i1 - i2) toInt)
-          case (acc, _) => acc
-        }
-      }
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = IterableDataset(
+    value.idCount, 
+    new Iterable[IA] {
+      def iterator = iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
     }
-    
-    ops.sort(enum, Some((memoId, ctx))) map {
-      case (ids, sv) => {
-        val (first, second) = ids.zipWithIndex partition {
-          case (_, i) => indexes contains i
-        }
-    
-        val prefix = first sortWith {
-          case ((_, i1), (_, i2)) => indexes.indexOf(i1) < indexes.indexOf(i2)
-        }
-        
-        val (back, _) = (prefix ++ second).unzip
-        (VectorCase.fromSeq(back), sv)
-      }
-    }
-    */
-  }
+  )
 
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
 

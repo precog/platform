@@ -26,7 +26,14 @@ object MemoCache {
 
 trait MemoizationContext {
   def cache: MemoCache
+}
 
+trait IteratorMemoizationContext extends MemoizationContext {
+  type Dataset[E]
+  def memoizing[E](memoId: Int): Either[Dataset[E] => Dataset[E], Dataset[E]]
+}
+
+trait IterateeMemoizationContext extends MemoizationContext {
   trait Memoizer[X, E] {
     def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO): IterateeT[X, E, F, A]
   }
@@ -34,8 +41,8 @@ trait MemoizationContext {
   def memoizing[X, E](memoId: Int)(implicit fs: IterateeFileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]]
 }
 
-object MemoizationContext {
-  trait Noop extends MemoizationContext {
+object IterateeMemoizationContext {
+  trait Noop extends IterateeMemoizationContext {
     def memoizing[X, E](memoId: Int)(implicit fs: IterateeFileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = Left(
       new Memoizer[X, E] {
         def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = iter
@@ -77,7 +84,7 @@ trait MemoEnvironment {
 }
 
 trait BufferingEnvironment {
-  type MemoContext <: BufferingContext
+  type MemoContext
 
   def withMemoizationContext[A](f: MemoContext => A): A
 }
