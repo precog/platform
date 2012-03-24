@@ -73,11 +73,7 @@ trait Memoizer extends DAG {
           case Split(loc, specs, child) => {
             val specs2 = specs map memoizedSpec
             val child2 = memoized(child)
-            
-            if (refs > 1)
-              Memoize(Split(loc, specs2, child2), refs)
-            else
-              Split(loc, specs2, child2)
+            Split(loc, specs2, child2)
           }
           
           case Join(loc, instr, left, right) => {
