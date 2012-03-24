@@ -16,18 +16,6 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-case class IterableDataset[A](idCount: Int, iterable: Iterable[(Identities, A)]) extends Iterable[A] {
-  def iterator: Iterator[A] = iterable.map(_._2).iterator
-
-  def map[B](f: A => B) = IterableDataset(idCount, iterable.map { case (i, v) => (i, f(v)) })
-
-  def padIdsTo(width: Int, nextId: => Long): IterableDataset[A] = {
-    @tailrec def padded(padTo: Int, ids: VectorCase[Long]): VectorCase[Long] = if (padTo <= 0) ids else padded(padTo - 1, ids :+ nextId)
-
-    IterableDataset(width, iterable map { case (ids, a) => (padded(idCount - width, ids), a) })
-  }
-}
-
 case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
 
 trait IterableDatasetOpsComponent extends YggConfigComponent {
@@ -473,5 +461,4 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     }
   )
   */
-  
 // vim: set ts=4 sw=4 et:
