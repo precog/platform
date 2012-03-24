@@ -354,7 +354,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     }
   )
 
-  def memoize(memoId: Int)(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
+  def memoize(memoId: Int): IterableDataset[A] = sys.error("todo") //(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
 
   def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, A)]): IterableGrouping[K, IterableDataset[A]] = sys.error("todo")
 

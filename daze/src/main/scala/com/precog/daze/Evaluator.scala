@@ -27,7 +27,9 @@ trait IdSource {
 }
 
 trait EvaluatorConfig {
-  def chunkSerialization: FileSerialization[SValue]
+  implicit def valueSerialization: SortSerialization[SValue]
+  implicit def eventSerialization: SortSerialization[(Identities, SValue)]
+  implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]
   def maxEvalDuration: akka.util.Duration
   def idSource: IdSource
 }
@@ -73,12 +75,7 @@ trait Evaluator extends DAG
     }
   }
 
-  implicit lazy val chunkSerialization = yggConfig.chunkSerialization
-  
-  implicit def valueSerialization: SortSerialization[SValue]      // TODO remove!
-  implicit def eventSerialization: SortSerialization[(Identities, SValue)]      // TODO remove!
-  implicit def keyValueSerialization: SortSerialization[(SValue, SValue)]    // TODO remove!
-  
+  import yggConfig._
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
