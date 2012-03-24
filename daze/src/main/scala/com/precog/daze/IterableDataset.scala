@@ -9,6 +9,7 @@ import scala.annotation.tailrec
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.Ordering._
 import scalaz.effect._
+import scalaz.syntax.semigroup._
 
 sealed trait CogroupState[+ER]
 case object Step extends CogroupState[Nothing]
@@ -65,9 +66,102 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         })
     }
 
-    def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]] = sys.error("todo")
+    def mergeGroups[A <: AnyRef, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] = {
+      val leftIter = d1.iterator
+      val rightIter = d2.iterator
 
-    def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = {
+      if (isUnion) {
+        IterableGrouping(new Iterator[(K, Dataset[A])] {
+          var _next: (K, Dataset[A]) = _
+          var _left: (K, Dataset[A]) = if (leftIter.hasNext) leftIter.next() else null
+          var _right: (K, Dataset[A]) = if (rightIter.hasNext) rightIter.next() else null
+
+          precomputeNext()
+
+          def hasNext = _next != null
+
+          def next() = {
+            val back = _next
+            precomputeNext()
+            back
+          }
+
+          private[this] def precomputeNext() {
+            if (!leftIter.hasNext && !rightIter.hasNext) {
+              _next = null
+            } else if (leftIter.hasNext && !rightIter.hasNext) {
+              _left = leftIter.next
+              _next = _left
+            } else if (!leftIter.hasNext && rightIter.hasNext) {
+              _right = rightIter.next
+              _next = _right
+            } else {
+              ord.order(_left._1, _right._1) match {
+                case LT =>
+                  _next = _left
+                  if (leftIter.hasNext) {
+                    _left = leftIter.next
+                  }
+                case GT =>
+                  _next = _left
+                  if (rightIter.hasNext) {
+                    _right = rightIter.next
+                  }
+                case EQ => {
+                  _next = (_left._1, extend(_left._2).union(_right._2))
+                  _left = if (leftIter.hasNext) leftIter.next else null
+                  _right = if (rightIter.hasNext) rightIter.next else null
+                }
+              }
+            }
+          }
+        })
+      } else {
+        IterableGrouping(new Iterator[(K, Dataset[A])] {
+          var _next: (K, Dataset[A]) = _
+          var _left: (K, Dataset[A]) = if (leftIter.hasNext) leftIter.next() else null
+          var _right: (K, Dataset[A]) = if (rightIter.hasNext) rightIter.next() else null
+
+          precomputeNext()
+
+          def hasNext = _next != null
+
+          def next() = {
+            val back = _next
+            precomputeNext()
+            back
+          }
+
+          @tailrec private[this] def precomputeNext() {
+            if (!leftIter.hasNext || !rightIter.hasNext) {
+              _next = null
+            } else {
+              ord.order(_left._1, _right._1) match {
+                case LT =>
+                  if (leftIter.hasNext) {
+                    _left = leftIter.next; precomputeNext()
+                  } else {
+                    _next = null
+                  }
+                case GT =>
+                  if (rightIter.hasNext) {
+                    _right = rightIter.next; precomputeNext()
+                  } else {
+                    _next = null
+                  }
+                case EQ => {
+                  _next = (_left._1, extend(_left._2).intersect(_right._2))
+                  _left = if (leftIter.hasNext) leftIter.next else null
+                  _right = if (rightIter.hasNext) rightIter.next else null
+                }
+              }
+            }
+          }
+        })
+      }
+    }
+
+    def zipGroups[A <: AnyRef, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = {
       val ord = implicitly[Order[K]]
 
       val leftIter = d1.iterator
@@ -106,7 +200,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
                   _next = null
                 }
               case EQ => {
-                _next = (_left._1, _left._2.list <::: _right._2)
+                _next = (_left._1, _left._2 |+| _right._2)
                 _left = if (leftIter.hasNext) leftIter.next else null
                 _right = if (rightIter.hasNext) rightIter.next else null
               }
@@ -116,9 +210,9 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = sys.error("todo")
+    def flattenGroup[A <: AnyRef, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = sys.error("todo")
 
-    def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
+    def mapGrouping[K, A <: AnyRef, B <: AnyRef](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
       IterableGrouping[K, B](g.iterator.map { case (k,a) => (k, f(a)) })
     }
   }
