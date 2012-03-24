@@ -760,6 +760,218 @@ object EmitterSpecs extends Specification
           Merge,
           Merge))
     }.pendingUntilFixed
+    
+    "emit split and merge for cf example with single, multiply constrained tic variable" in {
+      testEmit("""
+        | clicks := load(//clicks)
+        | foo('a) :=
+        |   bar := clicks where clicks.a = 'a
+        |   baz := clicks where clicks.b = 'a
+        |
+        |   bar.a + baz.b
+        |
+        | foo""".stripMargin)(Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Dup,
+          Dup,
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Bucket,
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Bucket,
+          ZipBuckets,
+          Split(1, 3),
+          Swap(1),
+          Swap(2),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Map2Match(Add),
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Merge))
+    }
+    
+    "emit split and merge for cf example with independent tic variables on same set" in {
+      testEmit("""
+        | clicks := load(//clicks)
+        | 
+        | foo('a, 'b) :=
+        |   bar := clicks where clicks.a = 'a
+        |   baz := clicks where clicks.b = 'b
+        |
+        |   bar.a + baz.b
+        |
+        | foo""".stripMargin)(Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Dup,
+          Dup,
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Bucket,
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Bucket,
+          Split(2, 4),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Swap(5),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Map2Match(Add),
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Merge))
+    }
+    
+    "emit split and merge for cf example with independent tic variables on different sets" in {
+      testEmit("""
+        | clicks := load(//clicks)
+        | imps := load(//impressions)
+        | 
+        | foo('a, 'b) :=
+        |   bar := clicks where clicks.a = 'a
+        |   baz := imps where imps.b = 'b
+        |
+        |   bar ~ baz
+        |     bar.a + baz.b
+        |
+        | foo""".stripMargin)(Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Swap(1),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Bucket,
+          PushString("/impressions"),
+          LoadLocal(Het),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Bucket,
+          Split(2, 4),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(4),
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          PushString("a"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Swap(5),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          Map2Cross(Add),
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Merge))
+    }
 
     "emit split and merge for ctr example" in {
       testEmit("clicks := load(//clicks) " + 

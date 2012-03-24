@@ -49,7 +49,7 @@ object GroupSolverSpecs extends Specification
       
       val tree @ Let(_, _, _, _,
         Let(_, _, _, 
-          origin @ Where(_, target, Eq(_, solution, _)), d: Dispatch)) = parse(input)
+          origin @ Where(_, target, Eq(_, solution, _)), d: Dispatch)) = compile(input)
         
       d.buckets must contain("'day" -> Group(origin, target, Definition(solution), Set()))
       tree.errors must beEmpty
@@ -60,12 +60,65 @@ object GroupSolverSpecs extends Specification
       
       val tree @ Let(_, _, _, _,
         Let(_, _, _, 
-          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), d: Dispatch)) = parse(input)
+          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), d: Dispatch)) = compile(input)
       
       val bucket = Group(origin, target,
         Conjunction(Definition(leftSol), Definition(rightSol)), Set())
       
       d.buckets must contain("'day" -> bucket)
+      tree.errors must beEmpty
+    }
+    
+    "identify separate buckets for independent tic variables on same set" in {
+      val input = """
+        | clicks := load(//clicks)
+        | 
+        | foo('a, 'b) :=
+        |   bar := clicks where clicks.a = 'a
+        |   baz := clicks where clicks.b = 'b
+        |
+        |   bar.a + baz.b
+        |
+        | foo""".stripMargin
+        
+      val tree @ Let(_, _, _, _,
+        Let(_, _, _,
+          Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
+            Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
+          d: Dispatch)) = compile(input)
+      
+      val bucketA = Group(originA, targetA, Definition(solA), Set())
+      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      
+      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
+      tree.errors must beEmpty
+    }
+    
+    "identify separate buckets for independent tic variables on different sets" in {
+      val input = """
+        | clicks := load(//clicks)
+        | imps := load(//impressions)
+        | 
+        | foo('a, 'b) :=
+        |   bar := clicks where clicks.a = 'a
+        |   baz := imps where imps.b = 'b
+        |
+        |   bar ~ baz
+        |     bar.a + baz.b
+        |
+        | foo""".stripMargin
+        
+      val tree @ Let(_, _, _, _,
+        Let(_, _, _, _,
+          Let(_, _, _,
+            Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
+              Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
+          d: Dispatch))) = compile(input)
+      
+      val bucketA = Group(originA, targetA, Definition(solA), Set())
+      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      
+      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
       tree.errors must beEmpty
     }
   }
