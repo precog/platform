@@ -31,7 +31,7 @@ trait Sorting[Dataset[_]] {
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
-  def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterator[E] = {
+  def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterable[E] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 
