@@ -270,7 +270,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     new IterableDatasetExtensions(d2, iteratorSorting).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then merge and sort -u by identities
-  def paddedMerge(d2: IterableDataset[A], nextId: () => Identity, memoId: Int)(implicit fs: FileSerialization[IA]): IterableDataset[A] = {
+  def paddedMerge(d2: IterableDataset[A], nextId: () => Identity, memoId: Int)(implicit fs: SortSerialization[A]): IterableDataset[A] = {
     val (left, right) = if (value.idCount > d2.idCount) (value, d2.padIdsTo(value.idCount, nextId()))
                         else if (value.idCount < d2.idCount) (value.padIdsTo(d2.idCount, nextId()), d2)
                         else (value, d2)
