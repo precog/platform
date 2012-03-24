@@ -95,7 +95,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): Dataset[A]
   
-  def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
+  def memoize(memoId: Int): Dataset[A] //(implicit fs: FileSerialization[A]): Dataset[A] 
 
   // for each value, calculate the keys for that value - this should be as singleton dataset
   // sort by key then by the identity ordering of the input dataset
