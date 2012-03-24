@@ -18,16 +18,16 @@
  *
  */
 package com.precog.quirrel
-package typer
+package emitter
 
-trait CriticalConditionFinder extends parser.AST with Binder {
+trait GroupFinder extends parser.AST with typer.Binder with Solutions {
   import Utils._
   import ast._
   
-  override def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = {
-    import condition._
+  override def findGroups(expr: Expr): Map[String, Set[GroupTree]] = {
+    import group._
     
-    def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[ConditionTree]] = expr match {
+    def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Map[String, Set[GroupTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
       case New(_, child) => loop(root, child, currentWhere)
@@ -40,7 +40,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
+        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): GroupTree)) } getOrElse Map()
         case _ => Map()
       }
       
@@ -69,22 +69,22 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         
         val fromDef = d.binding match {
           case UserDef(e) => loop(root, e.left, currentWhere)
-          case _ => Map[String, Set[ConditionTree]]()
+          case _ => Map[String, Set[GroupTree]]()
         }
         
         val back = merge(merged, fromDef)
         
         d.binding match {
           case b: BuiltIn if d.isReduction =>
-            back map { case (key, value) => key -> Set(Reduction(b, value): ConditionTree) }
+            back map { case (key, value) => key -> Set(Reduction(b, value): GroupTree) }
           
           case _ => back
         }
       }
       
-      case Where(_, left, right) => {
+      case op @ Where(_, left, right) => {
         val leftMap = loop(root, left, currentWhere)
-        val rightMap = loop(root, right, Some(right))
+        val rightMap = loop(root, right, Some(op))
         merge(leftMap, rightMap)
       }
       
@@ -141,114 +141,16 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     }
     
     expr match {
-      case root @ Let(_, _, _, left, _) => {
-        val wheres = loop(root, left, None)
-        
-        wheres map {
-          case (key, value) => {
-            val result = runAtLevels(value) { e => splitConj(e) filter referencesTicVar(root) }
-            key -> result
-          }
-        }
-      }
+      case root @ Let(_, _, _, left, _) => loop(root, left, None)
       case _ => Map()
     }
   }
   
-  private def runAtLevels(trees: Set[ConditionTree])(f: Expr => Set[Expr]): Set[ConditionTree] = trees flatMap {
-    case condition.Condition(expr) => f(expr) map { condition.Condition(_): ConditionTree }
-    
-    case condition.Reduction(b, trees) => {
-      val rec = runAtLevels(trees)(f)
-      if (rec.isEmpty)
-        Set[ConditionTree]()
-      else
-        Set(condition.Reduction(b, rec): ConditionTree)
-    }
-  }
   
-  private def splitConj(expr: Expr): Set[Expr] = expr match {
-    case And(_, left, right) => splitConj(left) ++ splitConj(right)
-    case e => Set(e)
-  }
+  sealed trait GroupTree
   
-  private def referencesTicVar(root: Let)(expr: Expr): Boolean = expr match {
-    case Let(_, _, _, _, right) => referencesTicVar(root)(right)
-    
-    case New(_, child) => referencesTicVar(root)(child)
-    
-    case Relate(_, from, to, in) =>
-      referencesTicVar(root)(from) || referencesTicVar(root)(to) || referencesTicVar(root)(in)
-    
-    case t @ TicVar(_, _) => t.binding match {
-      case UserDef(`root`) => true
-      case _ => false
-    }
-    
-    case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => false
-    
-    case ObjectDef(_, props) => props exists { case (_, e) => referencesTicVar(root)(e) }
-    
-    case ArrayDef(_, values) => values exists referencesTicVar(root)
-    
-    case Descent(_, child, _) => referencesTicVar(root)(child)
-    
-    case Deref(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case d @ Dispatch(_, _, actuals) => {
-      val paramRef = actuals exists referencesTicVar(root)
-      val defRef = d.binding match {
-        case UserDef(e) => referencesTicVar(root)(e.left)
-        case _ => false
-      }
-      
-      paramRef || defRef
-    }
-    
-    case Where(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-
-    case With(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-
-    case Union(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-
-    case Intersect(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Add(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Sub(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Mul(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Div(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Lt(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case LtEq(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Gt(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case GtEq(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Eq(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case NotEq(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case And(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Or(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
-    
-    case Comp(_, child) => referencesTicVar(root)(child)
-    
-    case Neg(_, child) => referencesTicVar(root)(child)
-    
-    case Paren(_, child) => referencesTicVar(root)(child)
-  }
-  
-  
-  sealed trait ConditionTree
-  
-  object condition {
-    case class Condition(expr: Expr) extends ConditionTree
-    case class Reduction(b: BuiltIn, children: Set[ConditionTree]) extends ConditionTree
+  object group {
+    case class Condition(op: Where) extends GroupTree
+    case class Reduction(b: BuiltIn, children: Set[GroupTree]) extends GroupTree
   }
 }

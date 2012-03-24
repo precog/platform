@@ -25,7 +25,7 @@ import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
-  implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
+  implicit def extend[A <: AnyRef](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
 
   def empty[A]: Dataset[A] 
 
@@ -53,17 +53,19 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
 
-trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
+trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
+  type IA = (Identities, A)
+
   def value: Dataset[A]
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
   def join[B, C](d2: Dataset[B], sharedPrefixLength: Int)(f: PartialFunction[(A, B), C]): Dataset[C]
 
   // concatenate identities
-  def crossLeft[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
+  def crossLeft[B <: AnyRef, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
   // concatenate identities
-  def crossRight[B, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
+  def crossRight[B <: AnyRef, C](d2: Dataset[B])(f: PartialFunction[(A, B), C]): Dataset[C] 
 
   // pad identities to the longest side, then sort -u by all identities
   def paddedMerge(d2: Dataset[A], nextId: () => Identity, memoId: Int)(implicit fs: FileSerialization[(Identities, A)]): Dataset[A]
@@ -84,14 +86,14 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: Manifest[A], fs: FileSerialization[A]): Dataset[A]
+  def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Dataset[A]
 
   // identify(None) strips all identities
   def identify(nextId: Option[() => Identity]): Dataset[A]
 
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: FileSerialization[(Identities, A)]): Dataset[A]
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): Dataset[A]
   
   def memoize(memoId: Int)(implicit fs: FileSerialization[A]): Dataset[A] 
 

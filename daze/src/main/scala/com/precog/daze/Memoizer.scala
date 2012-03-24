@@ -32,63 +32,76 @@ trait Memoizer extends DAG {
     val reftable = countRefs(graph)
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
-    def memoize(graph: DepGraph): DepGraph = {
+    def memoizedSpec(spec: BucketSpec): BucketSpec = spec match {
+      case MergeBucketSpec(left, right, and) =>
+        MergeBucketSpec(memoizedSpec(left), memoizedSpec(right), and)
+      
+      case ZipBucketSpec(left, right) =>
+        ZipBucketSpec(memoizedSpec(left), memoizedSpec(right))
+      
+      case SingleBucketSpec(target, solution) =>
+        SingleBucketSpec(memoized(target), memoized(solution))
+    }
+    
+    def memoized(graph: DepGraph): DepGraph = {
       def inner(graph: DepGraph): DepGraph = {
         lazy val refs = reftable.getOrElse(graph, 0)
         
         graph match {
-          case _: SplitRoot => graph
+          case _: SplitParam => graph
+          
+          case _: SplitGroup => graph
           
           case _: Root => graph
           
           case New(loc, parent) => {
             if (refs > MemoThreshold)
-              Memoize(New(loc, memoize(parent)), refs)
+              Memoize(New(loc, memoized(parent)), refs)
             else
-              New(loc, memoize(parent))
+              New(loc, memoized(parent))
           }
           
           case LoadLocal(loc, range, parent, tpe) => {
             if (refs > MemoThreshold)
-              Memoize(LoadLocal(loc, range, memoize(parent), tpe), refs)
+              Memoize(LoadLocal(loc, range, memoized(parent), tpe), refs)
             else
-              LoadLocal(loc, range, memoize(parent), tpe)
+              LoadLocal(loc, range, memoized(parent), tpe)
           }
           
           case Operate(loc, op, parent) => {
             if (refs > MemoThreshold)
-              Memoize(Operate(loc, op, memoize(parent)), refs)
+              Memoize(Operate(loc, op, memoized(parent)), refs)
             else
-              Operate(loc, op, memoize(parent))
+              Operate(loc, op, memoized(parent))
           }
           
           case Reduce(loc, red, parent) => {
             if (refs > MemoThreshold)
-              Memoize(Reduce(loc, red, memoize(parent)), refs)
+              Memoize(Reduce(loc, red, memoized(parent)), refs)
             else
-              Reduce(loc, red, memoize(parent))
+              Reduce(loc, red, memoized(parent))
           }          
 
           case SetReduce(loc, red, parent) => {
             if (refs > MemoThreshold)
-              Memoize(SetReduce(loc, red, memoize(parent)), refs)
+              Memoize(SetReduce(loc, red, memoized(parent)), refs)
             else
-              SetReduce(loc, red, memoize(parent))
+              SetReduce(loc, red, memoized(parent))
           }
           
-          case Split(loc, parent, child) => {
-            val parent2 = memoize(parent)
-            val child2 = memoize(child)
+          case Split(loc, specs, child) => {
+            val specs2 = specs map memoizedSpec
+            val child2 = memoized(child)
             
             if (refs > 1)
-              Memoize(Split(loc, parent2, child2), refs)
+              Memoize(Split(loc, specs2, child2), refs)
             else
-              Split(loc, parent2, child2)
+              Split(loc, specs2, child2)
           }
           
           case Join(loc, instr, left, right) => {
-            val left2 = memoize(left)
-            val right2 = memoize(right)
+            val left2 = memoized(left)
+            val right2 = memoized(right)
             
             if (refs > 1)
               Memoize(Join(loc, instr, left2, right2), refs)
@@ -97,8 +110,8 @@ trait Memoizer extends DAG {
           }
           
           case Filter(loc, cross, range, target, boolean) => {
-            val target2 = memoize(target)
-            val boolean2 = memoize(boolean)
+            val target2 = memoized(target)
+            val boolean2 = memoized(boolean)
             
             if (refs > 1)
               Memoize(Filter(loc, cross, range, target2, boolean2), refs)
@@ -108,12 +121,12 @@ trait Memoizer extends DAG {
           
           case Sort(parent, indexes) => {
             if (refs > MemoThreshold)
-              Memoize(Sort(memoize(parent), indexes), refs)
+              Memoize(Sort(memoized(parent), indexes), refs)
             else
-              Sort(memoize(parent), indexes)
+              Sort(memoized(parent), indexes)
           }
           
-          case Memoize(parent, _) => memoize(parent)
+          case Memoize(parent, _) => memoized(parent)
         }
       }
       
@@ -124,7 +137,18 @@ trait Memoizer extends DAG {
       }
     }
     
-    memoize(graph)
+    memoized(graph)
+  }
+  
+  def countSpecRefs(spec: BucketSpec): Map[DepGraph, Int] = spec match {
+    case MergeBucketSpec(left, right, _) =>
+      merge(countSpecRefs(left), countSpecRefs(right))
+    
+    case ZipBucketSpec(left, right) =>
+      merge(countSpecRefs(left), countSpecRefs(right))
+    
+    case SingleBucketSpec(target, solution) =>
+      merge(increment(countRefs(target), target, 1), increment(countRefs(solution), solution, 1))
   }
   
   def countRefs(graph: DepGraph): Map[DepGraph, Int] = graph match {
@@ -143,8 +167,8 @@ trait Memoizer extends DAG {
     case SetReduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
     
-    case Split(_, parent, child) =>
-      merge(countRefs(child), increment(countRefs(parent), parent, 1))
+    case Split(_, specs, child) =>
+      merge(countRefs(child), specs map countSpecRefs reduce merge[DepGraph])
     
     case Join(_, _, left, right) => {
       val rec = merge(countRefs(left), countRefs(right))

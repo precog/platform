@@ -18,12 +18,12 @@
  *
  */
 package com.precog.quirrel
+package emitter
 
-trait StubPhases extends Phases with RawErrors {
-  def bindNames(expr: Expr): Set[Error] = Set()
-  def checkProvenance(expr: Expr): Set[Error] = Set()
-  def solveCriticalConditions(expr: Expr): Set[Error] = Set()
-  def inferBuckets(expr: Expr): Set[Error] = Set()
-  def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
-  def findGroups(expr: Expr): Map[String, Set[GroupTree]] = Map()
+trait Solutions extends parser.AST {
+  sealed trait Solution
+  
+  case class Conjunction(left: Solution, right: Solution) extends Solution
+  case class Disjunction(left: Solution, right: Solution) extends Solution
+  case class Definition(expr: Expr) extends Solution
 }

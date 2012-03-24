@@ -115,3 +115,7 @@ case class UnableToSolveCriticalCondition(id: String) extends ErrorType {
 case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
   override def toString = "unable to solve defining set for function parameter %s".format(id)
 }
+
+case object GroupSetInvolvingMultipleParameters extends ErrorType {
+  override def toString = "cannot solve group set involving multiple function parameters"
+}
