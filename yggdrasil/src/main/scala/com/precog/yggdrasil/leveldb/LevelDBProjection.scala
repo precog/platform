@@ -128,9 +128,8 @@ object LevelDBProjection {
 //  }
 }
 
-class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection {
+class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset] {
   import LevelDBProjection._
-  type Dataset[E] = IterableDataset[E]
 
   val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
@@ -279,7 +278,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   })
 
-  @inline final def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = traverseIndex(expiresAt)
+  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
 
 //  def traverseIndexEnumerator[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
 //    import MO._

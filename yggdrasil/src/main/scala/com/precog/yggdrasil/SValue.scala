@@ -376,6 +376,8 @@ case class  FixedWidth(width: Int) extends StorageFormat {
 
 sealed trait ColumnType {
   def format: StorageFormat
+
+  def stype: SType
   
   def =~(tpe: SType): Boolean = (this, tpe) match {
     case (a, b) if a == b => true
@@ -545,14 +547,17 @@ case object SString extends SType with (String => SValue) {
 
 case class SStringFixed(width: Int) extends ColumnType {
   def format = FixedWidth(width)  
+  val stype = SString
 }
 
 case object SStringArbitrary extends ColumnType {
   def format = LengthEncoded  
+  val stype = SString
 }
 
 case object SBoolean extends SType with ColumnType with (Boolean => SValue) {
   def format = FixedWidth(1)
+  val stype = this
   def apply(v: Boolean) = if (v) STrue else SFalse
   def unapply(v: SValue): Option[Boolean] = v.mapBooleanOr(Option.empty[Boolean])(Some(_))
   override def toString(): String = "SBoolean"
@@ -590,6 +595,7 @@ case object SFalse extends SValue with SBooleanValue {
 
 case object SInt extends ColumnType with (Int => SValue) {
   def format = FixedWidth(4)
+  val stype = SDecimal
   def apply(v: Int) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -603,6 +609,7 @@ case object SInt extends ColumnType with (Int => SValue) {
 
 case object SLong extends ColumnType with (Long => SValue) {
   def format = FixedWidth(8)
+  val stype = SDecimal
   def apply(v: Long) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -617,6 +624,7 @@ case object SLong extends ColumnType with (Long => SValue) {
 
 case object SFloat extends ColumnType with (Float => SValue) {
   def format = FixedWidth(4)
+  val stype = SDecimal
   def apply(v: Float) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -630,6 +638,7 @@ case object SFloat extends ColumnType with (Float => SValue) {
 
 case object SDouble extends ColumnType with (Double => SValue) {
   def format = FixedWidth(8)
+  val stype = SDecimal
   def apply(v: Double) = new SValue {
     def fold[A](
       obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
@@ -644,6 +653,7 @@ case object SDouble extends ColumnType with (Double => SValue) {
 
 case object SDecimalArbitrary extends ColumnType {
   def format = LengthEncoded  
+  val stype = SDecimal
 }
 
 case object SDecimal extends SType with (BigDecimal => SValue) {
@@ -667,6 +677,7 @@ case object SDecimal extends SType with (BigDecimal => SValue) {
 
 case object SNull extends SType with ColumnType with SValue {
   def format = FixedWidth(0)
+  val stype = this
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
@@ -677,6 +688,7 @@ case object SNull extends SType with ColumnType with SValue {
 
 case object SEmptyObject extends ColumnType with SValue {
   def format = FixedWidth(0)
+  val stype = SDecimal
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
@@ -687,6 +699,7 @@ case object SEmptyObject extends ColumnType with SValue {
 
 case object SEmptyArray extends ColumnType with SValue {
   def format = FixedWidth(0)
+  val stype = SDecimal
   def fold[A](
     obj:    Map[String, SValue] => A,   arr:    Vector[SValue] => A,
     str:    String => A, bool:   Boolean => A,
