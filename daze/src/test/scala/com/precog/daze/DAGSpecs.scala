@@ -61,46 +61,130 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     
     "parse a single-level split" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, instructions.Split, PushFalse, VUnion, Merge))
-      result mustEqual Right(dag.Split(line, Root(line, PushTrue), Join(line, VUnion, SplitRoot(line, 0), Root(line, PushFalse))))
+      
+      val result = decorate(Vector(
+        line,
+        PushTrue,
+        Dup,
+        Bucket,
+        instructions.Split(1, 2),
+        VUnion,
+        Merge))
+        
+      result must beLike {
+        case Right(
+          s @ dag.Split(`line`,
+            Vector(SingleBucketSpec(
+              Root(`line`, PushTrue),
+              Root(`line`, PushTrue))),
+            Join(`line`, VUnion, 
+              sp @ SplitParam(`line`, 0),
+              sg @ SplitGroup(`line`, 1, Vector())))) => {
+              
+          sp.parent mustEqual s
+          sg.parent mustEqual s
+        }
+      }
     }
     
     "parse a bi-level split" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, instructions.Split, PushFalse, instructions.Split, VUnion, Merge, Merge))
-      result mustEqual Right(dag.Split(line, Root(line, PushTrue), dag.Split(line, Root(line, PushFalse), Join(line, VUnion, SplitRoot(line, 1), SplitRoot(line, 0)))))
-    }
-    
-    "parse a bi-level split with intermediate usage" in {
-      val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, instructions.Split, PushNum("42"), Map2Cross(Add), PushFalse, instructions.Split, VUnion, Merge, Merge))
-      result mustEqual Right(dag.Split(line,
-        Root(line, PushTrue),
-        dag.Split(line,
-          Root(line, PushFalse),
-          Join(line, VUnion,
-            Join(line, Map2Cross(Add),
-              SplitRoot(line, 1),
-              Root(line, PushNum("42"))),
-            SplitRoot(line, 0)))))
-    }
-    
-    "accept split which reduces the stack" in {
-      val line = Line(0, "")
+      
       val result = decorate(Vector(
         line,
         PushTrue,
         PushFalse,
-        instructions.Split,
+        Bucket,
+        instructions.Split(1, 2),
+        Bucket,
+        instructions.Split(1, 2),
+        VUnion,
+        Merge,
+        Merge))
+        
+      result must beLike {
+        case Right(
+          s1 @ dag.Split(`line`,
+            Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushTrue))),
+            s2 @ dag.Split(`line`,
+              Vector(SingleBucketSpec(sp1 @ SplitParam(`line`, 0), sg1 @ SplitGroup(`line`, 1, Vector()))),
+              Join(`line`, VUnion,
+                sp2 @ SplitParam(`line`, 0),
+                sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
+          
+          sp1.parent mustEqual s1
+          sg1.parent mustEqual s1
+          
+          sp2.parent mustEqual s2
+          sg2.parent mustEqual s2
+        }
+      }
+    }
+    
+    "parse a bi-level split with intermediate usage" in {
+      val line = Line(0, "")
+      
+      val result = decorate(Vector(
+        line,
+        PushTrue,
+        PushFalse,
+        Bucket,
+        instructions.Split(1, 2),
+        Map2Cross(Add),
+        PushNum("42"),
+        PushFalse,
+        Bucket,
+        instructions.Split(1, 2),
+        Drop,
+        VUnion,
+        Merge,
+        Merge))
+      
+      result must beLike {
+        case Right(
+          s1 @ dag.Split(`line`,
+            Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushTrue))),
+            s2 @ dag.Split(`line`,
+              Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushNum("42")))),
+              Join(`line`, VUnion,
+                Join(`line`, Map2Cross(Add),
+                  sp1 @ SplitParam(`line`, 0),
+                  sg1 @ SplitGroup(`line`, 1, Vector())),
+                sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
+          
+          sp1.parent mustEqual s1
+          sg1.parent mustEqual s1
+          
+          sg2.parent mustEqual s2
+        }
+      } 
+    }
+    
+    "accept split which reduces the stack" in {
+      val line = Line(0, "")
+      
+      val result = decorate(Vector(
+        line,
+        PushNum("42"),
+        PushTrue,
+        PushFalse,
+        Bucket,
+        instructions.Split(1, 2),
+        Drop,
         Map2Match(Add),
         Merge))
         
-      result mustEqual Right(
-        dag.Split(line,
-          Root(line, PushFalse),
-          Join(line, Map2Match(Add),
-            Root(line, PushTrue),
-            SplitRoot(line, 0))))
+      result must beLike {
+        case Right(
+          s @ dag.Split(`line`,
+            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            Join(`line`, Map2Match(Add),
+              Root(`line`, PushNum("42")),
+              sg @ SplitGroup(`line`, 1, Vector())))) => {
+          
+          sg.parent mustEqual s
+        }
+      }
     }
     
     "recognize a join instruction" in {
@@ -353,7 +437,7 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       }
       
       "split" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.Split
+        val instr = instructions.Split(1, 2)
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       
@@ -593,7 +677,14 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     }
     
     "reject merge with deepened stack" in {
-      decorate(Vector(Line(0, ""), PushTrue, instructions.Split, PushFalse, Merge)) mustEqual Left(MergeWithUnmatchedTails)
+      decorate(Vector(
+        Line(0, ""),
+        PushTrue,
+        PushFalse,
+        Bucket,
+        instructions.Split(1, 2),
+        PushFalse,
+        Merge)) mustEqual Left(MergeWithUnmatchedTails)
     }
     
     "accept merge with reduced (but reordered) stack" in {
@@ -604,20 +695,23 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
         PushTrue,
         PushFalse,
         PushNum("42"),
-        instructions.Split,
+        PushNum("12"),
+        Bucket,
+        instructions.Split(1, 2),
+        Drop,
         Swap(1),
         Swap(2),
         VUnion,
         Merge,
         VIntersect))
-        
-      val expect = Join(line, VIntersect,
-        Root(line, PushFalse),
-        dag.Split(line,
-          Root(line, PushNum("42")),
-          Join(line, VUnion,
-            SplitRoot(line, 0),
-            Root(line, PushTrue))))
+      
+      lazy val split: dag.Split = dag.Split(line,
+        Vector(SingleBucketSpec(Root(line, PushNum("42")), Root(line, PushNum("12")))),
+        Join(line, VUnion,
+          SplitGroup(line, 1, Vector())(split),
+          Root(line, PushTrue)))
+      
+      val expect = Join(line, VIntersect, Root(line, PushFalse), split)
         
       result mustEqual Right(expect)
     }
@@ -627,7 +721,7 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     }
     
     "reject split without corresponding merge" in {
-      decorate(Vector(Line(0, ""), PushTrue, instructions.Split)) mustEqual Left(UnmatchedSplit)
+      decorate(Vector(Line(0, ""), PushTrue, instructions.Split(1, 2))) mustEqual Left(UnmatchedSplit)
     }
     
     "reject split which increases the stack" in {
