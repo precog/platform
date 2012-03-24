@@ -726,11 +726,13 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     
     "reject split which increases the stack" in {
       val line = Line(0, "")
+      
       val result = decorate(Vector(
         line,
         PushTrue,
         PushFalse,
-        instructions.Split,
+        Bucket,
+        instructions.Split(1, 2),
         PushTrue,
         Merge))
         
