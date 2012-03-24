@@ -142,6 +142,31 @@ trait SValue {
     num = n => JDouble(n.toDouble), //sys.error("fix JValue"),
     nul = JNull)
 
+  def merge(other: SValue): SValue = {
+    mapObjectOr(
+      mapArrayOr(sys.error("cannot merge non object/array values")) { arrElems =>
+        other.mapArrayOr(sys.error("cannot merge an array with non-array")) { otherElems =>
+          List(arrElems, otherElems).sortBy(_.length) match {
+            case shorter :: longer :: Nil =>
+              var i = 0
+              var newElems = Vector.empty[SValue]
+              while (i < shorter.length) newElems :+ (shorter(i) merge longer(i))
+              while (i < longer.length)  newElems :+ longer(i)
+              SArray(newElems)
+          } 
+        }
+      }
+    ) { objMap =>
+      other.mapObjectOr(sys.error("cannot merge object with non-objecT")) { otherMap =>
+        SObject(
+          objMap.foldLeft(otherMap) {
+            case (acc, (k, v)) => acc + (k -> acc.get(k).map(_ merge v).getOrElse(v))
+          }
+        )
+      }
+    }
+  }
+
   abstract override def equals(obj: Any) = obj match {
     case sv: SValue => fold(
         obj  = o => sv.mapObjectOr(false)(_ == o),

@@ -10,8 +10,10 @@ import com.precog.yggdrasil.leveldb._
 
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
+import akka.dispatch.Await
 import akka.util.duration._
 import blueeyes.json.JPath
+import blueeyes.util.Clock
 import java.io.File
 
 import scalaz._
@@ -21,29 +23,38 @@ import scalaz.std.set._
 import Iteratee._
 
 trait LevelDBQueryConfig {
+  def clock: Clock
   def projectionRetrievalTimeout: akka.util.Timeout
 }
 
-trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent {
+trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent with YggShardComponent with DatasetOpsComponent {
   type YggConfig <: LevelDBQueryConfig
-  type Storage <: YggShard
-  type X = Throwable
+  type Dataset[E] = IterableDataset[E]
+  import ops._
 
-  def storage: Storage
   implicit def asyncContext: ExecutionContext
 
-  type Dataset[E] = DatasetEnum[X, E, IO]
-
   trait QueryAPI extends StorageEngineQueryAPI[Dataset] {
-    /*
-    override def fullProjection(userUID: String, path: Path, expiresAt: Long): DatasetEnum[X, SEvent, IO] = DatasetEnum(
-      for {
-        selectors   <- storage.userMetadataView(userUID).findSelectors(path) 
-        sources     <- Future.sequence(selectors map { s => storage.userMetadataView(userUID).findProjections(path, s) map { p => (s, p.keySet) } })
-        enumerator: EnumeratorP[X, Vector[SEvent], IO]  <- assemble(path, sources, expiresAt)
-      } yield enumerator
+    type Sources = Set[(JPath, SType, ProjectionDescriptor)]
+
+    /**
+     *
+     */
+    override def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = Await.result(
+      fullProjectionFuture(userUID, path, expiresAt),
+      (expiresAt - yggConfig.clock.now().getMillis) millis
     )
 
+    private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long): Future[Dataset[SValue]] = {
+      for {
+        pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
+        dataset  <- assemble(path, sources(JPath.Identity, pathRoot), expiresAt)
+      } yield dataset
+    }
+
+    /**
+     *
+     */
     override def mask(userUID: String, path: Path): DatasetMask[Dataset] = LevelDBDatasetMask(userUID, path, None, None) 
 
     private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
@@ -53,56 +64,95 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
       def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
-      def realize(expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] = {
-        def assembleForSelector(selector: JPath, retrieval: Future[Map[ProjectionDescriptor, ColumnMetadata]]) = 
-          DatasetEnum(
-            for {
-              descriptors <- retrieval 
-              // we don't know whether the descriptors retuned contain exactly the selector requested, 
-              // or children as well so we have to reassemble them such that we have relevant projections
-              // grouped by unique selector that is a child of the specified selector
-              val sources = descriptors flatMap {
-                case (descriptor, _) => 
-                  val baseSources = descriptor.columns collect { 
-                    case c if c.selector.nodes startsWith selector.nodes => (c.selector, Set(descriptor)) 
-                  } 
-                  
-                  baseSources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
-                    case (acc, (s, ds)) => acc + (s -> (acc.getOrElse(s, Set()) ++ ds))
-                  }
-              }
-              enum        <- assemble(path, sources.toSeq, expiresAt) 
-            } yield {
-              enum map { _ map { case (ids, sv) => (sv \ selector) map { v => (ids, v) } } flatten }
-            }
-          )
-
+      def realize(expiresAt: Long): Dataset[SValue] = Await.result(
         (selector, tpe) match {
           case (Some(s), None | Some(SObject) | Some(SArray)) => 
-            assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s))
+            storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
+              assemble(path, sources(s, pathRoot), expiresAt)
+            }
 
           case (Some(s), Some(tpe)) => 
-            assembleForSelector(s, storage.userMetadataView(userUID).findProjections(path, s, tpe))
+            storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot =>
+              assemble(path, sources(s, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+            }
 
           case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
-            assembleForSelector(JPath.Identity, storage.userMetadataView(userUID).findProjections(path, JPath.Identity))
+            storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) flatMap { pathRoot =>
+              assemble(path, sources(JPath.Identity, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+            }
 
-          case (_      , _        ) => fullProjection(userUID, path, expiresAt)
-        }
-      }
+          case (_      , _        ) => fullProjectionFuture(userUID, path, expiresAt)
+        },
+        (expiresAt - yggConfig.clock.now().getMillis) millis
+      )
     }
 
     implicit val mergeOrder = Order[Identities].contramap[SColumn] { case (ids, _) => ids }
 
-    def assemble(path: Path, sources: Seq[(JPath, Set[ProjectionDescriptor])], expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[EnumeratorP[X, Vector[SEvent], IO]] = {
-      def retrieveAndMerge(path: Path, selector: JPath, descriptors: Set[ProjectionDescriptor]): Future[EnumeratorP[X, Vector[SColumn], IO]] = {
-        import scalaz.std.list._
-        {for {
-          projections <- Future.sequence(descriptors map { storage.projection(_, yggConfig.projectionRetrievalTimeout) })
-        } yield {
-          mergeAllChunked(projections.map(_.getColumnValues(path, selector, expiresAt)).toSeq: _*)
-        }} recover {
-          case ex => EnumeratorP.pointErr(new RuntimeException("An error occurred retrieving data for " + descriptors, ex))
+    def sources(selector: JPath, root: PathRoot): Sources = {
+      def search(metadata: PathMetadata, selector: JPath, acc: Set[(JPath, SType, ProjectionDescriptor)]): Sources = {
+        metadata match {
+          case PathField(name, children) =>
+            children.flatMap(search(_, selector \ name, acc))
+
+          case PathIndex(idx, children) =>
+            children.flatMap(search(_, selector \ idx, acc))
+
+          case PathValue(valueType, descriptors) => 
+            descriptors.headOption map { case (d, _) => acc + ((selector, valueType.stype, d)) } getOrElse acc
+        }
+      }
+
+      root.children.flatMap(search(_, selector, Set.empty[(JPath, SType, ProjectionDescriptor)]))
+    }
+
+    def assemble(path: Path, sources: Sources, expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
+      // pull each projection from the database, then for all the selectors that are provided
+      // by tat projection, merge the values
+      def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {
+        def buildObject(instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
+          instructions.foldLeft(SEmptyObject: SValue) {
+            case (sv, (selector, columnIndex)) => sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
+          }
+        }
+
+        def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): Set[(JPath, Int)] = {
+          selectors map { s => 
+            (s, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
+          }
+        }
+
+        @tailrec def joinNext(result: Future[Dataset[SValue]], retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
+          case (descriptor, selectors) :: xs => 
+            val instr = buildInstructions(descriptor, selectors)
+
+            joinNext(
+              for {
+                projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+                dataset    <- result
+              } yield {
+                dataset.cogroup(projection.getAllPairs(expiresAt)) {
+                  new CogroupF[SValue, Seq[CValue], SValue] {
+                    def left(l: SValue) = l
+                    def both(l: SValue, r: Seq[CValue]) = l merge buildObject(instr, r)
+                    def right(r: Seq[CValue]) = buildObject(instr, r)
+                  }
+                }
+              },
+              xs
+            )
+
+          case Nil => result
+        }
+
+        retrievals.toList match {
+          case (descriptor, selectors) :: xs  => 
+            val instr = buildInstructions(descriptor, selectors)
+            val projection = storage.projection(descriptor, yggConfig.projectionRetrievalTimeout)
+            joinNext(projection map { _.getAllPairs(expiresAt) map { buildObject(instr, _) } }, xs)
+
+          case Nil => 
+            Future(ops.empty[SValue])
         }
       }
 
@@ -110,46 +160,24 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // todo: for right now, this is implemented greedily such that the first
       // projection containing a desired column wins. It should be implemented
       // to choose the projection that satisfies the largest number of columns.
-      val descriptors = sources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
-        case (acc, (selector, descriptorData)) => descriptorData.foldLeft(acc) {
-          case (acc, descriptor) => 
-            acc.get(selector) match {
-              case Some(chosen) if chosen.contains(descriptor) ||
-                                   (chosen exists { d => descriptor.columnAt(path, selector).exists(d.satisfies) }) => acc
+      val minimalDescriptors = sources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
+        case (acc, (selector, _, descriptor)) => 
+          acc.get(selector) match {
+            case Some(chosen) if chosen.contains(descriptor) ||
+                                 (chosen exists { d => descriptor.columnAt(path, selector).exists(d.satisfies) }) => acc
 
-              case _ => acc + (selector -> (acc.getOrElse(selector, Set.empty[ProjectionDescriptor]) + descriptor))
-            }
+            case _ => acc + (selector -> (acc.getOrElse(selector, Set.empty[ProjectionDescriptor]) + descriptor))
+          }
+      }
+
+      val retrievals = minimalDescriptors.foldLeft(Map.empty[ProjectionDescriptor, Set[JPath]]) {
+        case (acc, (jpath, descriptors)) => descriptors.foldLeft(acc) {
+          (acc, descriptor) => acc + (descriptor -> (acc.getOrElse(descriptor, Set.empty[JPath]) + jpath))
         }
       }
 
-      // now use merge with identity ordering to produce an enumerator for each selector. Given identity ordering, 
-      // encountering the middle case is an error since no single identity should ever correspond to 
-      // two values of different types, so the resulting merged set should not contain any duplicate identities.
-      val mergedFutures = descriptors map {
-        case (selector, descriptors) => retrieveAndMerge(path, selector, descriptors).map((e: EnumeratorP[X, Vector[(Identities, CValue)], IO]) => (selector, e))
-      }
-
-      implicit val SEventOrder = SEventIdentityOrder
-
-      Future.sequence(mergedFutures) map { en => combine(en.toList) }
+      retrieveAndJoin(retrievals)
     }
-
-    def combine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit o: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
-      innerCombine(enumerators)
-    }
-
-    private def innerCombine[X](enumerators: List[(JPath, EnumeratorP[X, Vector[SColumn], IO])])(implicit ord: Order[SEvent]): EnumeratorP[X, Vector[SEvent], IO] = {
-        enumerators match {
-          case (selector, column) :: xs => 
-            cogroupEChunked[X, SEvent, SColumn, IO].apply(innerCombine(xs), column).map { _ map {
-              case Left3(sevent) => sevent
-              case Middle3(((id, svalue), (_, cv))) => (id, svalue.set(selector, cv).getOrElse(sys.error("Cannot reassemble object: conflicting values for " + selector)))
-              case Right3((id, cv)) => (id, SValue(selector, cv))
-            } }
-          case Nil => EnumeratorP.empty[X, Vector[SEvent], IO]
-        }
-      }
-    */
   }
 }
 // vim: set ts=4 sw=4 et:
