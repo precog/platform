@@ -37,14 +37,14 @@ import akka.util._
 
 import scala.collection.immutable.ListMap
 
-object ShardMetadataActorSpec extends Specification {
+object MetadataActorSpec extends Specification {
 
   val system = ActorSystem("shard_metadata_test")
   implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
     "correctly propagates initial message clock on flush request" in {
-      val testActor = system.actorOf(Props(new TestShardMetadataActor), "test-metadata-actor1")
+      val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor1")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor1") 
       
       val fut1 = testActor ? FlushMetadata(captureActor)
@@ -58,7 +58,7 @@ object ShardMetadataActorSpec extends Specification {
 
     }
     "correctly propagates updated message clock on flush request" in {
-      val testActor = system.actorOf(Props(new TestShardMetadataActor), "test-metadata-actor2")
+      val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor2")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor2") 
 
       val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), SStringArbitrary, Authorities(Set("me")))
@@ -99,7 +99,7 @@ object ShardMetadataActorSpec extends Specification {
   }
 }
 
-class TestShardMetadataActor extends ShardMetadataActor(Map(), VectorClock.empty.update(0,0))
+class TestMetadataActor extends MetadataActor(new LocalMetadata(Map(), VectorClock.empty.update(0,0)))
 
 case object GetCaptureResult
 
