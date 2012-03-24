@@ -299,38 +299,42 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     sys.error("todo")
   }
 
-  private implicit def orderIA(implicit order: Order[A]): Order[IA] = new Order[IA] {
-    def order (x: IA, y: IA)): Ordering = {
+  private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {
+    def order (x: IA, y: IA): Ordering = {
       val idComp = IdentitiesOrder.order(x._1, y._1)
       if (idComp == EQ) {
-        order.order(x._2, y._2)
+        ord.order(x._2, y._2)
       } else idComp
     }
   }
 
-  def union(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] = {
+  private final val nullIA = null.asInstanceOf[IA]
+
+  def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
+    val order = orderIA(ord)
     val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
     val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
 
-    // TODO restarting
-
     IterableDataset(
       value.idCount,
-      new Iterable[A] {
-        def iterator = new Iterator[A] {
-          var _left: A = _
-          var _right: A = _
+      new Iterable[IA] {
+        def iterator = new Iterator[IA] {
+          val leftIter = sortedLeft.iterator
+          val rightIter = sortedRight.iterator
+
+          var _left: IA = _
+          var _right: IA = _
 
           def left() = {
-            if (_left == null && sortedLeft.hasNext) {
-              _left = sortedLeft.next()
+            if (_left == null && leftIter.hasNext) {
+              _left = leftIter.next()
             }
             _left
           }
 
           def right() = {
-            if (_right == null && sortedRight.hasNext) {
-              _right = sortedRight.next()
+            if (_right == null && rightIter.hasNext) {
+              _right = rightIter.next()
             }
             _right
           }
@@ -343,33 +347,33 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
             if (lf == null) {
               val back = _right
-              _right = null
+              _right = nullIA
               back
             } else if (rt == null) {
               val back = _left
-              _left = null
+              _left = nullIA
               back
             } else {
               order(lf, rt) match {
                 case LT => {
                   val back = _left
-                  _left = null
+                  _left = nullIA
                   back
                 }
 
                 case GT => {
                   val back = _right
-                  _right = null
+                  _right = nullIA
                   back
                 }
 
                 case EQ => {
                   val back = _left
                   while (order(back, left()) == EQ) {
-                    _left = null
+                    _left = nullIA
                   }
                   while (order(back, right()) == EQ) {
-                    _right = null
+                    _right = nullIA
                   }
                   back
                 }
@@ -381,21 +385,21 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     )
   }
 
-  def intersect(d2: IterableDataset[A])(implicit order: Order[A]): IterableDataset[A] =  {
-    val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
-    val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
-
-    // TODO restarting
+  def intersect(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
+    val order = orderIA(ord)
+    val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
+    val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
 
     IterableDataset(
       value.idCount,
-      new Iterable[A] {
-        def iterator = new Iterator[A] {
-          // val sortedLeft = ...iterator
-          // val sortedRight = ...iterator
-          var _left = if (sortedLeft.hasNext) sortedLeft.next else null
-          var _right = if (sortedRight.hasNext) sortedRight.next else null
-          var _next = precomputeNext
+      new Iterable[IA] {
+        def iterator = new Iterator[IA] {
+          val sortedLeft = sortedLeftIterable.iterator
+          val sortedRight = sortedRightIterable.iterator
+
+          var _left = if (sortedLeft.hasNext) sortedLeft.next else nullIA
+          var _right = if (sortedRight.hasNext) sortedRight.next else nullIA
+          var _next : IA = precomputeNext
 
           def hasNext = _next != null
 
@@ -407,7 +411,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             temp
           }
 
-          @tailrec private def precomputeNext = {
+          @tailrec private def precomputeNext: IA = {
             if (_left == null || _right == null) {
                null
             } else {
@@ -418,7 +422,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
                   while (order(_left, _right) == EQ && !stop) {
                     if (!sortedLeft.hasNext) {
-                      _left = null
+                      _left = nullIA
                       stop = true
                     }
 
@@ -427,7 +431,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   stop = false
                   while (order(temp, _right) == EQ && !stop) {
                     if (!sortedRight.hasNext) {
-                      _right = null
+                      _right = nullIA
                       stop = true
                     }
                     _right = sortedRight.next
