@@ -31,7 +31,24 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
 
     def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
 
-    def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A]
+    def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A] = {
+      new IterableDataset[A] {
+        def iterator = {
+          private var _next: A = precomputeNext()
+
+          def hasNext = _next != null
+
+          def next = {
+            val temp = _next
+
+            _next = precomputeNext()
+
+            temp
+          }
+        }
+      }
+    }
+
     def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]] = sys.error("todo")
 
     def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = sys.error("todo")
@@ -510,7 +527,46 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   // identify(None) strips all identities
-  def identify(baseId: Option[() => Identity]): IterableDataset[A] = sys.error("todo")
+  def identify(baseId: Option[() => Identity]): IterableDataset[A] = {
+    baseId match {
+      case Some(newId) => {
+        IterableDataset(
+          1,
+          new Iterable[IA] {
+            def iterator = new Iterator[IA] {
+              val inner = value.iterator
+
+              def hasNext = inner.hasNext
+
+              def next = {
+                val (_, sv) = inner.next
+                (VectorCase(newId()), sv)
+              }
+            }
+          })
+      }
+
+      case None => {
+        val emptyVector = VectorCase()
+        IterableDataset(
+          1,
+          new Iterable[IA] {
+            def iterator = new Iterator[IA] {
+              val inner = value.iterator
+
+              def hasNext = inner.hasNext
+
+              def next = {
+                val (_, sv) = inner.next
+                (emptyVector, sv)
+              }
+            }
+          })
+      }
+        
+    }
+
+  }
 
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = IterableDataset(
     value.idCount, 
