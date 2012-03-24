@@ -7,13 +7,13 @@ trait StorageEngineQueryComponent {
   type Dataset[E]
   type Grouping[K, A]
   type QueryAPI <: StorageEngineQueryAPI[Dataset]
-  def query: QueryAPI
+  val query: QueryAPI
 }
 
 trait DatasetOpsComponent {
   type Dataset[E]
   type Grouping[K, A]
   type Ops <: DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]
-  def ops: Ops
+  val ops: Ops
 }
 

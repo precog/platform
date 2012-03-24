@@ -18,10 +18,12 @@ case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
 case class IterableGrouping[K, A](iterable: Iterable[(K, A)]) 
 
-trait IterableDatasetOpsComponent extends YggConfigComponent {
+trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: SortConfig
+  type Dataset[E] = IterableDataset[E]
+  type Grouping[K, A] = IterableGrouping[K, A]
 
-  trait IterableDatasetOps extends DatasetOps[IterableDataset, IterableGrouping] {
+  trait Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
     implicit def extend[A <: AnyRef](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
       new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig))
 
@@ -30,6 +32,13 @@ trait IterableDatasetOpsComponent extends YggConfigComponent {
     def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
 
     def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A]
+    def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]] = sys.error("todo")
+
+    def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = sys.error("todo")
+
+    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = sys.error("todo")
+
+    def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = sys.error("todo")
   }
 }
 
