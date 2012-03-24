@@ -56,7 +56,9 @@ trait Timelib extends GenOpcode with ImplLibrary {
     MinutesBetween,
     SecondsBetween,
     MillisBetween,
-    MillisToISO
+
+    MillisToISO,
+    ChangeTimeZone
   )
 
   private def isValidISO(str: String): Boolean = {
@@ -126,7 +128,7 @@ trait Timelib extends GenOpcode with ImplLibrary {
   }
 
   object MillisBetween extends BIF2(TimeNamespace, "millisBetween") with TimeBetween{  
-    def between(d1: DateTime, d2: DateTime) = math.abs(d1.getMillis - d2.getMillis)
+    def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
   }
 
   object MillisToISO extends BIF2(TimeNamespace, "millisToISO") { 
