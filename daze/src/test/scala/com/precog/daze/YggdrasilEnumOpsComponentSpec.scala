@@ -52,6 +52,7 @@ import MonadPartialOrder._
 
 import com.precog.common.VectorCase
 
+/*
 class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsComponent with Logging with ScalaCheck with ArbitrarySValue{
   type MemoContext = MemoizationContext
   type YggConfig = YggEnumOpsConfig
@@ -128,5 +129,6 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
     // same distribution
   }
 }
+*/
 
 // vim: set ts=4 sw=4 et:

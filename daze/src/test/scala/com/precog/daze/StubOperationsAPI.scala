@@ -51,7 +51,7 @@ object StubOperationsAPI {
 
 trait StubOperationsAPI 
     extends StorageEngineQueryComponent
-    with YggdrasilEnumOpsComponent
+    with IterableDatasetOpsComponent
     with MemoryDatasetConsumer { self =>
   type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
 
@@ -61,18 +61,18 @@ trait StubOperationsAPI
     val chunkSize = 2000
   }
   
-  trait QueryAPI extends StorageEngineQueryAPI {
+  trait QueryAPI extends StorageEngineQueryAPI[Dataset] {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
 
     def chunkSize: Int
     
-    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[X] {
-      def derefObject(field: String): DatasetMask[X] = copy(selector = selector :+ Right(field))
-      def derefArray(index: Int): DatasetMask[X] = copy(selector = selector :+ Left(index))
-      def typed(tpe: SType): DatasetMask[X] = this
+    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[Dataset] {
+      def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector :+ Right(field))
+      def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector :+ Left(index))
+      def typed(tpe: SType): DatasetMask[Dataset] = this
       
-      def realize(expiresAt: Long)(implicit asyncContext: akka.dispatch.ExecutionContext): DatasetEnum[X, SEvent, IO] = {
+      def realize(expiresAt: Long)(implicit asyncContext: akka.dispatch.ExecutionContext): Dataset[SValue] = {
         fullProjection(userUID, path, expiresAt) collect unlift(mask)
       }
       
@@ -96,15 +96,15 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): DatasetEnum[X, SEvent, IO] =
-      DatasetEnum(akka.dispatch.Promise.successful(readJSON[X](path)))
+    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): Dataset[SValue] = readJSON(path)
     
-    def mask(userUID: String, path: Path): DatasetMask[X] = StubDatasetMask(userUID, path, Vector())
+    def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector())
     
-    private def readJSON[X](path: Path) = {
+    private def readJSON(path: Path): Iterator[SEvent] = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
       val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
-      Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
+      //Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
+      stream.iterator
     }
     
     private def scaleId(path: Path)(seed: Int): Long = {

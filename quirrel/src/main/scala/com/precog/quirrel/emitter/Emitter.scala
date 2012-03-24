@@ -557,6 +557,8 @@ trait Emitter extends AST
                     val (buckets, bucketStates) = d.buckets.toSeq map {
                       case pair @ (name, bucket) => (pair, emitBucket(bucket))
                     } unzip
+
+                    sys.error(buckets.mkString("::"))
                     
                     val n = buckets.length.toShort
                     val k = (buckets.length + (buckets map { _._2 } map origins map { _.size } sum)).toShort
