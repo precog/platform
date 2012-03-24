@@ -346,8 +346,11 @@ trait Evaluator extends DAG
           case IUnion if left.provenance.length != right.provenance.length =>
             leftEnum.paddedMerge(rightEnum, () => ctx.nextId(), IdGen.nextInt())
           
-          case IIntersect =>
+          case IIntersect if left.provenance.length == right.provenance.length =>
             leftEnum.intersect(rightEnum)
+          
+          case IIntersect if left.provenance.length != right.provenance.length =>
+            ops.empty[SValue]
         }
         
         Right(back)
