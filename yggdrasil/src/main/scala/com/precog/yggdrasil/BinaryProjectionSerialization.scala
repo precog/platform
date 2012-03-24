@@ -199,7 +199,7 @@ trait SValueSortSerialization extends SortSerialization[SValue] with BinarySValu
   def readHeader(in: DataInputStream): Header = Header(readStructure(in))
 }
 
-trait BinaryProjectionSerialization extends FileSerialization[Vector[SEvent]] with BinarySValueSerialization {
+trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEvent]] with BinarySValueSerialization {
   case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
   final val HeaderFlag = 0
   final val EventFlag = 1

@@ -48,18 +48,18 @@ trait Projection {
 
   def chunkSize: Int
 
-  def getAllPairs(expiresAt: Long) : EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO]
-  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO]
-
-  def getAllIds(expiresAt: Long) : EnumeratorP[X, Vector[Identities], IO]
-  def getAllValues(expiresAt: Long) : EnumeratorP[X, Vector[Seq[CValue]], IO]
-
-  def getColumnValues(path: Path, selector: JPath, expiresAt: Long): EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
-    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
-
-    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && isEqualOrChild(selector, col.selector))
-    getAllColumnPairs(columnIndex, expiresAt)
-  }
+  def getAllPairs(expiresAt: Long) : IterableDataset[Seq[CValue]]
+//  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO]
+//
+//  def getAllIds(expiresAt: Long) : EnumeratorP[X, Vector[Identities], IO]
+//  def getAllValues(expiresAt: Long) : EnumeratorP[X, Vector[Seq[CValue]], IO]
+//
+//  def getColumnValues(path: Path, selector: JPath, expiresAt: Long): EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
+//    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+//
+//    val columnIndex = descriptor.columns.indexWhere(col => col.path == path && isEqualOrChild(selector, col.selector))
+//    getAllColumnPairs(columnIndex, expiresAt)
+//  }
 
 //  def getPairsByIdRange[X](range: Interval[Identities]): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO]
 //
