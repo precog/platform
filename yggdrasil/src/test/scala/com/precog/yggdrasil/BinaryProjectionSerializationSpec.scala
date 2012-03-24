@@ -30,7 +30,7 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck w
     val file = File.createTempFile("test", "ygg")
     logger.trace("Created BinaryProjectionSerialization work file: " + file)
     
-    val fs = new BinaryProjectionSerialization {
+    val fs = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] {
       def chunkSize = 100
     }
 
