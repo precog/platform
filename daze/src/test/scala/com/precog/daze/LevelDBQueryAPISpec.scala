@@ -63,8 +63,6 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   object query extends QueryAPI
 
-  def die(x: => QueryAPI#X): IO[List[Vector[SValue]]] = throw x
-
   "combine" should {
     "restore objects from their component parts" in {
       val projectionData = storage.projections map { 
