@@ -14,15 +14,16 @@ object Stringlib extends Stringlib
 trait Stringlib extends GenOpcode with ImplLibrary {
   val StringNamespace = Vector("std", "string")
 
-  override def _lib1 = super._lib1 ++ Set(toString, length, trim, toUpperCase, toUpperCase, isEmpty, intern)
+  override def _lib1 = super._lib1 ++ Set(length, trim, toUpperCase, toLowerCase, isEmpty, intern)
   override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt, startsWith, lastIndexOf, concat, endsWith, codePointBefore, substring, matches, compareTo, compareToIgnoreCase, equals, indexOf)
 
-  object toString extends BIF1(StringNamespace, "toString") {
-    val operandType = Some(SString)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SString(str) => SString(str.toString)
+  private def isValidInt(num: BigDecimal): Boolean = {
+    try { num.toIntExact; true
+    } catch {
+      case e:java.lang.ArithmeticException => { false }
     }
   }
+
   object length extends BIF1(StringNamespace, "length") {
     val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
@@ -74,7 +75,8 @@ trait Stringlib extends GenOpcode with ImplLibrary {
   object codePointAt extends BIF2(StringNamespace, "codePointAt") {
     val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SString(str), SDecimal(v2)) => SDecimal(str.codePointAt(v2.toInt))
+      case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
+        SDecimal(str.codePointAt(v2.toInt))
     }
   }
   object startsWith extends BIF2(StringNamespace, "startsWith") {
@@ -104,13 +106,15 @@ trait Stringlib extends GenOpcode with ImplLibrary {
   object codePointBefore extends BIF2(StringNamespace, "codePointBefore") {
     val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SString(str), SDecimal(v2)) => SDecimal(str.codePointBefore(v2.toInt))
+      case (SString(str), SDecimal(v2)) if ((v2 > 0) && (str.length >= v2) && isValidInt(v2)) => 
+        SDecimal(str.codePointBefore(v2.toInt))
     }
   }
   object substring extends BIF2(StringNamespace, "substring") {
     val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SString(str), SDecimal(v2)) => SString(str.substring(v2.toInt))
+      case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
+        SString(str.substring(v2.toInt))
     }
   }
   object matches extends BIF2(StringNamespace, "matches") {
