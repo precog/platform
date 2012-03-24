@@ -16,7 +16,7 @@ case object LastEqual extends CogroupState[Nothing]
 case class RunLeft[+ER](nextRight: ER) extends CogroupState[ER]
 case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
-case class IterableGrouping[K, A](iterable: Iterable[(K, A)])
+case class IterableGrouping[K, A](iterator: Iterator[(K, A)])
 
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: SortConfig
@@ -67,11 +67,60 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
 
     def mergeGroups[A: Order, K: Order](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean): Grouping[K, Dataset[A]] = sys.error("todo")
 
-    def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = sys.error("todo")
+    def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = {
+      val ord = implicitly[Order[K]]
+
+      val leftIter = d1.iterator
+      val rightIter = d2.iterator
+
+      IterableGrouping(new Iterator[(K, NEL[Dataset[A]])] {
+        var _next: (K, NEL[Dataset[A]]) = _
+        var _left: (K, NEL[Dataset[A]]) = if (leftIter.hasNext) leftIter.next() else null
+        var _right: (K, NEL[Dataset[A]]) = if (rightIter.hasNext) rightIter.next() else null
+
+        precomputeNext()
+
+        def hasNext = _next != null
+
+        def next() = {
+          val back = _next
+          precomputeNext()
+          back
+        }
+
+        @tailrec private[this] def precomputeNext() {
+          if (!leftIter.hasNext || !rightIter.hasNext) {
+            _next = null
+          } else {
+            ord.order(_left._1, _right._1) match {
+              case LT =>
+                if (leftIter.hasNext) {
+                  _left = leftIter.next; precomputeNext()
+                } else {
+                  _next = null
+                }
+              case GT =>
+                if (rightIter.hasNext) {
+                  _right = rightIter.next; precomputeNext()
+                } else {
+                  _next = null
+                }
+              case EQ => {
+                _next = (_left._1, _left._2.list <::: _right._2)
+                _left = if (leftIter.hasNext) leftIter.next else null
+                _right = if (rightIter.hasNext) rightIter.next else null
+              }
+            }
+          }
+        }
+      })
+    }
 
     def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = sys.error("todo")
 
-    def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = sys.error("todo")
+    def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
+      IterableGrouping[K, B](g.iterator.map { case (k,a) => (k, f(a)) })
+    }
   }
 }
 
@@ -461,8 +510,14 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                         else if (value.idCount < d2.idCount) (value.padIdsTo(d2.idCount, nextId()), d2)
                         else (value, d2)
     
+    val cgf = new CogroupF[A, A, A] {
+      def left(a: A) = a
+      def both(a: A, b: A) = sys.error("Identities are non-unique in paddedMerge")
+      def right(a: A) = a
+    }
+
     //left merge right
-    sys.error("todo")
+    cogroup(right)(cgf)
   }
 
   private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {
@@ -520,7 +575,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
               _left = nullIA
               back
             } else {
-              order(lf, rt) match {
+              order.order(lf, rt) match {
                 case LT => {
                   val back = _left
                   _left = nullIA
@@ -535,10 +590,10 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
                 case EQ => {
                   val back = _left
-                  while (order(back, left()) == EQ) {
+                  while (order.order(back, left()) == EQ) {
                     _left = nullIA
                   }
-                  while (order(back, right()) == EQ) {
+                  while (order.order(back, right()) == EQ) {
                     _right = nullIA
                   }
                   back
@@ -581,12 +636,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             if (_left == null || _right == null) {
                null
             } else {
-              order(_left, _right) match {
+              order.order(_left, _right) match {
                 case EQ => 
                   val temp = _left
                   var stop = false
 
-                  while (order(_left, _right) == EQ && !stop) {
+                  while (order.order(_left, _right) == EQ && !stop) {
                     if (!sortedLeft.hasNext) {
                       _left = nullIA
                       stop = true
@@ -595,7 +650,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                     _left = sortedLeft.next
                   }
                   stop = false
-                  while (order(temp, _right) == EQ && !stop) {
+                  while (order.order(temp, _right) == EQ && !stop) {
                     if (!sortedRight.hasNext) {
                       _right = nullIA
                       stop = true
@@ -606,13 +661,13 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   temp
 
                 case LT =>
-                  while (order(_left, _right) == LT && sortedLeft.hasNext) {
+                  while (order.order(_left, _right) == LT && sortedLeft.hasNext) {
                     _left = sortedLeft.next
                   }
                   precomputeNext
 
                 case GT =>
-                  while (order(_left, _right) == GT && sortedRight.hasNext) {
+                  while (order.order(_left, _right) == GT && sortedRight.hasNext) {
                     _right = sortedRight.next
                   }
                   precomputeNext
@@ -741,7 +796,10 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
   )
 
-  def memoize(memoId: Int): IterableDataset[A] = sys.error("todo") //(implicit fs: FileSerialization[A]): IterableDataset[A]  = sys.error("todo")
+  def memoize(memoId: Int): IterableDataset[A] = {
+    val cache = value.iterable.toSeq
+    IterableDataset(value.idCount, cache)
+  }
 
   def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
     implicit val kaOrder: Order[(K,Identities,A)] = new Order[(K,Identities,A)] {
@@ -756,8 +814,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     val withK = value.iterable.iterator.flatMap { case (i, a) => keyFor(a).iterator.map(k => (k, i, a)) }
     val sorted: Iterator[(K,Identities,A)] = iteratorSorting.sort(withK, "group", memoId).iterator
 
-    IterableGrouping(new Iterable[(K, IterableDataset[A])] {
-      def iterator = new Iterator[(K, IterableDataset[A])] {
+    IterableGrouping(new Iterator[(K, IterableDataset[A])] {
         // Have to hold our "peek" over the entire outer iterator
         var _next: (K, Identities, A) = sorted.next
         var sameK = true
@@ -787,8 +844,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
           (currentK, extend(innerDS).memoize(kChunkId))
         }
-      }
-    })
+      })
   }
 
   def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
