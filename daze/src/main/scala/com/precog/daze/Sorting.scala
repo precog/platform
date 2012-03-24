@@ -7,11 +7,11 @@ import com.precog.util._
 import scala.annotation.tailrec
 import scalaz._
 
-trait Sorting[Dataset[_]] {
-  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Dataset[E]
+trait Sorting[Dataset[_], Resultset[_]] {
+  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Resultset[E]
 }
 
-class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
+class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
   def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterable[E] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
@@ -75,17 +75,21 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
     }
 
     val chunkFiles = writeChunked(Vector.empty[File])
-    mergeIterator {
-      chunkFiles flatMap { f =>
-        val stream = fs.iStream(f)
-        val iter = fs.reader(stream)
-        if (iter.hasNext) {
-          Some((iter, () => stream.close)) 
-        } else {
-          stream.close
-          None
+
+    new Iterable[E] {
+      def iterator = 
+        mergeIterator {
+          chunkFiles flatMap { f =>
+            val stream = fs.iStream(f)
+            val iter = fs.reader(stream)
+            if (iter.hasNext) {
+              Some((iter, () => stream.close)) 
+            } else {
+              stream.close
+              None
+            }
+          }
         }
-      }
     }
   }
 }
