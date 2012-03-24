@@ -13,11 +13,11 @@ trait Emitter extends AST
     with Binder
     with ProvenanceChecker
     with GroupSolver {
-  
+      
   import instructions._
   
   case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
-
+  
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
   private def notImpl[A](expr: Expr): A = throw EmitterError(Some(expr), "Not implemented for expression type")
 
@@ -94,7 +94,7 @@ trait Emitter extends AST
     }
 
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
-    private def emitAndMark(markType: MarkType)(f: EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+    private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
         case (_, e) =>
           val mark = Mark(e.bytecode.length, 0)
@@ -533,8 +533,6 @@ trait Emitter extends AST
                     
                     emitExpr(left) >> reduce(drops)
                   } else {
-                    val remaining = params drop actuals.length
-                    
                     val (buckets, bucketStates) = d.buckets.toSeq map {
                       case pair @ (name, bucket) => (pair, emitBucket(bucket))
                     } unzip
@@ -556,8 +554,8 @@ trait Emitter extends AST
                     
                     val (groups, _) = buckets.foldLeft((mzero[EmitterState], 0)) {
                       case ((state, offset), (name, bucket)) => {
-                        val (state, offset2, _) = markAllGroups(bucket, offset + 1, Set())
-                        (markTicVar(let, name, offset) >> state, offset2)
+                        val (state2, offset2, _) = markAllGroups(bucket, offset + 1, Set())
+                        (markTicVar(let, name, offset) >> state2 >> state, offset2)
                       }
                     }
                     
