@@ -282,7 +282,8 @@ trait DAG extends Instructions {
           if ((eitherBuckets lengthCompare n) != 0) {
             Left(StackUnderflow(instr))
           } else {
-            val buckets = Vector(roots flatMap { _.left.toOption }: _*)
+            // reverse needed to match intended semantics
+            val buckets = Vector(roots flatMap { _.left.toOption }: _*).reverse
             
             if ((buckets lengthCompare n) != 0) {
               Left(BucketOperationOnSets(instr))
