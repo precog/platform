@@ -49,11 +49,3 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
     ProjectionData(projDesc, identities, values, metadata)
   }
 }
-
-trait ProjectionStorage {
-  def store(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue])
-}
-
-trait MetadataStorage {
-  def update(pid: Int, eid: Int, desc: ProjectionDescriptor, values: Seq[JValue], metadata: Seq[Set[Metadata]])
-}
