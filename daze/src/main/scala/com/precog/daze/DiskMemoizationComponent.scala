@@ -46,7 +46,7 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironm
 
   def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
 
-  sealed trait MemoContext extends MemoizationContext with BufferingContext { ctx => 
+  sealed trait MemoContext extends IterateeMemoizationContext with BufferingContext { ctx => 
     type CacheKey[α] = Int
     type CacheValue[α] = Either[Vector[α], File]
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]

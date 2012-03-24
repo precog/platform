@@ -75,9 +75,8 @@ package object yggdrasil {
 
   implicit val IdentitiesOrdering = IdentitiesOrder.toScalaOrdering
 
-  object SEventIdentityOrder extends Order[SEvent] {
-    def order(s1: SEvent, s2: SEvent) = identityOrder(s1._1, s2._1)
-  }
+  implicit def tupledIdentitiesOrder[A]: Order[(Identities, A)] =
+    IdentitiesOrder.contramap((_: (Identities, A))._1)
 }
 
 

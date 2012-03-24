@@ -27,11 +27,11 @@ import scala.annotation.tailrec
 import scalaz._
 
 trait Sorting[Dataset[_]] {
-  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Dataset[E]
+  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Dataset[E]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
-  def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterator[E] = {
+  def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterator[E] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 
@@ -52,7 +52,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
       insert(0, values)
       Arrays.sort(buffer, javaOrder)
       val chunkFile = sortFile(chunkId)
-      fs.write(fs.oStream(chunkFile), buffer)
+      using(fs.oStream(chunkFile)) { fs.write(_, buffer) }
       chunkFile
     }
 
@@ -61,7 +61,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
       else files
     }
 
-    def mergeIterator(streams: Vector[Iterator[E]]): Iterator[E] = {
+    def mergeIterator(toMerge: Vector[(Iterator[E], () => Unit)]): Iterator[E] = {
       class Cell(iter: Iterator[E]) {
         var value: E = iter.next
         def advance(): Unit = {
@@ -73,10 +73,15 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
       val cellComparator = order.contramap((c: Cell) => c.value).toJavaComparator
 
       new Iterator[E] {
+        val (streams, closes) = toMerge.unzip
         private val heads: PriorityQueue[Cell] = new PriorityQueue[Cell](streams.size, cellComparator) 
         streams.foreach(i => heads.add(new Cell(i)))
 
-        def hasNext = !heads.isEmpty
+        def hasNext = {
+          if (heads.isEmpty) closes.foreach(_())
+          !heads.isEmpty
+        }
+
         def next = {
           assert(!heads.isEmpty) 
           val cell = heads.poll
@@ -89,7 +94,18 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator] {
     }
 
     val chunkFiles = writeChunked(Vector.empty[File])
-    mergeIterator(chunkFiles.map(f => fs.reader(fs.iStream(f))).filter(_.hasNext))
+    mergeIterator {
+      chunkFiles flatMap { f =>
+        val stream = fs.iStream(f)
+        val iter = fs.reader(stream)
+        if (iter.hasNext) {
+          Some((iter, () => stream.close)) 
+        } else {
+          stream.close
+          None
+        }
+      }
+    }
   }
 }
 

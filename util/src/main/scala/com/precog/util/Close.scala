@@ -17,26 +17,20 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
+package com.precog.util
 
-import scalaz.Order
-import java.util.Comparator
+trait Close[A] {
+  def close(a: A): Unit
+}
 
-package object util {
-  class Order2JComparator[A](order: Order[A]) {
-    def toJavaComparator: Comparator[A] = new Comparator[A] {
-      def compare(a1: A, a2: A) = {
-        order.order(a1, a2).toInt
-      }
-    }
+object Close {
+  import java.io._
+  implicit object DataInputStreamClose extends Close[DataInputStream] {
+    def close(a: DataInputStream) = a.close
   }
 
-  implicit def Order2JComparator[A](order: Order[A]): Order2JComparator[A] = new Order2JComparator(order)
-
-  def using[A, B](a: => A)(f: A => B)(implicit close: Close[A]): B = {
-    val result = f(a)
-    close.close(a)
-    result
+  implicit object DataOutputStreamClose extends Close[DataOutputStream] {
+    def close(a: DataOutputStream) = a.close
   }
 }
 
