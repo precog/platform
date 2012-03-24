@@ -10,6 +10,8 @@ import org.specs2.specification.BeforeExample
 import org.scalacheck._
 
 import blueeyes.json.JPath
+import blueeyes.json.JPathField
+import blueeyes.json.JPathIndex
 import blueeyes.json.JsonAST._
 
 import org.scalacheck.Gen._
@@ -26,7 +28,7 @@ import akka.util.duration._
 import akka.dispatch._
 import akka.testkit._
 
-class ShardMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample {
+class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample {
 
   implicit var actorSystem: ActorSystem = null 
   def before() {
@@ -72,16 +74,55 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }.toSet
     }
 
+    def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
+
     def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
       def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
-      def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
       Map(events.flatMap {
         case e @ Event(epath, token, data, metadata) if epath == path => 
           data.flattenWithPath.collect {
             case (k, v) if isEqualOrChild(selector, k) => k
           }.map( toProjectionDescriptor(e, _) )
-        case _                                                                              => List.empty
+        case _                                                        => List.empty
       }.map{ pd => (pd, convertColDesc(pd.columns.head)) }: _*)
+    }
+    
+    trait ChildType
+    case object LeafChild extends ChildType
+    case object IndexChild extends ChildType
+    case object FieldChild extends ChildType
+    case object NotChild extends ChildType
+
+    def extractPathMetadata(in: Set[(JPath, ColumnType)]): Set[PathMetadata] = {
+   
+      def classifyChild(ref: JPath, test: JPath): ChildType =
+        if(test.nodes startsWith ref.nodes) {
+          if(test.nodes.length - 1 == ref.nodes.length) {
+            LeafChild
+          } else {
+            test.nodes(ref.nodes.length) match {
+              case JPathField(_) => FieldChild
+              case JPathIndex(_) => IndexChild
+              case _             => NotChild
+            }
+          }
+        } else {
+          NotChild
+        }
+      sys.error("todo")
+    }
+
+    def extractPathMetadataFor(path: Path, selector: JPath)(events: List[Event]): PathRoot = {
+      val col: Set[(JPath, ColumnType)] = events.collect {
+        case Event(`path`, token, data, metadata) =>
+          data.flattenWithPath.collect {
+            case (s, v) if isEqualOrChild(selector, s) => 
+               val ns = s.nodes.slice(selector.length, s.length-1)
+              (JPath(ns), ColumnType.forValue(v).get)
+          }
+      }.flatten.toSet
+
+      PathRoot(extractPathMetadata(col)) 
     }
 
     def toProjectionDescriptor(e: Event, selector: JPath) = {
@@ -97,7 +138,7 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
 
       val fut = actor ? FindSelectors(event.path)
 
@@ -113,7 +154,7 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
 
       val fut = actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)
 
@@ -124,5 +165,22 @@ class ShardMetadataSpec extends Specification with ScalaCheck with RealisticInge
       result must_== expected
 
     }
+   
+    "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
+      val metadata = buildMetadata(sample)
+      val event = sample(0)
+
+      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+
+      val fut = actor ? FindPathMetadata(event.path, event.data.flattenWithPath.head._1)
+
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[PathRoot]
+     
+      val expected = extractPathMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
+
+      result must_== expected
+
+    }.pendingUntilFixed
+
   }
 }

@@ -6,31 +6,41 @@ import metadata._
 import com.precog.common._
 import com.precog.common.util._
 
+import blueeyes.json._
 import blueeyes.json.JPath
 
 import akka.actor.Actor
 import akka.actor.ActorRef
+import akka.dispatch.MessageDispatcher
+import akka.dispatch.Future
 
 import scalaz.Scalaz._
 
-class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) extends Actor {
+class MetadataActor(metadata: LocalMetadata) extends Actor {
 
+  def receive = {
+   
+    case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
+   
+    case FindSelectors(path)                  => sender ! metadata.findSelectors(path)
+
+    case FindDescriptors(path, selector)      => sender ! metadata.findDescriptors(path, selector)
+
+    case FindPathMetadata(path, selector)     => sender ! metadata.findPathMetadata(path, selector)
+    
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.currentState)
+    
+  }
+
+}
+
+class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) {
+  
   private var projections = initialProjections
 
   private var messageClock = initialClock 
 
-  def receive = {
-   
-    case UpdateMetadata(inserts) => 
-      sender ! update(inserts)
-   
-    case FindSelectors(path)                  => sender ! findSelectors(path)
-
-    case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
-
-    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! SaveMetadata(projections, messageClock))
-    
-  }
+  def currentState() = SaveMetadata(projections, messageClock)
 
   def update(inserts: Seq[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
@@ -44,7 +54,7 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
     projections = projUpdate
     messageClock = clockUpdate
   }
- 
+
   def findSelectors(path: Path): Seq[JPath] = {
     projections.foldLeft(Vector[JPath]()) {
       case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
@@ -61,7 +71,131 @@ class ShardMetadataActor(initialProjections: Map[ProjectionDescriptor, ColumnMet
     projections.filter {
       case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
     }
-  }  
+  } 
+
+  case class ResolvedSelector(selector: JPath, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
+    
+    // probably should enforce that only one column will match in someway
+    // but for now I am assuming it is true (which within this narrow context
+    // it should be
+    def columnType: ColumnType =
+      descriptor.columns.filter( _.selector == selector )(0).valueType
+  }
+
+  def findPathMetadata(path: Path, selector: JPath): PathRoot = {
+    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+
+    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
+      col.path == path && isEqualOrChild(selector, col.selector)
+    }
+
+    @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
+      projections.flatMap {
+        case (desc, meta) => desc.columns.collect {
+          case col @ ColumnDescriptor(_,sel,_,_) if matches(path,selector)(col) => ResolvedSelector(sel, desc, meta)
+        }
+      }(collection.breakOut)
+    
+    @inline def isLeaf(ref: JPath, test: JPath) = {
+      (test.nodes startsWith ref.nodes) && 
+      test.nodes.length - 1 == ref.nodes.length
+    }
+    
+    @inline def isObjectBranch(ref: JPath, test: JPath) = {
+      (test.nodes startsWith ref.nodes) && 
+      test.nodes.length > ref.nodes.length &&
+      (test.nodes(ref.nodes.length) match {
+        case JPathField(_) => true
+        case _             => false
+      })
+    }
+    
+    @inline def isArrayBranch(ref: JPath, test: JPath) = {
+      (test.nodes startsWith ref.nodes) && 
+      test.nodes.length > ref.nodes.length &&
+      (test.nodes(ref.nodes.length) match {
+        case JPathIndex(_) => true
+        case _             => false
+      })
+    }
+
+    def extractIndex(base: JPath, child: JPath): Int = child.nodes(base.length) match {
+      case JPathIndex(i) => i
+      case _             => sys.error("assertion failed") 
+    }
+
+    def extractName(base: JPath, child: JPath): String = child.nodes(base.length) match {
+      case JPathField(n) => n 
+      case _             => sys.error("unpossible")
+    }
+
+    def selectorPartition(sel: JPath, rss: Seq[ResolvedSelector]):
+        (Seq[ResolvedSelector], Seq[ResolvedSelector], Set[Int], Set[String]) = {
+      val (values, nonValues) = rss.partition(rs => isLeaf(sel, rs.selector))
+      val (indexes, fields) = rss.foldLeft( (Set.empty[Int], Set.empty[String]) ) {
+        case (acc @ (is, fs), rs) => if(isArrayBranch(sel, rs.selector)) {
+          (is + extractIndex(sel, rs.selector), fs)
+        } else if(isObjectBranch(sel, rs.selector)) {
+          (is, fs + extractName(sel, rs.selector))
+        } else {
+          acc
+        }
+      }
+
+      (values, nonValues, indexes, fields)
+    }
+
+    def convertValues(values: Seq[ResolvedSelector]): Set[PathMetadata] = {
+      values.foldLeft(Map[(JPath, ColumnType), Map[ProjectionDescriptor, ColumnMetadata]]()) {
+        case (acc, rs @ ResolvedSelector(sel, desc, meta)) => 
+          val key = (sel, rs.columnType)
+          val update = acc.get(key).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
+          acc + (key -> update)
+      }.map {
+        case ((sel, colType), meta) => PathValue(colType, meta) 
+      }(collection.breakOut)
+    }
+
+    def buildTree(branch: JPath, rs: Seq[ResolvedSelector]): Set[PathMetadata] = {
+      val (values, nonValues, indexes, fields) = selectorPartition(branch, rs)
+
+      val oval = convertValues(values)
+      val oidx = indexes.map { idx => PathIndex(idx, buildTree(branch \ idx, nonValues)) }
+      val ofld = fields.map { fld => PathField(fld, buildTree(branch \ fld, nonValues)) }
+
+      oval ++ oidx ++ ofld
+    }
+
+    PathRoot(buildTree(selector, matching(path, selector)))
+  }
+
+  trait PathMatch
+
+  case class ExactPath(columnType: ColumnType)
+  case class ChildPath(path: JPath)
+
+  def toStorageMetadata(messageDispatcher: MessageDispatcher): StorageMetadata = new StorageMetadata {
+
+    implicit val dispatcher = messageDispatcher 
+
+    def update(inserts: Seq[InsertComplete]) = Future {
+      LocalMetadata.this.update(inserts)
+    }
+
+    def findSelectors(path: Path) = Future {
+      LocalMetadata.this.findSelectors(path) 
+    }
+
+    def findProjections(path: Path, selector: JPath) = Future {
+      LocalMetadata.this.findDescriptors(path, selector)
+    } 
+
+    def findPathMetadata(path: Path, selector: JPath) = Future {
+      LocalMetadata.this.findPathMetadata(path, selector)
+    }
+
+  }
+
 }
 
 object MetadataUpdateHelper {
@@ -91,17 +225,17 @@ object MetadataUpdateHelper {
       (acc, col) => acc + (col -> Map[MetadataType, Metadata]())
     }
 
- def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
-   str = (s: String)      => Some(StringValueStats(1, s, s)),
-   bool = (b: Boolean)    => Some(BooleanValueStats(1, if(b) 1 else 0)),
-   int = (i: Int)         => Some(LongValueStats(1, i, i)),
-   long = (l: Long)       => Some(LongValueStats(1, l, l)),
-   float = (f: Float)     => Some(DoubleValueStats(1, f, f)),
-   double = (d: Double)   => Some(DoubleValueStats(1, d, d)),
-   num = (bd: BigDecimal) => Some(BigDecimalValueStats(1, bd, bd)),
-   emptyObj = None,
-   emptyArr = None,
-   nul = None)
+  def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
+    str = (s: String)      => Some(StringValueStats(1, s, s)),
+    bool = (b: Boolean)    => Some(BooleanValueStats(1, if(b) 1 else 0)),
+    int = (i: Int)         => Some(LongValueStats(1, i, i)),
+    long = (l: Long)       => Some(LongValueStats(1, l, l)),
+    float = (f: Float)     => Some(DoubleValueStats(1, f, f)),
+    double = (d: Double)   => Some(DoubleValueStats(1, d, d)),
+    num = (bd: BigDecimal) => Some(BigDecimalValueStats(1, bd, bd)),
+    emptyObj = None,
+    emptyArr = None,
+    nul = None)
  
 }   
 
@@ -111,6 +245,7 @@ case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetad
 
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
+case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
 
 case class UpdateMetadata(inserts: Seq[InsertComplete]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction

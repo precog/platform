@@ -48,7 +48,8 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   lazy val metadataActor = {
-    actorSystem.actorOf(Props(new ShardMetadataActor(yggState.metadata, checkpoints.latestCheckpoint.messageClock)), "metadata") 
+    val localMetadata = new LocalMetadata(yggState.metadata, checkpoints.latestCheckpoint.messageClock)
+    actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
   lazy val projectionsActor = {
@@ -157,7 +158,8 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   lazy val metadataActor = {
-    actorSystem.actorOf(Props(new ShardMetadataActor(yggState.metadata, checkpoints.latestCheckpoint.messageClock)), "metadata") 
+    val localMetadata = new LocalMetadata(yggState.metadata, checkpoints.latestCheckpoint.messageClock)
+    actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
   lazy val projectionsActor = {

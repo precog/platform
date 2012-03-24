@@ -20,6 +20,9 @@ trait StorageMetadata {
   implicit val dispatcher: MessageDispatcher
 
   def findSelectors(path: Path): Future[Seq[JPath]]
+  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
+  def findPathMetadata(path: Path, selector: JPath): Future[PathRoot]
+
 
   def findProjections(path: Path): Future[Map[ProjectionDescriptor, ColumnMetadata]] = {
     findSelectors(path).flatMap { selectors => 
@@ -32,21 +35,27 @@ trait StorageMetadata {
     }
   }
 
-  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
-
   def findProjections(path: Path, selector: JPath, valueType: SType): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
     findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
 
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
   }
+
 }
+
+sealed trait PathMetadata 
+case class PathRoot(children: Set[PathMetadata])
+case class PathValue(valueType: ColumnType, descriptors: Map[ProjectionDescriptor, ColumnMetadata]) extends PathMetadata
+case class PathField(name: String, children: Set[PathMetadata]) extends PathMetadata
+case class PathIndex(idx: Int, children: Set[PathMetadata]) extends PathMetadata
 
 trait MetadataView extends StorageMetadata
 
 class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
   def findSelectors(path: Path) = metadata.findSelectors(path)
   def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
+  def findPathMetadata(path: Path, selector: JPath) = metadata.findPathMetadata(path, selector)
 }
 
 class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
@@ -73,6 +82,10 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
       }
     }
   }
+  
+  def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = {
+    metadata.findPathMetadata(path, selector)
+  }
 
   def traverseFilter[A, B](as: Traversable[(A, B)])(f: ((A, B)) => Future[Boolean]): Future[Map[A, B]] = {
     val tx = as.map( t => f(t) map { (t, _) } )
@@ -89,7 +102,7 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
     }
 }
 
-class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
+class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
@@ -97,8 +110,10 @@ class ShardMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher)
 
   def findProjections(path: Path, selector: JPath) = 
     actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
+  
+  def findPathMetadata(path: Path, selector: JPath) = 
+    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] }
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
 
 }
-

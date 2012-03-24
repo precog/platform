@@ -75,13 +75,12 @@ trait StubYggShardComponent {
 
     def storeBatch(ems: Seq[EventMessage], timeout: Timeout) = sys.error("Feature not implemented in test stub.")
 
-    def metadata = new StorageMetadata {
-      implicit val dispatcher = actorSystem.dispatcher
-      def findSelectors(path: Path): Future[Seq[JPath]] = 
-        Future(projections.keys.flatMap(_.columns.filter(_.path == path).map(_.selector)).toSeq)
+    def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
+      projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
 
-      def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
-        Future(projections.keys.flatMap(pd => pd.columns.collect { case cd @ ColumnDescriptor(`path`, `selector`, _, _) => (pd, ColumnMetadata.Empty) }).toMap)
+    def metadata = {
+      val localMetadata = new LocalMetadata(projectionMetadata, VectorClock.empty)
+      localMetadata.toStorageMetadata(actorSystem.dispatcher)
     }
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
