@@ -953,6 +953,41 @@ object EmitterSpecs extends Specification
           Drop,
           Merge))
     }
+    
+    "emit split and merge for cf example with extra sets" in {
+      testEmit("""
+        | clicks := load(//clicks)
+        | foo('a) := clicks where clicks = 'a & clicks.b = 42
+        | foo""".stripMargin)(Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          Dup,
+          Swap(1),
+          Bucket,
+          Split(1, 2),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1),
+          Swap(2),
+          Swap(1),
+          Swap(1),
+          Swap(2),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          PushString("b"),
+          Map2Cross(DerefObject),
+          PushNum("42"),
+          Map2Cross(Eq),
+          FilterMatch(0, None),
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop,
+          Merge))
+    }
 
     "emit split and merge for ctr example" in {
       testEmit("clicks := load(//clicks) " + 
