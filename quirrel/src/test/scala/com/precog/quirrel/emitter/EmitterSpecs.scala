@@ -1396,20 +1396,51 @@ object EmitterSpecs extends Specification
             Merge))
       }
 
-      /*
       "histogram.qrl" >> {
-        val input = """
+        testEmit("""
           | clicks := load(//clicks)
           | 
           | histogram('value) :=
           |   { cnt: count(clicks where clicks = 'value), value: 'value }
           |   
           | histogram
-          """.stripMargin
-        
-        parse(input) must not(throwA[ParseException])
+          """.stripMargin)(Vector(
+            PushString("/clicks"),
+            LoadLocal(Het),
+            Dup,
+            Swap(1),
+            Bucket,
+            Split(1, 2),
+            Dup,
+            Swap(2),
+            Swap(1),
+            Swap(1),
+            Dup,
+            Swap(2),
+            Swap(1),
+            Swap(2),
+            Swap(1),
+            PushString("cnt"),
+            Swap(1),
+            Swap(2),
+            Swap(3),
+            Reduce(Count),
+            Map2Cross(WrapObject),
+            PushString("value"),
+            Swap(1),
+            Swap(2),
+            Swap(3),
+            Swap(4),
+            Map2Cross(WrapObject),
+            Map2Cross(JoinObject),
+            Swap(1),
+            Drop,
+            Swap(1),
+            Drop,
+            Merge))
       }
       
+      /*
       "interaction-totals.qrl" >> {
         val input = """
           | interactions := load(//interactions)
