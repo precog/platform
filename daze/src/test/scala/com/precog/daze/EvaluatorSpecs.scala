@@ -1668,10 +1668,27 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(5)
+      }
+      
+      "geometricMean" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, GeometricMean,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d.toDouble
+        }
+        
+        result2 must contain(13.822064739747386)
       }
       
       "mean" >> {
@@ -1685,7 +1702,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(29)
@@ -1702,7 +1719,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(13)
@@ -1719,7 +1736,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(1)
@@ -1736,7 +1753,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(77)
@@ -1753,7 +1770,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(1)
@@ -1792,6 +1809,41 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(145)
       }
+
+      "sumSq" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, SumSq,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d.toDouble
+        }
+        
+        result2 must contain(8007)
+      }
+
+      "variance" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Variance,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d.toDouble
+        }
+        
+        result2 must contain(760.4)
+      }
+
     }
 
     "reduce heterogeneous sets" >> {
@@ -1806,10 +1858,27 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(10)
+      }    
+      
+      "geometricMean" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, GeometricMean,
+          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d
+        }
+        
+        result2 must contain(13.822064739747386)
       }
       
       "mean" >> {
@@ -1823,7 +1892,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(29)
@@ -1840,7 +1909,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(13)
@@ -1857,7 +1926,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(1)
@@ -1874,7 +1943,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(77)
@@ -1891,7 +1960,7 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(1)
@@ -1925,10 +1994,44 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          case (VectorCase(), SDecimal(d)) => d
         }
         
         result2 must contain(145)
+      }      
+
+      "sumSq" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, SumSq,
+          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d
+        }
+        
+        result2 must contain(8007)
+      } 
+
+      "variance" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Variance,
+          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d
+        }
+        
+        result2 must contain(760.4)
       }
     }
 
