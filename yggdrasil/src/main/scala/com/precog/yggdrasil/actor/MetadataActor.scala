@@ -81,20 +81,21 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     def columnType: ColumnType =
       descriptor.columns.filter( _.selector == selector )(0).valueType
   }
+  
+  @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+
+  @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
+    col.path == path && isEqualOrChild(selector, col.selector)
+  }
+
+  @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
+    projections.flatMap {
+      case (desc, meta) => desc.columns.collect {
+        case col @ ColumnDescriptor(_,sel,_,_) if matches(path,selector)(col) => ResolvedSelector(sel, desc, meta)
+      }
+    }(collection.breakOut)
 
   def findPathMetadata(path: Path, selector: JPath): PathRoot = {
-    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
-
-    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
-      col.path == path && isEqualOrChild(selector, col.selector)
-    }
-
-    @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
-      projections.flatMap {
-        case (desc, meta) => desc.columns.collect {
-          case col @ ColumnDescriptor(_,sel,_,_) if matches(path,selector)(col) => ResolvedSelector(sel, desc, meta)
-        }
-      }(collection.breakOut)
     
     @inline def isLeaf(ref: JPath, test: JPath) = {
       (test.nodes startsWith ref.nodes) && 
@@ -129,9 +130,11 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       case _             => sys.error("unpossible")
     }
 
+    def newIsLeaf(ref: JPath, test: JPath): Boolean = ref == test 
+
     def selectorPartition(sel: JPath, rss: Seq[ResolvedSelector]):
         (Seq[ResolvedSelector], Seq[ResolvedSelector], Set[Int], Set[String]) = {
-      val (values, nonValues) = rss.partition(rs => isLeaf(sel, rs.selector))
+      val (values, nonValues) = rss.partition(rs => newIsLeaf(sel, rs.selector))
       val (indexes, fields) = rss.foldLeft( (Set.empty[Int], Set.empty[String]) ) {
         case (acc @ (is, fs), rs) => if(isArrayBranch(sel, rs.selector)) {
           (is + extractIndex(sel, rs.selector), fs)
@@ -168,6 +171,8 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
 
     PathRoot(buildTree(selector, matching(path, selector)))
   }
+
+
 
   trait PathMatch
 
