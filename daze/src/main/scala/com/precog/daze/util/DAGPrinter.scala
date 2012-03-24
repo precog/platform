@@ -32,6 +32,7 @@ trait DAGPrinter extends DAG {
       case Operate(_, WrapArray, parent) => "[%s]".format(loop(parent, split))
       
       case dag.Reduce(_, red, parent) => "%s(%s)".format(showReduction(red), loop(parent, split))
+      case dag.SetReduce(_, red, parent) => "%s(%s)".format(showSetReduction(red), loop(parent, split))
       
       case Join(_, VUnion, left, right) => "(%s vunion %s)".format(loop(left, split), loop(right, split))
       case Join(_, VIntersect, left, right) => "(%s vintersect %s)".format(loop(left, split), loop(right, split))
@@ -80,6 +81,10 @@ trait DAGPrinter extends DAG {
     case Sum => "sum"
     case SumSq => "sumSq"
     case Variance => "variance"
+  }
+
+  private def showSetReduction(red: SetReduction) = red match {
+    case Distinct => "distinct"
   }
   
   private def showOp(op: BinaryOperation) = op match {
