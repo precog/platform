@@ -52,11 +52,11 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   def paddedMerge(d2: Dataset[A], nextId: () => Identity, memoId: Int)(implicit fs: SortSerialization[A]): Dataset[A]
 
   // merge sorted uniq by identities and values
-  def union(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
+  def union(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
 
   // inputs are sorted in identity order - merge by identity, sorting any runs of equal identities
   // using the value ordering, equal identity, equal value are the only events that persist
-  def intersect(d2: Dataset[A])(implicit order: Order[A]): Dataset[A]
+  def intersect(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
 
   def map[B](f: A => B): Dataset[B] 
 
