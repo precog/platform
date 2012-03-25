@@ -44,44 +44,17 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   object query extends QueryAPI
 
-  "combine" should {
-    "restore objects from their component parts" in {
-      val projectionData = storage.projections map { 
-        case (pd, p) => ((pd.columns(0).selector, p.getAllPairs(System.currentTimeMillis + 10000) map { _ map { case (ids, vs) =>  (ids, vs(0)) } })) 
-      } toList
-
-      import scalaz.{Order,Ordering}
-      implicit def identityOrder[A, B]: (((Identities, A), (Identities, B)) => Ordering) = 
-        (t1: (Identities, A), t2: (Identities, B)) => {
-          (t1._1 zip t2._1).foldLeft[Ordering](Ordering.EQ) {
-            case (Ordering.EQ, (i1, i2)) => Order[Long].order(i1, i2)
-            case (ord, _) => ord
-          }
-        }
-
-      implicit object SEventIdentityOrder extends Order[SEvent] {
-        def order(s1: SEvent, s2: SEvent) = identityOrder(s1, s2)
-      }
-        
-      val enum = query.combine(projectionData) map { _ map { case (ids, sv) => sv } }
-      
-      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enum[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
-    }
-  }
-
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val enum = Await.result(query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000) map { case (ids, sv) => sv } fenum, intToDurationInt(30).seconds)
-      
-      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enum[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
-      val enum = Await.result(query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000).fenum, intToDurationInt(30).seconds)
-      val enumv = enum map { _ map { case (ids, sv) => sv } }
-      (consume[QueryAPI#X, Vector[SValue], IO, List] &= enumv[IO]).run(die _).unsafePerformIO.flatten must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
+      val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000)
+      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
 }

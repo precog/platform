@@ -29,44 +29,29 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
-trait StubYggShardComponent {
+trait StubYggShardComponent extends YggShardComponent {
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
+  type Dataset[E] = IterableDataset[E]
 
   val dataPath = Path("/test")
   def sampleSize: Int
 
-  trait Storage extends YggShard {
-
+  trait Storage extends YggShard[Dataset] {
+    implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
-    case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection {
+    case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
       val chunkSize = 2000
 
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-      def getAllPairs(expiresAt: Long): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = {
-        enumPStream[X, Vector[(Identities, Seq[CValue])], IO](data.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
-      }
-
-      def getAllValues(expiresAt: Long): EnumeratorP[X, Vector[Seq[CValue]], IO] = {
-        enumPStream[X, Vector[Seq[CValue]], IO](data.values.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
-      }
-
-      def getAllIds(expiresAt: Long): EnumeratorP[X, Vector[Identities], IO] = {
-        enumPStream[X, Vector[Identities], IO](data.keys.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
-      }
-
-      def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : EnumeratorP[X, Vector[(Identities, CValue)], IO] = {
-        enumPStream[X, Vector[(Identities, CValue)], IO](data.map{case (i,v) => (i, v(columnIndex))}.grouped(chunkSize).map(c => Vector(c.toSeq: _*)).toStream)
-      }
-
-      def getPairsByIdRange(range: Interval[Identities], expiresAt: Long): EnumeratorP[X, Vector[(Identities, Seq[CValue])], IO] = sys.error("not needed")
+      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = IterableDataset(1, data)
     }
 
     val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)
 
-    val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
+    val projections: Map[ProjectionDescriptor, Projection[Dataset]] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
       case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
         case (acc, ProjectionData(descriptor, identities, values, _)) =>
           acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
@@ -85,7 +70,7 @@ trait StubYggShardComponent {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection] =
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] =
       Future(projections(descriptor))
   }
 }

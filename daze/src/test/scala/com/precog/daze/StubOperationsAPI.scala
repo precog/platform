@@ -35,6 +35,7 @@ trait StubOperationsAPI
     with IterableDatasetOpsComponent
     with MemoryDatasetConsumer { self =>
   type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
+  type Dataset[E] = IterableDataset[E]
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
@@ -53,21 +54,17 @@ trait StubOperationsAPI
       def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[Dataset] = this
       
-      def realize(expiresAt: Long)(implicit asyncContext: akka.dispatch.ExecutionContext): Dataset[SValue] = {
+      def realize(expiresAt: Long): Dataset[SValue] = {
         fullProjection(userUID, path, expiresAt) collect unlift(mask)
       }
       
-      private def mask(sev: SEvent): Option[SEvent] = {
-        val (ids, sv) = sev
-        
-        val result = selector.foldLeft(Some(sv): Option[SValue]) {
+      private def mask(sv: SValue): Option[SValue] = {
+        selector.foldLeft(Some(sv): Option[SValue]) {
           case (None, _) => None
           case (Some(SObject(obj)), Right(field)) => obj get field
-          case (Some(SArray(arr)), Left(index)) => arr.lift(index)
+          case (Some(SArray(arr)),  Left(index)) => arr.lift(index)
           case _ => None
         }
-        
-        result map { sv => (ids, sv) }
       }
       
       // TODO merge with Evaluator impl
@@ -77,7 +74,8 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): Dataset[SValue] = readJSON(path)
+    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): Dataset[SValue] = 
+      IterableDataset(1, new Iterable[(Identities, SValue)] { def iterator = readJSON(path) })
     
     def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector())
     

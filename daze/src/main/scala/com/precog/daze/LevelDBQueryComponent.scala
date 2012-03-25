@@ -87,8 +87,6 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       )
     }
 
-    implicit val mergeOrder = Order[Identities].contramap[SColumn] { case (ids, _) => ids }
-
     def sources(selector: JPath, root: PathRoot): Sources = {
       def search(metadata: PathMetadata, selector: JPath, acc: Set[(JPath, SType, ProjectionDescriptor)]): Sources = {
         metadata match {
