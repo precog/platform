@@ -29,7 +29,7 @@ import com.precog.util.IdGen
 import akka.dispatch.Await
 import akka.util.duration._
 
-import java.io.File
+import java.io._
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -49,9 +49,11 @@ trait TestConfigComponent {
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
     def maxEvalDuration = intToDurationInt(30).seconds
+
     object valueSerialization extends SValueSortSerialization with ZippedStreamSerialization
-    val keyValueSerialization = sys.error("todo")
-    val eventSerialization = sys.error("todo")
+    object eventSerialization extends SEventSortSerialization with ZippedStreamSerialization
+    object groupSerialization extends GroupSortSerialization with ZippedStreamSerialization
+
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
       def nextId() = source.getAndIncrement
