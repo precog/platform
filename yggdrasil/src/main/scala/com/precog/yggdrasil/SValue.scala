@@ -228,6 +228,7 @@ trait SValue {
 
 trait SValueInstances {
   case class paired(sv1: SValue, sv2: SValue) {
+    assert(sv1 != null && sv2 != null)
     def fold[A](default: => A)(
       obj:    Map[String, SValue] => Map[String, SValue] => A,
       arr:    Vector[SValue] => Vector[SValue] => A,

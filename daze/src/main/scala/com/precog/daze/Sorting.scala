@@ -51,7 +51,8 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
         } else j
       }
 
-      insert(0, values)
+      insert(0, v)
+
       Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], javaOrder.asInstanceOf[Comparator[AnyRef]])
       val chunkFile = sortFile(chunkId)
       using(fs.oStream(chunkFile)) { fs.write(_, buffer) }
