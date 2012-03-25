@@ -961,11 +961,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             value.idCount, 
             new Iterable[(Identities,A)] {
               def iterator = new Iterator[(Identities,A)] {
-                def hasNext = sameK
+                def hasNext = _next != null && sameK
                 def next = {
+                  if (_next == null) throw new IllegalStateException("next called on an empty iterator.")
                   val tmp = _next
                   _next = precomputeNext()
-                  sameK = ord.order(currentK, _next._1) == EQ
+                  sameK = if (_next == null) false else ord.order(currentK, _next._1) == EQ
                   (tmp._2, tmp._3)
                 }
               }
