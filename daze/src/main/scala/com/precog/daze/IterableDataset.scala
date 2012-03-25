@@ -988,8 +988,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
         }
       })
   }
-
-  def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
 
 // vim: set ts=4 sw=4 et:
