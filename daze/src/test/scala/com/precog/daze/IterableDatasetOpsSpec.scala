@@ -49,13 +49,13 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     def sortWorkDir: File = new File("/tmp")
   }
 
-  def rec(i: Long) = (VectorCase(i), i: java.lang.Long)
+  def rec(i: Long) = (VectorCase(i), i: Long)
 
-  type Record[A <: AnyRef] = (Identities, A)
+  type Record[A] = (Identities, A)
 
-  implicit def genLong = for (l <- arbitrary[Long]) yield (l: java.lang.Long)
+  implicit def genLong = for (l <- arbitrary[Long]) yield (l: Long)
 
-  implicit def recGen[A <: AnyRef](implicit agen: Gen[A]): Gen[Record[A]] = 
+  implicit def recGen[A](implicit agen: Gen[A]): Gen[Record[A]] = 
     for {
       id <- arbitrary[Long]
       value <- agen
@@ -63,40 +63,39 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       (VectorCase(id), value)
     }
 
-  implicit def dsGen[A <: AnyRef](implicit rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
+  implicit def dsGen[A](implicit rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
     for (l <- listOf(rgen)) yield IterableDataset(1, l)
   }
 
-  implicit def arbIterableDataset[A <: AnyRef](implicit gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
+  implicit def arbIterableDataset[A](implicit gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
      Arbitrary(dsGen[A])
 
   "iterable dataset ops" should {
     "cogroup" in {
-      import java.lang.Long
       val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
       val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
 
       val expected = Vector(
-        left3(1: Long),
-        right3(2: Long),
-        middle3((3: Long, 3: Long)),
-        middle3((3: Long, 3: Long)),
-        right3(4: Long),
-        middle3((5: Long, 5: Long)),
-        middle3((5: Long, 5: Long)),
-        right3(6: Long),
-        left3(7: Long),
-        middle3((8: Long, 8: Long)),
-        middle3((8: Long, 8: Long)),
-        middle3((8: Long, 8: Long)),
-        middle3((8: Long, 8: Long)) 
+        left3(1),
+        right3(2),
+        middle3((3, 3)),
+        middle3((3, 3)),
+        right3(4),
+        middle3((5, 5)),
+        middle3((5, 5)),
+        right3(6),
+        left3(7),
+        middle3((8, 8)),
+        middle3((8, 8)),
+        middle3((8, 8)),
+        middle3((8, 8)) 
       )
 
       val results = v1.cogroup(v2) {
-        new CogroupF[java.lang.Long, java.lang.Long, Either3[java.lang.Long, (java.lang.Long, java.lang.Long), java.lang.Long]] {
-          def left(i: java.lang.Long) = left3(i)
-          def both(i1: java.lang.Long, i2: java.lang.Long) = middle3((i1, i2))
-          def right(i: java.lang.Long) = right3(i)
+        new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+          def left(i: Long) = left3(i)
+          def both(i1: Long, i2: Long) = middle3((i1, i2))
+          def right(i: Long) = right3(i)
         }
       }
 
@@ -126,22 +125,22 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
 
     "crossLeft" in {
-      check { (l1: IterableDataset[java.lang.Long], l2: IterableDataset[java.lang.Long]) => 
+      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossLeft(l2) { 
           case (a, b) => (a, b)
         }
 
-        results.iterator.toList must_== l1.flatMap(i => l2.map((j: java.lang.Long) => (i, j)))
+        results.iterator.toList must_== l1.flatMap(i => l2.map((j: Long) => (i, j)))
       } 
     }
 
     "crossRight" in {
-      check { (l1: IterableDataset[java.lang.Long], l2: IterableDataset[java.lang.Long]) => 
+      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossRight(l2) { 
           case (a, b) => (a, b)
         }
 
-        results.iterator.toList must_== l2.flatMap(i => l1.map((j: java.lang.Long) => (j, i)))
+        results.iterator.toList must_== l2.flatMap(i => l1.map((j: Long) => (j, i)))
       } 
     }
   }

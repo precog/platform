@@ -23,7 +23,7 @@ package serialization
 
 import java.io._
 
-trait SortSerialization[E <: AnyRef] extends StreamSerialization {
+trait SortSerialization[E] extends StreamSerialization {
   def write(out: DataOutputStream, values: Array[E]): Unit
   def reader(in: DataInputStream): Iterator[E]
 }

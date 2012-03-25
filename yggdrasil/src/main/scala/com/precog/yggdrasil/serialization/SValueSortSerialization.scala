@@ -34,7 +34,7 @@ import scala.annotation.tailrec
 import scalaz.effect._
 import scalaz.syntax.monad._
 
-trait BaseSortSerialization[A <: AnyRef] extends SortSerialization[A] {
+trait BaseSortSerialization[A] extends SortSerialization[A] {
   final val HeaderFlag = 0
   final val ValueFlag = 1
 

@@ -46,7 +46,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
   type Grouping[K, A] = IterableGrouping[K, A]
 
   class Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
-    implicit def extend[A <: AnyRef](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
+    implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
       new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig))
 
     def empty[A](idCount: Int): IterableDataset[A] = IterableDataset(idCount, Iterable.empty[(Identities, A)])
@@ -87,7 +87,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         })
     }
 
-    def mergeGroups[A <: AnyRef, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] = {
+    def mergeGroups[A, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] = {
       val leftIter = d1.iterator
       val rightIter = d2.iterator
 
@@ -182,7 +182,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       }
     }
 
-    def zipGroups[A <: AnyRef, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = {
+    def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]] = {
       val ord = implicitly[Order[K]]
 
       val leftIter = d1.iterator
@@ -231,7 +231,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A <: AnyRef, K, B <: AnyRef: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
+    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
       type IB = (Identities, B)
 
       val iter = new Iterator[IB] {
@@ -262,13 +262,13 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(IdGen.nextInt())
     }
 
-    def mapGrouping[K, A <: AnyRef, B <: AnyRef](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
+    def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
       IterableGrouping[K, B](g.iterator.map { case (k,a) => (k, f(a)) })
     }
   }
 }
 
-class IterableDatasetExtensions[A <: AnyRef](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable])
+class IterableDatasetExtensions[A](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable])
 extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   private def extend(o: IterableDataset[A]) = new IterableDatasetExtensions(o, iteratorSorting)
 
@@ -645,7 +645,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     )
   }
 
-  def crossRight[B <: AnyRef, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
+  def crossRight[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
     new IterableDatasetExtensions(d2, iteratorSorting).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then merge and sort -u by identities
