@@ -21,6 +21,7 @@ package com.precog
 
 import scalaz.{Order,Ordering}
 import scalaz.effect.IO
+import scalaz.Ordering.EQ
 
 import java.io.File
 
@@ -54,8 +55,10 @@ package object yggdrasil {
       val i1 = ids1(i)
       val i2 = ids2(i)
       
-      if (i1 != i2) {
-        result = Ordering.fromInt((i1 - i2) toInt)
+      if (i1 < i2) {
+        result = Ordering.LT
+      } else if (i1 > i2) {
+        result = Ordering.GT
       }
       
       i += 1
@@ -73,8 +76,18 @@ package object yggdrasil {
     def order(i1: Identities, i2: Identities) = identityOrder(i1, i2)
   }
 
-  implicit def tupledIdentitiesOrder[A]: Order[(Identities, A)] =
+  def tupledIdentitiesOrder[A]: Order[(Identities, A)] =
     IdentitiesOrder.contramap((_: (Identities, A))._1)
+
+  def identityValueOrder[A](implicit ord: Order[A]): Order[(Identities, A)] = new Order[(Identities, A)] {
+    type IA = (Identities, A)
+    def order(x: IA, y: IA): Ordering = {
+      val idComp = IdentitiesOrder.order(x._1, y._1)
+      if (idComp == EQ) {
+        ord.order(x._2, y._2)
+      } else idComp
+    }
+  }
 }
 
 

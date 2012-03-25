@@ -73,7 +73,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
 
   implicit def dsGen[A](implicit idCount: IdCount, rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
-    for (l <- listOf(rgen)) yield IterableDataset(idCount.idCount, l)
+    for (l <- listOf(rgen)) yield IterableDataset(idCount.idCount, l.distinct)
   }
 
   implicit def arbIterableDataset[A](implicit idCount: IdCount, gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
@@ -235,12 +235,14 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
     
     "union" in {
-      implicit val ordering = tupledIdentitiesOrder[Long].toScalaOrdering
+      implicit val ordering = identityValueOrder[Long].toScalaOrdering
       implicit val idCount = IdCount(1)
       check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.union(l2).iterable.toList
+        val expectedSet = Set((l1.iterable ++ l2.iterable).toSeq: _*).toList
+        val expectedSorted = expectedSet.sorted
 
-        results must containAllOf(Set((l1.iterable ++ l2.iterable).toSeq: _*).toList.sorted).only.inOrder
+        results must containAllOf(expectedSorted).only.inOrder
       }
     }
 
