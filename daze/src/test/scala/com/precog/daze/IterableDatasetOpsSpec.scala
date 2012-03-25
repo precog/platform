@@ -111,7 +111,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           case (a, b) => (a, b)
         }
 
-        results.iterator.toList must_== l1.flatMap(i => l2.map((j: Long) => (i, j)))
+        results.iterator.toList must_== l1.iterator.toList.flatMap(i => l2.iterator.toList.map((j: Long) => (i, j)))
       } 
     }
 
@@ -121,7 +121,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           case (a, b) => (a, b)
         }
 
-        results.iterator.toList must_== l2.flatMap(i => l1.map((j: Long) => (j, i)))
+        results.iterator.toList must_== l2.iterator.toList.flatMap(i => l1.iterator.toList.map((j: Long) => (j, i)))
       } 
     }
   }

@@ -48,10 +48,9 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
             def hasNext = _next != null
 
             def next() = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
               val temp = _next
-
               _next = precomputeNext()
-
               temp
             }
 
@@ -83,6 +82,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           def hasNext = _next != null
 
           def next() = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
             val back = _next
             precomputeNext()
             back
@@ -129,6 +129,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           def hasNext = _next != null
 
           def next() = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
             val back = _next
             precomputeNext()
             back
@@ -179,6 +180,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         def hasNext = _next != null
 
         def next() = {
+          if (_next == null) throw new IllegalStateException("next called on empty iterator.")
           val back = _next
           precomputeNext()
           back
@@ -277,7 +279,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             private var _next: IC = precomputeNext()
 
             def hasNext: Boolean = _next != null
-            def next: IC = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
+            def next: IC = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val temp = _next
+              _next = precomputeNext()
+              temp
+            }
 
             @tailrec def bufferRight(leftElement: IA, acc: Vector[IB]): (IB, Vector[IB]) = {
               if (right.hasNext) {
@@ -425,7 +432,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             private var _next: IC = precomputeNext()
 
             def hasNext: Boolean = _next != null
-            def next: IC = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
+            def next: IC = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val temp = _next
+              _next = precomputeNext()
+              temp 
+            }
 
             private def order(l: IA, r: IB) = prefixIdentityOrder(l._1, r._1, sharedPrefixLength)
 
@@ -595,7 +607,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             private var _next: IC = precomputeNext()
 
             def hasNext = _next != null
-            def next: IC = if (_next == null) sys.error("No more") else { val temp = _next; _next = precomputeNext(); temp }
+            def next: IC = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val temp = _next
+              _next = precomputeNext()
+              temp 
+            }
 
             @tailrec private def precomputeNext(): IC = {
               if (leftElement != null) {
@@ -691,7 +708,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
             val lf = left()
             val rt = right()
 
-            if (lf == null) {
+            val result = if (lf == null) {
               val back = _right
               _right = nullIA
               back
@@ -725,6 +742,9 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                 }
               }
             }
+
+            assert(result != null)
+            result
           }
         }
       }
@@ -750,14 +770,13 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
           def hasNext = _next != null
 
           def next = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
             val temp = _next
-
-            _next = precomputeNext
-
-            temp
+            _next = precomputeNext()
+            temp 
           }
 
-          @tailrec private def precomputeNext: IA = {
+          @tailrec private def precomputeNext(): IA = {
             if (_left == null || _right == null) {
                null
             } else {
@@ -826,6 +845,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
           def hasNext = _next != null
           def next = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
             val tmp = _next
             _next = precomputeNext()
             tmp
@@ -865,6 +885,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
           def hasNext = _next != null
           def next = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
             val result = (VectorCase(nextId()), _next)
             _next = precomputeNext()
             result
@@ -936,16 +957,21 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
       }
     }
 
-    val withK = value.iterable.iterator.flatMap { case (i, a) => keyFor(a).iterator.map(k => (k, i, a)) }
+    val withK = value.iterable.iterator.flatMap { 
+      case (i, a) => keyFor(a).iterator map { k => (k, i, a) }
+    }
+
     val sorted: Iterator[(K,Identities,A)] = iteratorSorting.sort(withK, "group", memoId).iterator
 
-    IterableGrouping(new Iterator[(K, IterableDataset[A])] {
+    IterableGrouping(
+      new Iterator[(K, IterableDataset[A])] {
         // Have to hold our "peek" over the entire outer iterator
-        var _next: (K, Identities, A) = sorted.next
+        var _next: (K, Identities, A) = precomputeNext()
         var sameK = true
 
-        def hasNext = sorted.hasNext
+        def hasNext = _next != null
         def next: (K, IterableDataset[A]) = {  
+          if (_next == null) throw new IllegalStateException("next called on empty iterator.")
           val currentK = _next._1
           sameK = true
           
@@ -957,7 +983,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                 def hasNext = sameK
                 def next = {
                   val tmp = _next
-                  _next = sorted.next
+                  _next = precomputeNext()
                   sameK = ord.order(currentK, _next._1) == EQ
                   (tmp._2, tmp._3)
                 }
@@ -969,7 +995,13 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
           (currentK, extend(innerDS).memoize(kChunkId))
         }
-      })
+
+        private def precomputeNext(): (K, Identities, A) = {
+          if (sorted.hasNext) sorted.next
+          else null.asInstanceOf[(K, Identities, A)]
+        }
+      }
+    )
   }
 }
 
