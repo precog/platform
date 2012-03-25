@@ -679,7 +679,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
       def right(a: A) = a
     }
 
-    //left merge right
     extend(left).cogroup(right)(cgf)
   }
 
