@@ -103,6 +103,22 @@ trait BinarySValueSerialization {
     case SEmptyObject           => CEmptyObject
     case SEmptyArray            => CEmptyArray
   }
+
+  def writeIdentities(out: DataOutputStream, id: Identities): Unit = {
+    id.foreach(out.writeLong(_))
+  }
+
+  def readIdentities(in: DataInputStream, length: Int): Identities = {
+    @tailrec def loop(in: DataInputStream, acc: VectorCase[Long], i: Int): Identities = {
+      if (i > 0) {
+        loop(in, acc :+ in.readLong(), i - 1)
+      } else {
+        acc
+      }
+    }
+
+    loop(in, VectorCase.empty[Long], length)
+  }
 }
 
 
@@ -171,34 +187,16 @@ trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEv
   def writeEvent(out: DataOutputStream, ev: SEvent): IO[Unit] = {
     for {
       _ <- IO { out.writeInt(EventFlag) }
-      _ <- writeIdentities(out, ev._1)
+      _ <- IO { writeIdentities(out, ev._1) }
       _ <- IO { writeValue(out, ev._2) }
     } yield ()
   }
 
-  def writeIdentities(out: DataOutputStream, id: Identities): IO[Unit] = IO {
-    id.map(out.writeLong(_))
-  }
-
   def readEvent(in: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = {
     for {
-      ids <- readIdentities(in, length)
+      ids <- IO { readIdentities(in, length) }
       sv  <- IO { readValue(in, cols) } 
     } yield (ids, sv)
-  }
-
-  def readIdentities(in: DataInputStream, length: Int): IO[Identities] = {
-    @tailrec def loop(in: DataInputStream, acc: VectorCase[Long], i: Int): Identities = {
-      if (i > 0) {
-        loop(in, acc :+ in.readLong(), i - 1)
-      } else {
-        acc
-      }
-    }
-
-    IO {
-      loop(in, VectorCase.empty[Long], length)
-    }
   }
 }
 
