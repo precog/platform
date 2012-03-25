@@ -74,11 +74,9 @@ class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataStorage: M
 
 trait MetadataStorage extends FileOps {
 
-  protected def dirMapping: ProjectionDescriptor => IO[File]
+  import MetadataStorage._
 
-  val prevFilename = "projection_metadata.prev"
-  val curFilename = "projection_metadata.cur"
-  val nextFilename = "projection_metadata.next"
+  protected def dirMapping: ProjectionDescriptor => IO[File]
 
   def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = {
     def extract(json: String): Validation[Error, MetadataRecord] = 
@@ -113,7 +111,7 @@ trait MetadataStorage extends FileOps {
   def stagePrev(dir: File): IO[Validation[Throwable, Unit]] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    if(src.exists) copy(src, dest) else IO{ Success(()) }
+    if(exists(src)) copy(src, dest) else IO{ Success(()) }
   }
   
   def rotateCurrent(dir: File): IO[Validation[Throwable, Unit]] = IO {
@@ -124,6 +122,14 @@ trait MetadataStorage extends FileOps {
       Success(())
     }
   }
+
+}
+
+object MetadataStorage {
+
+  val prevFilename = "projection_metadata.prev"
+  val curFilename = "projection_metadata.cur"
+  val nextFilename = "projection_metadata.next"
 
 }
 
@@ -154,6 +160,9 @@ object MetadataUtil {
 }
 
 trait FileOps {
+
+  def exists(src: File): Boolean
+
   def rename(src: File, dest: File): Unit
   def copy(src: File, dest: File): IO[Validation[Throwable, Unit]]
 
@@ -162,6 +171,8 @@ trait FileOps {
 }
 
 trait FilesystemFileOps extends FileOps {
+  def exists(src: File) = src.exists
+
   def rename(src: File, dest: File) { src.renameTo(dest) }
   def copy(src: File, dest: File) = IOUtils.copyFile(src, dest) 
 
