@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import metadata._
+import leveldb._
 
 import com.precog.common._
 import com.precog.common.util._
@@ -127,6 +128,30 @@ trait MetadataStorage extends FileOps {
 }
 
 class FilesystemMetadataStorage(protected val dirMapping: ProjectionDescriptor => IO[File]) extends MetadataStorage with FilesystemFileOps
+
+object MetadataUtil {
+  def repairMetadata(descriptor: ProjectionDescriptor, 
+                     projection: LevelDBProjection, 
+                     record: MetadataRecord): IO[Validation[Throwable, ColumnMetadata]] = IO {
+    Validation.fromTryCatch {
+      record.clock.map.foldLeft(record.metadata) {
+        case (meta, (pid, sid)) => update(meta, projection, descriptor, pid, sid, Int.MaxValue) 
+      }
+    }
+  }
+
+  private def update(metadata: ColumnMetadata,
+                     projection: LevelDBProjection,
+                     descriptor: ProjectionDescriptor,
+                     pid: Int,
+                     firstSID: Int,
+                     lastSID: Int): ColumnMetadata = {
+    // scan project from (pid, firstSID) to (pid, secondSID)
+    // for each value update metadata
+    // return metadata
+    sys.error("todo")
+  }
+}
 
 trait FileOps {
   def rename(src: File, dest: File): Unit
