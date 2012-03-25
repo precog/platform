@@ -21,10 +21,12 @@ package com.precog
 package daze
 
 import yggdrasil._
+import yggdrasil.serialization._
 import com.precog.common._
 
-import java.io.File
-import scalaz._
+import java.io.{DataInputStream, DataOutputStream, File}
+
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
@@ -76,6 +78,62 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 
   implicit def arbIterableDataset[A](implicit idCount: IdCount, gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
      Arbitrary(dsGen[A])
+   
+  
+  implicit object GroupingSortSerialization extends BaseSortSerialization[(Long, Identities, Long)] with ZippedStreamSerialization {
+    type Header = Int
+    
+    def headerFor(value: (Long, Identities, Long)) = value._2.length
+    
+    def writeHeader(out: DataOutputStream, header: Int) {
+      out.writeInt(header)
+    }
+    
+    def readHeader(in: DataInputStream) = in.readInt()
+    
+    def writeRecord(out: DataOutputStream, value: (Long, Identities, Long)) {
+      val (k, ids, v) = value
+      
+      out.writeLong(k)
+      ids foreach out.writeLong
+      out.writeLong(v)
+    }
+    
+    def readRecord(in: DataInputStream, header: Int) = {
+      val k = in.readLong()
+      val ids = VectorCase((0 until header) map { _ => in.readLong() }: _*)
+      val v = in.readLong()
+      
+      (k, ids, v)
+    }
+  }
+  
+  implicit object GroupingEventSortSerialization extends BaseSortSerialization[(Identities, Long)] with ZippedStreamSerialization {
+    type Header = Int
+    
+    def headerFor(value: (Identities, Long)) = value._1.length
+    
+    def writeHeader(out: DataOutputStream, header: Int) {
+      out.writeInt(header)
+    }
+    
+    def readHeader(in: DataInputStream) = in.readInt()
+    
+    def writeRecord(out: DataOutputStream, value: (Identities, Long)) {
+      val (ids, v) = value
+      
+      ids foreach out.writeLong
+      out.writeLong(v)
+    }
+    
+    def readRecord(in: DataInputStream, header: Int) = {
+      val ids = VectorCase((0 until header) map { _ => in.readLong() }: _*)
+      val v = in.readLong()
+      
+      (ids, v)
+    }
+  }
+  
 
   "iterable dataset ops" should {
     "cogroup" in {
@@ -174,6 +232,136 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
         (results must haveSize(sampleLeft.size + sampleRight.size)) and
         (results must haveTheSameElementsAs(sampleLeft ++ sampleRight))
       } 
+    }
+    
+    "group according to an integer key" in {
+      val groups = Stream(
+        0L -> Vector(rec(1)),
+        2L -> Vector(rec(2), rec(3), rec(3)),
+        4L -> Vector(rec(5)),
+        6L -> Vector(rec(6), rec(7)),
+        8L -> Vector(rec(8)))
+      
+      val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
+      
+      val result = ds.group(0) { num =>
+        IterableDataset(1, Vector(rec((num / 2) * 2)))
+      }
+      
+      val expected = groups map {
+        case (k, v) => (k, IterableDataset(1, v))
+      }
+      
+      result.iterator.toStream mustEqual expected
+    }
+  }
+  
+  "iterable grouping ops" should {
+    
+    val sharedRecs = Map(
+      'i1 -> rec(1),
+      'i2 -> rec(2),
+      'i3a -> rec(3),
+      'i3b -> rec(3),
+      'i4 -> rec(4),
+      'i5 -> rec(5),
+      'i6 -> rec(6),
+      'i7 -> rec(7),
+      'i8a -> rec(8),
+      'i8b -> rec(8))
+    
+    val g1 = {
+      val seed = Stream(
+        0L -> Vector(sharedRecs('i1)),
+        2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b)),
+        4L -> Vector(sharedRecs('i5)),
+        6L -> Vector(sharedRecs('i6), sharedRecs('i7)),
+        8L -> Vector(sharedRecs('i8a)))
+        
+      val itr = seed map {
+        case (k, v) => (k, IterableDataset(1, v))
+      } iterator
+      
+      IterableGrouping(itr)
+    }
+    
+    val g2 = {
+      val seed = Stream(
+        1L -> Vector(sharedRecs('i1)),
+        2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)),
+        5L -> Vector(sharedRecs('i5), sharedRecs('i6)),
+        7L -> Vector(sharedRecs('i7)),
+        8L -> Vector(sharedRecs('i8b)))
+        
+      val itr = seed map {
+        case (k, v) => (k, IterableDataset(1, v))
+      } iterator
+      
+      IterableGrouping(itr)
+    }
+    
+    "implement mapping" in {
+      val result = mapGrouping(g1) { v =>
+        v.iterable.size
+      }
+      
+      result.iterator.toStream mustEqual Stream(
+        0L -> 1,
+        2L -> 3,
+        4L -> 1,
+        6L -> 2,
+        8L -> 1)
+    }
+    
+    "implement merging" >> {
+      "union" >> {
+        val result = mergeGroups(g1, g2, true)
+        
+        val expected = Stream(
+          0L -> Vector(sharedRecs('i1)),
+          1L -> Vector(sharedRecs('i1)),
+          2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b), sharedRecs('i4)),
+          4L -> Vector(sharedRecs('i5)),
+          5L -> Vector(sharedRecs('i5), sharedRecs('i6)),
+          6L -> Vector(sharedRecs('i6), sharedRecs('i7)),
+          7L -> Vector(sharedRecs('i7)),
+          8L -> Vector(sharedRecs('i8a), sharedRecs('i8b)))
+          
+        result.iterator.toStream mustEqual expected
+      }
+      
+      "intersect" >> {
+        val result = mergeGroups(g1, g2, false)
+        
+        val expected = Stream(
+          2L -> Vector(sharedRecs('i2)),
+          6L -> Vector(sharedRecs('i6), sharedRecs('i7)),
+          8L -> Vector())
+          
+        result.iterator.toStream mustEqual expected
+      }
+    }
+    
+    "implement zipping" in {
+      val mappedG1 = mapGrouping(g1) { v => NEL(v) }
+      val mappedG2 = mapGrouping(g2) { v => NEL(v) }
+      
+      val result = zipGroups(mappedG1, mappedG2)
+      
+      val expected = Stream(
+        0L -> NEL(IterableDataset(1, Vector(sharedRecs('i1)))),
+        1L -> NEL(IterableDataset(1, Vector(sharedRecs('i1)))),
+        2L -> NEL(IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b))),
+          IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)))),
+        4L -> NEL(IterableDataset(1, Vector(sharedRecs('i5)))),
+        5L -> NEL(IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6))),
+          IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6)))),
+        6L -> NEL(IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7)))),
+        7L -> NEL(IterableDataset(1, Vector(sharedRecs('i7)))),
+        8L -> NEL(IterableDataset(1, Vector(sharedRecs('i8a))),
+          IterableDataset(1, Vector(sharedRecs('i8b)))))
+          
+      result.iterator.toStream mustEqual expected
     }
   }
 }
