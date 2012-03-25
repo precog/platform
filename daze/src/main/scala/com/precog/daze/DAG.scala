@@ -145,7 +145,7 @@ trait DAG extends Instructions {
         eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
       }
       
-      def pushBuckets(zipping: Boolean, split: => Split)(spec: BucketSpec, acc: (List[DepGraph], Int)): (List[DepGraph], Int) = spec match {
+      def pushBuckets(zipping: Boolean, split: () => Split)(spec: BucketSpec, acc: (List[DepGraph], Int)): (List[DepGraph], Int) = spec match {
         case MergeBucketSpec(left, _, _) => pushBuckets(zipping, split)(left, acc)     // only the evaluator cares
         
         case ZipBucketSpec(left, right) => {
@@ -155,12 +155,12 @@ trait DAG extends Instructions {
         
         case SingleBucketSpec(target, _) => {
           val (fragment, index) = acc
-          val fragment2 = SplitGroup(loc, index, target.provenance)(split) :: fragment
+          val fragment2 = SplitGroup(loc, index, target.provenance)(split()) :: fragment
           
           if (zipping)
             (fragment2, index - 1)
           else
-            (SplitParam(loc, index - 1)(split) :: fragment2, index - 2)
+            (SplitParam(loc, index - 1)(split()) :: fragment2, index - 2)
         }
       }
       
@@ -233,7 +233,7 @@ trait DAG extends Instructions {
         
         case Bucket => {
           val eitherRoots = roots match {
-            case Right(left) :: Right(right) :: tl =>
+            case Right(right) :: Right(left) :: tl =>
               Right(Left(SingleBucketSpec(left, right)) :: tl)
             
             case Left(_) :: _ | _ :: Left(_) :: _ =>
@@ -248,7 +248,7 @@ trait DAG extends Instructions {
         
         case instr @ MergeBuckets(and) => {
           val eitherRoots = roots match {
-            case Left(left) :: Left(right) :: tl =>
+            case Left(right) :: Left(left) :: tl =>
               Right(Left(MergeBucketSpec(left, right, and)) :: tl)
             
             case Right(_) :: _ | _ :: Right(_) :: _ =>
@@ -263,7 +263,7 @@ trait DAG extends Instructions {
         
         case ZipBuckets => {
           val eitherRoots = roots match {
-            case Left(left) :: Left(right) :: tl =>
+            case Left(right) :: Left(left) :: tl =>
               Right(Left(ZipBucketSpec(left, right)) :: tl)
             
             case Right(_) :: _ | _ :: Right(_) :: _ =>
@@ -288,9 +288,10 @@ trait DAG extends Instructions {
             if ((buckets lengthCompare n) != 0) {
               Left(BucketOperationOnSets(instr))
             } else {
-              val open = OpenSplit(loc, buckets)
-              val (fragment, _) = buckets.foldRight((List[DepGraph](), depth - 1))(pushBuckets(false, open.result))
-              val roots2 = (fragment map { Right(_) }) ::: (roots drop n)
+              val oldTail = roots drop n
+              val open = OpenSplit(loc, buckets, oldTail)
+              val (fragment, _) = buckets.foldRight((List[DepGraph](), depth - 1))(pushBuckets(false, () => open.result))
+              val roots2 = (fragment map { Right(_) }) ::: oldTail
               
               loop(loc, roots2, open :: splits, stream.tail)
             }
@@ -299,13 +300,20 @@ trait DAG extends Instructions {
         
         case Merge => {
           val (eitherRoots, splits2) = splits match {
-            case (open @ OpenSplit(loc, specs)) :: splitsTail => {
+            case (open @ OpenSplit(loc, specs, oldTail)) :: splitsTail => {
               roots match {
                 case Right(child) :: tl => {
-                  val split = Split(loc, specs, child)
-                  open.result = split
+                  val oldTailSet = Set(oldTail: _*)
+                  val newTailSet = Set(tl: _*)
                   
-                  (Right(Right(split) :: tl), splitsTail)
+                  if ((oldTailSet & newTailSet).size == newTailSet.size) {
+                    val split = Split(loc, specs, child)
+                    open.result = split
+                    
+                    (Right(Right(split) :: tl), splitsTail)
+                  } else {
+                    (Left(MergeWithUnmatchedTails), splitsTail)
+                  }
                 }
                 
                 case _ => (Left(StackUnderflow(Merge)), splitsTail)
@@ -422,7 +430,7 @@ trait DAG extends Instructions {
     override def toString = self.toString
   }
   
-  private case class OpenSplit(loc: Line, specs: Vector[dag.BucketSpec]) {
+  private case class OpenSplit(loc: Line, specs: Vector[dag.BucketSpec], oldTail: List[Either[dag.BucketSpec, DepGraph]]) {
     var result: dag.Split = _           // gross!
   }
   
