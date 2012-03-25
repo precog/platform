@@ -78,8 +78,8 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
               Root(`line`, PushTrue),
               Root(`line`, PushTrue))),
             Join(`line`, VUnion, 
-              sp @ SplitParam(`line`, 0),
-              sg @ SplitGroup(`line`, 1, Vector())))) => {
+              sg @ SplitGroup(`line`, 1, Vector()),
+              sp @ SplitParam(`line`, 0)))) => {
               
           sp.parent mustEqual s
           sg.parent mustEqual s
@@ -105,12 +105,12 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushTrue))),
+            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(sp1 @ SplitParam(`line`, 0), sg1 @ SplitGroup(`line`, 1, Vector()))),
+              Vector(SingleBucketSpec(sg1 @ SplitGroup(`line`, 1, Vector()), sp1 @ SplitParam(`line`, 0))),
               Join(`line`, VUnion,
-                sp2 @ SplitParam(`line`, 0),
-                sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
+                sg2 @ SplitGroup(`line`, 1, Vector()),
+                sp2 @ SplitParam(`line`, 0))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
@@ -143,13 +143,13 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushTrue))),
+            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(Root(`line`, PushFalse), Root(`line`, PushNum("42")))),
+              Vector(SingleBucketSpec(Root(`line`, PushNum("42")), Root(`line`, PushFalse))),
               Join(`line`, VUnion,
                 Join(`line`, Map2Cross(Add),
-                  sp1 @ SplitParam(`line`, 0),
-                  sg1 @ SplitGroup(`line`, 1, Vector())),
+                  sg1 @ SplitGroup(`line`, 1, Vector()),
+                  sp1 @ SplitParam(`line`, 0)),
                 sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
           
           sp1.parent mustEqual s1
@@ -684,7 +684,9 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
         Bucket,
         instructions.Split(1, 2),
         PushFalse,
-        Merge)) mustEqual Left(MergeWithUnmatchedTails)
+        Merge,
+        Drop,
+        Drop)) mustEqual Left(MergeWithUnmatchedTails)
     }
     
     "accept merge with reduced (but reordered) stack" in {
@@ -721,7 +723,11 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
     }
     
     "reject split without corresponding merge" in {
-      decorate(Vector(Line(0, ""), PushTrue, instructions.Split(1, 2))) mustEqual Left(UnmatchedSplit)
+      decorate(Vector(Line(0, ""),
+        PushTrue,
+        PushFalse,
+        Bucket,
+        instructions.Split(1, 2))) mustEqual Left(UnmatchedSplit)
     }
     
     "reject split which increases the stack" in {
