@@ -1,21 +1,23 @@
 package com.precog
 package daze
 
+import memoization._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.serialization._
+import com.precog.common.VectorCase
+import com.precog.util.IdGen
+
 import akka.dispatch.Await
 import akka.util.duration._
-import com.precog.yggdrasil._
-import org.specs2.mutable._
 
 import java.io.File
-
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
-import com.precog.util.IdGen
+import org.specs2.mutable._
 
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
@@ -23,11 +25,18 @@ trait TestConfigComponent {
   class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
-    def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]]
+    def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
     def maxEvalDuration = intToDurationInt(30).seconds
+    object valueSerialization extends SValueSortSerialization with ZippedStreamSerialization
+    val keyValueSerialization = sys.error("todo")
+    val eventSerialization = sys.error("todo")
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
   }
 }
 
@@ -36,7 +45,8 @@ class EvaluatorSpecs extends Specification
     with StubOperationsAPI 
     with TestConfigComponent 
     with DiskMemoizationComponent 
-    with Timelib { self =>
+    with Stdlib
+    with MemoryDatasetConsumer { self =>
 
   import Function._
   

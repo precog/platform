@@ -29,7 +29,7 @@ trait LevelDBQueryConfig {
 
 trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent with YggShardComponent with DatasetOpsComponent {
   type YggConfig <: LevelDBQueryConfig
-  type Dataset[E] = IterableDataset[E]
+  type Dataset[E] <: IterableDataset[E]
   import ops._
 
   implicit def asyncContext: ExecutionContext
@@ -147,10 +147,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case (descriptor, selectors) :: xs  => 
             val instr = buildInstructions(descriptor, selectors)
             val projection = storage.projection(descriptor, yggConfig.projectionRetrievalTimeout)
-            joinNext(projection map { _.getAllPairs(expiresAt) map { buildObject(instr, _) } }, xs)
+            joinNext(projection map { p => ops.extend(p.getAllPairs(expiresAt)) map { buildObject(instr, _) } }, xs)
 
           case Nil => 
-            Future(ops.empty[SValue])
+            Future(ops.empty[SValue](1))
         }
       }
 

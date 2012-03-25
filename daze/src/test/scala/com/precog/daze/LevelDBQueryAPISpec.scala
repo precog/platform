@@ -17,6 +17,7 @@ import com.precog.yggdrasil.util._
 import com.precog.util._
 import SValue._
 
+import java.io.File
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
@@ -27,7 +28,10 @@ import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
-class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with StubYggShardComponent {
+class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent 
+with StubYggShardComponent with IterableDatasetOpsComponent {
+  type YggConfig = SortConfig with LevelDBQueryConfig
+  override type Dataset[E] = IterableDataset[E]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
@@ -35,14 +39,17 @@ class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent with 
 
   val testUID = "testUID"
 
-  type YggConfig = LevelDBQueryConfig
-  object yggConfig extends LevelDBQueryConfig {
+  object yggConfig extends SortConfig with LevelDBQueryConfig {
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
+    val clock = blueeyes.util.Clock.System
+    val sortBufferSize: Int = 1000
+    val sortWorkDir: File = new File("/tmp")
   }
 
   val storage = new Storage { }
 
   object query extends QueryAPI
+  object ops extends Ops
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
