@@ -21,13 +21,16 @@ package com.precog
 package daze
 
 import yggdrasil._
+import yggdrasil.serialization._
+import memoization._
+
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
   implicit def extend[A <: AnyRef](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
 
-  def empty[A]: Dataset[A] 
+  def empty[A](idCount: Int): Dataset[A] 
 
   def point[A](value: A): Dataset[A] 
 

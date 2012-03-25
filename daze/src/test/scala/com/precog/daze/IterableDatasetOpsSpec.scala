@@ -23,6 +23,7 @@ package daze
 import yggdrasil._
 import com.precog.common._
 
+import java.io.File
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -38,12 +39,19 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 class IterableDatasetOpsSpec extends Specification with ScalaCheck with IterableDatasetOpsComponent {
+  type YggConfig = SortConfig
+
   object ops extends Ops
   import ops._
 
+  object yggConfig extends SortConfig {
+    def sortBufferSize: Int = 1000
+    def sortWorkDir: File = new File("/tmp")
+  }
+
   def rec(i: Long) = (VectorCase(i), i: java.lang.Long)
 
-  type Record[A <: AnyVal] = (Identities, A)
+  type Record[A <: AnyRef] = (Identities, A)
 
   implicit def genLong = for (l <- arbitrary[Long]) yield (l: java.lang.Long)
 

@@ -19,20 +19,22 @@
  */
 package com.precog
 package daze
+package memoization
 
 import yggdrasil._
+import yggdrasil.serialization._
 
-import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
-import java.io.File
 
+import java.io._
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import IterateeT._
 
+
 trait MemoCache {
-  def expire(memoId: Int): IO[Unit]
+  def expire(memoId: MemoId): IO[Unit]
   def purge: IO[Unit]
 }
 

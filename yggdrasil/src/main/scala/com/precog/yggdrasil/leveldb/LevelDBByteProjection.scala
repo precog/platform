@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package leveldb
 
+import serialization.bijections._
 import com.precog.common.VectorCase
 import com.precog.util.Bijection._
 import java.nio.ByteBuffer
