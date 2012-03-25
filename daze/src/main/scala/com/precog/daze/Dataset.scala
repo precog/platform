@@ -51,7 +51,7 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   def zipGroups[A <: AnyRef, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
 
   // the resulting Dataset[B] needs to be merged such that it is value-unique and has new identities
-  def flattenGroup[A <: AnyRef, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
+  def flattenGroup[A <: AnyRef, K, B <: AnyRef: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
 
   def mapGrouping[K, A <: AnyRef, B <: AnyRef](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
@@ -111,8 +111,6 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   // for each value, calculate the keys for that value - this should be as singleton dataset
   // sort by key then by the identity ordering of the input dataset
   def group[K](memoId: Int)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): Grouping[K, Dataset[A]]
-
-  def perform(io: IO[_]): Dataset[A]
 }
 
 // vim: set ts=4 sw=4 et:

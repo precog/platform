@@ -231,7 +231,36 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A <: AnyRef, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = sys.error("todo")
+    def flattenGroup[A <: AnyRef, K, B <: AnyRef: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
+      type IB = (Identities, B)
+
+      val iter = new Iterator[IB] {
+        private[this] var _currentIterator: Iterator[IB] = _
+        
+        if (g.iterator.hasNext) {
+          val (key, value) = g.iterator.next
+          _currentIterator = f(key, value).iterable.iterator
+        }
+
+        def hasNext = _currentIterator != null && _currentIterator.hasNext
+        def next = {
+          val tmp = _currentIterator.next
+
+          if (! _currentIterator.hasNext) {
+            if (g.iterator.hasNext) {
+              val (key, value) = g.iterator.next
+              _currentIterator = f(key, value).iterable.iterator
+            } else {
+              _currentIterator = null
+            }
+          }
+
+          tmp
+        }
+      }
+
+      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(IdGen.nextInt())
+    }
 
     def mapGrouping[K, A <: AnyRef, B <: AnyRef](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
       IterableGrouping[K, B](g.iterator.map { case (k,a) => (k, f(a)) })
@@ -961,8 +990,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
         }
       })
   }
-
-  def perform(io: IO[_]): IterableDataset[A] = sys.error("todo")
 }
 
 // vim: set ts=4 sw=4 et:
