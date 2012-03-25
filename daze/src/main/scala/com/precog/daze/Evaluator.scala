@@ -50,8 +50,8 @@ trait Evaluator extends DAG
   import instructions._
   import dag._
 
-  type Dataset[E] <: AnyRef
-  type Grouping[K, A] <: AnyRef
+  type Dataset[E]
+  type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
   trait Context {
@@ -62,7 +62,7 @@ trait Evaluator extends DAG
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  implicit def extend[E <: AnyRef](d: Dataset[E]): DatasetExtensions[Dataset, Grouping, E] = ops.extend(d)
+  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Grouping, E] = ops.extend(d)
 
   def withContext(f: Context => Dataset[SValue]): Dataset[SValue] = {
     withMemoizationContext { memoContext => 
@@ -72,8 +72,8 @@ trait Evaluator extends DAG
         def nextId() = yggConfig.idSource.nextId()
       }
 
-      val ds = f(ctx)
-      IterableDataset(ds.idCount, ds.iterator.toSeq)
+      f(ctx)
+      //IterableDataset(ds.idCount, ds.iterator.toSeq)
     }
   }
 

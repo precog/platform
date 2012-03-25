@@ -10,11 +10,11 @@ import scala.annotation.tailrec
 import scalaz._
 
 trait Sorting[Dataset[_], Resultset[_]] {
-  def sort[E <: AnyRef](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Resultset[E]
+  def sort[E](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Resultset[E]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
-  def sort[E <: AnyRef](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterable[E] = {
+  def sort[E](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterable[E] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 
@@ -33,7 +33,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
       }
 
       insert(0, values)
-      Arrays.sort(buffer, javaOrder)
+      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], javaOrder.asInstanceOf[Comparator[AnyRef]])
       val chunkFile = sortFile(chunkId)
       using(fs.oStream(chunkFile)) { fs.write(_, buffer) }
       chunkFile
