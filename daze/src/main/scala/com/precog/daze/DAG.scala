@@ -233,7 +233,7 @@ trait DAG extends Instructions {
         
         case Bucket => {
           val eitherRoots = roots match {
-            case Right(left) :: Right(right) :: tl =>
+            case Right(right) :: Right(left) :: tl =>
               Right(Left(SingleBucketSpec(left, right)) :: tl)
             
             case Left(_) :: _ | _ :: Left(_) :: _ =>
@@ -248,7 +248,7 @@ trait DAG extends Instructions {
         
         case instr @ MergeBuckets(and) => {
           val eitherRoots = roots match {
-            case Left(left) :: Left(right) :: tl =>
+            case Left(right) :: Left(left) :: tl =>
               Right(Left(MergeBucketSpec(left, right, and)) :: tl)
             
             case Right(_) :: _ | _ :: Right(_) :: _ =>
@@ -263,7 +263,7 @@ trait DAG extends Instructions {
         
         case ZipBuckets => {
           val eitherRoots = roots match {
-            case Left(left) :: Left(right) :: tl =>
+            case Left(right) :: Left(left) :: tl =>
               Right(Left(ZipBucketSpec(left, right)) :: tl)
             
             case Right(_) :: _ | _ :: Right(_) :: _ =>
