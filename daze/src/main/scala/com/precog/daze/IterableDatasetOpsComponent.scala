@@ -647,10 +647,12 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     new IterableDatasetExtensions(d2, iteratorSorting).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then merge and sort -u by identities
-  def paddedMerge(d2: IterableDataset[A], nextId: () => Identity, memoId: Int)(implicit fs: SortSerialization[A]): IterableDataset[A] = {
+  // this must never be called with datasets where the length of the identities is
+  // the same on both sides
+  def paddedMerge(d2: IterableDataset[A], nextId: () => Identity): IterableDataset[A] = {
     val (left, right) = if (value.idCount > d2.idCount) (value, d2.padIdsTo(value.idCount, nextId()))
                         else if (value.idCount < d2.idCount) (value.padIdsTo(d2.idCount, nextId()), d2)
-                        else (value, d2)
+                        else sys.error("Cannot supply datasets with the same number of identities to paddedMerge")
     
     val cgf = new CogroupF[A, A, A] {
       def left(a: A) = a
@@ -659,7 +661,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     }
 
     //left merge right
-    cogroup(right)(cgf)
+    extend(left).cogroup(right)(cgf)
   }
 
   private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {

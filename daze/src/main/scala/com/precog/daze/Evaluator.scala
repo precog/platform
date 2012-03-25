@@ -346,7 +346,7 @@ trait Evaluator extends DAG
           
           // apparently Dataset tracks number of identities...
           case IUnion if left.provenance.length != right.provenance.length =>
-            leftEnum.paddedMerge(rightEnum, () => ctx.nextId(), IdGen.nextInt())
+            leftEnum.paddedMerge(rightEnum, () => ctx.nextId())
           
           case IIntersect if left.provenance.length == right.provenance.length =>
             leftEnum.intersect(rightEnum)
