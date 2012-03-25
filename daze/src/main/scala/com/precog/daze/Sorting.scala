@@ -55,24 +55,29 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
       }
 
       val cellComparator = order.contramap((c: Cell) => c.value).toJavaComparator
+      val (streams, closes) = toMerge.unzip
+      
+      // creating a priority queue of size 0 will cause an NPE
+      if (streams.size == 0) {
+        Iterator.empty
+      } else {
+        new Iterator[E] {
+          private val heads: PriorityQueue[Cell] = new PriorityQueue[Cell](streams.size, cellComparator) 
+          streams.foreach(i => heads.add(new Cell(i)))
 
-      new Iterator[E] {
-        val (streams, closes) = toMerge.unzip
-        private val heads: PriorityQueue[Cell] = new PriorityQueue[Cell](streams.size, cellComparator) 
-        streams.foreach(i => heads.add(new Cell(i)))
+          def hasNext = {
+            if (heads.isEmpty) closes.foreach(_())
+            !heads.isEmpty
+          }
 
-        def hasNext = {
-          if (heads.isEmpty) closes.foreach(_())
-          !heads.isEmpty
-        }
-
-        def next = {
-          assert(!heads.isEmpty) 
-          val cell = heads.poll
-          val result = cell.value
-          cell.advance
-          if (cell.value != null) heads.offer(cell)
-          result
+          def next = {
+            assert(!heads.isEmpty) 
+            val cell = heads.poll
+            val result = cell.value
+            cell.advance
+            if (cell.value != null) heads.offer(cell)
+            result
+          }
         }
       }
     }
