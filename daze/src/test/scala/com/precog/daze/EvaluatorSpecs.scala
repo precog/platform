@@ -1,21 +1,23 @@
 package com.precog
 package daze
 
+import memoization._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.serialization._
+import com.precog.common.VectorCase
+import com.precog.util.IdGen
+
 import akka.dispatch.Await
 import akka.util.duration._
-import com.precog.yggdrasil._
-import org.specs2.mutable._
 
 import java.io.File
-
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
-import com.precog.common.VectorCase
-import com.precog.util.IdGen
+import org.specs2.mutable._
 
 trait TestConfigComponent {
   lazy val yggConfig = new YggConfig
