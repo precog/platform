@@ -26,11 +26,11 @@ trait MemoryDatasetConsumer extends Evaluator with YggConfigComponent {
 
   def consumeEval(userUID: String, graph: DepGraph): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
-    val validated: Validation[X, Validation[X, Set[SEvent]]] = Validation.fromTryCatch {
+    //val validated: Validation[X, Validation[X, Set[SEvent]]] = Validation.fromTryCatch {
       success(eval(userUID, graph).iterable.toSet)
-    } 
+    //} 
     
-    validated.fail.map(err => error("Timed out after " + yggConfig.maxEvalDuration + " in consumeEval", err)).validation.join
+    //validated.fail.map(err => error("Timed out after " + yggConfig.maxEvalDuration + " in consumeEval", err)).validation.join
   }
 }
 
