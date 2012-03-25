@@ -215,6 +215,16 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       } 
     }
     
+    "union" in {
+      implicit val ordering = tupledIdentitiesOrder[Long].toScalaOrdering
+      implicit val idCount = IdCount(1)
+      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
+        val results = l1.union(l2).iterable.toList
+
+        results must containAllOf(Set((l1.iterable ++ l2.iterable).toSeq: _*).toList.sorted).only.inOrder
+      }
+    }
+
     "group according to an integer key" in {
       val groups = Stream(
         0L -> Vector(rec(1)),
@@ -339,14 +349,5 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       result.iterator.toStream mustEqual expected
     }
 
-    "union" in {
-      implicit val ordering = tupledIdentitiesOrder[Long].toScalaOrdering
-      implicit val idCount = IdCount(1)
-      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
-        val results = l1.union(l2).iterable.iterator.toList
-
-        results must_== Set(l1.iterable ++ l2.iterable).toList.sorted
-      }
-    }
   }
 }
