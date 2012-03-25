@@ -663,19 +663,10 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     extend(left).cogroup(right)(cgf)
   }
 
-  private implicit def orderIA(implicit ord: Order[A]): Order[IA] = new Order[IA] {
-    def order(x: IA, y: IA): Ordering = {
-      val idComp = IdentitiesOrder.order(x._1, y._1)
-      if (idComp == EQ) {
-        ord.order(x._2, y._2)
-      } else idComp
-    }
-  }
-
   private final val nullIA = null.asInstanceOf[IA]
 
   def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
-    val order = implicitly[Order[IA]]
+    implicit val order = identityValueOrder[A]
     val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
     val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
 
@@ -707,8 +698,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
               lastRight = if (rightIter.hasNext) rightIter.next else null
               tmp
             } else if (lastRight == null) {
-              val tmp = lastRight
-              lastRight = if (rightIter.hasNext) rightIter.next else null
+              val tmp = lastLeft
+              lastLeft = if (leftIter.hasNext) leftIter.next else null
               tmp
             } else {
               order.order(lastLeft, lastRight) match {
@@ -739,7 +730,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   def intersect(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
-    val order = orderIA(ord)
+    implicit val order = identityValueOrder[A]
     val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
     val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
 
@@ -924,10 +915,13 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   }
 
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = IterableDataset(
-    value.idCount, 
-    iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
-  )
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): IterableDataset[A] = {
+    implicit val order = tupledIdentitiesOrder[A]
+    IterableDataset(
+      value.idCount, 
+      iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
+    )
+  }
 
   def memoize(memoId: Int): IterableDataset[A] = {
     val cache = value.iterable.toSeq
