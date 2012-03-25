@@ -264,7 +264,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
         case (k, v) => (k, IterableDataset(1, v))
       }
       
-      result.iterator.toStream mustEqual expected
+      result.iterator.toList must_== expected.toList
     }
   }
   
@@ -318,12 +318,12 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
         v.iterable.size
       }
       
-      result.iterator.toStream mustEqual Stream(
+      result.iterator.toList must containAllOf(List(
         0L -> 1,
         2L -> 3,
         4L -> 1,
         6L -> 2,
-        8L -> 1)
+        8L -> 1)).only.inOrder
     }
     
     "implement merging" >> {
@@ -331,27 +331,27 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
         val result = mergeGroups(g1, g2, true)
         
         val expected = Stream(
-          0L -> Vector(sharedRecs('i1)),
-          1L -> Vector(sharedRecs('i1)),
-          2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b), sharedRecs('i4)),
-          4L -> Vector(sharedRecs('i5)),
-          5L -> Vector(sharedRecs('i5), sharedRecs('i6)),
-          6L -> Vector(sharedRecs('i6), sharedRecs('i7)),
-          7L -> Vector(sharedRecs('i7)),
-          8L -> Vector(sharedRecs('i8a), sharedRecs('i8b)))
+          0L -> IterableDataset(1, Vector(sharedRecs('i1))),
+          1L -> IterableDataset(1, Vector(sharedRecs('i1))),
+          2L -> IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b), sharedRecs('i4))),
+          4L -> IterableDataset(1, Vector(sharedRecs('i5))),
+          5L -> IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6))),
+          6L -> IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7))),
+          7L -> IterableDataset(1, Vector(sharedRecs('i7))),
+          8L -> IterableDataset(1, Vector(sharedRecs('i8a), sharedRecs('i8b))))
           
-        result.iterator.toStream mustEqual expected
+        result.iterator.toList mustEqual expected.toList
       }
       
       "intersect" >> {
         val result = mergeGroups(g1, g2, false)
         
-        val expected = Stream(
-          2L -> Vector(sharedRecs('i2)),
-          6L -> Vector(sharedRecs('i6), sharedRecs('i7)),
-          8L -> Vector())
+        val expected = List(
+          2L -> IterableDataset(1, Vector(sharedRecs('i2))),
+          6L -> IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7))),
+          8L -> IterableDataset(1, Vector()))
           
-        result.iterator.toStream mustEqual expected
+        result.iterator.toList must containAllOf(expected).only.inOrder
       }
     }
     
@@ -367,7 +367,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
         8L -> NEL(IterableDataset(1, Vector(sharedRecs('i8a))),
                   IterableDataset(1, Vector(sharedRecs('i8b)))))
           
-      result.iterator.toStream mustEqual expected
+      result.iterator.toList must containAllOf(expected).only.inOrder
     }
 
   }
