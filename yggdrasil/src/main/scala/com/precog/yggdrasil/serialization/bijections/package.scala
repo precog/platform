@@ -18,25 +18,19 @@
  *
  */
 package com.precog.yggdrasil
+package serialization
 
-import com.precog.common._
 import com.precog.util._
-import com.precog.util.Bijection._
-
-import blueeyes.json.JsonAST._
-import blueeyes.json.Printer._
+import com.precog.common.VectorCase
+import Bijection._
 
 import java.math.BigInteger
 import java.nio.ByteBuffer
-
 import scala.annotation.tailrec
 import scala.collection.generic.CanBuildFrom
-import scala.math.BigDecimal
 
-
-// TODO: optimize
-package object leveldb {
-  val UTF8 = java.nio.charset.Charset.forName("UTF-8")
+package object bijections {
+  private val UTF8 = java.nio.charset.Charset.forName("UTF-8")
 
   implicit object id2ab extends Bijection[Identities, Array[Byte]] {
     def apply(id : Identities) = id.foldLeft(ByteBuffer.allocate(8 * id.size))((b, id) => b.putLong(id)).array
@@ -51,8 +45,8 @@ package object leveldb {
   }
 
   implicit object booltoab extends Bijection[Boolean, Array[Byte]] {
-    def apply(b : Boolean) = ByteBuffer.allocate(1).put(if (b) 0x1 else 0x0).array
-    def unapply(ab : Array[Byte]) = ByteBuffer.wrap(ab).get != 0x0
+    def apply(b : Boolean) = ByteBuffer.allocate(1).put(if (b) (0x1: Byte) else (0x0: Byte)).array
+    def unapply(ab : Array[Byte]) = ByteBuffer.wrap(ab).get != (0x0: Byte)
   }
 
   implicit object itoab extends Bijection[Int, Array[Byte]] {
@@ -75,16 +69,6 @@ package object leveldb {
     def unapply(ab : Array[Byte]) = new String(ab, UTF8)
   }
 
-
-  trait LengthEncodedArrayBijection[A] extends Bijection[A, Array[Byte]] {
-    abstract override def apply(a : A) = {
-      val bytes: Array[Byte] = super.apply(a)
-      ByteBuffer.allocate(bytes.length + 4).putInt(bytes.length).put(bytes).array
-    }
-
-    abstract override def unapply(ab : Array[Byte]) = super.unapply(ab.drop(4))
-  }
-	  
   implicit object bi2ab extends Bijection[BigInteger, Array[Byte]] {
     def apply(bi : BigInteger) = bi.toByteArray
     def unapply(ab : Array[Byte]) = new BigInteger(ab)
@@ -109,70 +93,6 @@ package object leveldb {
       _unapply(0).map(identity[T])
     }
   }
-
-  def idLen(length: Int) = Array[Byte]((length >> 8).asInstanceOf[Byte], (length & 0xff).asInstanceOf[Byte])
-
-/*
-  def projectionBijection(descriptor: ProjectionDescriptor): Bijection[SValue, Array[Byte]] = new Bijection[JValue, Array[Byte]] {
-    def apply(jv: JValue) = {
-      def lengthEncoded(valueType: SType) : Array[Byte] => Array[Byte] = {
-        (a: Array[Byte]) => valueType match {
-          case SDecimalArbitrary | SStringArbitrary => ByteBuffer.allocate(a.length + 4).putInt(a.length).put(a).array
-          case SStringFixed(width)                  => ByteBuffer.allocate(width).put(a, 0, width).array
-          case _ => a
-        }
-      } 
-
-      val (len, arrays) = descriptor.columns.foldRight((0, List.empty[Array[Byte]])) {
-        case (QualifiedSelector(path, selector, valueType), (len, acc)) =>
-          val v = lengthEncoded(valueType) {
-            jv(selector) match {
-              case JBool(value)   => value.as[Array[Byte]]
-              case JInt(value)    => value.bigInteger.toByteArray //TODO: Specialize to long if possible
-              case JDouble(value) => value.as[Array[Byte]]
-              case JString(value) => value.as[Array[Byte]] //TODO: Specialize for fixed length
-              case JNothing       => Array[Byte]()
-              case JNull          => Array[Byte]()
-              case x              => sys.error("Column selector " + selector + " returns a non-leaf JSON value: " + compact(render(x)))
-            }
-          }
-
-          (len + v.length, v :: acc)
-      }
-
-      arrays.foldLeft(ByteBuffer.allocate(len))((buf, arr) => buf.put(arr)).arr
-    }
-
-    def unapply(buf: Array[Byte]) = {
-      def getColumnValue(valueType: SType[SValue]) = valueType match {
-        case SLong => JInt(buf.getLong)
-        case SDouble => JDouble(buf.getDouble)
-        case SBoolean => JBool(buf.get != 0x0)
-        case SNull => JNull
-        case SNothing => JNothing
-        case SDecimalArbitrary => //TODO: Specialize for fixed length
-          val len = if (useColumnWidth) SDecimalArbitrary.width.getOrElse(buf.getInt) else buf.remaining
-          val scale = buf.getInt
-          val target = new Array[Byte](len - 4)
-          buf.get(target)
-          JInt(new BigInt(new BigInteger(target))) //TODO: Assume that we're storing BigInt as BigDecimal
-
-        case SStringArbitrary => //TODO: Specialize for fixed length
-          val len = if (useColumnWidth) SStringArbitrary.width.getOrElse(buf.getInt) else buf.remaining
-          val target = new Array[Byte](len)
-          buf.get(target)
-          JString(new String(target, UTF8))
-
-      }
-
-      descriptor.columns match {
-        case valueType :: Nil => getColumnValue(valueType.valueType)
-        case types => types.foldLeft[JValue](JNothing) {
-          case (obj, QualifiedSelector(path, selector, valueType)) => obj.set(selector, getColumnValue(valueType))
-        }
-      }
-    }
-  }
-  */
 }
 
+// vim: set ts=4 sw=4 et:

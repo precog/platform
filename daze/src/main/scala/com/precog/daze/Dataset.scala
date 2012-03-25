@@ -21,6 +21,9 @@ package com.precog
 package daze
 
 import yggdrasil._
+import yggdrasil.serialization._
+import memoization._
+
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 

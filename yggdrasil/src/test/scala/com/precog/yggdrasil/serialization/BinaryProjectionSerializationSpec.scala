@@ -18,6 +18,7 @@
  *
  */
 package com.precog.yggdrasil
+package serialization
 
 import java.io.File
 import scalaz.effect._
@@ -49,7 +50,7 @@ object BinaryProjectionSerializationSpec extends Specification with ScalaCheck w
     val file = File.createTempFile("test", "ygg")
     logger.trace("Created BinaryProjectionSerialization work file: " + file)
     
-    val fs = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] {
+    val fs = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization {
       def chunkSize = 100
     }
 

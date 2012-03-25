@@ -18,13 +18,15 @@
  *
  */
 package com.precog.yggdrasil
+package serialization
+package bijections
+
+import com.precog.util.Bijection
+import Bijection._
 
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
-import leveldb._
-import com.precog.util.Bijection
-import Bijection._
 
 class BijectionSpec extends Specification with ScalaCheck {
   // Disable the T => Descriptable conversion because that enables a conflictin "as" def

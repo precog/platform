@@ -20,6 +20,12 @@
 package com.precog
 package daze
 
+import memoization._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.serialization._
+import com.precog.util._
+import com.precog.common.{Path, VectorCase}
+
 import org.joda.time._
 import org.joda.time.format._
 import org.joda.time.DateTimeZone
@@ -33,13 +39,8 @@ import blueeyes.json.{JPathField, JPathIndex}
 import scalaz.{Identity => _, NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.syntax.traverse._
-//import scalaz.syntax.monad._
 import scalaz.std.list._
 import scalaz.std.partialFunction._
-
-import com.precog.yggdrasil._
-import com.precog.util._
-import com.precog.common.{Path, VectorCase}
 
 trait IdSource {
   def nextId(): Long

@@ -17,10 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.daze
+package memoization
 
-import yggdrasil._
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.serialization._
 import com.precog.util.KMap
 
 import akka.dispatch.Future

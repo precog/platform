@@ -18,6 +18,7 @@
  *
  */
 package com.precog.daze
+package memoization
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -30,6 +31,7 @@ import blueeyes.json.JsonAST._
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 import SValue._
