@@ -113,7 +113,7 @@ trait MetadataStorage extends FileOps {
   def stagePrev(dir: File): IO[Validation[Throwable, Unit]] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    copy(src, dest)
+    if(src.exists) copy(src, dest) else IO{ Success(()) }
   }
   
   def rotateCurrent(dir: File): IO[Validation[Throwable, Unit]] = IO {
