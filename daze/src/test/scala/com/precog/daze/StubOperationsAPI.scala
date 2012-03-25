@@ -51,17 +51,18 @@ object StubOperationsAPI {
 
 trait StubOperationsAPI 
     extends StorageEngineQueryComponent
-    with IterableDatasetOpsComponent
-    with MemoryDatasetConsumer { self =>
+    with IterableDatasetOpsComponent { self =>
   type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
   type Dataset[E] = IterableDataset[E]
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   
+  import ops._
+  
   object query extends QueryAPI {
     val chunkSize = 2000
   }
-  
+
   trait QueryAPI extends StorageEngineQueryAPI[Dataset] {
     private var pathIds = Map[Path, Int]()
     private var currentId = 0
@@ -93,7 +94,7 @@ trait StubOperationsAPI
       }
     }
     
-    def fullProjection(userUID: String, path: Path, expiresAt: Long)(implicit asyncContext: ExecutionContext): Dataset[SValue] = 
+    def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = 
       IterableDataset(1, new Iterable[(Identities, SValue)] { def iterator = readJSON(path) })
     
     def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector())

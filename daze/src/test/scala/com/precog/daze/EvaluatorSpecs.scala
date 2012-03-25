@@ -44,7 +44,7 @@ trait TestConfigComponent {
   class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
     def sortBufferSize = 1000
     def sortWorkDir: File = null //no filesystem storage in test!
-    def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]]
+    def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
@@ -57,7 +57,8 @@ class EvaluatorSpecs extends Specification
     with StubOperationsAPI 
     with TestConfigComponent 
     with DiskMemoizationComponent 
-    with Timelib { self =>
+    with Stdlib
+    with MemoryDatasetConsumer { self =>
 
   import Function._
   

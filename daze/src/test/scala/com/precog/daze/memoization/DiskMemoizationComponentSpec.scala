@@ -50,7 +50,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   implicit val timeout = Timeout(intToDurationInt(30).seconds)
-  implicit val chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]]
+  implicit val chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
   def sampleSize = 50
 
   type YggConfig = DiskMemoizationConfig 
