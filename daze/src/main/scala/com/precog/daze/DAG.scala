@@ -145,7 +145,7 @@ trait DAG extends Instructions {
         eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
       }
       
-      def pushBuckets(zipping: Boolean, split: => Split)(spec: BucketSpec, acc: (List[DepGraph], Int)): (List[DepGraph], Int) = spec match {
+      def pushBuckets(zipping: Boolean, split: () => Split)(spec: BucketSpec, acc: (List[DepGraph], Int)): (List[DepGraph], Int) = spec match {
         case MergeBucketSpec(left, _, _) => pushBuckets(zipping, split)(left, acc)     // only the evaluator cares
         
         case ZipBucketSpec(left, right) => {
@@ -155,12 +155,12 @@ trait DAG extends Instructions {
         
         case SingleBucketSpec(target, _) => {
           val (fragment, index) = acc
-          val fragment2 = SplitGroup(loc, index, target.provenance)(split) :: fragment
+          val fragment2 = SplitGroup(loc, index, target.provenance)(split()) :: fragment
           
           if (zipping)
             (fragment2, index - 1)
           else
-            (SplitParam(loc, index - 1)(split) :: fragment2, index - 2)
+            (SplitParam(loc, index - 1)(split()) :: fragment2, index - 2)
         }
       }
       
@@ -289,7 +289,7 @@ trait DAG extends Instructions {
               Left(BucketOperationOnSets(instr))
             } else {
               val open = OpenSplit(loc, buckets)
-              val (fragment, _) = buckets.foldRight((List[DepGraph](), depth - 1))(pushBuckets(false, open.result))
+              val (fragment, _) = buckets.foldRight((List[DepGraph](), depth - 1))(pushBuckets(false, () => open.result))
               val roots2 = (fragment map { Right(_) }) ::: (roots drop n)
               
               loop(loc, roots2, open :: splits, stream.tail)
