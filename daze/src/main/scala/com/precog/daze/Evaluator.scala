@@ -177,7 +177,7 @@ trait Evaluator extends DAG
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
-          case Some(_) => Right(ops.empty[SValue])
+          case Some(_) => Right(ops.empty[SValue](1))
           
           case None => {
             val loaded = maybeRealize(loop(parent, assume, roots, ctx), ctx) collect { 
@@ -244,7 +244,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            max.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+            max.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
           
           case Min => 
             val min = enum.reduce(Option.empty[BigDecimal]) {
@@ -254,7 +254,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
           
-            min.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+            min.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
           
           case Sum => 
             val sum = enum.reduce(Option.empty[BigDecimal]) {
@@ -263,7 +263,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sum.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+            sum.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
 
           case Mean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
@@ -271,7 +271,7 @@ trait Evaluator extends DAG
               case (total, _) => total
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue]
+            if (count == BigDecimal(0)) ops.empty[SValue](0)
             else ops.point(SDecimal(total / count))
           
           case GeometricMean => 
@@ -280,7 +280,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue]
+            if (count == BigDecimal(0)) ops.empty[SValue](0)
             else ops.point(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
           
           case SumSq => 
@@ -290,7 +290,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sumsq.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue])
+            sumsq.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
 
           case Variance => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -298,7 +298,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            if (count == BigDecimal(0)) ops.empty[SValue]
+            if (count == BigDecimal(0)) ops.empty[SValue](0)
             else ops.point(SDecimal((sumsq - (sum * (sum / count))) / count))
 
           case StdDev => 
@@ -307,7 +307,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue]
+            if (count == BigDecimal(0)) ops.empty[SValue](0)
             else ops.point(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
@@ -351,7 +351,7 @@ trait Evaluator extends DAG
             leftEnum.intersect(rightEnum)
           
           case IIntersect if left.provenance.length != right.provenance.length =>
-            ops.empty[SValue]
+            ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
         }
         
         Right(back)
@@ -365,7 +365,7 @@ trait Evaluator extends DAG
                enum => Right(enum collect SValue.deref(JPathField(str)))
             )
           
-          case _ => Right(ops.empty[SValue])
+          case _ => Right(ops.empty[SValue](left.provenance.length))
         }
       }
       
@@ -377,7 +377,7 @@ trait Evaluator extends DAG
               enum => Right(enum collect SValue.deref(JPathIndex(num.toInt)))
             )
           
-          case _ => Right(ops.empty[SValue])
+          case _ => Right(ops.empty[SValue](left.provenance.length))
         }
       }
       

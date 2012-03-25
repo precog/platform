@@ -19,7 +19,7 @@ trait DatasetConsumersConfig extends EvaluatorConfig {
 // TODO decouple this from the evaluator specifics
 trait MemoryDatasetConsumer extends Evaluator with YggConfigComponent {
   type X = Throwable
-  type Dataset[E] = IterableDataset[E]
+  type Dataset[E] <: IterableDataset[E]
   type YggConfig <: DatasetConsumersConfig 
 
   def error(msg: String, ex: Throwable): X = new RuntimeException(msg, ex)

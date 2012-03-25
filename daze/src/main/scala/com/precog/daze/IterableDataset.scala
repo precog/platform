@@ -26,7 +26,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
   type Dataset[E] = IterableDataset[E]
   type Grouping[K, A] = IterableGrouping[K, A]
 
-  trait Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
+  class Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
     implicit def extend[A <: AnyRef](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
       new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig))
 
@@ -34,7 +34,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
 
     def point[A](value: A): IterableDataset[A] = IterableDataset(0, Iterable((Identities.Empty, value)))
 
-    def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: => Long, memoId: Int): IterableDataset[A] = {
+    def flattenAndIdentify[A](d: IterableDataset[IterableDataset[A]], nextId: () => Identity): IterableDataset[A] = {
       type IA = (Identities, A)
       IterableDataset(
         1,
@@ -58,7 +58,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
             @tailrec private final def precomputeNext(): IA = {
               if (inner.hasNext) {
                 val (_, sv) = inner.next()
-                (VectorCase(nextId), sv)
+                (VectorCase(nextId()), sv)
               } else if (di.hasNext) {
                 inner = di.next.iterable.iterator
                 precomputeNext()
