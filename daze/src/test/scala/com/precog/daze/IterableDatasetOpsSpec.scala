@@ -251,7 +251,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       'i8a -> rec(8),
       'i8b -> rec(8))
     
-    val g1 = {
+    def g1 = {
       val seed = Stream(
         0L -> Vector(sharedRecs('i1)),
         2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b)),
@@ -266,7 +266,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       IterableGrouping(itr)
     }
     
-    val g2 = {
+    def g2 = {
       val seed = Stream(
         1L -> Vector(sharedRecs('i1)),
         2L -> Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)),
@@ -282,6 +282,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
     
     "implement mapping" in {
+      g1.iterator.size must_== 5
       val result = mapGrouping(g1) { v =>
         v.iterable.size
       }
@@ -326,21 +327,14 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     "implement zipping" in {
       val mappedG1 = mapGrouping(g1) { v => NEL(v) }
       val mappedG2 = mapGrouping(g2) { v => NEL(v) }
-      
+
       val result = zipGroups(mappedG1, mappedG2)
       
       val expected = Stream(
-        0L -> NEL(IterableDataset(1, Vector(sharedRecs('i1)))),
-        1L -> NEL(IterableDataset(1, Vector(sharedRecs('i1)))),
         2L -> NEL(IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b))),
-          IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)))),
-        4L -> NEL(IterableDataset(1, Vector(sharedRecs('i5)))),
-        5L -> NEL(IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6))),
-          IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6)))),
-        6L -> NEL(IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7)))),
-        7L -> NEL(IterableDataset(1, Vector(sharedRecs('i7)))),
+                  IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)))),
         8L -> NEL(IterableDataset(1, Vector(sharedRecs('i8a))),
-          IterableDataset(1, Vector(sharedRecs('i8b)))))
+                  IterableDataset(1, Vector(sharedRecs('i8b)))))
           
       result.iterator.toStream mustEqual expected
     }

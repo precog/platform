@@ -5,7 +5,8 @@ package serialization
 import java.io._
 
 trait SortSerialization[E] extends StreamSerialization {
-  def write(out: DataOutputStream, values: Array[E]): Unit
+  // Write out from the buffer, indices [0,limit)
+  def write(out: DataOutputStream, values: Array[E], limit: Int): Unit
   def reader(in: DataInputStream): Iterator[E]
 }
 

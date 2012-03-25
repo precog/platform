@@ -23,9 +23,9 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
 
   def headerFor(value: A): Header
 
-  def write(out: DataOutputStream, values: Array[A]): Unit = {
+  def write(out: DataOutputStream, values: Array[A], limit: Int): Unit = {
     @tailrec def write(i: Int, header: Option[Header]): Unit = {
-      if (i < values.length) {
+      if (i < limit) {
         val sv = values(i)
         val newHeader = headerFor(sv)
         if (header.exists(_ == newHeader)) {
@@ -39,7 +39,7 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
       }
     }
     
-    out.writeInt(values.length)
+    out.writeInt(limit)
     write(0, None)
   }
 
