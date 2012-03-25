@@ -35,8 +35,8 @@ import scalaz.effect._
 import scalaz.syntax.monad._
 
 trait BaseSortSerialization[A] extends SortSerialization[A] {
-  final val HeaderFlag = 0
-  final val ValueFlag = 1
+  final val HeaderFlag = Int.MinValue
+  final val ValueFlag = Int.MinValue + 1
 
   type Header
 
@@ -48,14 +48,17 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
         val sv = values(i)
         val newHeader = headerFor(sv)
         if (header.exists(_ == newHeader)) {
+          out.writeInt(ValueFlag)
           writeRecord(out, sv)
           write(i + 1, header)
         } else {
+          out.writeInt(HeaderFlag)
           writeHeader(out, newHeader)
+          out.writeInt(ValueFlag)
           writeRecord(out, sv)
           write(i + 1, Some(newHeader))
         }
-      }
+      } 
     }
     
     out.writeInt(limit)
@@ -67,7 +70,7 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
 
   def reader(in: DataInputStream): Iterator[A] = {
     new Iterator[A] {
-      private val remaining: Int = in.readInt()
+      private var remaining: Int = in.readInt()
       private var header: Header = null.asInstanceOf[Header]
 
       private var _next = precomputeNext()
@@ -88,6 +91,7 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
               precomputeNext()
 
             case ValueFlag => 
+              remaining -= 1
               assert (header != null)
               readRecord(in, header)
           }
@@ -108,12 +112,10 @@ trait SValueSortSerialization extends BaseSortSerialization[SValue] with BinaryS
   def headerFor(value: SValue) = Header(value.structure)
 
   def writeHeader(out: DataOutputStream, header: Header): Unit = {
-    out.writeInt(HeaderFlag)
     writeStructure(out, header.structure)
   }
 
   def writeRecord(out: DataOutputStream, sv: SValue): Unit = {
-    out.writeInt(ValueFlag)
     writeValue(out, sv)
   }
 
@@ -127,13 +129,11 @@ trait SEventSortSerialization extends BaseSortSerialization[SEvent] with BinaryS
   def headerFor(value: SEvent) = Header(value._1.length, value._2.structure)
 
   def writeHeader(out: DataOutputStream, header: Header): Unit = {
-    out.writeInt(HeaderFlag)
     out.writeInt(header.idCount)
     writeStructure(out, header.structure)
   }
 
   def writeRecord(out: DataOutputStream, sv: SEvent): Unit = {
-    out.writeInt(ValueFlag)
     writeIdentities(out, sv._1)
     writeValue(out, sv._2)
   }
@@ -153,14 +153,12 @@ trait GroupSortSerialization extends BaseSortSerialization[(SValue, Identities, 
   def headerFor(value: (SValue, Identities, SValue)) = Header(value._1.structure, value._2.length, value._3.structure)
 
   def writeHeader(out: DataOutputStream, header: Header): Unit = {
-    out.writeInt(HeaderFlag)
     writeStructure(out, header.keyStructure)
     out.writeInt(header.idCount)
     writeStructure(out, header.valueStructure)
   }
 
   def writeRecord(out: DataOutputStream, sv: (SValue, Identities, SValue)): Unit = {
-    out.writeInt(ValueFlag)
     writeValue(out, sv._1)
     writeIdentities(out, sv._2)
     writeValue(out, sv._3)
