@@ -288,9 +288,10 @@ trait DAG extends Instructions {
             if ((buckets lengthCompare n) != 0) {
               Left(BucketOperationOnSets(instr))
             } else {
-              val open = OpenSplit(loc, buckets)
+              val oldTail = roots drop n
+              val open = OpenSplit(loc, buckets, oldTail)
               val (fragment, _) = buckets.foldRight((List[DepGraph](), depth - 1))(pushBuckets(false, () => open.result))
-              val roots2 = (fragment map { Right(_) }) ::: (roots drop n)
+              val roots2 = (fragment map { Right(_) }) ::: oldTail
               
               loop(loc, roots2, open :: splits, stream.tail)
             }
@@ -299,13 +300,20 @@ trait DAG extends Instructions {
         
         case Merge => {
           val (eitherRoots, splits2) = splits match {
-            case (open @ OpenSplit(loc, specs)) :: splitsTail => {
+            case (open @ OpenSplit(loc, specs, oldTail)) :: splitsTail => {
               roots match {
                 case Right(child) :: tl => {
-                  val split = Split(loc, specs, child)
-                  open.result = split
+                  val oldTailSet = Set(oldTail: _*)
+                  val newTailSet = Set(tl: _*)
                   
-                  (Right(Right(split) :: tl), splitsTail)
+                  if ((oldTailSet & newTailSet).size == newTailSet.size) {
+                    val split = Split(loc, specs, child)
+                    open.result = split
+                    
+                    (Right(Right(split) :: tl), splitsTail)
+                  } else {
+                    (Left(MergeWithUnmatchedTails), splitsTail)
+                  }
                 }
                 
                 case _ => (Left(StackUnderflow(Merge)), splitsTail)
@@ -422,7 +430,7 @@ trait DAG extends Instructions {
     override def toString = self.toString
   }
   
-  private case class OpenSplit(loc: Line, specs: Vector[dag.BucketSpec]) {
+  private case class OpenSplit(loc: Line, specs: Vector[dag.BucketSpec], oldTail: List[Either[dag.BucketSpec, DepGraph]]) {
     var result: dag.Split = _           // gross!
   }
   
