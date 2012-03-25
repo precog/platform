@@ -259,12 +259,17 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       val result = ds.group(0) { num =>
         IterableDataset(1, Vector(rec((num / 2) * 2)))
       }
+
+      val result2 = mapGrouping(result) { ds =>
+        val IterableDataset(count, str) = ds
+        IterableDataset(count, Vector(str.toSeq: _*))
+      }
       
       val expected = groups map {
         case (k, v) => (k, IterableDataset(1, v))
       }
       
-      result.iterator.toList must_== expected.toList
+      result2.iterator.toList must_== expected.toList
     }
   }
   
