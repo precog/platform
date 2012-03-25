@@ -29,9 +29,10 @@ case class IterableDataset[A](idCount: Int, iterable: Iterable[(Identities, A)])
   def map[B](f: A => B): IterableDataset[B] = IterableDataset(idCount, iterable.map { case (i, v) => (i, f(v)) })
 
   def padIdsTo(width: Int, nextId: => Long): IterableDataset[A] = {
-    @tailrec def padded(padTo: Int, ids: VectorCase[Long]): VectorCase[Long] = if (padTo <= 0) ids else padded(padTo - 1, ids :+ nextId)
+    @tailrec def padded(padTo: Int, ids: VectorCase[Long]): VectorCase[Long] = 
+      if (padTo <= 0) ids else padded(padTo - 1, ids :+ nextId)
 
-    IterableDataset(width, iterable map { case (ids, a) => (padded(idCount - width, ids), a) })
+    IterableDataset(width, iterable map { case (ids, a) => (padded(width - idCount, ids), a) })
   }
 }
 

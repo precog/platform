@@ -51,23 +51,30 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 
   def rec(i: Long) = (VectorCase(i), i: Long)
 
+  val idSource = new IdSource {
+    private val source = new java.util.concurrent.atomic.AtomicLong
+    def nextId() = source.getAndIncrement
+  }
+
   type Record[A] = (Identities, A)
+
+  case class IdCount(idCount: Int)
 
   implicit def genLong = for (l <- arbitrary[Long]) yield (l: Long)
 
-  implicit def recGen[A](implicit agen: Gen[A]): Gen[Record[A]] = 
+  implicit def recGen[A](implicit idCount: IdCount, agen: Gen[A]): Gen[Record[A]] = 
     for {
-      id <- arbitrary[Long]
+      ids <- listOfN(idCount.idCount, arbitrary[Long])
       value <- agen
     } yield {
-      (VectorCase(id), value)
+      (VectorCase(ids: _*), value)
     }
 
-  implicit def dsGen[A](implicit rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
-    for (l <- listOf(rgen)) yield IterableDataset(1, l)
+  implicit def dsGen[A](implicit idCount: IdCount, rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
+    for (l <- listOf(rgen)) yield IterableDataset(idCount.idCount, l)
   }
 
-  implicit def arbIterableDataset[A](implicit gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
+  implicit def arbIterableDataset[A](implicit idCount: IdCount, gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
      Arbitrary(dsGen[A])
 
   "iterable dataset ops" should {
@@ -125,6 +132,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
 
     "crossLeft" in {
+      implicit val idCount = IdCount(1)
       check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossLeft(l2) { 
           case (a, b) => (a, b)
@@ -135,12 +143,36 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
 
     "crossRight" in {
+      implicit val idCount = IdCount(1)
       check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossRight(l2) { 
           case (a, b) => (a, b)
         }
 
         results.iterator.toList must_== l2.iterator.toList.flatMap(i => l1.iterator.toList.map((j: Long) => (j, i)))
+      } 
+    }
+
+    "paddedMerge" in {
+      case class MergeSample(maxIds: Int, l1: IterableDataset[Long], l2: IterableDataset[Long])
+      implicit val mergeSampleArbitrary = Arbitrary(
+        for {
+          i1 <- choose(0, 3) map (IdCount(_: Int))
+          i2 <- choose(1, 3) map (IdCount(_: Int)) if i2 != i1
+          l1 <- dsGen(i1, recGen(i1, genLong))
+          l2 <- dsGen(i2, recGen(i2, genLong))
+        } yield {
+          MergeSample(i1.idCount max i2.idCount, l1, l2)
+        }
+      )
+
+      check { (sample: MergeSample) => 
+        val results = sample.l1.paddedMerge(sample.l2, () => idSource.nextId()).iterator.toList
+        val sampleLeft = sample.l1.iterator.toList
+        val sampleRight = sample.l2.iterator.toList
+
+        (results must haveSize(sampleLeft.size + sampleRight.size)) and
+        (results must haveTheSameElementsAs(sampleLeft ++ sampleRight))
       } 
     }
   }
