@@ -53,7 +53,6 @@ trait StubOperationsAPI
     extends StorageEngineQueryComponent
     with IterableDatasetOpsComponent { self =>
   type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
-  type Dataset[E] = IterableDataset[E]
 
   implicit def asyncContext = StubOperationsAPI.asyncContext
   

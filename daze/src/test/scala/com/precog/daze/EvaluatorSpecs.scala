@@ -49,6 +49,13 @@ trait TestConfigComponent {
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
     def maxEvalDuration = intToDurationInt(30).seconds
+    object valueSerialization extends SValueSortSerialization with ZippedStreamSerialization
+    val keyValueSerialization = sys.error("todo")
+    val eventSerialization = sys.error("todo")
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
   }
 }
 

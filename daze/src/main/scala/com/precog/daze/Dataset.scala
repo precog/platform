@@ -30,7 +30,7 @@ import scalaz.effect._
 trait DatasetOps[Dataset[_], Grouping[_, _]] {
   implicit def extend[A <: AnyRef](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
 
-  def empty[A]: Dataset[A] 
+  def empty[A](idCount: Int): Dataset[A] 
 
   def point[A](value: A): Dataset[A] 
 
