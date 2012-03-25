@@ -89,8 +89,6 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A <: AnyRef] {
   // for each value, calculate the keys for that value - this should be as singleton dataset
   // sort by key then by the identity ordering of the input dataset
   def group[K](memoId: Int)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): Grouping[K, Dataset[A]]
-
-  def perform(io: IO[_]): Dataset[A]
 }
 
 // vim: set ts=4 sw=4 et:

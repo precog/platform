@@ -71,7 +71,8 @@ trait Evaluator extends DAG
         def nextId() = yggConfig.idSource.nextId()
       }
 
-      f(ctx).perform(memoContext.cache.purge)
+      val ds = f(ctx)
+      IterableDataset(ds.idCount, ds.iterator.toSeq)
     }
   }
 
