@@ -21,6 +21,8 @@ import Scalaz._
 
 class MetadataStorageSpec extends Specification {
 
+  import MetadataStorage._
+
   val inputMetadata = 
 """{
   "metadata":[],
@@ -43,17 +45,26 @@ class MetadataStorageSpec extends Specification {
 
   "metadata storage" should {
     "safely update metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base)
+      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
       val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
       result must beLike {
         case Success(()) => ok
       }
-      ms.confirmWrite(0, new File(base, ms.nextFilename), output) aka "write next" must beTrue
-      ms.confirmCopy(1, new File(base, ms.curFilename), new File(base, ms.prevFilename)) aka "copy cur to prev" must beTrue 
-      ms.confirmRename(2, new File(base, ms.nextFilename), new File(base, ms.curFilename)) aka "move next to cur" must beTrue
+      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
+      ms.confirmCopy(1, new File(base, curFilename), new File(base, prevFilename)) aka "copy cur to prev" must beTrue 
+      ms.confirmRename(2, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
+    }
+    "safely update metadata no current" in {
+      val ms = new TestMetadataStorage(inputMetadata, base, List())
+      val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
+      result must beLike {
+        case Success(()) => ok
+      }
+      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
+      ms.confirmRename(1, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
     }
     "correctly read metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base)
+      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
       val result = ms.currentMetadata(desc).unsafePerformIO
       result must beLike {
        case Success(m) => Printer.pretty(Printer.render(m.serialize)) must_== inputMetadata
@@ -62,15 +73,18 @@ class MetadataStorageSpec extends Specification {
   }
 }
 
-class TestMetadataStorage(val input: String, dirName: File) extends MetadataStorage with TestFileOps {
+class TestMetadataStorage(val input: String, dirName: File, val existing: List[File]) extends MetadataStorage with TestFileOps {
   val dirMapping = (_: ProjectionDescriptor) => IO { dirName }
 }
 
 trait TestFileOps {
  
   def input: String
+  def existing: List[File]
  
   val messages = MutableList[String]()  
+
+  def exists(src: File): Boolean = existing.contains(src)
 
   def rename(src: File, dest: File): Unit = {
     messages += "rename %s to %s".format(src, dest)
