@@ -2596,43 +2596,4 @@ class EvaluatorSpecs extends Specification
       }
     }
   }
-
-  "sortByIdentities" should {
-    def consumeToList[X](d: DatasetEnum[X, SEvent, IO]): List[SEvent] ={
-      val enum = Await.result(d.fenum, intToDurationInt(5).seconds)
-      (consume[X, Vector[SEvent], IO, List] &= enum[IO]).run(_ => sys.error("")).unsafePerformIO.flatten
-    }
-
-    "order the numbers set by specified identities" in {
-      withMemoizationContext { ctx =>
-        val numbers = {
-          val base = eval("testUID", dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/hom/numbers")), Het))
-          base.zipWithIndex map {
-            case ((_, sv), id) => (VectorCase(id): Identities, sv)
-          }
-        }
-        val max = 5
-
-        val enum = numbers.zipWithIndex map {
-          case ((ids, sv), i) => (ids :+ (5 - i), sv)
-        }
-
-        val sorted = sortByIdentities(enum, Vector(0), IdGen.nextInt(), ctx)
-        val sorted2 = sortByIdentities(enum, Vector(1), IdGen.nextInt(), ctx)
-        val sorted3 = sortByIdentities(enum, Vector(1, 0), IdGen.nextInt(), ctx)
-
-        consumeToList(sorted) mustEqual List((VectorCase(0, 5), SDecimal(42)),
-           (VectorCase(1, 4), SDecimal(12)), (VectorCase(2, 3), SDecimal(77)),
-           (VectorCase(3, 2), SDecimal(1)), (VectorCase(4, 1), SDecimal(13)))
-
-        consumeToList(sorted2) mustEqual List((VectorCase(1, 4), SDecimal(13)),
-           (VectorCase(2, 3), SDecimal(1)), (VectorCase(3, 2), SDecimal(77)),
-           (VectorCase(4, 1), SDecimal(12)), (VectorCase(5, 0), SDecimal(42)))
-
-        consumeToList(sorted3) mustEqual List((VectorCase(1, 4), SDecimal(13)),
-           (VectorCase(2, 3), SDecimal(1)), (VectorCase(3, 2), SDecimal(77)),
-           (VectorCase(4, 1), SDecimal(12)), (VectorCase(5, 0), SDecimal(42)))
-      }
-    }
-  }
 }

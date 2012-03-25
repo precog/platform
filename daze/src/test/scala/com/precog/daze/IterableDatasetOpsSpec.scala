@@ -41,83 +41,81 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
   object ops extends Ops
   import ops._
 
-  "iterable dataset ops" should {
-    /*
-    "cogroup" in {
-      val v1  = Vector(1, 3, 3, 5, 7, 8, 8)
-      val v2  = Vector(2, 3, 4, 5, 5, 6, 8, 8)
+  def rec(i: Long) = (VectorCase(i), i: java.lang.Long)
 
-      implicit val order: (Int, Int) => Ordering = Order[Int].order _
-      
+  type Record[A <: AnyVal] = (Identities, A)
+
+  implicit def genLong = for (l <- arbitrary[Long]) yield (l: java.lang.Long)
+
+  implicit def recGen[A <: AnyRef](implicit agen: Gen[A]): Gen[Record[A]] = 
+    for {
+      id <- arbitrary[Long]
+      value <- agen
+    } yield {
+      (VectorCase(id), value)
+    }
+
+  implicit def dsGen[A <: AnyRef](implicit rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
+    for (l <- listOf(rgen)) yield IterableDataset(1, l)
+  }
+
+  implicit def arbIterableDataset[A <: AnyRef](implicit gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
+     Arbitrary(dsGen[A])
+
+  "iterable dataset ops" should {
+    "cogroup" in {
+      import java.lang.Long
+      val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
+      val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
+
       val expected = Vector(
-        left3(1),
-        right3(2),
-        middle3((3, 3)),
-        middle3((3, 3)),
-        right3(4),
-        middle3((5, 5)),
-        middle3((5, 5)),
-        right3(6),
-        left3(7),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)) 
+        left3(1: Long),
+        right3(2: Long),
+        middle3((3: Long, 3: Long)),
+        middle3((3: Long, 3: Long)),
+        right3(4: Long),
+        middle3((5: Long, 5: Long)),
+        middle3((5: Long, 5: Long)),
+        right3(6: Long),
+        left3(7: Long),
+        middle3((8: Long, 8: Long)),
+        middle3((8: Long, 8: Long)),
+        middle3((8: Long, 8: Long)),
+        middle3((8: Long, 8: Long)) 
       )
 
-      val results = ops.cogroup(v1, v2) {
-        new CogroupF[Int, Int, Either3[Int, (Int, Int), Int]](false) {
-          def left(i: Int) = left3(i)
-          def both(i1: Int, i2: Int) = middle3((i1, i2))
-          def right(i: Int) = right3(i)
+      val results = v1.cogroup(v2) {
+        new CogroupF[java.lang.Long, java.lang.Long, Either3[java.lang.Long, (java.lang.Long, java.lang.Long), java.lang.Long]] {
+          def left(i: java.lang.Long) = left3(i)
+          def both(i1: java.lang.Long, i2: java.lang.Long) = middle3((i1, i2))
+          def right(i: java.lang.Long) = right3(i)
         }
       }
 
-      Vector(results.toSeq: _*) must_== expected
+      Vector(results.iterator.toSeq: _*) must_== expected
     }
-    */
 
     "join" in {
-      def rec(i: Long) = (VectorCase(i), i: java.lang.Long)
       val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
       val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
       
       val expected = Vector(
-        middle3((3, 3)),
-        middle3((3, 3)),
-        middle3((5, 5)),
-        middle3((5, 5)),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)) 
+        (3, 3),
+        (3, 3),
+        (5, 5),
+        (5, 5),
+        (8, 8),
+        (8, 8),
+        (8, 8),
+        (8, 8) 
       )
 
       val results = v1.join(v2, 1) {
         case (a, b) => (a, b)
       }
 
-      Vector(results.toSeq: _*) must_== expected
+      Vector(results.iterator.toSeq: _*) must_== expected
     }
-
-    type Record[A <: AnyVal] = (Identities, A)
-
-    implicit def genLong = for (l <- arbitrary[Long]) yield (l: java.lang.Long)
-
-    implicit def recGen[A <: AnyRef](implicit agen: Gen[A]): Gen[Record[A]] = 
-      for {
-        id <- arbitrary[Long]
-        value <- agen
-      } yield {
-        (VectorCase(id), value)
-      }
-
-    implicit def dsGen[A <: AnyRef](implicit rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
-      for (l <- listOf(rgen)) yield IterableDataset(1, l)
-    }
-
-    implicit def arbIterableDataset[A <: AnyRef](implicit gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
-       Arbitrary(dsGen[A])
 
     "crossLeft" in {
       check { (l1: IterableDataset[java.lang.Long], l2: IterableDataset[java.lang.Long]) => 
@@ -125,7 +123,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           case (a, b) => (a, b)
         }
 
-        results.toList must_== l1.flatMap(i => l2.map((j: java.lang.Long) => (i, j)))
+        results.iterator.toList must_== l1.flatMap(i => l2.map((j: java.lang.Long) => (i, j)))
       } 
     }
 
@@ -135,7 +133,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           case (a, b) => (a, b)
         }
 
-        results.toList must_== l2.flatMap(i => l1.map((j: java.lang.Long) => (j, i)))
+        results.iterator.toList must_== l2.flatMap(i => l1.map((j: java.lang.Long) => (j, i)))
       } 
     }
   }
