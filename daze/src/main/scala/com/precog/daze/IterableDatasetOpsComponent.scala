@@ -694,7 +694,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   private final val nullIA = null.asInstanceOf[IA]
 
   def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
-    val order = orderIA(ord)
+    val order = implicitly[Order[IA]]
     val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
     val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
 
@@ -704,67 +704,53 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
         def iterator = new Iterator[IA] {
           val leftIter = sortedLeft.iterator
           val rightIter = sortedRight.iterator
+          
+          var lastLeft: IA = if (leftIter.hasNext) leftIter.next else null
+          var lastRight: IA = if (rightIter.hasNext) rightIter.next else null
+          var _next: IA = precomputeNext()
 
-          var _left: IA = _
-          var _right: IA = _
+          def hasNext = _next != null
 
-          def left() = {
-            if (_left == null && leftIter.hasNext) {
-              _left = leftIter.next()
-            }
-            _left
+          def next(): IA = {
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+            val temp = _next
+            _next = precomputeNext()
+            temp
           }
 
-          def right() = {
-            if (_right == null && rightIter.hasNext) {
-              _right = rightIter.next()
-            }
-            _right
-          }
-
-          def hasNext = left() != null || right() != null
-
-          def next() = {
-            val lf = left()
-            val rt = right()
-
-            val result = if (lf == null) {
-              val back = _right
-              _right = nullIA
-              back
-            } else if (rt == null) {
-              val back = _left
-              _left = nullIA
-              back
+          private[this] def precomputeNext(): IA = {
+            if (lastLeft == null && lastRight == null) {
+              null
+            } else if (lastLeft == null) {
+              val tmp = lastRight
+              lastRight = if (rightIter.hasNext) rightIter.next else null
+              tmp
+            } else if (lastRight == null) {
+              val tmp = lastRight
+              lastRight = if (rightIter.hasNext) rightIter.next else null
+              tmp
             } else {
-              order.order(lf, rt) match {
+              order.order(lastLeft, lastRight) match {
+                case EQ => {
+                  val tmp = lastLeft
+                  lastLeft = if (leftIter.hasNext) leftIter.next() else null
+                  lastRight = if (rightIter.hasNext) rightIter.next() else null
+                  tmp
+                }
+
                 case LT => {
-                  val back = _left
-                  _left = nullIA
-                  back
+                  val tmp = lastLeft
+                  lastLeft = if (leftIter.hasNext) leftIter.next() else null
+                  tmp
                 }
 
                 case GT => {
-                  val back = _right
-                  _right = nullIA
-                  back
+                  val tmp = lastRight
+                  lastRight = if (rightIter.hasNext) rightIter.next() else null
+                  tmp
                 }
-
-                case EQ => {
-                  val back = _left
-                  while (order.order(back, left()) == EQ) {
-                    _left = nullIA
-                  }
-                  while (order.order(back, right()) == EQ) {
-                    _right = nullIA
-                  }
-                  back
-                }
-              }
+              } 
             }
-
-            assert(result != null)
-            result
           }
         }
       }
