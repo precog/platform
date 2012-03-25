@@ -51,11 +51,11 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
         } else j
       }
 
-      insert(0, v)
+      val limit = insert(0, v)
 
-      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], javaOrder.asInstanceOf[Comparator[AnyRef]])
+      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], 0, limit, javaOrder.asInstanceOf[Comparator[AnyRef]])
       val chunkFile = sortFile(chunkId)
-      using(fs.oStream(chunkFile)) { fs.write(_, buffer) }
+      using(fs.oStream(chunkFile)) { fs.write(_, buffer, limit) }
       chunkFile
     }
 

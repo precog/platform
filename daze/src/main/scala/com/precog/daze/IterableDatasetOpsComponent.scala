@@ -206,7 +206,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         }
 
         @tailrec private[this] def precomputeNext() {
-          if (!leftIter.hasNext || !rightIter.hasNext) {
+          if (_left == null || _right == null) {
             _next = null
           } else {
             ord.order(_left._1, _right._1) match {
@@ -224,7 +224,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
                 }
               case EQ => {
                 _next = (_left._1, _left._2 |+| _right._2)
-                _left = if (leftIter.hasNext) leftIter.next else null
+                  _left = if (leftIter.hasNext) leftIter.next else null
                 _right = if (rightIter.hasNext) rightIter.next else null
               }
             }
