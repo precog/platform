@@ -20,7 +20,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
 
     val javaOrder = order.toJavaComparator
 
-    def sortFile(i: Int) = new File(sortConfig.sortWorkDir, filePrefix + "." + i)
+    def sortFile(i: Int) = new File(sortConfig.sortWorkDir, filePrefix + "." + memoId + "." + i)
 
     val buffer = new Array[E](sortConfig.sortBufferSize)
 
