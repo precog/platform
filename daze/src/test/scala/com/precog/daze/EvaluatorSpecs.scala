@@ -56,7 +56,6 @@ class EvaluatorSpecs extends Specification
     with TestConfigComponent 
     with DiskMemoizationComponent 
     with Timelib { self =>
-    
 
   import Function._
   
@@ -1612,16 +1611,19 @@ class EvaluatorSpecs extends Specification
        *   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
        * sums
        */
-      val input = dag.Split(line,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+       
+      val nums = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+      
+      lazy val input: dag.Split = dag.Split(line,
+        Vector(SingleBucketSpec(nums, nums)),
         Join(line, Map2Cross(Add),
-          SplitRoot(line, 0),
+          SplitGroup(line, 1, nums.provenance)(input),
           dag.Reduce(line, Max,
             Filter(line, None, None,
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              nums,
               Join(line, Map2Cross(Lt),
-                dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-                SplitRoot(line, 0))))))
+                nums,
+                SplitParam(line, 0)(input))))))
               
       val result = testEval(input)
       
@@ -1646,24 +1648,23 @@ class EvaluatorSpecs extends Specification
        *   { user: 'user, num: count(clicks where clicks.user = 'user) }
        * histogram
        */
-      val input = dag.Split(line,
-        Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-          Root(line, PushString("user"))),
+       
+      val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
+       
+      lazy val input: dag.Split = dag.Split(line,
+        Vector(SingleBucketSpec(
+          clicks,
+          Join(line, Map2Cross(DerefObject),
+            clicks,
+            Root(line, PushString("user"))))),
         Join(line, Map2Cross(JoinObject),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("user")),
-            SplitRoot(line, 0)),
+            SplitParam(line, 0)(input)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
             dag.Reduce(line, Count,
-              Filter(line, None, None,
-                dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-                Join(line, Map2Cross(Eq),
-                  Join(line, Map2Cross(DerefObject),
-                    dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-                    Root(line, PushString("user"))),
-                  SplitRoot(line, 0)))))))
+              SplitGroup(line, 1, clicks.provenance)(input)))))
                   
       val result = testEval(input)
       
@@ -1726,24 +1727,22 @@ class EvaluatorSpecs extends Specification
        * histogram where histogram.num = 9
        */
        
-      val histogram = dag.Split(line,
-        Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-          Root(line, PushString("user"))),
+      val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
+       
+      lazy val histogram: dag.Split = dag.Split(line,
+        Vector(SingleBucketSpec(
+          clicks,
+          Join(line, Map2Cross(DerefObject),
+            clicks,
+            Root(line, PushString("user"))))),
         Join(line, Map2Cross(JoinObject),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("user")),
-            SplitRoot(line, 0)),
+            SplitParam(line, 0)(histogram)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
             dag.Reduce(line, Count,
-              Filter(line, None, None,
-                dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-                Join(line, Map2Cross(Eq),
-                  Join(line, Map2Cross(DerefObject),
-                    dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-                    Root(line, PushString("user"))),
-                  SplitRoot(line, 0)))))))
+              SplitGroup(line, 1, clicks.provenance)(histogram)))))
        
       val input = Filter(line, None, None,
         histogram,
