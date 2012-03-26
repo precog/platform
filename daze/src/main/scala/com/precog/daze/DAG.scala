@@ -126,6 +126,7 @@ trait DAG extends Instructions {
         eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
       }
       
+      // explicit thunk needed for split due to SI-5610
       def pushBuckets(zipping: Boolean, split: () => Split)(spec: BucketSpec, acc: (List[DepGraph], Int)): (List[DepGraph], Int) = spec match {
         case MergeBucketSpec(left, _, _) => pushBuckets(zipping, split)(left, acc)     // only the evaluator cares
         
