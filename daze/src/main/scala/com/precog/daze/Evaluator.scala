@@ -40,6 +40,7 @@ trait EvaluatorConfig {
 trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
+    with MatchAlgebra
     with OperationsAPI
     with MemoizationEnvironment
     with ImplLibrary
@@ -451,6 +452,36 @@ trait Evaluator extends DAG
     withContext { ctx =>
       maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), ctx)
     }
+  }
+  
+  override def resolveUnaryOperation(op: UnaryOperation) = op match {
+    case Comp => {
+      case SBoolean(b) => SBoolean(!b)
+    }
+    
+    case Neg => {
+      case SDecimal(d) => SDecimal(-d)
+    }
+    
+    case WrapArray => {
+      case sv => SArray(Vector(sv))
+    }
+    
+    case BuiltInFunction1Op(f) => f.operation
+  }
+  
+  override def resolveBinaryOperation(op: BinaryOperation) = op match {
+    case DerefObject => {
+      case (sv, SString(str)) if SValue.deref(JPathField(str)).isDefinedAt(sv) =>
+        SValue.deref(JPathField(str))(sv)
+    }
+    
+    case DerefArray => {
+      case (sv, SDecimal(num)) if SValue.deref(JPathIndex(num.toInt)).isDefinedAt(sv) =>
+        SValue.deref(JPathIndex(num.toInt))(sv)
+    }
+    
+    case op => binaryOp(op).operation
   }
 
   /**
