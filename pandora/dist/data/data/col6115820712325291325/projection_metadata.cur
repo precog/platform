@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":100,
+      "min":"user-1000",
+      "max":"user-1020"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

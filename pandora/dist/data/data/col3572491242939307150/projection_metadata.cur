@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":100,
+      "min":"Australia",
+      "max":"United States"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

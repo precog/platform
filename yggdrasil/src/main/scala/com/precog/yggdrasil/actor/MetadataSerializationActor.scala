@@ -189,8 +189,12 @@ case class MetadataRecord(metadata: ColumnMetadata, clock: VectorClock)
 trait MetadataRecordSerialization {
 
   implicit val MetadataRecordDecomposer: Decomposer[MetadataRecord] = new Decomposer[MetadataRecord] {
+    def extract(metadata: ColumnMetadata) = {
+      val list: List[Set[Metadata]] = metadata.values.map{ _.values.toSet }(collection.breakOut)
+      list.serialize
+    }
     override def decompose(metadata: MetadataRecord): JValue = JObject(List(
-      JField("metadata", metadata.metadata.values.flatMap{ _.values }.toList.serialize),
+      JField("metadata", extract(metadata.metadata)),
       JField("checkpoint", metadata.clock)
     ))
   }
