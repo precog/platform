@@ -237,7 +237,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
+    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
       type IB = (Identities, B)
 
       val iter = new Iterator[IB] {
@@ -265,7 +265,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         }
       }
 
-      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(IdGen.nextInt())
+      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(memoId)
     }
 
     def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {

@@ -534,6 +534,8 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = sys.error("todo")
       
+      lazy val memoIds = specs map { _ => IdGen.nextInt() }
+      
       lazy val findMemos = sys.error("todo")
     }
     

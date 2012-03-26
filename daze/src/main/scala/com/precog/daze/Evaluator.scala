@@ -337,22 +337,22 @@ trait Evaluator extends DAG
       }
       
       case s @ dag.Split(_, specs, child) => {
-        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]]): Dataset[SValue] = {
+        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]], memoIds: Vector[Int]): Dataset[SValue] = {
           val current = groupings.head
           val rest = groupings.tail
           
-          ops.flattenGroup(current, () => ctx.nextId()) { (key, groups) =>
+          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head) { (key, groups) =>
             val params2 = (ops.point(key) +: Vector(groups.toList: _*)) ++ params
             
             if (rest.isEmpty)
               maybeRealize(loop(child, assume, splits + (s -> params2), ctx), ctx)
             else
-              flattenAllGroups(rest, params2)
+              flattenAllGroups(rest, params2, memoIds.tail)
           }
         }
         
         val groupings = specs map computeGrouping(assume, splits, ctx)
-        Right(flattenAllGroups(groupings, Vector()))
+        Right(flattenAllGroups(groupings, Vector(), s.memoIds))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
