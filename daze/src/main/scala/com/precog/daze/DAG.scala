@@ -513,7 +513,7 @@ trait DAG extends Instructions {
     case class Split(loc: Line, specs: Vector[BucketSpec], child: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
-      lazy val isSingleton = sys.error("todo")
+      lazy val isSingleton = false
       
       lazy val memoIds = specs map { _ => IdGen.nextInt() }
       
