@@ -53,6 +53,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
   }
 
   def rec(i: Long) = (VectorCase(i), i: Long)
+  def unstableRec(i: Long) = (VectorCase(idSource.nextId()), i: Long)
 
   val idSource = new IdSource {
     private val source = new java.util.concurrent.atomic.AtomicLong
@@ -247,6 +248,18 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       }
     }
 
+    "intersect" in {
+      implicit val ordering = identityValueOrder[Long].toScalaOrdering
+      implicit val idCount = IdCount(1)
+      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
+        val results = l1.intersect(l2).iterable.toList
+        val expectedSet = (Set(l1.iterable.toSeq: _*) & Set(l2.iterable.toSeq: _*)).toList
+        val expectedSorted = expectedSet.sorted
+
+        results must containAllOf(expectedSorted).only.inOrder
+      }
+    }
+
     "group according to an integer key" in {
       val groups = Stream(
         0L -> Vector(rec(1)),
@@ -277,16 +290,16 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
   "iterable grouping ops" should {
     
     val sharedRecs = Map(
-      'i1 -> rec(1),
-      'i2 -> rec(2),
-      'i3a -> rec(3),
-      'i3b -> rec(3),
-      'i4 -> rec(4),
-      'i5 -> rec(5),
-      'i6 -> rec(6),
-      'i7 -> rec(7),
-      'i8a -> rec(8),
-      'i8b -> rec(8))
+      'i1 -> unstableRec(1),
+      'i2 -> unstableRec(2),
+      'i3a -> unstableRec(3),
+      'i3b -> unstableRec(3),
+      'i4 -> unstableRec(4),
+      'i5 -> unstableRec(5),
+      'i6 -> unstableRec(6),
+      'i7 -> unstableRec(7),
+      'i8a -> unstableRec(8),
+      'i8b -> unstableRec(8))
     
     def g1 = {
       val seed = Stream(
@@ -346,20 +359,21 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           5L -> IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6))),
           6L -> IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7))),
           7L -> IterableDataset(1, Vector(sharedRecs('i7))),
-          8L -> IterableDataset(1, Vector(sharedRecs('i8a), sharedRecs('i8b)).distinct))
+          8L -> IterableDataset(1, Vector(sharedRecs('i8a), sharedRecs('i8b))))
           
         result.toList mustEqual expected.toList
       }
       
       "intersect" >> {
-        val result = mergeGroups(g1, g2, false)
-        
+        val result = mergeGroups(g1, g2, false).iterator.map {
+          case (k, v) => (k, IterableDataset(v.idCount, Vector(v.iterable.toSeq: _*)))
+        }
+
         val expected = List(
-          2L -> IterableDataset(1, Vector(sharedRecs('i2))),
-          6L -> IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7))),
+          2L -> IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a))),
           8L -> IterableDataset(1, Vector()))
           
-        result.iterator.toList must containAllOf(expected).only.inOrder
+        result.toList mustEqual expected.toList
       }
     }
     
