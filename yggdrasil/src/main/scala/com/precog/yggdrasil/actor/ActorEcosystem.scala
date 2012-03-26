@@ -149,9 +149,13 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   private lazy val ingestActor = {
     actorSystem.actorOf(Props(new KafkaShardIngestActor(checkpoints, ingestBatchConsumer)), "shard_ingest")
   }
-  
+ 
+  private lazy val metadataStorage = {
+    new FilesystemMetadataStorage(yggState.descriptorLocator)
+  }
+
   private lazy val metadataSerializationActor = {
-    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, yggState.metadataIO)), "metadata_serializer")
+    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
   }
 
   
@@ -245,8 +249,12 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   
   private val metadataSyncPeriod = Duration(1, "minutes")
   
+  private lazy val metadataStorage = {
+    new FilesystemMetadataStorage(yggState.descriptorLocator)
+  }
+  
   private lazy val metadataSerializationActor = {
-    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, yggState.metadataIO)), "metadata_serializer")
+    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
   }
 
   
