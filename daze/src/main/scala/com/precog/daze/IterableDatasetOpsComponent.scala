@@ -89,25 +89,29 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           }
 
           private[this] def precomputeNext() {
-            if (!leftIter.hasNext && !rightIter.hasNext) {
+            if (_left == null && _right == null) {
               _next = null
-            } else if (leftIter.hasNext && !rightIter.hasNext) {
-              _left = leftIter.next
+            } else if (_left != null && _right == null) {
               _next = _left
-            } else if (!leftIter.hasNext && rightIter.hasNext) {
-              _right = rightIter.next
+              _left = leftIter.next
+            } else if (_left == null && _right != null) {
               _next = _right
+              _right = rightIter.next
             } else {
               ord.order(_left._1, _right._1) match {
                 case LT =>
                   _next = _left
                   if (leftIter.hasNext) {
                     _left = leftIter.next
+                  } else {
+                    _left = null
                   }
                 case GT =>
-                  _next = _left
+                  _next = _right
                   if (rightIter.hasNext) {
                     _right = rightIter.next
+                  } else {
+                    _right = null
                   }
                 case EQ => {
                   _next = (_left._1, extend(_left._2).union(_right._2))
@@ -731,8 +735,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def intersect(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
     implicit val order = identityValueOrder[A]
-    val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
-    val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
+    val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "intersect", IdGen.nextInt())
+    val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "intersect", IdGen.nextInt())
 
     IterableDataset(
       value.idCount,
