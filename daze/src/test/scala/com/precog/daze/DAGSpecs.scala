@@ -226,6 +226,42 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       }
     }
     
+    "parse a split with zipped buckets" in {
+      val line = Line(0, "")
+      
+      val result = decorate(Vector(
+        line,
+        PushNum("1"),
+        PushNum("2"),
+        Bucket,
+        PushNum("3"),
+        PushNum("4"),
+        Bucket,
+        ZipBuckets,
+        instructions.Split(1, 3),
+        IUnion,
+        IUnion,
+        Merge))
+        
+      result must beLike {
+        case Right(
+          s @ dag.Split(`line`,
+            Vector(ZipBucketSpec(
+              SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
+              SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))))),
+            Join(`line`, IUnion,
+              sg2 @ SplitGroup(`line`, 2, Vector()),
+              Join(`line`, IUnion,
+                sg1 @ SplitGroup(`line`, 1, Vector()),
+                sp1 @ SplitParam(`line`, 0))))) => {
+          
+          sg1.parent mustEqual s
+          sp1.parent mustEqual s
+          sg2.parent mustEqual s
+        }
+      }
+    }
+    
     "accept split which reduces the stack" in {
       val line = Line(0, "")
       
