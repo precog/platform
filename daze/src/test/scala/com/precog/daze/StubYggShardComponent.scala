@@ -65,7 +65,7 @@ trait StubYggShardComponent extends YggShardComponent {
 
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = IterableDataset(1, data)
+      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = IterableDataset(1, data.toList)
     }
 
     val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)

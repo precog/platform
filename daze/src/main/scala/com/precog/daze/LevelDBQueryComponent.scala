@@ -67,7 +67,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long): Future[Dataset[SValue]] = {
       for {
         pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
-        dataset  <- assemble(path, sources(JPath.Identity, pathRoot), expiresAt)
+        dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt)
       } yield dataset
     }
 
@@ -87,17 +87,17 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
         (selector, tpe) match {
           case (Some(s), None | Some(SObject) | Some(SArray)) => 
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
-              assemble(path, sources(s, pathRoot), expiresAt)
+              assemble(path, s, sources(s, pathRoot), expiresAt)
             }
 
           case (Some(s), Some(tpe)) => 
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot =>
-              assemble(path, sources(s, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+              assemble(path, s, sources(s, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
             }
 
           case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
             storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) flatMap { pathRoot =>
-              assemble(path, sources(JPath.Identity, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+              assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
             }
 
           case (_      , _        ) => fullProjectionFuture(userUID, path, expiresAt)
@@ -123,54 +123,50 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       root.children.flatMap(search(_, selector, Set.empty[(JPath, SType, ProjectionDescriptor)]))
     }
 
-    def assemble(path: Path, sources: Sources, expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
+    def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
       // pull each projection from the database, then for all the selectors that are provided
       // by tat projection, merge the values
       def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {
-        def buildObject(instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
-          instructions.foldLeft(SEmptyObject: SValue) {
+        def appendToObject(sv: SValue, instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
+          instructions.foldLeft(sv) {
             case (sv, (selector, columnIndex)) => sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
           }
         }
 
         def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): Set[(JPath, Int)] = {
           selectors map { s => 
-            (s, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
+            (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
           }
         }
 
-        @tailrec def joinNext(result: Future[Dataset[SValue]], retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
-          case (descriptor, selectors) :: xs => 
+        def joinNext(retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
+          case (descriptor, selectors) :: x :: xs => 
             val instr = buildInstructions(descriptor, selectors)
-
-            joinNext(
-              for {
-                projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
-                dataset    <- result
-              } yield {
-                dataset.cogroup(projection.getAllPairs(expiresAt)) {
-                  new CogroupF[SValue, Seq[CValue], SValue] {
-                    def left(l: SValue) = l
-                    def both(l: SValue, r: Seq[CValue]) = l merge buildObject(instr, r)
-                    def right(r: Seq[CValue]) = buildObject(instr, r)
-                  }
+            for {
+              projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+              dataset    <- joinNext(x :: xs)
+            } yield {
+              val result = projection.getAllPairs(expiresAt).cogroup(dataset) {
+                new CogroupF[Seq[CValue], SValue, SValue] {
+                  def left(l: Seq[CValue]) = appendToObject(SEmptyObject, instr, l)
+                  def both(l: Seq[CValue], r: SValue) = appendToObject(r, instr, l)
+                  def right(r: SValue) = r
                 }
-              },
-              xs
-            )
+              }
+              result
+            }
 
-          case Nil => result
-        }
-
-        retrievals.toList match {
-          case (descriptor, selectors) :: xs  => 
+          case (descriptor, selectors) :: Nil =>
             val instr = buildInstructions(descriptor, selectors)
-            val projection = storage.projection(descriptor, yggConfig.projectionRetrievalTimeout)
-            joinNext(projection map { p => ops.extend(p.getAllPairs(expiresAt)) map { buildObject(instr, _) } }, xs)
-
-          case Nil => 
-            Future(ops.empty[SValue](1))
+            for {
+              projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+            } yield {
+              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(SEmptyObject, instr, _) }
+              result
+            }
         }
+
+        if (retrievals.isEmpty) Future(ops.empty[SValue](1)) else joinNext(retrievals.toList)
       }
 
       // determine the projections from which to retrieve data
