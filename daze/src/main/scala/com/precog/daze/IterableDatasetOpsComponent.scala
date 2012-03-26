@@ -360,6 +360,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   } else {
                     state = Step
                     lastLeft = null.asInstanceOf[IA]
+                    lastRight = null.asInstanceOf[IB]
                     precomputeNext()
                   }
 
@@ -520,6 +521,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   } else {
                     state = Step
                     lastLeft = null.asInstanceOf[IA]
+                    lastRight = null.asInstanceOf[IB]
                     precomputeNext()
                   }
 

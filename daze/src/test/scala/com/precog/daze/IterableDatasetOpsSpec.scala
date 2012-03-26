@@ -120,56 +120,87 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 
   "iterable dataset ops" should {
     "cogroup" in {
-      val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
-      val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
+      // TODO: Enhance test coverage
+      "abitrary datasets" in {
+        true mustEqual false
+      }.pendingUntilFixed(" - TODO: ")
 
-      val expected = Vector(
-        left3(1),
-        right3(2),
-        middle3((3, 3)),
-        middle3((3, 3)),
-        right3(4),
-        middle3((5, 5)),
-        middle3((5, 5)),
-        right3(6),
-        left3(7),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)),
-        middle3((8, 8)) 
-      )
+      "static full dataset" in {
+        val v1  = IterableDataset(1, Vector(rec(0), rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
+        val v2  = IterableDataset(1, Vector(rec(0), rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
 
-      val results = v1.cogroup(v2) {
-        new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
-          def left(i: Long) = left3(i)
-          def both(i1: Long, i2: Long) = middle3((i1, i2))
-          def right(i: Long) = right3(i)
+        val expected = Vector(
+          middle3((0, 0)),
+          left3(1),
+          right3(2),
+          middle3((3, 3)),
+          middle3((3, 3)),
+          right3(4),
+          middle3((5, 5)),
+          middle3((5, 5)),
+          right3(6),
+          left3(7),
+          middle3((8, 8)),
+          middle3((8, 8)),
+          middle3((8, 8)),
+          middle3((8, 8)) 
+        )
+
+        val results = v1.cogroup(v2) {
+          new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+            def left(i: Long) = left3(i)
+            def both(i1: Long, i2: Long) = middle3((i1, i2))
+            def right(i: Long) = right3(i)
+          }
         }
+
+        Vector(results.iterator.toSeq: _*) mustEqual expected
       }
 
-      Vector(results.iterator.toSeq: _*) must_== expected
+      "static single pair dataset" in {
+        // Catch bug where equal at the end of input produces middle, right
+        val v1s = IterableDataset(1, Vector(rec(0)))
+        val v2s = IterableDataset(1, Vector(rec(0)))
+
+        val expected2 = Vector(middle3((0, 0)))
+
+        val results2 = v1s.cogroup(v2s) {
+          new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+            def left(i: Long) = left3(i)
+            def both(i1: Long, i2: Long) = middle3((i1, i2))
+            def right(i: Long) = right3(i)
+          }
+        }
+
+        Vector(results2.iterator.toSeq: _*) mustEqual expected2
+      }
     }
 
     "join" in {
-      val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
-      val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
-      
-      val expected = Vector(
-        (3, 3),
-        (3, 3),
-        (5, 5),
-        (5, 5),
-        (8, 8),
-        (8, 8),
-        (8, 8),
-        (8, 8) 
-      )
+      // TODO: Enhance test coverage
+      "arbitrary dataset" in { true mustEqual false }.pendingUntilFixed(" - TODO: ")
 
-      val results = v1.join(v2, 1) {
-        case (a, b) => (a, b)
+      "static full dataset" in {
+        val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
+        val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
+        
+        val expected = Vector(
+          (3, 3),
+          (3, 3),
+          (5, 5),
+          (5, 5),
+          (8, 8),
+          (8, 8),
+          (8, 8),
+          (8, 8) 
+        )
+
+        val results = v1.join(v2, 1) {
+          case (a, b) => (a, b)
+        }
+
+        Vector(results.iterator.toSeq: _*) must_== expected
       }
-
-      Vector(results.iterator.toSeq: _*) must_== expected
     }
 
     "crossLeft" in {
