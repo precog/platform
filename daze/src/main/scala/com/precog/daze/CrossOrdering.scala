@@ -79,7 +79,7 @@ trait CrossOrdering extends DAG {
           else if (left.isSingleton)
             Join(loc, Map2CrossRight(op), memoized(left, splits), memoized(right, splits))
           else
-            Join(loc, Map2CrossLeft(op), memoized(left, splits), memoized(right, splits))
+            Join(loc, Map2CrossLeft(op), memoized(left, splits), Memoize(memoized(right, splits), 100))
         }
         
         case Join(loc, instr, left, right) =>
