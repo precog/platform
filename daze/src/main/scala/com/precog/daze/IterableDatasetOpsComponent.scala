@@ -7,6 +7,10 @@ import memoization._
 import com.precog.common.VectorCase
 import com.precog.util._
 
+import akka.dispatch.Await
+import akka.util.duration._
+import blueeyes.util.Clock
+
 import scala.annotation.tailrec
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.Ordering._
@@ -21,14 +25,18 @@ case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
 case class IterableGrouping[K, A](iterator: Iterator[(K, A)])
 
+trait IterableDatasetOpsConfig extends SortConfig {
+  def clock: Clock
+}
+
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
-  type YggConfig <: SortConfig
+  type YggConfig <: IterableDatasetOpsConfig
   type Dataset[E] = IterableDataset[E]
   type Grouping[K, A] = IterableGrouping[K, A]
 
   class Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
     implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
-      new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig))
+      new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig), yggConfig.clock)
 
     def empty[A](idCount: Int): IterableDataset[A] = IterableDataset(idCount, Iterable.empty[(Identities, A)])
 
@@ -218,7 +226,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B] = {
+    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit order: Order[B], ms: IncrementalSerialization[(Identities, B)]): Dataset[B] = {
       type IB = (Identities, B)
 
       val iter = new Iterator[IB] {
@@ -246,7 +254,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         }
       }
 
-      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(memoId)
+      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(memoId, memoCtx, expiration)
     }
 
     def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] = {
@@ -255,9 +263,9 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
   }
 }
 
-class IterableDatasetExtensions[A](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable])
+class IterableDatasetExtensions[A](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable], clock: Clock)
 extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
-  private def extend(o: IterableDataset[A]) = new IterableDatasetExtensions(o, iteratorSorting)
+  private def extend[T](o: IterableDataset[T]) = new IterableDatasetExtensions[T](o, iteratorSorting, clock)
 
   /**
    * Used for event reassembly - match is on identities
@@ -650,7 +658,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   def crossRight[B, C](d2: IterableDataset[B])(f: PartialFunction[(A, B), C]): IterableDataset[C] = 
-    new IterableDatasetExtensions(d2, iteratorSorting).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
+    extend(d2).crossLeft(value) { case (er, el) if f.isDefinedAt((el, er)) => f((el, er)) }
 
   // pad identities to the longest side, then merge and sort -u by identities
   // this must never be called with datasets where the length of the identities is
@@ -822,7 +830,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def count: BigInt = value.iterable.size
 
-  def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): IterableDataset[A] = {
+  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): IterableDataset[A] = {
     val filePrefix = "uniq"
 
     IterableDataset[A](1, 
@@ -908,12 +916,17 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     )
   }
 
-  def memoize(memoId: Int): IterableDataset[A] = {
-    val cache = value.iterable.toSeq
-    IterableDataset(value.idCount, cache)
+  def memoize(memoId: Int, memoCtx: MemoizationContext[IterableDataset], expiration: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): IterableDataset[A] = {
+    Await.result(
+      memoCtx.memoizing(memoId) match {
+        case Left(f) => f(value)
+        case Right(d) => d
+      },
+      (expiration - clock.now().getMillis) millis
+    )
   }
 
-  def group[K](memoId: Int)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
+  def group[K](memoId: Int, memoCtx: MemoizationContext[IterableDataset], expiration: Long)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
     implicit val kaOrder: Order[(K,Identities,A)] = new Order[(K,Identities,A)] {
       def order(x: (K,Identities,A), y: (K,Identities,A)) = {
         val kOrder = ord.order(x._1, y._1)
@@ -960,7 +973,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
           val kChunkId = IdGen.nextInt()
 
-          (currentK, extend(innerDS).memoize(kChunkId))
+          (currentK, extend(innerDS).memoize(kChunkId, memoCtx, expiration))
         }
 
         private def precomputeNext(): (K, Identities, A) = {

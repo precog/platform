@@ -30,12 +30,14 @@ import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 trait StubYggShardComponent extends YggShardComponent {
+  type Dataset[α]
+
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
-  type Dataset[E] = IterableDataset[E]
 
   val dataPath = Path("/test")
   def sampleSize: Int
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): Dataset[Seq[CValue]]
 
   trait Storage extends YggShard[Dataset] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
@@ -46,7 +48,7 @@ trait StubYggShardComponent extends YggShardComponent {
 
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
-      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = IterableDataset(1, data.toList)
+      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
     }
 
     val (sampleData, _) = DistributedSampleSet.sample(sampleSize, 0)

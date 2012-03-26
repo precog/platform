@@ -32,7 +32,7 @@ trait GroupingOps[Dataset[_], Grouping[_, _]] {
   def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
 
   // the resulting Dataset[B] needs to be merged such that it is value-unique and has new identities
-  def flattenGroup[A, K, B: Order](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int)(f: (K, NEL[Dataset[A]]) => Dataset[B]): Dataset[B]
+  def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit order: Order[B], ms: IncrementalSerialization[(Identities, B)]): Dataset[B]
 
   def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
@@ -78,7 +78,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Dataset[A]
+  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Dataset[A]
 
   // identify(None) strips all identities
   def identify(nextId: Option[() => Identity]): Dataset[A]
@@ -87,11 +87,11 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
   def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit cm: Manifest[A], fs: SortSerialization[IA]): Dataset[A]
   
-  def memoize(memoId: Int): Dataset[A] //(implicit fs: FileSerialization[A]): Dataset[A] 
+  def memoize(memoId: Int, memoCtx: MemoizationContext[Dataset], expiresAt: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
 
   // for each value, calculate the keys for that value - this should be as singleton dataset
   // sort by key then by the identity ordering of the input dataset
-  def group[K](memoId: Int)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)]): Grouping[K, Dataset[A]]
+  def group[K](memoId: Int, memoCtx: MemoizationContext[Dataset], expiresAt: Long)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
 }
 
 // vim: set ts=4 sw=4 et:

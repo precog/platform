@@ -28,7 +28,7 @@ trait IncrementalSerialization[A] extends StreamSerialization with RunlengthForm
   }
 
   final class IncrementalReader {
-    def read(in: DataInputStream): Iterator[A] = {
+    def read(in: DataInputStream, closeOnEOF: Boolean): Iterator[A] = {
       new Iterator[A] {
         private var header: Header = null.asInstanceOf[Header]
         private var _next = precomputeNext()
@@ -52,6 +52,7 @@ trait IncrementalSerialization[A] extends StreamSerialization with RunlengthForm
               readRecord(in, header)
 
             case EOFFlag =>
+              if (closeOnEOF) in.close()
               null.asInstanceOf[A]
           }
         }

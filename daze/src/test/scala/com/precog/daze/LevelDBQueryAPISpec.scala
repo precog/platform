@@ -30,7 +30,13 @@ import org.specs2.mutable._
 
 class LevelDBQueryAPISpec extends Specification with LevelDBQueryComponent 
 with StubYggShardComponent with IterableDatasetOpsComponent {
-  type YggConfig = SortConfig with LevelDBQueryConfig
+  trait YggConfig extends SortConfig with LevelDBQueryConfig with IterableDatasetOpsConfig {
+    val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
+    val clock = blueeyes.util.Clock.System
+    val sortBufferSize: Int = 1000
+    val sortWorkDir: File = new File("/tmp")
+  }
+
   override type Dataset[E] = IterableDataset[E]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
@@ -38,15 +44,10 @@ with StubYggShardComponent with IterableDatasetOpsComponent {
   def sampleSize = 1 
 
   val testUID = "testUID"
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
 
-  object yggConfig extends SortConfig with LevelDBQueryConfig {
-    val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
-    val clock = blueeyes.util.Clock.System
-    val sortBufferSize: Int = 1000
-    val sortWorkDir: File = new File("/tmp")
-  }
-
-  val storage = new Storage { }
+  object yggConfig extends YggConfig
+  object storage extends Storage
 
   object query extends QueryAPI
   object ops extends Ops

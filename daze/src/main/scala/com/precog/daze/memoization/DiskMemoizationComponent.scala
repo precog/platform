@@ -3,13 +3,15 @@ package memoization
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
-import com.precog.util.KMap
+import com.precog.util._
 
 import akka.dispatch.Future
+import akka.dispatch.Promise
 import akka.dispatch.ExecutionContext
 import java.io._
 import java.util.zip._
 
+import scala.annotation.tailrec
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -23,7 +25,86 @@ trait DiskMemoizationConfig {
   def memoizationWorkDir: File
 }
 
-trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironment { self =>
+trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
+  type YggConfig <: DiskMemoizationConfig
+  type Dataset[α] = IterableDataset[α]
+
+  implicit val asyncContext: ExecutionContext
+
+  def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
+
+  sealed trait MemoContext extends MemoizationContext[IterableDataset] { ctx => 
+    type CacheKey[α] = Int
+    type CacheValue[α] = Promise[(Int, Either[Vector[α], File])]
+    @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
+    @volatile private var files: List[File] = Nil
+
+    def memoizing[A](memoId: Int)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[IterableDataset[A] => Future[IterableDataset[A]], Future[IterableDataset[A]]] = {
+      type IA = (Identities, A)
+      def store(iter: Iterator[IA]): Either[Vector[IA], File] = {
+        @tailrec def buffer(i: Int, acc: Vector[IA]): Vector[IA] = {
+          if (i < yggConfig.memoizationBufferSize && iter.hasNext) buffer(i+1, acc :+ iter.next)
+          else acc
+        }
+
+        @tailrec def spill(writer: serialization.IncrementalWriter, out: DataOutputStream, iter: Iterator[IA]): serialization.IncrementalWriter = {
+          if (iter.hasNext) spill(writer.write(out, iter.next), out, iter)
+          else writer
+        }
+
+        val initial = buffer(0, Vector()) 
+        if (initial.length < yggConfig.memoizationBufferSize) {
+          Left(initial)
+        } else {
+          val memoFile = new File(yggConfig.memoizationWorkDir, "memo." + memoId)
+          using(serialization.oStream(memoFile)) { out =>
+            spill(spill(serialization.writer, out, initial.iterator), out, iter).finish(out)
+          }
+
+          Right(memoFile)
+        }
+      }
+
+      def datasetFor(future: Future[(Int, Either[Vector[IA], File])]) = future map {
+        case (idCount, Left(vector)) =>
+          IterableDataset(idCount, vector)
+
+        case (idCount, Right(file)) => 
+          IterableDataset(idCount, new Iterable[IA] { def iterator = serialization.reader.read(serialization.iStream(file), true) })
+      }
+
+      ctx.synchronized {
+        memoCache.get(memoId) match {
+          case Some(future) => Right(datasetFor(future))
+
+          case None => 
+            val promise = Promise[(Int, Either[Vector[IA], File])]
+            memoCache += (memoId -> promise)
+            Left((toMemoize: IterableDataset[A]) => {
+              datasetFor(promise.completeWith(Future((toMemoize.idCount, store(toMemoize.iterable.iterator)))))
+            })
+        }
+      }
+    }
+
+    object cache extends MemoCache {
+      def expire(memoId: Int) = IO {
+        ctx.synchronized { memoCache -= memoId }
+      }
+
+      def purge = IO {
+        ctx.synchronized {
+          for (f <- files) f.delete
+          files = Nil
+          memoCache = KMap.empty[CacheKey, CacheValue]
+        }
+      }
+    }
+  }
+}
+
+/*
+trait DiskIterateeMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
   type YggConfig <: DiskMemoizationConfig
 
   def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
@@ -114,3 +195,4 @@ trait DiskMemoizationComponent extends YggConfigComponent with BufferingEnvironm
   }
 }
 
+*/
