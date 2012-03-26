@@ -179,6 +179,72 @@ object DAGSpecs extends Specification with DAG with Timelib with Genlib {
       } 
     }
     
+    "parse a split with merged buckets" >> {
+      "union" >> {
+        val line = Line(0, "")
+        
+        val result = decorate(Vector(
+          line,
+          PushNum("1"),
+          PushNum("2"),
+          Bucket,
+          PushNum("3"),
+          PushNum("4"),
+          Bucket,
+          MergeBuckets(false),
+          instructions.Split(1, 2),
+          IUnion,
+          Merge))
+          
+        result must beLike {
+          case Right(
+            s @ dag.Split(`line`,
+              Vector(MergeBucketSpec(
+                SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
+                SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))), false)),
+              Join(`line`, IUnion,
+                sg @ SplitGroup(`line`, 1, Vector()),
+                sp @ SplitParam(`line`, 0)))) => {
+            
+            sg.parent mustEqual s
+            sp.parent mustEqual s
+          }
+        }
+      }
+      
+      "intersect" >> {
+        val line = Line(0, "")
+        
+        val result = decorate(Vector(
+          line,
+          PushNum("1"),
+          PushNum("2"),
+          Bucket,
+          PushNum("3"),
+          PushNum("4"),
+          Bucket,
+          MergeBuckets(true),
+          instructions.Split(1, 2),
+          IUnion,
+          Merge))
+          
+        result must beLike {
+          case Right(
+            s @ dag.Split(`line`,
+              Vector(MergeBucketSpec(
+                SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
+                SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))), true)),
+              Join(`line`, IUnion,
+                sg @ SplitGroup(`line`, 1, Vector()),
+                sp @ SplitParam(`line`, 0)))) => {
+            
+            sg.parent mustEqual s
+            sp.parent mustEqual s
+          }
+        }
+      }
+    }
+    
     "accept split which reduces the stack" in {
       val line = Line(0, "")
       
