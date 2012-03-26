@@ -166,16 +166,11 @@ trait Evaluator extends DAG
     def loop(graph: DepGraph, assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
       case g if assume contains g => Right(assume(g))
       
-      case s @ SplitParam(_, index) => {
+      case s @ SplitParam(_, index) =>
         Right(splits(s.parent)(index))
-      }
       
-      case s @ SplitGroup(_, index, _) => {
-        if (!(splits contains s.parent)) {
-          println(splits)
-        }
+      case s @ SplitGroup(_, index, _) =>
         Right(splits(s.parent)(index))
-      }
       
       case Root(_, instr) =>
         Right(ops.point(graph.value.get))    // TODO don't be stupid
