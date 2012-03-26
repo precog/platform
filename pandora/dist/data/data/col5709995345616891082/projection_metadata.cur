@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":1,
+      "min":"canceled",
+      "max":"canceled"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

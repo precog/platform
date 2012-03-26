@@ -15,6 +15,11 @@ import blueeyes.json.JsonParser
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
+import scopt.mutable.OptionParser
+
+import scala.collection.SortedSet
+import scala.collection.SortedMap
+
 object YggUtils {
 
   import JsonParser._
@@ -36,8 +41,20 @@ dbRoot - path to database root (will show a summary of all columns in the databa
 colRoot - path to a specific column root (will show a more detailed view of a specific column)
  """
 
+  val commands: Map[String, Command] = List(
+    DescriptorSummary 
+  ).map( c => (c.name, c) )(collection.breakOut)
+
   def main(args: Array[String]) {
-    if(args.length == 0) die(usage) else run(args(0)) 
+    if(args.length > 0) {
+      commands.get(args(0)).map { c =>
+        c.run(args.slice(1,args.length))
+      }.getOrElse {
+        run(args(0))
+      }
+    } else {
+      die(usage)
+    }
   }
 
   def run(dirname: String) {
@@ -174,4 +191,97 @@ object LevelDBOpenFileTest extends App {
       }
       if(cnt % 1000 == 0) println("Insert count: " + cnt) 
     }
+}
+
+trait Command {
+  def name(): String
+  def description(): String
+  def run(args: Array[String])
+}
+
+object DescriptorSummary extends Command {
+  val name = "describe" 
+  val description = "describe paths and selectors" 
+  
+  def run(args: Array[String]) {
+    println(args.mkString(","))
+    val config = new Config
+    val parser = new OptionParser("ygg describe") {
+      opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
+      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
+      booleanOpt("v", "verbose", "<vebose>", "show selectors as well", {v: Boolean => config.verbose = v})
+      arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  implicit val tOrdering = new Ordering[(JPath, ColumnType)] {
+    def compare(a: (JPath, ColumnType), b: (JPath, ColumnType)): Int = {
+      val jord = implicitly[Ordering[JPath]]
+      val sord = implicitly[Ordering[String]] 
+      val jo = jord.compare(a._1, b._1)
+      if(jo != 0) {
+        jo 
+      } else {
+        sord.compare(a._2.toString, b._2.toString)
+      }
+    }
+  }
+
+  def process(config: Config) {
+    println("describing data at %s matching %s%s".format(config.dataDir, 
+                                                         config.path.map(_.toString).getOrElse("*"),
+                                                         config.selector.map(_.toString).getOrElse(".*")))
+    
+    show(extract(load(config.dataDir)), config.verbose)
+  }
+
+  def load(dataDir: String) = {
+    val dir = new File(dataDir)
+    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
+      readDescriptor(d)
+    }
+  }
+
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, ColumnType)]] = {
+    implicit val pord = new Ordering[Path] {
+      val sord = implicitly[Ordering[String]] 
+      def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
+    }
+    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, ColumnType)]]()) {
+      case (acc, desc) =>
+       desc.columns.foldLeft(acc) {
+         case (acc, ColumnDescriptor(p, s, t, _)) =>
+           val update = acc.get(p) map { _ + (s -> t) } getOrElse { SortedSet((s, t)) } 
+           acc + (p -> update) 
+       }
+    }
+  }
+
+  def show(summary: SortedMap[Path, SortedSet[(JPath, ColumnType)]], verbose: Boolean) {
+    summary.foreach { 
+      case (p, sels) =>
+        println(p)
+        if(verbose) {
+          sels.foreach {
+            case (s, ct) => println("  %s -> %s".format(s, ct))
+          }
+          println
+        }
+    }
+  }
+
+  def readDescriptor(dir: File): ProjectionDescriptor = {
+    val rawDescriptor = scala.io.Source.fromFile(new File(dir, "projection_descriptor.json")).mkString
+    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
+  }
+
+  class Config(var path: Option[Path] = None, 
+               var selector: Option[JPath] = None,
+               var dataDir: String = ".",
+               var verbose: Boolean = false)
 }

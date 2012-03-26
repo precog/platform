@@ -1,5 +1,6 @@
 package com.precog.yggdrasil
 
+import actor._
 import metadata._
 
 import com.precog.common._
@@ -62,7 +63,6 @@ case class YggState(
 
 object YggState extends Logging {
   val descriptorName = "projection_descriptor.json"
-  val metadataName = "projection_metadata.json"
   val checkpointName = "checkpoints.json"
 
   def restore(dataDir: File): IO[Validation[Error, YggState]] = {
@@ -102,31 +102,22 @@ object YggState extends Logging {
     loadMap(baseDir)
   }
 
+  type ValProjTuple = Validation[Error, (ProjectionDescriptor, ColumnMetadata)]
+
   def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Map[ProjectionDescriptor, ColumnMetadata]]] = {
-    def readAll(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Seq[(ProjectionDescriptor, ColumnMetadata)]]] = {
-      val validatedEntries = descriptors.toList.map{ 
-        case (d, f) => readSingle(f) map { _.map {
-          case metadataSeq => (d, Map((d.columns zip metadataSeq): _*))
-        }}
-      }.sequence[IO, Validation[Error, (ProjectionDescriptor, ColumnMetadata)]]
+   
+    val metadataStorage = new FilesystemMetadataStorage((desc: ProjectionDescriptor) => IO { descriptors(desc) })
+    
+    val dms: List[IO[ValProjTuple]] = descriptors.keys.map { desc => 
+      loadSingleMetadata(desc, metadataStorage).map{ _.map { (desc, _) }}
+    }(collection.breakOut)
+    
+    dms.sequence[IO, ValProjTuple].map(flattenValidations).map{ _.map { Map(_: _*) } }
+  }
 
-      validatedEntries.map(flattenValidations)
-    }
-
-
-    def readSingle(dir: File): IO[Validation[Error, Seq[MetadataMap]]] = {
-      import JsonParser._
-      val metadataFile = new File(dir, "projection_metadata.json")
-      IOUtils.readFileToString(metadataFile).map { _ match {
-        case None    => Success(List(Map[MetadataType, Metadata]()))
-        case Some(c) => {
-          val validatedTuples = parse(c).validated[List[Set[Metadata]]]
-          validatedTuples.map( _.map( Metadata.toTypedMap _ ))
-        }
-      }}
-    }
-
-    readAll(descriptors).map { _.map { Map(_: _*) } }
+  def loadSingleMetadata(descriptor: ProjectionDescriptor, metadataStorage: MetadataStorage): IO[Validation[Error, ColumnMetadata]] = {
+    // note this is not complete as it doesn't restore the metadata state to match the leveldb columns
+    metadataStorage.currentMetadata(descriptor).map { _.map { _.metadata } }
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
