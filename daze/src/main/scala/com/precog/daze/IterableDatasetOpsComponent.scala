@@ -140,7 +140,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           }
 
           @tailrec private[this] def precomputeNext() {
-            if (!leftIter.hasNext || !rightIter.hasNext) {
+            if (_left == null || _right == null) {
               _next = null
             } else {
               ord.order(_left._1, _right._1) match {
@@ -667,8 +667,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     extend(left).cogroup(right)(cgf)
   }
 
-  private final val nullIA = null.asInstanceOf[IA]
-
   def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
     implicit val order = identityValueOrder[A]
     val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
@@ -745,9 +743,9 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
           val sortedLeft = sortedLeftIterable.iterator
           val sortedRight = sortedRightIterable.iterator
 
-          var _left = if (sortedLeft.hasNext) sortedLeft.next else nullIA
-          var _right = if (sortedRight.hasNext) sortedRight.next else nullIA
-          var _next : IA = precomputeNext
+          var _left : IA = if (sortedLeft.hasNext) sortedLeft.next else null
+          var _right : IA = if (sortedRight.hasNext) sortedRight.next else null
+          var _next : IA = precomputeNext()
 
           def hasNext = _next != null
 
@@ -759,44 +757,25 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
           }
 
           @tailrec private def precomputeNext(): IA = {
-            if (_left == null || _right == null) {
-               null
+            if (_left == null || _right == null) {    // TODO no longer assume full consumption
+              while (sortedLeft.hasNext) sortedLeft.next()
+              while (sortedRight.hasNext) sortedRight.next()
+              null
             } else {
               order.order(_left, _right) match {
                 case EQ => 
                   val temp = _left
-                  var stop = false
-
-                  while (order.order(_left, _right) == EQ && !stop) {
-                    if (!sortedLeft.hasNext) {
-                      _left = nullIA
-                      stop = true
-                    }
-
-                    _left = sortedLeft.next
-                  }
-                  stop = false
-                  while (order.order(temp, _right) == EQ && !stop) {
-                    if (!sortedRight.hasNext) {
-                      _right = nullIA
-                      stop = true
-                    }
-                    _right = sortedRight.next
-                  }
-
+                  _left = if (sortedLeft.hasNext) sortedLeft.next() else null
+                  _right = if (sortedRight.hasNext) sortedRight.next() else null
                   temp
 
                 case LT =>
-                  while (order.order(_left, _right) == LT && sortedLeft.hasNext) {
-                    _left = sortedLeft.next
-                  }
-                  precomputeNext
+                  _left = if (sortedLeft.hasNext) sortedLeft.next() else null
+                  precomputeNext()
 
                 case GT =>
-                  while (order.order(_left, _right) == GT && sortedRight.hasNext) {
-                    _right = sortedRight.next
-                  }
-                  precomputeNext
+                  _right = if (sortedRight.hasNext) sortedRight.next() else null
+                  precomputeNext()
               }
             }
           }
