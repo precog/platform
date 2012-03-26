@@ -926,7 +926,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   def memoize(memoId: Int): IterableDataset[A] = {
-    val cache = Vector(value.iterable.toSeq: _*)
+    val cache = value.iterable.toSeq
     IterableDataset(value.idCount, cache)
   }
 
