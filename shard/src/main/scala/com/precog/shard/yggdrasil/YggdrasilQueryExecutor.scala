@@ -10,6 +10,7 @@ import daze.memoization._
 import pandora.ParseEvalStack
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.serialization._
 
@@ -130,6 +131,10 @@ trait YggdrasilQueryExecutor
     } 
 
     solution.fail.map(systemError(_)).validation.join
+  }
+
+  def metadata(userUID: String): MetadataView = {
+    storage.userMetadataView(userUID)
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {

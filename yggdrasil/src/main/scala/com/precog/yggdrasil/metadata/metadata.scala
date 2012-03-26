@@ -19,6 +19,8 @@ trait StorageMetadata {
 
   implicit val dispatcher: MessageDispatcher
 
+  def findChildren(path: Path): Future[Seq[Path]]
+
   def findSelectors(path: Path): Future[Seq[JPath]]
   def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
   def findPathMetadata(path: Path, selector: JPath): Future[PathRoot]
@@ -57,13 +59,25 @@ case class PathValue(valueType: CType, descriptors: Map[ProjectionDescriptor, Co
 trait MetadataView extends StorageMetadata
 
 class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
+  def findChildren(path: Path) = metadata.findChildren(path)
   def findSelectors(path: Path) = metadata.findSelectors(path)
   def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
   def findPathMetadata(path: Path, selector: JPath) = metadata.findPathMetadata(path, selector)
 }
 
 class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
-  
+ 
+  def findChildren(path: Path): Future[Seq[Path]] = {
+    metadata.findChildren(path) flatMap { paths =>
+      Future.traverse(paths) { path =>
+        accessControl.mayAccessPath(uid, path, PathRead) map {
+          case true => Seq(path)
+          case false => Seq.empty
+        }
+      }.map{ _.flatten }
+    }
+  }
+
   def findSelectors(path: Path): Future[Seq[JPath]] = {
     metadata.findSelectors(path) flatMap { selectors =>
       Future.traverse(selectors) { selector =>
@@ -110,6 +124,8 @@ class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDisp
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
+  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Seq[Path]] }
+
   def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
 
   def findProjections(path: Path, selector: JPath) = 

@@ -55,7 +55,7 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
         request { (state: IngestState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              dataPath("track") {
+              dataPath("vfs") {
                 post(new TrackingServiceHandler(state.accessControl, state.eventStore, state.usageLogging, insertTimeout)(defaultFutureDispatch))
               }
             }

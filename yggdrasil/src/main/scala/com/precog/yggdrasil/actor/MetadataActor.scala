@@ -22,6 +22,8 @@ class MetadataActor(metadata: LocalMetadata) extends Actor {
    
     case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
    
+    case FindChildren(path)                   => sender ! metadata.findChildren(path)
+    
     case FindSelectors(path)                  => sender ! metadata.findSelectors(path)
 
     case FindDescriptors(path, selector)      => sender ! metadata.findDescriptors(path, selector)
@@ -54,7 +56,18 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     projections = projUpdate
     messageClock = clockUpdate
   }
+ 
+  private def isChildPath(test: Path, ref: Path): Boolean = 
+    ref.elements.startsWith(test.elements) && 
+    test.elements.size == ref.elements.size + 1
 
+  def findChildren(path: Path): Seq[Path] = 
+    projections.foldLeft(Set[Path]()) {
+      case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { 
+        case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => cpath 
+      }
+    }.toList
+ 
   def findSelectors(path: Path): Seq[JPath] = {
     projections.foldLeft(Vector[JPath]()) {
       case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
@@ -187,6 +200,10 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       LocalMetadata.this.update(inserts)
     }
 
+    def findChildren(path: Path) = Future {
+      LocalMetadata.this.findChildren(path)
+    }
+
     def findSelectors(path: Path) = Future {
       LocalMetadata.this.findSelectors(path) 
     }
@@ -246,6 +263,7 @@ sealed trait ShardMetadataAction
 
 case class ExpectedEventActions(eventId: EventId, count: Int) extends ShardMetadataAction
 
+case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
