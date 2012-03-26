@@ -535,6 +535,9 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
+      lazy val memoId = IdGen.nextInt()
+      
+      // TODO include this
       lazy val findMemos = left.findMemos ++ right.findMemos
     }
     
@@ -547,6 +550,9 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = target.isSingleton
       
+      lazy val memoId = IdGen.nextInt()
+      
+      // TODO include this
       lazy val findMemos = target.findMemos ++ boolean.findMemos
     }
     

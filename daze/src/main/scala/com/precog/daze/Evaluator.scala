@@ -83,10 +83,15 @@ trait Evaluator extends DAG
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
-    def maybeRealize(result: Either[DatasetMask[Dataset], Dataset[SValue]], ctx: Context): Dataset[SValue] =
-      (result.left map { _.realize(ctx.expiration) }).fold(identity, identity)
+    def maybeRealize(result: Either[DatasetMask[Dataset], Match], ctx: Context): Match =
+      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration)) }).fold(identity, identity)
+    
+    def realizeMatch(spec: MatchSpec, set: Dataset[SValue]): Dataset[SValue] = spec match {
+      case mal.Actual => set
+      case _ => set collect resolveMatch(spec)
+    }
   
-    def computeGrouping(assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
+    def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
       case ZipBucketSpec(left, right) => {
         val leftGroup = computeGrouping(assume, splits, ctx)(left)
         val rightGroup = computeGrouping(assume, splits, ctx)(right)
@@ -97,7 +102,7 @@ trait Evaluator extends DAG
         ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, splits, ctx)(spec)) { a => NEL(a) }
     }
     
-    def computeMergeGrouping(assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
+    def computeMergeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
       case ZipBucketSpec(_, _) => sys.error("Cannot merge_buckets following a zip_buckets")
       
       case MergeBucketSpec(left, right, and) => {
@@ -108,10 +113,13 @@ trait Evaluator extends DAG
       
       case SingleBucketSpec(target, solution) => {
         val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
-        val source: Dataset[SValue] = maybeRealize(loop(common, assume, splits, ctx), ctx)
+        val Match(sourceSpec, sourceSet) = maybeRealize(loop(common, assume, splits, ctx), ctx)
+        val source = realizeMatch(sourceSpec, sourceSet)
         
-        source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
-          maybeRealize(loop(solution, assume + (common -> ops.point(sv)), splits, ctx), ctx)
+        source.group[SValue](IdGen.nextInt() , ctx.memoizationContext, ctx.expiration) { sv: SValue =>
+          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv)))
+          val Match(spec, set) = maybeRealize(loop(solution, assume2, splits, ctx), ctx)
+          realizeMatch(spec, set)
         }
       }
     }
@@ -165,7 +173,7 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next.toSeq: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
       case g if assume contains g => Right(assume(g))
       
       case s @ SplitParam(_, index) =>
@@ -175,68 +183,42 @@ trait Evaluator extends DAG
         Right(splits(s.parent)(index))
       
       case Root(_, instr) =>
-        Right(ops.point(graph.value.get))    // TODO don't be stupid
+        Right(Match(mal.Actual, ops.point(graph.value.get)))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, assume, splits, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
-          case Some(_) => Right(ops.empty[SValue](1))
+          case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1)))
           
           case None => {
-            val loaded = maybeRealize(loop(parent, assume, splits, ctx), ctx) collect { 
+            val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+            val loaded = realizeMatch(spec, set) collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
-            Right(ops.flattenAndIdentify(loaded, () => ctx.nextId()))
+            Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId())))
           }
         }
       }
 
-      case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, assume, splits, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt()))
+      case dag.SetReduce(_, Distinct, parent) => {
+        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext)
+        Right(Match(mal.Actual, result))
       }
       
-      case Operate(_, Comp, parent) => {
-        val parentRes = loop(parent, assume, splits, ctx)
-        val parentResTyped = parentRes.left map { _ typed SBoolean }
-        val enum = maybeRealize(parentResTyped, ctx)
-        
-        Right(enum collect {
-          case SBoolean(b) => SBoolean(!b)
-        })
-      }
-      
-      case Operate(_, Neg, parent) => {
-        val parentRes = loop(parent, assume, splits, ctx)
-        val parentResTyped = parentRes.left map { _ typed SDecimal }
-        val enum = maybeRealize(parentResTyped, ctx)
-        
-        Right(enum collect {
-          case SDecimal(d) => SDecimal(-d)
-        })
-      }
-      
-      case Operate(_, WrapArray, parent) => {
-        val enum = maybeRealize(loop(parent, assume, splits, ctx), ctx)
-        
-        Right(enum map { sv => SArray(Vector(sv)) })
-      }
-
-      case Operate(_, BuiltInFunction1Op(f), parent) => {
-        implicit val pfArrow = partialFunctionInstance
-        val parentRes = loop(parent, assume, splits, ctx)
-        val parentResTyped = parentRes.left map { mask =>
-          f.operandType map mask.typed getOrElse mask
-        }
-
-        Right(maybeRealize(parentResTyped, ctx) collect f.operation)
+      case Operate(_, op, parent) => {
+        // TODO unary typing
+        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        Right(Match(mal.Op1(spec, op), set))
       }
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
-        val enum = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        val enum = realizeMatch(spec, set)
         
         val reduced = red match {
           case Count => ops.point(SDecimal(BigDecimal(enum.count)))
@@ -316,33 +298,39 @@ trait Evaluator extends DAG
             else ops.point(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
-        Right(reduced)
+        Right(Match(mal.Actual, reduced))
       }
       
       case s @ dag.Split(_, specs, child) => {
-        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]], memoIds: Vector[Int]): Dataset[SValue] = {
+        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Match], memoIds: Vector[Int]): Dataset[SValue] = {
           val current = groupings.head
           val rest = groupings.tail
           
           ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext, ctx.expiration) { (key, groups) =>
-            val params2 = (ops.point(key) +: Vector(groups.toList: _*)) ++ params
+            val sets = ops.point(key) +: Vector(groups.toList: _*)
+            val params2 = (sets map { Match(mal.Actual, _) }) ++ params
             
-            if (rest.isEmpty)
-              maybeRealize(loop(child, assume, splits + (s -> params2), ctx), ctx)
-            else
+            if (rest.isEmpty) {
+              val Match(spec, set) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), ctx)
+              realizeMatch(spec, set)
+            } else {
               flattenAllGroups(rest, params2, memoIds.tail)
+            }
           }
         }
         
         val groupings = specs map computeGrouping(assume, splits, ctx)
-        Right(flattenAllGroups(groupings, Vector(), s.memoIds))
+        Right(Match(mal.Actual, flattenAllGroups(groupings, Vector(), s.memoIds)))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
-        val leftEnum = maybeRealize(loop(left, assume, splits, ctx), ctx)
-        val rightEnum = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        val Match(leftSpec, leftSet) = maybeRealize(loop(left, assume, splits, ctx), ctx)
+        val Match(rightSpec, rightSet) = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
         
         val back = instr match {
           case IUnion if left.provenance.length == right.provenance.length =>
@@ -359,38 +347,105 @@ trait Evaluator extends DAG
             ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
         }
         
-        Right(back)
+        Right(Match(mal.Actual, back))
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
-          case SString(str) => 
-            loop(left, assume, splits, ctx).fold(
-               mask => Left(mask derefObject str),
-               enum => Right(enum collect SValue.deref(JPathField(str)))
-            )
+          case value @ SString(str) => {
+            val parent = loop(left, assume, splits, ctx)
+            val part1 = parent.left map { _ derefObject str }
+            
+            part1.right map {
+              case Match(spec, set) => Match(mal.Op2Single(spec, value, DerefObject, true), set)
+            }
+          }
           
-          case _ => Right(ops.empty[SValue](left.provenance.length))
+          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length)))
         }
       }
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value.get match {
-          case SDecimal(num) if num.isValidInt => 
-            loop(left, assume, splits, ctx).fold(
-              mask => Left(mask derefArray num.toInt),
-              enum => Right(enum collect SValue.deref(JPathIndex(num.toInt)))
-            )
+          case value @ SDecimal(num) if num.isValidInt => {
+            val parent = loop(left, assume, splits, ctx)
+            val part1 = parent.left map { _ derefArray num.toInt }
+            
+            part1.right map {
+              case Match(spec, set) => Match(mal.Op2Single(spec, value, DerefArray, true), set)
+            }
+          }
           
-          case _ => Right(ops.empty[SValue](left.provenance.length))
+          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length)))
         }
       }
       
-      case Join(_, instr, left, right) => {
+      // begin: annoyance with Scala's lousy pattern matcher
+      case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+      }
+      
+      case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+      }
+      
+      case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+      }
+      
+      case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+      }
+      
+      case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+      }
+      
+      case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
+        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+      }
+      // end: annoyance
+      
+      case Join(_, Map2Match(op), left, right) => {
+        lazy val length = sharedPrefixLength(left, right)
+        val bif = binaryOp(op)
+        
+        val leftRes = loop(left, assume, splits, ctx)
+        val rightRes = loop(right, assume, splits, ctx)
+        
+        val (leftTpe, rightTpe) = bif.operandType
+        
+        val leftResTyped = leftRes.left map { mask =>
+          leftTpe map mask.typed getOrElse mask
+        }
+        
+        val rightResTyped = rightRes.left map { mask =>
+          rightTpe map mask.typed getOrElse mask
+        }
+        
+        val Match(leftSpec, leftSet) = maybeRealize(leftResTyped, ctx)
+        val Match(rightSpec, rightSet) = maybeRealize(rightResTyped, ctx)
+        
+        lazy val leftEnum = realizeMatch(leftSpec, leftSet)
+        lazy val rightEnum = realizeMatch(rightSpec, rightSet)
+        
+        // TODO memoize evaluation so that this works
+        if (leftSet eq rightSet)
+          Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet))
+        else
+          Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation)))
+      }
+      
+      case j @ Join(_, instr, left, right) => {
         lazy val length = sharedPrefixLength(left, right)
         
         val op = instr match {
-          case Map2Match(op) => binaryOp(op)
           case Map2Cross(op) => binaryOp(op)
           case Map2CrossLeft(op) => binaryOp(op)
           case Map2CrossRight(op) => binaryOp(op)
@@ -409,19 +464,24 @@ trait Evaluator extends DAG
           rightTpe map mask.typed getOrElse mask
         }
         
-        val leftEnum = maybeRealize(leftResTyped, ctx)
-        val rightEnum = maybeRealize(rightResTyped, ctx)
+        val Match(leftSpec, leftSet) = maybeRealize(leftResTyped, ctx)
+        val Match(rightSpec, rightSet) = maybeRealize(rightResTyped, ctx)
         
-        Right(
-          instr match {
-            case Map2Match(_) => leftEnum.join(rightEnum, length) { op.operation }
-            case Map2Cross(_) | Map2CrossLeft(_) => leftEnum.crossLeft(rightEnum) { op.operation }
-            case Map2CrossRight(_) => leftEnum.crossRight(rightEnum) { op.operation }
-          }
-        )
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+        
+        val resultEnum = instr match {
+          case Map2Cross(_) | Map2CrossLeft(_) =>
+            leftEnum.crossLeft(rightEnum.memoize(j.memoId))(op.operation)
+          
+          case Map2CrossRight(_) =>
+            leftEnum.memoize(j.memoId).crossRight(rightEnum)(op.operation)
+        }
+        
+        Right(Match(mal.Actual, resultEnum))
       }
       
-      case Filter(_, cross, _, target, boolean) => {
+      case Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         
         val targetRes = loop(target, assume, splits, ctx)
@@ -429,28 +489,60 @@ trait Evaluator extends DAG
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
-        val targetEnum = maybeRealize(targetRes, ctx)
-        val booleanEnum = maybeRealize(booleanResTyped, ctx)
+        val Match(targetSpec, targetSet) = maybeRealize(targetRes, ctx)
+        val Match(booleanSpec, booleanSet) = maybeRealize(booleanResTyped, ctx)
         
-        Right(
-          cross match {
-            case None => targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }
-            case Some(CrossNeutral) => targetEnum.crossLeft(booleanEnum) { case (sv, STrue) => sv }
-            case Some(CrossLeft)    => targetEnum.crossLeft(booleanEnum) { case (sv, STrue) => sv }
-            case Some(CrossRight)   => targetEnum.crossRight(booleanEnum) { case (sv, STrue) => sv }
-          }
-        )
+        lazy val targetEnum = realizeMatch(targetSpec, targetSet)
+        lazy val booleanEnum = realizeMatch(booleanSpec, booleanSet)
+        
+        if (targetSet eq booleanSet)
+          Right(Match(mal.Filter(targetSpec, booleanSpec), targetSet))
+        else
+          Right(Match(mal.Actual, targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }))
       }
       
-      case s @ Sort(parent, indexes) => 
-        loop(parent, assume, splits, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
+      case f @ Filter(_, Some(cross), _, target, boolean) => {
+        lazy val length = sharedPrefixLength(target, boolean)
+        
+        val targetRes = loop(target, assume, splits, ctx)
+        val booleanRes = loop(boolean, assume, splits, ctx)
+        
+        val booleanResTyped = booleanRes.left map { _ typed SBoolean }
+        
+        val Match(targetSpec, targetSet) = maybeRealize(targetRes, ctx)
+        val Match(booleanSpec, booleanSet) = maybeRealize(booleanResTyped, ctx)
+        
+        val targetEnum = realizeMatch(targetSpec, targetSet)
+        val booleanEnum = realizeMatch(booleanSpec, booleanSet)
+        
+        val resultEnum = cross match {
+          case CrossNeutral | CrossLeft =>
+            targetEnum.crossLeft(booleanEnum.memoize(f.memoId)) { case (sv, STrue) => sv }
+          
+          case CrossRight =>
+            targetEnum.memoize(f.memoId).crossRight(booleanEnum) { case (sv, STrue) => sv }
+        }
+        
+        Right(Match(mal.Actual, resultEnum))
+      }
       
+      case s @ Sort(parent, indexes) => {
+        loop(parent, assume, splits, ctx).right map {
+          case Match(spec, set) => {
+            val enum = realizeMatch(spec, set)
+            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId))
+          }
+        }
+      }
+      
+      // TODO adjust memoizer to be less aggressive
       case m @ Memoize(parent, _) =>
-        loop(parent, assume, splits, ctx).right map { _.memoize(m.memoId, ctx.memoizationContext, ctx.expiration) }
+        loop(parent, assume, splits, ctx)       // .right map { _.memoize(m.memoId, ctx.memoizationContext, ctx.expiration) }
     }
     
     withContext { ctx =>
-      maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), ctx)
+      val Match(spec, set) = maybeRealize(loop(orderCrosses(graph), Map(), Map(), ctx), ctx)
+      realizeMatch(spec, set)
     }
   }
   
