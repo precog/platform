@@ -1132,42 +1132,6 @@ class EvaluatorSpecs extends Specification
       result must haveSize(0)
     }
     
-    "compute the vunion of two homogeneous sets" in {
-      val line = Line(0, "")
-      
-      val input = Join(line, VUnion,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
-        
-      val result = testEval(input)
-      
-      result must haveSize(8)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toDouble
-      }
-      
-      result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
-    }
-    
-    "compute the vintersect of two homogeneous sets" in {
-      val line = Line(0, "")
-      
-      val input = Join(line, VIntersect,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
-        
-      val result = testEval(input)
-      
-      result must haveSize(2)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toDouble
-      }
-      
-      result2 must contain(42, 77)
-    }
-    
     
     
     "filter homogeneous numeric set by binary operation" >> {

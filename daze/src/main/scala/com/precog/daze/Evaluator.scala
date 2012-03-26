@@ -103,32 +103,32 @@ trait Evaluator extends DAG
     def maybeRealize(result: Either[DatasetMask[Dataset], Dataset[SValue]], ctx: Context): Dataset[SValue] =
       (result.left map { _.realize(ctx.expiration) }).fold(identity, identity)
   
-    def computeGrouping(assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
+    def computeGrouping(assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
       case ZipBucketSpec(left, right) => {
-        val leftGroup = computeGrouping(assume, roots, ctx)(left)
-        val rightGroup = computeGrouping(assume, roots, ctx)(right)
+        val leftGroup = computeGrouping(assume, splits, ctx)(left)
+        val rightGroup = computeGrouping(assume, splits, ctx)(right)
         ops.zipGroups(leftGroup, rightGroup)
       }
       
       case _: MergeBucketSpec | _: SingleBucketSpec =>
-        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, roots, ctx)(spec)) { a => NEL(a) }
+        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, splits, ctx)(spec)) { a => NEL(a) }
     }
     
-    def computeMergeGrouping(assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
+    def computeMergeGrouping(assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
       case ZipBucketSpec(_, _) => sys.error("Cannot merge_buckets following a zip_buckets")
       
       case MergeBucketSpec(left, right, and) => {
-        val leftGroup = computeMergeGrouping(assume, roots, ctx)(left)
-        val rightGroup = computeMergeGrouping(assume, roots, ctx)(right)
+        val leftGroup = computeMergeGrouping(assume, splits, ctx)(left)
+        val rightGroup = computeMergeGrouping(assume, splits, ctx)(right)
         ops.mergeGroups(leftGroup, rightGroup, !and)
       }
       
       case SingleBucketSpec(target, solution) => {
         val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
-        val source: Dataset[SValue] = maybeRealize(loop(common, assume, roots, ctx), ctx)
+        val source: Dataset[SValue] = maybeRealize(loop(common, assume, splits, ctx), ctx)
         
         source.group[SValue](IdGen.nextInt()) { sv: SValue =>
-          maybeRealize(loop(solution, assume + (common -> ops.point(sv)), roots, ctx), ctx)
+          maybeRealize(loop(solution, assume + (common -> ops.point(sv)), splits, ctx), ctx)
         }
       }
     }
@@ -182,17 +182,24 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next.toSeq: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Dataset[SValue]], roots: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Dataset[SValue]], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Dataset[SValue]] = graph match {
       case g if assume contains g => Right(assume(g))
       
-      case s @ SplitParam(_, index) => Right(roots(s.parent)(index))
+      case s @ SplitParam(_, index) => {
+        Right(splits(s.parent)(index))
+      }
       
-      case s @ SplitGroup(_, index, _) => Right(roots(s.parent)(index))
+      case s @ SplitGroup(_, index, _) => {
+        if (!(splits contains s.parent)) {
+          println(splits)
+        }
+        Right(splits(s.parent)(index))
+      }
       
       case Root(_, instr) =>
         Right(ops.point(graph.value.get))    // TODO don't be stupid
       
-      case dag.New(_, parent) => loop(parent, assume, roots, ctx)
+      case dag.New(_, parent) => loop(parent, assume, splits, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
@@ -200,7 +207,7 @@ trait Evaluator extends DAG
           case Some(_) => Right(ops.empty[SValue](1))
           
           case None => {
-            val loaded = maybeRealize(loop(parent, assume, roots, ctx), ctx) collect { 
+            val loaded = maybeRealize(loop(parent, assume, splits, ctx), ctx) collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
@@ -210,11 +217,11 @@ trait Evaluator extends DAG
       }
 
       case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, assume, roots, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext))
+        Right(maybeRealize(loop(parent, assume, splits, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext))
       }
       
       case Operate(_, Comp, parent) => {
-        val parentRes = loop(parent, assume, roots, ctx)
+        val parentRes = loop(parent, assume, splits, ctx)
         val parentResTyped = parentRes.left map { _ typed SBoolean }
         val enum = maybeRealize(parentResTyped, ctx)
         
@@ -224,7 +231,7 @@ trait Evaluator extends DAG
       }
       
       case Operate(_, Neg, parent) => {
-        val parentRes = loop(parent, assume, roots, ctx)
+        val parentRes = loop(parent, assume, splits, ctx)
         val parentResTyped = parentRes.left map { _ typed SDecimal }
         val enum = maybeRealize(parentResTyped, ctx)
         
@@ -234,14 +241,14 @@ trait Evaluator extends DAG
       }
       
       case Operate(_, WrapArray, parent) => {
-        val enum = maybeRealize(loop(parent, assume, roots, ctx), ctx)
+        val enum = maybeRealize(loop(parent, assume, splits, ctx), ctx)
         
         Right(enum map { sv => SArray(Vector(sv)) })
       }
 
       case Operate(_, BuiltInFunction1Op(f), parent) => {
         implicit val pfArrow = partialFunctionInstance
-        val parentRes = loop(parent, assume, roots, ctx)
+        val parentRes = loop(parent, assume, splits, ctx)
         val parentResTyped = parentRes.left map { mask =>
           f.operandType map mask.typed getOrElse mask
         }
@@ -251,7 +258,7 @@ trait Evaluator extends DAG
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
-        val enum = maybeRealize(loop(parent, assume, roots, ctx), ctx)
+        val enum = maybeRealize(loop(parent, assume, splits, ctx), ctx)
         
         val reduced = red match {
           case Count => ops.point(SDecimal(BigDecimal(enum.count)))
@@ -343,21 +350,21 @@ trait Evaluator extends DAG
             val params2 = (ops.point(key) +: Vector(groups.toList: _*)) ++ params
             
             if (rest.isEmpty)
-              maybeRealize(loop(child, assume, roots + (s -> params2), ctx), ctx)
+              maybeRealize(loop(child, assume, splits + (s -> params2), ctx), ctx)
             else
               flattenAllGroups(rest, params2)
           }
         }
         
-        val groupings = specs map computeGrouping(assume, roots, ctx)
+        val groupings = specs map computeGrouping(assume, splits, ctx)
         Right(flattenAllGroups(groupings, Vector()))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
-        val leftEnum = maybeRealize(loop(left, assume, roots, ctx), ctx)
-        val rightEnum = maybeRealize(loop(right, assume, roots, ctx), ctx)
+        val leftEnum = maybeRealize(loop(left, assume, splits, ctx), ctx)
+        val rightEnum = maybeRealize(loop(right, assume, splits, ctx), ctx)
         
         val back = instr match {
           case IUnion if left.provenance.length == right.provenance.length =>
@@ -380,7 +387,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value.get match {
           case SString(str) => 
-            loop(left, assume, roots, ctx).fold(
+            loop(left, assume, splits, ctx).fold(
                mask => Left(mask derefObject str),
                enum => Right(enum collect SValue.deref(JPathField(str)))
             )
@@ -392,7 +399,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value.get match {
           case SDecimal(num) if num.isValidInt => 
-            loop(left, assume, roots, ctx).fold(
+            loop(left, assume, splits, ctx).fold(
               mask => Left(mask derefArray num.toInt),
               enum => Right(enum collect SValue.deref(JPathIndex(num.toInt)))
             )
@@ -411,8 +418,8 @@ trait Evaluator extends DAG
           case Map2CrossRight(op) => binaryOp(op)
         }
         
-        val leftRes = loop(left, assume, roots, ctx)
-        val rightRes = loop(right, assume, roots, ctx)
+        val leftRes = loop(left, assume, splits, ctx)
+        val rightRes = loop(right, assume, splits, ctx)
         
         val (leftTpe, rightTpe) = op.operandType
         
@@ -439,8 +446,8 @@ trait Evaluator extends DAG
       case Filter(_, cross, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         
-        val targetRes = loop(target, assume, roots, ctx)
-        val booleanRes = loop(boolean, assume, roots, ctx)
+        val targetRes = loop(target, assume, splits, ctx)
+        val booleanRes = loop(boolean, assume, splits, ctx)
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
@@ -458,10 +465,10 @@ trait Evaluator extends DAG
       }
       
       case s @ Sort(parent, indexes) => 
-        loop(parent, assume, roots, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
+        loop(parent, assume, splits, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
       
       case m @ Memoize(parent, _) =>
-        loop(parent, assume, roots, ctx).right map { _.memoize(m.memoId) }
+        loop(parent, assume, splits, ctx).right map { _.memoize(m.memoId) }
     }
     
     withContext { ctx =>

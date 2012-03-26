@@ -29,46 +29,53 @@ trait CrossOrdering extends DAG {
   def orderCrosses(node: DepGraph): DepGraph = {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
-    def memoizedSpec(spec: BucketSpec): BucketSpec = spec match {
+    def memoizedSpec(spec: BucketSpec, splits: => Map[dag.Split, dag.Split]): BucketSpec = spec match {
       case MergeBucketSpec(left, right, and) =>
-        MergeBucketSpec(memoizedSpec(left), memoizedSpec(right), and)
+        MergeBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits), and)
       
       case ZipBucketSpec(left, right) =>
-        ZipBucketSpec(memoizedSpec(left), memoizedSpec(right))
+        ZipBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
       case SingleBucketSpec(target, solution) =>
-        SingleBucketSpec(memoized(target), memoized(solution))
+        SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
     }
     
-    def memoized(node: DepGraph): DepGraph = {
+    def memoized(node: DepGraph, _splits: => Map[dag.Split, dag.Split]): DepGraph = {
+      lazy val splits = _splits
+      
       def inner(node: DepGraph): DepGraph = node match {
-        case node @ SplitParam(_, _) => node
+        case node @ SplitParam(loc, index) => SplitParam(loc, index)(splits(node.parent))
         
-        case node @ SplitGroup(_, _, _) => node
+        case node @ SplitGroup(loc, index, provenance) => SplitGroup(loc, index, provenance)(splits(node.parent))
         
         case node @ Root(_, _) => node
         
         case dag.New(loc, parent) =>
-          dag.New(loc, memoized(parent))
+          dag.New(loc, memoized(parent, splits))
         
         case dag.LoadLocal(loc, range, parent, tpe) =>
-          dag.LoadLocal(loc, range, memoized(parent), tpe)
+          dag.LoadLocal(loc, range, memoized(parent, splits), tpe)
         
         case Operate(loc, op, parent) =>
-          Operate(loc, op, memoized(parent))
+          Operate(loc, op, memoized(parent, splits))
         
         case dag.SetReduce(loc, red, parent) =>
-          dag.SetReduce(loc, red, memoized(parent))
+          dag.SetReduce(loc, red, memoized(parent, splits))
                 
         case dag.Reduce(loc, red, parent) =>
-          dag.Reduce(loc, red, memoized(parent))
+          dag.Reduce(loc, red, memoized(parent, splits))
         
-        case dag.Split(loc, specs, child) =>
-          dag.Split(loc, specs map memoizedSpec, memoized(child))
+        case s @ dag.Split(loc, specs, child) => {
+          lazy val splits2 = splits + (s -> result)
+          lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
+          lazy val child2 = memoized(child, splits2)
+          lazy val result: dag.Split = dag.Split(loc, specs2, child2)
+          result
+        }
         
         case Join(loc, instr: Map2Match, left, right) => {
-          val left2 = memoized(left)
-          val right2 = memoized(right)
+          val left2 = memoized(left, splits)
+          val right2 = memoized(right, splits)
           
           val (leftIndexes, rightIndexes) = determineSort(left2, right2)
           
@@ -87,19 +94,19 @@ trait CrossOrdering extends DAG {
         
         case Join(loc, Map2Cross(op), left, right) => {
           if (right.isSingleton)
-            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
+            Join(loc, Map2CrossLeft(op), memoized(left, splits), memoized(right, splits))
           else if (left.isSingleton)
-            Join(loc, Map2CrossRight(op), memoized(left), memoized(right))
+            Join(loc, Map2CrossRight(op), memoized(left, splits), memoized(right, splits))
           else
-            Join(loc, Map2CrossLeft(op), memoized(left), memoized(right))
+            Join(loc, Map2CrossLeft(op), memoized(left, splits), memoized(right, splits))
         }
         
         case Join(loc, instr, left, right) =>
-          Join(loc, instr, memoized(left), memoized(right))
+          Join(loc, instr, memoized(left, splits), memoized(right, splits))
         
         case Filter(loc, None, range, target, boolean) => {
-          val target2 = memoized(target)
-          val boolean2 = memoized(boolean)
+          val target2 = memoized(target, splits)
+          val boolean2 = memoized(boolean, splits)
           
           val (targetIndexes, booleanIndexes) = determineSort(target2, boolean2)
           
@@ -117,11 +124,11 @@ trait CrossOrdering extends DAG {
         }
         
         case Filter(loc, cross, range, target, boolean) =>
-          Filter(loc, cross, range, memoized(target), memoized(boolean))
+          Filter(loc, cross, range, memoized(target, splits), memoized(boolean, splits))
         
-        case Sort(parent, _) => memoized(parent)
+        case Sort(parent, _) => memoized(parent, splits)
         
-        case Memoize(parent, priority) => Memoize(memoized(parent), priority)
+        case Memoize(parent, priority) => Memoize(memoized(parent, splits), priority)
       }
   
       memotable.get(node) getOrElse {
@@ -131,7 +138,7 @@ trait CrossOrdering extends DAG {
       }
     }
     
-    memoized(node)
+    memoized(node, Map())
   }
 
   private def determineSort(left2: DepGraph, right2: DepGraph): (Vector[Int], Vector[Int]) = {
