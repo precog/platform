@@ -29,46 +29,51 @@ import scala.annotation.tailrec
 import scalaz._
 
 trait Sorting[Dataset[_], Resultset[_]] {
-  def sort[E](values: Dataset[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Resultset[E]
+  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Resultset[A]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
-  def sort[E](values: Iterator[E], filePrefix: String, memoId: Int)(implicit order: Order[E], cm: ClassManifest[E], fs: SortSerialization[E]): Iterable[E] = {
+  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Iterable[A] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 
     val javaOrder = order.toJavaComparator
+    val buffer = new Array[A](sortConfig.sortBufferSize)
 
     def sortFile(i: Int) = new File(sortConfig.sortWorkDir, filePrefix + "." + memoId + "." + i)
 
-    val buffer = new Array[E](sortConfig.sortBufferSize)
-
-    def writeSortedChunk(chunkId: Int, v: Iterator[E]): File = {
-      @tailrec def insert(j: Int, iter: Iterator[E]): Int = {
+    def bufferChunk(v: Iterator[A]): Int = {
+      @tailrec def insert(j: Int, iter: Iterator[A]): Int = {
         if (j < buffer.length && iter.hasNext) {
           buffer(j) = iter.next()
           insert(j + 1, iter)
         } else j
       }
 
-      val limit = insert(0, v)
+      insert(0, v)
+    }
 
+    def writeSortedChunk(chunkId: Int, limit: Int): File = {
       Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], 0, limit, javaOrder.asInstanceOf[Comparator[AnyRef]])
       val chunkFile = sortFile(chunkId)
       using(fs.oStream(chunkFile)) { fs.write(_, buffer, limit) }
       chunkFile
     }
 
-    @tailrec def writeChunked(files: Vector[File]): Vector[File] = {
-      if (values.hasNext) writeChunked(files :+ writeSortedChunk(files.length, values))
-      else files
+    @tailrec def writeChunked(files: Vector[File], v: Iterator[A]): Vector[File] = {
+      if (v.hasNext) {
+        val limit = bufferChunk(v)
+        writeChunked(files :+ writeSortedChunk(files.length, limit), v)
+      } else {
+        files
+      }
     }
 
-    def mergeIterator(toMerge: Vector[(Iterator[E], () => Unit)]): Iterator[E] = {
-      class Cell(iter: Iterator[E]) {
-        var value: E = iter.next
+    def mergeIterator(toMerge: Vector[(Iterator[A], () => Unit)]): Iterator[A] = {
+      class Cell(iter: Iterator[A]) {
+        var value: A = iter.next
         def advance(): Unit = {
-          value = if (iter.hasNext) iter.next else null.asInstanceOf[E]
+          value = if (iter.hasNext) iter.next else null.asInstanceOf[A]
           this
         }
       }
@@ -80,7 +85,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
       if (streams.size == 0) {
         Iterator.empty
       } else {
-        new Iterator[E] {
+        new Iterator[A] {
           private val heads: PriorityQueue[Cell] = new PriorityQueue[Cell](streams.size, cellComparator) 
           streams.foreach(i => heads.add(new Cell(i)))
 
@@ -101,22 +106,42 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
       }
     }
 
-    val chunkFiles = writeChunked(Vector.empty[File])
-
-    new Iterable[E] {
-      def iterator = 
-        mergeIterator {
-          chunkFiles flatMap { f =>
-            val stream = fs.iStream(f)
-            val iter = fs.reader(stream)
-            if (iter.hasNext) {
-              Some((iter, () => stream.close)) 
-            } else {
-              stream.close
-              None
-            }
+    // first buffer up to the limit of the iterator, so that we can stay in-memory if possible
+    val limit = bufferChunk(values)
+    if (limit < buffer.length) {
+      // if we fit in memory, just sort then return an iterator over the buffer
+      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], 0, limit, javaOrder.asInstanceOf[Comparator[AnyRef]])
+      new Iterable[A] {
+        def iterator = new Iterator[A] {
+          private var i = 0
+          def hasNext = i < limit
+          def next = {
+            val tmp = buffer(i)
+            i += 1
+            tmp
           }
         }
+      }
+    } else {
+      // dump the chunk to disk, then dump the remainder of the iterator to disk in chunks
+      // and return an iterator over the full set of files
+      val initialChunkFile = writeSortedChunk(0, limit)
+      val chunkFiles = writeChunked(Vector(initialChunkFile), values)
+      new Iterable[A] {
+        def iterator = 
+          mergeIterator {
+            chunkFiles flatMap { f =>
+              val stream = fs.iStream(f)
+              val iter = fs.reader(stream)
+              if (iter.hasNext) {
+                Some((iter, () => stream.close)) 
+              } else {
+                stream.close
+                None
+              }
+            }
+          }
+      }
     }
   }
 }
