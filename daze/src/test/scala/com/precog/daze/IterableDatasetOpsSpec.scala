@@ -285,6 +285,34 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       
       result2.iterator.toList must_== expected.toList
     }
+    
+    "group according to an identity key" in {
+      val groups = Stream(
+        1L -> Vector(rec(1)),
+        2L -> Vector(rec(2)),
+        3L -> Vector(rec(3)),
+        5L -> Vector(rec(5)),
+        6L -> Vector(rec(6)),
+        7L -> Vector(rec(7)),
+        8L -> Vector(rec(8)))
+      
+      val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
+      
+      val result = ds.group(0) { num =>
+        IterableDataset(1, Vector(rec(num)))
+      }
+
+      val result2 = mapGrouping(result) { ds =>
+        val IterableDataset(count, str) = ds
+        IterableDataset(count, Vector(str.toSeq: _*))
+      }
+      
+      val expected = groups map {
+        case (k, v) => (k, IterableDataset(1, v))
+      }
+      
+      result2.iterator.toList must_== expected.toList
+    }
   }
   
   "iterable grouping ops" should {
