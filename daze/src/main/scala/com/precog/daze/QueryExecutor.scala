@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import yggdrasil.metadata.MetadataView
+
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
@@ -42,6 +44,7 @@ object EvaluationError {
 
 trait QueryExecutor {
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray]
+  def metadata(userUID: String): MetadataView 
   def startup: Future[Unit]
   def shutdown: Future[Unit]
 }
@@ -52,6 +55,10 @@ trait NullQueryExecutor extends QueryExecutor {
 
   def execute(userUID: String, query: String) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
+  }
+  
+  def metadata(userUID: String) = {
+    sys.error("feature no available") 
   }
 
   def startup = Future(())

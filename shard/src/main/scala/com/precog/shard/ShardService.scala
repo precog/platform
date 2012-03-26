@@ -37,7 +37,11 @@ import org.streum.configrity.Configuration
 
 case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl, usageLogging: UsageLogging)
 
-trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators with AkkaDefaults {
+trait ShardService extends 
+    BlueEyesServiceBuilder with 
+    IngestServiceCombinators with 
+    ShardServiceCombinators with 
+    AkkaDefaults {
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -77,8 +81,11 @@ trait ShardService extends BlueEyesServiceBuilder with IngestServiceCombinators 
         request { (state: ShardState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              path("/query") {
-                post(new QueryServiceHandler(state.queryExecutor))
+              dataPath("/vfs") {
+                query {
+                  get(new QueryServiceHandler(state.queryExecutor))
+                }// ~ 
+//                get(new BrowseServiceHandler(state.queryExecutor))
               }
             }
           }
