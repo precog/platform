@@ -20,10 +20,15 @@
 package com.precog
 package daze
 
+import memoization._
 import yggdrasil._
 import yggdrasil.serialization._
 import com.precog.common._
 import com.precog.common.util.IOUtils
+
+import blueeyes.util.Clock
+import akka.actor.ActorSystem
+import akka.dispatch.ExecutionContext
 
 import java.io.{DataInputStream, DataOutputStream, File}
 
@@ -41,25 +46,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-class IterableDatasetOpsSpec extends Specification with ScalaCheck with IterableDatasetOpsComponent {
-  type YggConfig = SortConfig
-
-  object ops extends Ops
-  import ops._
-
-  object yggConfig extends SortConfig {
-    def sortBufferSize: Int = 1000
-    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
-  }
-
-  def rec(i: Long) = (VectorCase(i), i: Long)
-  def unstableRec(i: Long) = (VectorCase(idSource.nextId()), i: Long)
-
-  val idSource = new IdSource {
-    private val source = new java.util.concurrent.atomic.AtomicLong
-    def nextId() = source.getAndIncrement
-  }
-
+trait IterableDatasetGenerators {
   type Record[A] = (Identities, A)
 
   case class IdCount(idCount: Int)
@@ -80,8 +67,69 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 
   implicit def arbIterableDataset[A](implicit idCount: IdCount, gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
      Arbitrary(dsGen[A])
-   
-  
+}
+
+class IterableDatasetOpsSpec extends Specification with ScalaCheck with IterableDatasetOpsComponent with IterableDatasetGenerators 
+with DiskIterableDatasetMemoizationComponent {
+  type YggConfig = IterableDatasetOpsConfig with DiskMemoizationConfig
+  override type Dataset[α] = IterableDataset[α]
+
+  object ops extends Ops
+  import ops._
+
+  object yggConfig extends IterableDatasetOpsConfig with DiskMemoizationConfig {
+    def sortBufferSize: Int = 1000
+    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    def clock = Clock.System
+    implicit object memoSerialization extends IncrementalSerialization[(Identities, Long)] with TestRunlengthFormatting with ZippedStreamSerialization
+    def memoizationBufferSize: Int = 1000
+    def memoizationWorkDir: File = IOUtils.createTmpDir("idsoSpecMemo")
+  }
+
+  def rec(i: Long) = (VectorCase(i), i: Long)
+  def unstableRec(i: Long) = (VectorCase(idSource.nextId()), i: Long)
+
+  val actorSystem = ActorSystem("stub_operations_api")
+  implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+  var memoCtx: MemoContext = _
+  withMemoizationContext((ctx: MemoContext) => memoCtx = ctx)
+
+  val idSource = new IdSource {
+    private val source = new java.util.concurrent.atomic.AtomicLong
+    def nextId() = source.getAndIncrement
+  }
+
+  def expiration = System.currentTimeMillis + 10000
+
+  trait TestRunlengthFormatting extends RunlengthFormatting[(Identities, Long)] {
+    type Header = Int
+    
+    def headerFor(value: (Identities, Long)) = value._1.length
+    
+    def writeHeader(out: DataOutputStream, header: Int) {
+      out.writeInt(header)
+    }
+    
+    def readHeader(in: DataInputStream) = in.readInt()
+    
+    def writeRecord(out: DataOutputStream, value: (Identities, Long)) {
+      val (ids, v) = value
+      
+      ids foreach out.writeLong
+      out.writeLong(v)
+    }
+    
+    def readRecord(in: DataInputStream, header: Int) = {
+      val ids = VectorCase((0 until header) map { _ => in.readLong() }: _*)
+      val v = in.readLong()
+      
+      (ids, v)
+    }
+  }
+
+  import yggConfig.memoSerialization
+
   implicit object GroupingSortSerialization extends SortSerialization[(Long, Identities, Long)] with RunlengthFormatting[(Long, Identities, Long)] with ZippedStreamSerialization {
     type Header = Int
     
@@ -110,33 +158,9 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
   }
   
-  implicit object GroupingEventSortSerialization extends SortSerialization[(Identities, Long)] with RunlengthFormatting[(Identities, Long)] with ZippedStreamSerialization {
-    type Header = Int
-    
-    def headerFor(value: (Identities, Long)) = value._1.length
-    
-    def writeHeader(out: DataOutputStream, header: Int) {
-      out.writeInt(header)
-    }
-    
-    def readHeader(in: DataInputStream) = in.readInt()
-    
-    def writeRecord(out: DataOutputStream, value: (Identities, Long)) {
-      val (ids, v) = value
-      
-      ids foreach out.writeLong
-      out.writeLong(v)
-    }
-    
-    def readRecord(in: DataInputStream, header: Int) = {
-      val ids = VectorCase((0 until header) map { _ => in.readLong() }: _*)
-      val v = in.readLong()
-      
-      (ids, v)
-    }
-  }
+  implicit object GroupingEventSortSerialization extends SortSerialization[(Identities, Long)] with TestRunlengthFormatting with ZippedStreamSerialization
   
-
+  
   "iterable dataset ops" should {
     "cogroup" in {
       // TODO: Enhance test coverage
@@ -301,7 +325,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       
       val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
       
-      val result = ds.group(0) { num =>
+      val result = ds.group(0, memoCtx, expiration) { num =>
         IterableDataset(1, Vector(rec((num / 2) * 2)))
       }
 
@@ -329,7 +353,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
       
       val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
       
-      val result = ds.group(0) { num =>
+      val result = ds.group(0, memoCtx, expiration) { num =>
         IterableDataset(1, Vector(rec(num)))
       }
 

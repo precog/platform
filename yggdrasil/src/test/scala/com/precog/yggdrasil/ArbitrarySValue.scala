@@ -91,12 +91,12 @@ object LimitList {
 }
 
 trait ArbitrarySValue extends SValueGenerators {
-  def genChunks(size: Int): Gen[LimitList[Vector[SEvent]]]
+  def genChunks(size: Int): Gen[LimitList[Vector[SEvent]]] = LimitList.genLimitList[Vector[SEvent]](size)
 
   implicit val SEventIdentityOrder: Order[SEvent] = Order[List[Long]].contramap((_: SEvent)._1.toList)
   implicit val SEventOrdering = SEventIdentityOrder.toScalaOrdering
 
-  implicit val SEventGen: Gen[Vector[SEvent]] = chunk(3, 3, 2)
+  implicit val SEventChunkGen: Gen[Vector[SEvent]] = chunk(3, 3, 2)
   implicit val ArbitraryChunks = Arbitrary(genChunks(5))
 }
 

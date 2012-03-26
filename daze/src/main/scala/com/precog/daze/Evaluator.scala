@@ -50,6 +50,7 @@ trait EvaluatorConfig {
   implicit def valueSerialization: SortSerialization[SValue]
   implicit def eventSerialization: SortSerialization[(Identities, SValue)]
   implicit def groupSerialization: SortSerialization[(SValue, Identities, SValue)]
+  implicit def memoSerialization: IncrementalSerialization[(Identities, SValue)]
   def maxEvalDuration: akka.util.Duration
   def idSource: IdSource
 }
@@ -59,7 +60,7 @@ trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
     with OperationsAPI
-    with MemoEnvironment
+    with MemoizationEnvironment
     with ImplLibrary
     with Infixlib
     with YggConfigComponent { self =>
@@ -127,7 +128,7 @@ trait Evaluator extends DAG
         val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
         val source: Dataset[SValue] = maybeRealize(loop(common, assume, splits, ctx), ctx)
         
-        source.group[SValue](IdGen.nextInt()) { sv: SValue =>
+        source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
           maybeRealize(loop(solution, assume + (common -> ops.point(sv)), splits, ctx), ctx)
         }
       }
@@ -212,7 +213,7 @@ trait Evaluator extends DAG
       }
 
       case dag.SetReduce(_, Distinct, parent) => {  
-        Right(maybeRealize(loop(parent, assume, splits, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext))
+        Right(maybeRealize(loop(parent, assume, splits, ctx), ctx).uniq(() => ctx.nextId(), IdGen.nextInt()))
       }
       
       case Operate(_, Comp, parent) => {
@@ -341,7 +342,7 @@ trait Evaluator extends DAG
           val current = groupings.head
           val rest = groupings.tail
           
-          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head) { (key, groups) =>
+          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext, ctx.expiration) { (key, groups) =>
             val params2 = (ops.point(key) +: Vector(groups.toList: _*)) ++ params
             
             if (rest.isEmpty)
@@ -463,7 +464,7 @@ trait Evaluator extends DAG
         loop(parent, assume, splits, ctx).right map { _.sortByIndexedIds(indexes, s.memoId) }
       
       case m @ Memoize(parent, _) =>
-        loop(parent, assume, splits, ctx).right map { _.memoize(m.memoId) }
+        loop(parent, assume, splits, ctx).right map { _.memoize(m.memoId, ctx.memoizationContext, ctx.expiration) }
     }
     
     withContext { ctx =>

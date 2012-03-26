@@ -44,8 +44,6 @@ import com.precog.common.util.IOUtils
 object BinaryProjectionSerializationSpec extends Specification with ScalaCheck with ArbitrarySValue with Logging {
   override val defaultPrettyParams = Pretty.Params(2)
 
-  def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) 
-
   trait TempFileScope extends Scope with After {
     val file = File.createTempFile("test", "ygg")
     logger.trace("Created BinaryProjectionSerialization work file: " + file)

@@ -40,11 +40,12 @@ import Iteratee._
 import org.specs2.mutable._
 
 trait TestConfigComponent {
-  lazy val yggConfig = new YggConfig
+  object yggConfig extends YggConfig
 
-  class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
+  trait YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig with IterableDatasetOpsConfig {
     def sortBufferSize = 1000
     def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    val clock = blueeyes.util.Clock.System
     def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
@@ -54,6 +55,7 @@ trait TestConfigComponent {
     object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
     object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
     object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong
@@ -66,9 +68,10 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with StubOperationsAPI 
     with TestConfigComponent 
-    with DiskMemoizationComponent 
+    with DiskIterableDatasetMemoizationComponent 
     with Stdlib
     with MemoryDatasetConsumer { self =>
+  override type Dataset[α] = IterableDataset[α]
 
   import Function._
   
@@ -79,6 +82,7 @@ class EvaluatorSpecs extends Specification
   
   val testUID = "testUID"
 
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
   def testEval = consumeEval(testUID, _: DepGraph) match {
     case Success(results) => results
     case Failure(error) => throw error

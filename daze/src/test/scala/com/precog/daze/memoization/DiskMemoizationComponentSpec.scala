@@ -44,45 +44,49 @@ import Iteratee._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
+import org.scalacheck.Arbitrary
+import org.scalacheck.Gen
+import org.scalacheck.Gen._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
-  type X = Throwable
+class DiskMemoizationComponentSpec extends Specification with DiskIterableDatasetMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
+  override type Dataset[E] = IterableDataset[E]
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
-  implicit def asyncContext = ExecutionContext.defaultExecutionContext
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
   implicit val timeout = Timeout(intToDurationInt(30).seconds)
-  implicit val chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
+  implicit object memoSerialization extends IncrementalSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
+
   def sampleSize = 50
 
   type YggConfig = DiskMemoizationConfig 
   object yggConfig extends DiskMemoizationConfig {
     val memoizationBufferSize = 10
     val memoizationWorkDir = IOUtils.createTmpDir("memotest")
-    val memoizationSerialization = chunkSerialization
   }
 
   val storage = new Storage { }
+  case class Unshrinkable[A](value: A)
+  implicit val SEventGen = Arbitrary(listOf(sevent(3, 3)).map(Unshrinkable(_)))
 
   val testUID = "testUID"
-  def genChunks(size: Int) = LimitList.genLimitList[Vector[SEvent]](size) 
-
   "memoization" should {
     "ensure that results are not recomputed" in {
       withMemoizationContext { ctx =>
         @volatile var i = 0;
-        check { (ll: LimitList[Vector[SEvent]]) => 
+        check { (sample: Unshrinkable[List[SEvent]]) => 
+          val events = sample.value
           synchronized { i += 1 } 
-          val events: List[Vector[SEvent]] = ll.values
-          val enum = enumPStream[X, Vector[SEvent], IO](events.toStream)
 
-          ctx.memoizing[X, Vector[SEvent]](i) must beLike {
+          ctx.memoizing[SValue](i) must beLike {
             case Left(f) => 
-              val results: List[Vector[SEvent]] = (f(consume[X, Vector[SEvent], IO, List]) &= enum[IO]).run(_ => sys.error("")).unsafePerformIO
+              val results = Await.result(f(IterableDataset(1, events)), timeout.duration)
 
-              results must_== events and {
-                ctx.memoizing[X, Vector[SEvent]](i) must beLike {
+              (results.iterable.toList must_== events) and {
+                ctx.memoizing[SValue](i) must beLike {
                   case Right(d) => 
-                    val results2: List[Vector[SEvent]] = (consume[X, Vector[SEvent], IO, List] &= d[IO]).run(_ => sys.error("")).unsafePerformIO
-                    results2 must_== events
+                    val results2 = Await.result(d, timeout.duration)
+                    results2.iterable.toList must_== events
                 }
               }
           }

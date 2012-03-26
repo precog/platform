@@ -22,6 +22,7 @@ package com.precog.daze
 import com.precog.common.{Path, VectorCase}
 import com.precog.yggdrasil._
 
+import akka.actor.ActorSystem
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
@@ -42,7 +43,6 @@ import IterateeT._
 import Validation._
 
 object StubOperationsAPI {
-  import akka.actor.ActorSystem
   import akka.dispatch.ExecutionContext
 
   val actorSystem = ActorSystem("stub_operations_api")
@@ -52,9 +52,9 @@ object StubOperationsAPI {
 trait StubOperationsAPI 
     extends StorageEngineQueryComponent
     with IterableDatasetOpsComponent { self =>
-  type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig
+  type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig with IterableDatasetOpsConfig
 
-  implicit def asyncContext = StubOperationsAPI.asyncContext
+  implicit val asyncContext = StubOperationsAPI.asyncContext
   
   import ops._
   
