@@ -61,7 +61,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
      Arbitrary(dsGen[A])
    
   
-  implicit object GroupingSortSerialization extends BaseSortSerialization[(Long, Identities, Long)] with ZippedStreamSerialization {
+  implicit object GroupingSortSerialization extends SortSerialization[(Long, Identities, Long)] with RunlengthFormatting[(Long, Identities, Long)] with ZippedStreamSerialization {
     type Header = Int
     
     def headerFor(value: (Long, Identities, Long)) = value._2.length
@@ -89,7 +89,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     }
   }
   
-  implicit object GroupingEventSortSerialization extends BaseSortSerialization[(Identities, Long)] with ZippedStreamSerialization {
+  implicit object GroupingEventSortSerialization extends SortSerialization[(Identities, Long)] with RunlengthFormatting[(Identities, Long)] with ZippedStreamSerialization {
     type Header = Int
     
     def headerFor(value: (Identities, Long)) = value._1.length

@@ -1,8 +1,5 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package serialization
-
-import com.precog.common.VectorCase
 
 import com.precog.yggdrasil.SValue._
 import com.precog.yggdrasil.ColumnType._
@@ -15,7 +12,7 @@ import scala.annotation.tailrec
 import scalaz.effect._
 import scalaz.syntax.monad._
 
-trait BaseSortSerialization[A] extends SortSerialization[A] {
+trait RunlengthFormatting[A] {
   final val HeaderFlag = Int.MinValue
   final val ValueFlag = Int.MinValue + 1
 
@@ -23,71 +20,14 @@ trait BaseSortSerialization[A] extends SortSerialization[A] {
 
   def headerFor(value: A): Header
 
-  def write(out: DataOutputStream, values: Array[A], limit: Int): Unit = {
-    @tailrec def write(i: Int, header: Option[Header]): Unit = {
-      if (i < limit) {
-        val sv = values(i)
-        val newHeader = headerFor(sv)
-        if (header.exists(_ == newHeader)) {
-          out.writeInt(ValueFlag)
-          writeRecord(out, sv)
-          write(i + 1, header)
-        } else {
-          out.writeInt(HeaderFlag)
-          writeHeader(out, newHeader)
-          out.writeInt(ValueFlag)
-          writeRecord(out, sv)
-          write(i + 1, Some(newHeader))
-        }
-      } 
-    }
-    
-    out.writeInt(limit)
-    write(0, None)
-  }
-
   def writeHeader(out: DataOutputStream, header: Header): Unit
   def writeRecord(out: DataOutputStream, value: A): Unit 
-
-  def reader(in: DataInputStream): Iterator[A] = {
-    new Iterator[A] {
-      private var remaining: Int = in.readInt()
-      private var header: Header = null.asInstanceOf[Header]
-
-      private var _next = precomputeNext()
-
-      def hasNext = _next != null
-      def next: A = {
-        assert (_next != null)
-        val tmp = _next
-        _next = precomputeNext()
-        tmp
-      }
-
-      @tailrec private def precomputeNext(): A = {
-        if (remaining > 0) {
-          in.readInt() match {
-            case HeaderFlag =>
-              header = readHeader(in)
-              precomputeNext()
-
-            case ValueFlag => 
-              remaining -= 1
-              assert (header != null)
-              readRecord(in, header)
-          }
-        } else {
-          null.asInstanceOf[A]
-        }
-      }
-    }
-  }
 
   def readHeader(in: DataInputStream): Header
   def readRecord(in: DataInputStream, header: Header): A
 }
 
-trait SValueSortSerialization extends BaseSortSerialization[SValue] with BinarySValueSerialization {
+trait SValueRunlengthFormatting extends RunlengthFormatting[SValue] with SValueFormatting {
   case class Header(structure: Seq[(JPath, ColumnType)])
 
   def headerFor(value: SValue) = Header(value.structure)
@@ -104,7 +44,8 @@ trait SValueSortSerialization extends BaseSortSerialization[SValue] with BinaryS
   def readRecord(in: DataInputStream, header: Header) = readValue(in, header.structure)
 }
 
-trait SEventSortSerialization extends BaseSortSerialization[SEvent] with BinarySValueSerialization {
+trait SEventRunlengthFormatting extends RunlengthFormatting[SEvent] 
+with SValueFormatting with IdentitiesFormatting {
   case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
 
   def headerFor(value: SEvent) = Header(value._1.length, value._2.structure)
@@ -128,7 +69,8 @@ trait SEventSortSerialization extends BaseSortSerialization[SEvent] with BinaryS
   }
 }
 
-trait GroupSortSerialization extends BaseSortSerialization[(SValue, Identities, SValue)] with BinarySValueSerialization {
+trait GroupRunlengthFormatting extends RunlengthFormatting[(SValue, Identities, SValue)] 
+with SValueFormatting with IdentitiesFormatting {
   case class Header(keyStructure: Seq[(JPath, ColumnType)], idCount: Int, valueStructure: Seq[(JPath, ColumnType)])
 
   def headerFor(value: (SValue, Identities, SValue)) = Header(value._1.structure, value._2.length, value._3.structure)
@@ -154,4 +96,5 @@ trait GroupSortSerialization extends BaseSortSerialization[(SValue, Identities, 
   }
 }
 
+// vim: set ts=4 sw=4 et:
 // vim: set ts=4 sw=4 et:
