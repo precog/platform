@@ -23,6 +23,7 @@ package daze
 import yggdrasil._
 import yggdrasil.serialization._
 import com.precog.common._
+import com.precog.common.util.IOUtils
 
 import java.io.{DataInputStream, DataOutputStream, File}
 
@@ -48,7 +49,7 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 
   object yggConfig extends SortConfig {
     def sortBufferSize: Int = 1000
-    def sortWorkDir: File = new File("/tmp")
+    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
   }
 
   def rec(i: Long) = (VectorCase(i), i: Long)
@@ -333,7 +334,9 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
     
     "implement merging" >> {
       "union" >> {
-        val result = mergeGroups(g1, g2, true)
+        val result = mergeGroups(g1, g2, true).iterator.map {
+          case (k, v) => (k, IterableDataset(v.idCount, Vector(v.iterable.toSeq: _*)))
+        }
         
         val expected = Stream(
           0L -> IterableDataset(1, Vector(sharedRecs('i1))),
@@ -343,9 +346,9 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
           5L -> IterableDataset(1, Vector(sharedRecs('i5), sharedRecs('i6))),
           6L -> IterableDataset(1, Vector(sharedRecs('i6), sharedRecs('i7))),
           7L -> IterableDataset(1, Vector(sharedRecs('i7))),
-          8L -> IterableDataset(1, Vector(sharedRecs('i8a), sharedRecs('i8b))))
+          8L -> IterableDataset(1, Vector(sharedRecs('i8a), sharedRecs('i8b)).distinct))
           
-        result.iterator.toList mustEqual expected.toList
+        result.toList mustEqual expected.toList
       }
       
       "intersect" >> {
