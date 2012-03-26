@@ -24,6 +24,7 @@ import memoization._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.common.VectorCase
+import com.precog.common.util.IOUtils
 import com.precog.util.IdGen
 
 import akka.dispatch.Await
@@ -43,7 +44,7 @@ trait TestConfigComponent {
 
   class YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig{
     def sortBufferSize = 1000
-    def sortWorkDir: File = null //no filesystem storage in test!
+    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
     def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
