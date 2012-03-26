@@ -50,9 +50,9 @@ trait TestConfigComponent {
     def flatMapTimeout = intToDurationInt(30).seconds
     def maxEvalDuration = intToDurationInt(30).seconds
 
-    object valueSerialization extends SValueSortSerialization with ZippedStreamSerialization
-    object eventSerialization extends SEventSortSerialization with ZippedStreamSerialization
-    object groupSerialization extends GroupSortSerialization with ZippedStreamSerialization
+    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong

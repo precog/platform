@@ -21,7 +21,7 @@ package com.precog.yggdrasil.serialization
 
 import java.io._
 
-trait IncrementalSerialization[A] {
+trait IncrementalSerialization[A] extends StreamSerialization with RunlengthFormatting[A] {
   trait IncrementalWriter {
     def write(out: DataOutputStream, a: A): IncrementalWriter
   }
