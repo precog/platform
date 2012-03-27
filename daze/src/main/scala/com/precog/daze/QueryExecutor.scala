@@ -59,7 +59,7 @@ trait NullQueryExecutor extends QueryExecutor {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
   
-  def metadata(userUID: String) = {
+  def browse(userUID: String, path: Path) = {
     sys.error("feature no available") 
   }
 

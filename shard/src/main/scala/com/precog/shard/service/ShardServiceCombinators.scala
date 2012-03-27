@@ -33,10 +33,11 @@ import akka.dispatch.MessageDispatcher
 
 import com.precog.common.Path
 import com.precog.common.security._
+import com.precog.ingest.service._
 
 import scalaz.Validation._
 
-trait ShardServiceCombinators extends HttpRequestHandlerCombinators {
+trait ShardServiceCombinators extends IngestServiceCombinators {
 
   type Query = String
 

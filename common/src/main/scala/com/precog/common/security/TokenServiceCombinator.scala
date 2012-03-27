@@ -17,33 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "shard"
+package com.precog.common
+package security
 
-version := "1.0.0-SNAPSHOT"
+import blueeyes._
+import blueeyes.core.http._
+import blueeyes.core.service._
+import blueeyes.json._
+import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.DefaultSerialization._
 
-organization := "com.precog"
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
-scalaVersion := "2.9.1"
-
-scalacOptions ++= Seq("-deprecation", "-unchecked")
-
-libraryDependencies ++= Seq(
-      "org.apache"                %% "kafka-core"         % "0.7.5",
-      "joda-time"                 % "joda-time"           % "1.6.2",
-      "org.scalaz"                %% "scalaz-core"        % "6.0.2",
-      "ch.qos.logback"            % "logback-classic"     % "1.0.0",
-      "org.scala-tools.testing"   %% "scalacheck"         % "1.9",
-      "org.specs2"                %% "specs2"             % "1.8"  % "test"
-)
-
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
-
-mainClass := Some("com.precog.shard.KafkaShardServer")
+trait TokenServiceCombinators extends HttpRequestHandlerCombinators {
+  implicit val jsonErrorTransform = (failure: HttpFailure, s: String) => HttpResponse(failure, content = Some(s.serialize))
+  
+  def token[A, B](tokenManager: TokenManager)(service: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) = {
+      new TokenRequiredService[A, B](tokenManager, service)
+  }
+}

@@ -18,70 +18,49 @@
  *
  */
 package com.precog
-package shard
+package auth
 
-import service._
-import ingest.service._
 import common.security._
-import daze._
+
+import blueeyes.BlueEyesServer
 
 import akka.dispatch.Future
 
+import blueeyes.BlueEyesServiceBuilder
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.bkka.Stoppable
-import blueeyes.BlueEyesServiceBuilder
 import blueeyes.core.data.{BijectionsChunkJson, BijectionsChunkFutureJson, BijectionsChunkString, ByteChunk}
 import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl)
+case class TokenServiceState(tokenManager: TokenManager)
 
-trait ShardService extends 
-    BlueEyesServiceBuilder with 
-    ShardServiceCombinators with 
-    AkkaDefaults {
+trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
 
+  val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
-
-  def queryExecutorFactory(config: Configuration): QueryExecutor
 
   def tokenManagerFactory(config: Configuration): TokenManager
 
-  val analyticsService = this.service("quirrel", "1.0") {
+  val tokenService = service("auth", "1.0") {
     requestLogging(timeout) {
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"))
-
-          val theTokenManager = tokenManagerFactory(config.detach("security"))
-
-          val accessControl = new TokenBasedAccessControl {
-            val executionContext = defaultFutureDispatch
-            val tokenManager = theTokenManager
-          }
-
-          queryExecutor.startup.map { _ =>
-            ShardState(
-              queryExecutor,
-              theTokenManager,
-              accessControl
-            )
-          }
+          Future(TokenServiceState(tokenManagerFactory(config.detach("tokenManager"))))
         } ->
-        request { (state: ShardState) =>
+        request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              dataPath("vfs") {
-                query {
-                  get(new QueryServiceHandler(state.queryExecutor))
-                } ~ 
-                get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
+              path("tokens") {
+                get(new GetTokenHandler(state.tokenManager)) ~
+                post(new CreateTokenHandler(state.tokenManager)) ~
+                delete(new DeleteTokenHandler(state.tokenManager)) ~
+                post(new UpdateTokenHandler(state.tokenManager))
               }
             }
           }
@@ -91,3 +70,26 @@ trait ShardService extends
     }
   }
 }
+
+// Token Services
+//
+//
+// Get token details
+//
+// GET tokens?tokenId={token}
+//
+//
+// New Token 
+//
+// POST tokens?tokenId={parent token} 
+//
+//
+// Delete token
+//
+// DELETE tokens?tokenId={authority}&delete={token-to-delete}
+//
+//
+// Update token {protected fields}
+//
+// POST tokens?tokenId={authority}&update{token-to-update}
+//

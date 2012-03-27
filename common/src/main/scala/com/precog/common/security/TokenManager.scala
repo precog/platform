@@ -33,6 +33,8 @@ import akka.dispatch.ExecutionContext
 
 import java.util.concurrent.TimeUnit._
 
+import org.streum.configrity.Configuration
+
 import scalaz._
 import Scalaz._
 
@@ -117,6 +119,12 @@ class MongoTokenManager(private[security] val database: Database, collection: St
     _ <- database(remove.from(collection).where("uid" === token.uid))
   } yield {
     token
+  }
+}
+
+trait CachedMongoTokenManagerComponent {
+  def tokenManagerFactory(config: Configuration): TokenManager = {
+    sys.error("todo")
   }
 }
 
