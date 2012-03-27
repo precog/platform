@@ -1,0 +1,601 @@
+[{
+  "age":32,
+  "income":142000,
+  "location":{
+    "state":"DE"
+  }
+},{
+  "age":18,
+  "income":27000,
+  "location":{
+    "state":"SC"
+  }
+},{
+  "age":87,
+  "income":10000,
+  "location":{
+    "state":"AZ"
+  }
+},{
+  "age":48,
+  "income":10000,
+  "location":{
+    "state":"CT"
+  }
+},{
+  "age":18,
+  "income":66000,
+  "location":{
+    "state":"MA"
+  }
+},{
+  "age":73,
+  "income":250000,
+  "location":{
+    "state":"DE"
+  }
+},{
+  "age":100,
+  "income":10000,
+  "location":{
+    "state":"HI"
+  }
+},{
+  "age":52,
+  "income":217000,
+  "location":{
+    "state":"NC"
+  }
+},{
+  "age":100,
+  "income":238000,
+  "location":{
+    "state":"KY"
+  }
+},{
+  "age":40,
+  "income":10000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":100,
+  "income":213000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":85,
+  "income":250000,
+  "location":{
+    "state":"SC"
+  }
+},{
+  "age":87,
+  "income":250000,
+  "location":{
+    "state":"MN"
+  }
+},{
+  "age":100,
+  "income":222000,
+  "location":{
+    "state":"AZ"
+  }
+},{
+  "age":90,
+  "income":10000,
+  "location":{
+    "state":"GA"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"UT"
+  }
+},{
+  "age":92,
+  "income":250000,
+  "location":{
+    "state":"LA"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":100,
+  "income":62000,
+  "location":{
+    "state":"NJ"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"PA"
+  }
+},{
+  "age":18,
+  "income":250000,
+  "location":{
+    "state":"OR"
+  }
+},{
+  "age":18,
+  "income":190000,
+  "location":{
+    "state":"DE"
+  }
+},{
+  "age":21,
+  "income":172000,
+  "location":{
+    "state":"IA"
+  }
+},{
+  "age":38,
+  "income":10000,
+  "location":{
+    "state":"NJ"
+  }
+},{
+  "age":50,
+  "income":150000,
+  "location":{
+    "state":"ID"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"NC"
+  }
+},{
+  "age":100,
+  "income":82000,
+  "location":{
+    "state":"ID"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"SD"
+  }
+},{
+  "age":100,
+  "income":39000,
+  "location":{
+    "state":"CA"
+  }
+},{
+  "age":100,
+  "income":82000,
+  "location":{
+    "state":"WA"
+  }
+},{
+  "age":18,
+  "income":208000,
+  "location":{
+    "state":"NY"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"AZ"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"ME"
+  }
+},{
+  "age":83,
+  "income":109000,
+  "location":{
+    "state":"TX"
+  }
+},{
+  "age":18,
+  "income":228000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"NM"
+  }
+},{
+  "age":62,
+  "income":139000,
+  "location":{
+    "state":"CT"
+  }
+},{
+  "age":50,
+  "income":250000,
+  "location":{
+    "state":"NH"
+  }
+},{
+  "age":65,
+  "income":10000,
+  "location":{
+    "state":"AZ"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"OR"
+  }
+},{
+  "age":67,
+  "income":10000,
+  "location":{
+    "state":"VT"
+  }
+},{
+  "age":91,
+  "income":158000,
+  "location":{
+    "state":"AK"
+  }
+},{
+  "age":49,
+  "income":250000,
+  "location":{
+    "state":"WY"
+  }
+},{
+  "age":100,
+  "income":80000,
+  "location":{
+    "state":"MD"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"WY"
+  }
+},{
+  "age":100,
+  "income":100000,
+  "location":{
+    "state":"NH"
+  }
+},{
+  "age":18,
+  "income":221000,
+  "location":{
+    "state":"NE"
+  }
+},{
+  "age":44,
+  "income":241000,
+  "location":{
+    "state":"TN"
+  }
+},{
+  "age":21,
+  "income":10000,
+  "location":{
+    "state":"NE"
+  }
+},{
+  "age":22,
+  "income":10000,
+  "location":{
+    "state":"WI"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"ND"
+  }
+},{
+  "age":84,
+  "income":10000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":24,
+  "income":10000,
+  "location":{
+    "state":"TN"
+  }
+},{
+  "age":100,
+  "income":65000,
+  "location":{
+    "state":"NM"
+  }
+},{
+  "age":100,
+  "income":10000,
+  "location":{
+    "state":"MI"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"UT"
+  }
+},{
+  "age":35,
+  "income":10000,
+  "location":{
+    "state":"SD"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"NY"
+  }
+},{
+  "age":21,
+  "income":235000,
+  "location":{
+    "state":"HI"
+  }
+},{
+  "age":18,
+  "income":250000,
+  "location":{
+    "state":"TN"
+  }
+},{
+  "age":100,
+  "income":214000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"OR"
+  }
+},{
+  "age":92,
+  "income":10000,
+  "location":{
+    "state":"MA"
+  }
+},{
+  "age":88,
+  "income":134000,
+  "location":{
+    "state":"MI"
+  }
+},{
+  "age":58,
+  "income":223000,
+  "location":{
+    "state":"MS"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"MS"
+  }
+},{
+  "age":81,
+  "income":250000,
+  "location":{
+    "state":"NC"
+  }
+},{
+  "age":58,
+  "income":145000,
+  "location":{
+    "state":"SC"
+  }
+},{
+  "age":78,
+  "income":250000,
+  "location":{
+    "state":"NJ"
+  }
+},{
+  "age":72,
+  "income":10000,
+  "location":{
+    "state":"NJ"
+  }
+},{
+  "age":35,
+  "income":10000,
+  "location":{
+    "state":"IL"
+  }
+},{
+  "age":100,
+  "income":10000,
+  "location":{
+    "state":"CA"
+  }
+},{
+  "age":29,
+  "income":10000,
+  "location":{
+    "state":"IA"
+  }
+},{
+  "age":42,
+  "income":250000,
+  "location":{
+    "state":"DE"
+  }
+},{
+  "age":18,
+  "income":56000,
+  "location":{
+    "state":"ID"
+  }
+},{
+  "age":49,
+  "income":250000,
+  "location":{
+    "state":"PA"
+  }
+},{
+  "age":18,
+  "income":192000,
+  "location":{
+    "state":"GA"
+  }
+},{
+  "age":18,
+  "income":178000,
+  "location":{
+    "state":"GA"
+  }
+},{
+  "age":18,
+  "income":73000,
+  "location":{
+    "state":"ND"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"IL"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"IN"
+  }
+},{
+  "age":25,
+  "income":250000,
+  "location":{
+    "state":"NE"
+  }
+},{
+  "age":65,
+  "income":107000,
+  "location":{
+    "state":"WI"
+  }
+},{
+  "age":100,
+  "income":10000,
+  "location":{
+    "state":"HI"
+  }
+},{
+  "age":100,
+  "income":82000,
+  "location":{
+    "state":"DC"
+  }
+},{
+  "age":60,
+  "income":250000,
+  "location":{
+    "state":"ID"
+  }
+},{
+  "age":18,
+  "income":16000,
+  "location":{
+    "state":"CA"
+  }
+},{
+  "age":35,
+  "income":250000,
+  "location":{
+    "state":"WY"
+  }
+},{
+  "age":24,
+  "income":144000,
+  "location":{
+    "state":"KS"
+  }
+},{
+  "age":18,
+  "income":250000,
+  "location":{
+    "state":"WY"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"WV"
+  }
+},{
+  "age":36,
+  "income":250000,
+  "location":{
+    "state":"CO"
+  }
+},{
+  "age":87,
+  "income":250000,
+  "location":{
+    "state":"ND"
+  }
+},{
+  "age":84,
+  "income":10000,
+  "location":{
+    "state":"MD"
+  }
+},{
+  "age":52,
+  "income":10000,
+  "location":{
+    "state":"IA"
+  }
+},{
+  "age":100,
+  "income":250000,
+  "location":{
+    "state":"AL"
+  }
+},{
+  "age":52,
+  "income":250000,
+  "location":{
+    "state":"SD"
+  }
+},{
+  "age":18,
+  "income":159000,
+  "location":{
+    "state":"AZ"
+  }
+},{
+  "age":19,
+  "income":10000,
+  "location":{
+    "state":"DC"
+  }
+},{
+  "age":18,
+  "income":10000,
+  "location":{
+    "state":"IL"
+  }
+}]
