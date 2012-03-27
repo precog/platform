@@ -43,13 +43,13 @@ trait TestConfigComponent {
   object yggConfig extends YggConfig
 
   trait YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig with IterableDatasetOpsConfig {
-    def sortBufferSize = 1000
-    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    val sortBufferSize = 1000
+    val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
     val clock = blueeyes.util.Clock.System
-    def memoizationBufferSize = 1000
-    def memoizationWorkDir: File = null //no filesystem storage in test!
-    def flatMapTimeout = intToDurationInt(30).seconds
-    def maxEvalDuration = intToDurationInt(30).seconds
+    val memoizationBufferSize = 1000
+    val memoizationWorkDir: File = null //no filesystem storage in test!
+    val flatMapTimeout = intToDurationInt(30).seconds
+    val maxEvalDuration = intToDurationInt(30).seconds
 
     object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
     object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
