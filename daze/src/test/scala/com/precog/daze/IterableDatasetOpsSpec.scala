@@ -344,62 +344,97 @@ with DiskIterableDatasetMemoizationComponent {
     }
 
     "group according to an integer key" in {
-      val groups = Stream(
-        0L -> Vector(rec(1)),
-        2L -> Vector(rec(2), rec(3), rec(3)),
-        4L -> Vector(rec(5)),
-        6L -> Vector(rec(6), rec(7)),
-        8L -> Vector(rec(8)))
-      
-      val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
-      
-      val result = ds.group(0, memoCtx, expiration) { num =>
-        IterableDataset(1, Vector(rec((num / 2) * 2)))
+      "for a static input" in {
+        val groups = Stream(
+          0L -> Vector(rec(1)),
+          2L -> Vector(rec(2), rec(3), rec(3)),
+          4L -> Vector(rec(5)),
+          6L -> Vector(rec(6), rec(7)),
+          8L -> Vector(rec(8)))
+        
+        val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
+        
+        val result = ds.group(0, memoCtx, expiration) { num =>
+          IterableDataset(1, Vector(rec((num / 2) * 2)))
+        }
+
+        val result2 = mapGrouping(result) { ds =>
+          val IterableDataset(count, str) = ds
+          IterableDataset(count, Vector(str.toSeq: _*))
+        }
+        
+        val expected = groups map {
+          case (k, v) => (k, IterableDataset(1, v))
+        }
+        
+        result2.iterator.toList must_== expected.toList
       }
 
-      val result2 = mapGrouping(result) { ds =>
-        val IterableDataset(count, str) = ds
-        IterableDataset(count, Vector(str.toSeq: _*))
+      "for arbitrary inputs" in {
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idCount = IdCount(1)
+
+        check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
+          val expected = ds.iterable.groupBy(_._2 / 2 * 2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
+
+          val result = ds.group(0, memoCtx, expiration) {
+            v => IterableDataset[Long](1, Vector(rec(v / 2 * 2)))
+          }.iterator.toList
+
+          result must containAllOf(expected).only.inOrder
+        } }
       }
-      
-      val expected = groups map {
-        case (k, v) => (k, IterableDataset(1, v))
-      }
-      
-      result2.iterator.toList must_== expected.toList
     }
+          
     
     "group according to an identity key" in {
-      val groups = Stream(
-        1L -> Vector(rec(1)),
-        2L -> Vector(rec(2)),
-        3L -> Vector(rec(3)),
-        5L -> Vector(rec(5)),
-        6L -> Vector(rec(6)),
-        7L -> Vector(rec(7)),
-        8L -> Vector(rec(8)))
-      
-      val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
-      
-      val result = ds.group(0, memoCtx, expiration) { num =>
-        IterableDataset(1, Vector(rec(num)))
+      "for a static input" in {
+        val groups = Stream(
+          1L -> Vector(rec(1)),
+          2L -> Vector(rec(2)),
+          3L -> Vector(rec(3)),
+          5L -> Vector(rec(5)),
+          6L -> Vector(rec(6)),
+          7L -> Vector(rec(7)),
+          8L -> Vector(rec(8)))
+        
+        val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
+        
+        val result = ds.group(0, memoCtx, expiration) { num =>
+          IterableDataset(1, Vector(rec(num)))
+        }
+  
+        val result2 = mapGrouping(result) { ds =>
+          val IterableDataset(count, str) = ds
+          IterableDataset(count, Vector(str.toSeq: _*))
+        }
+        
+        val expected = groups map {
+          case (k, v) => (k, IterableDataset(1, v))
+        }
+        
+        result2.iterator.toList must_== expected.toList
       }
 
-      val result2 = mapGrouping(result) { ds =>
-        val IterableDataset(count, str) = ds
-        IterableDataset(count, Vector(str.toSeq: _*))
+      "for arbitrary inputs" in {
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idOrder = com.precog.yggdrasil.IdentitiesOrder.toScalaOrdering
+        implicit val idCount = IdCount(1)
+
+        check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
+          val expected: List[(Long,IterableDataset[Long])] = ds.iterable.groupBy(_._2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
+
+          val result = ds.group(0, memoCtx, expiration) {
+            num => IterableDataset[Long](1, Vector(rec(num)))
+          }.iterator.toList
+
+          result must containAllOf(expected).only.inOrder
+        } }
       }
-      
-      val expected = groups map {
-        case (k, v) => (k, IterableDataset(1, v))
-      }
-      
-      result2.iterator.toList must_== expected.toList
     }
   }
   
-  "iterable grouping ops" should {
-    
+  "iterable grouping ops" should {  
     val sharedRecs = Map(
       'i1 -> unstableRec(1),
       'i2 -> unstableRec(2),
