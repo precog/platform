@@ -48,6 +48,7 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
 
   def value: Dataset[A]
 
+  // Input datasets must have equal identity counts, and must be sorted on identity
   def cogroup[B, C](d2: Dataset[B])(f: CogroupF[A, B, C]): Dataset[C]
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
@@ -62,11 +63,12 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   // pad identities to the longest side, then sort -u by all identities
   def paddedMerge(d2: Dataset[A], nextId: () => Identity): Dataset[A]
 
-  // merge sorted uniq by identities and values
+  // merge sorted uniq by identities and values. Input datasets must have equal identity counts
   def union(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
 
   // inputs are sorted in identity order - merge by identity, sorting any runs of equal identities
   // using the value ordering, equal identity, equal value are the only events that persist
+  // Input datasets must have equal identity counts
   def intersect(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
 
   def map[B](f: A => B): Dataset[B] 
