@@ -217,6 +217,32 @@ with DiskIterableDatasetMemoizationComponent {
 
         Vector(results2.iterator.toSeq: _*) mustEqual expected2
       }
+      
+      "static datasets with zero identities" in {
+        def rec(l: Long) = (VectorCase(), l)
+        val v1  = IterableDataset(0, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
+        val v2  = IterableDataset(0, Vector(rec(3)))
+
+        val results = v1.cogroup(v2) {
+          new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+            def left(i: Long) = left3(i)
+            def both(i1: Long, i2: Long) = middle3((i1, i2))
+            def right(i: Long) = right3(i)
+          }
+        }
+
+        val expected = Vector(
+          middle3((1, 3)),
+          middle3((3, 3)),
+          middle3((3, 3)),
+          middle3((5, 3)),
+          middle3((7, 3)),
+          middle3((8, 3)),
+          middle3((8, 3))
+        )
+
+        Vector(results.iterator.toSeq: _*) must_== expected
+      }
     }
 
     "join" in {
@@ -241,6 +267,27 @@ with DiskIterableDatasetMemoizationComponent {
         val results = v1.join(v2, 1) {
           case (a, b) => (a, b)
         }
+
+        Vector(results.iterator.toSeq: _*) must_== expected
+      }
+
+      "static datasets with zero identities" in {
+        val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
+        val v2  = IterableDataset(0, Vector((VectorCase(), 3)))
+
+        val results = v1.join(v2, 0) {
+          case (a, b) => (a, b)
+        }
+
+        val expected = Vector(
+          (1, 3),
+          (3, 3),
+          (3, 3),
+          (5, 3),
+          (7, 3),
+          (8, 3),
+          (8, 3)
+        )
 
         Vector(results.iterator.toSeq: _*) must_== expected
       }

@@ -385,9 +385,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                         sys.error("inputs on the right-hand side not sorted")
                     }
                   } else {
-                    state = Step
+                    state = RunLeft(null.asInstanceOf[IB])
                     lastLeft = null.asInstanceOf[IA]
-                    lastRight = null.asInstanceOf[IB]
                     precomputeNext()
                   }
 
@@ -548,7 +547,6 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   } else {
                     state = Step
                     lastLeft = null.asInstanceOf[IA]
-                    lastRight = null.asInstanceOf[IB]
                     precomputeNext()
                   }
 

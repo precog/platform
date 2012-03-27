@@ -46,7 +46,6 @@ trait TestConfigComponent {
     def sortBufferSize = 1000
     def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
     val clock = blueeyes.util.Clock.System
-    def chunkSerialization = new BinaryProjectionSerialization with IterateeFileSerialization[Vector[SEvent]] with ZippedStreamSerialization
     def memoizationBufferSize = 1000
     def memoizationWorkDir: File = null //no filesystem storage in test!
     def flatMapTimeout = intToDurationInt(30).seconds
@@ -242,6 +241,16 @@ class EvaluatorSpecs extends Specification
     }
 
     "evaluate a binary non-numeric operation mapped over homogeneous set" >> { //todo also test for case when second parameter is not a singleton
+      "load sample data" >> {
+        val line = Line(0, "")
+        
+        val input = dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het)
+          
+        val result = testEval(input)
+        
+        result must haveSize(5)
+      }
+
       "changeTimeZone" >> {
         val line = Line(0, "")
         
@@ -251,16 +260,14 @@ class EvaluatorSpecs extends Specification
           
         val result = testEval(input)
         
-        result must haveSize(5)
-        
         val result2 = result collect {
           case (VectorCase(_), SString(d)) => d.toString
         }
         
-        result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
+        result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00").only
       }
 
- "yearsBetween" >> {
+      "yearsBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(YearsBetween)),
