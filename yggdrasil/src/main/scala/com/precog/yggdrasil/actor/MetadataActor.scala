@@ -97,7 +97,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     // probably should enforce that only one column will match in someway
     // but for now I am assuming it is true (which within this narrow context
     // it should be
-    def columnType: ColumnType =
+    def columnType: CType =
       descriptor.columns.filter( _.selector == selector )(0).valueType
   }
   
@@ -168,7 +168,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     }
 
     def convertValues(values: Seq[ResolvedSelector]): Set[PathMetadata] = {
-      values.foldLeft(Map[(JPath, ColumnType), Map[ProjectionDescriptor, ColumnMetadata]]()) {
+      values.foldLeft(Map[(JPath, CType), Map[ProjectionDescriptor, ColumnMetadata]]()) {
         case (acc, rs @ ResolvedSelector(sel, desc, meta)) => 
           val key = (sel, rs.columnType)
           val update = acc.get(key).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
@@ -195,7 +195,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
 
   trait PathMatch
 
-  case class ExactPath(columnType: ColumnType)
+  case class ExactPath(columnType: CType)
   case class ChildPath(path: JPath)
 
   def toStorageMetadata(messageDispatcher: MessageDispatcher): StorageMetadata = new StorageMetadata {
@@ -249,18 +249,16 @@ object MetadataUpdateHelper {
       (acc, col) => acc + (col -> Map[MetadataType, Metadata]())
     }
 
-  def valueStats(cval: CValue): Option[Metadata] = cval.fold( 
-    str = (s: String)      => Some(StringValueStats(1, s, s)),
-    bool = (b: Boolean)    => Some(BooleanValueStats(1, if(b) 1 else 0)),
-    int = (i: Int)         => Some(LongValueStats(1, i, i)),
-    long = (l: Long)       => Some(LongValueStats(1, l, l)),
-    float = (f: Float)     => Some(DoubleValueStats(1, f, f)),
-    double = (d: Double)   => Some(DoubleValueStats(1, d, d)),
-    num = (bd: BigDecimal) => Some(BigDecimalValueStats(1, bd, bd)),
-    emptyObj = None,
-    emptyArr = None,
-    nul = None)
- 
+  def valueStats(cval: CValue): Option[Metadata] = cval match { 
+    case CString(s)  => Some(StringValueStats(1, s, s))
+    case CBoolean(b) => Some(BooleanValueStats(1, if(b) 1 else 0))
+    case CInt(i)     => Some(LongValueStats(1, i, i))
+    case CLong(l)    => Some(LongValueStats(1, l, l))
+    case CFloat(f)   => Some(DoubleValueStats(1, f, f))
+    case CDouble(d)  => Some(DoubleValueStats(1, d, d))
+    case CNum(bd)    => Some(BigDecimalValueStats(1, bd, bd))
+    case _           => None
+  }
 }   
 
 sealed trait ShardMetadataAction

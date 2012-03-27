@@ -39,13 +39,13 @@ class SValueSpec extends Specification {
     }
 
     "return None for a primitive" in {
-      SLong(1).set(JPath(".foo.bar"), CString("hi")) must beNone
+      STrue.set(JPath(".foo.bar"), CString("hi")) must beNone
     }
   }
 
   "structure" should {
     "return correct sequence for an array" in {
-      SArray(Vector(SBoolean(true))).structure must_== Seq((JPath("[0]"), SBoolean))
+      SArray(Vector(SBoolean(true))).structure must_== Seq((JPath("[0]"), CBoolean))
     }
   }
 }

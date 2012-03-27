@@ -24,7 +24,7 @@ package serialization
 import bijections.bd2ab
 import com.precog.common.VectorCase
 import com.precog.yggdrasil.SValue._
-import com.precog.yggdrasil.ColumnType._
+import com.precog.yggdrasil.CType._
 import com.precog.yggdrasil.leveldb._
 import com.precog.util._
 import Bijection._
@@ -40,7 +40,7 @@ import scalaz.syntax.monad._
 
 
 trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEvent]] with BinarySValueFormatting {
-  case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
+  case class Header(idCount: Int, structure: Seq[(JPath, CType)])
   final val HeaderFlag = 0
   final val EventFlag = 1
 
@@ -109,7 +109,7 @@ trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEv
     } yield ()
   }
 
-  def readEvent(in: DataInputStream, length: Int, cols: Seq[(JPath, ColumnType)]): IO[SEvent] = {
+  def readEvent(in: DataInputStream, length: Int, cols: Seq[(JPath, CType)]): IO[SEvent] = {
     for {
       ids <- IO { readIdentities(in, length) }
       sv  <- IO { readValue(in, cols) } 

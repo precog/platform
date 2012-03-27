@@ -239,8 +239,8 @@ trait Evaluator extends DAG
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
-        val reduced = red match {
-          case Count => ops.point(SDecimal(BigDecimal(enum.count)))
+        val reduced: Dataset[SValue] = red match {
+          case Count => ops.point[SValue](SDecimal(BigDecimal(enum.count)))
           
           case Max => 
             val max = enum.reduce(Option.empty[BigDecimal]) {
@@ -250,7 +250,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            max.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            max.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
           
           case Min => 
             val min = enum.reduce(Option.empty[BigDecimal]) {
@@ -260,7 +260,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
           
-            min.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            min.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
           
           case Sum => 
             val sum = enum.reduce(Option.empty[BigDecimal]) {
@@ -269,7 +269,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sum.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            sum.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
 
           case Mean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
@@ -278,7 +278,7 @@ trait Evaluator extends DAG
             }
             
             if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point(SDecimal(total / count))
+            else ops.point[SValue](SDecimal(total / count))
           
           case GeometricMean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
@@ -287,7 +287,7 @@ trait Evaluator extends DAG
             }
             
             if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
+            else ops.point[SValue](SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
           
           case SumSq => 
             val sumsq = enum.reduce(Option.empty[BigDecimal]) {
@@ -296,7 +296,7 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sumsq.map(v => ops.point(SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            sumsq.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
 
           case Variance => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -305,7 +305,7 @@ trait Evaluator extends DAG
             }
 
             if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point(SDecimal((sumsq - (sum * (sum / count))) / count))
+            else ops.point[SValue](SDecimal((sumsq - (sum * (sum / count))) / count))
 
           case StdDev => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -314,7 +314,7 @@ trait Evaluator extends DAG
             }
             
             if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point(SDecimal(sqrt(count * sumsq - sum * sum) / count))
+            else ops.point[SValue](SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
         Right(Match(mal.Actual, reduced, graph))

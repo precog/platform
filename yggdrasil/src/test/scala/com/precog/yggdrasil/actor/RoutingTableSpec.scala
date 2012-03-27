@@ -49,7 +49,7 @@ class RoutingTableSpec extends Specification {
       
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
       
-      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SStringArbitrary, Authorities(Set("token")))
+      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CStringArbitrary, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 
@@ -73,8 +73,8 @@ class RoutingTableSpec extends Specification {
 
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), SStringArbitrary, Authorities(Set("token")))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), SInt, Authorities(Set("token")))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CStringArbitrary, Authorities(Set("token")))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), CInt, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 

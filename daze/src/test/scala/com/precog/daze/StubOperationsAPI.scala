@@ -68,22 +68,24 @@ trait StubOperationsAPI
 
     def chunkSize: Int
     
-    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]]) extends DatasetMask[Dataset] {
+    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]], valueType: Option[SType]) extends DatasetMask[Dataset] {
       def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector :+ Right(field))
       def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector :+ Left(index))
-      def typed(tpe: SType): DatasetMask[Dataset] = this
+      def typed(tpe: SType): DatasetMask[Dataset] = copy(valueType = Some(tpe))
       
       def realize(expiresAt: Long): Dataset[SValue] = {
         fullProjection(userUID, path, expiresAt) collect unlift(mask)
       }
       
       private def mask(sv: SValue): Option[SValue] = {
-        selector.foldLeft(Some(sv): Option[SValue]) {
+        val masked = selector.foldLeft(Option(sv)) {
           case (None, _) => None
           case (Some(SObject(obj)), Right(field)) => obj get field
           case (Some(SArray(arr)),  Left(index)) => arr.lift(index)
           case _ => None
         }
+
+        masked.filter(v => valueType.forall(v.isA))
       }
       
       // TODO merge with Evaluator impl
@@ -96,7 +98,7 @@ trait StubOperationsAPI
     def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = 
       IterableDataset(1, new Iterable[(Identities, SValue)] { def iterator = readJSON(path) })
     
-    def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector())
+    def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector(), None)
     
     private def readJSON(path: Path): Iterator[SEvent] = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
@@ -122,42 +124,7 @@ trait StubOperationsAPI
       JsonParser parse str
     
     private def wrapSEvent(id: Long, value: JValue): SEvent =
-      (VectorCase(id), wrapSValue(value))
-    
-    private def wrapSValue(value: JValue): SValue = new SValue {
-      def fold[A](
-          obj: Map[String, SValue] => A,
-          arr: Vector[SValue] => A,
-          str: String => A,
-          bool: Boolean => A,
-          long: Long => A,
-          double: Double => A,
-          num: BigDecimal => A,
-          nul: => A): A = value match {
-            
-        case JObject(fields) => {
-          val pairs = fields map {
-            case JField(key, value) => (key, wrapSValue(value))
-          }
-          
-          obj(Map(pairs: _*))
-        }
-        
-        case JArray(values) => arr(Vector(values map wrapSValue: _*))
-        
-        case JString(s) => str(s)
-        
-        case JBool(b) => bool(b)
-        
-        case JInt(i) => num(BigDecimal(i.toString))
-        
-        case JDouble(d) => num(d)
-        
-        case JNull => nul
-        
-        case JNothing => sys.error("Hit JNothing")
-      }
-    }
+      (VectorCase(id), SValue.fromJValue(value))
   }
 }
 

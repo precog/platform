@@ -37,7 +37,7 @@ import akka.util._
 
 import scala.collection.immutable.ListMap
 
-object MetadataActorSpec extends Specification {
+object ShardMetadataActorSpec extends Specification {
 
   val system = ActorSystem("shard_metadata_test")
   implicit val timeout = Timeout(30000) 
@@ -61,7 +61,7 @@ object MetadataActorSpec extends Specification {
       val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor2")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor2") 
 
-      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), SStringArbitrary, Authorities(Set("me")))
+      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
 
       val indexedColumns = ListMap((colDesc -> 0))
       val sorting = Vector((colDesc -> ById))

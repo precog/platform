@@ -32,7 +32,7 @@ import blueeyes.json.JPath
 
 class LocalMetadataSpec extends Specification {
   
-  def projectionDescriptor(path: Path, selector: JPath, cType: ColumnType, token: String) = {
+  def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
     val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
     val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
@@ -42,38 +42,38 @@ class LocalMetadataSpec extends Specification {
   val token1 = "TOKEN"
 
   val data = {
-    projectionDescriptor(Path("/abc/"), JPath(""), SBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo"), SBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo"), SStringArbitrary, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo.bar"), SBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), SStringArbitrary, token1) ++
-    projectionDescriptor(Path("/def/"), JPath(".foo"), SBoolean, token1) ++
-    projectionDescriptor(Path("/def/"), JPath(".foo.bar"), SBoolean, token1) ++
-    projectionDescriptor(Path("/def/"), JPath(".foo.bar.baz.buz"), SBoolean, token1)
+    projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo.bar"), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo.bar"), CBoolean, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo.bar.baz.buz"), CBoolean, token1)
   }
 
   val rootAbc = PathRoot(Set(
-    PathValue(SBoolean, projectionDescriptor(Path("/abc/"), JPath(""), SBoolean, token1)),
+    PathValue(CBoolean, projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1)),
     PathField("foo", Set(
-      PathValue(SBoolean, projectionDescriptor(Path("/abc/"), JPath(".foo"), SBoolean, token1)),
-      PathValue(SStringArbitrary, projectionDescriptor(Path("/abc/"), JPath(".foo"), SStringArbitrary, token1)),
+      PathValue(CBoolean, projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
+      PathValue(CStringArbitrary, projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
       PathField("bar", Set(
-        PathValue(SBoolean, projectionDescriptor(Path("/abc"), JPath(".foo.bar"), SBoolean, token1))
+        PathValue(CBoolean, projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
       )),
       PathIndex(0, Set(
-        PathValue(SStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), SStringArbitrary, token1))
+        PathValue(CStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
       ))
     ))
   ))
 
   val rootDef = PathRoot(Set(
     PathField("foo", Set(
-      PathValue(SBoolean, projectionDescriptor(Path("/def/"), JPath(".foo"), SBoolean, token1)),
+      PathValue(CBoolean, projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
       PathField("bar", Set(
-        PathValue(SBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar"), SBoolean, token1)),
+        PathValue(CBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar"), CBoolean, token1)),
         PathField("baz", Set(
           PathField("buz", Set(
-            PathValue(SBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), SBoolean, token1))
+            PathValue(CBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
           ))
         ))
       ))
@@ -97,13 +97,13 @@ class LocalMetadataSpec extends Specification {
       val result = lm.findPathMetadata(Path("/abc/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
-        PathValue(SBoolean, projectionDescriptor(Path("/abc/"), JPath(".foo"), SBoolean, token1)),
-        PathValue(SStringArbitrary, projectionDescriptor(Path("/abc/"), JPath(".foo"), SStringArbitrary, token1)),
+        PathValue(CBoolean, projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
+        PathValue(CStringArbitrary, projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
         PathField("bar", Set(
-          PathValue(SBoolean, projectionDescriptor(Path("/abc"), JPath(".foo.bar"), SBoolean, token1))
+          PathValue(CBoolean, projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
         )),
         PathIndex(0, Set(
-          PathValue(SStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), SStringArbitrary, token1))
+          PathValue(CStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
         ))
       ))
 
@@ -113,12 +113,12 @@ class LocalMetadataSpec extends Specification {
       val result = lm.findPathMetadata(Path("/def/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
-        PathValue(SBoolean, projectionDescriptor(Path("/def/"), JPath(".foo"), SBoolean, token1)),
+        PathValue(CBoolean, projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
         PathField("bar", Set(
-          PathValue(SBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar"), SBoolean, token1)),
+          PathValue(CBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar"), CBoolean, token1)),
           PathField("baz", Set(
             PathField("buz", Set(
-              PathValue(SBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), SBoolean, token1))
+              PathValue(CBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
             ))
           ))
         ))
@@ -130,7 +130,7 @@ class LocalMetadataSpec extends Specification {
       val result = lm.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
      
       val expected = PathRoot(Set(
-        PathValue(SStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), SStringArbitrary, token1))
+        PathValue(CStringArbitrary, projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
       ))
 
       result must_== expected
@@ -139,7 +139,7 @@ class LocalMetadataSpec extends Specification {
       val result = lm.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
      
       val expected = PathRoot(Set(
-        PathValue(SBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), SBoolean, token1))
+        PathValue(CBoolean, projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
       ))
 
       result must_== expected 

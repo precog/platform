@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package serialization
 
 import com.precog.yggdrasil.SValue._
-import com.precog.yggdrasil.ColumnType._
+import com.precog.yggdrasil.CType._
 
 import blueeyes.json._
 import blueeyes.json.JPath._
@@ -47,7 +47,7 @@ trait RunlengthFormatting[A] {
 }
 
 trait SValueRunlengthFormatting extends RunlengthFormatting[SValue] with SValueFormatting {
-  case class Header(structure: Seq[(JPath, ColumnType)])
+  case class Header(structure: Seq[(JPath, CType)])
 
   def headerFor(value: SValue) = Header(value.structure)
 
@@ -65,7 +65,7 @@ trait SValueRunlengthFormatting extends RunlengthFormatting[SValue] with SValueF
 
 trait SEventRunlengthFormatting extends RunlengthFormatting[SEvent] 
 with SValueFormatting with IdentitiesFormatting {
-  case class Header(idCount: Int, structure: Seq[(JPath, ColumnType)])
+  case class Header(idCount: Int, structure: Seq[(JPath, CType)])
 
   def headerFor(value: SEvent) = Header(value._1.length, value._2.structure)
 
@@ -90,7 +90,7 @@ with SValueFormatting with IdentitiesFormatting {
 
 trait GroupRunlengthFormatting extends RunlengthFormatting[(SValue, Identities, SValue)] 
 with SValueFormatting with IdentitiesFormatting {
-  case class Header(keyStructure: Seq[(JPath, ColumnType)], idCount: Int, valueStructure: Seq[(JPath, ColumnType)])
+  case class Header(keyStructure: Seq[(JPath, CType)], idCount: Int, valueStructure: Seq[(JPath, CType)])
 
   def headerFor(value: (SValue, Identities, SValue)) = Header(value._1.structure, value._2.length, value._3.structure)
 

@@ -88,7 +88,7 @@ trait AuthoritiesSerialization {
 
 object Authorities extends AuthoritiesSerialization 
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: ColumnType, authorities: Authorities) 
+case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) 
 
 trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
@@ -104,13 +104,13 @@ trait ColumnDescriptorSerialization {
     override def validated(obj : JValue) : Validation[Error,ColumnDescriptor] = 
       ((obj \ "path").validated[Path] |@|
        (obj \ "selector").validated[JPath] |@|
-       (obj \ "valueType").validated[ColumnType] |@|
+       (obj \ "valueType").validated[CType] |@|
        (obj \ "authorities").validated[Authorities]).apply(ColumnDescriptor(_,_,_,_))
   }
 }
 
 object ColumnDescriptor extends ColumnDescriptorSerialization 
-with ((Path, JPath, ColumnType, Authorities) => ColumnDescriptor)
+with ((Path, JPath, CType, Authorities) => ColumnDescriptor)
 
 
 

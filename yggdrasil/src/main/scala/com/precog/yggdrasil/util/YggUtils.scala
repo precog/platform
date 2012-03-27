@@ -38,7 +38,7 @@ object YggUtils {
 
   import JsonParser._
   
-  case class ColumnSummary(types: Seq[ColumnType], count: Long, keyLengthSum: Long, valueLengthSum: Long) {
+  case class ColumnSummary(types: Seq[CType], count: Long, keyLengthSum: Long, valueLengthSum: Long) {
     def +(other: ColumnSummary) = ColumnSummary(types ++ other.types, 
                                             count + other.count, 
                                             keyLengthSum + other.keyLengthSum, 
@@ -128,7 +128,7 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
     }
   }
 
-  def columnStats(colDir: File, colType: ColumnType, desc: ProjectionDescriptor): ColumnSummary = {
+  def columnStats(colDir: File, colType: CType, desc: ProjectionDescriptor): ColumnSummary = {
     val createOptions = (new Options).createIfMissing(false)
 
     val db: DB = factory.open(new File(colDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(desc)))
