@@ -12,6 +12,7 @@ import org.specs2.specification._
 import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
+import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 import akka.util.Duration
 
@@ -28,6 +29,9 @@ import blueeyes.concurrent.test._
 import blueeyes.core.data._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.core.service.test.BlueEyesServiceSpecification
+import blueeyes.core.http.HttpResponse
+import blueeyes.core.http.HttpStatus
+import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
 
@@ -46,6 +50,7 @@ trait TestTokens {
   import StaticTokenManager._
   val TestTokenUID = testUID
   val TrackingTokenUID = usageUID
+  val ExpiredTokenUID = expiredUID
 }
 
 trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults {
@@ -81,15 +86,46 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  lazy val jsonTestService = service.contentType[JValue](application/(MimeTypes.json)).
-                                     query("tokenId", TestTokenUID)
+  lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
+          
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
-  "Ingest Service" should {
-    todo 
+
+  def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
+    token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
+  }
+
+  def testValue = JObject(List(JField("testing", JInt(123))))
+
+  "Ingest service" should {
+    "track event with valid token" in {
+      track(testValue) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, None, _) => ok 
+      }}
+    }
+    "reject track request when token not found" in {
+      track(testValue, Some("not gonna find it")) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok 
+      }}
+    }
+    "reject track request when no token provided" in {
+      track(testValue, None) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok 
+      }}
+    }
+    "reject track request when token is expired" in {
+      track(testValue, Some(ExpiredTokenUID)) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok 
+      }}
+    }
+    "reject track request when path is not accessible by token" in {
+      track(testValue, path = "") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _) => ok 
+      }}
+    }
   }
 }

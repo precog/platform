@@ -3,6 +3,8 @@ package daze
 
 import yggdrasil.metadata.MetadataView
 
+import com.precog.common._
+
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem

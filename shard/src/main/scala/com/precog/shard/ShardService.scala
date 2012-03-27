@@ -16,7 +16,7 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl, usageLogging: UsageLogging)
+case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl)
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -30,8 +30,6 @@ trait ShardService extends
   implicit val timeout = akka.util.Timeout(120000) //for now
 
   def queryExecutorFactory(config: Configuration): QueryExecutor
-
-  def usageLoggingFactory(config: Configuration): UsageLogging 
 
   def tokenManagerFactory(config: Configuration): TokenManager
 
@@ -54,19 +52,18 @@ trait ShardService extends
             ShardState(
               queryExecutor,
               theTokenManager,
-              accessControl,
-              usageLoggingFactory(config.detach("usageLogging"))
+              accessControl
             )
           }
         } ->
         request { (state: ShardState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              dataPath("/vfs") {
+              dataPath("vfs") {
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
-                }// ~ 
-//                get(new BrowseServiceHandler(state.queryExecutor))
+                } ~ 
+                get(new BrowseServiceHandler(state.queryExecutor))
               }
             }
           }

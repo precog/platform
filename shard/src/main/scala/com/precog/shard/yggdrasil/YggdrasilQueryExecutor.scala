@@ -9,6 +9,8 @@ import daze.memoization._
 
 import pandora.ParseEvalStack
 
+import com.precog.common._
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.actor._
@@ -120,7 +122,7 @@ trait YggdrasilQueryExecutor
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray] = {
     import EvaluationError._
     implicit val M = Validation.validationMonad[EvaluationError]
-
+    
     val solution: Validation[Throwable, Validation[EvaluationError, JArray]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
         Validation.fromEither(decorate(bytecode)).bimap(
