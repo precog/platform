@@ -6,9 +6,6 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Await
 import akka.util.Duration
 
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.actor._
-import com.precog.common.kafka._
 import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._
 
@@ -17,7 +14,14 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
+import com.precog.common.kafka._
+import yggdrasil._
+import yggdrasil.actor._
+import yggdrasil.serialization._
+
 import daze._
+import daze.memoization._
+
 import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
@@ -36,7 +40,7 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends ParseEvalStack {
+trait REPL extends ParseEvalStack with MemoryDatasetConsumer {
 
   val dummyUID = "dummyUID"
 
@@ -205,17 +209,30 @@ object Console extends App {
       LevelDBQueryConfig with 
       DiskMemoizationConfig with 
       DatasetConsumersConfig with 
+      IterableDatasetOpsConfig with 
       ProductionActorConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
-    val flatMapTimeout = controlTimeout
-    val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val sortWorkDir = scratchDir
-    val chunkSerialization = BinaryProjectionSerialization
     val memoizationBufferSize = sortBufferSize
     val memoizationWorkDir = scratchDir
+
+    val flatMapTimeout = controlTimeout
+    val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
     val maxEvalDuration = controlTimeout
+    val clock = blueeyes.util.Clock.System
+
+    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+
+    //TODO: Get a producer ID
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
   }
 
   def loadConfig(dataDir: Option[String]): IO[REPLConfig] = IO {
@@ -228,10 +245,11 @@ object Console extends App {
   } yield {
     replState map { shardState => 
       new REPL 
-          with YggdrasilEnumOpsComponent
+          with IterableDatasetOpsComponent
           with LevelDBQueryComponent
-          with DiskMemoizationComponent
+          with DiskIterableDatasetMemoizationComponent 
           with Lifecycle { self =>
+        override type Dataset[A] = IterableDataset[A]
 
         lazy val actorSystem = ActorSystem("repl_actor_system")
         implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -239,16 +257,15 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        type Storage = ActorYggShard
-        val storage = new ActorYggShard with StandaloneActorEcosystem {
+        trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
           type YggConfig = REPLConfig
           lazy val yggConfig = replConfig
           lazy val yggState = shardState
         }
 
         object ops extends Ops 
-
         object query extends QueryAPI 
+        object storage extends Storage
 
         def startup = IO { Await.result(storage.actorsStart, controlTimeout) }
 

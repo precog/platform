@@ -11,6 +11,7 @@ import common.kafka._
 
 import daze._
 import daze.util._
+import daze.memoization._
 
 import pandora._
 
@@ -21,13 +22,15 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.serialization._
 
 object SBTConsole {
   
   trait Platform  extends ParseEvalStack 
-                  with YggdrasilEnumOpsComponent 
+                  with IterableDatasetOpsComponent
                   with LevelDBQueryComponent 
-                  with DiskMemoizationComponent 
+                  with DiskIterableDatasetMemoizationComponent 
+                  with MemoryDatasetConsumer
                   with DAGPrinter {
 
     trait YggConfig extends BaseConfig 
@@ -35,7 +38,10 @@ object SBTConsole {
                     with LevelDBQueryConfig 
                     with DiskMemoizationConfig 
                     with DatasetConsumersConfig 
+                    with IterableDatasetOpsConfig 
                     with ProductionActorConfig
+
+    override type Dataset[A] = IterableDataset[A]
   }
 
   val platform = new Platform { console =>
@@ -60,27 +66,38 @@ object SBTConsole {
         Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
       }
 
-      lazy val flatMapTimeout = controlTimeout
-      lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      lazy val chunkSerialization = BinaryProjectionSerialization
       lazy val sortWorkDir = scratchDir
       lazy val memoizationBufferSize = sortBufferSize
       lazy val memoizationWorkDir = scratchDir
+
+      lazy val flatMapTimeout = controlTimeout
+      lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
       lazy val maxEvalDuration = controlTimeout
+      lazy val clock = blueeyes.util.Clock.System
+
+      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+
+      //TODO: Get a producer ID
+      lazy val idSource = new IdSource {
+        private val source = new java.util.concurrent.atomic.AtomicLong
+        def nextId() = source.getAndIncrement
+      }
     }
 
     val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
     
-    type Storage = ActorYggShard
-    val storage = new ActorYggShard with StandaloneActorEcosystem {
+    trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
       type YggConfig = console.YggConfig
       val yggConfig = console.yggConfig
       val yggState = shardState
     }
     
     object ops extends Ops 
-    
     object query extends QueryAPI 
+    object storage extends Storage
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
       case Success(results) => results.map(_._2)
