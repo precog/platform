@@ -254,7 +254,7 @@ class EvaluatorSpecs extends Specification
       "changeTimeZone" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(ChangeTimeZone)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("-10:00")))
           
@@ -270,7 +270,7 @@ class EvaluatorSpecs extends Specification
       "yearsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(YearsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -288,7 +288,7 @@ class EvaluatorSpecs extends Specification
       "monthsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MonthsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -306,7 +306,7 @@ class EvaluatorSpecs extends Specification
       "weeksBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(WeeksBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -324,7 +324,7 @@ class EvaluatorSpecs extends Specification
       "daysBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(DaysBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -342,7 +342,7 @@ class EvaluatorSpecs extends Specification
       "hoursBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(HoursBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -360,7 +360,7 @@ class EvaluatorSpecs extends Specification
       "minutesBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MinutesBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -378,7 +378,7 @@ class EvaluatorSpecs extends Specification
       "secondsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(SecondsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -396,7 +396,7 @@ class EvaluatorSpecs extends Specification
       "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MillisToISO)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           
@@ -416,7 +416,7 @@ class EvaluatorSpecs extends Specification
       "changeTimeZone" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(ChangeTimeZone)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("-10:00")))
           
@@ -434,7 +434,7 @@ class EvaluatorSpecs extends Specification
       "yearsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(YearsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -452,7 +452,7 @@ class EvaluatorSpecs extends Specification
       "monthsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MonthsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -470,7 +470,7 @@ class EvaluatorSpecs extends Specification
       "weeksBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(WeeksBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -488,7 +488,7 @@ class EvaluatorSpecs extends Specification
       "daysBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(DaysBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -506,7 +506,7 @@ class EvaluatorSpecs extends Specification
       "hoursBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(HoursBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -524,7 +524,7 @@ class EvaluatorSpecs extends Specification
       "minutesBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MinutesBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -542,7 +542,7 @@ class EvaluatorSpecs extends Specification
       "secondsBetween" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(SecondsBetween)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsBetween)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
           Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
           
@@ -560,7 +560,7 @@ class EvaluatorSpecs extends Specification
       "millisToISO" >> {
         val line = Line(0, "")
         
-        val input = Join(line, Map2Match(BuiltInFunction2Op(MillisToISO)),
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisToISO)),
           dag.LoadLocal(line, None, Root(line, PushString("/het/millisSinceEpoch")), Het),
           Root(line, PushString("-10:00")))
           
