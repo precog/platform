@@ -32,6 +32,9 @@ import akka.dispatch.ExecutionContext
 
 import java.io.{DataInputStream, DataOutputStream, File}
 
+import scala.annotation.tailrec
+import scalaz.Ordering._
+
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.iteratee._
@@ -48,25 +51,66 @@ import org.scalacheck.Arbitrary._
 
 trait IterableDatasetGenerators {
   type Record[A] = (Identities, A)
+  type DSPair[A] = Pair[IterableDataset[A], IterableDataset[A]]
+
+  case class MergeSample(maxIds: Int, l1: IterableDataset[Long], l2: IterableDataset[Long])
 
   case class IdCount(idCount: Int)
 
-  implicit def genLong = for (l <- arbitrary[Long]) yield (l: Long)
-
-  implicit def recGen[A](implicit idCount: IdCount, agen: Gen[A]): Gen[Record[A]] = 
+  implicit val mergeSampleArbitrary = Arbitrary(
     for {
-      ids <- listOfN(idCount.idCount, arbitrary[Long])
+      i1 <- choose(0, 3) map (IdCount(_: Int))
+      i2 <- choose(1, 3) map (IdCount(_: Int)) if i2 != i1
+      l1 <- dsGen[Long](Gen.value(i1), genLong)
+      l2 <- dsGen[Long](Gen.value(i2), genLong)
+    } yield {
+      MergeSample(i1.idCount max i2.idCount, l1, l2)
+    }
+  )
+
+  implicit val genLong: Gen[Long] = arbLong.arbitrary
+
+  val genVariableIdCount = Gen.choose(0, 2).map(IdCount(_))
+
+  def genFixedIdCount(count: Int): Gen[IdCount] = Gen.value(IdCount(count))
+
+  implicit def recGen[A](idCount: IdCount, agen: Gen[A]): Gen[Record[A]] = 
+    for {
+      ids   <- listOfN(idCount.idCount, arbitrary[Long])
       value <- agen
     } yield {
       (VectorCase(ids: _*), value)
     }
 
-  implicit def dsGen[A](implicit idCount: IdCount, rgen: Gen[Record[A]]): Gen[IterableDataset[A]] = {
-    for (l <- listOf(rgen)) yield IterableDataset(idCount.idCount, l.distinct)
+  implicit def dsGen[A](implicit count: Gen[IdCount], agen: Gen[A]): Gen[IterableDataset[A]] = {
+    for {
+      idCount <- count
+      l       <- listOf(recGen(idCount, agen))
+    } yield IterableDataset(idCount.idCount, l.distinct)
   }
 
-  implicit def arbIterableDataset[A](implicit idCount: IdCount, gen: Gen[Record[A]]): Arbitrary[IterableDataset[A]] =
-     Arbitrary(dsGen[A])
+  implicit def equalCountDSPair[A](implicit count: Gen[IdCount], agen: Gen[A]): Gen[DSPair[A]] = {
+    for {
+      idCount <- count
+      l       <- listOf(recGen(idCount, agen))
+      m       <- listOf(recGen(idCount, agen))
+    } yield (IterableDataset(idCount.idCount, l.distinct), IterableDataset(idCount.idCount, m.distinct))
+  }
+
+  implicit def groupingGen[K,A](implicit groupingFunc: A => K, count: Gen[IdCount], agen: Gen[A], orderA: Order[A], orderK: Order[K]): Gen[IterableGrouping[K,IterableDataset[A]]] = {
+    implicit val orderingA = tupledIdentitiesOrder[A].toScalaOrdering
+    implicit val orderingK = orderK.toScalaOrdering
+
+    for {
+      ds <- dsGen[A]
+    } yield {
+      IterableGrouping(ds.iterable.groupBy { case (k,v) => groupingFunc(v) }.map { case (k,v) => (k, IterableDataset[A](ds.idCount, List(v.toSeq: _*).sorted)) }.toList.sortBy(_._1).toIterator)
+    }
+  }
+
+  implicit def arbLongDataset(implicit idCount: Gen[IdCount]) = Arbitrary(dsGen[Long])
+
+  implicit def arbLongDSPair(implicit idCount: Gen[IdCount]) = Arbitrary(equalCountDSPair[Long])
 }
 
 class IterableDatasetOpsSpec extends Specification with ScalaCheck with IterableDatasetOpsComponent with IterableDatasetGenerators 
@@ -163,12 +207,62 @@ with DiskIterableDatasetMemoizationComponent {
   
   "iterable dataset ops" should {
     "cogroup" in {
-      // TODO: Enhance test coverage
-      "abitrary datasets" in {
-        true mustEqual false
-      }.pendingUntilFixed(" - TODO: ")
+      "for abitrary datasets" in {
+        implicit val idCount = genFixedIdCount(1)
+        check { (p: DSPair[Long]) => {
+          val (l1, l2) = p
+          
+          implicit val idSort = IdentitiesOrder.toScalaOrdering
 
-      "static full dataset" in {
+          val l1List = l1.iterable.toList.sorted
+          val l2List = l2.iterable.toList.sorted
+
+          type ResultList = List[Record[Either3[Long, (Long,Long), Long]]]
+
+          val tOrder = tupledIdentitiesOrder[Long]
+
+          @tailrec def computeCogroup(l: List[Record[Long]], r: List[Record[Long]], acc: ResultList): ResultList = {
+            (l,r) match {
+              case (lh :: lt, rh :: rt) => tOrder.order(lh,rh) match {
+                case EQ => {
+                  val (leftSpan, leftRemain) = l.partition(tOrder.order(_, lh) == EQ)
+                  val (rightSpan, rightRemain) = r.partition(tOrder.order(_, rh) == EQ)
+
+                  val cartesian = leftSpan.flatMap { lv => rightSpan.map { rv => (rv._1, middle3((lv._2,rv._2))) } }
+
+                  computeCogroup(leftRemain, rightRemain, acc ::: cartesian)
+                }
+                case LT => {
+                  val (leftRun, leftRemain) = l.partition(tOrder.order(_, rh) == LT)
+                  
+                  computeCogroup(leftRemain, r, acc ::: leftRun.map { case (i,v) => (i, left3(v)) })
+                }
+                case GT => {
+                  val (rightRun, rightRemain) = r.partition(tOrder.order(lh, _) == GT)
+
+                  computeCogroup(l, rightRemain, acc ::: rightRun.map { case (i,v) => (i, right3(v)) })
+                }
+              }
+              case (Nil, _) => acc ::: r.map { case (i,v) => (i, right3(v)) }
+              case (_, Nil) => acc ::: l.map { case (i,v) => (i, left3(v)) }
+            }
+          }
+
+          val expected = computeCogroup(l1List, l2List, Nil)
+
+          val result = IterableDataset(1, l1List.toIterable).cogroup(IterableDataset(1, l2List.toIterable)) {
+            new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+              def left(i: Long) = left3(i)
+              def both(i1: Long, i2: Long) = middle3((i1, i2))
+              def right(i: Long) = right3(i)
+            }
+          }.iterable.toList
+
+          result must containAllOf(expected).only.inOrder
+        }}
+      }
+
+      "for a static full dataset" in {
         val v1  = IterableDataset(1, Vector(rec(0), rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
         val v2  = IterableDataset(1, Vector(rec(0), rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
 
@@ -200,7 +294,7 @@ with DiskIterableDatasetMemoizationComponent {
         Vector(results.iterator.toSeq: _*) mustEqual expected
       }
 
-      "static single pair dataset" in {
+      "for a static single pair dataset" in {
         // Catch bug where equal at the end of input produces middle, right
         val v1s = IterableDataset(1, Vector(rec(0)))
         val v2s = IterableDataset(1, Vector(rec(0)))
@@ -217,39 +311,76 @@ with DiskIterableDatasetMemoizationComponent {
 
         Vector(results2.iterator.toSeq: _*) mustEqual expected2
       }
-      
-      "static datasets with zero identities" in {
-        def rec(l: Long) = (VectorCase(), l)
-        val v1  = IterableDataset(0, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
-        val v2  = IterableDataset(0, Vector(rec(3)))
 
-        val results = v1.cogroup(v2) {
-          new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
-            def left(i: Long) = left3(i)
-            def both(i1: Long, i2: Long) = middle3((i1, i2))
-            def right(i: Long) = right3(i)
-          }
-        }
+      val cgf = new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
+        def left(i: Long) = left3(i)
+        def both(i1: Long, i2: Long) = middle3((i1, i2))
+        def right(i: Long) = right3(i)
+      }
 
-        val expected = Vector(
-          middle3((1, 3)),
-          middle3((3, 3)),
-          middle3((3, 3)),
-          middle3((5, 3)),
-          middle3((7, 3)),
-          middle3((8, 3)),
-          middle3((8, 3))
-        )
+      "with an assertion on unequal identity widths" in {
+        val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
+        val d2 = IterableDataset[Long](1, List((VectorCase[Long](1l), 1l)))
 
-        Vector(results.iterator.toSeq: _*) must_== expected
+        d1.cogroup(d2)(cgf) must throwAn[AssertionError]
+      }
+
+      "with an assertion on zero-width identities" in {
+        val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
+        val d2 = IterableDataset[Long](0, List((VectorCase[Long](), 2l)))
+
+        d1.cogroup(d2)(cgf) must throwAn[AssertionError]
       }
     }
 
     "join" in {
-      // TODO: Enhance test coverage
-      "arbitrary dataset" in { true mustEqual false }.pendingUntilFixed(" - TODO: ")
+      "for arbitrary datasets" in { 
+        implicit val idCount = genVariableIdCount
+        check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => {
+          implicit val idSort = IdentitiesOrder.toScalaOrdering
 
-      "static full dataset" in {
+          val sharedPrefixLen = l1.idCount min l2.idCount
+
+          val l1List = l1.iterable.toList.sorted
+          val l2List = l2.iterable.toList.sorted
+
+          type ResultList = List[Record[(Long,Long)]]
+
+          import scala.annotation.tailrec
+          import scalaz.Ordering._
+
+          def order(l: Record[Long], r: Record[Long]): Ordering = prefixIdentityOrder(l._1, r._1, sharedPrefixLen)
+
+          @tailrec def computeJoin(l: List[Record[Long]], r: List[Record[Long]], acc: ResultList): ResultList = {
+            (l,r) match {
+              case (lh :: lt, rh :: rt) => order(lh, rh) match {
+                case EQ => {
+                  val (leftSpan, leftRemain) = l.partition(order(_, lh) == EQ)
+                  val (rightSpan, rightRemain) = r.partition(order(_, rh) == EQ)
+
+                  val cartesian = leftSpan.flatMap { lv => rightSpan.map { rv => (lv._1 ++ rv._1.drop(sharedPrefixLen), (lv._2,rv._2)) } }
+
+                  computeJoin(leftRemain, rightRemain, acc ::: cartesian)
+                }
+                case LT => computeJoin(l.dropWhile(order(_, rh) == LT), r, acc)
+                case GT => computeJoin(l, r.dropWhile(order(lh, _) == GT), acc)
+              }
+              case (Nil, _) => acc
+              case (_, Nil) => acc
+            }
+          }
+
+          val expected = computeJoin(l1List, l2List, Nil)
+
+          val result = IterableDataset(1, l1List.toIterable).join(IterableDataset(1, l2List.toIterable), sharedPrefixLen) {
+            case (a, b) => (a, b)
+          }.iterable.toList
+
+          result must containAllOf(expected).only.inOrder
+        }}
+      }
+
+      "for a static full dataset" in {
         val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
         val v2  = IterableDataset(1, Vector(rec(2), rec(3), rec(4), rec(5), rec(5), rec(6), rec(8), rec(8)))
         
@@ -271,7 +402,7 @@ with DiskIterableDatasetMemoizationComponent {
         Vector(results.iterator.toSeq: _*) must_== expected
       }
 
-      "static datasets with zero identities" in {
+      "for a static dataset with zero-width identities" in {
         val v1  = IterableDataset(1, Vector(rec(1), rec(3), rec(3), rec(5), rec(7), rec(8), rec(8)))
         val v2  = IterableDataset(0, Vector((VectorCase(), 3)))
 
@@ -294,18 +425,18 @@ with DiskIterableDatasetMemoizationComponent {
     }
 
     "crossLeft" in {
-      implicit val idCount = IdCount(1)
+      implicit val idCount = genVariableIdCount
       check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossLeft(l2) { 
           case (a, b) => (a, b)
         }
-
+             
         results.iterator.toList must_== l1.iterator.toList.flatMap(i => l2.iterator.toList.map((j: Long) => (i, j)))
       } 
     }
 
     "crossRight" in {
-      implicit val idCount = IdCount(1)
+      implicit val idCount = genVariableIdCount
       check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
         val results = l1.crossRight(l2) { 
           case (a, b) => (a, b)
@@ -316,18 +447,6 @@ with DiskIterableDatasetMemoizationComponent {
     }
 
     "paddedMerge" in {
-      case class MergeSample(maxIds: Int, l1: IterableDataset[Long], l2: IterableDataset[Long])
-      implicit val mergeSampleArbitrary = Arbitrary(
-        for {
-          i1 <- choose(0, 3) map (IdCount(_: Int))
-          i2 <- choose(1, 3) map (IdCount(_: Int)) if i2 != i1
-          l1 <- dsGen(i1, recGen(i1, genLong))
-          l2 <- dsGen(i2, recGen(i2, genLong))
-        } yield {
-          MergeSample(i1.idCount max i2.idCount, l1, l2)
-        }
-      )
-
       check { (sample: MergeSample) => 
         val results = sample.l1.paddedMerge(sample.l2, () => idSource.nextId()).iterator.toList
         val sampleLeft = sample.l1.iterator.toList
@@ -335,30 +454,52 @@ with DiskIterableDatasetMemoizationComponent {
 
         (results must haveSize(sampleLeft.size + sampleRight.size)) and
         (results must haveTheSameElementsAs(sampleLeft ++ sampleRight))
-      } 
+      }
     }
     
     "union" in {
-      implicit val ordering = identityValueOrder[Long].toScalaOrdering
-      implicit val idCount = IdCount(1)
-      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
-        val results = l1.union(l2).iterable.toList
-        val expectedSet = Set((l1.iterable ++ l2.iterable).toSeq: _*).toList
-        val expectedSorted = expectedSet.sorted
+      "for arbitrary datasets" in {
+        implicit val ordering = identityValueOrder[Long].toScalaOrdering
+        implicit val idCount = genVariableIdCount
+  
+        check { (p: DSPair[Long]) =>
+          val (l1, l2) = p
+          val results = l1.union(l2).iterable.toList
+          val expectedSet = Set((l1.iterable ++ l2.iterable).toSeq: _*).toList
+          val expectedSorted = expectedSet.sorted
+  
+          results must containAllOf(expectedSorted).only.inOrder
+        }
+      }
 
-        results must containAllOf(expectedSorted).only.inOrder
+      "with an assertion on unequal identity widths" in {
+        val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
+        val d2 = IterableDataset[Long](1, List((VectorCase[Long](1l), 1l)))
+
+        d1.union(d2) must throwAn[AssertionError]
       }
     }
 
     "intersect" in {
-      implicit val ordering = identityValueOrder[Long].toScalaOrdering
-      implicit val idCount = IdCount(1)
-      check { (l1: IterableDataset[Long], l2: IterableDataset[Long]) => 
-        val results = l1.intersect(l2).iterable.toList
-        val expectedSet = (Set(l1.iterable.toSeq: _*) & Set(l2.iterable.toSeq: _*)).toList
-        val expectedSorted = expectedSet.sorted
+      "for arbitrary datasets" in {
+        implicit val ordering = identityValueOrder[Long].toScalaOrdering
+        implicit val idCount = genVariableIdCount
+  
+        check { (p: DSPair[Long]) =>
+          val (l1, l2) = p
+          val results = l1.intersect(l2).iterable.toList
+          val expectedSet = (Set(l1.iterable.toSeq: _*) & Set(l2.iterable.toSeq: _*)).toList
+          val expectedSorted = expectedSet.sorted
+  
+          results must containAllOf(expectedSorted).only.inOrder
+        }
+      }
 
-        results must containAllOf(expectedSorted).only.inOrder
+      "with an assertion on unequal identity widths" in {
+        val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
+        val d2 = IterableDataset[Long](1, List((VectorCase[Long](1l), 1l)))
+
+        d1.union(d2) must throwAn[AssertionError]
       }
     }
 
@@ -391,7 +532,7 @@ with DiskIterableDatasetMemoizationComponent {
 
       "for arbitrary inputs" in {
         implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
-        implicit val idCount = IdCount(1)
+        implicit val idCount = genVariableIdCount
 
         check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
           val expected = ds.iterable.groupBy(_._2 / 2 * 2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
@@ -438,9 +579,9 @@ with DiskIterableDatasetMemoizationComponent {
       "for arbitrary inputs" in {
         implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
         implicit val idOrder = com.precog.yggdrasil.IdentitiesOrder.toScalaOrdering
-        implicit val idCount = IdCount(1)
-
-        check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
+        implicit val idCount = genVariableIdCount        
+        
+        check { (ds: IterableDataset[Long]) => {
           val expected: List[(Long,IterableDataset[Long])] = ds.iterable.groupBy(_._2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
 
           val result = ds.group(0, memoCtx, expiration) {
@@ -497,18 +638,46 @@ with DiskIterableDatasetMemoizationComponent {
     }
     
     "implement mapping" in {
-      g1.iterator.size must_== 5
-      val result = mapGrouping(g1) { v =>
-        v.iterable.size
-      }
+      "for a reference grouping" in {
+        g1.iterator.size must_== 5
+        val result = mapGrouping(g1) { 
+          v => v.iterable.size
+        }
       
-      result.iterator.toList must containAllOf(List(
-        0L -> 1,
-        2L -> 3,
-        4L -> 1,
-        6L -> 2,
-        8L -> 1)).only.inOrder
+        result.iterator.toList must containAllOf(List(
+          0L -> 1,
+          2L -> 3,
+          4L -> 1,
+          6L -> 2,
+          8L -> 1)).only.inOrder
+      }
+
+      "for arbitrary groupings" in {
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idCount = genVariableIdCount
+
+        check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
+          def mapFunc(r: Record[Long]) = (r._1, r._2 * 2)
+          
+          val expected = ds.iterable.groupBy(_._2 % 10).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.map(mapFunc).toSeq: _*).sorted)) }.toList.sortBy(_._1)
+
+          val grouped = ds.group(0, memoCtx, expiration) {
+            v => IterableDataset[Long](1, Vector(rec(v % 10)))
+          }
+
+          val result = mapGrouping(grouped) {
+            (a: IterableDataset[Long]) => IterableDataset[Long](a.idCount, a.iterable.map(mapFunc))
+          }.iterator.toList
+
+          result must containAllOf(expected).only.inOrder
+        } }
+
+      }
     }
+
+    "implement flatten" in {
+      true mustEqual false
+    }.pendingUntilFixed
     
     "implement merging" >> {
       "union" >> {
@@ -543,19 +712,57 @@ with DiskIterableDatasetMemoizationComponent {
     }
     
     "implement zipping" in {
-      val mappedG1 = mapGrouping(g1) { v => NEL(v) }
-      val mappedG2 = mapGrouping(g2) { v => NEL(v) }
+      "for a reference grouping" in {
+        val mappedG1 = mapGrouping(g1) { v => NEL(v) }
+        val mappedG2 = mapGrouping(g2) { v => NEL(v) }
 
-      val result = zipGroups(mappedG1, mappedG2)
+        val result = zipGroups(mappedG1, mappedG2)
       
-      val expected = Stream(
-        2L -> NEL(IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b))),
-                  IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)))),
-        8L -> NEL(IterableDataset(1, Vector(sharedRecs('i8a))),
-                  IterableDataset(1, Vector(sharedRecs('i8b)))))
+        val expected = Stream(
+          2L -> NEL(IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i3b))),
+                    IterableDataset(1, Vector(sharedRecs('i2), sharedRecs('i3a), sharedRecs('i4)))),
+          8L -> NEL(IterableDataset(1, Vector(sharedRecs('i8a))),
+                    IterableDataset(1, Vector(sharedRecs('i8b)))))
           
-      result.iterator.toList must containAllOf(expected).only.inOrder
+        result.iterator.toList must containAllOf(expected).only.inOrder
+      }
+
+      "for arbitrary groupings" in {
+        implicit val groupFunc = (a: Long) => a % 10
+        implicit val idCount = genVariableIdCount
+
+        implicit val arbGroup = Arbitrary(groupingGen[Long,Long])
+
+        check { (g1: IterableGrouping[Long, IterableDataset[Long]], g2: IterableGrouping[Long, IterableDataset[Long]]) => {
+          val list1 = g1.iterator.toList
+          val list2 = g2.iterator.toList
+          
+          @tailrec def zipList(l1: List[(Long, IterableDataset[Long])], l2: List[(Long, IterableDataset[Long])], acc: List[(Long,NEL[IterableDataset[Long]])]): List[(Long,NEL[IterableDataset[Long]])]  = (l1, l2) match {
+            case (h1 :: t1, h2 :: t2) => {
+              if (h1._1 == h2._1) {
+                zipList(t1, t2, (h1._1, NEL(h1._2, h2._2)) :: acc)
+              } else if (h1._1 < h2._1) {
+                zipList(t1, l2, acc)
+              } else {
+                zipList(l1, t2, acc)
+              }
+            }
+            case (Nil, _) => acc.reverse
+            case (_, Nil) => acc.reverse
+          }
+
+          val ng1 = mapGrouping(IterableGrouping(list1.iterator)) { v => NEL(v) }
+          val ng2 = mapGrouping(IterableGrouping(list2.iterator)) { v => NEL(v) }
+
+          val result = zipGroups(ng1, ng2).iterator.toList
+
+          val expected = zipList(list1, list2, Nil)
+
+          result must containAllOf(expected).only.inOrder
+        }}
+      }
     }
 
+    
   }
 }

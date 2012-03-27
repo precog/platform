@@ -293,6 +293,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     type IB = (Identities, B)
     type IC = (Identities, C)
     assert(value.idCount == d2.idCount)
+    assert(value.idCount != 0)
     def order(ia: IA, ib: IB) = identityOrder(ia._1, ib._1)
 
     IterableDataset[C](
@@ -695,6 +696,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
+    assert(value.idCount == d2.idCount)
+
     implicit val order = identityValueOrder[A]
     val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
     val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
@@ -759,6 +762,8 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
   }
 
   def intersect(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
+    assert(value.idCount == d2.idCount)
+
     implicit val order = identityValueOrder[A]
     val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "intersect", IdGen.nextInt())
     val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "intersect", IdGen.nextInt())
