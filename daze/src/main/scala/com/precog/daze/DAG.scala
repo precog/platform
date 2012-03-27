@@ -425,6 +425,8 @@ trait DAG extends Instructions {
     
     def isSingleton: Boolean
     
+    lazy val memoId = IdGen.nextInt()
+    
     def findMemos: Set[dag.Memoize]
     
     def containsSplitArg: Boolean
@@ -568,8 +570,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
       
-      lazy val memoId = IdGen.nextInt()
-      
       // TODO include this
       lazy val findMemos = left.findMemos ++ right.findMemos
       
@@ -584,8 +584,6 @@ trait DAG extends Instructions {
       }
       
       lazy val isSingleton = target.isSingleton
-      
-      lazy val memoId = IdGen.nextInt()
       
       // TODO include this
       lazy val findMemos = target.findMemos ++ boolean.findMemos
@@ -611,8 +609,6 @@ trait DAG extends Instructions {
       
       lazy val isSingleton = parent.isSingleton
       
-      lazy val memoId = IdGen.nextInt()
-      
       lazy val findMemos = parent.findMemos
       
       lazy val containsSplitArg = parent.containsSplitArg
@@ -623,8 +619,6 @@ trait DAG extends Instructions {
       
       lazy val provenance = parent.provenance
       lazy val isSingleton = parent.isSingleton
-      
-      lazy val memoId = IdGen.nextInt()
       
       lazy val findMemos = parent.findMemos + this
       
