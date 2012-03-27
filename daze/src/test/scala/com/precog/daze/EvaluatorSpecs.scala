@@ -1634,7 +1634,7 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("num")),
             dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.provenance)(input)))))
-                  
+      
       val result = testEval(input)
       
       result must haveSize(9)

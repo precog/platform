@@ -311,7 +311,13 @@ trait Evaluator extends DAG
             
             if (rest.isEmpty) {
               val Match(spec, set, _) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), child, ctx)
-              realizeMatch(spec, set)
+              val back = realizeMatch(spec, set)
+              
+              for (id <- child.findMemos(s)) {
+                ctx.memoizationContext.cache.expire(id).unsafePerformIO
+              }
+              
+              back
             } else {
               flattenAllGroups(rest, params2, memoIds.tail)
             }
