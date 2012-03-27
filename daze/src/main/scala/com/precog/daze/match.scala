@@ -4,14 +4,20 @@ package daze
 import bytecode._
 import yggdrasil._
 
-trait MatchAlgebra extends OperationsAPI with Instructions {
+trait MatchAlgebra extends OperationsAPI with Instructions with DAG {
   import instructions._
   
   def resolveMatch(spec: MatchSpec): PartialFunction[SValue, SValue] = spec match {
     case mal.Actual => { case x => x }
     
-    case mal.Op1(parent, op) =>
-      pfCompose(resolveUnaryOperation(op), resolveMatch(parent))
+    case mal.Op1(parent, op) => {
+      val left = resolveUnaryOperation(op)
+      val right = resolveMatch(parent)
+      
+      {
+        case a if right.isDefinedAt(a) && left.isDefinedAt(right(a)) => left(right(a))
+      }
+    }
     
     // TODO generalize to all statically singleton sets
     case mal.Op2Single(parent, value, op, left) => {
@@ -57,12 +63,8 @@ trait MatchAlgebra extends OperationsAPI with Instructions {
   
   def resolveBinaryOperation(op: BinaryOperation): PartialFunction[(SValue, SValue), SValue]
   
-  private def pfCompose[A, B, C](left: PartialFunction[B, C], right: PartialFunction[A, B]): PartialFunction[A, C] = {
-    case a if right.isDefinedAt(a) && left.isDefinedAt(right(a)) => left(right(a))
-  }
   
-  
-  case class Match(spec: MatchSpec, set: Dataset[SValue])
+  case class Match(spec: MatchSpec, set: Dataset[SValue], graph: DepGraph)
   
   sealed trait MatchSpec
   

@@ -83,42 +83,42 @@ trait Evaluator extends DAG
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
-    def maybeRealize(result: Either[DatasetMask[Dataset], Match], ctx: Context): Match =
-      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration)) }).fold(identity, identity)
+    def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
+      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration), graph) }).fold(identity, identity)
     
     def realizeMatch(spec: MatchSpec, set: Dataset[SValue]): Dataset[SValue] = spec match {
       case mal.Actual => set
       case _ => set collect resolveMatch(spec)
     }
   
-    def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
+    def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
       case ZipBucketSpec(left, right) => {
-        val leftGroup = computeGrouping(assume, splits, ctx)(left)
-        val rightGroup = computeGrouping(assume, splits, ctx)(right)
+        val leftGroup = computeGrouping(assume, splits, graph, ctx)(left)
+        val rightGroup = computeGrouping(assume, splits, graph, ctx)(right)
         ops.zipGroups(leftGroup, rightGroup)
       }
       
       case _: MergeBucketSpec | _: SingleBucketSpec =>
-        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, splits, ctx)(spec)) { a => NEL(a) }
+        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, splits, graph, ctx)(spec)) { a => NEL(a) }
     }
     
-    def computeMergeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
+    def computeMergeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
       case ZipBucketSpec(_, _) => sys.error("Cannot merge_buckets following a zip_buckets")
       
       case MergeBucketSpec(left, right, and) => {
-        val leftGroup = computeMergeGrouping(assume, splits, ctx)(left)
-        val rightGroup = computeMergeGrouping(assume, splits, ctx)(right)
+        val leftGroup = computeMergeGrouping(assume, splits, graph, ctx)(left)
+        val rightGroup = computeMergeGrouping(assume, splits, graph, ctx)(right)
         ops.mergeGroups(leftGroup, rightGroup, !and)
       }
       
       case SingleBucketSpec(target, solution) => {
         val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
-        val Match(sourceSpec, sourceSet) = maybeRealize(loop(common, assume, splits, ctx), ctx)
+        val Match(sourceSpec, sourceSet, _) = maybeRealize(loop(common, assume, splits, ctx), common, ctx)
         val source = realizeMatch(sourceSpec, sourceSet)
         
-        source.group[SValue](IdGen.nextInt() , ctx.memoizationContext, ctx.expiration) { sv: SValue =>
-          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv)))
-          val Match(spec, set) = maybeRealize(loop(solution, assume2, splits, ctx), ctx)
+        source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
+          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv), graph))
+          val Match(spec, set, _) = maybeRealize(loop(solution, assume2, splits, ctx), graph, ctx)
           realizeMatch(spec, set)
         }
       }
@@ -173,51 +173,51 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next.toSeq: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Match]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
       case g if assume contains g => Right(assume(g))
       
       case s @ SplitParam(_, index) =>
-        Right(splits(s.parent)(index))
+        Right(Match(mal.Actual, splits(s.parent)(index), s))
       
       case s @ SplitGroup(_, index, _) =>
-        Right(splits(s.parent)(index))
+        Right(Match(mal.Actual, splits(s.parent)(index), s))
       
       case Root(_, instr) =>
-        Right(Match(mal.Actual, ops.point(graph.value.get)))    // TODO don't be stupid
+        Right(Match(mal.Actual, ops.point(graph.value.get), graph))    // TODO don't be stupid
       
       case dag.New(_, parent) => loop(parent, assume, splits, ctx)
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
-          case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1)))
+          case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1), graph))
           
           case None => {
-            val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+            val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
             val loaded = realizeMatch(spec, set) collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
             } 
 
-            Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId())))
+            Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))
           }
         }
       }
 
       case dag.SetReduce(_, Distinct, parent) => {
-        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext)
-        Right(Match(mal.Actual, result))
+        Right(Match(mal.Actual, result, graph))
       }
       
       case Operate(_, op, parent) => {
         // TODO unary typing
-        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
-        Right(Match(mal.Op1(spec, op), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
+        Right(Match(mal.Op1(spec, op), set, graph2))
       }
       
       // TODO mode and median
       case dag.Reduce(_, red, parent) => {
-        val Match(spec, set) = maybeRealize(loop(parent, assume, splits, ctx), ctx)
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
         val reduced = red match {
@@ -298,20 +298,19 @@ trait Evaluator extends DAG
             else ops.point(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
-        Right(Match(mal.Actual, reduced))
+        Right(Match(mal.Actual, reduced, graph))
       }
       
-      case s @ dag.Split(_, specs, child) => {
-        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Match], memoIds: Vector[Int]): Dataset[SValue] = {
+      case s @ dag.Split(line, specs, child) => {
+        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]], memoIds: Vector[Int]): Dataset[SValue] = {
           val current = groupings.head
           val rest = groupings.tail
           
           ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext, ctx.expiration) { (key, groups) =>
-            val sets = ops.point(key) +: Vector(groups.toList: _*)
-            val params2 = (sets map { Match(mal.Actual, _) }) ++ params
+            val params2 = ops.point(key) +: Vector(groups.toList: _*)
             
             if (rest.isEmpty) {
-              val Match(spec, set) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), ctx)
+              val Match(spec, set, _) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), child, ctx)
               realizeMatch(spec, set)
             } else {
               flattenAllGroups(rest, params2, memoIds.tail)
@@ -319,15 +318,15 @@ trait Evaluator extends DAG
           }
         }
         
-        val groupings = specs map computeGrouping(assume, splits, ctx)
-        Right(Match(mal.Actual, flattenAllGroups(groupings, Vector(), s.memoIds)))
+        val groupings = specs map computeGrouping(assume, splits, graph, ctx)
+        Right(Match(mal.Actual, flattenAllGroups(groupings, Vector(), s.memoIds), s))
       }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
       case Join(_, instr @ (IUnion | IIntersect), left, right) => {
-        val Match(leftSpec, leftSet) = maybeRealize(loop(left, assume, splits, ctx), ctx)
-        val Match(rightSpec, rightSet) = maybeRealize(loop(right, assume, splits, ctx), ctx)
+        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
@@ -347,7 +346,7 @@ trait Evaluator extends DAG
             ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
         }
         
-        Right(Match(mal.Actual, back))
+        Right(Match(mal.Actual, back, graph))
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
@@ -357,11 +356,11 @@ trait Evaluator extends DAG
             val part1 = parent.left map { _ derefObject str }
             
             part1.right map {
-              case Match(spec, set) => Match(mal.Op2Single(spec, value, DerefObject, true), set)
+              case Match(spec, set, graph) => Match(mal.Op2Single(spec, value, DerefObject, true), set, graph)
             }
           }
           
-          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length)))
+          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
         }
       }
       
@@ -372,43 +371,43 @@ trait Evaluator extends DAG
             val part1 = parent.left map { _ derefArray num.toInt }
             
             part1.right map {
-              case Match(spec, set) => Match(mal.Op2Single(spec, value, DerefArray, true), set)
+              case Match(spec, set, graph) => Match(mal.Op2Single(spec, value, DerefArray, true), set, graph)
             }
           }
           
-          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length)))
+          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
         }
       }
       
       // begin: annoyance with Scala's lousy pattern matcher
       case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
       }
       
       case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
       }
       
       case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(left, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
       }
       
       case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
       
       case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
       
       case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
-        val Match(spec, set) = maybeRealize(loop(right, assume, splits, ctx), ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set))
+        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
       // end: annoyance
       
@@ -429,17 +428,16 @@ trait Evaluator extends DAG
           rightTpe map mask.typed getOrElse mask
         }
         
-        val Match(leftSpec, leftSet) = maybeRealize(leftResTyped, ctx)
-        val Match(rightSpec, rightSet) = maybeRealize(rightResTyped, ctx)
+        val Match(leftSpec, leftSet, leftGraph) = maybeRealize(leftResTyped, left, ctx)
+        val Match(rightSpec, rightSet, rightGraph) = maybeRealize(rightResTyped, right, ctx)
         
         lazy val leftEnum = realizeMatch(leftSpec, leftSet)
         lazy val rightEnum = realizeMatch(rightSpec, rightSet)
         
-        // TODO memoize evaluation so that this works
-        if (leftSet eq rightSet)
-          Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet))
+        if (leftGraph == rightGraph)
+          Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet, leftGraph))
         else
-          Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation)))
+          Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
       }
       
       case j @ Join(_, instr, left, right) => {
@@ -464,8 +462,8 @@ trait Evaluator extends DAG
           rightTpe map mask.typed getOrElse mask
         }
         
-        val Match(leftSpec, leftSet) = maybeRealize(leftResTyped, ctx)
-        val Match(rightSpec, rightSet) = maybeRealize(rightResTyped, ctx)
+        val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
         
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
@@ -478,7 +476,7 @@ trait Evaluator extends DAG
             leftEnum.memoize(j.memoId).crossRight(rightEnum)(op.operation)
         }
         
-        Right(Match(mal.Actual, resultEnum))
+        Right(Match(mal.Actual, resultEnum, graph))
       }
       
       case Filter(_, None, _, target, boolean) => {
@@ -489,16 +487,16 @@ trait Evaluator extends DAG
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
-        val Match(targetSpec, targetSet) = maybeRealize(targetRes, ctx)
-        val Match(booleanSpec, booleanSet) = maybeRealize(booleanResTyped, ctx)
+        val Match(targetSpec, targetSet, targetGraph) = maybeRealize(targetRes, target, ctx)
+        val Match(booleanSpec, booleanSet, booleanGraph) = maybeRealize(booleanResTyped, boolean, ctx)
         
         lazy val targetEnum = realizeMatch(targetSpec, targetSet)
         lazy val booleanEnum = realizeMatch(booleanSpec, booleanSet)
         
-        if (targetSet eq booleanSet)
-          Right(Match(mal.Filter(targetSpec, booleanSpec), targetSet))
+        if (targetGraph == booleanGraph)
+          Right(Match(mal.Filter(targetSpec, booleanSpec), targetSet, targetGraph))
         else
-          Right(Match(mal.Actual, targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }))
+          Right(Match(mal.Actual, targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }, graph))
       }
       
       case f @ Filter(_, Some(cross), _, target, boolean) => {
@@ -509,8 +507,8 @@ trait Evaluator extends DAG
         
         val booleanResTyped = booleanRes.left map { _ typed SBoolean }
         
-        val Match(targetSpec, targetSet) = maybeRealize(targetRes, ctx)
-        val Match(booleanSpec, booleanSet) = maybeRealize(booleanResTyped, ctx)
+        val Match(targetSpec, targetSet, _) = maybeRealize(targetRes, target, ctx)
+        val Match(booleanSpec, booleanSet, _) = maybeRealize(booleanResTyped, boolean, ctx)
         
         val targetEnum = realizeMatch(targetSpec, targetSet)
         val booleanEnum = realizeMatch(booleanSpec, booleanSet)
@@ -523,14 +521,14 @@ trait Evaluator extends DAG
             targetEnum.memoize(f.memoId).crossRight(booleanEnum) { case (sv, STrue) => sv }
         }
         
-        Right(Match(mal.Actual, resultEnum))
+        Right(Match(mal.Actual, resultEnum, graph))
       }
       
       case s @ Sort(parent, indexes) => {
         loop(parent, assume, splits, ctx).right map {
-          case Match(spec, set) => {
+          case Match(spec, set, _) => {
             val enum = realizeMatch(spec, set)
-            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId))
+            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId), graph)
           }
         }
       }
@@ -541,7 +539,7 @@ trait Evaluator extends DAG
     }
     
     withContext { ctx =>
-      val Match(spec, set) = maybeRealize(loop(orderCrosses(graph), Map(), Map(), ctx), ctx)
+      val Match(spec, set, _) = maybeRealize(loop(orderCrosses(graph), Map(), Map(), ctx), graph, ctx)
       realizeMatch(spec, set)
     }
   }
