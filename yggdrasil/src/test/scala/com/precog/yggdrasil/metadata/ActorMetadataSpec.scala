@@ -94,6 +94,17 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     }
 
     def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
+    
+    def extractPathsFor(ref: Path)(events: List[Event]): Set[Path] = {
+
+      def isDescendant(ref: Path, test: Path): Boolean = 
+        test.elements.startsWith(ref.elements) &&
+        test.elements.length > ref.elements.length
+      
+      events.collect {
+        case Event(test, _, _, _) if isDescendant(ref, test) => Path(test.elements(ref.length))
+      }.toSet
+    }
 
     def extractMetadataFor(path: Path, selector: JPath)(events: List[Event]): Map[ProjectionDescriptor, Map[ColumnDescriptor, Map[MetadataType, Metadata]]] = {
       def convertColDesc(cd: ColumnDescriptor) = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (cd -> Map[MetadataType, Metadata]())
@@ -178,6 +189,40 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       
       val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.data), Authorities(Set(e.tokenId)))
       ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+    }
+    
+    "return all children for the root path" ! check { (sample: List[Event]) =>
+      val metadata = buildMetadata(sample)
+      val event = sample(0)
+
+      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+
+      val fut = actor ? FindChildren(Path(""))
+
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]].toSet
+      
+      val expected = extractPathsFor(Path(""))(sample)
+      
+      result must_== expected
+
+    }
+    
+    "return all children for the an arbitrary path" ! check { (sample: List[Event]) =>
+      val metadata = buildMetadata(sample)
+      val event = sample(0)
+
+      val testPath: Path = event.path.parent.getOrElse(event.path)
+
+      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+
+      val fut = actor ? FindChildren(testPath)
+
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]].toSet
+      
+      val expected = extractPathsFor(testPath)(sample)
+      
+      result must_== expected
+
     }
 
     "return all selectors for a given path" ! check { (sample: List[Event]) =>

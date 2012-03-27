@@ -76,16 +76,16 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     messageClock = clockUpdate
   }
  
-  private def isChildPath(test: Path, ref: Path): Boolean = 
-    ref.elements.startsWith(test.elements) && 
-    test.elements.size == ref.elements.size + 1
+  private def isChildPath(ref: Path, test: Path): Boolean = 
+    test.elements.startsWith(ref.elements) && 
+    test.elements.size > ref.elements.size
 
-  def findChildren(path: Path): Seq[Path] = 
+  def findChildren(path: Path): Set[Path] = 
     projections.foldLeft(Set[Path]()) {
       case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { 
-        case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => cpath 
+        case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
       }
-    }.toList
+    }.toSet
  
   def findSelectors(path: Path): Seq[JPath] = {
     projections.foldLeft(Vector[JPath]()) {

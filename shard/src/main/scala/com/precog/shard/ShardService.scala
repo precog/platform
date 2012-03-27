@@ -82,7 +82,7 @@ trait ShardService extends
                 query {
                   get(new QueryServiceHandler(state.queryExecutor))
                 } ~ 
-                get(new BrowseServiceHandler(state.queryExecutor))
+                get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
             }
           }
