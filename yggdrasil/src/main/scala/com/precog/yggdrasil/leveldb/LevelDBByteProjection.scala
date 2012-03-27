@@ -27,56 +27,52 @@ trait LevelDBByteProjection extends ByteProjection {
     private final val buf = ByteBuffer.allocate(length)
     def writeIdentity(id: Identity): Unit = buf.putLong(id)
 
-    def writeValue(colDesc: ColumnDescriptor, v: CValue) = v.fold[Unit](
-      str     = s => {
+    def writeValue(colDesc: ColumnDescriptor, v: CValue) = v match {
+      case CString(s) => 
         val sbytes = s.getBytes("UTF-8")
         colDesc.valueType.format match {
           case FixedWidth(w) => buf.put(sbytes, 0, w)
           case LengthEncoded => buf.putInt(sbytes.length).put(sbytes)
         }
-      },
-      bool    = b => buf.put(if (b) trueByte else falseByte), 
-      int     = i => buf.putInt(i), 
-      long    = l => buf.putLong(l),
-      float   = f => buf.putFloat(f), 
-      double  = d => buf.putDouble(d), 
-      num     = d => {
+      
+      case CBoolean(b) => buf.put(if (b) trueByte else falseByte)
+      case CInt(i) => buf.putInt(i)
+      case CLong(l) => buf.putLong(l)
+      case CFloat(f) => buf.putFloat(f)
+      case CDouble(d) => buf.putDouble(d)
+      case CNum(d) => 
         val dbytes = d.as[Array[Byte]]
         buf.putInt(dbytes.length).put(dbytes)
-      },
-      emptyObj = (), emptyArr = (), 
-      nul = colDesc.valueType match {
-        case SStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
-        case SStringArbitrary       => buf.putInt(0)
-        case SBoolean               => buf.put(nullByte)
-        case SInt                   => buf.putInt(Int.MaxValue)
-        case SLong                  => buf.putLong(Long.MaxValue)
-        case SFloat                 => buf.putFloat(Float.MaxValue)
-        case SDouble                => buf.putDouble(Double.MaxValue)
-        case SDecimalArbitrary      => buf.putInt(0)
-        case _                      => ()
-      }
-    )
+      
+      case CEmptyObject => ()
+      case CEmptyArray => ()
+      case CNull => 
+        colDesc.valueType match {
+          case CStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
+          case CStringArbitrary       => buf.putInt(0)
+          case CBoolean               => buf.put(nullByte)
+          case CInt                   => buf.putInt(Int.MaxValue)
+          case CLong                  => buf.putLong(Long.MaxValue)
+          case CFloat                 => buf.putFloat(Float.MaxValue)
+          case CDouble                => buf.putDouble(Double.MaxValue)
+          case CDecimalArbitrary      => buf.putInt(0)
+          case _                      => ()
+        }
+    }
     
     def toArray: Array[Byte] = buf.array
   }
 
-  private final val incompatible = (_: Any) => sys.error("Column values incompatible with projection descriptor.")
 
   private final def listWidths(cvalues: Seq[CValue]): List[Int] = 
     descriptor.columns.map(_.valueType.format) zip cvalues map {
-      case (FixedWidth(w), sv) => w
-      case (LengthEncoded, sv) => 
-        sv.fold[Int](
-          str     = s => s.getBytes("UTF-8").length + 4,
-          bool    = incompatible, int     = incompatible, long    = incompatible,
-          float   = incompatible, double  = incompatible, 
-          num     = _.as[Array[Byte]].length + 4,
-          emptyObj = incompatible(()), emptyArr = incompatible(()), nul = incompatible(())
-        )
+      case (FixedWidth(w), cv) => w
+      case (LengthEncoded, CString(s)) => s.getBytes("UTF-8").length + 4
+      case (LengthEncoded, CNum(n)) => n.as[Array[Byte]].length + 4
+      case _ => sys.error("Column values incompatible with projection descriptor.")
     }
 
-  private final def allocateWidth(valueWidths: Seq[Int]): (Int) =  
+  private final def allocateWidth(valueWidths: Seq[Int]): Int =  
     descriptor.sorting.foldLeft(0) { 
       case (width, (col, ById)) =>
         (width + 8)
@@ -253,34 +249,35 @@ private[leveldb] object CValueReader {
 
   final def readIdentity(buf: ByteBuffer): Long = buf.getLong
 
-  final def readValue(buf: ByteBuffer, valueType: ColumnType): CValue = {
+  final def readValue(buf: ByteBuffer, valueType: CType): CValue = {
     valueType match {
-      case SStringFixed(width)    => 
+      case CStringFixed(width)    => 
         val sstringbuffer: Array[Byte] = new Array(width)
         buf.get(sstringbuffer)
         CString(new String(sstringbuffer, "UTF-8"))
       
-      case SStringArbitrary       => 
+      case CStringArbitrary       => 
         val length: Int = buf.getInt
         val sstringarb: Array[Byte] = new Array(length)
         buf.get(sstringarb)
         CString(new String(sstringarb, "UTF-8"))
 
-      case SBoolean               => 
+      case CBoolean               => 
         val b: Byte = buf.get
         if (b == trueByte)       CBoolean(true)
         else if (b == falseByte) CBoolean(false)
         else                     sys.error("Boolean byte value was not true or false")
 
-      case SInt                   => CInt(buf.getInt)
-      case SLong                  => CLong(buf.getLong)
-      case SFloat                 => CFloat(buf.getFloat)
-      case SDouble                => CDouble(buf.getDouble)
-      case SDecimalArbitrary      => 
+      case CInt                   => CInt(buf.getInt)
+      case CLong                  => CLong(buf.getLong)
+      case CFloat                 => CFloat(buf.getFloat)
+      case CDouble                => CDouble(buf.getDouble)
+      case CDecimalArbitrary      => 
         val length: Int = buf.getInt
         val sdecimalarb: Array[Byte] = new Array(length)
         buf.get(sdecimalarb)
         CNum(sdecimalarb.as[BigDecimal])
+
       case invalid                => sys.error("Invalid type read: " + invalid)
     }
   }

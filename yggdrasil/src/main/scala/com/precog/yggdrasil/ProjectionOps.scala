@@ -14,6 +14,7 @@ import scalaz.syntax.bind._
 import java.nio.ByteBuffer
 
 object ProjectionOps {
+  /*
   def printer[X, E, F[_] : Monad] : IterateeT[X, E, F, Unit] = {
     def loop : Input[E] => IterateeT[X, E, F, Unit] = {
       i => i.fold(el = {e => println(e); cont(loop)},
@@ -29,7 +30,7 @@ object ProjectionOps {
       Monad[F].point {
         acc map { asv =>
           sv.mapDoubleOr(asv) {
-            d => SDouble(asv.mapDoubleOr(d) { _ + d })
+            d => SDecimal(asv.mapDoubleOr(d) { _ + d })
           }
         } orElse {
           sv.mapDoubleOr(Option.empty[SValue]) { _ => Some(sv) }
@@ -37,6 +38,7 @@ object ProjectionOps {
       }
     }
   }
+  */
 
 
   // enumE((sumSValues >>== enum).run(x => Monad[F].point(None)))

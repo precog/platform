@@ -272,7 +272,7 @@ trait Timelib extends GenOpcode with ImplLibrary {
       case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => 
         val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
         val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
-        SLong(between(newTime1, newTime2))
+        SDecimal(between(newTime1, newTime2))
     }
 
     def between(d1: DateTime, d2: DateTime): Long
@@ -326,7 +326,7 @@ trait Timelib extends GenOpcode with ImplLibrary {
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SLong(newTime.getMillis)
+        SDecimal(newTime.getMillis)
     }    
   }
 
@@ -360,7 +360,7 @@ trait Timelib extends GenOpcode with ImplLibrary {
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
-        SLong(fraction(newTime))
+        SDecimal(fraction(newTime))
     }
 
     def fraction(d: DateTime): Int

@@ -43,10 +43,10 @@ trait SValueGenerators {
 
 
   def sleaf: Gen[SValue] = oneOf(
-    alphaStr map SString,
-    arbitrary[Boolean] map SBoolean,
-    arbitrary[Long] map SLong,
-    arbitrary[Double] map SDouble,
+    alphaStr map (SString(_: String)),
+    arbitrary[Boolean] map (SBoolean(_: Boolean)),
+    arbitrary[Long]    map (l => SDecimal(BigDecimal(l))),
+    arbitrary[Double]  map (d => SDecimal(BigDecimal(d))),
     //arbitrary[BigDecimal] map SDecimal, //scalacheck's BigDecimal gen will overflow at random
     value(SNull)
   )

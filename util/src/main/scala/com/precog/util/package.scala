@@ -19,6 +19,14 @@ package object util {
     close.close(a)
     result
   }
+
+  private val MAX_LONG = BigInt(Long.MaxValue)
+  private val MIN_LONG = BigInt(Long.MinValue)
+  
+  @inline
+  final def isValidLong(i: BigInt): Boolean = {
+    MIN_LONG <= i && i <= MAX_LONG
+  }
 }
 
 

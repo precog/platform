@@ -37,14 +37,14 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
   @inline
   private final def toProjectionData(msg: EventMessage, sel: JPath, value: JValue): ProjectionData = {
     val authorities = Set.empty + msg.event.tokenId
-    val colDesc = ColumnDescriptor(msg.event.path, sel, ColumnType.forValue(value).get, Authorities(authorities))
+    val colDesc = ColumnDescriptor(msg.event.path, sel, CType.forValue(value).get, Authorities(authorities))
 
     val map = new ListMap[ColumnDescriptor, Int]() + (colDesc -> 0)
     val seq: Seq[(ColumnDescriptor, SortBy)] = (colDesc -> ById) :: Nil
 
     val projDesc = ProjectionDescriptor.trustedApply(1, map, seq)
     val identities = Vector1(msg.eventId.uid)
-    val values = Vector1(ColumnType.toCValue(value))
+    val values = Vector1(CType.toCValue(value))
     val metadata = msg.event.metadata.get(sel).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
     ProjectionData(projDesc, identities, values, metadata)
   }

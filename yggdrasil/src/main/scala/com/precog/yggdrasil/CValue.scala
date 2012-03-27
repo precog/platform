@@ -1,35 +1,27 @@
 package com.precog.yggdrasil
 
-import scalaz.Order
+import com.precog.util._
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema._
+import blueeyes.json.xschema.DefaultSerialization._
+import scalaz._
+import scalaz.syntax.order._
 import scalaz.std.AllInstances._
 
-trait CValue {
+sealed abstract class CValue {
   def typeIndex: Int
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A
 
-  def toSValue: SValue = fold[SValue](
-    str  = SString(_),
-    bool = SBoolean(_), 
-    int  = SInt(_),
-    long = SLong(_),
-    float  = SFloat(_),
-    double = SDouble(_),
-    num    = SDecimal(_),
-    emptyObj = SObject(Map()),
-    emptyArr = SArray(Vector.empty[SValue]),
-    nul      = SNull
-  )
+  @inline final def toSValue: SValue = this match {
+    case CString(v) => SString(v)
+    case CBoolean(v) => if (v) STrue else SFalse
+    case CInt(v) => SDecimal(v)
+    case CLong(v) => SDecimal(v)
+    case CDouble(v) => SDecimal(v)
+    case CNum(v) => SDecimal(v)
+    case CEmptyObject => SObject(Map())
+    case CEmptyArray => SArray(Vector())
+    case CNull => SNull
+  }
 }
 
 object CValue {
@@ -47,164 +39,223 @@ object CValue {
   }
 }
 
+sealed trait CType {
+  def format: StorageFormat
+
+  def stype: SType
+  
+  def =~(tpe: SType): Boolean = (this, tpe) match {
+    case (CBoolean, SBoolean) => true  
+
+    case (CStringFixed(_), SString) => true
+    case (CStringArbitrary, SString) => true
+    
+    case (CInt, SDecimal) => true
+    case (CLong, SDecimal) => true
+    case (CFloat, SDecimal) => true
+    case (CDouble, SDecimal) => true
+    case (CDecimalArbitrary, SDecimal) => true
+    
+    case (CEmptyObject, SObject) => true
+    case (CEmptyArray, SArray) => true
+    case (CNull, SNull) => true
+
+    case _ => false
+  }
+}
+
+trait CTypeSerialization {
+  def nameOf(c: CType): String = c match {
+    case CStringFixed(width)    => "String("+width+")"
+    case CStringArbitrary       => "String"
+    case CBoolean               => "Boolean"
+    case CInt                   => "Int"
+    case CLong                  => "Long"
+    case CFloat                 => "Float"
+    case CDouble                => "Double"
+    case CDecimalArbitrary      => "Decimal"
+    case CNull                  => "Null"
+    case CEmptyObject           => "EmptyObject"
+    case CEmptyArray            => "EmptyArray"
+  } 
+
+  def fromName(n: String): Option[CType] = {
+    val FixedStringR = """String\(\d+\)""".r
+    n match {
+      case FixedStringR(w) => Some(CStringFixed(w.toInt))
+      case "String"        => Some(CStringArbitrary)
+      case "Boolean"       => Some(CBoolean)
+      case "Int"           => Some(CInt)
+      case "Long"          => Some(CLong)
+      case "Float"         => Some(CFloat)
+      case "Double"        => Some(CDouble)
+      case "Decimal"       => Some(CDecimalArbitrary)
+      case "Null"          => Some(CNull)
+      case "EmptyObject"   => Some(CEmptyObject)
+      case "EmptyArray"    => Some(CEmptyArray)
+      case _ => None
+    }
+  }
+    
+  implicit val PrimtitiveTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
+    def decompose(ctype : CType) : JValue = JString(nameOf(ctype))
+  }
+
+  implicit val STypeExtractor : Extractor[CType] = new Extractor[CType] with ValidatedExtraction[CType] {
+    override def validated(obj : JValue) : Validation[Extractor.Error,CType] = 
+      obj.validated[String].map( fromName _ ) match {
+        case Success(Some(t)) => Success(t)
+        case Success(None)    => Failure(Extractor.Invalid("Unknown type."))
+        case Failure(f)       => Failure(f)
+      }
+  }
+}
+
+object CType extends CTypeSerialization {
+
+  // Note this conversion has a peer for SValues that should always be changed
+  // in conjunction with this mapping.
+  @inline
+  final def toCValue(jval: JValue): CValue = jval match {
+    case JString(s) => CString(s)
+    case JInt(i) => sizedIntCValue(i)
+    case JDouble(d) => CDouble(d)
+    case JBool(b) => CBoolean(b)
+    case JNull => CNull
+    case _ => sys.error("unpossible: " + jval.getClass.getName)
+  }
+
+  @inline
+  final def forValue(jval: JValue): Option[CType] = jval match {
+    case JBool(_)     => Some(CBoolean)
+    case JInt(bi)     => Some(sizedIntCType(bi))
+    case JDouble(_)   => Some(CDouble)
+    case JString(_)   => Some(CStringArbitrary)
+    case JNull        => Some(CNull)
+    case JArray(Nil)  => Some(CEmptyArray)
+    case JObject(Nil) => Some(CEmptyObject)
+    case _            => None
+  }
+
+  @inline
+  private final def sizedIntCValue(bi: BigInt): CValue = {
+    if(bi.isValidInt) {
+      CInt(bi.intValue)
+    } else if(isValidLong(bi)) {
+      CLong(bi.longValue)
+    } else {
+      CNum(BigDecimal(bi))
+    }
+  }
+
+  @inline
+  private final def sizedIntCType(bi: BigInt): CType = {
+   if(bi.isValidInt) {
+      CInt 
+    } else if(isValidLong(bi)) {
+      CLong
+    } else {
+      CDecimalArbitrary
+    }   
+  }
+}
+
+// vim: set ts=4 sw=4 et:
+//
+// Strings
+//
 case class CString(value: String) extends CValue {
   val typeIndex = 0
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = str(value)
 }
 
+case class CStringFixed(width: Int) extends CType {
+  def format = FixedWidth(width)  
+  val stype = SString
+}
+
+case object CStringArbitrary extends CType {
+  val format = LengthEncoded  
+  val stype = SString
+}
+
+//
+// Booleans
+//
 case class CBoolean(value: Boolean) extends CValue {
   val typeIndex = 1
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = bool(value)
 }
 
+case object CBoolean extends CType {
+  val format = FixedWidth(1)
+  val stype = SBoolean
+}
+
+//
+// Numerics
+//
 case class CInt(value: Int) extends CValue {
   val typeIndex = 2
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = int(value)
+}
+
+case object CInt extends CType {
+  val format = FixedWidth(4)
+  val stype = SDecimal
 }
 
 case class CLong(value: Long) extends CValue {
   val typeIndex = 3
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = long(value)
+}
+
+case object CLong extends CType {
+  val format = FixedWidth(8)
+  val stype = SDecimal
 }
 
 case class CFloat(value: Float) extends CValue {
   val typeIndex = 4
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = float(value)
+}
+
+case object CFloat extends CType {
+  val format = FixedWidth(4)
+  val stype = SDecimal
 }
 
 case class CDouble(value: Double) extends CValue {
   val typeIndex = 5
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = double(value)
+}
+
+case object CDouble extends CType {
+  val format = FixedWidth(8)
+  val stype = SDecimal
 }
 
 case class CNum(value: BigDecimal) extends CValue {
   val typeIndex = 6
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = num(value)
 }
 
+case object CDecimalArbitrary extends CType {
+  val format = LengthEncoded  
+  val stype = SDecimal
+}
 
-case object CEmptyObject extends CValue {
+//
+// Nulls
+//
+case object CEmptyObject extends CValue with CType {
   val typeIndex = 7
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = emptyObj
+  val format = FixedWidth(0)
+  val stype = SObject
 }
 
-case object CEmptyArray extends CValue {
+case object CEmptyArray extends CValue with CType {
   val typeIndex = 8
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = emptyArr
+  val format = FixedWidth(0)
+  val stype = SArray
 }
 
-case object CNull extends CValue {
+case object CNull extends CValue with CType {
   val typeIndex = 9
-  def fold[A](
-    str:    String => A,
-    bool:   Boolean => A,
-    int:    Int => A,
-    long:   Long => A,
-    float:  Float => A,
-    double: Double => A,
-    num:    BigDecimal => A,
-    emptyObj: => A,
-    emptyArr: => A,
-    nul:      => A
-  ): A = nul
+  val format = FixedWidth(0)
+  val stype = SNull
 }
-// vim: set ts=4 sw=4 et:
+

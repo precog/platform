@@ -20,7 +20,7 @@ import Scalaz._
 class MetadataUpdateHelperSpec extends Specification {
 
   "metadata update helper" should {
-    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), SInt, Authorities(Set()))
+    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
     val descriptor1 = ProjectionDescriptor(ListMap[ColumnDescriptor, Int]((colDesc1 -> 0)), Seq[(ColumnDescriptor, SortBy)]((colDesc1 -> ById))).toOption.get
 
     def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()

@@ -5,7 +5,7 @@ import bijections._
 
 import com.precog.common.VectorCase
 import com.precog.yggdrasil.SValue._
-import com.precog.yggdrasil.ColumnType._
+import com.precog.yggdrasil.CType._
 import com.precog.util.Bijection._
 
 import blueeyes.json._
@@ -18,11 +18,11 @@ import scalaz.syntax.monad._
 
 
 trait SValueFormatting {
-  def writeStructure(out: DataOutputStream, structure: Seq[(JPath, ColumnType)]): Unit
-  def readStructure(in: DataInputStream): Seq[(JPath, ColumnType)]
+  def writeStructure(out: DataOutputStream, structure: Seq[(JPath, CType)]): Unit
+  def readStructure(in: DataInputStream): Seq[(JPath, CType)]
 
   def writeValue(out: DataOutputStream, sv: SValue): Unit
-  def readValue(in: DataInputStream, cols: Seq[(JPath, ColumnType)]): SValue
+  def readValue(in: DataInputStream, cols: Seq[(JPath, CType)]): SValue
 }
 
 trait IdentitiesFormatting {
@@ -31,7 +31,7 @@ trait IdentitiesFormatting {
 }
 
 trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting {
-  def writeStructure(out: DataOutputStream, structure: Seq[(JPath, ColumnType)]): Unit = {
+  def writeStructure(out: DataOutputStream, structure: Seq[(JPath, CType)]): Unit = {
     out.writeInt(structure.size)
     structure foreach {
       case (sel, valType) => {       
@@ -41,11 +41,11 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
     }
   }
 
-  def readStructure(in: DataInputStream): Seq[(JPath, ColumnType)] = {
-    @tailrec def loop(in: DataInputStream, acc: Seq[(JPath, ColumnType)], i: Int): Seq[(JPath, ColumnType)] = {
+  def readStructure(in: DataInputStream): Seq[(JPath, CType)] = {
+    @tailrec def loop(in: DataInputStream, acc: Seq[(JPath, CType)], i: Int): Seq[(JPath, CType)] = {
       if (i > 0) {
         val selector = JPath(in.readUTF())
-        ColumnType.fromName(in.readUTF()) match {
+        CType.fromName(in.readUTF()) match {
           case Some(ctype) => loop(in, acc :+ ((selector, ctype)), i - 1)
           case None        => sys.error("Memoization header corrupt: unable to read back column type indicator.")
         }
@@ -55,32 +55,30 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
     }
 
     val columns = in.readInt()
-    loop(in, Vector.empty[(JPath, ColumnType)], columns)
+    loop(in, Vector.empty[(JPath, CType)], columns)
   }
 
   def writeValue(out: DataOutputStream, sv: SValue): Unit = {
     def write(out: DataOutputStream, sv: SValue): Unit = {
-      sv.fold(
-        obj = obj       => obj.map { 
-          case (_, v)   => write(out, v)
-        },
-        arr = arr       => arr.map(v => write(out, v)),
-        str = str       => out.writeUTF(str),
-        bool = bool     => out.writeBoolean(bool),
-        long = long     => out.writeLong(long),
-        double = double => out.writeDouble(double),
-        num = num       => {
+      sv match {
+        case SObject(obj)  => obj.map { case (_, v) => write(out, v) }
+        case SArray(arr)   => arr.map { case v      => write(out, v) }
+        case SString(str)  => out.writeUTF(str)
+        case STrue         => out.writeBoolean(true)
+        case SFalse        => out.writeBoolean(false)
+        case SDecimal(num) => 
           val bytes = num.as[Array[Byte]]
           out.writeInt(bytes.length)
           out.write(bytes, 0, bytes.length)
-        },
-        nul = out.writeInt(0))
+        
+        case SNull => out.writeInt(0)
+      }
     }
 
     write(out, sv)
   }
 
-  def readValue(in: DataInputStream, cols: Seq[(JPath, ColumnType)]): SValue = {
+  def readValue(in: DataInputStream, cols: Seq[(JPath, CType)]): SValue = {
     cols.foldLeft(Option.empty[SValue]) {
       case (None     , (JPath.Identity, ctype)) => Some(readColumn(in, ctype).toSValue)
       case (None     , (jpath, ctype))          => 
@@ -95,25 +93,26 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
     }
   }
 
-  private def readColumn(in: DataInputStream, ctype: ColumnType): CValue = ctype match {
-    case SStringFixed(_)   => CString(in.readUTF())
-    case SStringArbitrary  => CString(in.readUTF())
-    case SBoolean          => CBoolean(in.readBoolean())
-    case SInt              => CInt(in.readInt())
-    case SLong             => CLong(in.readLong())
-    case SFloat            => CFloat(in.readFloat())
-    case SDouble           => CDouble(in.readDouble())
-    case SDecimalArbitrary => 
+  private def readColumn(in: DataInputStream, ctype: CType): CValue = ctype match {
+    case CStringFixed(_)   => CString(in.readUTF())
+    case CStringArbitrary  => CString(in.readUTF())
+    case CBoolean          => CBoolean(in.readBoolean())
+    case CInt              => CInt(in.readInt())
+    case CLong             => CLong(in.readLong())
+    case CFloat            => CFloat(in.readFloat())
+    case CDouble           => CDouble(in.readDouble())
+    case CDecimalArbitrary => 
       val length = in.readInt()
       val sdecimalarb: Array[Byte] = new Array(length)
       in.read(sdecimalarb)
       CNum(sdecimalarb.as[BigDecimal])
-    case SNull                  => {
+
+    case CNull => 
       in.readInt()
       CNull
-    }
-    case SEmptyObject           => CEmptyObject
-    case SEmptyArray            => CEmptyArray
+    
+    case CEmptyObject => CEmptyObject
+    case CEmptyArray => CEmptyArray
   }
 
   def writeIdentities(out: DataOutputStream, id: Identities): Unit = {

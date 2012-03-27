@@ -129,7 +129,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
             } yield {
               val result = projection.getAllPairs(expiresAt).cogroup(dataset) {
                 new CogroupF[Seq[CValue], SValue, SValue] {
-                  def left(l: Seq[CValue]) = appendToObject(SEmptyObject, instr, l)
+                  def left(l: Seq[CValue]) = appendToObject(SObject.Empty, instr, l)
                   def both(l: Seq[CValue], r: SValue) = appendToObject(r, instr, l)
                   def right(r: SValue) = r
                 }
@@ -142,7 +142,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
             for {
               projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
             } yield {
-              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(SEmptyObject, instr, _) }
+              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(SObject.Empty, instr, _) }
               result
             }
         }
