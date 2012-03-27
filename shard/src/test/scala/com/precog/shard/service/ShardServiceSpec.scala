@@ -87,7 +87,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
 
   val testQuery = "1 + 1"
 
-  "Shard service" should {
+  "Shard query service" should {
     "handle query from root path" in {
       query(testQuery) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JInt(i)::Nil)), _) => ok
@@ -114,6 +114,38 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
       }}
     }
   }
+  
+  def browse(token: Option[String] = Some(TestTokenUID), path: String = "unittest/"): Future[HttpResponse[JValue]] = {
+    token.map{ shardService.query("tokenId", _) }.getOrElse(shardService).get(path)
+  }
+ 
+  "Shard browse service" should {
+    "handle browse for token accessible path" in {
+      browse() must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JString("foo")::JString("bar")::Nil)), _) => ok
+      }}
+    }
+    "reject browse for non-token accessible path" in {
+      browse(path = "") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "The specified token may not browse this location"), _, None, _) => ok
+      }}
+    }
+    "reject brows when no token provided" in {
+      browse(None) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, "A tokenId query parameter is required to access this URL"), _, None, _) => ok
+      }}
+    }
+    "reject browse when token not found" in {
+      browse(Some("not-gonna-find-it")) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok
+      }}
+    }
+    "reject borwse when token expired" in {
+      browse(Some(ExpiredTokenUID)) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok
+      }}
+    }
+  }
 }
 
 trait TestQueryExecutor extends QueryExecutor {
@@ -129,8 +161,8 @@ trait TestQueryExecutor extends QueryExecutor {
     } 
   }
   
-  def metadata(userUID: String) = {
-    sys.error("feature no available") 
+  def browse(userUID: String, path: Path) = {
+    Future(success(JArray(List(JString("foo"), JString("bar")))))
   }
   
   def startup = Future(())

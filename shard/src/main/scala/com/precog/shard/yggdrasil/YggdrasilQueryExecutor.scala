@@ -135,8 +135,10 @@ trait YggdrasilQueryExecutor
     solution.fail.map(systemError(_)).validation.join
   }
 
-  def metadata(userUID: String): MetadataView = {
-    storage.userMetadataView(userUID)
+  def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {
+    storage.userMetadataView(userUID).findChildren(path) map {
+      case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut)))
+    }
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {

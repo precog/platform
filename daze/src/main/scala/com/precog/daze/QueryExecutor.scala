@@ -27,7 +27,7 @@ object EvaluationError {
 
 trait QueryExecutor {
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray]
-  def metadata(userUID: String): MetadataView 
+  def browse(userUID: String, path: Path): Future[Validation[String, JArray]]
   def startup: Future[Unit]
   def shutdown: Future[Unit]
 }

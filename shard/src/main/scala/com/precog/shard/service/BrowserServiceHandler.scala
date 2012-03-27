@@ -21,12 +21,19 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.yggdrasil.metadata.MetadataView
 
-class BrowseServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
+class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessControl)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path) => {
-      val metadata = queryExecutor.metadata(t.uid)
-      Future(HttpResponse[JValue](ServiceUnavailable, content = None))
+      accessControl.mayAccessPath(t.uid, p, PathRead).flatMap { 
+        case true =>
+          queryExecutor.browse(t.uid, p) map {
+            case Success(result) => HttpResponse[JValue](OK, content = Some(result))
+            case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
+          }
+        case false =>
+          Future(HttpResponse[JValue](HttpStatus(Unauthorized, "The specified token may not browse this location")))
+      }
     })
   }
 

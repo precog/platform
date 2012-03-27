@@ -30,7 +30,7 @@ trait ShardServiceCombinators extends HttpRequestHandlerCombinators {
         query map { q =>
           next.service(request) map { f => (token: Token, path: Path) => f(token, path, q) }
         } getOrElse {
-          failure(DispatchError(HttpException(BadRequest, "No query string was provided.")))
+          failure(inapplicable)
         }
       }
     }
