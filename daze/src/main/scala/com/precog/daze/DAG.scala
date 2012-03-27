@@ -445,6 +445,8 @@ trait DAG extends Instructions {
     def isSingleton: Boolean
     
     def findMemos: Set[dag.Memoize]
+    
+    def containsSplitArg: Boolean
   }
   
   object dag {
@@ -456,6 +458,8 @@ trait DAG extends Instructions {
       val isSingleton = true
       
       val findMemos = Set[Memoize]()
+      
+      val containsSplitArg = true
     }
     
     case class SplitGroup(loc: Line, index: Int, provenance: Vector[Provenance])(_parent: => Split) extends DepGraph {
@@ -464,6 +468,8 @@ trait DAG extends Instructions {
       val isSingleton = false
       
       val findMemos = Set[Memoize]()
+      
+      val containsSplitArg = true
     }
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
@@ -481,6 +487,8 @@ trait DAG extends Instructions {
       val isSingleton = true
       
       val findMemos = Set[Memoize]()
+      
+      val containsSplitArg = false
     }
     
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
@@ -491,6 +499,8 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }    
 
     case class SetReduce(loc: Line, red: SetReduction, parent: DepGraph) extends DepGraph {
@@ -499,6 +509,8 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
@@ -510,6 +522,8 @@ trait DAG extends Instructions {
       val isSingleton = false
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     // TODO propagate AOT value computation
@@ -519,6 +533,8 @@ trait DAG extends Instructions {
       lazy val isSingleton = parent.isSingleton
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
@@ -527,6 +543,8 @@ trait DAG extends Instructions {
       val isSingleton = true
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     case class Split(loc: Line, specs: Vector[BucketSpec], child: DepGraph) extends DepGraph {
@@ -537,6 +555,21 @@ trait DAG extends Instructions {
       lazy val memoIds = specs map { _ => IdGen.nextInt() }
       
       lazy val findMemos = sys.error("todo")
+      
+      lazy val containsSplitArg = {
+        def loop(spec: BucketSpec): Boolean = spec match {
+          case MergeBucketSpec(left, right, _) =>
+            loop(left) || loop(right)
+          
+          case ZipBucketSpec(left, right) =>
+            loop(left) || loop(right)
+          
+          case SingleBucketSpec(left, right) =>
+            left.containsSplitArg || right.containsSplitArg
+        }
+        
+        specs exists loop
+      }
     }
     
     // TODO propagate AOT value computation
@@ -558,6 +591,8 @@ trait DAG extends Instructions {
       
       // TODO include this
       lazy val findMemos = left.findMemos ++ right.findMemos
+      
+      lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
     case class Filter(loc: Line, cross: Option[CrossType], range: Option[IndexRange], target: DepGraph, boolean: DepGraph) extends DepGraph {
@@ -573,6 +608,8 @@ trait DAG extends Instructions {
       
       // TODO include this
       lazy val findMemos = target.findMemos ++ boolean.findMemos
+      
+      lazy val containsSplitArg = target.containsSplitArg || boolean.containsSplitArg
     }
     
     case class Sort(parent: DepGraph, indexes: Vector[Int]) extends DepGraph {
@@ -596,6 +633,8 @@ trait DAG extends Instructions {
       lazy val memoId = IdGen.nextInt()
       
       lazy val findMemos = parent.findMemos
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
@@ -607,6 +646,8 @@ trait DAG extends Instructions {
       lazy val memoId = IdGen.nextInt()
       
       lazy val findMemos = parent.findMemos + this
+      
+      lazy val containsSplitArg = parent.containsSplitArg
     }
     
     
