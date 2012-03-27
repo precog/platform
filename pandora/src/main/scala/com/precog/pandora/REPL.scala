@@ -278,6 +278,7 @@ object Console extends App {
 
         trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
           type YggConfig = REPLConfig
+          //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
           lazy val yggConfig = replConfig
           lazy val yggState = shardState
         }
