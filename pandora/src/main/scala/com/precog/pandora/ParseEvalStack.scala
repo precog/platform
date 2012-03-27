@@ -30,6 +30,7 @@ import quirrel.typer._
 trait ParseEvalStack extends Compiler
     with LineErrors
     with ProvenanceChecker
+    with CriticalConditionSolver
     with Emitter
     with Evaluator
     with Stdlib

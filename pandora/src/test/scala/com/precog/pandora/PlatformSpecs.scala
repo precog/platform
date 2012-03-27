@@ -24,6 +24,7 @@ import common.VectorCase
 import common.kafka._
 
 import daze._
+import daze.memoization._
 import daze.util._
 
 import pandora._
@@ -35,6 +36,7 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.serialization._
 
 import org.specs2.mutable._
   
@@ -54,9 +56,11 @@ import akka.dispatch.ExecutionContext
 
 class PlatformSpecs extends Specification
     with ParseEvalStack
-    with YggdrasilEnumOpsComponent
+    with IterableDatasetOpsComponent
     with LevelDBQueryComponent 
-    with DiskMemoizationComponent { platformSpecs =>
+    with DiskIterableDatasetMemoizationComponent 
+    with MemoryDatasetConsumer { platformSpecs =>
+  override type Dataset[A] = IterableDataset[A]
 
   lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
@@ -69,6 +73,7 @@ class PlatformSpecs extends Specification
     LevelDBQueryConfig with 
     DiskMemoizationConfig with 
     DatasetConsumersConfig with
+    IterableDatasetOpsConfig with 
     ProductionActorConfig
 
   object yggConfig extends YggConfig {
@@ -76,27 +81,38 @@ class PlatformSpecs extends Specification
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
-    lazy val flatMapTimeout = Duration(100, "seconds")
-    lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     lazy val sortWorkDir = scratchDir
-    lazy val chunkSerialization = BinaryProjectionSerialization
     lazy val memoizationBufferSize = sortBufferSize
     lazy val memoizationWorkDir = scratchDir
+
+    lazy val flatMapTimeout = Duration(100, "seconds")
+    lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
     lazy val maxEvalDuration = controlTimeout
+    lazy val clock = blueeyes.util.Clock.System
+
+    object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+    object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+
+    //TODO: Get a producer ID
+    val idSource = new IdSource {
+      private val source = new java.util.concurrent.atomic.AtomicLong
+      def nextId() = source.getAndIncrement
+    }
   }
 
   lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
 
-  type Storage = ActorYggShard
-  val storage = new ActorYggShard with StandaloneActorEcosystem {
+  trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
     type YggConfig = platformSpecs.YggConfig
     lazy val yggConfig = platformSpecs.yggConfig
     lazy val yggState = shardState 
   }
   
   object ops extends Ops 
-  
   object query extends QueryAPI 
+  object storage extends Storage
 
   step {
     startup()
