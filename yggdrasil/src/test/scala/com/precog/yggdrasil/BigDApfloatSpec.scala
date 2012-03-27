@@ -6,9 +6,13 @@ import org.apfloat.ApfloatMath._
 
 import org.specs2.mutable.Specification
 
+import org.scalacheck._
+import org.scalacheck.Prop._
+import org.scalacheck.Arbitrary._
+
 object Timer {
-  var initial:Long = 0L
-  var ending:Long = 0L
+  var initial: Long = 0L
+  var ending: Long = 0L
   
   def start = {
    initial = System.currentTimeMillis
@@ -20,37 +24,146 @@ object Timer {
   }
 }
 
-class BigDApfloatSpec extends Specification{
+class BigDApfloatSpec extends Specification {
   import Timer._
 
-  val d1: BigDecimal = -12343234234232.234234
-  val d2: BigDecimal = 234324995.229098090
+  implicit def intTimes(n: Int) = new {
+    def times(f: => Unit) = 1 to n foreach { _ => f }
+  }
 
-  val a1 = new Apfloat(-12343234234232.234234, 128) 
-  val a2 = new Apfloat(234324995.229098090, 128)
+  val d20 = BigDecimal(9374.8726354987652380)
+  val d40 = BigDecimal(9374.872635498765238093748726354987652380)
+  val d60 = BigDecimal(9374.87263549876523809374872635498765238093748726354987652380)
+  val d80 = BigDecimal(9374.8726354987652380937487263549876523809374872635498765238093748726354987652380)
 
-  print("BigDecimal abs: ")
-  start
-  d1.abs
-  stop
+  val a20 = new Apfloat(9374.8726354987652380)
+  val a40 = new Apfloat(9374.872635498765238093748726354987652380)
+  val a60 = new Apfloat(9374.87263549876523809374872635498765238093748726354987652380)
+  val a80 = new Apfloat(9374.8726354987652380937487263549876523809374872635498765238093748726354987652380)
 
-  print("Apfloat abs: ")
-  start
-  abs(a1)
-  stop
 
-  print("BigDecimal multiply: ")
-  start
-  d1 * d2
-  stop
 
-  print("Apfloat multiply: ")
-  start
-  a1.multiply(a2)
-  stop
+  println("BigDecimal multiply p=20: ")
+
+  3 times {
+    start
+    1000000 times {
+      d20 * d20
+    }
+    stop
+  }
+
+  println("Apfloat multiply p=20: ")
+
+  3 times {
+    start
+    1000000 times {
+      a20.multiply(a20)
+    }
+    stop
+
+  }  
   
-  
+  println("BigDecimal multiply p=40: ")
 
+  3 times {
+    start
+    1000000 times {
+      d40 * d40
+    }
+    stop
+  }
+
+  println("Apfloat multiply p=40: ")
+
+  3 times {
+    start
+    1000000 times {
+      a40.multiply(a40)
+    }
+    stop
+
+  }  
+  
+  println("BigDecimal multiply p=60: ")
+
+  3 times {
+    start
+    1000000 times {
+      d60 * d60
+    }
+    stop
+  }
+
+  println("Apfloat multiply p=60: ")
+
+  3 times {
+    start
+    1000000 times {
+      a60.multiply(a60)
+    }
+    stop
+  }    
+  println("BigDecimal multiply p=80: ")
+
+  3 times {
+    start
+    1000000 times {
+      d80 * d80
+    }
+    stop
+  }
+
+  println("Apfloat multiply p=80: ")
+
+  3 times {
+    start
+    1000000 times {
+      a80.multiply(a80)
+    }
+    stop
+  }  
+  
+  //println("BigDecimal add large: ")
+
+  //3 times {
+  //  start
+  //  1000000 times {
+  //    d3 + d4
+  //  }
+  //  stop
+  //}
+
+  //println("Apfloat add large: ")
+
+  //3 times {
+  //  start
+  //  1000000 times {
+  //    a3.add(a4)
+  //  }
+  //  stop
+  //}  
+  //
+  //println("BigDecimal add small: ")
+
+  //3 times {
+  //  start
+  //  1000000 times {
+  //    d1 + d2
+  //  }
+  //  stop
+  //}
+
+  //println("Apfloat add small: ")
+
+  //3 times {
+  //  start
+  //  1000000 times {
+  //    a1.add(a2)
+  //  }
+  //  stop
+
+  //}
 }
 
 // vim: set ts=4 sw=4 et:
