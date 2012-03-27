@@ -43,15 +43,22 @@ class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: Mes
 extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path, q: String) => 
-      Future(queryExecutor.execute(t.uid, q) match {
-        case Success(result)               => HttpResponse[JValue](OK, content = Some(result))
-        case Failure(UserError(errorData)) => HttpResponse[JValue](UnprocessableEntity, content = Some(errorData))
-        case Failure(AccessDenied(reason)) => HttpResponse[JValue](HttpStatus(Unauthorized, reason))
-        case Failure(TimeoutError)         => HttpResponse[JValue](RequestEntityTooLarge)
-        case Failure(SystemError(error))   => 
-          logger.error("An error occurred processing the query: " + q, error)
-          HttpResponse[JValue](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
-      }))
+      if(t.expired) {
+        Future(HttpResponse[JValue](HttpStatus(Unauthorized, "The specified token has expired")))
+      } else if(p != Path("/")) {
+        Future(HttpResponse[JValue](HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available.")))
+      } else {
+        Future(queryExecutor.execute(t.uid, q) match {
+          case Success(result)               => HttpResponse[JValue](OK, content = Some(result))
+          case Failure(UserError(errorData)) => HttpResponse[JValue](UnprocessableEntity, content = Some(errorData))
+          case Failure(AccessDenied(reason)) => HttpResponse[JValue](HttpStatus(Unauthorized, reason))
+          case Failure(TimeoutError)         => HttpResponse[JValue](RequestEntityTooLarge)
+          case Failure(SystemError(error))   => 
+            error.printStackTrace() 
+            logger.error("An error occurred processing the query: " + q, error)
+            HttpResponse[JValue](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
+        })
+      })
   }
 
   val metadata = Some(DescriptionMetadata(

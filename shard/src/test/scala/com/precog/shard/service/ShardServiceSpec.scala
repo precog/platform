@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ingest
+package com.precog.shard
 package service
 
 import kafka._
@@ -31,8 +31,8 @@ import org.specs2.specification._
 import org.scalacheck.Gen._
 
 import akka.actor.ActorSystem
-import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
+import akka.dispatch.Future
 import akka.util.Duration
 
 import org.joda.time._
@@ -42,14 +42,14 @@ import org.streum.configrity.io.BlockFormat
 
 import scalaz.{Success, NonEmptyList}
 import scalaz.Scalaz._
+import scalaz.Validation._
 
 import blueeyes.concurrent.test._
 
 import blueeyes.core.data._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.core.service.test.BlueEyesServiceSpecification
-import blueeyes.core.http.HttpResponse
-import blueeyes.core.http.HttpStatus
+import blueeyes.core.http._
 import blueeyes.core.http.HttpStatusCodes._
 import blueeyes.core.http.MimeTypes
 import blueeyes.core.http.MimeTypes._
@@ -57,7 +57,6 @@ import blueeyes.core.http.MimeTypes._
 import blueeyes.json.JsonAST._
 
 import blueeyes.util.Clock
-
 
 case class PastClock(duration: org.joda.time.Duration) extends Clock {
   def now() = new DateTime().minus(duration)
@@ -68,83 +67,91 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 trait TestTokens {
   import StaticTokenManager._
   val TestTokenUID = testUID
-  val TrackingTokenUID = usageUID
   val ExpiredTokenUID = expiredUID
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults {
+trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults {
 
   import BijectionsChunkJson._
 
-  val requestLoggingData = """
+  val requestLoggingData = """ 
     requestLog {
       enabled = true
       fields = "time cs-method cs-uri sc-status cs-content"
     }
   """
 
-  override val configuration = "services { ingest { v1 { " + requestLoggingData + " } } }"
+  override val configuration = "services { shard { v1 { " + requestLoggingData + " } } }"
 
+  def queryExecutorFactory(config: Configuration) = new TestQueryExecutor {
+    lazy val actorSystem = ActorSystem("ingest_service_spec")
+    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    lazy val allowedUID = TestTokenUID
+  }
 
   def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
   
-  def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingTokenUID) 
-
-  val messaging = new CollectingMessaging
-
-  def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingest_service_spec")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  }
-
-  def eventStoreFactory(config: Configuration): EventStore = {
-    val defaultAddresses = NonEmptyList(MailboxAddress(0))
-
-    val routeTable = new ConstantRouteTable(defaultAddresses)
-
-    new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
-  }
-
-  lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
-          
+  lazy val shardService = service.contentType[JValue](application/(MimeTypes.json))
+                                 .path("/vfs/")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
-class IngestServiceSpec extends TestIngestService with FutureMatchers {
+class ShardServiceSpec extends TestShardService with FutureMatchers {
 
-  def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
-    token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
+  def query(query: String, token: Option[String] = Some(TestTokenUID), path: String = ""): Future[HttpResponse[JValue]] = {
+    token.map{ shardService.query("tokenId", _) }.getOrElse(shardService).query("q", query).get(path)
   }
 
-  def testValue = JObject(List(JField("testing", JInt(123))))
+  val testQuery = "1 + 1"
 
-  "Ingest service" should {
-    "track event with valid token" in {
-      track(testValue) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, None, _) => ok 
+  "Shard service" should {
+    "handle query from root path" in {
+      query(testQuery) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JInt(i)::Nil)), _) => ok
       }}
     }
-    "reject track request when token not found" in {
-      track(testValue, Some("not gonna find it")) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok 
+    "reject query from non-root path (for now)" in {
+      query(testQuery, path = "/non/root/") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available."), _, None, _) => ok
       }}
     }
-    "reject track request when no token provided" in {
-      track(testValue, None) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok 
+    "reject query when no token provided" in {
+      query(testQuery, None) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, "A tokenId query parameter is required to access this URL"), _, None, _) => ok
       }}
     }
-    "reject track request when token is expired" in {
-      track(testValue, Some(ExpiredTokenUID)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok 
+    "reject query when token not found" in {
+      query(testQuery, Some("not-gonna-find-it")) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok
       }}
     }
-    "reject track request when path is not accessible by token" in {
-      track(testValue, path = "") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _) => ok 
+    "reject query when token expired" in {
+      query(testQuery, Some(ExpiredTokenUID)) must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok
       }}
     }
   }
+}
+
+trait TestQueryExecutor extends QueryExecutor {
+  def actorSystem: ActorSystem  
+  implicit def executionContext: ExecutionContext
+  def allowedUID: String
+  
+  def execute(userUID: String, query: String) = {
+    if(userUID != allowedUID) {
+      failure(UserError(JArray(List(JString("No data accessable at the specified path.")))))
+    } else {
+      success(JArray(List(JInt(2))))
+    } 
+  }
+  
+  def metadata(userUID: String) = {
+    sys.error("feature no available") 
+  }
+  
+  def startup = Future(())
+  def shutdown = Future { actorSystem.shutdown }
 }

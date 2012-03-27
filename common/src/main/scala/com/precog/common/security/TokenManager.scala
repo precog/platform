@@ -185,6 +185,8 @@ object StaticTokenManager {
   val cust1UID = "C5EF0038-A2A2-47EB-88A4-AAFCE59EC22B"
   val cust2UID = "1B10E413-FB5B-4769-A887-8AFB587CF00A"
   
+  val expiredUID = "expired"
+  
   def standardAccountPerms(path: String, owner: UID, mayShare: Boolean = true) =
     Permissions(
       MayAccessPath(Subtree(Path(path)), PathRead, mayShare), 
@@ -206,7 +208,8 @@ object StaticTokenManager {
     (testUID, Some(rootUID), standardAccountPerms("/unittest", testUID, true), Set(), false),
     (usageUID, Some(rootUID), standardAccountPerms("/__usage_tracking__", usageUID, true), Set(), false),
     (cust1UID, Some(rootUID), standardAccountPerms("/user1", cust1UID, true), Set(publicUID), false),
-    (cust2UID, Some(rootUID), standardAccountPerms("/user2", cust2UID, true), Set(publicUID), false)
+    (cust2UID, Some(rootUID), standardAccountPerms("/user2", cust2UID, true), Set(publicUID), false),
+    (expiredUID, Some(rootUID), standardAccountPerms("/expired", expiredUID, true), Set(publicUID), true)
   )
 
   private var map = Map(config map Token.tupled map { t => (t.uid, t) }: _*)
