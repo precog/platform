@@ -325,6 +325,13 @@ class PlatformSpecs extends Specification
         SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
         SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
     }
+
+    "load a nonexistent dataset with a dot in the name" in {
+      val input = """
+        | load(//foo.bar)""".stripMargin
+     
+      eval(input) mustEqual Set()
+    }
     
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
