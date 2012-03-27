@@ -284,7 +284,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-2, -1, 0)
       }
- "monthsBetween" >> {
+      
+      "monthsBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(MonthsBetween)),
@@ -301,7 +302,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-16, -4, -27, 4, -11)
       }
- "weeksBetween" >> {
+      
+      "weeksBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(WeeksBetween)),
@@ -318,7 +320,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-49, -118, -72, -21, 21)
       }
- "daysBetween" >> {
+      
+      "daysBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(DaysBetween)),
@@ -335,7 +338,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-505, -347, 148, -826, -150)
       }
- "hoursBetween" >> {
+      
+      "hoursBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(HoursBetween)),
@@ -352,7 +356,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-12131, -3606, -19836, -8340, 3554)
       }
- "minutesBetween" >> {
+      
+      "minutesBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(MinutesBetween)),
@@ -369,7 +374,8 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-727898, 213295, -216396, -500411, -1190164)
       }
- "secondsBetween" >> {
+      
+      "secondsBetween" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Match(BuiltInFunction2Op(SecondsBetween)),
@@ -424,6 +430,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain("2011-02-21T01:09:59.165-10:00", "2012-02-11T06:11:33.394-10:00", "2011-09-06T06:44:52.848-10:00", "2010-04-28T15:37:52.599-10:00", "2012-12-28T06:38:19.430-10:00")
       }
+      
       "yearsBetween" >> {
         val line = Line(0, "")
         
@@ -441,6 +448,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-2, -1, 0)
       }
+      
       "monthsBetween" >> {
         val line = Line(0, "")
         
@@ -458,6 +466,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-16, -4, -27, 4, -11)
       }
+      
       "weeksBetween" >> {
         val line = Line(0, "")
         
@@ -475,6 +484,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-49, -118, -72, -21, 21)
       }
+      
       "daysBetween" >> {
         val line = Line(0, "")
         
@@ -492,6 +502,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-505, -347, 148, -826, -150)
       }
+      
       "hoursBetween" >> {
         val line = Line(0, "")
         
@@ -509,6 +520,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-12131, -3606, -19836, -8340, 3554)
       }
+      
       "minutesBetween" >> {
         val line = Line(0, "")
         
@@ -526,6 +538,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(-727898, 213295, -216396, -500411, -1190164)
       }
+      
       "secondsBetween" >> {
         val line = Line(0, "")
         
