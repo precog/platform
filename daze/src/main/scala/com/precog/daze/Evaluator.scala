@@ -489,10 +489,10 @@ trait Evaluator extends DAG
         
         val resultEnum = instr match {
           case Map2Cross(_) | Map2CrossLeft(_) =>
-            leftEnum.crossLeft(rightEnum.memoize(j.memoId, ctx.memoizationContext, ctx.expiration))(op.operation)
+            leftEnum.crossLeft(rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration))(op.operation)
           
           case Map2CrossRight(_) =>
-            leftEnum.memoize(j.memoId, ctx.memoizationContext, ctx.expiration).crossRight(rightEnum)(op.operation)
+            leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration).crossRight(rightEnum)(op.operation)
         }
         
         Right(Match(mal.Actual, resultEnum, graph))
@@ -534,10 +534,10 @@ trait Evaluator extends DAG
         
         val resultEnum = cross match {
           case CrossNeutral | CrossLeft =>
-            targetEnum.crossLeft(booleanEnum.memoize(f.memoId, ctx.memoizationContext, ctx.expiration)) { case (sv, STrue) => sv }
+            targetEnum.crossLeft(booleanEnum.memoize(boolean.memoId, ctx.memoizationContext, ctx.expiration)) { case (sv, STrue) => sv }
           
           case CrossRight =>
-            targetEnum.memoize(f.memoId, ctx.memoizationContext, ctx.expiration).crossRight(booleanEnum) { case (sv, STrue) => sv }
+            targetEnum.memoize(target.memoId, ctx.memoizationContext, ctx.expiration).crossRight(booleanEnum) { case (sv, STrue) => sv }
         }
         
         Right(Match(mal.Actual, resultEnum, graph))
