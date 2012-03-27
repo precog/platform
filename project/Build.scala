@@ -27,7 +27,7 @@ object PlatformBuild extends Build {
   val commonSettings = Seq(
     scalacOptions ++= Seq())
 
-  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, pandora, util, common)
+  lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
   
   lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings ++ commonSettings: _*)
@@ -49,6 +49,9 @@ object PlatformBuild extends Build {
 
   val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
+  
+  val authSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
+  lazy val auth    = Project(id = "auth", base = file("auth")).settings(authSettings ++ commonSettings: _*).dependsOn(common)
   
   lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 

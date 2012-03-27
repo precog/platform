@@ -1,6 +1,5 @@
-package com.precog
-package ingest
-package service
+package com.precog.common
+package security 
 
 import blueeyes._
 import blueeyes.core.service._

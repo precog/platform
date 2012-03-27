@@ -20,7 +20,6 @@ case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, 
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
-    IngestServiceCombinators with 
     ShardServiceCombinators with 
     AkkaDefaults {
   import BijectionsChunkJson._

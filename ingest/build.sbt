@@ -1,6 +1,6 @@
 name := "ingest"
 
-version := "1.2.1-SNAPSHOT"
+version := "1.0.0-SNAPSHOT"
 
 organization := "com.precog"
 
