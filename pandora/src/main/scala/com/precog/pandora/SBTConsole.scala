@@ -91,6 +91,7 @@ object SBTConsole {
     
     trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
       type YggConfig = console.YggConfig
+      //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
       val yggConfig = console.yggConfig
       val yggState = shardState
     }
