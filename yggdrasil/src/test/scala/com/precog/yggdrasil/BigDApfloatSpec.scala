@@ -123,47 +123,6 @@ class BigDApfloatSpec extends Specification {
     }
     stop
   }  
-  
-  //println("BigDecimal add large: ")
-
-  //3 times {
-  //  start
-  //  1000000 times {
-  //    d3 + d4
-  //  }
-  //  stop
-  //}
-
-  //println("Apfloat add large: ")
-
-  //3 times {
-  //  start
-  //  1000000 times {
-  //    a3.add(a4)
-  //  }
-  //  stop
-  //}  
-  //
-  //println("BigDecimal add small: ")
-
-  //3 times {
-  //  start
-  //  1000000 times {
-  //    d1 + d2
-  //  }
-  //  stop
-  //}
-
-  //println("Apfloat add small: ")
-
-  //3 times {
-  //  start
-  //  1000000 times {
-  //    a1.add(a2)
-  //  }
-  //  stop
-
-  //}
 }
 
 // vim: set ts=4 sw=4 et:
