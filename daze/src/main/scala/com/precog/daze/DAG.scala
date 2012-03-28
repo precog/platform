@@ -342,7 +342,8 @@ trait DAG extends Instructions {
           }
         }
         
-        case loc2: Line => loop(loc2, roots, splits, stream.tail)
+        // TODO reenable lines
+        case _: Line => loop(loc, roots, splits, stream.tail)
         
         case instr @ instructions.LoadLocal(tpe) => {
           val eitherRoots = roots match {
