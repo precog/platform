@@ -594,7 +594,7 @@ with DiskIterableDatasetMemoizationComponent {
     }
   }
   
-  "iterable grouping ops" should {  
+  "iterable grouping ops" should {
     val sharedRecs = Map(
       'i1 -> unstableRec(1),
       'i2 -> unstableRec(2),
@@ -676,8 +676,36 @@ with DiskIterableDatasetMemoizationComponent {
     }
 
     "implement flatten" in {
-      true mustEqual false
-    }.pendingUntilFixed
+      implicit val groupFunc = (a: Long) => a % 10
+      implicit val idCount = genVariableIdCount
+
+      implicit val arbGroup = Arbitrary(groupingGen[Long,Long])
+
+      check { (g1: IterableGrouping[Long, IterableDataset[Long]]) => (g1.iterator.hasNext == true) ==> {
+        val list1 = g1.iterator.toList
+
+        def idGen() = {
+          var id = -1l
+          () => { id += 1; id }
+        }
+
+        val expIds = idGen()
+        val flattenFunc: (Long,NEL[IterableDataset[Long]]) => IterableDataset[Long] = {
+          case (k, nv) => IterableDataset(1, Iterable.concat(nv.list.map(_.iterable): _*).map{ case (_,v) => (VectorCase(expIds()), v) })
+        }
+          
+        val ng1 = mapGrouping(IterableGrouping(list1.iterator)) { v => NEL(v) }
+
+        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, NEL(v)).iterable }: _*)).iterable.toList
+
+        val ids = idGen()
+        import scalaz.std.tuple._
+        import com.precog.util.IdGen
+        val result: List[Record[Long]] = flattenGroup(ng1, ids, IdGen.nextInt(), memoCtx, System.currentTimeMillis + 10000)(flattenFunc).iterable.toList
+
+        result must containAllOf(expected).only.inOrder
+      }}
+    }
     
     "implement merging" >> {
       "union" >> {
@@ -761,8 +789,6 @@ with DiskIterableDatasetMemoizationComponent {
           result must containAllOf(expected).only.inOrder
         }}
       }
-    }
-
-    
+    } 
   }
 }
