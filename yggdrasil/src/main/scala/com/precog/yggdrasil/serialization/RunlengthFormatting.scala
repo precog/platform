@@ -40,7 +40,7 @@ trait RunlengthFormatting[A] {
   def headerFor(value: A): Header
 
   def writeHeader(out: DataOutputStream, header: Header): Unit
-  def writeRecord(out: DataOutputStream, value: A): Unit 
+  def writeRecord(out: DataOutputStream, value: A, header: Header): Unit 
 
   def readHeader(in: DataInputStream): Header
   def readRecord(in: DataInputStream, header: Header): A
@@ -55,8 +55,8 @@ trait SValueRunlengthFormatting extends RunlengthFormatting[SValue] with SValueF
     writeStructure(out, header.structure)
   }
 
-  def writeRecord(out: DataOutputStream, sv: SValue): Unit = {
-    writeValue(out, sv)
+  def writeRecord(out: DataOutputStream, sv: SValue, header: Header): Unit = {
+    writeValue(out, sv, header.structure)
   }
 
   def readHeader(in: DataInputStream): Header = Header(readStructure(in))
@@ -74,9 +74,9 @@ with SValueFormatting with IdentitiesFormatting {
     writeStructure(out, header.structure)
   }
 
-  def writeRecord(out: DataOutputStream, sv: SEvent): Unit = {
+  def writeRecord(out: DataOutputStream, sv: SEvent, header: Header): Unit = {
     writeIdentities(out, sv._1)
-    writeValue(out, sv._2)
+    writeValue(out, sv._2, header.structure)
   }
 
   def readHeader(in: DataInputStream): Header = {
@@ -100,10 +100,10 @@ with SValueFormatting with IdentitiesFormatting {
     writeStructure(out, header.valueStructure)
   }
 
-  def writeRecord(out: DataOutputStream, sv: (SValue, Identities, SValue)): Unit = {
-    writeValue(out, sv._1)
+  def writeRecord(out: DataOutputStream, sv: (SValue, Identities, SValue), header: Header): Unit = {
+    writeValue(out, sv._1, header.keyStructure)
     writeIdentities(out, sv._2)
-    writeValue(out, sv._3)
+    writeValue(out, sv._3, header.valueStructure)
   }
 
   def readHeader(in: DataInputStream): Header = {

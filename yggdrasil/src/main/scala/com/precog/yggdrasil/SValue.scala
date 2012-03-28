@@ -39,20 +39,26 @@ sealed trait SValue {
   def isA(valueType: SType): Boolean 
   def hasProperty(selector: JPath) = (this \ selector).isDefined
 
-  def \(selector: JPath): Option[SValue] = this match {
-    case SObject(obj) => 
-      selector.nodes match {
-        case JPathField(name) :: Nil => obj.get(name)
-        case JPathField(name) :: xs  => obj.get(name).flatMap(_ \ JPath(xs)) 
-      }
+  def \(selector: JPath): Option[SValue] = {
+    if (selector == JPath.Identity) {
+      Some(this)
+    } else {
+      this match {
+        case SObject(obj) => 
+          selector.nodes match {
+            case JPathField(name) :: Nil => obj.get(name)
+            case JPathField(name) :: xs  => obj.get(name).flatMap(_ \ JPath(xs)) 
+          }
 
-    case SArray(arr) => 
-      selector.nodes match {
-        case JPathIndex(i)    :: Nil => arr.lift(i) 
-        case JPathIndex(i)    :: xs  => arr.lift(i).flatMap(_ \ JPath(xs)) 
-      }
+        case SArray(arr) => 
+          selector.nodes match {
+            case JPathIndex(i)    :: Nil => arr.lift(i) 
+            case JPathIndex(i)    :: xs  => arr.lift(i).flatMap(_ \ JPath(xs)) 
+          }
 
-    case _ => None
+        case _ => None
+      }
+    }
   }
 
   def set(selector: JPath, cv: CValue): Option[SValue] = this match {
@@ -85,27 +91,36 @@ sealed trait SValue {
     case _ => None
   }
 
-  def structure: Seq[(JPath, CType)] = this match {
-    case SObject(m) =>
-      if (m.isEmpty) List((JPath(), CEmptyObject))
-      else {
-        m.toSeq.flatMap { case (name, value) => value.structure map { case (path, ctype) => (JPathField(name) \ path, ctype) }}
-      }
-    
-    case SArray(a) =>
-      if (a.isEmpty) List((JPath(), CEmptyArray))
-      else {
-        a.zipWithIndex.flatMap { 
-          case (value, index) => value.structure map { 
-            case (path, ctype) => (JPathIndex(index) \ path, ctype) 
+  def structure: Seq[(JPath, CType)] = {
+    import SValue._
+    val s = this match {
+      case SObject(m) =>
+        if (m.isEmpty) List((JPath(), CEmptyObject))
+        else {
+          m.toSeq.flatMap { 
+            case (name, value) => value.structure map { 
+              case (path, ctype) => (JPathField(name) \ path, ctype) 
+            }
           }
         }
-      }
-    
-    case SString(_)     => List((JPath(), CStringArbitrary))
-    case STrue | SFalse => List((JPath(), CBoolean))
-    case SDecimal(_)    => List((JPath(), CDecimalArbitrary))
-    case SNull          => List((JPath(), CNull)) 
+      
+      case SArray(a) =>
+        if (a.isEmpty) List((JPath(), CEmptyArray))
+        else {
+          a.zipWithIndex.flatMap { 
+            case (value, index) => value.structure map { 
+              case (path, ctype) => (JPathIndex(index) \ path, ctype) 
+            }
+          }
+        }
+      
+      case SString(_)     => List((JPath(), CStringArbitrary))
+      case STrue | SFalse => List((JPath(), CBoolean))
+      case SDecimal(_)    => List((JPath(), CDecimalArbitrary))
+      case SNull          => List((JPath(), CNull)) 
+    }
+
+    s.sorted
   }
    
   lazy val shash: Long = structure.hashCode
@@ -212,6 +227,8 @@ trait SValueInstances {
       nul    = true
     )
   }
+
+  implicit val StructureOrdering: scala.math.Ordering[(JPath, CType)] = implicitly[Order[(JPath, CType)]].toScalaOrdering
 }
 
 object SValue extends SValueInstances {
@@ -243,6 +260,7 @@ object SValue extends SValueInstances {
   }
 
   def asJSON(sv: SValue): String = pretty(render(sv.toJValue))
+
 }
 
 

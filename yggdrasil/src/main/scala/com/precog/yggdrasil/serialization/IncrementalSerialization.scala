@@ -30,13 +30,13 @@ trait IncrementalSerialization[A] extends StreamSerialization with RunlengthForm
       val newHeader = headerFor(value)
       if (header == newHeader) {
         out.writeInt(ValueFlag)
-        writeRecord(out, value)
+        writeRecord(out, value, header)
         this
       } else {
         out.writeInt(HeaderFlag)
         writeHeader(out, newHeader)
         out.writeInt(ValueFlag)
-        writeRecord(out, value)
+        writeRecord(out, value, newHeader)
         new IncrementalWriter(newHeader)
       }
     }

@@ -40,8 +40,8 @@ trait SValueFormatting {
   def writeStructure(out: DataOutputStream, structure: Seq[(JPath, CType)]): Unit
   def readStructure(in: DataInputStream): Seq[(JPath, CType)]
 
-  def writeValue(out: DataOutputStream, sv: SValue): Unit
-  def readValue(in: DataInputStream, cols: Seq[(JPath, CType)]): SValue
+  def writeValue(out: DataOutputStream, sv: SValue, structure: Seq[(JPath, CType)]): Unit
+  def readValue(in: DataInputStream, structure: Seq[(JPath, CType)]): SValue
 }
 
 trait IdentitiesFormatting {
@@ -77,28 +77,28 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
     loop(in, Vector.empty[(JPath, CType)], columns)
   }
 
-  def writeValue(out: DataOutputStream, sv: SValue): Unit = {
-    def write(out: DataOutputStream, sv: SValue): Unit = {
-      sv match {
-        case SObject(obj)  => obj.map { case (_, v) => write(out, v) }
-        case SArray(arr)   => arr.map { case v      => write(out, v) }
-        case SString(str)  => out.writeUTF(str)
-        case STrue         => out.writeBoolean(true)
-        case SFalse        => out.writeBoolean(false)
-        case SDecimal(num) => 
+  def writeValue(out: DataOutputStream, sv: SValue, structure: Seq[(JPath, CType)]): Unit = {
+    for ((selector, ctype) <- structure) {
+      val leaf = (sv \ selector) 
+      leaf match {
+        case Some(SString(str))  => out.writeUTF(str)
+        case Some(STrue)         => out.writeBoolean(true)
+        case Some(SFalse)        => out.writeBoolean(false)
+        case Some(SDecimal(num)) => 
           val bytes = num.as[Array[Byte]]
+          assert(bytes.length > 0)
+
           out.writeInt(bytes.length)
           out.write(bytes, 0, bytes.length)
         
-        case SNull => out.writeInt(0)
+        case Some(SNull) => out.writeInt(0)
+        case _ => sys.error("Value structure " + sv.structure + " for value " + sv.toString + " does not correspond to write header " + structure)
       }
     }
-
-    write(out, sv)
   }
 
-  def readValue(in: DataInputStream, cols: Seq[(JPath, CType)]): SValue = {
-    cols.foldLeft(Option.empty[SValue]) {
+  def readValue(in: DataInputStream, structure: Seq[(JPath, CType)]): SValue = {
+    structure.foldLeft(Option.empty[SValue]) {
       case (None     , (JPath.Identity, ctype)) => Some(readColumn(in, ctype).toSValue)
       case (None     , (jpath, ctype))          => 
         jpath.nodes match {
@@ -112,26 +112,30 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
     }
   }
 
-  private def readColumn(in: DataInputStream, ctype: CType): CValue = ctype match {
-    case CStringFixed(_)   => CString(in.readUTF())
-    case CStringArbitrary  => CString(in.readUTF())
-    case CBoolean          => CBoolean(in.readBoolean())
-    case CInt              => CInt(in.readInt())
-    case CLong             => CLong(in.readLong())
-    case CFloat            => CFloat(in.readFloat())
-    case CDouble           => CDouble(in.readDouble())
-    case CDecimalArbitrary => 
-      val length = in.readInt()
-      val sdecimalarb: Array[Byte] = new Array(length)
-      in.read(sdecimalarb)
-      CNum(sdecimalarb.as[BigDecimal])
+  private def readColumn(in: DataInputStream, ctype: CType): CValue = {
+    ctype match {
+  //    case CStringFixed(_)   => CString(in.readUTF())
+      case CStringArbitrary  => CString(in.readUTF())
+      case CBoolean          => CBoolean(in.readBoolean())
+  //    case CInt              => CInt(in.readInt())
+  //    case CLong             => CLong(in.readLong())
+  //    case CFloat            => CFloat(in.readFloat())
+  //    case CDouble           => CDouble(in.readDouble())
+      case CInt | CLong | CFloat | CDouble | CDecimalArbitrary => 
+        val length = in.readInt()
+        assert(length > 0)
 
-    case CNull => 
-      in.readInt()
-      CNull
-    
-    case CEmptyObject => CEmptyObject
-    case CEmptyArray => CEmptyArray
+        val bytes: Array[Byte] = new Array(length)
+        in.readFully(bytes)
+        CNum(bytes.as[BigDecimal])
+
+      case CNull => 
+        assert(in.readInt() == 0)
+        CNull
+      
+      case CEmptyObject => CEmptyObject
+      case CEmptyArray => CEmptyArray
+    }
   }
 
   def writeIdentities(out: DataOutputStream, id: Identities): Unit = {

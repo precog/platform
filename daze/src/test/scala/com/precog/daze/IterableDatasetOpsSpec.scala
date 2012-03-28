@@ -157,7 +157,7 @@ with DiskIterableDatasetMemoizationComponent {
     
     def readHeader(in: DataInputStream) = in.readInt()
     
-    def writeRecord(out: DataOutputStream, value: (Identities, Long)) {
+    def writeRecord(out: DataOutputStream, value: (Identities, Long), header: Header) {
       val (ids, v) = value
       
       ids foreach out.writeLong
@@ -185,7 +185,7 @@ with DiskIterableDatasetMemoizationComponent {
     
     def readHeader(in: DataInputStream) = in.readInt()
     
-    def writeRecord(out: DataOutputStream, value: (Long, Identities, Long)) {
+    def writeRecord(out: DataOutputStream, value: (Long, Identities, Long), header: Header) {
       val (k, ids, v) = value
       
       out.writeLong(k)

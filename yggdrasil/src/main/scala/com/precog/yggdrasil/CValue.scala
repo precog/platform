@@ -28,7 +28,17 @@ import scalaz.syntax.order._
 import scalaz.std.AllInstances._
 
 sealed abstract class CValue {
-  def typeIndex: Int
+  @inline private[CValue] final def typeIndex: Int = this match {
+    case CString(v) => 0
+    case CBoolean(v) => 1
+    case CInt(v) => 2
+    case CLong(v) => 3
+    case CDouble(v) => 4
+    case CNum(v) => 5
+    case CEmptyObject => 6
+    case CEmptyArray => 7
+    case CNull => 8
+  }
 
   @inline final def toSValue: SValue = this match {
     case CString(v) => SString(v)
@@ -62,6 +72,23 @@ sealed trait CType {
   def format: StorageFormat
 
   def stype: SType
+
+  @inline private[CType] final def typeIndex = this match {
+    case CBoolean => 0
+
+    case CStringFixed(_) => 1
+    case CStringArbitrary => 2
+    
+    case CInt => 3
+    case CLong => 4
+    case CFloat => 5
+    case CDouble => 6
+    case CDecimalArbitrary => 7
+    
+    case CEmptyObject => 8
+    case CEmptyArray => 9
+    case CNull => 10
+  }
   
   def =~(tpe: SType): Boolean = (this, tpe) match {
     case (CBoolean, SBoolean) => true  
@@ -130,8 +157,8 @@ trait CTypeSerialization {
   }
 }
 
-object CType extends CTypeSerialization {
 
+object CType extends CTypeSerialization {
   // Note this conversion has a peer for SValues that should always be changed
   // in conjunction with this mapping.
   @inline
@@ -177,15 +204,17 @@ object CType extends CTypeSerialization {
       CDecimalArbitrary
     }   
   }
+
+  implicit object CTypeOrder extends Order[CType] {
+    def order(t1: CType, t2: CType): Ordering = Order[Int].order(t1.typeIndex, t2.typeIndex)
+  }
 }
 
 // vim: set ts=4 sw=4 et:
 //
 // Strings
 //
-case class CString(value: String) extends CValue {
-  val typeIndex = 0
-}
+case class CString(value: String) extends CValue 
 
 case class CStringFixed(width: Int) extends CType {
   def format = FixedWidth(width)  
@@ -200,9 +229,7 @@ case object CStringArbitrary extends CType {
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CValue {
-  val typeIndex = 1
-}
+case class CBoolean(value: Boolean) extends CValue 
 
 case object CBoolean extends CType {
   val format = FixedWidth(1)
@@ -212,45 +239,35 @@ case object CBoolean extends CType {
 //
 // Numerics
 //
-case class CInt(value: Int) extends CValue {
-  val typeIndex = 2
-}
+case class CInt(value: Int) extends CValue 
 
 case object CInt extends CType {
   val format = FixedWidth(4)
   val stype = SDecimal
 }
 
-case class CLong(value: Long) extends CValue {
-  val typeIndex = 3
-}
+case class CLong(value: Long) extends CValue 
 
 case object CLong extends CType {
   val format = FixedWidth(8)
   val stype = SDecimal
 }
 
-case class CFloat(value: Float) extends CValue {
-  val typeIndex = 4
-}
+case class CFloat(value: Float) extends CValue 
 
 case object CFloat extends CType {
   val format = FixedWidth(4)
   val stype = SDecimal
 }
 
-case class CDouble(value: Double) extends CValue {
-  val typeIndex = 5
-}
+case class CDouble(value: Double) extends CValue 
 
 case object CDouble extends CType {
   val format = FixedWidth(8)
   val stype = SDecimal
 }
 
-case class CNum(value: BigDecimal) extends CValue {
-  val typeIndex = 6
-}
+case class CNum(value: BigDecimal) extends CValue 
 
 case object CDecimalArbitrary extends CType {
   val format = LengthEncoded  
@@ -261,19 +278,16 @@ case object CDecimalArbitrary extends CType {
 // Nulls
 //
 case object CEmptyObject extends CValue with CType {
-  val typeIndex = 7
   val format = FixedWidth(0)
   val stype = SObject
 }
 
 case object CEmptyArray extends CValue with CType {
-  val typeIndex = 8
   val format = FixedWidth(0)
   val stype = SArray
 }
 
 case object CNull extends CValue with CType {
-  val typeIndex = 9
   val format = FixedWidth(0)
   val stype = SNull
 }

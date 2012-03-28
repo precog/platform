@@ -44,11 +44,14 @@ import Iteratee._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
+import org.scalacheck.Pretty
 import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
 class DiskMemoizationComponentSpec extends Specification with DiskIterableDatasetMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
+  override val defaultPrettyParams = Pretty.Params(2)
+
   override type Dataset[E] = IterableDataset[E]
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -75,20 +78,24 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableDatase
       withMemoizationContext { ctx =>
         @volatile var i = 0;
         check { (sample: Unshrinkable[List[SEvent]]) => 
-          val events = sample.value
-          synchronized { i += 1 } 
+          try {
+            val events = sample.value
+            synchronized { i += 1 } 
 
-          ctx.memoizing[SValue](i) must beLike {
-            case Left(f) => 
-              val results = Await.result(f(IterableDataset(1, events)), timeout.duration)
+            ctx.memoizing[SValue](i) must beLike {
+              case Left(f) => 
+                val results = Await.result(f(IterableDataset(1, events)), timeout.duration)
 
-              (results.iterable.toList must_== events) and {
-                ctx.memoizing[SValue](i) must beLike {
-                  case Right(d) => 
-                    val results2 = Await.result(d, timeout.duration)
-                    results2.iterable.toList must_== events
+                (results.iterable.toList must_== events) and {
+                  ctx.memoizing[SValue](i) must beLike {
+                    case Right(d) => 
+                      val results2 = Await.result(d, timeout.duration)
+                      results2.iterable.toList must_== events
+                  }
                 }
-              }
+            }
+          } catch {
+            case ex => ex.printStackTrace; throw ex
           }
         }
       }
