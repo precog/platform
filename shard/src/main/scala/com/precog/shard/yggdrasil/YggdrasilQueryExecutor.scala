@@ -24,11 +24,13 @@ package yggdrasil
 import blueeyes.json.JsonAST._
 
 import daze._
+import daze.memoization._
 
 import pandora.ParseEvalStack
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.serialization._
 
 import akka.actor.ActorSystem
 import akka.dispatch._
@@ -46,12 +48,13 @@ import scalaz.syntax.monad._
 import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig extends 
+    BaseConfig with 
     YggEnumOpsConfig with 
     LevelDBQueryConfig with 
     DiskMemoizationConfig with 
-    ProductionActorConfig with
-    DatasetConsumersConfig with
-    BaseConfig {
+    DatasetConsumersConfig with 
+    IterableDatasetOpsConfig with 
+    ProductionActorConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -64,9 +67,21 @@ trait YggdrasilQueryExecutorComponent {
     new YggdrasilQueryExecutorConfig {
       val config = wrappedConfig 
       val sortWorkDir = scratchDir
-      val chunkSerialization = BinaryProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
+
+      val clock = blueeyes.util.Clock.System
+
+      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+
+      //TODO: Get a producer ID
+      val idSource = new IdSource {
+        private val source = new java.util.concurrent.atomic.AtomicLong
+        def nextId() = source.getAndIncrement
+      }
     }
   }
     
@@ -75,8 +90,13 @@ trait YggdrasilQueryExecutorComponent {
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
       for( state <- YggState.restore(yConfig.dataDir) ) yield {
 
-        state map { yState => new YggdrasilQueryExecutor {
-          trait Storage extends ActorYggShard with ProductionActorEcosystem
+        state map { yState => 
+          new YggdrasilQueryExecutor
+            with IterableDatasetOpsComponent
+            with LevelDBQueryComponent
+            with DiskIterableDatasetMemoizationComponent {
+          override type Dataset[E] = IterableDataset[E]
+          trait Storage extends ActorYggShard[IterableDataset] with ProductionActorEcosystem
           lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
           implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
           val yggConfig = yConfig
@@ -101,13 +121,14 @@ trait YggdrasilQueryExecutorComponent {
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
     with ParseEvalStack
-    with YggdrasilEnumOpsComponent
     with LevelDBQueryComponent 
-    with DiskMemoizationComponent 
-    with Logging { self =>
+    with MemoryDatasetConsumer
+    with DiskIterableDatasetMemoizationComponent
+    with Logging  { self =>
+  override type Dataset[E] = IterableDataset[E]
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  type Storage <: ActorYggShard
+  type Storage <: ActorYggShard[IterableDataset]
 
   def startup() = storage.actorsStart
   def shutdown() = storage.actorsStop
