@@ -229,7 +229,7 @@ class PlatformSpecs extends Specification
           obj must contain("cpm" -> SDecimal(1))
         }
       }
-    }.pendingUntilFixed
+    }
 
     "use the where operator on a key with array values" in {
       val input = "load(//campaigns) where load(//campaigns).ageRange = [37, 48]"
@@ -243,7 +243,7 @@ class PlatformSpecs extends Specification
           obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
         }
       }
-    }.pendingUntilFixed  
+    }
 
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(load(//campaigns) with { t: 42 })"

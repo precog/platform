@@ -264,7 +264,7 @@ trait Evaluator extends DAG
             else ops.point[SValue](SDecimal(total / count))
           
           case GeometricMean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
+            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
               case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
               case (acc, _) => acc
             }
