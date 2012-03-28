@@ -20,6 +20,7 @@ import scalaz.syntax.monad._
 
 
 
+/*
 trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEvent]] with BinarySValueFormatting {
   case class Header(idCount: Int, structure: Seq[(JPath, CType)])
   final val HeaderFlag = 0
@@ -97,4 +98,5 @@ trait BinaryProjectionSerialization extends IterateeFileSerialization[Vector[SEv
     } yield (ids, sv)
   }
 }
+*/
 

@@ -7,11 +7,16 @@ trait Close[A] {
 object Close {
   import java.io._
   implicit object DataInputStreamClose extends Close[DataInputStream] {
-    def close(a: DataInputStream) = a.close
+    def close(a: DataInputStream) = {
+      a.close
+    }
   }
 
   implicit object DataOutputStreamClose extends Close[DataOutputStream] {
-    def close(a: DataOutputStream) = a.close
+    def close(a: DataOutputStream) = {
+      a.flush
+      a.close
+    }
   }
 }
 
