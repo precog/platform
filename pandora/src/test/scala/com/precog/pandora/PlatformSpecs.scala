@@ -107,7 +107,7 @@ class PlatformSpecs extends Specification
         
       eval(input) mustEqual Set(SDecimal(100))
     }
-    
+
     "count the campaigns dataset" >> {
       "<root>" >> {
         eval("count(load(//campaigns))") mustEqual Set(SDecimal(100))
@@ -250,12 +250,23 @@ class PlatformSpecs extends Specification
       eval(input) mustEqual Set(SDecimal(100))
     }
 
-    "perform distinct" in {
-      val input = """
-        | a := load(//campaigns)
-        |   distinct(a.gender)""".stripMargin
+    "perform distinct" >> {
+      "on a homogenous set of numbers" >> {
+        val input = """
+          | a := load(//campaigns)
+          |   distinct(a.gender)""".stripMargin
 
-      eval(input) mustEqual Set(SString("female"), SString("male"))   
+        eval(input) mustEqual Set(SString("female"), SString("male"))   
+      }
+
+      "on set of strings formed by a union" >> {
+        val input = """
+          | gender := load(//campaigns).gender
+          | pageId := load(//clicks).pageId
+          | distinct(gender union pageId)""".stripMargin
+
+        eval(input) mustEqual Set(SString("female"), SString("male"), SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))   
+      }
     }
 
     "map object creation over the campaigns dataset" in {

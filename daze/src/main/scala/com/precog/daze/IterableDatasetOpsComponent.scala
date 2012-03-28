@@ -63,7 +63,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
             }
 
             @tailrec private final def precomputeNext(): IA = {
-              if (inner.hasNext) {
+              if ((inner != null) && inner.hasNext) {
                 val (_, sv) = inner.next()
                 (VectorCase(nextId()), sv)
               } else if (di.hasNext) {
