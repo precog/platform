@@ -64,12 +64,11 @@ sealed trait SValue {
   def set(selector: JPath, cv: CValue): Option[SValue] = this match {
     case SObject(obj) => 
       selector.nodes match {
-        case Nil => Some(cv.toSValue)
         case JPathField(name) :: Nil => Some(SObject(obj + (name -> cv.toSValue))) 
         case JPathField(name) :: xs  => 
           val child = xs.head match { 
-            case JPathField(_)  => SObject(Map())
-            case JPathIndex(_) => SArray(Vector.empty[SValue])
+            case JPathField(_) => SObject.Empty
+            case JPathIndex(_) => SArray.Empty
           }
 
           obj.getOrElse(name, child).set(JPath(xs), cv).map(sv => (SObject(obj + (name -> sv)))) 
@@ -77,16 +76,17 @@ sealed trait SValue {
 
     case SArray(arr) => 
       selector.nodes match {
-        case Nil => Some(cv.toSValue)
         case JPathIndex(i) :: Nil => Some(SArray(arr.padTo(i + 1, SNull).updated(i, cv.toSValue))) 
         case JPathIndex(i) :: xs  => 
           val child = xs.head match { 
-            case JPathField(_)  => SObject(Map())
-            case JPathIndex(_) => SArray(Vector.empty[SValue])
+            case JPathField(_) => SObject.Empty
+            case JPathIndex(_) => SArray.Empty
           }
 
           arr.lift(i).getOrElse(child).set(JPath(xs), cv).map(sv => SArray(arr.padTo(i + 1, SNull).updated(i, sv))) 
       }
+
+    case SNull if (selector == JPath.Identity) => Some(cv.toSValue)
 
     case _ => None
   }

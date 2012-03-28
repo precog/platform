@@ -32,6 +32,8 @@ import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
 import blueeyes.json.JPath
+import blueeyes.json.JPathField
+import blueeyes.json.JPathIndex
 import blueeyes.util.Clock
 import java.io.File
 
@@ -133,22 +135,30 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           }
         }
 
-        def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): Set[(JPath, Int)] = {
-          selectors map { s => 
-            (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
-          }
+        def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): (SValue, Set[(JPath, Int)]) = {
+          Tuple2(
+            selectors.flatMap(_.dropPrefix(prefix).flatMap(_.head)).toList match {
+              case List(JPathField(_)) => SObject.Empty
+              case List(JPathIndex(_)) => SArray.Empty
+              case Nil => SNull
+              case _ => sys.error("Inconsistent JSON structure: " + selectors)
+            },
+            selectors map { s =>
+              (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
+            }
+          )
         }
 
         def joinNext(retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
           case (descriptor, selectors) :: x :: xs => 
-            val instr = buildInstructions(descriptor, selectors)
+            val (init, instr) = buildInstructions(descriptor, selectors)
             for {
               projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
               dataset    <- joinNext(x :: xs)
             } yield {
               val result = projection.getAllPairs(expiresAt).cogroup(dataset) {
                 new CogroupF[Seq[CValue], SValue, SValue] {
-                  def left(l: Seq[CValue]) = appendToObject(SObject.Empty, instr, l)
+                  def left(l: Seq[CValue]) = appendToObject(init, instr, l)
                   def both(l: Seq[CValue], r: SValue) = appendToObject(r, instr, l)
                   def right(r: SValue) = r
                 }
@@ -157,11 +167,11 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
             }
 
           case (descriptor, selectors) :: Nil =>
-            val instr = buildInstructions(descriptor, selectors)
+            val (init, instr) = buildInstructions(descriptor, selectors)
             for {
               projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
             } yield {
-              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(SObject.Empty, instr, _) }
+              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
               result
             }
         }
