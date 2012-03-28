@@ -384,7 +384,7 @@ class PlatformSpecs extends Specification
         """.stripMargin
 
         eval(input) must not(throwA[Throwable])
-      }.pendingUntilFixed
+      }
 
       // times out...
       /* "handle chained characteristic functions" in {
