@@ -186,7 +186,7 @@ trait Evaluator extends DAG
         }
       }
       
-      if (back.isDefined)
+      if (back.isDefined || next.isEmpty)
         back
       else
         findCommonality(seen2)(next.toSeq: _*)
