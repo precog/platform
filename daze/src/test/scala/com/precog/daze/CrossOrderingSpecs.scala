@@ -2,7 +2,7 @@ package com.precog.daze
 
 import org.specs2.mutable._
 
-object CrossOrderingSpecs extends Specification with CrossOrdering with Timelib with Genlib {
+object CrossOrderingSpecs extends Specification with CrossOrdering with Stdlib {
   import instructions._
   import dag._
   

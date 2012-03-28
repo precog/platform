@@ -20,8 +20,10 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map 
   val cpStr = cp map { _.data } mkString delim
   s.log.debug("Running with classpath: " + cpStr)
   val opts2 =
+    Seq("-server") ++
     Seq("-XX:MaxPermSize=512m") ++
-    Seq("-Xmx2G") ++
+    Seq("-Xms3G") ++
+    Seq("-Xmx4G") ++
     Seq("-classpath", cpStr) ++
     Seq("specs2.run") ++
     Seq(testName)

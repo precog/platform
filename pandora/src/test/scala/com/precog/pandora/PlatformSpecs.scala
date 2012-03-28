@@ -134,9 +134,128 @@ class PlatformSpecs extends Specification
       }
     }
 
+    "use the where operator on a unioned set" >> {
+      "campaigns.gender" >> {
+        val input = """
+          | a := load(//campaigns) union load(//clicks)
+          |   a where a.gender = "female" """.stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(46)
+        
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("gender" -> SString("female"))
+          }
+        }
+      }
+
+      "clicks.platform" >> {
+        val input = """
+          | a := load(//campaigns) union load(//clicks)
+          |   a where a.platform = "android" """.stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(72)
+        
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("platform" -> SString("android"))
+          }
+        }
+      }
+    }
+
+    "use the where operator on an intersected set" >> {
+      "campaigns.gender" >> {
+        val input = """
+          | a := load(//campaigns).campaign union load(//campaigns).cpm
+          |   a intersect load(//campaigns).campaign """.stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SString(campaign)) =>
+            Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
+        }
+      }
+
+      "clicks.platform" >> {
+        val input = """
+          | a := load(//campaigns).campaign union load(//campaigns).cpm
+          |   a intersect load(//campaigns).cpm """.stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(num)) => {
+            Set(100,39,91,77,96,99,48,67,10,17,90,58,20,38,1,43,49,23,72,42,94,16,9,21,52,5,40,62,4,33,28,54,70,82,76,22,6,12,65,31,80,45,51,89,69) must contain(num)
+          }
+        }
+      }
+    }
+
+    "use the where operator on a key with string values" in {
+      val input = """load(//campaigns) where load(//campaigns).platform = "android" """
+      val results = evalE(input)
+      
+      results must haveSize(72)
+
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("platform" -> SString("android"))
+        }
+      }
+    }
+
+    "use the where operator on a key with numeric values" in {
+      val input = "load(//campaigns) where load(//campaigns).cpm = 1 "
+      val results = evalE(input)
+      
+      results must haveSize(34)
+
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("cpm" -> SDecimal(1))
+        }
+      }
+    }.pendingUntilFixed
+
+    "use the where operator on a key with array values" in {
+      val input = "load(//campaigns) where load(//campaigns).ageRange = [37, 48]"
+      val results = evalE(input)
+      
+      results must haveSize(39)
+
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
+        }
+      }
+    }.pendingUntilFixed  
+
     "evaluate the with operator across the campaigns dataset" in {
       val input = "count(load(//campaigns) with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
+    }
+
+    "perform distinct" in {
+      val input = """
+        | a := load(//campaigns)
+        |   distinct(a.gender)""".stripMargin
+
+      eval(input) mustEqual Set(SString("female"), SString("male"))   
     }
 
     "map object creation over the campaigns dataset" in {
@@ -174,48 +293,23 @@ class PlatformSpecs extends Specification
       }
     }    
 
-    "perform distinct" in {
+    "return only value-unique results from a characteristic function" in {
       val input = """
-        | a := load(//campaigns)
-        |   distinct(a.gender)""".stripMargin
-
-      eval(input) mustEqual Set(SString("female"), SString("male"))   
-    }
-
-    "use where on a unioned set" in {
-      val input = """
-        | a := load(//campaigns) union load(//clicks)
-        |   a where a.gender = "female" """.stripMargin
+        | campaigns := load(//campaigns)
+        | f('a) :=
+        |   campaigns.gender where campaigns.platform = 'a
+        |
+        | f""".stripMargin
         
       val results = evalE(input)
       
-      results must haveSize(46)
+      results must haveSize(2)
       
       forall(results) {
-        case (VectorCase(_), SObject(obj)) => {
-          obj must haveSize(5)
-          obj must haveKey("gender")
-        }
+        case (VectorCase(_), SString(gender)) =>
+          Set("male", "female") must contain(gender)
       }
     }
-    
-    //"return only value-unique results from a characteristic function" in {
-    //  val input = """
-    //    | campaigns := load(//campaigns)
-    //    | f('a) :=
-    //    |   campaigns.gender where campaigns.platform = 'a
-    //    |
-    //    | f""".stripMargin
-    //    
-    //  val results = evalE(input)
-    //  
-    //  results must haveSize(2)
-    //  
-    //  forall(results) {
-    //    case (VectorCase(_), SString(gender)) =>
-    //      Set("male", "female") must contain(gender)
-    //  }
-    //}
     
     "determine a histogram of genders on campaigns" in {
       val input = """
@@ -227,6 +321,13 @@ class PlatformSpecs extends Specification
       eval(input) mustEqual Set(
         SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
         SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+    }
+
+    "load a nonexistent dataset with a dot in the name" in {
+      val input = """
+        | load(//foo.bar)""".stripMargin
+     
+      eval(input) mustEqual Set()
     }
     
     /* commented out until we have memoization (MASSIVE time sink)

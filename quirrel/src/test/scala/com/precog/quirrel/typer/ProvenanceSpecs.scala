@@ -253,6 +253,12 @@ object ProvenanceSpecs extends Specification
         val tree = compile("count(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
+      }     
+      
+      {
+        val tree = compile("geometricMean(load(//foo))")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
       }
       
       {
@@ -293,6 +299,18 @@ object ProvenanceSpecs extends Specification
       
       {
         val tree = compile("sum(load(//foo))")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }
+      
+      {
+        val tree = compile("sumSq(load(//foo))")
+        tree.provenance mustEqual ValueProvenance
+        tree.errors must beEmpty
+      }     
+      
+      {
+        val tree = compile("variance(load(//foo))")
         tree.provenance mustEqual ValueProvenance
         tree.errors must beEmpty
       }
@@ -1407,6 +1425,26 @@ object ProvenanceSpecs extends Specification
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 3))
         }
+      }      
+      
+      "geometricMean" >> {
+        {
+          val tree = compile("geometricMean")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 0))
+        }
+        
+        {
+          val tree = compile("geometricMean(1, 2)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        
+        {
+          val tree = compile("geometricMean(1, 2, 3)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 3))
+        }
       }
       
       "load" >> {
@@ -1567,7 +1605,47 @@ object ProvenanceSpecs extends Specification
           tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(IncorrectArity(1, 3))
         }
-      }      
+      }  
+
+     "sumSq" >> {
+        {
+          val tree = compile("sumSq")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 0))
+        }
+        
+        {
+          val tree = compile("sumSq(1, 2)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        
+        {
+          val tree = compile("sumSq(1, 2, 3)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 3))
+        }
+      }    
+      
+      "variance" >> {
+        {
+          val tree = compile("variance")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 0))
+        }
+        
+        {
+          val tree = compile("variance(1, 2)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        
+        {
+          val tree = compile("variance(1, 2, 3)")
+          tree.provenance mustEqual NullProvenance
+          tree.errors mustEqual Set(IncorrectArity(1, 3))
+        }
+      }
 
       "distinct" >> {
         {

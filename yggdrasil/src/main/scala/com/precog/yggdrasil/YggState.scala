@@ -58,13 +58,6 @@ case class YggState(
       f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
     }.map(_ => ())
 
-  val metadataIO = (descriptor: ProjectionDescriptor, metadata: ColumnMetadata) => {
-    descriptorLocator(descriptor).map( d => new File(d, metadataName) ).flatMap {
-      f => 
-        val metadataSeq = descriptor.columns map { col => metadata(col) }
-        IOUtils.safeWriteToFile(pretty(render(metadataSeq.toList.map( _.values.toSet ).serialize)), f)
-    }.map(_ => ())
-  }
 }
 
 object YggState extends Logging {
@@ -137,14 +130,11 @@ object YggState extends Logging {
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
-    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { (acc, el) => (acc, el) match {
+    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { 
       case (Success(ms), Success(m)) => Success(ms :+ m)
       case (Failure(e1), Failure(e2)) => Failure(e1 |+| e2)
       case (_          , Failure(e)) => Failure(e)
-    }}
-  }
-
-  class DBIO(dataDir: File, descriptorLocations: Map[ProjectionDescriptor, File]) { 
+    }
   }
 }
 
