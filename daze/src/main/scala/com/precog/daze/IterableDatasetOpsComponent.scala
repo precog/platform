@@ -505,6 +505,9 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                   val rightElement: IB = if (lastRight != null) lastRight else if (right.hasNext) right.next else null.asInstanceOf[IB]
 
                   if (leftElement == null || rightElement == null) {
+                    // spin out the iterators to get them to clean up their resources. Ugh. //TODO: FIX!!!!!
+                    if (leftElement  != null) while (left.hasNext) left.next 
+                    if (rightElement != null) while (right.hasNext) right.next 
                     null.asInstanceOf[IC]
                   } else {
                     order(leftElement, rightElement) match {
