@@ -80,7 +80,9 @@ trait Evaluator extends DAG
   }
 
   import yggConfig._
+
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
+  //import Function._
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
@@ -262,7 +264,7 @@ trait Evaluator extends DAG
             else ops.point[SValue](SDecimal(total / count))
           
           case GeometricMean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
+            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
               case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
               case (acc, _) => acc
             }

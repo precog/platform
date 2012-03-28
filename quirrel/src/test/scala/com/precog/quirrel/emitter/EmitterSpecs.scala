@@ -419,11 +419,11 @@ object EmitterSpecs extends Specification
           Reduce(Count)))
     }
 
-    "emit count reduction" in {
-      testEmit("count(1)")(
+    "emit geometricMean reduction" in {
+      testEmit("geometricMean(1)")(
         Vector(
           PushNum("1"),
-          Reduce(Count)))
+          Reduce(GeometricMean)))
     }
 
     "emit mean reduction" in {
@@ -474,6 +474,20 @@ object EmitterSpecs extends Specification
           PushNum("1"),
           Reduce(Sum)))
     } 
+
+    "emit sumSq reduction" in {
+      testEmit("sumSq(1)")(
+        Vector(
+          PushNum("1"),
+          Reduce(SumSq)))
+    }
+
+    "emit variance reduction" in {
+      testEmit("variance(1)")(
+        Vector(
+          PushNum("1"),
+          Reduce(Variance)))
+    }
 
     "emit distinct set-reduction" in {
       testEmit("distinct(1)")(

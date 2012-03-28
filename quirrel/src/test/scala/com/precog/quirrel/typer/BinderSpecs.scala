@@ -157,6 +157,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
       
       {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("geometricMean := 1 geometricMean")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("load := 1 load")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
@@ -219,6 +226,20 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         d.errors must beEmpty
       }      
 
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("sumSq := 1 sumSq")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, d: Dispatch) = parse("variance := 1 variance")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("distinct := 1 distinct")
         d.binding mustEqual UserDef(e)
@@ -604,6 +625,13 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.binding mustEqual BuiltIn(Identifier(Vector(), "count"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
+    }      
+   
+    "bind geometricMean" in {
+    val d @ Dispatch(_, _, _) = parse("geometricMean")
+      d.binding mustEqual BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
+      d.isReduction mustEqual true
+      d.errors must beEmpty
     }
     
     "bind load" in {
@@ -662,6 +690,20 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d.errors must beEmpty
     }    
 
+    "bind sumSq" in {
+      val d @ Dispatch(_, _, _) = parse("sumSq")
+        d.binding mustEqual BuiltIn(Identifier(Vector(), "sumSq"), 1, true)
+        d.isReduction mustEqual true
+        d.errors must beEmpty
+    }
+    
+    "bind variance" in {
+      val d @ Dispatch(_, _, _) = parse("variance")
+        d.binding mustEqual BuiltIn(Identifier(Vector(), "variance"), 1, true)
+        d.isReduction mustEqual true
+        d.errors must beEmpty
+    }
+    
     "bind distinct" in {
       val d @ Dispatch(_, _, _) = parse("distinct")
       d.binding mustEqual BuiltIn(Identifier(Vector(), "distinct"), 1, false)

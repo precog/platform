@@ -130,39 +130,3 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
     cleanupTempDir(tmpDir)
   }
 }
-
-class TestQueryExecutor(config: Configuration, testShard: TestShard) extends YggdrasilQueryExecutor {
-
-  lazy val actorSystem = ActorSystem("test_query_executor")
-  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-  lazy val yggConfig = new YggdrasilQueryExecutorConfig {
-      val config = TestQueryExecutor.this.config
-      val sortWorkDir = scratchDir
-      val chunkSerialization = BinaryProjectionSerialization
-      val memoizationBufferSize = sortBufferSize
-      val memoizationWorkDir = scratchDir
-      override lazy val flatMapTimeout: Duration = 5000 seconds
-      override lazy val projectionRetrievalTimeout: Timeout = Timeout(5000 seconds)
-      override lazy val maxEvalDuration: Duration = 5000 seconds
-    }  
-  type Storage = TestShard
-  object ops extends Ops
-  object query extends QueryAPI
-
-  val storage = testShard
-}
-
-class TestShard(config: Configuration, dataDir: File) extends ActorYggShard with StandaloneActorEcosystem {
-  type YggConfig = ProductionActorConfig
-  lazy val yggConfig = new ProductionActorConfig {
-    lazy val config = TestShard.this.config
-  }
-  lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
-
-  def waitForRoutingActorIdle() {
-    val td = Duration(5000, "seconds")
-    implicit val to = new Timeout(td)
-    Await.result(routingActor ? ControlledStop, td)
-    Await.result(routingActor ? Restart, td)
-  }
-}
