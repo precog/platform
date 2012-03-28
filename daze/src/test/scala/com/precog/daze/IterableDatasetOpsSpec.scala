@@ -42,8 +42,8 @@ trait IterableDatasetGenerators {
     for {
       i1 <- choose(0, 3) map (IdCount(_: Int))
       i2 <- choose(1, 3) map (IdCount(_: Int)) if i2 != i1
-      l1 <- dsGen[Long](Gen.value(i1), genLong)
-      l2 <- dsGen[Long](Gen.value(i2), genLong)
+      l1 <- dsGen[Long]()(Gen.value(i1), genLong)
+      l2 <- dsGen[Long]()(Gen.value(i2), genLong)
     } yield {
       MergeSample(i1.idCount max i2.idCount, l1, l2)
     }
@@ -51,7 +51,7 @@ trait IterableDatasetGenerators {
 
   implicit val genLong: Gen[Long] = arbLong.arbitrary
 
-  val genVariableIdCount = Gen.choose(0, 2).map(IdCount(_))
+  val genVariableIdCount = Gen.choose(0, 10).map(IdCount(_))
 
   def genFixedIdCount(count: Int): Gen[IdCount] = Gen.value(IdCount(count))
 
@@ -63,10 +63,11 @@ trait IterableDatasetGenerators {
       (VectorCase(ids: _*), value)
     }
 
-  implicit def dsGen[A](implicit count: Gen[IdCount], agen: Gen[A]): Gen[IterableDataset[A]] = {
+  implicit def dsGen[A](minSize: Int = 0)(implicit count: Gen[IdCount], agen: Gen[A]): Gen[IterableDataset[A]] = {
     for {
-      idCount <- count
-      l       <- listOf(recGen(idCount, agen))
+      idCount  <- count
+      recCount <- Gen.choose(minSize, 100)
+      l        <- listOfN(recCount, recGen(idCount, agen))
     } yield IterableDataset(idCount.idCount, l.distinct)
   }
 
@@ -78,18 +79,31 @@ trait IterableDatasetGenerators {
     } yield (IterableDataset(idCount.idCount, l.distinct), IterableDataset(idCount.idCount, m.distinct))
   }
 
-  implicit def groupingGen[K,A](implicit groupingFunc: A => K, count: Gen[IdCount], agen: Gen[A], orderA: Order[A], orderK: Order[K]): Gen[IterableGrouping[K,IterableDataset[A]]] = {
+  implicit def groupingGen[K,A](minSize: Int = 0)(implicit groupingFunc: A => K, count: Gen[IdCount], agen: Gen[A], orderA: Order[A], orderK: Order[K]): Gen[IterableGrouping[K,IterableDataset[A]]] = {
     implicit val orderingA = tupledIdentitiesOrder[A].toScalaOrdering
     implicit val orderingK = orderK.toScalaOrdering
 
     for {
-      ds <- dsGen[A]
+      ds <- dsGen[A](minSize)
     } yield {
       IterableGrouping(ds.iterable.groupBy { case (k,v) => groupingFunc(v) }.map { case (k,v) => (k, IterableDataset[A](ds.idCount, List(v.toSeq: _*).sorted)) }.toList.sortBy(_._1).toIterator)
     }
   }
 
-  implicit def arbLongDataset(implicit idCount: Gen[IdCount]) = Arbitrary(dsGen[Long])
+  implicit def groupingNelGen[K,A](implicit groupingFunc: A => K, count: Gen[IdCount], agen: Gen[A], orderA: Order[A], orderK: Order[K]): Gen[IterableGrouping[K,NEL[IterableDataset[A]]]] = {
+    groupingGen[K,A](1).map {
+      g => {
+        IterableGrouping(g.iterator.map { 
+          case (k,IterableDataset(count,iterable)) => {
+            val splitList = iterable.toList.grouped(1).map(IterableDataset(count,_)).toList
+            (k, NEL.nel(splitList.head, splitList.tail))
+          } 
+        })
+      }
+    }
+  }
+
+  implicit def arbLongDataset(implicit idCount: Gen[IdCount]) = Arbitrary(dsGen[Long]())
 
   implicit def arbLongDSPair(implicit idCount: Gen[IdCount]) = Arbitrary(equalCountDSPair[Long])
 }
@@ -98,6 +112,8 @@ class IterableDatasetOpsSpec extends Specification with ScalaCheck with Iterable
 with DiskIterableDatasetMemoizationComponent {
   type YggConfig = IterableDatasetOpsConfig with DiskMemoizationConfig
   override type Dataset[α] = IterableDataset[α]
+
+  override def defaultValues = super.defaultValues + (minTestsOk -> 1000)
 
   object ops extends Ops
   import ops._
@@ -657,13 +673,13 @@ with DiskIterableDatasetMemoizationComponent {
     }
 
     "implement flatten" in {
-      implicit val groupFunc = (a: Long) => a % 10
+      implicit val groupFunc = (a: Long) => a % 3
       implicit val idCount = genVariableIdCount
 
-      implicit val arbGroup = Arbitrary(groupingGen[Long,Long])
+      implicit val arbGroup = Arbitrary(groupingNelGen[Long,Long])
 
-      check { (g1: IterableGrouping[Long, IterableDataset[Long]]) => (g1.iterator.hasNext == true) ==> {
-        val list1 = g1.iterator.toList
+      check { (g1: IterableGrouping[Long, NEL[IterableDataset[Long]]]) => (g1.iterator.hasNext == true) ==> {
+        val list1: List[(Long,NEL[IterableDataset[Long]])] = g1.iterator.toList
 
         def idGen() = {
           var id = -1l
@@ -675,9 +691,9 @@ with DiskIterableDatasetMemoizationComponent {
           case (k, nv) => IterableDataset(1, Iterable.concat(nv.list.map(_.iterable): _*).map{ case (_,v) => (VectorCase(expIds()), v) })
         }
           
-        val ng1 = mapGrouping(IterableGrouping(list1.iterator)) { v => NEL(v) }
+        val ng1 = IterableGrouping(list1.iterator)
 
-        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, NEL(v)).iterable }: _*)).iterable.toList
+        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable }: _*)).iterable.toList
 
         val ids = idGen()
         import scalaz.std.tuple._
@@ -740,7 +756,7 @@ with DiskIterableDatasetMemoizationComponent {
         implicit val groupFunc = (a: Long) => a % 10
         implicit val idCount = genVariableIdCount
 
-        implicit val arbGroup = Arbitrary(groupingGen[Long,Long])
+        implicit val arbGroup = Arbitrary(groupingGen[Long,Long]())
 
         check { (g1: IterableGrouping[Long, IterableDataset[Long]], g2: IterableGrouping[Long, IterableDataset[Long]]) => {
           val list1 = g1.iterator.toList
