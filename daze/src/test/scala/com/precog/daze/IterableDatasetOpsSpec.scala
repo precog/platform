@@ -707,9 +707,15 @@ with DiskIterableDatasetMemoizationComponent {
 
         val expIds = idGen()
         val flattenFunc: (Long,NEL[IterableDataset[Long]]) => IterableDataset[Long] = {
-          case (k, nv) => IterableDataset(1, Iterable.concat(nv.list.map(_.iterable): _*).map{ case (_,v) => (VectorCase(expIds()), v) })
+          case (k, nv) => if (k == 0) {
+            // Force a discard to ensure we handle the case where a grouping transforms to "no results"
+            // A bug in flattenGroup would cause the iteration to stop prematurely when this was the case
+            IterableDataset(1, Iterable()) 
+          } else {
+            IterableDataset(1, Iterable.concat(nv.list.map(_.iterable): _*).map{ case (_,v) => (VectorCase(expIds()), v) })
+          }
         }
-          
+        
         val ng1 = IterableGrouping(list1.iterator)
 
         val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable }: _*)).iterable.toList
