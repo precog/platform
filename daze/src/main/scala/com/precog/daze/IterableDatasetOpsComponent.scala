@@ -229,25 +229,39 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
     def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit order: Order[B], ms: IncrementalSerialization[(Identities, B)]): Dataset[B] = {
       type IB = (Identities, B)
 
+      val gIterator = g.iterator
+
+      assert(gIterator.hasNext)
+
       val iter = new Iterator[IB] {
         private[this] var _currentIterator: Iterator[IB] = _
-        
-        if (g.iterator.hasNext) {
-          val (key, value) = g.iterator.next
-          _currentIterator = f(key, value).iterable.iterator
+
+        private[this] def getNextValidIteratorFromG() = {
+          var nextIterator: Iterator[IB] = null
+ 
+          if (gIterator.hasNext) {
+            do { 
+              val (key, value) = gIterator.next
+              nextIterator = f(key, value).iterable.iterator
+            } while (!nextIterator.hasNext && gIterator.hasNext)
+          }
+
+          if (nextIterator != null && nextIterator.hasNext) {
+            _currentIterator = nextIterator
+          } else {
+            _currentIterator = null
+          }
         }
 
+        getNextValidIteratorFromG()
+
         def hasNext = _currentIterator != null && _currentIterator.hasNext
+
         def next = {
           val tmp = _currentIterator.next
 
           if (! _currentIterator.hasNext) {
-            if (g.iterator.hasNext) {
-              val (key, value) = g.iterator.next
-              _currentIterator = f(key, value).iterable.iterator
-            } else {
-              _currentIterator = null
-            }
+            getNextValidIteratorFromG()
           }
 
           tmp
