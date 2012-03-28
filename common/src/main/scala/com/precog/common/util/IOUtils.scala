@@ -20,6 +20,7 @@
 package com.precog.common.util
 
 import java.io._
+import java.nio.channels._
 import java.util.Properties
 
 import scalaz._
@@ -51,12 +52,14 @@ object IOUtils {
     props
   }
 
-  def writeToFile(s: String, f: File): IO[Unit] = IO {
-    val writer = new PrintWriter(new PrintWriter(f))
-    try {
-      writer.println(s)
-    } finally { 
-      writer.close
+  def writeToFile(s: String, f: File): IO[Validation[Throwable, Unit]] = IO {
+    Validation.fromTryCatch {
+      val writer = new PrintWriter(new PrintWriter(f))
+      try {
+        writer.println(s)
+      } finally { 
+        writer.close
+      }
     }
   }
 
@@ -84,6 +87,26 @@ object IOUtils {
     tmp 
   }
 
+  def copyFile(src: File, dest: File): IO[Validation[Throwable, Unit]] = IO {
+    Validation.fromTryCatch { Success(nioCopyFile(src, dest)) }
+  }
+
+  private def nioCopyFile(sourceFile: File, destFile: File) {
+    if(!destFile.exists) {
+     destFile.createNewFile
+    }
+   
+    var source: FileChannel = null
+    var destination: FileChannel = null
+    try {
+      source = new FileInputStream(sourceFile).getChannel
+      destination = new FileOutputStream(destFile).getChannel
+      destination.transferFrom(source, 0, source.size)
+    } finally {
+      if(source != null) source.close
+      if(destination != null) destination.close
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

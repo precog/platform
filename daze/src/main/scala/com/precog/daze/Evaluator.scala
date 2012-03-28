@@ -99,7 +99,9 @@ trait Evaluator extends DAG
   }
 
   import yggConfig._
+
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
+  //import Function._
   
   def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =

@@ -34,8 +34,6 @@ object QuirrelConsole {
     type BIF2 = BuiltInFunc2
     def lib1 = Set()
     def lib2 = Set()
-    def mathlib1 = Set()
-    def mathlib2 = Set()
   }
 
   val compiler = new Parser
