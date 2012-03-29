@@ -372,7 +372,37 @@ class PlatformSpecs extends Specification
 
       eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
     }
-    
+
+    "evaluate functions from each library" >> {
+      "Stringlib" >> {
+        val input = """
+          | gender := distinct(load(//campaigns).gender)
+          | std::string::concat("alpha ", gender)""".stripMargin
+
+        eval(input) mustEqual Set(SString("alpha female"), SString("alpha male"))
+      }
+
+      "Mathlib" >> {
+        val input = """
+          | cpm := distinct(load(//campaigns).cpm)
+          | selectCpm := cpm where cpm < 10
+          | std::math::pow(selectCpm, 2)""".stripMargin
+
+        eval(input) mustEqual Set(SDecimal(25), SDecimal(1), SDecimal(36), SDecimal(81), SDecimal(16))
+      }
+
+      "Timelib" >> {
+        val input = """
+          | time := load(//clicks).timeString
+          | std::time::yearsBetween(time, "2012-02-09T19:31:13.616+10:00")""".stripMargin
+
+        val results = evalE(input) 
+        val results2 = results map { case (VectorCase(_), SDecimal(d)) => d.toInt } 
+
+        results2 must contain(0).only
+      }
+    }
+
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
