@@ -28,18 +28,31 @@ trait DiskMemoizationConfig {
 trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
   type YggConfig <: DiskMemoizationConfig
   type Dataset[α] = IterableDataset[α]
+  type MemoId = Int
 
   implicit val asyncContext: ExecutionContext
 
   def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
 
   sealed trait MemoContext extends MemoizationContext[IterableDataset] { ctx => 
-    type CacheKey[α] = Int
-    type CacheValue[α] = Promise[(Int, Either[Vector[α], File])]
+    type CacheKey[α] = MemoId
+    class CacheValue[A](val value: Promise[(Int, Either[Vector[A], File])]) {
+      @volatile private var references = 1
+      def reserve = synchronized {
+        if (references > 0) references += 1
+        else sys.error("Attempt to reserve usage for an expired memo")
+      }
+
+      def release = synchronized {
+        references -= 1
+        if (references == 0) for ((_, Right(file)) <- value) file.delete
+      }
+    }
+
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
 
-    def memoizing[A](memoId: Int)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[IterableDataset[A] => Future[IterableDataset[A]], Future[IterableDataset[A]]] = {
+    def memoizing[A](memoId: MemoId)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[IterableDataset[A] => Future[IterableDataset[A]], Future[IterableDataset[A]]] = {
       type IA = (Identities, A)
       def store(iter: Iterator[IA]): Either[Vector[IA], File] = {
         @tailrec def buffer(i: Int, acc: Vector[IA]): Vector[IA] = {
@@ -61,38 +74,79 @@ trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with Me
             spill(spill(serialization.writer, out, initial.iterator), out, iter).finish(out)
           }
 
+          ctx.synchronized { files = memoFile :: files }
+
           Right(memoFile)
         }
       }
 
-      def datasetFor(future: Future[(Int, Either[Vector[IA], File])]) = future map {
-        case (idCount, Left(vector)) =>
-          IterableDataset(idCount, vector)
+      def datasetFor(cv: CacheValue[IA]): Future[IterableDataset[A]] = {
+        def wrap(inner: Iterator[IA]): Iterator[IA] = new Iterator[IA] { self =>
+          @volatile private var cacheValue = cv
+          def hasNext = {
+            if (!inner.hasNext) {
+              self.synchronized { 
+                if (cacheValue != null) {
+                  cacheValue.release
+                  // ensure that we don't release the same reference twice
+                  cacheValue = null.asInstanceOf[CacheValue[IA]]
+                }
+              }
+            }
 
-        case (idCount, Right(file)) => 
-          IterableDataset(idCount, new Iterable[IA] { def iterator = serialization.reader.read(serialization.iStream(file), true) })
+            inner.hasNext
+          }
+
+          def next = inner.next
+        }
+
+        // first, update the reference count
+        cv.reserve
+
+        // return a dataset that wraps an iterator which will decrement the reference count
+        // on exhaustion
+        cv.value map {
+          case (idCount, Left(vector)) =>
+            IterableDataset(idCount, new Iterable[IA] { 
+              def iterator = wrap(vector.iterator)
+            })
+
+          case (idCount, Right(file)) => 
+            IterableDataset(idCount, new Iterable[IA] { 
+              def iterator = wrap(serialization.reader.read(serialization.iStream(file), true))
+            })
+        }
       }
 
       ctx.synchronized {
-        memoCache.get(memoId) match {
-          case Some(future) => Right(datasetFor(future))
+        memoCache.get[IA](memoId) match {
+          case Some(cacheValue) => 
+            Right(datasetFor(cacheValue))
 
           case None => 
             val promise = Promise[(Int, Either[Vector[IA], File])]
-            memoCache += (memoId -> promise)
+            val cacheValue: CacheValue[IA] = new CacheValue[IA](promise)
+            memoCache += (memoId -> cacheValue)
+
             Left((toMemoize: IterableDataset[A]) => {
-              datasetFor(promise.completeWith(Future((toMemoize.idCount, store(toMemoize.iterable.iterator)))))
+              promise.completeWith(Future((toMemoize.idCount, store(toMemoize.iterable.iterator))))
+              datasetFor(cacheValue)
             })
         }
       }
     }
 
     object cache extends MemoCache {
-      def expire(memoId: Int) = IO {
-        ctx.synchronized { memoCache -= memoId }
+      def expire(memoId: Int) = {
+        ctx.synchronized { 
+          memoCache.get[Any](memoId) foreach { cacheValue =>
+            memoCache -= memoId
+            cacheValue.release // this final release will decrement the reference counter so that it will be freed by the last iterator
+          }
+        }
       }
 
-      def purge = IO {
+      def purge = {
         ctx.synchronized {
           for (f <- files) f.delete
           files = Nil
