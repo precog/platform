@@ -359,6 +359,18 @@ class PlatformSpecs extends Specification
      
       eval(input) mustEqual Set()
     }
+
+    "evaluate an unquantified characteristic function" in {
+      val input = """
+        | campaigns := load(//campaigns)
+        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+        | sums('n) :=
+        |   m := max(nums where nums < 'n)
+        |   (nums where nums = 'n) + m 
+        | sums""".stripMargin
+
+      eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+    }
     
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {

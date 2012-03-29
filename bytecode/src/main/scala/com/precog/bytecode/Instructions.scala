@@ -33,6 +33,7 @@ trait Instructions extends Library {
       case Map2CrossRight(_) => (2, 1)
         
       case Reduce(_) => (1, 1)
+      case SetReduce(_) => (1, 1)
       
       case VUnion => (2, 1)
       case VIntersect => (2, 1)
