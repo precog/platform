@@ -94,12 +94,18 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
           case (Some(s), Some(tpe)) => 
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot =>
-              assemble(path, s, sources(s, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+              assemble(path, s, sources(s, pathRoot) filter { 
+                case (_, `tpe`, _) => true
+                case _ => false
+              }, expiresAt)
             }
 
           case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
             storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) flatMap { pathRoot =>
-              assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { case (_, `tpe`, _) => true }, expiresAt)
+              assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { 
+                case (_, `tpe`, _) => true 
+                case _ => false
+              }, expiresAt)
             }
 
           case (_      , _        ) => fullProjectionFuture(userUID, path, expiresAt)
