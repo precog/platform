@@ -47,10 +47,53 @@ trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with Me
         references -= 1
         if (references == 0) for ((_, Right(file)) <- value) file.delete
       }
+
+      def expire = synchronized {
+        references -= 1
+      }
     }
 
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
+
+    private def datasetFor[A](cv: CacheValue[(Identities, A)])(implicit serialization: IncrementalSerialization[(Identities, A)]): Future[IterableDataset[A]] = {
+      type IA = (Identities, A)
+      def wrap(inner: Iterator[IA]): Iterator[IA] = new Iterator[IA] { self =>
+        @volatile private var cacheValue = cv
+        def hasNext = {
+          if (!inner.hasNext) {
+            self.synchronized { 
+              if (cacheValue != null) {
+                cacheValue.release
+                // ensure that we don't release the same reference twice
+                cacheValue = null.asInstanceOf[CacheValue[IA]]
+              }
+            }
+          }
+
+          inner.hasNext
+        }
+
+        def next = inner.next
+      }
+
+      // first, update the reference count
+      cv.reserve
+
+      // return a dataset that wraps an iterator which will decrement the reference count
+      // on exhaustion
+      cv.value map {
+        case (idCount, Left(vector)) =>
+          IterableDataset(idCount, new Iterable[IA] { 
+            def iterator = wrap(vector.iterator)
+          })
+
+        case (idCount, Right(file)) => 
+          IterableDataset(idCount, new Iterable[IA] { 
+            def iterator = wrap(serialization.reader.read(serialization.iStream(file), true))
+          })
+      }
+    }
 
     def memoizing[A](memoId: MemoId)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[IterableDataset[A] => Future[IterableDataset[A]], Future[IterableDataset[A]]] = {
       type IA = (Identities, A)
@@ -80,43 +123,6 @@ trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with Me
         }
       }
 
-      def datasetFor(cv: CacheValue[IA]): Future[IterableDataset[A]] = {
-        def wrap(inner: Iterator[IA]): Iterator[IA] = new Iterator[IA] { self =>
-          @volatile private var cacheValue = cv
-          def hasNext = {
-            if (!inner.hasNext) {
-              self.synchronized { 
-                if (cacheValue != null) {
-                  cacheValue.release
-                  // ensure that we don't release the same reference twice
-                  cacheValue = null.asInstanceOf[CacheValue[IA]]
-                }
-              }
-            }
-
-            inner.hasNext
-          }
-
-          def next = inner.next
-        }
-
-        // first, update the reference count
-        cv.reserve
-
-        // return a dataset that wraps an iterator which will decrement the reference count
-        // on exhaustion
-        cv.value map {
-          case (idCount, Left(vector)) =>
-            IterableDataset(idCount, new Iterable[IA] { 
-              def iterator = wrap(vector.iterator)
-            })
-
-          case (idCount, Right(file)) => 
-            IterableDataset(idCount, new Iterable[IA] { 
-              def iterator = wrap(serialization.reader.read(serialization.iStream(file), true))
-            })
-        }
-      }
 
       ctx.synchronized {
         memoCache.get[IA](memoId) match {
@@ -141,7 +147,7 @@ trait DiskIterableDatasetMemoizationComponent extends YggConfigComponent with Me
         ctx.synchronized { 
           memoCache.get[Any](memoId) foreach { cacheValue =>
             memoCache -= memoId
-            cacheValue.release // this final release will decrement the reference counter so that it will be freed by the last iterator
+            cacheValue.expire // this final release will decrement the reference counter so that it will be freed by the last iterator
           }
         }
       }
