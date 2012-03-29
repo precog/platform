@@ -251,26 +251,19 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       val gIterator = g.iterator
 
       val iter = new Iterator[IB] {
-        private[this] var _currentIterator: Iterator[IB] = _
+        private[this] var _currentIterator: Iterator[IB] = getNextValidIteratorFromG()
 
-        private[this] def getNextValidIteratorFromG() = {
-          var nextIterator: Iterator[IB] = null
- 
+        @tailrec private[this] def getNextValidIteratorFromG(): Iterator[IB] = {
+          // find the first non-empty result of the function
           if (gIterator.hasNext) {
-            do { 
-              val (key, value) = gIterator.next
-              nextIterator = f(key, value).iterable.iterator
-            } while (!nextIterator.hasNext && gIterator.hasNext)
-          }
-
-          if (nextIterator != null && nextIterator.hasNext) {
-            _currentIterator = nextIterator
+            val (key, value) = gIterator.next
+            val nextIterator = f(key, value).iterable.iterator
+            if (nextIterator.hasNext) nextIterator
+            else getNextValidIteratorFromG
           } else {
-            _currentIterator = null
-          }
+            null
+          } 
         }
-
-        getNextValidIteratorFromG()
 
         def hasNext = _currentIterator != null && _currentIterator.hasNext
 
@@ -278,7 +271,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           val tmp = _currentIterator.next
 
           if (! _currentIterator.hasNext) {
-            getNextValidIteratorFromG()
+            _currentIterator = getNextValidIteratorFromG()
           }
 
           tmp
