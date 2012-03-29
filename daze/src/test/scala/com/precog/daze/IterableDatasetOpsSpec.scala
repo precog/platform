@@ -536,7 +536,10 @@ with DiskIterableDatasetMemoizationComponent {
 
           val result = ds.group(0, memoCtx, expiration) {
             v => IterableDataset[Long](1, Vector(rec(v / 2 * 2)))
-          }.iterator.toList
+          }.iterator.toList.map {
+            // Make the datasets wrap Vectors so that the types align with expected and specs doesn't have a fit
+            case (k, IterableDataset(count, iterable)) => (k, IterableDataset(count, Vector(iterable.toSeq: _*)))
+          }
 
           result must containAllOf(expected).only.inOrder
         } }
@@ -583,7 +586,10 @@ with DiskIterableDatasetMemoizationComponent {
 
           val result = ds.group(0, memoCtx, expiration) {
             num => IterableDataset[Long](1, Vector(rec(num)))
-          }.iterator.toList
+          }.iterator.toList.map {
+            // Make the datasets wrap Vectors so that the types align with expected and specs doesn't have a fit
+            case (k, IterableDataset(count, iterable)) => (k, IterableDataset(count, Vector(iterable.toSeq: _*)))
+          }
 
           result must containAllOf(expected).only.inOrder
         } }
