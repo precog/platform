@@ -403,6 +403,20 @@ class PlatformSpecs extends Specification
       }
     }
 
+    "evaluate an unquantified characteristic function of two parameters" in {
+      val input = """
+        | campaigns := load(//campaigns)
+        | gender := campaigns.gender
+        | platform := campaigns.platform
+        | equality('a, 'b) :=
+        |   g := gender where gender = 'a
+        |   p := platform where platform = 'b
+        |   campaigns where std::string::equals(g, p) = true
+        | equality""".stripMargin
+
+      eval(input) mustEqual Set()
+    }
+
     /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
