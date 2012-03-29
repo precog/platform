@@ -403,7 +403,7 @@ class PlatformSpecs extends Specification
       }
     }
 
-    "evaluate an unquantified characteristic function of two parameters" in {
+    "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
       val input = """
         | campaigns := load(//campaigns)
         | gender := campaigns.gender
@@ -411,7 +411,7 @@ class PlatformSpecs extends Specification
         | equality('a, 'b) :=
         |   g := gender where gender = 'a
         |   p := platform where platform = 'b
-        |   campaigns where std::string::equals(g, p) = true
+        |   campaigns where g = p
         | equality""".stripMargin
 
       eval(input) mustEqual Set()
