@@ -304,10 +304,24 @@ class PlatformSpecs extends Specification
       }
     }    
 
-    "add a set of numbers to a set of strings" in {
-      val input = "load(//campaigns).cpm + load(//campaigns).gender"
+    "add sets of different types" >> {
+      "a set of numbers and a set of strings" >> {
+        val input = "load(//campaigns).cpm + load(//campaigns).gender"
 
-      eval(input) mustEqual Set()
+        eval(input) mustEqual Set()
+      }
+
+      "a set of numbers and a set of arrays" >> {
+        val input = "load(//campaigns).cpm + load(//campaigns).ageRange"
+
+        eval(input) mustEqual Set()
+      }
+
+      "a set of arrays and a set of strings" >> {
+        val input = "load(//campaigns).gender + load(//campaigns).ageRange"
+
+        eval(input) mustEqual Set()
+      }
     }
 
     "return only value-unique results from a characteristic function" in {
