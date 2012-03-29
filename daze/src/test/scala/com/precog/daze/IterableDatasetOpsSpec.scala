@@ -220,6 +220,21 @@ with DiskIterableDatasetMemoizationComponent {
   
   implicit object GroupingEventSortSerialization extends SortSerialization[(Identities, Long)] with TestRunlengthFormatting with ZippedStreamSerialization
   
+  implicit object LongSortSerialization extends SortSerialization[Long] with ZippedStreamSerialization {
+    type Header = Unit
+    
+    def headerFor(value: Long) {}
+    def writeHeader(out: DataOutputStream, header: Unit) {}
+    def writeHeader(out: DataOutputStream, value: Long, header: Unit) {}
+    def readHeader(in: DataInputStream) {}
+    
+    def writeRecord(out: DataOutputStream, value: Long, header: Unit) {
+      out.writeLong(value)
+    }
+    
+    def readRecord(in: DataInputStream, header: Unit) = in.readLong()
+  }
+  
   
   "iterable dataset ops" should {
     "cogroup" in {
