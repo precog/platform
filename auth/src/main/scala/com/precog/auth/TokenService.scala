@@ -15,7 +15,7 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class TokenServiceState(tokenManager: TokenManager)
+case class TokenServiceState(tokenManager: TokenManager, accessControl: AccessControl)
 
 trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
   import BijectionsChunkJson._
@@ -32,16 +32,26 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-          Future(TokenServiceState(tokenManagerFactory(config.detach("tokenManager"))))
+          val theTokenManager = tokenManagerFactory(config.detach("tokenManager"))
+
+          val accessControl = new TokenBasedAccessControl {
+            val executionContext = defaultFutureDispatch
+            val tokenManager = theTokenManager
+          }
+
+          Future(TokenServiceState(theTokenManager, accessControl))
         } ->
         request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              path("tokens") {
+              path("/tokens") {
                 get(new GetTokenHandler(state.tokenManager)) ~
-                post(new CreateTokenHandler(state.tokenManager)) ~
-                delete(new DeleteTokenHandler(state.tokenManager)) ~
-                post(new UpdateTokenHandler(state.tokenManager))
+                // Note the update handler needs to be before the create
+                // handler as it's arguements are a super set of the create
+                // call thus requires first refusal
+                post(new UpdateTokenHandler(state.tokenManager)) ~
+                post(new CreateTokenHandler(state.tokenManager, state.accessControl)) ~
+                delete(new DeleteTokenHandler(state.tokenManager)) 
               }
             }
           }
@@ -51,26 +61,3 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
     }
   }
 }
-
-// Token Services
-//
-//
-// Get token details
-//
-// GET tokens?tokenId={token}
-//
-//
-// New Token 
-//
-// POST tokens?tokenId={parent token} 
-//
-//
-// Delete token
-//
-// DELETE tokens?tokenId={authority}&delete={token-to-delete}
-//
-//
-// Update token {protected fields}
-//
-// POST tokens?tokenId={authority}&update{token-to-update}
-//
