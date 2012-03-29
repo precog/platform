@@ -80,12 +80,14 @@ definedTests in Test <<= (definedTests in Test, mainTest) map { (tests, name) =>
 test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, mainTest) map { (s, cp, os, dataDir, testName) =>
   val delim = java.io.File.pathSeparator
   val cpStr = cp map { _.data } mkString delim
-  s.log.debug("Running with classpath: " + cpStr)
   val opts2 =
+    Seq("-Xmx1G") ++
     Seq("-classpath", cpStr) ++
     Seq("-Dprecog.storage.root=" + dataDir) ++
+    Seq("-XX:+HeapDumpOnOutOfMemoryError") ++
     Seq("specs2.run") ++
     Seq(testName)
+  s.log.debug("Running with flags: " + opts2.mkString(" "))
   val result = Fork.java.fork(None, opts2, None, Map(), false, LoggedOutput(s.log)).exitValue()
   if (result != 0) error("Tests unsuccessful")    // currently has no effect (https://github.com/etorreborre/specs2/issues/55)
 }
