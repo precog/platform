@@ -118,9 +118,15 @@ trait Evaluator extends DAG
         val Match(sourceSpec, sourceSet, _) = maybeRealize(loop(common, assume, splits, ctx), common, ctx)
         val source = realizeMatch(sourceSpec, sourceSet)
         
-        source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
-          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv), graph))
+        val grouping = source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
+          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv), common))
           val Match(spec, set, _) = maybeRealize(loop(solution, assume2, splits, ctx), graph, ctx)
+          realizeMatch(spec, set)
+        }
+        
+        ops.mapGrouping(grouping) { bucket =>
+          val assume2 = assume + (common -> Match(mal.Actual, bucket, common))
+          val Match(spec, set, _) = maybeRealize(loop(target, assume2, splits, ctx), graph, ctx)
           realizeMatch(spec, set)
         }
       }
