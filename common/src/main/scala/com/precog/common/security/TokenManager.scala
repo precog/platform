@@ -51,6 +51,27 @@ trait TokenManager {
   def listChildren(parent: Token): Future[List[Token]]
   def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]]
   def deleteToken(token: Token): Future[Token]
+  def updateToken(token: Token): Future[Validation[String, Token]]
+
+  def sharablePermissions(token: Token): Future[Permissions] = {
+    val perms = token.permissions.sharable
+
+    val grants = token.grants.map{ lookup }
+
+    Future.fold(grants)(perms) {
+      case (acc, grantToken) => grantToken.map { acc ++ _.permissions.sharable } getOrElse { acc }
+    }
+  }
+  
+  def permissions(token: Token): Future[Permissions] = {
+    val perms = token.permissions
+
+    val grants = token.grants.map{ lookup }
+
+    Future.fold(grants)(perms) {
+      case (acc, grantToken) => grantToken.map { acc ++ _.permissions } getOrElse { acc }
+    }
+  }
 
   private def newUUID() = java.util.UUID.randomUUID().toString.toUpperCase
 
@@ -79,6 +100,23 @@ trait TokenManager {
       Future.sequence(removals).map(_.flatten)
     }
   }
+
+  def updateToken(authority: Token, target: Token): Future[Validation[String, Token]] = {
+    if(authority.uid == target.uid) {
+      // self may not alter expiry
+      if(authority.expired != target.expired) {
+        updateToken(target.copy(expired = authority.expired))
+      } else {
+        updateToken(target)
+      }
+    } else {
+      getDescendant(authority, target.uid).flatMap { _.map { t =>
+        updateToken(target) 
+      } getOrElse {
+        Future(Failure("Unable to update the specified token."))
+      }}
+    }
+  }
 }
 
 class MongoTokenManager(private[security] val database: Database, collection: String, deleted: String, timeout: Timeout)(implicit val execContext: ExecutionContext) extends TokenManager {
@@ -87,6 +125,7 @@ class MongoTokenManager(private[security] val database: Database, collection: St
 
   def lookup(uid: UID): Future[Option[Token]] = find(uid, collection) 
   def lookupDeleted(uid: UID): Future[Option[Token]] = find(uid, deleted) 
+  def updateToken(t: Token): Future[Validation[String, Token]] = sys.error("feature not available")
 
   private def find(uid: UID, col: String) = database {
     selectOne().from(col).where("uid" === uid)
@@ -146,6 +185,8 @@ class CachingTokenManager(delegate: TokenManager, settings: CacheSettings[String
   def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = 
     delegate.issueNew(uid, issuer, permissions, grants, expired) 
 
+  def updateToken(t: Token) = delegate.updateToken(t) map { _.map { t => t ->- remove } }
+
   def deleteToken(token: Token): Future[Token] = 
     delegate.deleteToken(token) map { t => t ->- remove }
 
@@ -157,7 +198,8 @@ object CachingTokenManager {
 }
 
 class StaticTokenManager(implicit val execContext: ExecutionContext) extends TokenManager {
-  import StaticTokenManager._
+
+  var map = StaticTokenManager.tokenMap
   
   def lookup(uid: UID) = Future(map.get(uid))
   def lookupDeleted(uid: UID) = Future(None)
@@ -175,6 +217,11 @@ class StaticTokenManager(implicit val execContext: ExecutionContext) extends Tok
     Future(Success(newToken))
   }
 
+  def updateToken(t: Token) = {
+    map += (t.uid -> t)
+    Future(Success(t))
+  }
+
   def deleteToken(token: Token): Future[Token] = Future {
     map -= token.uid
     token
@@ -189,6 +236,7 @@ object StaticTokenManager {
   val usageUID = "6EF2E81E-D9E8-4DC6-AD66-DEB30A164F73"
   
   val publicUID = "B88E82F0-B78B-49D9-A36B-78E0E61C4EDC"
+  val otherPublicUID = "AECEF195-81FE-4079-AF26-5B20ED32F7E0"
  
   val cust1UID = "C5EF0038-A2A2-47EB-88A4-AAFCE59EC22B"
   val cust2UID = "1B10E413-FB5B-4769-A887-8AFB587CF00A"
@@ -200,7 +248,7 @@ object StaticTokenManager {
       MayAccessPath(Subtree(Path(path)), PathRead, mayShare), 
       MayAccessPath(Subtree(Path(path)), PathWrite, mayShare)
     )(
-      MayAccessData(Subtree(Path("/")), OwnerAndDescendants(owner), DataQuery, mayShare)
+      MayAccessData(Subtree(Path("/")), HolderAndDescendants, DataQuery, mayShare)
     )
 
   def publishPathPerms(path: String, owner: UID, mayShare: Boolean = true) =
@@ -213,6 +261,7 @@ object StaticTokenManager {
   val config = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
     (rootUID, None, standardAccountPerms("/", rootUID, true), Set(), false),
     (publicUID, Some(rootUID), publishPathPerms("/public", rootUID, true), Set(), false),
+    (otherPublicUID, Some(rootUID), publishPathPerms("/opublic", rootUID, true), Set(), false),
     (testUID, Some(rootUID), standardAccountPerms("/unittest", testUID, true), Set(), false),
     (usageUID, Some(rootUID), standardAccountPerms("/__usage_tracking__", usageUID, true), Set(), false),
     (cust1UID, Some(rootUID), standardAccountPerms("/user1", cust1UID, true), Set(publicUID), false),
@@ -220,6 +269,6 @@ object StaticTokenManager {
     (expiredUID, Some(rootUID), standardAccountPerms("/expired", expiredUID, true), Set(publicUID), true)
   )
 
-  private var map = Map(config map Token.tupled map { t => (t.uid, t) }: _*)
+  val tokenMap = Map(config map Token.tupled map { t => (t.uid, t) }: _*)
 
 }

@@ -69,14 +69,21 @@ package object security {
     implicit val OwnerRestrictionDecomposer: Decomposer[OwnerRestriction] = new Decomposer[OwnerRestriction] {
       override def decompose(ownerSpec: OwnerRestriction): JValue = ownerSpec match {
         case OwnerAndDescendants(owner) => JObject(List(
-          JField("ownerAndDescendants", JString(owner))
+          JField("ownerRestriction", JString(owner))
+
+        ))
+        case HolderAndDescendants => JObject(List(
+          JField("ownerRestriction", JString("[HOLDER]"))
         ))
       }
     }
 
     implicit val OwnerRestrictionExtractor: Extractor[OwnerRestriction] = new Extractor[OwnerRestriction] with ValidatedExtraction[OwnerRestriction] {    
       override def validated(obj: JValue): Validation[Error, OwnerRestriction] = obj match {
-        case JObject(JField("ownerAndDescendants", JString(o)) :: Nil) => Success(OwnerAndDescendants(o))
+        case JObject(JField("ownerRestriction", JString(o)) :: Nil) => o match {
+          case "[HOLDER]" => Success(HolderAndDescendants)
+          case o   => Success(OwnerAndDescendants(o))
+        }
         case _                                             => Failure(Invalid("Unable to parse owner restriction."))
       }
     }
@@ -86,6 +93,7 @@ package object security {
 
   //case class AnyOwner extends OwnerRestriction
   case class OwnerAndDescendants(owner: UID) extends OwnerRestriction
+  case object HolderAndDescendants extends OwnerRestriction
 
   sealed trait PathAccess {
     def symbol: String
@@ -164,15 +172,15 @@ package object security {
   trait MayAccessDataSerialization {
     implicit val MayAccessDataDecomposer: Decomposer[MayAccessData] = new Decomposer[MayAccessData] {
       override def decompose(mayAccessData: MayAccessData): JValue = JObject(List( 
-        JField("pathSpec", mayAccessData.pathSpec),
-        JField("ownershipSpec", mayAccessData.ownershipSpec),
+        JField("pathSpec", mayAccessData.pathSpec.serialize),
+        JField("ownershipSpec", mayAccessData.ownershipSpec.serialize),
         JField("dataAccess", mayAccessData.dataAccess),
         JField("mayShare", mayAccessData.mayShare)
       ))    
     }
 
     implicit val MayAccessDataExtractor: Extractor[MayAccessData] = new Extractor[MayAccessData] with ValidatedExtraction[MayAccessData] {    
-      override def validated(obj: JValue): Validation[Error, MayAccessData] =
+      override def validated(obj: JValue): Validation[Error, MayAccessData] = 
         ((obj \ "pathSpec").validated[PathRestriction] |@|
          (obj \ "ownershipSpec").validated[OwnerRestriction] |@|
          (obj \ "dataAccess").validated[DataAccess] |@|
@@ -184,6 +192,11 @@ package object security {
   
   case class Permissions(path: Set[MayAccessPath], data: Set[MayAccessData]) {
     def ++(that: Permissions) = Permissions(this.path ++ that.path, this.data ++ that.data)
+    def sharable: Permissions = 
+      Permissions( 
+        this.path.filter{ _.mayShare },
+        this.data.filter{ _.mayShare }
+      )
   }
   
   trait PermissionsSerialization {
@@ -203,6 +216,7 @@ package object security {
 
   object Permissions extends PermissionsSerialization {
     def apply(path: MayAccessPath*)(data: MayAccessData*): Permissions = Permissions(path.toSet, data.toSet)
+    val empty = Permissions(Set.empty[MayAccessPath], Set.empty[MayAccessData])
   }
 
   case class Token(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean) {

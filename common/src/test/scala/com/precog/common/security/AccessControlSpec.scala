@@ -457,5 +457,6 @@ trait TestTokenManagerComponent extends TokenManagerComponent with AkkaDefaults 
     def listChildren(parent: Token): Future[List[Token]] = sys.error("not available")
     def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = sys.error("not available")
     def deleteToken(token: Token): Future[Token] = sys.error("not available")
+    def updateToken(token: Token): Future[Validation[String, Token]] = sys.error("not available")
   }
 }

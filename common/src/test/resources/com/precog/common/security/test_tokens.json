@@ -13,7 +13,7 @@
     }],
     "data":[{
       "pathSpec":{ "subtree":"/" },
-      "ownershipSpec":{ "ownerAndDescendants":"C18ED787-BF07-4097-B819-0415C759C8D5" },
+      "ownershipSpec":{ "ownerRestriction":"C18ED787-BF07-4097-B819-0415C759C8D5" },
       "dataAccess":"DATA_QUERY",
       "mayShare":true
     }]
@@ -36,7 +36,7 @@
     }],
     "data":[{
       "pathSpec":{ "subtree":"/" },
-      "ownershipSpec":{ "ownerAndDescendants":"C18ED787-BF07-4097-B819-0415C759C8D5" },
+      "ownershipSpec":{ "ownerRestriction":"C18ED787-BF07-4097-B819-0415C759C8D5" },
       "dataAccess":"DATA_QUERY",
       "mayShare":true
     }]
@@ -59,7 +59,7 @@
     }],
     "data":[{
       "pathSpec":{ "subtree":"/" },
-      "ownershipSpec":{ "ownerAndDescendants":"C18ED787-BF07-4097-B819-0415C759C8D5" },
+      "ownershipSpec":{ "ownerRestriction":"C18ED787-BF07-4097-B819-0415C759C8D5" },
       "dataAccess":"DATA_QUERY",
       "mayShare":true
     }]
@@ -82,7 +82,7 @@
     }],
     "data":[{
       "pathSpec":{ "subtree":"/" },
-      "ownershipSpec":{ "ownerAndDescendants":"C18ED787-BF07-4097-B819-0415C759C8D5" },
+      "ownershipSpec":{ "ownerRestriction":"C18ED787-BF07-4097-B819-0415C759C8D5" },
       "dataAccess":"DATA_QUERY",
       "mayShare":true
     }]
@@ -105,7 +105,7 @@
     }],
     "data":[{
       "pathSpec":{ "subtree":"/" },
-      "ownershipSpec":{ "ownerAndDescendants":"C18ED787-BF07-4097-B819-0415C759C8D5" },
+      "ownershipSpec":{ "ownerRestriction":"C18ED787-BF07-4097-B819-0415C759C8D5" },
       "dataAccess":"DATA_QUERY",
       "mayShare":true
     }]
