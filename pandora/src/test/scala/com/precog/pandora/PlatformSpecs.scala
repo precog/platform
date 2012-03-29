@@ -323,6 +323,12 @@ class PlatformSpecs extends Specification
       }
     }    
 
+    "add a set of numbers to a set of strings" in {
+      val input = "load(//campaigns).cpm + load(//campaigns).gender"
+
+      eval(input) mustEqual Set()
+    }
+
     "return only value-unique results from a characteristic function" in {
       val input = """
         | campaigns := load(//campaigns)
