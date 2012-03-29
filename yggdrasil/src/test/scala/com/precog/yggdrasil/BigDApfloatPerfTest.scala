@@ -23,12 +23,6 @@ import org.apfloat.Apfloat
 import org.apfloat.Apfloat._
 import org.apfloat.ApfloatMath._
 
-import org.specs2.mutable.Specification
-
-import org.scalacheck._
-import org.scalacheck.Prop._
-import org.scalacheck.Arbitrary._
-
 object Timer {
   var initial: Long = 0L
   var ending: Long = 0L
@@ -43,7 +37,7 @@ object Timer {
   }
 }
 
-class BigDApfloatSpec extends Specification {
+class BigDApfloatPerfTest extends App {
   import Timer._
 
   implicit def intTimes(n: Int) = new {
