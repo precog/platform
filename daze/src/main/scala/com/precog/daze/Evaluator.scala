@@ -315,7 +315,7 @@ trait Evaluator extends DAG
           val rest = groupings.tail
           
           ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext, ctx.expiration) { (key, groups) =>
-            val params2 = ops.point(key) +: Vector(groups.toList: _*)
+            val params2 = ops.point(key) +: (Vector(groups.toList: _*) ++ params)
             
             if (rest.isEmpty) {
               val Match(spec, set, _) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), child, ctx)

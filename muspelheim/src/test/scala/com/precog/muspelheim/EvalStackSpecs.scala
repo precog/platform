@@ -6,9 +6,9 @@ import com.precog.common._
 import org.specs2.mutable._
 
 trait EvalStackSpecs extends Specification {
-  def eval(str: String): Set[SValue]
-  def evalE(str: String): Set[SEvent]
-
+  def eval(str: String, debug: Boolean = false): Set[SValue]
+  def evalE(str: String, debug: Boolean = false): Set[SEvent]
+  
   "the full stack" should {
     "count a filtered clicks dataset" in {
       val input = """
@@ -333,7 +333,7 @@ trait EvalStackSpecs extends Specification {
         |   campaigns where g = p
         | equality""".stripMargin
 
-      eval(input) mustEqual Set()
+      eval(input, true) mustEqual Set()
     }
 
     /* commented out until we have memoization (MASSIVE time sink)

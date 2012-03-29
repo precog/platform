@@ -102,9 +102,9 @@ class PlatformSpecs extends Specification
   
   include(
     new EvalStackSpecs {
-      def eval(str: String): Set[SValue] = evalE(str) map { _._2 }
+      def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
-      def evalE(str: String) = {
+      def evalE(str: String, debug: Boolean = false) = {
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
