@@ -290,18 +290,6 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
-    "evaluate an unquantified characteristic function" in {
-      val input = """
-        | campaigns := load(//campaigns)
-        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-        | sums('n) :=
-        |   m := max(nums where nums < 'n)
-        |   (nums where nums = 'n) + m 
-        | sums""".stripMargin
-
-      eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
-    }
-
     "evaluate functions from each library" >> {
       "Stringlib" >> {
         val input = """
@@ -330,6 +318,27 @@ trait EvalStackSpecs extends Specification {
 
         results2 must contain(0).only
       }
+    }
+ 
+    "set critical conditions given an empty set" in {
+        val input = """
+          | function('a) :=
+          |   load(//campaigns) where load(//campaigns).foo = 'a
+          | function""".stripMargin
+
+        eval(input) mustEqual Set()
+    }
+
+    "evaluate an unquantified characteristic function" in {
+      val input = """
+        | campaigns := load(//campaigns)
+        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+        | sums('n) :=
+        |   m := max(nums where nums < 'n)
+        |   (nums where nums = 'n) + m 
+        | sums""".stripMargin
+
+      eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
     }
 
     "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
