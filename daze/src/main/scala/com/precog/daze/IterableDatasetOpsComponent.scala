@@ -231,7 +231,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
 
       val gIterator = g.iterator
 
-      assert(gIterator.hasNext)
+      assert(gIterator.hasNext) //todo: this assertion fails if we try to flatten an empty group - what is this assertion guarding against? should we special case the empty dataset? 
 
       val iter = new Iterator[IB] {
         private[this] var _currentIterator: Iterator[IB] = _
