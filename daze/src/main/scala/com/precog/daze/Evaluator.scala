@@ -127,10 +127,10 @@ trait Evaluator extends DAG
     }
     
     def findCommonality(seen: Set[DepGraph])(graphs: DepGraph*): Option[DepGraph] = {
-      val (seen2, next, back) = graphs.foldLeft((seen, Set[DepGraph](), None: Option[DepGraph])) {
+      val (seen2, next, back) = graphs.foldLeft((seen, Vector[DepGraph](), None: Option[DepGraph])) {
         case (pair @ (_, _, Some(_)), _) => pair
         
-        case ((seen, _, _), graph) if seen(graph) => (seen, Set(), Some(graph))
+        case ((seen, _, _), graph) if seen(graph) => (seen, Vector(), Some(graph))
         
         case ((oldSeen, next, None), graph) => {
           val seen = oldSeen + graph
@@ -140,31 +140,31 @@ trait Evaluator extends DAG
               (seen, next, None)
               
             case dag.New(_, parent) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case dag.SetReduce(_, _, parent) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case dag.LoadLocal(_, _, parent, _) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case Operate(_, _, parent) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case dag.Reduce(_, _, parent) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case Join(_, _, left, right) =>
-              (seen, next + left + right, None)
+              (seen, next :+ left :+ right, None)
             
             case Filter(_, _, _, target, boolean) =>
-              (seen, next + target + boolean, None)
+              (seen, next :+ target :+ boolean, None)
             
             case Sort(parent, _) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
             
             case Memoize(parent, _) =>
-              (seen, next + parent, None)
+              (seen, next :+ parent, None)
           }
         }
       }
@@ -172,7 +172,7 @@ trait Evaluator extends DAG
       if (back.isDefined || next.isEmpty)
         back
       else
-        findCommonality(seen2)(next.toSeq: _*)
+        findCommonality(seen2)(next: _*)
     }
   
     def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
