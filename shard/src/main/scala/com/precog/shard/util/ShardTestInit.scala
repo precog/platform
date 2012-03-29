@@ -25,7 +25,7 @@ object ShardTestInit extends App {
   val dir = new File("./data") 
   dir.mkdirs
 
-  object shard extends ActorYggShard with StandaloneActorEcosystem {
+  object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
     class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
 
     }
