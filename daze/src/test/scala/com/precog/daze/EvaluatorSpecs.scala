@@ -1269,13 +1269,13 @@ class EvaluatorSpecs extends Specification
     "split on a homogeneous set" in {
       val line = Line(0, "")
       
-      /*
-       * nums := dataset(//hom/numbers)
-       * sums('n) :=
-       *   m := max(nums where nums < 'n)
-       *   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
-       * sums
-       */
+      // 
+      // nums := dataset(//hom/numbers)
+      // sums('n) :=
+      //   m := max(nums where nums < 'n)
+      //   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
+      // sums
+      // 
        
       val nums = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
       
@@ -1307,13 +1307,13 @@ class EvaluatorSpecs extends Specification
       
       val line = Line(0, "")
       
-      /*
-       * clicks := dataset(//clicks)
-       * histogram('user) :=
-       *   { user: 'user, num: count(clicks where clicks.user = 'user) }
-       * histogram
-       */
-       
+      // 
+      // clicks := dataset(//clicks)
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram
+      // 
+      // 
       val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
        
       lazy val input: dag.Split = dag.Split(line,
@@ -1385,13 +1385,13 @@ class EvaluatorSpecs extends Specification
     "evaluate filter on the results of a histogram function" in {
       val line = Line(0, "")
       
-      /*
-       * clicks := dataset(//clicks)
-       * histogram('user) :=
-       *   { user: 'user, num: count(clicks where clicks.user = 'user) }
-       * histogram where histogram.num = 9
-       */
-       
+      // 
+      // clicks := dataset(//clicks)
+      // histogram('user) :=
+      //   { user: 'user, num: count(clicks where clicks.user = 'user) }
+      // histogram where histogram.num = 9
+      // 
+      // 
       val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
        
       lazy val histogram: dag.Split = dag.Split(line,

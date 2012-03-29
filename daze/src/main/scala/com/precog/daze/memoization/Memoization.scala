@@ -42,14 +42,14 @@ trait MemoizationEnvironment {
 }
 
 trait MemoCache {
-  def expire(memoId: MemoId): IO[Unit]
-  def purge: IO[Unit]
+  def expire(memoId: MemoId): Unit
+  def purge: Unit
 }
 
 object MemoCache {
   object Noop extends MemoCache {
-    def expire(memoId: Int) = IO(())
-    def purge = IO(())
+    def expire(memoId: Int) = ()
+    def purge = ()
   }
 }
 

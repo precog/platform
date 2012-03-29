@@ -336,8 +336,9 @@ trait Evaluator extends DAG
               
               // TODO this is probably not safe, since result Iterable might depend on something memoized
               for (id <- child.findMemos(s)) {
-                ctx.memoizationContext.cache.expire(id).unsafePerformIO
+                ctx.memoizationContext.cache.expire(id)
               }
+              // NOTE: Nope, it's not safe; it breaks the evaluator.
               
               back
             } else {
