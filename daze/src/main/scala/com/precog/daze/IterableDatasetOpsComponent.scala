@@ -239,8 +239,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
           if (gIterator.hasNext) {
             val (key, value) = gIterator.next
             val nextIterator = f(key, value).iterable.iterator
-            if (nextIterator.hasNext) nextIterator
-            else getNextValidIteratorFromG
+            if (nextIterator.hasNext) nextIterator else getNextValidIteratorFromG
           } else {
             null
           } 

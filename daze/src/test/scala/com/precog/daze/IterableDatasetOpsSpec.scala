@@ -20,6 +20,7 @@ import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.anyVal._
+import scalaz.std.tuple._
 import Iteratee._
 import Either3._
 
@@ -719,15 +720,16 @@ with DiskIterableDatasetMemoizationComponent {
         }
         
         val ng1 = IterableGrouping(list1.iterator)
+        implicit val ordering = Order[Long].toScalaOrdering
 
-        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable }: _*)).iterable.toList
+        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable }: _*)).iterator.toList.distinct.sorted.zipWithIndex.map { case (v, id) => (VectorCase(id: Long), v) }
 
         val ids = idGen()
         import scalaz.std.tuple._
         import com.precog.util.IdGen
         val result: List[Record[Long]] = flattenGroup(ng1, ids, IdGen.nextInt(), memoCtx, System.currentTimeMillis + 10000)(flattenFunc).iterable.toList
 
-        result must containAllOf(expected).only.inOrder
+        result must containAllOf(expected).only
       }}
     }
     
