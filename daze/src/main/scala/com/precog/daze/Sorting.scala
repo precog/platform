@@ -8,21 +8,15 @@ import com.precog.util._
 
 import scala.annotation.tailrec
 import scalaz._
+import scalaz.std.anyVal.longInstance
 
-trait Sorting[Dataset[_], Resultset[_]] {
-  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Resultset[A]
-}
+trait Buffering[A] {
+  implicit val order: Order[A]
+  def newBuffer(size: Int): Buffer
 
-class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
-  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): Iterable[A] = {
-    import java.io.File
-    import java.util.{PriorityQueue, Comparator, Arrays}
-
-    val javaOrder = order.toJavaComparator
-    val buffer = new Array[A](sortConfig.sortBufferSize)
-
-    def sortFile(i: Int) = new File(sortConfig.sortWorkDir, filePrefix + "." + memoId + "." + i)
-
+  trait Buffer {
+    val buffer: Array[A]
+    def sort(limit: Int): Unit
     def bufferChunk(v: Iterator[A]): Int = {
       @tailrec def insert(j: Int, iter: Iterator[A]): Int = {
         if (j < buffer.length && iter.hasNext) {
@@ -33,17 +27,56 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
 
       insert(0, v)
     }
+  }
+}
+
+object Buffering {
+  import java.util.Arrays
+
+  implicit def refBuffering[A <: AnyRef](implicit ord: Order[A], cm: ClassManifest[A]): Buffering[A] = new Buffering[A] {
+    implicit val order = ord
+    private val javaOrder = order.toJavaComparator
+
+    def newBuffer(size: Int) = new Buffer {
+      val buffer = new Array[A](size)
+      def sort(limit: Int) = Arrays.sort(buffer, 0, limit, javaOrder)
+    }
+  }
+
+  implicit object longBuffering extends Buffering[Long] {
+    implicit val order = longInstance
+    def newBuffer(size: Int) = new Buffer {
+      val buffer = new Array[Long](size)
+      def sort(limit: Int) = Arrays.sort(buffer, 0, limit)
+    }
+  }
+}
+
+
+trait Sorting[Dataset[_], Resultset[_]] {
+  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], cm: ClassManifest[A], fs: SortSerialization[A]): Resultset[A]
+}
+
+class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
+  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], cm: ClassManifest[A], fs: SortSerialization[A]): Iterable[A] = {
+    import java.io.File
+    import java.util.{PriorityQueue, Comparator, Arrays}
+
+    val buf = buffering.newBuffer(sortConfig.sortBufferSize)
+
+    def sortFile(i: Int) = new File(sortConfig.sortWorkDir, filePrefix + "." + memoId + "." + i)
+
 
     def writeSortedChunk(chunkId: Int, limit: Int): File = {
-      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], 0, limit, javaOrder.asInstanceOf[Comparator[AnyRef]])
+      buf.sort(limit)
       val chunkFile = sortFile(chunkId)
-      using(fs.oStream(chunkFile)) { fs.write(_, buffer, limit) }
+      using(fs.oStream(chunkFile)) { fs.write(_, buf.buffer, limit) }
       chunkFile
     }
 
     @tailrec def writeChunked(files: Vector[File], v: Iterator[A]): Vector[File] = {
       if (v.hasNext) {
-        val limit = bufferChunk(v)
+        val limit = buf.bufferChunk(v)
         writeChunked(files :+ writeSortedChunk(files.length, limit), v)
       } else {
         files
@@ -59,7 +92,7 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
         }
       }
 
-      val cellComparator = order.contramap((c: Cell) => c.value).toJavaComparator
+      val cellComparator = buffering.order.contramap((c: Cell) => c.value).toJavaComparator
       val (streams, closes) = toMerge.unzip
       
       // creating a priority queue of size 0 will cause an NPE
@@ -88,16 +121,16 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
     }
 
     // first buffer up to the limit of the iterator, so that we can stay in-memory if possible
-    val limit = bufferChunk(values)
-    if (limit < buffer.length) {
+    val limit = buf.bufferChunk(values)
+    if (limit < buf.buffer.length) {
       // if we fit in memory, just sort then return an iterator over the buffer
-      Arrays.sort(buffer.asInstanceOf[Array[AnyRef]], 0, limit, javaOrder.asInstanceOf[Comparator[AnyRef]])
+      buf.sort(limit)
       new Iterable[A] {
         def iterator = new Iterator[A] {
           private var i = 0
           def hasNext = i < limit
           def next = {
-            val tmp = buffer(i)
+            val tmp = buf.buffer(i)
             i += 1
             tmp
           }
