@@ -245,7 +245,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit order: Order[B], cm: ClassManifest[B], fs: SortSerialization[B]): Dataset[B] = {
+    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], cm: ClassManifest[B], fs: SortSerialization[B]): Dataset[B] = {
       type IB = (Identities, B)
 
       val gIterator = g.iterator
@@ -868,7 +868,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def count: BigInt = value.iterable.size
 
-  def uniq(nextId: () => Identity, memoId: Int)(implicit order: Order[A], cm: ClassManifest[A], fs: SortSerialization[A]): IterableDataset[A] = {
+  def uniq(nextId: () => Identity, memoId: Int)(implicit buffering: Buffering[A], cm: ClassManifest[A], fs: SortSerialization[A]): IterableDataset[A] = {
     val filePrefix = "uniq"
 
     IterableDataset[A](1, 
@@ -885,7 +885,7 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
                 sorted.next
               } else {
                 val tmp = sorted.next
-                if (order.order(_next, tmp) == EQ) precomputeNext() else tmp
+                if (buffering.order.order(_next, tmp) == EQ) precomputeNext() else tmp
               }
             } else {
               null.asInstanceOf[A]
