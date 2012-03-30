@@ -541,6 +541,51 @@ object EmitterSpecs extends Specification
           Swap(1),
           Drop))
     }
+    
+    "emit body of a fully applied characteristic function with two variables" in {
+      testEmit("""
+        | fun('a, 'b) := 
+        |   load(//campaigns) where load(//campaigns).ageRange = 'a & load(//campaigns).gender = 'b
+        | fun([25,36], "female")""".stripMargin)(Vector(
+          PushNum("25"),
+          Map1(WrapArray),
+          PushNum("36"),
+          Map1(WrapArray),
+          Map2Cross(JoinArray),
+          Dup,
+          PushString("female"),
+          Dup,
+          Swap(3),
+          Swap(2),
+          Swap(1),
+          PushString("/campaigns"),
+          LoadLocal(Het),
+          PushString("/campaigns"),
+          LoadLocal(Het),
+          PushString("ageRange"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Map2Cross(Eq),
+          PushString("/campaigns"),
+          LoadLocal(Het),
+          PushString("gender"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          Swap(2),
+          Swap(3),
+          Swap(4),
+          Swap(5),
+          Map2Cross(Eq),
+          Map2Match(And),
+          FilterMatch(0, None),
+          Swap(1),
+          Drop,
+          Swap(1),
+          Drop))
+    }
 
     "emit match for first-level union provenance" in {
       testEmit("a := load(//a) b := load(//b) a ~ b (b.x - a.x) * (a.y - b.y)")(
