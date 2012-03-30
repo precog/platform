@@ -25,6 +25,7 @@ import yggdrasil._
 import yggdrasil.serialization._
 import com.precog.common._
 import com.precog.common.util.IOUtils
+import com.precog.util.IdGen
 
 import blueeyes.util.Clock
 import akka.actor.ActorSystem
@@ -100,7 +101,7 @@ trait IterableDatasetGenerators {
   }
 
   implicit def groupingGen[K,A](minSize: Int = 0)(implicit groupingFunc: A => K, count: Gen[IdCount], agen: Gen[A], orderA: Order[A], orderK: Order[K]): Gen[IterableGrouping[K,IterableDataset[A]]] = {
-    implicit val orderingA = tupledIdentitiesOrder[A].toScalaOrdering
+    implicit val orderingA = tupledIdentitiesOrder[A](IdentitiesOrder).toScalaOrdering
     implicit val orderingK = orderK.toScalaOrdering
 
     for {
@@ -134,6 +135,7 @@ with DiskIterableDatasetMemoizationComponent {
   override type Dataset[α] = IterableDataset[α]
 
   override def defaultValues = super.defaultValues + (minTestsOk -> 1000)
+  override val defaultPrettyParams = org.scalacheck.Pretty.Params(2)
 
   object ops extends Ops
   import ops._
@@ -251,7 +253,7 @@ with DiskIterableDatasetMemoizationComponent {
 
           type ResultList = List[Record[Either3[Long, (Long,Long), Long]]]
 
-          val tOrder = tupledIdentitiesOrder[Long]
+          val tOrder = tupledIdentitiesOrder[Long](IdentitiesOrder)
 
           @tailrec def computeCogroup(l: List[Record[Long]], r: List[Record[Long]], acc: ResultList): ResultList = {
             (l,r) match {
@@ -381,7 +383,7 @@ with DiskIterableDatasetMemoizationComponent {
           import scala.annotation.tailrec
           import scalaz.Ordering._
 
-          def order(l: Record[Long], r: Record[Long]): Ordering = prefixIdentityOrder(l._1, r._1, sharedPrefixLen)
+          def order(l: Record[Long], r: Record[Long]): Ordering = prefixIdentityOrdering(l._1, r._1, sharedPrefixLen)
 
           @tailrec def computeJoin(l: List[Record[Long]], r: List[Record[Long]], acc: ResultList): ResultList = {
             (l,r) match {
@@ -491,7 +493,7 @@ with DiskIterableDatasetMemoizationComponent {
     
     "union" in {
       "for arbitrary datasets" in {
-        implicit val ordering = identityValueOrder[Long].toScalaOrdering
+        implicit val ordering = identityValueOrder[Long](IdentitiesOrder).toScalaOrdering
         implicit val idCount = genVariableIdCount
   
         check { (p: DSPair[Long]) =>
@@ -514,7 +516,7 @@ with DiskIterableDatasetMemoizationComponent {
 
     "intersect" in {
       "for arbitrary datasets" in {
-        implicit val ordering = identityValueOrder[Long].toScalaOrdering
+        implicit val ordering = identityValueOrder[Long](IdentitiesOrder).toScalaOrdering
         implicit val idCount = genVariableIdCount
   
         check { (p: DSPair[Long]) =>
@@ -563,7 +565,7 @@ with DiskIterableDatasetMemoizationComponent {
       }
 
       "for arbitrary inputs" in {
-        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long](IdentitiesOrder).toScalaOrdering
         implicit val idCount = genVariableIdCount
 
         check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
@@ -612,7 +614,7 @@ with DiskIterableDatasetMemoizationComponent {
       }
 
       "for arbitrary inputs" in {
-        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long](IdentitiesOrder).toScalaOrdering
         implicit val idOrder = com.precog.yggdrasil.IdentitiesOrder.toScalaOrdering
         implicit val idCount = genVariableIdCount        
         
@@ -628,6 +630,36 @@ with DiskIterableDatasetMemoizationComponent {
 
           result must containAllOf(expected).only.inOrder
         } }
+      }
+    }
+
+    "sort by indexed identities" in {
+      "for arbitrary inputs" >> {
+        implicit val idCount: Gen[IdCount] = IdCount(5)
+        check { (ds: IterableDataset[Long]) => 
+          val expected = ds.iterable.toList sortWith {
+            case ((ids1, _), (ids2, _)) => 
+              if (ids1(2) == ids2(2)) {
+                if (ids1(0) == ids2(0)) {
+                  if (ids1(4) == ids2(4)) {
+                    false
+                  } else {
+                    ids1(4) < ids2(4)
+                  }
+                } else {
+                  ids1(0) < ids2(0)
+                }
+              } else {
+                ids1(2) < ids2(2)
+              }
+          } map {
+            case (_, v) => v
+          }
+          
+          val result = ds.sortByIndexedIds(Vector(2, 0, 4), IdGen.nextInt()).iterator.toList
+
+          result must containAllOf(expected).only.inOrder
+        }
       }
     }
   }
@@ -691,7 +723,7 @@ with DiskIterableDatasetMemoizationComponent {
       }
 
       "for arbitrary groupings" in {
-        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long].toScalaOrdering
+        implicit val idTupleOrder = com.precog.yggdrasil.tupledIdentitiesOrder[Long](IdentitiesOrder).toScalaOrdering
         implicit val idCount = genVariableIdCount
 
         check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {

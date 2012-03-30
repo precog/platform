@@ -37,3 +37,5 @@ libraryDependencies ++= Seq(
   "com.eed3si9n" %% "treehugger" % "0.1.2")
   
 logBuffered := false       // gives us incremental output from Specs2
+
+parallelExecution in Test := false
