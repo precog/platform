@@ -54,11 +54,11 @@ object Buffering {
 
 
 trait Sorting[Dataset[_], Resultset[_]] {
-  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], cm: ClassManifest[A], fs: SortSerialization[A]): Resultset[A]
+  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Resultset[A]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
-  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], cm: ClassManifest[A], fs: SortSerialization[A]): Iterable[A] = {
+  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Iterable[A] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 

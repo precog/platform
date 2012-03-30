@@ -2,7 +2,8 @@ package com.precog
 
 import scalaz.{Order,Ordering}
 import scalaz.effect.IO
-import scalaz.Ordering.EQ
+import scalaz.Ordering._
+import scalaz.std.anyVal._
 
 import java.io.File
 
@@ -25,45 +26,51 @@ package object yggdrasil {
     def apply(id: Identities, sv: SValue): SEvent = (id, sv)
   }
 
-  //TODO: should this not just be an Order[Identities]
-  def identityOrder(ids1: Identities, ids2: Identities): Ordering = 
-    prefixIdentityOrder(ids1, ids2, ids1.length min ids2.length)
-
-  def prefixIdentityOrder(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
-    var result: Ordering = Ordering.EQ
+  def prefixIdentityOrdering(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {
+    var result: Ordering = EQ
     var i = 0
-    while (i < prefixLength && (result eq Ordering.EQ)) {
-      val i1 = ids1(i)
-      val i2 = ids2(i)
-      
-      if (i1 < i2) {
-        result = Ordering.LT
-      } else if (i1 > i2) {
-        result = Ordering.GT
-      }
-      
+    while (i < prefixLength && (result eq EQ)) {
+      result = longInstance.order(ids1(i), ids2(i))
       i += 1
     }
     
     result
   }
 
-  //TODO: This should use Order#contramap
-  def combinedIdentitiesOrder[A, B](p1: (Identities, A), p2: (Identities, B)): Ordering = {
-    identityOrder(p1._1, p2._1)
+  def fullIdentityOrdering(ids1: Identities, ids2: Identities) = prefixIdentityOrdering(ids1, ids2, ids1.length min ids2.length)
+
+  object IdentitiesOrder extends Order[Identities] {
+    def order(ids1: Identities, ids2: Identities) = fullIdentityOrdering(ids1, ids2)
   }
 
-  implicit object IdentitiesOrder extends Order[Identities] {
-    def order(i1: Identities, i2: Identities) = identityOrder(i1, i2)
+  def prefixIdentityOrder(prefixLength: Int): Order[Identities] = {
+    new Order[Identities] {
+      def order(ids1: Identities, ids2: Identities) = prefixIdentityOrdering(ids1, ids2, prefixLength)
+    }
   }
 
-  def tupledIdentitiesOrder[A]: Order[(Identities, A)] =
-    IdentitiesOrder.contramap((_: (Identities, A))._1)
+  def indexedIdentitiesOrder(indices: Vector[Int]): Order[Identities] = {
+    new Order[Identities] {
+      def order(ids1: Identities, ids2: Identities): Ordering = {
+        var result: Ordering = EQ
+        var i = 0
+        while (i < indices.length && (result eq EQ)) {
+          result = longInstance.order(ids1(indices(i)), ids2(indices(i)))
+          i += 1
+        }
 
-  def identityValueOrder[A](implicit ord: Order[A]): Order[(Identities, A)] = new Order[(Identities, A)] {
+        result
+      }
+    }
+  }
+
+  def tupledIdentitiesOrder[A](idOrder: Order[Identities] = IdentitiesOrder): Order[(Identities, A)] =
+    idOrder.contramap((_: (Identities, A))._1)
+
+  def identityValueOrder[A](idOrder: Order[Identities] = IdentitiesOrder)(implicit ord: Order[A]): Order[(Identities, A)] = new Order[(Identities, A)] {
     type IA = (Identities, A)
     def order(x: IA, y: IA): Ordering = {
-      val idComp = IdentitiesOrder.order(x._1, y._1)
+      val idComp = idOrder.order(x._1, y._1)
       if (idComp == EQ) {
         ord.order(x._2, y._2)
       } else idComp

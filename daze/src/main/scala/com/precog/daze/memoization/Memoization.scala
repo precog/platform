@@ -37,6 +37,7 @@ object MemoCache {
 trait MemoizationContext[Dataset[_]] {
   def cache: MemoCache
   def memoizing[A](memoId: Int)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[Dataset[A] => Future[Dataset[A]], Future[Dataset[A]]] 
+  //def memosort[A](memoId: Int)(implicit serialization: SortSerialization[A], buffering: Buffering[A]): Either[Sortable[A] => Future[Sortable[A]], Future[Sortable[A]]]
 }
 
 /*
