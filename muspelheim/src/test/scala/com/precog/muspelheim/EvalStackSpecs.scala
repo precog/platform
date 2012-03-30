@@ -341,6 +341,23 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
     }
 
+    "evaluate a quantified characteristic function of two parameters" in {
+      val input = """
+        | fun('a, 'b) := 
+        |   load(//campaigns) where load(//campaigns).ageRange = 'a & load(//campaigns).gender = 'b
+        | fun([25,36], "female")""".stripMargin
+
+      val results = evalE(input) 
+      
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("ageRange" -> SArray(Vector(SDecimal(25), SDecimal(36))))
+          obj must contain("gender" -> SString("female"))
+        }
+      }
+    }.pendingUntilFixed
+
     "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
       val input = """
         | campaigns := load(//campaigns)
