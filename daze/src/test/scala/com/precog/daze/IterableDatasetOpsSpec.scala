@@ -391,7 +391,8 @@ with DiskIterableDatasetMemoizationComponent {
             case (a, b) => (a, b)
           }.iterable.toList
 
-          result must containAllOf(expected).only.inOrder
+          //result must containAllOf(expected).only.inOrder
+          result must_== expected
         }}
       }
 
