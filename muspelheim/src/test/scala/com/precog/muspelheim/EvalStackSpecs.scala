@@ -353,7 +353,6 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
-    /* commented out until we have memoization (MASSIVE time sink)
     "determine a histogram of genders on category" in {
       val input = """
         | campaigns := load(//campaigns)
@@ -364,17 +363,15 @@ trait EvalStackSpecs extends Specification {
         |   campaigns' := campaigns where campaigns.campaign = 'campaign
         |   organizations'' := organizations' where organizations'.campaign = 'campaign
         |   
-        |   campaigns' :: organizations''
+        |   campaigns' ~ organizations''
         |     { revenue: 'revenue, num: count(campaigns') }
         |   
         | hist""".stripMargin
 
-      println("Waiting")
-      Thread.sleep(30000)
-      
       eval(input) mustEqual Set()   // TODO
-    }
+    }.pendingUntilFixed
      
+    /* commented out until we have memoization (MASSIVE time sink)
     "determine most isolated clicks in time" in {
 
       val input = """
