@@ -62,6 +62,10 @@ case class UndefinedTicVariable(name: TicId) extends ErrorType {
   override def toString = "undefined tic-variable: %s".format(name)
 }
 
+case class MultiplyDefinedTicVariable(name: TicId) extends ErrorType {
+  override def toString = "tic-variable name used multiple times: %s".format(name)
+}
+
 case class UndefinedFunction(name: Identifier) extends ErrorType {
   override def toString = "undefined function: %s".format(name)
 }
