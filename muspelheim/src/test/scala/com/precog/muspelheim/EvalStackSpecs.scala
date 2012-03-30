@@ -352,7 +352,7 @@ trait EvalStackSpecs extends Specification {
         |   campaigns where g = p
         | equality""".stripMargin
 
-      eval(input, true) mustEqual Set()
+      eval(input) mustEqual Set()
     }
 
     /* commented out until we have memoization (MASSIVE time sink)
