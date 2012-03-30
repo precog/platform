@@ -371,16 +371,14 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()   // TODO
     }.pendingUntilFixed
      
-    /* commented out until we have memoization (MASSIVE time sink)
     "determine most isolated clicks in time" in {
-
       val input = """
         | clicks := load(//clicks)
         | 
         | spacings('time) :=
         |   click := clicks where clicks.time = 'time
-        |   belowTime := max(clicks.time where clicks.time < click.time)
-        |   aboveTime := min(clicks.time where clicks.time > click.time)
+        |   belowTime := max(clicks.time where clicks.time < 'time)
+        |   aboveTime := min(clicks.time where clicks.time > 'time)
         |   
         |   {
         |     click: click,
@@ -393,27 +391,8 @@ trait EvalStackSpecs extends Specification {
         | 
         | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-      def time[T](f : => T): (T, Long) = {
-        val start = System.currentTimeMillis
-        val result = f
-        (result, System.currentTimeMillis - start)
-      }
-
-      println("warmup")
-      (1 to 10).foreach(_ => eval(input))
-
-      println("warmup complete")
-      Thread.sleep(30000)
-      println("running")
-
-      val runs = 25
-
-      println("Avg run time = " + (time((1 to runs).map(_ => eval(input)))._2 / (runs * 1.0)) + "ms")
-        
-      //eval(input) mustEqual Set()   // TODO
-      true mustEqual false
+      eval(input) must not(beEmpty)   // TODO
     }
-    */
   
     "evaluate the 'hello, quirrel' examples" >> {
       "json" >> {
