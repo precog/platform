@@ -122,6 +122,23 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
+    "reject multiple definitions of tic-variables" in {
+      {
+        val tree = parse("f('a, 'a) := 1 2")
+        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"))
+      }
+      
+      {
+        val tree = parse("f('a, 'b, 'c, 'a) := 1 2")
+        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"))
+      }
+      
+      {
+        val tree = parse("f('a, 'b, 'c, 'a, 'b, 'a) := 1 2")
+        tree.errors mustEqual Set(MultiplyDefinedTicVariable("'a"), MultiplyDefinedTicVariable("'b"))
+      }
+    }
+    
     "not leak dispatch into an adjacent scope" in {
       val Add(_, _, d: Dispatch) = parse("(a := 1 2) + a")
       d.binding mustEqual NullBinding

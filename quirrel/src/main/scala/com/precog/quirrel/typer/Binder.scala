@@ -29,8 +29,17 @@ trait Binder extends parser.AST with Library {
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[Either[TicId, Identifier], Binding]): Set[Error] = tree match {
       case b @ Let(_, id, formals, left, right) => {
-        val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> UserDef(b)) }
-        loop(left, env2) ++ loop(right, env + (Right(id) -> UserDef(b)))
+        val (_, dups) = formals.foldLeft((Set[TicId](), Set[TicId]())) {
+          case ((acc, dup), id) if acc(id) => (acc, dup + id)
+          case ((acc, dup), id) if !acc(id) => (acc + id, dup)
+        }
+        
+        if (!dups.isEmpty) {
+          dups map { id => Error(b, MultiplyDefinedTicVariable(id)) }
+        } else {
+          val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> UserDef(b)) }
+          loop(left, env2) ++ loop(right, env + (Right(id) -> UserDef(b)))
+        }
       }
       
       case New(_, child) => loop(child, env)
