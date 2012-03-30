@@ -329,6 +329,19 @@ trait EvalStackSpecs extends Specification {
         eval(input) mustEqual Set()
     }
 
+    "use NotEq correctly" in {
+      val input = """load(//campaigns) where load(//campaigns).gender != "female" """.stripMargin
+
+      val results = evalE(input)
+
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("gender" -> SString("male"))
+        }
+      }
+    }
+
     "evaluate an unquantified characteristic function" in {
       val input = """
         | campaigns := load(//campaigns)
@@ -356,7 +369,7 @@ trait EvalStackSpecs extends Specification {
           obj must contain("gender" -> SString("female"))
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
       val input = """
