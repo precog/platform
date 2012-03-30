@@ -24,7 +24,13 @@ import java.io.{PrintStream, PrintWriter}
 
 class Performance(
     warmupDefaults: BenchmarkParameters = Performance.warmupDefaults,
-    benchmarkDefaults: BenchmarkParameters = Performance.benchmarkDefaults) {
+    benchmarkDefaults: BenchmarkParameters = Performance.benchmarkDefaults,
+    profileDefaults: BenchmarkParameters = Performance.profileDefaults) {
+  
+  def profile[T](test: => T, profileParams: BenchmarkParameters = profileDefaults) = {
+    benchmarkOnly(test, profileParams)
+  }
+ 
   def benchmark[T](test: => T,
                    warmupParams: BenchmarkParameters = warmupDefaults,
                    benchmarkParams: BenchmarkParameters = benchmarkDefaults): BenchmarkResults[T] = {
@@ -32,15 +38,13 @@ class Performance(
     benchmarkOnly(test, benchmarkParams)
   }
 
+
   def benchmarkOnly[T](test: => T, parameters: BenchmarkParameters = benchmarkDefaults): BenchmarkResults[T] = {
 
     @tailrec
     def benchmark[A](test: => A, result: BenchmarkResults[A]): BenchmarkResults[A] = {
       if (result.testRuns < parameters.testRuns) {
          val (t, r) = time(result.repCount, test)
-         if(parameters.gcBetweenTests) {
-           attemptGC
-         }
          parameters.restBetweenTests foreach { Thread.sleep }
          benchmark(test, result.add(t, r))
       } else {
@@ -65,10 +69,15 @@ class Performance(
     }
 
     def noop = ()
+   
+    val overhead = if(parameters.calcOverhead) {
+      val baseline = benchmark(noop, BenchmarkResults(0, 10, 0, Vector.empty[Long], Vector.empty[Unit]))
+      baseline.meanRepTime()
+    } else {
+      0.0
+    }
     
-    val baseline = benchmark(noop, BenchmarkResults(0, 10, 0, Vector.empty[Long], Vector.empty[Unit]))
-    
-    benchmark(test,  BenchmarkResults(0, repeatsRequired(), baseline.meanRepTime(), Vector.empty[Long], Vector.empty[T]))
+    benchmark(test,  BenchmarkResults(0, repeatsRequired(), overhead, Vector.empty[Long], Vector.empty[T]))
   }
 
   def time[T](repeat: Int, f: => T): (Long,  T) = {
@@ -77,7 +86,7 @@ class Performance(
         f
         rep(r+1)
       } else {
-        f
+        f 
       }
     }
     val start = System.nanoTime()
@@ -91,6 +100,7 @@ object Performance {
   
   val warmupDefaults = BenchmarkParameters(10, 1000)
   val benchmarkDefaults = BenchmarkParameters(200, 1000)
+  val profileDefaults = BenchmarkParameters(Int.MaxValue, 1000, Some(500), false, false)
 
   def apply(warmupDefaults: BenchmarkParameters = this.warmupDefaults,
             benchmarkDefaults: BenchmarkParameters = this.benchmarkDefaults) =
@@ -128,7 +138,7 @@ Measurement overhead:        %10.02f%%
     val ts = timings.sorted.map(_ / (repCount * 1000000000.0))
     out.println(reportTemplate.format(
       label,
-      testRuns,
+      results.size,
       repCount,
       ts.head * 1000, mean * 1000, ts.last * 1000,
       ts(p90) * 1000, ts(p95) * 1000, ts(p99) * 1000,
@@ -152,5 +162,6 @@ case class BenchmarkParameters(
   testRuns: Int,
   runMillisGoal: Long,
   restBetweenTests: Option[Long] = None,
-  gcBetweenTests: Boolean = false
+  gcBetweenTests: Boolean = false,
+  calcOverhead: Boolean = true
 )
