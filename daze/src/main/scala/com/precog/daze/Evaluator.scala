@@ -568,13 +568,18 @@ trait Evaluator extends DAG
         }
       }
       
-      // TODO adjust memoizer to be less aggressive
-      case m @ Memoize(parent, _) =>
-        loop(parent, assume, splits, ctx)       // .right map { _.memoize(m.memoId, ctx.memoizationContext, ctx.expiration) }
+      case m @ Memoize(parent, _) => {
+        loop(parent, assume, splits, ctx).right map {
+          case Match(mal.Actual, enum, graph) =>
+            Match(mal.Actual, enum.memoize(m.memoId, ctx.memoizationContext, ctx.expiration), graph)
+          
+          case m => m
+        }
+      }
     }
     
     withContext { ctx =>
-      val Match(spec, set, _) = maybeRealize(loop(orderCrosses(graph), Map(), Map(), ctx), graph, ctx)
+      val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
       realizeMatch(spec, set)
     }
   }

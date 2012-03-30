@@ -43,6 +43,7 @@ trait Memoizer extends DAG {
         SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
     }
     
+    // TODO rewrite!
     def memoized(graph: DepGraph, _splits: => Map[Split, Split]): DepGraph = {
       lazy val splits = _splits
       
@@ -56,39 +57,25 @@ trait Memoizer extends DAG {
           
           case _: Root => graph
           
-          case New(loc, parent) => {
-            if (refs > MemoThreshold)
-              Memoize(New(loc, memoized(parent, splits)), refs)
-            else
-              New(loc, memoized(parent, splits))
-          }
+          case New(loc, parent) =>
+            New(loc, memoized(parent, splits))
           
-          case LoadLocal(loc, range, parent, tpe) => {
-            if (refs > MemoThreshold)
-              Memoize(LoadLocal(loc, range, memoized(parent, splits), tpe), refs)
-            else
-              LoadLocal(loc, range, memoized(parent, splits), tpe)
-          }
+          case LoadLocal(loc, range, parent, tpe) =>
+            LoadLocal(loc, range, memoized(parent, splits), tpe)
           
-          case Operate(loc, op, parent) => {
-            if (refs > MemoThreshold)
-              Memoize(Operate(loc, op, memoized(parent, splits)), refs)
-            else
-              Operate(loc, op, memoized(parent, splits))
-          }
+          case Operate(loc, op, parent) =>
+            Operate(loc, op, memoized(parent, splits))
           
-          case Reduce(loc, red, parent) => {
-            if (refs > MemoThreshold)
-              Memoize(Reduce(loc, red, memoized(parent, splits)), refs)
-            else
-              Reduce(loc, red, memoized(parent, splits))
-          }          
+          case Reduce(loc, red, parent) =>
+            Reduce(loc, red, memoized(parent, splits))
 
           case SetReduce(loc, red, parent) => {
-            if (refs > MemoThreshold)
-              Memoize(SetReduce(loc, red, memoized(parent, splits)), refs)
+            val back = SetReduce(loc, red, memoized(parent, splits))
+            
+            if (refs > 1)
+              Memoize(back, refs)
             else
-              SetReduce(loc, red, memoized(parent, splits))
+              back
           }
           
           case s @ Split(loc, specs, child) => {
@@ -96,35 +83,29 @@ trait Memoizer extends DAG {
             lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
             lazy val child2 = memoized(child, splits2)
             lazy val result: Split = Split(loc, specs2, child2)
-            result
+            
+            if (refs > 1)
+              Memoize(result, refs)
+            else
+              result
           }
           
           case Join(loc, instr, left, right) => {
             val left2 = memoized(left, splits)
             val right2 = memoized(right, splits)
             
-            if (refs > 1)
-              Memoize(Join(loc, instr, left2, right2), refs)
-            else
-              Join(loc, instr, left2, right2)
+            Join(loc, instr, left2, right2)
           }
           
           case Filter(loc, cross, range, target, boolean) => {
             val target2 = memoized(target, splits)
             val boolean2 = memoized(boolean, splits)
             
-            if (refs > 1)
-              Memoize(Filter(loc, cross, range, target2, boolean2), refs)
-            else
-              Filter(loc, cross, range, target2, boolean2)
+            Filter(loc, cross, range, target2, boolean2)
           }
           
-          case Sort(parent, indexes) => {
-            if (refs > MemoThreshold)
-              Memoize(Sort(memoized(parent, splits), indexes), refs)
-            else
-              Sort(memoized(parent, splits), indexes)
-          }
+          case Sort(parent, indexes) =>
+            Sort(memoized(parent, splits), indexes)
           
           case Memoize(parent, _) => memoized(parent, splits)
         }
