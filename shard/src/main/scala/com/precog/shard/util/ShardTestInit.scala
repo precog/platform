@@ -20,6 +20,7 @@
 package com.precog.shard.util
 
 import com.precog.common._
+import com.precog.common.util._
 import com.precog.common.security._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -73,7 +74,7 @@ object ShardTestInit extends App {
     val filename = parts(1)
     val path = parts(0)
 
-    val data = scala.io.Source.fromFile(filename).toList.mkString
+    val data = IOUtils.rawReadFileToString(new File(filename))
     val json = JsonParser.parse(data)
 
     val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty

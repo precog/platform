@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package util
 
 import com.precog.common.Path
+import com.precog.common.util._
 import com.precog.yggdrasil.leveldb._
 
 import org.iq80.leveldb._
@@ -127,7 +128,7 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
 
 
   def columnSummary(colDir: File, acc: Map[Path, Map[JPath, ColumnSummary]]): Map[Path, Map[JPath, ColumnSummary]] = {
-    val rawDescriptor = scala.io.Source.fromFile(new File(colDir, "projection_descriptor.json")).mkString
+    val rawDescriptor = IOUtils.rawReadFileToString(new File(colDir, "projection_descriptor.json"))
     val descriptor = parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
 
     descriptor.columns.foldLeft( acc ) { 
@@ -295,7 +296,7 @@ object DescriptorSummary extends Command {
   }
 
   def readDescriptor(dir: File): ProjectionDescriptor = {
-    val rawDescriptor = scala.io.Source.fromFile(new File(dir, "projection_descriptor.json")).mkString
+    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, "projection_descriptor.json"))
     JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
   }
 
