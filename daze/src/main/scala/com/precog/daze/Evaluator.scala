@@ -506,10 +506,12 @@ trait Evaluator extends DAG
         
         val resultEnum = instr match {
           case Map2Cross(_) | Map2CrossLeft(_) =>
-            leftEnum.crossLeft(rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration))(op.operation)
+            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
+            leftEnum.crossLeft(enum)(op.operation)
           
           case Map2CrossRight(_) =>
-            leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration).crossRight(rightEnum)(op.operation)
+            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
+            enum.crossRight(rightEnum)(op.operation)
         }
         
         Right(Match(mal.Actual, resultEnum, graph))
