@@ -229,22 +229,35 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
   
   private def solveGroupForest(d: Dispatch, name: String, groups: Set[GroupTree]): (Set[Error], Option[Bucket]) = {
     if (groups exists { case Condition(_) => true case _ => false }) {
-      val solutions = groups collect {
-        case Condition(where) => (where, solveCondition(name, where.right))
+      // TODO ensure commonality (is this needed?)
+      
+      val UserDef(b) = d.binding
+      val hasDependence = groups exists {
+        case Condition(where) => isDependent(b)(where.left)
+        case _ => false
       }
       
-      // if it's None all the way down, then we already have the error
-      val successes = for ((expr, result) <- solutions; (Some(solution), extras) <- result.right.toSeq)
-        yield Group(expr, expr.left, solution, extras)
-      
-      val errors = (solutions flatMap { _._2.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
-      
-      val (addend, result) = if (!successes.isEmpty)
-        (None, Some(successes reduce IntersectBucket))
-      else
-        (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
-      
-      (addend map (errors +) getOrElse errors, result)
+      if (hasDependence) {
+        (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
+      } else {
+        val solutions = groups collect {
+          case Condition(where) =>
+            (where, solveCondition(name, where.right))
+        }
+        
+        // if it's None all the way down, then we already have the error
+        val successes = for ((expr, result) <- solutions; (Some(solution), extras) <- result.right.toSeq)
+          yield Group(expr, expr.left, solution, extras)
+        
+        val errors = (solutions flatMap { _._2.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
+        
+        val (addend, result) = if (!successes.isEmpty)
+          (None, Some(successes reduce IntersectBucket))
+        else
+          (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
+        
+        (addend map (errors +) getOrElse errors, result)
+      }
     } else if (groups exists { case Reduction(_, _) => true case _ => false }) {
       val (errors, successes) = groups collect {
         case Reduction(_, children) => solveGroupForest(d, name, children)
@@ -259,6 +272,17 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     } else {
       (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
     }
+  }
+  
+  private def isDependent(b: Let): Expr => Boolean = isSubtree {
+    case t: TicVar if t.binding == UserDef(b) => true
+    
+    case d: Dispatch => d.binding match {
+      case UserDef(let) => isDependent(b)(let.left)
+      case _ => false
+    }
+    
+    case _ => false
   }
   
   private def containsTicVar(name: String): Expr => Boolean = isSubtree {
