@@ -337,7 +337,7 @@ trait EvalStackSpecs extends Specification {
           obj must contain("gender" -> SString("female"))
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
       val input = """
