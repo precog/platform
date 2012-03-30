@@ -61,10 +61,12 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     /**
      *
      */
-    override def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = Await.result(
-      fullProjectionFuture(userUID, path, expiresAt),
-      (expiresAt - yggConfig.clock.now().getMillis) millis
-    )
+    override def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = {
+      Await.result(
+        fullProjectionFuture(userUID, path, expiresAt),
+        (expiresAt - yggConfig.clock.now().getMillis) millis
+      )
+    }
 
     private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long): Future[Dataset[SValue]] = {
       for {
