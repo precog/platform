@@ -194,12 +194,12 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     "return all children for the root path" ! check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
-
-      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+      
+      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
 
       val fut = actor ? FindChildren(Path(""))
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]].toSet
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[Path]].toSet
       
       val expected = extractPathsFor(Path(""))(sample)
       
@@ -213,11 +213,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       val testPath: Path = event.path.parent.getOrElse(event.path)
 
-      val actor = TestActorRef(new ShardMetadataActor(metadata, VectorClock.empty))
+      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
 
       val fut = actor ? FindChildren(testPath)
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]].toSet
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[Path]].toSet
       
       val expected = extractPathsFor(testPath)(sample)
       
