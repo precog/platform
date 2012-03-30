@@ -1,8 +1,10 @@
 package com.precog
 package daze
 
+import akka.dispatch.Future
 import yggdrasil._
 import yggdrasil.serialization._
+import memoization._
 import com.precog.common.VectorCase
 import com.precog.util._
 
@@ -54,11 +56,11 @@ object Buffering {
 
 
 trait Sorting[Dataset[_], Resultset[_]] {
-  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Resultset[A]
+  def sort[A](values: Dataset[A], filePrefix: String, memoId: Int, memoCtx: MemoizationContext[Resultset])(implicit buffering: Buffering[A], fs: SortSerialization[A]): Future[Resultset[A]]
 }
 
 class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable] {
-  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Iterable[A] = {
+  def sort[A](values: Iterator[A], filePrefix: String, memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit buffering: Buffering[A], fs: SortSerialization[A]): Future[Iterable[A]] = {
     import java.io.File
     import java.util.{PriorityQueue, Comparator, Arrays}
 
@@ -120,42 +122,55 @@ class IteratorSorting(sortConfig: SortConfig) extends Sorting[Iterator, Iterable
       }
     }
 
-    // first buffer up to the limit of the iterator, so that we can stay in-memory if possible
-    val limit = buf.bufferChunk(values)
-    if (limit < buf.buffer.length) {
-      // if we fit in memory, just sort then return an iterator over the buffer
-      buf.sort(limit)
-      new Iterable[A] {
-        def iterator = new Iterator[A] {
-          private var i = 0
-          def hasNext = i < limit
-          def next = {
-            val tmp = buf.buffer(i)
-            i += 1
-            tmp
-          }
-        }
-      }
-    } else {
-      // dump the chunk to disk, then dump the remainder of the iterator to disk in chunks
-      // and return an iterator over the full set of files
-      val initialChunkFile = writeSortedChunk(0, limit)
-      val chunkFiles = writeChunked(Vector(initialChunkFile), values)
-      new Iterable[A] {
-        def iterator = 
-          mergeIterator {
-            chunkFiles flatMap { f =>
-              val stream = fs.iStream(f)
-              val iter = fs.reader(stream)
-              if (iter.hasNext) {
-                Some((iter, () => stream.close)) 
-              } else {
-                stream.close
-                None
+    implicit val memoSerialization = new WrapRunlengthFormatting[A](fs) with IncrementalSerialization[A] {
+      def iStream(file: File) = fs.iStream(file)
+      def oStream(file: File) = fs.oStream(file)
+    }
+
+    memoCtx.memoizing(memoId) match {
+      case Right(memoized) => memoized
+      case Left(memof) => 
+        // first buffer up to the limit of the iterator, so that we can stay in-memory if possible
+        val limit = buf.bufferChunk(values)
+        if (limit < buf.buffer.length) {
+          // if we fit in memory, just sort then return an iterator over the buffer
+          buf.sort(limit)
+          memof(
+            new Iterable[A] {
+              def iterator = new Iterator[A] {
+                private var i = 0
+                def hasNext = i < limit
+                def next = {
+                  val tmp = buf.buffer(i)
+                  i += 1
+                  tmp
+                }
               }
             }
-          }
-      }
+          )
+        } else {
+          // dump the chunk to disk, then dump the remainder of the iterator to disk in chunks
+          // and return an iterator over the full set of files
+          val initialChunkFile = writeSortedChunk(0, limit)
+          val chunkFiles = writeChunked(Vector(initialChunkFile), values)
+          memof(
+            new Iterable[A] {
+              def iterator = 
+                mergeIterator {
+                  chunkFiles flatMap { f =>
+                    val stream = fs.iStream(f)
+                    val iter = fs.reader(stream)
+                    if (iter.hasNext) {
+                      Some((iter, () => stream.close)) 
+                    } else {
+                      stream.close
+                      None
+                    }
+                  }
+                }
+            }
+          )
+        }
     }
   }
 }

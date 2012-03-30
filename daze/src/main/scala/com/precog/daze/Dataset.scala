@@ -8,8 +8,8 @@ import memoization._
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 
-trait DatasetOps[Dataset[_], Grouping[_, _]] {
-  implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Grouping, A]
+trait DatasetOps[Dataset[_], Valueset[_], Grouping[_, _]] {
+  implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Valueset, Grouping, A]
 
   def empty[A](idCount: Int): Dataset[A] 
 
@@ -21,18 +21,18 @@ trait DatasetOps[Dataset[_], Grouping[_, _]] {
 }
   
 // groups have no identities
-trait GroupingOps[Dataset[_], Grouping[_, _]] {
+trait GroupingOps[Dataset[_], Valueset[_], Grouping[_, _]] {
   // if isUnion, cogroup, merging datasets of the common key by the union operation
   // if !isUnion (intersect) retain where keys are equivalent, merging the inner datasets using the intersect operation
   // keep result in key order
-  def mergeGroups[A, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
+  def mergeGroups[A, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean, memoCtx: MemoizationContext[Valueset], expiration: Long)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] 
 
   // intersect by key, concatenating the NELs
   // keep result in key order
   def zipGroups[A, K: Order](d1: Grouping[K, NEL[Dataset[A]]], d2: Grouping[K, NEL[Dataset[A]]]): Grouping[K, NEL[Dataset[A]]]
 
   // the resulting Dataset[B] needs to be merged such that it is value-unique and has new identities
-  def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: SortSerialization[B]): Dataset[B]
+  def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Valueset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: SortSerialization[B]): Dataset[B]
 
   def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B]
 }
@@ -43,7 +43,7 @@ trait CogroupF[A, B, C] {
   def right(b: B): C
 }
 
-trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
+trait DatasetExtensions[Dataset[_], Valueset[_], Grouping[_, _], A] {
   type IA = (Identities, A)
 
   def value: Dataset[A]
@@ -64,12 +64,12 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def paddedMerge(d2: Dataset[A], nextId: () => Identity): Dataset[A]
 
   // merge sorted uniq by identities and values. Input datasets must have equal identity counts
-  def union(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
+  def union(d2: Dataset[A], memoCtx: MemoizationContext[Valueset], expiration: Long)(implicit ord: Order[A], ss: SortSerialization[IA]): Dataset[A]
 
   // inputs are sorted in identity order - merge by identity, sorting any runs of equal identities
   // using the value ordering, equal identity, equal value are the only events that persist
   // Input datasets must have equal identity counts
-  def intersect(d2: Dataset[A])(implicit order: Order[A], ss: SortSerialization[IA]): Dataset[A]
+  def intersect(d2: Dataset[A], memoCtx: MemoizationContext[Valueset], expiration: Long)(implicit ord: Order[A], ss: SortSerialization[IA]): Dataset[A] 
 
   def map[B](f: A => B): Dataset[B] 
 
@@ -80,20 +80,20 @@ trait DatasetExtensions[Dataset[_], Grouping[_, _], A] {
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: () => Identity, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Dataset[A]
+  def uniq(nextId: () => Identity, memoId: Int, ctx: MemoizationContext[Valueset], expiration: Long)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Dataset[A] 
 
   // identify(None) strips all identities
   def identify(nextId: Option[() => Identity]): Dataset[A]
 
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit fs: SortSerialization[IA]): Dataset[A]
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Valueset], expiration: Long)(implicit fs: SortSerialization[IA]): Dataset[A] 
   
-  def memoize(memoId: Int, memoCtx: MemoizationContext[Dataset], expiresAt: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
+  def memoize(memoId: Int, memoCtx: MemoizationContext[Valueset], expiresAt: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
 
   // for each value, calculate the keys for that value - this should be as singleton dataset
   // sort by key then by the identity ordering of the input dataset
-  def group[K](memoId: Int, memoCtx: MemoizationContext[Dataset], expiresAt: Long)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
+  def group[K](memoId: Int, memoCtx: MemoizationContext[Valueset], expiresAt: Long)(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
 }
 
 // vim: set ts=4 sw=4 et:

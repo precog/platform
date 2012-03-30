@@ -247,9 +247,10 @@ object Console extends App {
       new REPL 
           with IterableDatasetOpsComponent
           with LevelDBQueryComponent
-          with DiskIterableDatasetMemoizationComponent 
+          with DiskIterableMemoizationComponent 
           with Lifecycle { self =>
         override type Dataset[A] = IterableDataset[A]
+        override type Valueset[A] = Iterable[A]
 
         lazy val actorSystem = ActorSystem("repl_actor_system")
         implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)

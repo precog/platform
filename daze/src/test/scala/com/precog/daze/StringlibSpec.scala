@@ -18,10 +18,11 @@ class StringlibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
-  with DiskIterableDatasetMemoizationComponent 
+  with DiskIterableMemoizationComponent 
   with Stringlib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
+  override type Valueset[α] = Iterable[α]
     
 
   import Function._

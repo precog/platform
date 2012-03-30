@@ -21,10 +21,11 @@ class TimelibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
-  with DiskIterableDatasetMemoizationComponent 
+  with DiskIterableMemoizationComponent 
   with Timelib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
+  override type Valueset[α] = Iterable[α]
 
   import Function._
   

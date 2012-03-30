@@ -18,10 +18,11 @@ class MathlibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
-  with DiskIterableDatasetMemoizationComponent 
+  with DiskIterableMemoizationComponent 
   with Mathlib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
+  override type Valueset[α] = Iterable[α]
 
   import Function._
   

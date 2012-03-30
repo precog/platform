@@ -16,8 +16,8 @@ import IterateeT._
 
 
 trait MemoizationEnvironment {
-  type Dataset[E]
-  type MemoContext <: MemoizationContext[Dataset]
+  type Valueset[E]
+  type MemoContext <: MemoizationContext[Valueset]
 
   def withMemoizationContext[A](f: MemoContext => A): A
 }
@@ -36,8 +36,7 @@ object MemoCache {
 
 trait MemoizationContext[Dataset[_]] {
   def cache: MemoCache
-  def memoizing[A](memoId: Int)(implicit serialization: IncrementalSerialization[(Identities, A)]): Either[Dataset[A] => Future[Dataset[A]], Future[Dataset[A]]] 
-  //def memosort[A](memoId: Int)(implicit serialization: SortSerialization[A], buffering: Buffering[A]): Either[Sortable[A] => Future[Sortable[A]], Future[Sortable[A]]]
+  def memoizing[A](memoId: Int)(implicit serialization: IncrementalSerialization[A]): Either[Dataset[A] => Future[Dataset[A]], Future[Dataset[A]]] 
 }
 
 /*
