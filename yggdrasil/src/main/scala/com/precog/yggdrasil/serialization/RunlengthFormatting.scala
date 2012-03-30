@@ -46,6 +46,18 @@ trait RunlengthFormatting[A] {
   def readRecord(in: DataInputStream, header: Header): A
 }
 
+class WrapRunlengthFormatting[A](val delegate: RunlengthFormatting[A]) extends RunlengthFormatting[A] {
+  type Header = delegate.Header
+
+  def headerFor(value: A): Header = delegate.headerFor(value)
+
+  def writeHeader(out: DataOutputStream, header: Header): Unit = delegate.writeHeader(out, header)
+  def writeRecord(out: DataOutputStream, value: A, header: Header): Unit = delegate.writeRecord(out, value, header)
+
+  def readHeader(in: DataInputStream): Header = delegate.readHeader(in)
+  def readRecord(in: DataInputStream, header: Header): A = delegate.readRecord(in, header)
+}
+
 trait SValueRunlengthFormatting extends RunlengthFormatting[SValue] with SValueFormatting {
   case class Header(structure: Seq[(JPath, CType)])
 

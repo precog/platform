@@ -26,6 +26,7 @@ import memoization._
 import com.precog.common.VectorCase
 import com.precog.util._
 
+import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
 import blueeyes.util.Clock
@@ -50,11 +51,12 @@ trait IterableDatasetOpsConfig extends SortConfig {
 
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: IterableDatasetOpsConfig
-  type Dataset[E] = IterableDataset[E]
+  type Dataset[α] = IterableDataset[α]
+  type Valueset[α] = Iterable[α]
   type Grouping[K, A] = IterableGrouping[K, A]
 
-  class Ops extends DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]{
-    implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, IterableGrouping, A] = 
+  class Ops extends DatasetOps[Dataset, Valueset, Grouping] with GroupingOps[Dataset, Valueset, Grouping]{
+    implicit def extend[A](d: IterableDataset[A]): DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] = 
       new IterableDatasetExtensions[A](d, new IteratorSorting(yggConfig), yggConfig.clock)
 
     def empty[A](idCount: Int): IterableDataset[A] = IterableDataset(idCount, Iterable.empty[(Identities, A)])
@@ -94,7 +96,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         })
     }
 
-    def mergeGroups[A, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] = {
+    def mergeGroups[A, K](d1: Grouping[K, Dataset[A]], d2: Grouping[K, Dataset[A]], isUnion: Boolean, memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit ord1: Order[A], ord: Order[K], ss: SortSerialization[(Identities, A)]): Grouping[K, Dataset[A]] = {
       val leftIter = d1.iterator
       val rightIter = d2.iterator
 
@@ -141,7 +143,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
                     _right = null
                   }
                 case EQ => {
-                  _next = (_left._1, extend(_left._2).union(_right._2))
+                  _next = (_left._1, extend(_left._2).union(_right._2, memoCtx, expiration))
                   _left = if (leftIter.hasNext) leftIter.next else null
                   _right = if (rightIter.hasNext) rightIter.next else null
                 }
@@ -184,7 +186,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
                     _next = null
                   }
                 case EQ => {
-                  _next = (_left._1, extend(_left._2).intersect(_right._2))
+                  _next = (_left._1, extend(_left._2).intersect(_right._2, memoCtx, expiration))
                   _left = if (leftIter.hasNext) leftIter.next else null
                   _right = if (rightIter.hasNext) rightIter.next else null
                 }
@@ -245,7 +247,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Dataset], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: SortSerialization[B]): Dataset[B] = {
+    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: SortSerialization[B]): Dataset[B] = {
       type IB = (Identities, B)
 
       val gIterator = g.iterator
@@ -277,7 +279,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         }
       }
 
-      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).uniq(nextId, memoId)
+      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).uniq(nextId, memoId, memoCtx, expiration)
     }
 
     def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] =
@@ -286,7 +288,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
 }
 
 class IterableDatasetExtensions[A](val value: IterableDataset[A], iteratorSorting: Sorting[Iterator, Iterable], clock: Clock)
-extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
+extends DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] {
   private def extend[T](o: IterableDataset[T]) = new IterableDatasetExtensions[T](o, iteratorSorting, clock)
 
   /**
@@ -701,125 +703,133 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     extend(left).cogroup(right)(cgf)
   }
 
-  def union(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
+  def union(d2: IterableDataset[A], memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] = {
     assert(value.idCount == d2.idCount)
 
     implicit val order = identityValueOrder[A](IdentitiesOrder)
-    val sortedLeft = iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt())
-    val sortedRight = iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt())
+    val resultFuture = for {
+      sortedLeft <- iteratorSorting.sort(value.iterable.iterator, "union", IdGen.nextInt(), memoCtx)
+      sortedRight <- iteratorSorting.sort(d2.iterable.iterator, "union", IdGen.nextInt(), memoCtx)
+    } yield {
+      IterableDataset(
+        value.idCount,
+        new Iterable[IA] {
+          def iterator = new Iterator[IA] {
+            val leftIter = sortedLeft.iterator
+            val rightIter = sortedRight.iterator
+            
+            var lastLeft: IA = if (leftIter.hasNext) leftIter.next else null
+            var lastRight: IA = if (rightIter.hasNext) rightIter.next else null
+            var _next: IA = precomputeNext()
 
-    IterableDataset(
-      value.idCount,
-      new Iterable[IA] {
-        def iterator = new Iterator[IA] {
-          val leftIter = sortedLeft.iterator
-          val rightIter = sortedRight.iterator
-          
-          var lastLeft: IA = if (leftIter.hasNext) leftIter.next else null
-          var lastRight: IA = if (rightIter.hasNext) rightIter.next else null
-          var _next: IA = precomputeNext()
+            def hasNext = _next != null
 
-          def hasNext = _next != null
-
-          def next(): IA = {
-            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
-            val temp = _next
-            _next = precomputeNext()
-            temp
-          }
-
-          private[this] def precomputeNext(): IA = {
-            if (lastLeft == null && lastRight == null) {
-              null
-            } else if (lastLeft == null) {
-              val tmp = lastRight
-              lastRight = if (rightIter.hasNext) rightIter.next else null
-              tmp
-            } else if (lastRight == null) {
-              val tmp = lastLeft
-              lastLeft = if (leftIter.hasNext) leftIter.next else null
-              tmp
-            } else {
-              order.order(lastLeft, lastRight) match {
-                case EQ => {
-                  val tmp = lastLeft
-                  lastLeft = if (leftIter.hasNext) leftIter.next() else null
-                  lastRight = if (rightIter.hasNext) rightIter.next() else null
-                  tmp
-                }
-
-                case LT => {
-                  val tmp = lastLeft
-                  lastLeft = if (leftIter.hasNext) leftIter.next() else null
-                  tmp
-                }
-
-                case GT => {
-                  val tmp = lastRight
-                  lastRight = if (rightIter.hasNext) rightIter.next() else null
-                  tmp
-                }
-              } 
+            def next(): IA = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val temp = _next
+              _next = precomputeNext()
+              temp
             }
-          }
-        }
-      }
-    )
-  }
 
-  def intersect(d2: IterableDataset[A])(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
-    assert(value.idCount == d2.idCount)
+            private[this] def precomputeNext(): IA = {
+              if (lastLeft == null && lastRight == null) {
+                null
+              } else if (lastLeft == null) {
+                val tmp = lastRight
+                lastRight = if (rightIter.hasNext) rightIter.next else null
+                tmp
+              } else if (lastRight == null) {
+                val tmp = lastLeft
+                lastLeft = if (leftIter.hasNext) leftIter.next else null
+                tmp
+              } else {
+                order.order(lastLeft, lastRight) match {
+                  case EQ => {
+                    val tmp = lastLeft
+                    lastLeft = if (leftIter.hasNext) leftIter.next() else null
+                    lastRight = if (rightIter.hasNext) rightIter.next() else null
+                    tmp
+                  }
 
-    implicit val order = identityValueOrder[A](IdentitiesOrder)
-    val sortedLeftIterable = iteratorSorting.sort(value.iterable.iterator, "intersect", IdGen.nextInt())
-    val sortedRightIterable = iteratorSorting.sort(d2.iterable.iterator, "intersect", IdGen.nextInt())
+                  case LT => {
+                    val tmp = lastLeft
+                    lastLeft = if (leftIter.hasNext) leftIter.next() else null
+                    tmp
+                  }
 
-    IterableDataset(
-      value.idCount,
-      new Iterable[IA] {
-        def iterator = new Iterator[IA] {
-          val sortedLeft = sortedLeftIterable.iterator
-          val sortedRight = sortedRightIterable.iterator
-
-          var _left : IA = if (sortedLeft.hasNext) sortedLeft.next else null
-          var _right : IA = if (sortedRight.hasNext) sortedRight.next else null
-          var _next : IA = precomputeNext()
-
-          def hasNext = _next != null
-
-          def next = {
-            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
-            val temp = _next
-            _next = precomputeNext()
-            temp 
-          }
-
-          @tailrec private def precomputeNext(): IA = {
-            if (_left == null || _right == null) {    // TODO no longer assume full consumption
-              while (sortedLeft.hasNext) sortedLeft.next()
-              while (sortedRight.hasNext) sortedRight.next()
-              null
-            } else {
-              order.order(_left, _right) match {
-                case EQ => 
-                  val temp = _left
-                  _left = if (sortedLeft.hasNext) sortedLeft.next() else null
-                  _right = if (sortedRight.hasNext) sortedRight.next() else null
-                  temp
-
-                case LT =>
-                  _left = if (sortedLeft.hasNext) sortedLeft.next() else null
-                  precomputeNext()
-
-                case GT =>
-                  _right = if (sortedRight.hasNext) sortedRight.next() else null
-                  precomputeNext()
+                  case GT => {
+                    val tmp = lastRight
+                    lastRight = if (rightIter.hasNext) rightIter.next() else null
+                    tmp
+                  }
+                } 
               }
             }
           }
         }
-      }
-    )
+      )
+    }
+
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
+  }
+
+  def intersect(d2: IterableDataset[A], memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit ord: Order[A], ss: SortSerialization[IA]): IterableDataset[A] =  {
+    assert(value.idCount == d2.idCount)
+
+    implicit val order = identityValueOrder[A](IdentitiesOrder)
+    val resultFuture = for {
+      sortedLeftIterable <- iteratorSorting.sort(value.iterable.iterator, "intersect", IdGen.nextInt(), memoCtx)
+      sortedRightIterable <- iteratorSorting.sort(d2.iterable.iterator, "intersect", IdGen.nextInt(), memoCtx)
+    } yield {
+      IterableDataset(
+        value.idCount,
+        new Iterable[IA] {
+          def iterator = new Iterator[IA] {
+            val sortedLeft = sortedLeftIterable.iterator
+            val sortedRight = sortedRightIterable.iterator
+
+            var _left : IA = if (sortedLeft.hasNext) sortedLeft.next else null
+            var _right : IA = if (sortedRight.hasNext) sortedRight.next else null
+            var _next : IA = precomputeNext()
+
+            def hasNext = _next != null
+
+            def next = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val temp = _next
+              _next = precomputeNext()
+              temp 
+            }
+
+            @tailrec private def precomputeNext(): IA = {
+              if (_left == null || _right == null) {    // TODO no longer assume full consumption
+                while (sortedLeft.hasNext) sortedLeft.next()
+                while (sortedRight.hasNext) sortedRight.next()
+                null
+              } else {
+                order.order(_left, _right) match {
+                  case EQ => 
+                    val temp = _left
+                    _left = if (sortedLeft.hasNext) sortedLeft.next() else null
+                    _right = if (sortedRight.hasNext) sortedRight.next() else null
+                    temp
+
+                  case LT =>
+                    _left = if (sortedLeft.hasNext) sortedLeft.next() else null
+                    precomputeNext()
+
+                  case GT =>
+                    _right = if (sortedRight.hasNext) sortedRight.next() else null
+                    precomputeNext()
+                }
+              }
+            }
+          }
+        }
+      )
+    }
+
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
   }
 
   def map[B](f: A => B): IterableDataset[B] = IterableDataset(value.idCount, value.iterable.map { case (i, v) => (i, f(v)) })
@@ -858,41 +868,46 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
 
   def count: BigInt = value.iterable.size
 
-  def uniq(nextId: () => Identity, memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): IterableDataset[A] = {
+  def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit buffering: Buffering[A], fs: SortSerialization[A]): IterableDataset[A] = {
     val filePrefix = "uniq"
 
-    val sorted = iteratorSorting.sort(value.iterator, filePrefix, memoId)
-    IterableDataset[A](1, 
-      new Iterable[IA] {
-        def iterator: Iterator[IA] = new Iterator[IA]{
-          val inner = sorted.iterator
-          private var atStart = true
-          private var _next: A = precomputeNext()
+    val sortedFuture = iteratorSorting.sort(value.iterator, filePrefix, memoId, memoCtx)
 
-          @tailrec private def precomputeNext(): A = {
-            if (inner.hasNext) {
-              if (atStart) {
-                atStart = false
-                inner.next
+    val resultFuture = sortedFuture map { sorted =>
+      IterableDataset[A](1, 
+        new Iterable[IA] {
+          def iterator: Iterator[IA] = new Iterator[IA]{
+            val inner = sorted.iterator
+            private var atStart = true
+            private var _next: A = precomputeNext()
+
+            @tailrec private def precomputeNext(): A = {
+              if (inner.hasNext) {
+                if (atStart) {
+                  atStart = false
+                  inner.next
+                } else {
+                  val tmp = inner.next
+                  if (buffering.order.order(_next, tmp) == EQ) precomputeNext() else tmp
+                }
               } else {
-                val tmp = inner.next
-                if (buffering.order.order(_next, tmp) == EQ) precomputeNext() else tmp
+                null.asInstanceOf[A]
               }
-            } else {
-              null.asInstanceOf[A]
+            }
+
+            def hasNext = _next != null
+            def next = {
+              if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+              val result = (VectorCase(nextId()), _next)
+              _next = precomputeNext()
+              result
             }
           }
-
-          def hasNext = _next != null
-          def next = {
-            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
-            val result = (VectorCase(nextId()), _next)
-            _next = precomputeNext()
-            result
-          }
         }
-      }
-    )
+      )
+    }
+
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
   }
 
   // identify(None) strips all identities
@@ -936,25 +951,23 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
     }
   }
 
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int)(implicit fs: SortSerialization[IA]): IterableDataset[A] = {
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit fs: SortSerialization[IA]): IterableDataset[A] = {
     implicit val order = tupledIdentitiesOrder[A](indexedIdentitiesOrder(indices))
-    IterableDataset(
-      value.idCount, 
-      iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId)
-    )
+    val resultFuture = iteratorSorting.sort(value.iterable.iterator, "sort-ids", memoId, memoCtx) map { IterableDataset(value.idCount, _) }
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
   }
 
-  def memoize(memoId: Int, memoCtx: MemoizationContext[IterableDataset], expiration: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): IterableDataset[A] = {
-    Await.result(
-      memoCtx.memoizing(memoId) match {
-        case Left(f) => f(value)
-        case Right(d) => d
-      },
-      (expiration - clock.now().getMillis) millis
-    )
+  def memoize(memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(implicit serialization: IncrementalSerialization[(Identities, A)]): IterableDataset[A] = {
+    val memoFuture = memoCtx.memoizing(memoId) match {
+      case Left(f) => f(value.iterable)
+      case Right(d) => d
+    }
+
+    val resultFuture = memoFuture map { IterableDataset(value.idCount, _) }
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
   }
 
-  def group[K](memoId: Int, memoCtx: MemoizationContext[IterableDataset], expiration: Long)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
+  def group[K](memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(keyFor: A => IterableDataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): IterableGrouping[K, IterableDataset[A]] = {
     implicit val kaOrder: Order[(K,Identities,A)] = new Order[(K,Identities,A)] {
       def order(x: (K,Identities,A), y: (K,Identities,A)) = {
         val kOrder = ord.order(x._1, y._1)
@@ -968,48 +981,51 @@ extends DatasetExtensions[IterableDataset, IterableGrouping, A] {
       case (i, a) => keyFor(a).iterator map { k => (k, i, a) }
     }
 
-    val sorted: Iterator[(K,Identities,A)] = iteratorSorting.sort(withK, "group", memoId).iterator
+    val sortedFuture: Future[Iterable[(K,Identities,A)]] = iteratorSorting.sort(withK, "group", memoId, memoCtx)
 
-    IterableGrouping(
-      new Iterator[(K, IterableDataset[A])] {
-        // Have to hold our "peek" over the entire outer iterator
-        var _next: (K, Identities, A) = precomputeNext()
-        var sameK = true
+    val resultFuture = sortedFuture map { iterable =>
+      val sorted = iterable.iterator
+      IterableGrouping(
+        new Iterator[(K, IterableDataset[A])] {
+          // Have to hold our "peek" over the entire outer iterator
+          var _next: (K, Identities, A) = precomputeNext()
+          var sameK = true
 
-        def hasNext = _next != null
-        def next: (K, IterableDataset[A]) = {  
-          if (_next == null) throw new IllegalStateException("next called on empty iterator.")
-          val currentK = _next._1
-          sameK = true
-          
-          // Compute an IterableDataset that will run over sorted for all == K
-          val innerDS = IterableDataset[A](
-            value.idCount, 
-            new Iterable[(Identities,A)] {
-              def iterator = new Iterator[(Identities,A)] {
-                def hasNext = _next != null && sameK
-                def next = {
-                  if (_next == null) throw new IllegalStateException("next called on an empty iterator.")
-                  val tmp = _next
-                  _next = precomputeNext()
-                  sameK = if (_next == null) false else ord.order(currentK, _next._1) == EQ
-                  (tmp._2, tmp._3)
+          def hasNext = _next != null
+          def next: (K, IterableDataset[A]) = {  
+            if (_next == null) throw new IllegalStateException("next called on empty iterator.")
+            val currentK = _next._1
+            sameK = true
+            
+            // Compute an IterableDataset that will run over sorted for all == K
+            val innerDS = IterableDataset[A](
+              value.idCount, 
+              new Iterable[(Identities,A)] {
+                def iterator = new Iterator[(Identities,A)] {
+                  def hasNext = _next != null && sameK
+                  def next = {
+                    if (_next == null) throw new IllegalStateException("next called on an empty iterator.")
+                    val tmp = _next
+                    _next = precomputeNext()
+                    sameK = if (_next == null) false else ord.order(currentK, _next._1) == EQ
+                    (tmp._2, tmp._3)
+                  }
                 }
               }
-            }
-          )
+            )
 
-          val kChunkId = IdGen.nextInt()
+            (currentK, extend(innerDS).memoize(IdGen.nextInt(), memoCtx, expiration))
+          }
 
-          (currentK, extend(innerDS).memoize(kChunkId, memoCtx, expiration))
+          private def precomputeNext(): (K, Identities, A) = {
+            if (sorted.hasNext) sorted.next
+            else null.asInstanceOf[(K, Identities, A)]
+          }
         }
+      )
+    }
 
-        private def precomputeNext(): (K, Identities, A) = {
-          if (sorted.hasNext) sorted.next
-          else null.asInstanceOf[(K, Identities, A)]
-        }
-      }
-    )
+    Await.result(resultFuture, (expiration - clock.now().getMillis) millis)
   }
 }
 
