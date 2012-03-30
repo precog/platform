@@ -6,7 +6,11 @@ import com.precog.common._
 import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.serialization._
 import com.precog.shard.yggdrasil._
+
+import com.precog.daze._
+import com.precog.daze.memoization._
 
 import akka.actor.ActorSystem
 import akka.pattern.ask
@@ -15,6 +19,8 @@ import akka.dispatch.Await
 import akka.util.Timeout
 import akka.util.Duration
 import akka.util.duration._
+
+import blueeyes.json.JsonAST._
 
 import java.io.File
 
@@ -30,7 +36,8 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
 
   val timeout = Duration(5000, "seconds")
 
-  val benchParams = BenchmarkParameters(5, 500, Some(500), true)
+  val benchParams = BenchmarkParameters(5, 500, Some(500), false)
+  val singleParams = BenchmarkParameters(5, 500, Some(500), false)
 
   val config = Configuration(Map.empty[String, String]) 
 
@@ -73,22 +80,29 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
     "insert" in {
       val tests = 10000
       val batchSize = 1000
-      val result = Performance().benchmark(insert(shard, Path("/test/large/"), 0, batchSize, tests / batchSize), benchParams, benchParams)   
+      val result = Performance().benchmark(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
+      //val result = Performance().profile(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
 
       println("starting insert test")
       result.report("insert 10K", System.out)
       true must_== true
     }
-    
+   
+    def testRead() = {
+      executor.execute("token", "count(load(//test/large))")
+    }
+
     "read large" in {
-      val result = Performance().benchmark(executor.execute("token", "count(load(//test/large))"), benchParams, benchParams)   
+      insert(shard, Path("/test/large"), 1, 100000, 1)
+      val result = Performance().benchmark(testRead(), benchParams, benchParams)   
+      //val result = Performance().profile(testRead())   
       println("read large test")
-      result.report("read 10K", System.out)
+      result.report("read 100K", System.out)
       true must_== true
     }
     
-    "read small" in {
-      insert(shard, Path("/test/small1"), 1, 100, 1)
+    "read small 10K x 10" in {
+      insert(shard, Path("/test/small1"), 1, 10000, 1)
 
       def test(i: Int) = {
         var cnt = 0
@@ -102,14 +116,15 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
         }
       }
       
-      val result = Performance().benchmark(test(100), benchParams, benchParams)   
+      val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      //val result = Performance().profile(test(100))   
       
-      result.report("read 100 elements x 100 times", System.out)
+      result.report("read 10K elements x 10 times", System.out)
       true must_== true
     }
     
     "multi-thread read" in {
-      insert(shard, Path("/test/small2"), 2, 100, 1)
+      insert(shard, Path("/test/small2"), 2, 10000, 1)
       val threadCount = 10 
       
       def test(i: Int) = {
@@ -133,15 +148,16 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
         threads.foreach{ _.join }
       } 
       
-      val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      //val result = Performance().profile(test(10))   
       
       println("read small thread test")
-      result.report("read 100 elements x 10 times with 10 threads", System.out)
+      result.report("read 10K elements x 1 times with 10 threads", System.out)
       true must_== true
     }
     
-    "hw2 test" in {
-      insert(shard, Path("/test/small3"), 1, 100, 1)
+    "hw2 test 10K x 10" in {
+      insert(shard, Path("/test/small3"), 1, 100000, 1)
 
       val query =
 """
@@ -161,14 +177,15 @@ count(tests where tests.gender = "male")
         }
       }
       
-      val result = Performance().benchmark(test(100), benchParams, benchParams)   
+      val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      //val result = Performance().profile(test(100))   
       
-      result.report("hw2 test", System.out)
+      result.report("hw2 test 10K * 1", System.out)
       true must_== true
     }
     
     "hw3 test" in {
-      insert(shard, Path("/test/small4"), 1, 100, 1)
+      insert(shard, Path("/test/small4"), 1, 100000, 1)
 
       val query =
 """
@@ -190,9 +207,10 @@ histogram
         }
       }
       
-      val result = Performance().benchmark(test(100), benchParams, benchParams)   
+      val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      //val result = Performance().profile(test(100))   
       
-      result.report("hw3 test", System.out)
+      result.report("hw3 test 10K * 1", System.out)
       true must_== true
     }
   }
@@ -203,28 +221,44 @@ histogram
   }
 }
 
-class TestQueryExecutor(config: Configuration, testShard: TestShard) extends YggdrasilQueryExecutor {
+class TestQueryExecutor(config: Configuration, testShard: TestShard) extends 
+    YggdrasilQueryExecutor with
+    IterableDatasetOpsComponent { 
+
+  override type Dataset[A] = IterableDataset[A]
 
   lazy val actorSystem = ActorSystem("test_query_executor")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   lazy val yggConfig = new YggdrasilQueryExecutorConfig {
       val config = TestQueryExecutor.this.config
       val sortWorkDir = scratchDir
-      val chunkSerialization = BinaryProjectionSerialization
       val memoizationBufferSize = sortBufferSize
       val memoizationWorkDir = scratchDir
+      
+      val clock = blueeyes.util.Clock.System
+      val idSource = new IdSource {
+        private val source = new java.util.concurrent.atomic.AtomicLong
+        def nextId() = source.getAndIncrement
+      }
+
+      object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object groupSerialization extends SortSerialization[(SValue, Identities, SValue)] with GroupRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+      object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
+
       override lazy val flatMapTimeout: Duration = 5000 seconds
       override lazy val projectionRetrievalTimeout: Timeout = Timeout(5000 seconds)
       override lazy val maxEvalDuration: Duration = 5000 seconds
     }  
   type Storage = TestShard
+
   object ops extends Ops
   object query extends QueryAPI
 
   val storage = testShard
 }
 
-class TestShard(config: Configuration, dataDir: File) extends ActorYggShard with StandaloneActorEcosystem {
+class TestShard(config: Configuration, dataDir: File) extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
   type YggConfig = ProductionActorConfig
   lazy val yggConfig = new ProductionActorConfig {
     lazy val config = TestShard.this.config
