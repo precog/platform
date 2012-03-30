@@ -130,9 +130,10 @@ trait IterableDatasetGenerators {
 }
 
 class IterableDatasetOpsSpec extends Specification with ScalaCheck with IterableDatasetOpsComponent with IterableDatasetGenerators 
-with DiskIterableDatasetMemoizationComponent {
+with DiskIterableMemoizationComponent {
   type YggConfig = IterableDatasetOpsConfig with DiskMemoizationConfig
   override type Dataset[α] = IterableDataset[α]
+  override type Valueset[α] = Iterable[α]
 
   override def defaultValues = super.defaultValues + (minTestsOk -> 1000)
   override val defaultPrettyParams = org.scalacheck.Pretty.Params(2)
@@ -499,7 +500,7 @@ with DiskIterableDatasetMemoizationComponent {
   
         check { (p: DSPair[Long]) =>
           val (l1, l2) = p
-          val results = l1.union(l2).iterable.toList
+          val results = l1.union(l2, memoCtx, expiration).iterable.toList
           val expectedSet = Set((l1.iterable ++ l2.iterable).toSeq: _*).toList
           val expectedSorted = expectedSet.sorted
   
@@ -511,7 +512,7 @@ with DiskIterableDatasetMemoizationComponent {
         val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
         val d2 = IterableDataset[Long](1, List((VectorCase[Long](1l), 1l)))
 
-        d1.union(d2) must throwAn[AssertionError]
+        d1.union(d2, memoCtx, expiration) must throwAn[AssertionError]
       }
     }
 
@@ -522,7 +523,7 @@ with DiskIterableDatasetMemoizationComponent {
   
         check { (p: DSPair[Long]) =>
           val (l1, l2) = p
-          val results = l1.intersect(l2).iterable.toList
+          val results = l1.intersect(l2, memoCtx, expiration).iterable.toList
           val expectedSet = (Set(l1.iterable.toSeq: _*) & Set(l2.iterable.toSeq: _*)).toList
           val expectedSorted = expectedSet.sorted
   
@@ -534,7 +535,7 @@ with DiskIterableDatasetMemoizationComponent {
         val d1 = IterableDataset[Long](0, List((VectorCase[Long](), 1l)))
         val d2 = IterableDataset[Long](1, List((VectorCase[Long](1l), 1l)))
 
-        d1.union(d2) must throwAn[AssertionError]
+        d1.union(d2, memoCtx, expiration) must throwAn[AssertionError]
       }
     }
 
@@ -549,7 +550,7 @@ with DiskIterableDatasetMemoizationComponent {
         
         val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
         
-        val result = ds.group(0, memoCtx, expiration) { num =>
+        val result = ds.group(IdGen.nextInt(), memoCtx, expiration) { num =>
           IterableDataset(1, Vector(rec((num / 2) * 2)))
         }
 
@@ -557,7 +558,7 @@ with DiskIterableDatasetMemoizationComponent {
           val IterableDataset(count, str) = ds
           IterableDataset(count, Vector(str.toSeq: _*))
         }
-        
+
         val expected = groups map {
           case (k, v) => (k, IterableDataset(1, v))
         }
@@ -572,7 +573,7 @@ with DiskIterableDatasetMemoizationComponent {
         check { (ds: IterableDataset[Long]) => (!ds.iterable.isEmpty) ==> {
           val expected = ds.iterable.groupBy(_._2 / 2 * 2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
 
-          val result = ds.group(0, memoCtx, expiration) {
+          val result = ds.group(IdGen.nextInt(), memoCtx, expiration) {
             v => IterableDataset[Long](1, Vector(rec(v / 2 * 2)))
           }.iterator.toList.map {
             // Make the datasets wrap Vectors so that the types align with expected and specs doesn't have a fit
@@ -598,7 +599,7 @@ with DiskIterableDatasetMemoizationComponent {
         
         val ds = IterableDataset(1, groups.unzip._2 reduce { _ ++ _ })
         
-        val result = ds.group(0, memoCtx, expiration) { num =>
+        val result = ds.group(IdGen.nextInt(), memoCtx, expiration) { num =>
           IterableDataset(1, Vector(rec(num)))
         }
   
@@ -622,7 +623,7 @@ with DiskIterableDatasetMemoizationComponent {
         check { (ds: IterableDataset[Long]) => {
           val expected: List[(Long,IterableDataset[Long])] = ds.iterable.groupBy(_._2).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.toSeq: _*).sorted)) }.toList.sortBy(_._1)
 
-          val result = ds.group(0, memoCtx, expiration) {
+          val result = ds.group(IdGen.nextInt(), memoCtx, expiration) {
             num => IterableDataset[Long](1, Vector(rec(num)))
           }.iterator.toList.map {
             // Make the datasets wrap Vectors so that the types align with expected and specs doesn't have a fit
@@ -657,7 +658,7 @@ with DiskIterableDatasetMemoizationComponent {
             case (_, v) => v
           }
           
-          val result = ds.sortByIndexedIds(Vector(2, 0, 4), IdGen.nextInt()).iterator.toList
+          val result = ds.sortByIndexedIds(Vector(2, 0, 4), IdGen.nextInt(), memoCtx, expiration).iterator.toList
 
           result must containAllOf(expected).only.inOrder
         }
@@ -732,7 +733,7 @@ with DiskIterableDatasetMemoizationComponent {
           
           val expected = ds.iterable.groupBy(_._2 % 10).map { case (k,v) => (k, IterableDataset[Long](ds.idCount, Vector(v.map(mapFunc).toSeq: _*).sorted)) }.toList.sortBy(_._1)
 
-          val grouped = ds.group(0, memoCtx, expiration) {
+          val grouped = ds.group(IdGen.nextInt(), memoCtx, expiration) {
             v => IterableDataset[Long](1, Vector(rec(v % 10)))
           }
 
@@ -787,7 +788,7 @@ with DiskIterableDatasetMemoizationComponent {
     
     "implement merging" >> {
       "union" >> {
-        val result = mergeGroups(g1, g2, true).iterator.map {
+        val result = mergeGroups(g1, g2, true, memoCtx, expiration).iterator.map {
           case (k, v) => (k, IterableDataset(v.idCount, Vector(v.iterable.toSeq: _*)))
         }
         
@@ -805,7 +806,7 @@ with DiskIterableDatasetMemoizationComponent {
       }
       
       "intersect" >> {
-        val result = mergeGroups(g1, g2, false).iterator.map {
+        val result = mergeGroups(g1, g2, false, memoCtx, expiration).iterator.map {
           case (k, v) => (k, IterableDataset(v.idCount, Vector(v.iterable.toSeq: _*)))
         }
 

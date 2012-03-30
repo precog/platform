@@ -48,7 +48,7 @@ object SBTConsole {
   trait Platform  extends ParseEvalStack 
                   with IterableDatasetOpsComponent
                   with LevelDBQueryComponent 
-                  with DiskIterableDatasetMemoizationComponent 
+                  with DiskIterableMemoizationComponent 
                   with MemoryDatasetConsumer
                   with DAGPrinter {
 
@@ -61,6 +61,7 @@ object SBTConsole {
                     with ProductionActorConfig
 
     override type Dataset[A] = IterableDataset[A]
+    override type Valueset[A] = Iterable[A]
   }
 
   val platform = new Platform { console =>

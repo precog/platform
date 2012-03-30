@@ -72,6 +72,7 @@ trait Evaluator extends DAG
   import dag._
 
   type Dataset[E]
+  type Valueset[E]
   type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
@@ -83,7 +84,7 @@ trait Evaluator extends DAG
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Grouping, E] = ops.extend(d)
+  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Valueset, Grouping, E] = ops.extend(d)
 
   def withContext(f: Context => Dataset[SValue]): Dataset[SValue] = {
     withMemoizationContext { memoContext => 
@@ -129,7 +130,7 @@ trait Evaluator extends DAG
       case MergeBucketSpec(left, right, and) => {
         val leftGroup = computeMergeGrouping(assume, splits, graph, ctx)(left)
         val rightGroup = computeMergeGrouping(assume, splits, graph, ctx)(right)
-        ops.mergeGroups(leftGroup, rightGroup, !and)
+        ops.mergeGroups(leftGroup, rightGroup, !and, ctx.memoizationContext, ctx.expiration)
       }
       
       case SingleBucketSpec(target, solution) => {
@@ -232,7 +233,7 @@ trait Evaluator extends DAG
 
       case dag.SetReduce(_, Distinct, parent) => {
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt())
+        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext, ctx.expiration)
         Right(Match(mal.Actual, result, graph))
       }
       
@@ -368,14 +369,14 @@ trait Evaluator extends DAG
         
         val back = instr match {
           case IUnion if left.provenance.length == right.provenance.length =>
-            leftEnum.union(rightEnum)
+            leftEnum.union(rightEnum, ctx.memoizationContext, ctx.expiration)
           
           // apparently Dataset tracks number of identities...
           case IUnion if left.provenance.length != right.provenance.length =>
             leftEnum.paddedMerge(rightEnum, () => ctx.nextId())
           
           case IIntersect if left.provenance.length == right.provenance.length =>
-            leftEnum.intersect(rightEnum)
+            leftEnum.intersect(rightEnum, ctx.memoizationContext, ctx.expiration)
           
           case IIntersect if left.provenance.length != right.provenance.length =>
             ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
@@ -563,7 +564,7 @@ trait Evaluator extends DAG
         loop(parent, assume, splits, ctx).right map {
           case Match(spec, set, _) => {
             val enum = realizeMatch(spec, set)
-            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId), graph)
+            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId, ctx.memoizationContext, ctx.expiration), graph)
           }
         }
       }
