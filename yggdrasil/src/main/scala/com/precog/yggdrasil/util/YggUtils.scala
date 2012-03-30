@@ -219,8 +219,8 @@ object DescriptorSummary extends Command {
     }
   }
 
-  implicit val tOrdering = new Ordering[(JPath, ColumnType)] {
-    def compare(a: (JPath, ColumnType), b: (JPath, ColumnType)): Int = {
+  implicit val tOrdering = new Ordering[(JPath, CType)] {
+    def compare(a: (JPath, CType), b: (JPath, CType)): Int = {
       val jord = implicitly[Ordering[JPath]]
       val sord = implicitly[Ordering[String]] 
       val jo = jord.compare(a._1, b._1)
@@ -247,12 +247,12 @@ object DescriptorSummary extends Command {
     }
   }
 
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, ColumnType)]] = {
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType)]] = {
     implicit val pord = new Ordering[Path] {
       val sord = implicitly[Ordering[String]] 
       def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
     }
-    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, ColumnType)]]()) {
+    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, CType)]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
          case (acc, ColumnDescriptor(p, s, t, _)) =>
@@ -262,7 +262,7 @@ object DescriptorSummary extends Command {
     }
   }
 
-  def show(summary: SortedMap[Path, SortedSet[(JPath, ColumnType)]], verbose: Boolean) {
+  def show(summary: SortedMap[Path, SortedSet[(JPath, CType)]], verbose: Boolean) {
     summary.foreach { 
       case (p, sels) =>
         println(p)
