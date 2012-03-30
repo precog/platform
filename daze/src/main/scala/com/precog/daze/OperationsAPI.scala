@@ -12,8 +12,9 @@ trait StorageEngineQueryComponent {
 
 trait DatasetOpsComponent {
   type Dataset[E]
+  type Valueset[E]
   type Grouping[K, A]
-  type Ops <: DatasetOps[Dataset, Grouping] with GroupingOps[Dataset, Grouping]
+  type Ops <: DatasetOps[Dataset, Valueset, Grouping] with GroupingOps[Dataset, Valueset, Grouping]
   val ops: Ops
 }
 

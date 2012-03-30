@@ -75,24 +75,21 @@ trait YggdrasilQueryExecutorComponent {
       for( state <- YggState.restore(yConfig.dataDir) ) yield {
 
         state map { yState => 
-          new YggdrasilQueryExecutor
-            with IterableDatasetOpsComponent
-            with LevelDBQueryComponent
-            with DiskIterableDatasetMemoizationComponent {
-          override type Dataset[E] = IterableDataset[E]
-          trait Storage extends ActorYggShard[IterableDataset] with ProductionActorEcosystem
-          lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
-          implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-          val yggConfig = yConfig
+          new YggdrasilQueryExecutor {
+            trait Storage extends ActorYggShard[IterableDataset] with ProductionActorEcosystem
+            lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
+            implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+            val yggConfig = yConfig
 
-          object ops extends Ops 
-          object query extends QueryAPI 
-          val storage = new Storage {
-            type YggConfig = YggdrasilQueryExecutorConfig
-            lazy val yggConfig = yConfig
-            lazy val yggState = yState
+            object ops extends Ops 
+            object query extends QueryAPI 
+            val storage = new Storage {
+              type YggConfig = YggdrasilQueryExecutorConfig
+              lazy val yggConfig = yConfig
+              lazy val yggState = yState
+            }
           }
-        }}
+        }
       }
 
     validatedQueryExecutor map { 
@@ -105,11 +102,13 @@ trait YggdrasilQueryExecutorComponent {
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
     with ParseEvalStack
+    with IterableDatasetOpsComponent
     with LevelDBQueryComponent 
     with MemoryDatasetConsumer
-    with DiskIterableDatasetMemoizationComponent
+    with DiskIterableMemoizationComponent
     with Logging  { self =>
   override type Dataset[E] = IterableDataset[E]
+  override type Valueset[E] = Iterable[E]
 
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard[IterableDataset]

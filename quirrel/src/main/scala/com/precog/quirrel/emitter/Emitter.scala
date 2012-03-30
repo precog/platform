@@ -524,14 +524,27 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
-                  val actualStates = params zip actuals map {
-                    case (name, expr) => emitAndMark(MarkTicVar(let, name))(emitExpr(expr))
+                  val (actualStates, actualMarks) = params zip actuals map {
+                    case (name, expr) => {
+                      val mark = MarkTicVar(let, name)
+                      (emitAndMark(mark)(emitExpr(expr)), mark)
+                    }
+                  } unzip
+                  
+                  val populateActualFrame = StateT.apply[Id, Emission, Unit] { e =>
+                    val toDrop2 = e.toDrop match {
+                      case hd :: tl => (hd ++ actualMarks) :: tl
+                      case Nil => Nil
+                    }
+                    
+                    ((), e.copy(toDrop = toDrop2))
                   }
                   
                   val body = if (actuals.length == n) {
-                    val drops = params map { name => emitDrop(MarkTicVar(let, name)) }
-                    
-                    emitExpr(left) >> reduce(drops)
+                    pushDropFrame >>
+                      populateActualFrame >>
+                      emitExpr(left) >>
+                      popDropFrame
                   } else {
                     val (buckets, bucketStates) = d.buckets.toSeq map {
                       case pair @ (name, bucket) => (pair, emitBucket(bucket))
@@ -560,6 +573,7 @@ trait Emitter extends AST
                     reduce(bucketStates) >>
                       split >>
                       pushDropFrame >>
+                      populateActualFrame >>
                       groups >>
                       emitExpr(left) >>
                       popDropFrame >>

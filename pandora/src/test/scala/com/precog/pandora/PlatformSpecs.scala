@@ -40,9 +40,10 @@ class PlatformSpecs extends Specification
     with ParseEvalStack
     with IterableDatasetOpsComponent
     with LevelDBQueryComponent 
-    with DiskIterableDatasetMemoizationComponent 
+    with DiskIterableMemoizationComponent 
     with MemoryDatasetConsumer { platformSpecs =>
   override type Dataset[A] = IterableDataset[A]
+  override type Valueset[α] = Iterable[α]
 
   lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
