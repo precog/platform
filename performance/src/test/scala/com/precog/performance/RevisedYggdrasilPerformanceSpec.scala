@@ -175,7 +175,7 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
       true must_== true
     }
     
-    "hw2 test 10K x 10" in {
+    "hw2 test 100K x 1" in {
       insert(shard, Path("/test/small3"), 1, 100000, 1)
 
       val query =
@@ -229,7 +229,7 @@ histogram
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
       //val result = Performance().profile(test(100))   
       
-      result.report("hw3 test 10K * 1", System.out)
+      result.report("hw3 test 100K * 1", System.out)
       true must_== true
     }
   }
