@@ -121,7 +121,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   private val createOptions = (new Options)
     .createIfMissing(true)
     .maxOpenFiles(maxOpenFiles)
-  private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions.comparator(LevelDBProjectionComparator(descriptor)))
+  private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
   //private lazy val valIndexFile: DB = {
   //   factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
   //}

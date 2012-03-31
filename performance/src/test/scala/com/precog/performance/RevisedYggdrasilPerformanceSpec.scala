@@ -78,13 +78,13 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
     }
 
     "insert" in {
-      val tests = 10000
+      val tests = 100000
       val batchSize = 1000
       val result = Performance().benchmark(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
       //val result = Performance().profile(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
 
       println("starting insert test")
-      result.report("insert 10K", System.out)
+      result.report("insert 100K", System.out)
       true must_== true
     }
    
@@ -93,11 +93,13 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
     }
 
     "read large" in {
-      insert(shard, Path("/test/large"), 1, 100000, 1)
-      val result = Performance().benchmark(testRead(), benchParams, benchParams)   
-      //val result = Performance().profile(testRead())   
+      insert(shard, Path("/test/large"), 1, 1000000, 1)
       println("read large test")
-      result.report("read 100K", System.out)
+
+      Thread.sleep(10000)
+      //val result = Performance().benchmark(testRead(), benchParams, benchParams)   
+      val result = Performance().profile(testRead())   
+      result.report("read 1M", System.out)
       true must_== true
     }
     
@@ -180,7 +182,7 @@ count(tests where tests.gender = "male")
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
       //val result = Performance().profile(test(100))   
       
-      result.report("hw2 test 10K * 1", System.out)
+      result.report("hw2 test 100K * 1", System.out)
       true must_== true
     }
     
