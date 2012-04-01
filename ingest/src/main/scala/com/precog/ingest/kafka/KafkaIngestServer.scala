@@ -9,6 +9,7 @@ import akka.util.Timeout
 import akka.dispatch.MessageDispatcher
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.ingest.service._
 import com.precog.common.util.ZookeeperSystemCoordination
 import com.precog.common.security.StaticTokenManager
@@ -19,13 +20,15 @@ import java.net.InetAddress
 
 import org.streum.configrity.Configuration
 
-object KafkaIngestServer extends BlueEyesServer with IngestService with KafkaEventStoreComponent {
+object KafkaIngestServer extends 
+    BlueEyesServer with 
+    IngestService with 
+    KafkaEventStoreComponent with 
+    MongoTokenManagerComponent {
 
   val clock = Clock.System
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-
-  def tokenManagerFactory(config: Configuration) = new StaticTokenManager
 
 }
 
