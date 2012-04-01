@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "LongValueStats":{
+      "count":127,
+      "min":334,
+      "max":685
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":102,
+      "min":"created",
+      "max":"created"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}
