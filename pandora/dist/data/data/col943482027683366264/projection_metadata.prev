@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "DoubleValueStats":{
+      "count":100,
+      "min":1.23,
+      "max":111.45
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

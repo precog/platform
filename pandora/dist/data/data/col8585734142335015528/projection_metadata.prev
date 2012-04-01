@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":400,
+      "min":"blogger.com",
+      "max":"news.com"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":100,
+      "min":"+00:00",
+      "max":"-12:00"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}

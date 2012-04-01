@@ -1,0 +1,10 @@
+{
+  "metadata":[[{
+    "StringValueStats":{
+      "count":31,
+      "min":"vastaus-1",
+      "max":"vastaus-8"
+    }
+  }]],
+  "checkpoint":[[0,2671]]
+}
