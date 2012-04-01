@@ -76,6 +76,63 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
       
       shard.waitForRoutingActorIdle
     }
+    
+    "load test sim" in {
+      insert(shard, Path("/test/query_set"), 2, 100000, 1)
+      val threadCount = 10 
+     
+      val queries = List(
+"(load(//test/query_set))",
+"""
+tests := load(//test/small3)
+count(tests where tests.gender = "male")
+""",
+"""
+tests := load(//test/small4)
+histogram('platform) :=
+  { platform: 'platform, num: count(tests where tests.platform = 'platform) }
+histogram
+"""
+)
+
+      def test(i: Int) = {
+        val threads = (0.until(threadCount)) map { i =>
+          if(i == 0) {
+            new Thread {
+              override def run() {
+                insert(shard, Path("/test/insert_set"), 2, 100000, 1)
+              }
+            } 
+          } else {
+            new Thread {
+              val rand = new java.util.Random()
+              override def run() {
+                var cnt = 0
+                while(cnt < i) {
+                  val q = queries(rand.nextInt(queries.length))  
+                  val result = executor.execute("token", q) 
+                  result match {
+                    case Success(jval) =>
+                    case Failure(e) => new RuntimeException("Query result failure")
+                  }
+                  cnt += 1
+                }
+              }
+            } 
+          }
+        }
+        
+        threads.foreach{ _.start }
+        threads.foreach{ _.join }
+      } 
+      
+      println("load test sim")
+      //val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      val result = Performance().profile(test(10))   
+      
+      result.report("load test sym", System.out)
+      true must_== true
+    }
 
     "insert" in {
       val tests = 100000
@@ -97,8 +154,8 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
       println("read large test")
 
       Thread.sleep(10000)
-      //val result = Performance().benchmark(testRead(), benchParams, benchParams)   
-      val result = Performance().profile(testRead())   
+      val result = Performance().benchmark(testRead(), benchParams, benchParams)   
+      //val result = Performance().profile(testRead())   
       result.report("read 1M", System.out)
       true must_== true
     }
@@ -215,6 +272,7 @@ histogram
       result.report("hw3 test 100K * 1", System.out)
       true must_== true
     }
+    
   }
 
   step {
