@@ -97,17 +97,17 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
     }
     
     "load test sim" in {
-      insert(shard, Path("/test/query_set"), 2, 100000, 1)
+      insert(shard, Path("/test/query_set"), 2, 10000, 1)
       val threadCount = 10 
      
       val queries = List(
 "(load(//test/query_set))",
 """
-tests := load(//test/small3)
+tests := load(//test/query_set)
 count(tests where tests.gender = "male")
 """,
 """
-tests := load(//test/small4)
+tests := load(//test/query_set)
 histogram('platform) :=
   { platform: 'platform, num: count(tests where tests.platform = 'platform) }
 histogram
@@ -119,7 +119,7 @@ histogram
           if(i == 0) {
             new Thread {
               override def run() {
-                insert(shard, Path("/test/insert_set"), 2, 100000, 1)
+                insert(shard, Path("/test/insert_set"), 2, 10000, 1)
               }
             } 
           } else {
@@ -146,8 +146,8 @@ histogram
       } 
       
       println("load test sim")
-      //val result = Performance().benchmark(test(1), benchParams, benchParams)   
-      val result = Performance().profile(test(10))   
+      val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      //val result = Performance().profile(test(10))   
       
       result.report("load test sym", System.out)
       true must_== true
@@ -169,13 +169,13 @@ histogram
     }
 
     "read large" in {
-      insert(shard, Path("/test/large"), 1, 1000000, 1)
+      insert(shard, Path("/test/large"), 1, 100000, 1)
       println("read large test")
 
       Thread.sleep(10000)
       val result = Performance().benchmark(testRead(), benchParams, benchParams)   
       //val result = Performance().profile(testRead())   
-      result.report("read 1M", System.out)
+      result.report("read 100K", System.out)
       true must_== true
     }
     
