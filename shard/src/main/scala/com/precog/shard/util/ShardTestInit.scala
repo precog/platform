@@ -20,6 +20,7 @@
 package com.precog.shard.util
 
 import com.precog.common._
+import com.precog.common.util._
 import com.precog.common.security._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -64,6 +65,11 @@ object ShardTestInit extends App {
     val timeout = Timeout(30000) 
     loads.foreach{ insert(_, timeout) }
 
+    // Shutdown is not currently waiting for all inflight
+    // requests to this is a brute force way to get load
+    // testing underway.
+    Thread.sleep(60000)
+
     Await.result(shard.actorsStop, Duration(30, "seconds"))
   }
 
@@ -73,7 +79,7 @@ object ShardTestInit extends App {
     val filename = parts(1)
     val path = parts(0)
 
-    val data = scala.io.Source.fromFile(filename).toList.mkString
+    val data = IOUtils.rawReadFileToString(new File(filename))
     val json = JsonParser.parse(data)
 
     val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty

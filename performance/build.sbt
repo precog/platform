@@ -43,6 +43,10 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map 
     Seq("-XX:MaxPermSize=512m") ++
     Seq("-Xms3G") ++
     Seq("-Xmx4G") ++
+    Seq("-XX:+UseConcMarkSweepGC") ++
+    Seq("-XX:+CMSIncrementalMode") ++
+    Seq("-XX:-CMSIncrementalPacing") ++ 
+    Seq("-XX:CMSIncrementalDutyCycle=100") ++
     Seq("-classpath", cpStr) ++
     Seq("specs2.run") ++
     Seq(testName)

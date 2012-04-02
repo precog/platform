@@ -40,6 +40,8 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
+import org.streum.configrity._
+
 import scalaz._
 
 object MongoTokenManagerSpec extends Specification {
@@ -204,14 +206,25 @@ object MongoTokenManagerSpec extends Specification {
     }
   }
 
-  trait tokenManager extends After {
-    private lazy val actorSystem = ActorSystem("token_manager_test")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-    lazy val database = new MockMongo().database("test")
-    lazy val tokenManager = new MongoTokenManager(database, "tokens", "deleted_tokens", Timeout(15000))
+  trait tokenManager extends After with MongoTokenManagerComponent {
+    lazy val defaultActorSystem = ActorSystem("token_manager_test")
+
+    val config = Configuration.parse("""
+    tokenManager {
+      mongo {
+        mock = true
+        database = "test"
+        collection = "tokens"
+        deleted = "deleted_tokens"
+      }
+      cached = true
+    }
+    """)
+
+    lazy val tokenManager = tokenManagerFactory(config.detach("tokenManager"))
 
     def readTestTokens(): List[Token] = {
-      val rawTestTokens = io.Source.fromInputStream(getClass.getResourceAsStream("test_tokens.json")).mkString
+      val rawTestTokens = scala.io.Source.fromInputStream(getClass.getResourceAsStream("test_tokens.json")).mkString
       JsonParser.parse(rawTestTokens).deserialize[List[Token]]
     }
 
@@ -227,7 +240,7 @@ object MongoTokenManagerSpec extends Specification {
     Await.result(f, Duration(120, "seconds"))
     
     def after = { 
-      actorSystem.shutdown 
+      defaultActorSystem.shutdown 
     }
   }
 

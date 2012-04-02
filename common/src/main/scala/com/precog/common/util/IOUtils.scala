@@ -20,6 +20,7 @@
 package com.precog.common.util
 
 import java.io._
+import java.nio.charset._
 import java.nio.channels._
 import java.util.Properties
 
@@ -34,14 +35,21 @@ object IOUtils {
   def walkSubdirs(root: File): IO[Seq[File]] =
     IO { if(!root.isDirectory) List.empty else root.listFiles.filter( isNormalDirectory ) }
 
-  def readFileToString(f: File): IO[Option[String]] = {
-    def readFile(f: File): String = {
-      val in = scala.io.Source.fromFile(f)
-      val content = in.mkString
-      in.close
-      content
+  def rawReadFileToString(f: File): String = {
+    val stream = new FileInputStream(f)
+    try {
+      val fc = stream.getChannel
+      val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size)
+      /* Instead of using default, pass in a decoder. */
+      return Charset.defaultCharset().decode(bb).toString
+    } finally {
+      stream.close
     }
-    IO { if(f.exists && f.canRead) Some(readFile(f)) else None }
+  }
+
+  def readFileToString(f: File): IO[Option[String]] = {
+
+    IO { if(f.exists && f.canRead) Some(rawReadFileToString(f)) else None }
   }
 
   def readPropertiesFile(s: String): IO[Properties] = readPropertiesFile { new File(s) } 

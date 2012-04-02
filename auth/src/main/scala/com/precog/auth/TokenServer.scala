@@ -24,5 +24,5 @@ import common.security._
 
 import blueeyes.BlueEyesServer
 
-object MongoTokenServer extends BlueEyesServer with TokenService with CachedMongoTokenManagerComponent
+object MongoTokenServer extends BlueEyesServer with TokenService with MongoTokenManagerComponent
 

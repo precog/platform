@@ -144,7 +144,7 @@ verboseErrors - whether to print verbose error messages (default: false)
     val verboseErrors = properties.getProperty("verboseErrors", "false").toBoolean
 
 
-    val workQueue = new ArrayBlockingQueue[(Int, JValue)](1000)
+    val workQueue = new ArrayBlockingQueue[(Int, String)](1000)
 
 //    println("Starting workers")
     
@@ -155,14 +155,15 @@ verboseErrors - whether to print verbose error messages (default: false)
         override def run() {
           val client = new HttpClientXLightWeb
           while (true) {
-            val (index, sample) = workQueue.take()
+            val (index, query) = workQueue.take()
             try {
               val started = System.nanoTime()
-              
+             
               val f: Future[HttpResponse[JValue]] = client.path(apiUrl)
                                                           .query("tokenId", token)
+                                                          .query("q", query)
                                                           .contentType(application/MimeTypes.json)
-                                                          .post[JValue]("")(sample)
+                                                          .get[JValue]("")
 
               Await.ready(f, 120 seconds)
               f.value match {
@@ -180,7 +181,7 @@ verboseErrors - whether to print verbose error messages (default: false)
                 if(verboseErrors) {
                   println("QUERY - ERROR")
                   println("URL: " + apiUrl + "?tokenId="+token)
-                  println("Event: " + Printer.compact(Printer.render(sample)))
+                  println("QUERY: " + query)
                   println()
                   println("ERROR MESSAGE")
                   e.printStackTrace
@@ -225,8 +226,8 @@ histogram('platform) :=
 
   private val random = new java.util.Random
 
-  def next(base: String, maxQuery: Int): (Int, JValue) = {
+  def next(base: String, maxQuery: Int): (Int, String) = {
     val index = random.nextInt(maxQuery)
-    (index, JString(testQueries(index).format(base)))
+    (index, testQueries(index).format(base).replace("\n", " ").replace("  "," ").trim())
   }
 }
