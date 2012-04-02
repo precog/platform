@@ -131,7 +131,7 @@ object SBTConsole {
         sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
       }
       val Right(dag) = decorate(emit(tree))
-      consumeEval("0", dag)
+      withContext { ctx => consumeEval("0", dag, ctx) }
     }
 
     def startup() {
