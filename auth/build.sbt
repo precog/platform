@@ -16,4 +16,4 @@ libraryDependencies ++= Seq(
       "org.specs2"                %% "specs2"             % "1.8"  % "test"
 )
 
-mainClass := Some("com.precog.auth.TokenServer")
+mainClass := Some("com.precog.auth.MongoTokenServer")
