@@ -8,6 +8,7 @@ import blueeyes.persistence.cache._
 import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
+import akka.actor.ActorSystem
 import akka.util.Timeout
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
@@ -142,9 +143,31 @@ class MongoTokenManager(private[security] val database: Database, collection: St
   }
 }
 
-trait CachedMongoTokenManagerComponent {
+trait MongoTokenManagerComponent {
+  def defaultActorSystem: ActorSystem
+  implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
+
   def tokenManagerFactory(config: Configuration): TokenManager = {
-    sys.error("todo")
+    
+    val mock = config[Boolean]("mongo.mock", false)
+    
+    val mongo = if(mock) new MockMongo else RealMongo(config.detach("mongo"))
+    
+    val database = config[String]("mongo.database", "auth_v1")
+    val collection = config[String]("mongo.collection", "tokens")
+    val deletedCollection = config[String]("mongo.deleted", collection + "_deleted")
+    val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
+
+    val mongoTokenManager = 
+      new MongoTokenManager(mongo.database(database), collection, deletedCollection, new Timeout(timeoutMillis))
+
+    val cached = config[Boolean]("cached", false)
+
+    if(cached) {
+      new CachingTokenManager(mongoTokenManager)
+    } else {
+      mongoTokenManager
+    }
   }
 }
 

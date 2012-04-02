@@ -801,6 +801,19 @@ object EmitterSpecs extends Specification
           Merge))
     }.pendingUntilFixed
     
+    "emit split and merge for cf example with consecutively-constrained paired tic variables on a single set" in {
+      testEmit("""
+        | organizations := load(//organizations)
+        | 
+        | hist('revenue, 'campaign) :=
+        |   organizations' := organizations where organizations.revenue = 'revenue
+        |   organizations'' := organizations' where organizations'.campaign = 'campaign
+        |   
+        |   organizations''
+        |   
+        | hist""".stripMargin)(Vector())
+    }.pendingUntilFixed
+    
     "emit split and merge for cf example with single, multiply constrained tic variable" in {
       testEmit("""
         | clicks := load(//clicks)

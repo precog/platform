@@ -1,7 +1,7 @@
 package com.precog
 package shard
 
-import common.security.StaticTokenManager
+import common.security._
 import ingest.service.NullUsageLogging
 import shard.yggdrasil.YggdrasilQueryExecutorComponent
 
@@ -10,11 +10,10 @@ import blueeyes.util.Clock
 
 import org.streum.configrity.Configuration
 
-object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent {
+object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQueryExecutorComponent with MongoTokenManagerComponent {
   
   val clock = Clock.System
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-  def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
 
 }

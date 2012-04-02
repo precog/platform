@@ -76,15 +76,72 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
       
       shard.waitForRoutingActorIdle
     }
+    
+    "load test sim" in {
+      insert(shard, Path("/test/query_set"), 2, 10000, 1)
+      val threadCount = 10 
+     
+      val queries = List(
+"(load(//test/query_set))",
+"""
+tests := load(//test/query_set)
+count(tests where tests.gender = "male")
+""",
+"""
+tests := load(//test/query_set)
+histogram('platform) :=
+  { platform: 'platform, num: count(tests where tests.platform = 'platform) }
+histogram
+"""
+)
+
+      def test(i: Int) = {
+        val threads = (0.until(threadCount)) map { i =>
+          if(i == 0) {
+            new Thread {
+              override def run() {
+                insert(shard, Path("/test/insert_set"), 2, 10000, 1)
+              }
+            } 
+          } else {
+            new Thread {
+              val rand = new java.util.Random()
+              override def run() {
+                var cnt = 0
+                while(cnt < i) {
+                  val q = queries(rand.nextInt(queries.length))  
+                  val result = executor.execute("token", q) 
+                  result match {
+                    case Success(jval) =>
+                    case Failure(e) => new RuntimeException("Query result failure")
+                  }
+                  cnt += 1
+                }
+              }
+            } 
+          }
+        }
+        
+        threads.foreach{ _.start }
+        threads.foreach{ _.join }
+      } 
+      
+      println("load test sim")
+      val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      //val result = Performance().profile(test(10))   
+      
+      result.report("load test sym", System.out)
+      true must_== true
+    }
 
     "insert" in {
-      val tests = 10000
+      val tests = 100000
       val batchSize = 1000
       val result = Performance().benchmark(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
       //val result = Performance().profile(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
 
       println("starting insert test")
-      result.report("insert 10K", System.out)
+      result.report("insert 100K", System.out)
       true must_== true
     }
    
@@ -94,9 +151,11 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
 
     "read large" in {
       insert(shard, Path("/test/large"), 1, 100000, 1)
+      println("read large test")
+
+      Thread.sleep(10000)
       val result = Performance().benchmark(testRead(), benchParams, benchParams)   
       //val result = Performance().profile(testRead())   
-      println("read large test")
       result.report("read 100K", System.out)
       true must_== true
     }
@@ -156,7 +215,7 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
       true must_== true
     }
     
-    "hw2 test 10K x 10" in {
+    "hw2 test 100K x 1" in {
       insert(shard, Path("/test/small3"), 1, 100000, 1)
 
       val query =
@@ -180,7 +239,7 @@ count(tests where tests.gender = "male")
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
       //val result = Performance().profile(test(100))   
       
-      result.report("hw2 test 10K * 1", System.out)
+      result.report("hw2 test 100K * 1", System.out)
       true must_== true
     }
     
@@ -210,9 +269,10 @@ histogram
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
       //val result = Performance().profile(test(100))   
       
-      result.report("hw3 test 10K * 1", System.out)
+      result.report("hw3 test 100K * 1", System.out)
       true must_== true
     }
+    
   }
 
   step {

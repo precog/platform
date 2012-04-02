@@ -71,7 +71,7 @@ sealed trait SValue {
 
     case _ => None
   }
-
+  
   def structure: Seq[(JPath, CType)] = {
     import SValue._
     val s = this match {
@@ -217,8 +217,8 @@ object SValue extends SValueInstances {
   // in conjunction with this mapping.
   @inline
   def fromJValue(jv: JValue): SValue = jv match {
-    case JObject(fields) => SObject(fields map { case JField(name, v) => (name, fromJValue(v)) } toMap)
-    case JArray(elements) => SArray(Vector(elements map fromJValue: _*))
+    case JObject(fields) => SObject(fields.map{ case JField(name, v) => (name, fromJValue(v)) }(collection.breakOut))
+    case JArray(elements) => SArray((elements map fromJValue)(collection.breakOut))
     case JString(s) => SString(s)
     case JBool(s) => SBoolean(s)
     case JInt(i) => SDecimal(BigDecimal(i))

@@ -36,7 +36,8 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
 
   sealed trait MemoContext extends MemoizationContext[Valueset] { ctx => 
     type CacheKey[α] = MemoId
-    class CacheValue[A](val value: Promise[Either[Vector[A], File]]) {
+    class CacheValue[A](val value: Promise[Either[Vector[A], File]]) 
+    /*{
       @volatile private var references = 1
       def reserve = synchronized {
         if (references > 0) references += 1
@@ -51,7 +52,7 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
       def expire = synchronized {
         references -= 1
       }
-    }
+    }*/
 
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
     @volatile private var files: List[File] = Nil
@@ -63,7 +64,7 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
           if (!inner.hasNext) {
             self.synchronized { 
               if (cacheValue != null) {
-                cacheValue.release
+                //cacheValue.release
                 // ensure that we don't release the same reference twice
                 cacheValue = null.asInstanceOf[CacheValue[A]]
               }
@@ -77,7 +78,7 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
       }
 
       // first, update the reference count
-      cv.reserve
+      //cv.reserve
 
       // return a dataset that wraps an iterator which will decrement the reference count
       // on exhaustion
@@ -145,7 +146,7 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
         ctx.synchronized { 
           memoCache.get[Any](memoId) foreach { cacheValue =>
             memoCache -= memoId
-            cacheValue.expire // this final release will decrement the reference counter so that it will be freed by the last iterator
+            //cacheValue.expire // this final release will decrement the reference counter so that it will be freed by the last iterator
           }
         }
       }

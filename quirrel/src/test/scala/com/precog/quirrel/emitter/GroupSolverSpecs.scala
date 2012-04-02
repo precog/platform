@@ -102,5 +102,42 @@ object GroupSolverSpecs extends Specification
       d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
       tree.errors must beEmpty
     }
+    
+    "reject shared buckets for dependent tic variables on the same set" in {
+      {
+        val input = """
+          | organizations := load(//organizations)
+          | 
+          | hist('revenue, 'campaign) :=
+          |   organizations' := organizations where organizations.revenue = 'revenue
+          |   organizations'' := organizations' where organizations'.campaign = 'campaign
+          |   
+          |   organizations''
+          |   
+          | hist""".stripMargin
+          
+        val tree = compile(input)
+        tree.errors must not(beEmpty)
+      }
+      
+      {
+        val input = """
+          | campaigns := load(//campaigns)
+          | organizations := load(//organizations)
+          | 
+          | hist('revenue, 'campaign) :=
+          |   organizations' := organizations where organizations.revenue = 'revenue
+          |   campaigns' := campaigns where campaigns.campaign = 'campaign
+          |   organizations'' := organizations' where organizations'.campaign = 'campaign
+          |   
+          |   campaigns' ~ organizations''
+          |     { revenue: 'revenue, num: count(campaigns') }
+          |   
+          | hist""".stripMargin
+          
+        val tree = compile(input)
+        tree.errors must not(beEmpty)
+      }
+    }
   }
 }
