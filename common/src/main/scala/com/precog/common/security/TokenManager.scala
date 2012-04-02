@@ -34,6 +34,8 @@ import akka.dispatch.ExecutionContext
 
 import java.util.concurrent.TimeUnit._
 
+import com.weiglewilczek.slf4s.Logging
+
 import org.streum.configrity.Configuration
 
 import scalaz._
@@ -162,12 +164,12 @@ class MongoTokenManager(private[security] val database: Database, collection: St
   }
 }
 
-trait MongoTokenManagerComponent {
+trait MongoTokenManagerComponent extends Logging {
   def defaultActorSystem: ActorSystem
   implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
   def tokenManagerFactory(config: Configuration): TokenManager = {
-    
+   
     val mock = config[Boolean]("mongo.mock", false)
     
     val mongo = if(mock) new MockMongo else RealMongo(config.detach("mongo"))
