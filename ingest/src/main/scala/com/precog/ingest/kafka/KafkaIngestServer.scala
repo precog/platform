@@ -31,7 +31,7 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.ingest.service._
 import com.precog.common.util.ZookeeperSystemCoordination
-import com.precog.common.security.StaticTokenManager
+import com.precog.common.security._
 
 import java.util.Properties
 
