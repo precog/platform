@@ -187,22 +187,27 @@ object MongoTokenManagerSpec extends Specification {
     }
   }
 
+  object Counter {
+    val cnt = new java.util.concurrent.atomic.AtomicLong
+  }
+
   trait tokenManager extends After with MongoTokenManagerComponent {
     lazy val defaultActorSystem = ActorSystem("token_manager_test")
 
     val config = Configuration.parse("""
-    tokenManager {
+    security {
       mongo {
         mock = true
-        database = "test"
+        servers = "[localhost]"
+        database = "test-%d"
         collection = "tokens"
         deleted = "deleted_tokens"
       }
       cached = true
     }
-    """)
+    """.format(Counter.cnt.getAndIncrement))
 
-    lazy val tokenManager = tokenManagerFactory(config.detach("tokenManager"))
+    lazy val tokenManager = tokenManagerFactory(config.detach("security"))
 
     def readTestTokens(): List[Token] = {
       val rawTestTokens = scala.io.Source.fromInputStream(getClass.getResourceAsStream("test_tokens.json")).mkString

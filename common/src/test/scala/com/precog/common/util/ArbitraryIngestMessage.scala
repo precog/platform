@@ -1,7 +1,7 @@
 package com.precog.common
 package util
 
-import security.StaticTokenManager
+import security.TestTokenManager
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -58,7 +58,7 @@ trait RealisticIngestMessage extends ArbitraryIngestMessage {
   
   def genEventMessage: Gen[EventMessage] = for(producerId <- choose(0,producers-1); event <- genEvent) yield EventMessage(producerId, eventIds(producerId).getAndIncrement, event) 
   
-  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, StaticTokenManager.rootUID)
+  def genEvent: Gen[Event] = for (path <- genStablePath; event <- genRawEvent) yield Event.fromJValue(Path(path), event, TestTokenManager.rootUID)
   
   def genRawEvent: Gen[JValue] = containerOfN[Set, JPath](10, genStableJPath).map(_.map((_, genSimpleNotNull.sample.get)).foldLeft[JValue](JObject(Nil)){ (acc, t) =>
       acc.set(t._1, t._2)
