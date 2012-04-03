@@ -391,13 +391,32 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "evaluate a reduction within a cross" in {
+    "evaluate a reduction in the right side of a cross" in {
       val line = Line(0, "")
 
       val input = Join(line, Map2Cross(Add), 
         dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
         dag.Reduce(line, Count, 
           Root(line, PushNum("42"))))
+
+      val result = testEval(input)
+
+      result must haveSize(5)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+
+      result2 must contain(43, 13, 78, 2, 14)
+    }
+
+    "evaluate a reduction in the left side of a cross" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Add), 
+        dag.Reduce(line, Count, 
+          Root(line, PushNum("42"))),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
 
       val result = testEval(input)
 
