@@ -228,18 +228,19 @@ trait Evaluator extends DAG
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
-        val reduced: SValue = red match {
-          case Count => ops.point[SValue](SDecimal(BigDecimal(enum.count)))
+        val reduced: Option[SValue] = red match {
+          case Count => Some(SDecimal(BigDecimal(enum.count)))
           
           case Max => 
-            val max = enum.reduce(Option.empty[BigDecimal]) {
+            val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
               case (None, SDecimal(v)) => Some(v)
               case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
               case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
               case (acc, _) => acc
             }
 
-            max.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (max.isDefined) max map { v => SDecimal(v) }
+            else None
           
           case Min => 
             val min = enum.reduce(Option.empty[BigDecimal]) {
@@ -249,7 +250,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
           
-            min.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (min.isDefined) min map { v => SDecimal(v) }
+            else None
           
           case Sum => 
             val sum = enum.reduce(Option.empty[BigDecimal]) {
@@ -258,7 +260,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sum.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (sum.isDefined) sum map { v => SDecimal(v) }
+            else None
 
           case Mean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
@@ -266,8 +269,8 @@ trait Evaluator extends DAG
               case (total, _) => total
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(total / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(total / count))
           
           case GeometricMean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
@@ -275,8 +278,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
           
           case SumSq => 
             val sumsq = enum.reduce(Option.empty[BigDecimal]) {
@@ -285,7 +288,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sumsq.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
+            else None
 
           case Variance => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -293,8 +297,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal((sumsq - (sum * (sum / count))) / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
 
           case StdDev => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -302,11 +306,11 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(sqrt(count * sumsq - sum * sum) / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
-        Right(Match(mal.Actual, reduced, graph))
+        reduced.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
       }
       
       case s @ dag.Split(line, specs, child) => {
@@ -366,8 +370,8 @@ trait Evaluator extends DAG
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
-        right.value.get match {
-          case value @ SString(str) => {
+        right.value match {
+          case value @ Some(SString(str)) => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefObject str }
             
@@ -381,8 +385,8 @@ trait Evaluator extends DAG
       }
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
-        right.value.get match {
-          case value @ SDecimal(num) if num.isValidInt => {
+        right.value match {
+          case value @ Some(SDecimal(num)) if num.isValidInt => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefArray num.toInt }
             
@@ -398,32 +402,36 @@ trait Evaluator extends DAG
       // begin: annoyance with Scala's lousy pattern matcher
       case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+        Right(Match(mal.Op2Single(spec, right.value, op, true), set, graph2))
       }
       
       case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+        Right(Match(mal.Op2Single(spec, right.value, op, true), set, graph2))
       }
       
-      case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+      case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
+        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        lazy val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        Right(Match(mal.Op2Single(leftSpec, rightEnum.reduce(Option.empty[SValue]){ case (_, sv2) => Some(sv2) }, op, true), leftSet, leftGraph2))
       }
       
       case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
       }
       
       case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
       }
       
       case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
       }
       // end: annoyance
       
@@ -456,46 +464,46 @@ trait Evaluator extends DAG
           Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
       }
       
-      case j @ Join(_, instr, left, right) => {
-        lazy val length = sharedPrefixLength(left, right)
-        
-        val op = instr match {
-          case Map2Cross(op) => binaryOp(op)
-          case Map2CrossLeft(op) => binaryOp(op)
-          case Map2CrossRight(op) => binaryOp(op)
-        }
-        
-        val leftRes = loop(left, assume, splits, ctx)
-        val rightRes = loop(right, assume, splits, ctx)
-        
-        val (leftTpe, rightTpe) = op.operandType
-        
-        val leftResTyped = leftRes.left map { mask =>
-          leftTpe map mask.typed getOrElse mask
-        }
-        
-        val rightResTyped = rightRes.left map { mask =>
-          rightTpe map mask.typed getOrElse mask
-        }
-        
-        val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
-        
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-        
-        val resultEnum = instr match {
-          case Map2Cross(_) | Map2CrossLeft(_) =>
-            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
-            leftEnum.crossLeft(enum)(op.operation)
-          
-          case Map2CrossRight(_) =>
-            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
-            enum.crossRight(rightEnum)(op.operation)
-        }
-        
-        Right(Match(mal.Actual, resultEnum, graph))
-      }
+      //case j @ Join(_, instr, left, right) => {
+      //  lazy val length = sharedPrefixLength(left, right)
+      //  
+      //  val op = instr match {
+      //    case Map2Cross(op) => binaryOp(op)
+      //    case Map2CrossLeft(op) => binaryOp(op)
+      //    case Map2CrossRight(op) => binaryOp(op)
+      //  }
+      //  
+      //  val leftRes = loop(left, assume, splits, ctx)
+      //  val rightRes = loop(right, assume, splits, ctx)
+      //  
+      //  val (leftTpe, rightTpe) = op.operandType
+      //  
+      //  val leftResTyped = leftRes.left map { mask =>
+      //    leftTpe map mask.typed getOrElse mask
+      //  }
+      //  
+      //  val rightResTyped = rightRes.left map { mask =>
+      //    rightTpe map mask.typed getOrElse mask
+      //  }
+      //  
+      //  val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
+      //  val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
+      //  
+      //  val leftEnum = realizeMatch(leftSpec, leftSet)
+      //  val rightEnum = realizeMatch(rightSpec, rightSet)
+      //  
+      //  val resultEnum = instr match {
+      //    case Map2Cross(_) | Map2CrossLeft(_) =>
+      //      val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
+      //      leftEnum.crossLeft(enum)(op.operation)
+      //    
+      //    case Map2CrossRight(_) =>
+      //      val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
+      //      enum.crossRight(rightEnum)(op.operation)
+      //  }
+      //  
+      //  Right(Match(mal.Actual, resultEnum, graph))
+      //}
       
       case Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
