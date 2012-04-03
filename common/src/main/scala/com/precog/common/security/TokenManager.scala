@@ -34,9 +34,12 @@ import akka.dispatch.ExecutionContext
 
 import java.util.concurrent.TimeUnit._
 
+import com.weiglewilczek.slf4s.Logging
+
 import org.streum.configrity.Configuration
 
 import scalaz._
+import scalaz.Validation._
 import Scalaz._
 
 trait TokenManagerComponent {
@@ -162,30 +165,34 @@ class MongoTokenManager(private[security] val database: Database, collection: St
   }
 }
 
-trait MongoTokenManagerComponent {
+trait MongoTokenManagerComponent extends Logging {
   def defaultActorSystem: ActorSystem
   implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
   def tokenManagerFactory(config: Configuration): TokenManager = {
-    
-    val mock = config[Boolean]("mongo.mock", false)
-    
-    val mongo = if(mock) new MockMongo else RealMongo(config.detach("mongo"))
-    
-    val database = config[String]("mongo.database", "auth_v1")
-    val collection = config[String]("mongo.collection", "tokens")
-    val deletedCollection = config[String]("mongo.deleted", collection + "_deleted")
-    val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
-
-    val mongoTokenManager = 
-      new MongoTokenManager(mongo.database(database), collection, deletedCollection, new Timeout(timeoutMillis))
-
-    val cached = config[Boolean]("cached", false)
-
-    if(cached) {
-      new CachingTokenManager(mongoTokenManager)
+    val test = config[Boolean]("test", false)   
+    if(test) {
+      new TestTokenManager(TestTokenManager.tokenMap, execContext)
     } else {
-      mongoTokenManager
+      val mock = config[Boolean]("mongo.mock", false)
+      
+      val mongo = if(mock) new MockMongo else RealMongo(config.detach("mongo"))
+      
+      val database = config[String]("mongo.database", "auth_v1")
+      val collection = config[String]("mongo.collection", "tokens")
+      val deletedCollection = config[String]("mongo.deleted", collection + "_deleted")
+      val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
+
+      val mongoTokenManager = 
+        new MongoTokenManager(mongo.database(database), collection, deletedCollection, new Timeout(timeoutMillis))
+
+      val cached = config[Boolean]("cached", false)
+
+      if(cached) {
+        new CachingTokenManager(mongoTokenManager)
+      } else {
+        mongoTokenManager
+      }
     }
   }
 }
@@ -220,38 +227,43 @@ object CachingTokenManager {
   val defaultSettings = CacheSettings[String, Token](ExpirationPolicy(Some(5), Some(5), MINUTES))
 }
 
-class StaticTokenManager(implicit val execContext: ExecutionContext) extends TokenManager {
 
-  var map = StaticTokenManager.tokenMap
+class TestTokenManager(initialTokens: Map[UID, Token], implicit val execContext: ExecutionContext) extends TokenManager {  
+  var tokens = initialTokens
+  var deleted = Map[UID, Token]()
+
+  def lookup(uid: UID): Future[Option[Token]] = Future(tokens.get(uid))
+
+  def lookupDeleted(uid: UID): Future[Option[Token]] = Future(deleted.get(uid))
+
+  def listChildren(parent: Token): Future[List[Token]] = Future(
+    tokens.values.filter {
+      case Token(_, Some(parent.uid), _, _, _) => true
+      case _                                   => false
+    }.toList
+  )
   
-  def lookup(uid: UID) = Future(map.get(uid))
-  def lookupDeleted(uid: UID) = Future(None)
+  def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = Future {    val t = Token(uid, issuer, permissions, grants, expired)
+    tokens += (t.uid -> t) 
+    success(t) 
+  }
+
+  def updateToken(t: Token) = Future {
+    tokens += (t.uid -> t)
+    success(t) 
+  }
   
-  def listChildren(parent: Token): Future[List[Token]] = Future {
-    map.values.filter( _.issuer match {
-      case Some(`parent`) => true
-      case _              => false
-    }).toList
-  }
-
-  def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = {
-    val newToken = Token(uid, issuer, permissions, grants, expired)
-    map += (uid -> newToken)
-    Future(Success(newToken))
-  }
-
-  def updateToken(t: Token) = {
-    map += (t.uid -> t)
-    Future(Success(t))
-  }
-
   def deleteToken(token: Token): Future[Token] = Future {
-    map -= token.uid
+    tokens.get(token.uid).foreach { t =>
+      tokens -= t.uid
+      deleted += (t.uid -> t)
+    }     
     token
-  }
+  }     
+
 }
 
-object StaticTokenManager {
+object TestTokenManager {
   
   val rootUID = "C18ED787-BF07-4097-B819-0415C759C8D5"
   

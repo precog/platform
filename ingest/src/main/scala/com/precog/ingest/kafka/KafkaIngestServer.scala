@@ -31,19 +31,21 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.ingest.service._
 import com.precog.common.util.ZookeeperSystemCoordination
-import com.precog.common.security.StaticTokenManager
+import com.precog.common.security._
 
 import java.util.Properties
 
 import java.net.InetAddress
+
+import com.weiglewilczek.slf4s.Logging
 
 import org.streum.configrity.Configuration
 
 object KafkaIngestServer extends 
     BlueEyesServer with 
     IngestService with 
-    KafkaEventStoreComponent with 
-    MongoTokenManagerComponent {
+    MongoTokenManagerComponent with
+    KafkaEventStoreComponent {
 
   val clock = Clock.System
 
@@ -51,7 +53,7 @@ object KafkaIngestServer extends
 
 }
 
-trait KafkaEventStoreComponent extends AkkaDefaults {
+trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
 
   def eventStoreFactory(config: Configuration): EventStore = {
 

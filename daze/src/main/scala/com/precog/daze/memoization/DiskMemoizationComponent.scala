@@ -51,7 +51,14 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
 
   implicit val asyncContext: ExecutionContext
 
-  def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
+  def withMemoizationContext[A](f: MemoContext => A) = {
+    val ctx = new MemoContext { } 
+    try {
+      f(ctx)
+    } finally {
+      ctx.cache.purge()
+    }
+  }
 
   sealed trait MemoContext extends MemoizationContext[Valueset] { ctx => 
     type CacheKey[α] = MemoId
@@ -170,7 +177,7 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
         }
       }
 
-      def purge = {
+      def purge() = {
         ctx.synchronized {
           for (f <- files) f.delete
           files = Nil

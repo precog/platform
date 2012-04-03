@@ -137,7 +137,7 @@ verboseErrors - whether to print verbose error messages (default: false)
     val apiUrl = properties.getProperty("baseUrl", "http://localhost:30070/query")
     val threads = properties.getProperty("threads", "1").toInt 
     val maxQuery = properties.getProperty("maxQuery", sampleSet.testQueries.size.toString).toInt 
-    val token = properties.getProperty("token", StaticTokenManager.rootUID)
+    val token = properties.getProperty("token", TestTokenManager.rootUID)
     val base = properties.getProperty("queryBase", "public")
     interval = properties.getProperty("iterations", "10").toInt
     intervalDouble = interval.toDouble

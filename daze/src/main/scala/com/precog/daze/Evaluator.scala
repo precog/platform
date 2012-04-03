@@ -76,7 +76,7 @@ trait Evaluator extends DAG
   type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
-  trait Context {
+  sealed trait Context {
     def memoizationContext: MemoContext
     def expiration: Long
     def nextId(): Long
@@ -86,7 +86,7 @@ trait Evaluator extends DAG
 
   implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Valueset, Grouping, E] = ops.extend(d)
 
-  def withContext(f: Context => Dataset[SValue]): Dataset[SValue] = {
+  def withContext[A](f: Context => A): A = {
     withMemoizationContext { memoContext => 
       val ctx = new Context { 
         val memoizationContext = memoContext
@@ -95,7 +95,6 @@ trait Evaluator extends DAG
       }
 
       f(ctx)
-      //IterableDataset(ds.idCount, ds.iterator.toSeq)
     }
   }
 
@@ -104,7 +103,7 @@ trait Evaluator extends DAG
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   //import Function._
   
-  def eval(userUID: String, graph: DepGraph): Dataset[SValue] = {
+  def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
       (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration), graph) }).fold(identity, identity)
     
@@ -506,10 +505,12 @@ trait Evaluator extends DAG
         
         val resultEnum = instr match {
           case Map2Cross(_) | Map2CrossLeft(_) =>
-            leftEnum.crossLeft(rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration))(op.operation)
+            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
+            leftEnum.crossLeft(enum)(op.operation)
           
           case Map2CrossRight(_) =>
-            leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration).crossRight(rightEnum)(op.operation)
+            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
+            enum.crossRight(rightEnum)(op.operation)
         }
         
         Right(Match(mal.Actual, resultEnum, graph))
@@ -579,10 +580,8 @@ trait Evaluator extends DAG
       }
     }
     
-    withContext { ctx =>
-      val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
-      realizeMatch(spec, set)
-    }
+    val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
+    realizeMatch(spec, set)
   }
   
   override def resolveUnaryOperation(op: UnaryOperation) = op match {
