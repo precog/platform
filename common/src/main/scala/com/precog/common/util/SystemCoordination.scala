@@ -269,7 +269,6 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
   }
 
   def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState] = {
-    
     val agentPath = relayAgentPath(agent)
 
     acquireActivePath(agentPath) flatMap { _ =>

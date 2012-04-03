@@ -36,11 +36,12 @@ class TimelibSpec extends Specification
   
   val testUID = "testUID"
 
-  def testEval = consumeEval(testUID, _: DepGraph) match {
-    case Success(results) => results
-    case Failure(error) => throw error
+  def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
+    consumeEval(testUID, graph, ctx) match {
+      case Success(results) => results
+      case Failure(error) => throw error
+    }
   }
-
 
   "all time functions" should {
     "validate input" in todo

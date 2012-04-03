@@ -66,9 +66,16 @@ trait MetadataStorage extends FileOps {
     dirMapping(desc) flatMap { dir =>
       val file = new File(dir, curFilename)
       read(file) map { opt =>
-        opt.map { extract } getOrElse { Failure(Invalid("Unable to access the specified metadata file: " + file)) }
+        opt.map { extract } getOrElse { Success(defaultMetadata(desc)) }
       }
     }
+  }
+ 
+  private def defaultMetadata(desc: ProjectionDescriptor): MetadataRecord = {
+    val metadata: ColumnMetadata = desc.columns.map { col =>
+      (col -> Map.empty[MetadataType, Metadata])
+    }(collection.breakOut)
+    MetadataRecord(metadata, VectorClock.empty)
   }
   
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = 

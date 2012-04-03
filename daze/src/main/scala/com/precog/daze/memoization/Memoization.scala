@@ -24,13 +24,13 @@ trait MemoizationEnvironment {
 
 trait MemoCache {
   def expire(memoId: MemoId): Unit
-  def purge: Unit
+  def purge(): Unit
 }
 
 object MemoCache {
   object Noop extends MemoCache {
     def expire(memoId: Int) = ()
-    def purge = ()
+    def purge() = ()
   }
 }
 

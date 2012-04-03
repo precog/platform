@@ -47,28 +47,29 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 }
 
 trait TestTokens {
-  import StaticTokenManager._
+  import TestTokenManager._
   val TestTokenUID = testUID
   val TrackingTokenUID = usageUID
   val ExpiredTokenUID = expiredUID
 }
 
-trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults {
+trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
 
   import BijectionsChunkJson._
 
-  val requestLoggingData = """
-    requestLog {
-      enabled = true
-      fields = "time cs-method cs-uri sc-status cs-content"
+  val config = """
+    security {
+      test = true
+      mongo {
+        mock = true
+        servers = [localhost]
+        database = test
+      }
     }
   """
 
-  override val configuration = "services { ingest { v1 { " + requestLoggingData + " } } }"
+  override val configuration = "services { ingest { v1 { " + config + " } } }"
 
-
-  def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
-  
   def usageLoggingFactory(config: Configuration) = new ReportGridUsageLogging(TrackingTokenUID) 
 
   val messaging = new CollectingMessaging

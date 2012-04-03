@@ -228,7 +228,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
       })
     }
 
-    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: SortSerialization[B]): Dataset[B] = {
+    def flattenGroup[A, K, B](g: Grouping[K, NEL[Dataset[A]]], nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Iterable], expiration: Long)(f: (K, NEL[Dataset[A]]) => Dataset[B])(implicit buffering: Buffering[B], fs: IncrementalSerialization[(Identities, B)]): Dataset[B] = {
       type IB = (Identities, B)
 
       val gIterator = g.iterator
@@ -260,7 +260,7 @@ trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComp
         }
       }
 
-      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).uniq(nextId, memoId, memoCtx, expiration)
+      extend(IterableDataset(1, new Iterable[IB] { def iterator = iter })).identify(Some(nextId)).memoize(memoId, memoCtx, expiration)
     }
 
     def mapGrouping[K, A, B](g: Grouping[K, A])(f: A => B): Grouping[K, B] =

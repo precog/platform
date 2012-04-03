@@ -535,9 +535,8 @@ with DiskIterableMemoizationComponent {
           IterableDataset(1, Vector(rec((num / 2) * 2)))
         }
 
-        val result2 = mapGrouping(result) { ds =>
-          val IterableDataset(count, str) = ds
-          IterableDataset(count, Vector(str.toSeq: _*))
+        val result2 = mapGrouping(result) { 
+          case IterableDataset(count, str) => IterableDataset(count, Vector(str.toSeq: _*))
         }
 
         val expected = groups map {
@@ -584,9 +583,8 @@ with DiskIterableMemoizationComponent {
           IterableDataset(1, Vector(rec(num)))
         }
   
-        val result2 = mapGrouping(result) { ds =>
-          val IterableDataset(count, str) = ds
-          IterableDataset(count, Vector(str.toSeq: _*))
+        val result2 = mapGrouping(result) { 
+          case IterableDataset(count, str) => IterableDataset(count, Vector(str.toSeq: _*))
         }
         
         val expected = groups map {
@@ -756,12 +754,12 @@ with DiskIterableMemoizationComponent {
         val ng1 = IterableGrouping(list1.iterator)
         implicit val ordering = Order[Long].toScalaOrdering
 
-        val expected: List[Record[Long]] = IterableDataset(1, Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable }: _*)).iterator.toList.distinct.sorted.zipWithIndex.map { case (v, id) => (VectorCase(id: Long), v) }
+        val expected: List[Long] = Iterable.concat(list1.map { case (k,v) => flattenFunc(k, v).iterable map { case (id, v) => v } }: _*).toList
 
         val ids = idGen()
         import scalaz.std.tuple._
         import com.precog.util.IdGen
-        val result: List[Record[Long]] = flattenGroup(ng1, ids, IdGen.nextInt(), memoCtx, System.currentTimeMillis + 10000)(flattenFunc).iterable.toList
+        val result: List[Long] = flattenGroup(ng1, ids, IdGen.nextInt(), memoCtx, System.currentTimeMillis + 10000)(flattenFunc).iterator.toList
 
         result must containAllOf(expected).only
       }}

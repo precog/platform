@@ -109,9 +109,11 @@ class PlatformSpecs extends Specification
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
-        consumeEval("dummyUID", dag) match {
-          case Success(result) => result
-          case Failure(error) => throw error
+        withContext { ctx => 
+          consumeEval("dummyUID", dag, ctx) match {
+            case Success(result) => result
+            case Failure(error) => throw error
+          }
         }
       }
     }
