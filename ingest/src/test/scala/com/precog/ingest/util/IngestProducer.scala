@@ -212,7 +212,7 @@ Usage:
 
 class WebappIngestProducer(args: Array[String]) extends IngestProducer(args) {
   lazy val base = config.getProperty("serviceUrl", "http://localhost:30050/vfs/")
-  lazy val token = config.getProperty("token", StaticTokenManager.rootUID)
+  lazy val token = config.getProperty("token", TestTokenManager.rootUID)
   val client = new HttpClientXLightWeb 
 
   def send(event: Event, timeout: Timeout) {

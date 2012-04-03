@@ -65,23 +65,26 @@ case class PastClock(duration: org.joda.time.Duration) extends Clock {
 }
 
 trait TestTokens {
-  import StaticTokenManager._
+  import TestTokenManager._
   val TestTokenUID = testUID
   val ExpiredTokenUID = expiredUID
 }
 
-trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults {
+trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
 
   import BijectionsChunkJson._
 
-  val requestLoggingData = """ 
-    requestLog {
-      enabled = true
-      fields = "time cs-method cs-uri sc-status cs-content"
+  val config = """ 
+    security {
+      test = true
+      mongo {
+        servers = [localhost]
+        database = test
+      }
     }
   """
 
-  override val configuration = "services { shard { v1 { " + requestLoggingData + " } } }"
+  override val configuration = "services { quirrel { v1 { " + config + " } } }"
 
   def queryExecutorFactory(config: Configuration) = new TestQueryExecutor {
     lazy val actorSystem = ActorSystem("ingest_service_spec")
@@ -89,8 +92,6 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
     lazy val allowedUID = TestTokenUID
   }
 
-  def tokenManagerFactory(config: Configuration) = new StaticTokenManager 
-  
   lazy val shardService = service.contentType[JValue](application/(MimeTypes.json))
                                  .path("/vfs/")
 

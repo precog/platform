@@ -58,23 +58,23 @@ import blueeyes.json.JsonAST._
 
 import blueeyes.util.Clock
 
-trait TestTokenService extends BlueEyesServiceSpecification with TokenService with AkkaDefaults {
+trait TestTokenService extends BlueEyesServiceSpecification with TokenService with AkkaDefaults with MongoTokenManagerComponent {
 
   import BijectionsChunkJson._
 
-  val requestLoggingData = """ 
-    requestLog {
-      enabled = true
-      fields = "time cs-method cs-uri sc-status cs-content"
-    }
+  val config = """ 
+    security {
+      test = true
+      mongo {
+        mock = true
+        servers = [localhost]
+        database = test
+      }
+    }   
   """
 
-  override val configuration = "services { shard { v1 { " + requestLoggingData + " } } }"
+  override val configuration = "services { auth { v1 { " + config + " } } }"
 
-  def tokenManagerFactory(config: Configuration) = {
-    new TestTokenManager(StaticTokenManager.tokenMap, ExecutionContext.defaultExecutionContext(defaultActorSystem))
-  }
-  
   lazy val client = service.contentType[JValue](application/(MimeTypes.json)).path("/tokens")
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
@@ -83,7 +83,7 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
 
-  import StaticTokenManager._
+  import TestTokenManager._
 
   def get(tokenId: String) = 
     client.query("tokenId", tokenId).get("")
@@ -217,41 +217,4 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
   }
-}
-
-class TestTokenManager(initialTokens: Map[UID, Token], implicit val execContext: ExecutionContext) extends TokenManager {
-  
-  var tokens = initialTokens
-  var deleted = Map[UID, Token]()
-
-  def lookup(uid: UID): Future[Option[Token]] = Future(tokens.get(uid))
-
-  def lookupDeleted(uid: UID): Future[Option[Token]] = Future(deleted.get(uid))
-
-  def listChildren(parent: Token): Future[List[Token]] = Future(
-    tokens.values.filter {
-      case Token(_, Some(parent.uid), _, _, _) => true 
-      case _                                   => false
-    }.toList
-  )
-  
-  def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = Future {
-    val t = Token(uid, issuer, permissions, grants, expired)
-    tokens += (t.uid -> t)
-    success(t)
-  }
-
-  def updateToken(t: Token) = Future {
-    tokens += (t.uid -> t)
-    success(t)
-  }
-  
-  def deleteToken(token: Token): Future[Token] = Future {
-    tokens.get(token.uid).foreach { t =>
-      tokens -= t.uid
-      deleted += (t.uid -> t)
-    }
-    token
-  } 
-
 }

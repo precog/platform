@@ -83,9 +83,11 @@ class EvaluatorSpecs extends Specification
   val testUID = "testUID"
 
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
-  def testEval = consumeEval(testUID, _: DepGraph) match {
-    case Success(results) => results
-    case Failure(error) => throw error
+  def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
+    consumeEval(testUID, graph, ctx) match {
+      case Success(results) => results
+      case Failure(error) => throw error
+    }
   }
 
   "evaluator" should {

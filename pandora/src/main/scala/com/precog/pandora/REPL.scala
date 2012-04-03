@@ -103,10 +103,12 @@ trait REPL extends ParseEvalStack with MemoryDatasetConsumer {
           // TODO decoration errors
           
           for (graph <- eitherGraph.right) {
-            val result = consumeEval(dummyUID, graph) fold (
-              error   => "An error occurred processing your query: " + error.getMessage,
-              results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
-            )
+            val result = withContext { ctx =>
+              consumeEval(dummyUID, graph, ctx) fold (
+                error   => "An error occurred processing your query: " + error.getMessage,
+                results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
+              )
+            }
             
             out.println()
             out.println(color.cyan(result))
