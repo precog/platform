@@ -39,8 +39,12 @@ trait ShardService extends
           import context._
 
           val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"))
+          
+          println(config)
+          println(config.detach("security"))
 
           val theTokenManager = tokenManagerFactory(config.detach("security"))
+
 
           val accessControl = new TokenBasedAccessControl {
             val executionContext = defaultFutureDispatch

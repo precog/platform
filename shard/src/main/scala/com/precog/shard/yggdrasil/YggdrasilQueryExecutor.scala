@@ -141,7 +141,9 @@ trait YggdrasilQueryExecutor
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
-    consumeEval(userUID, dag) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+    withContext { ctx =>
+      consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+    }
   }
 
   private def asBytecode(query: String): Validation[EvaluationError, Vector[Instruction]] = {
