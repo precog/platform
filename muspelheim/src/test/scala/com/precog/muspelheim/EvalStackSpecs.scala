@@ -253,7 +253,7 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only value-unique results from a characteristic function" in {
+    "return only all possible value results from a characteristic function" in {
       val input = """
         | campaigns := load(//campaigns)
         | f('a) :=
@@ -263,11 +263,11 @@ trait EvalStackSpecs extends Specification {
         
       val results = evalE(input)
       
-      results must haveSize(2)
+      results must haveSize(100)
       
       forall(results) {
         case (VectorCase(_), SString(gender)) =>
-          Set("male", "female") must contain(gender)
+          gender must beOneOf("male", "female")
       }
     }
     
