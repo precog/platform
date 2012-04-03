@@ -535,9 +535,8 @@ with DiskIterableMemoizationComponent {
           IterableDataset(1, Vector(rec((num / 2) * 2)))
         }
 
-        val result2 = mapGrouping(result) { ds =>
-          val IterableDataset(count, str) = ds
-          IterableDataset(count, Vector(str.toSeq: _*))
+        val result2 = mapGrouping(result) { 
+          case IterableDataset(count, str) => IterableDataset(count, Vector(str.toSeq: _*))
         }
 
         val expected = groups map {
@@ -584,9 +583,8 @@ with DiskIterableMemoizationComponent {
           IterableDataset(1, Vector(rec(num)))
         }
   
-        val result2 = mapGrouping(result) { ds =>
-          val IterableDataset(count, str) = ds
-          IterableDataset(count, Vector(str.toSeq: _*))
+        val result2 = mapGrouping(result) { 
+          case IterableDataset(count, str) => IterableDataset(count, Vector(str.toSeq: _*))
         }
         
         val expected = groups map {
