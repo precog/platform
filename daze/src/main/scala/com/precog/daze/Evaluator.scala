@@ -248,7 +248,7 @@ trait Evaluator extends DAG
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
-        val reduced: Dataset[SValue] = red match {
+        val reduced: SValue = red match {
           case Count => ops.point[SValue](SDecimal(BigDecimal(enum.count)))
           
           case Max => 
