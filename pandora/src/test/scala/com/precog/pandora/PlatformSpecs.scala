@@ -43,7 +43,7 @@ class PlatformSpecs extends Specification
     with DiskIterableMemoizationComponent 
     with MemoryDatasetConsumer { platformSpecs =>
   override type Dataset[A] = IterableDataset[A]
-  override type Valueset[α] = Iterable[α]
+  override type Memoable[α] = Iterable[α]
 
   lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
