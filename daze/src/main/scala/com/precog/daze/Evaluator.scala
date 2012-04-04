@@ -92,7 +92,7 @@ trait Evaluator extends DAG
       case mal.Actual => set
       case _ => set collect resolveMatch(spec)
     }
-  
+
     def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
       case ZipBucketSpec(left, right) => {
         val leftGroup = computeGrouping(assume, splits, graph, ctx)(left)
@@ -480,46 +480,46 @@ trait Evaluator extends DAG
           Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
       }
       
-      case j @ Join(_, instr, left, right) => {
-        lazy val length = sharedPrefixLength(left, right)
-        
-        val op = instr match {
-          case Map2Cross(op) => binaryOp(op)
-          case Map2CrossLeft(op) => binaryOp(op)
-          case Map2CrossRight(op) => binaryOp(op)
-        }
-        
-        val leftRes = loop(left, assume, splits, ctx)
-        val rightRes = loop(right, assume, splits, ctx)
-        
-        val (leftTpe, rightTpe) = op.operandType
-        
-        val leftResTyped = leftRes.left map { mask =>
-          leftTpe map mask.typed getOrElse mask
-        }
-        
-        val rightResTyped = rightRes.left map { mask =>
-          rightTpe map mask.typed getOrElse mask
-        }
-        
-        val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
-        
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-        
-        val resultEnum = instr match {
-          case Map2Cross(_) | Map2CrossLeft(_) =>
-            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
-            leftEnum.crossLeft(enum)(op.operation)
-          
-          case Map2CrossRight(_) =>
-            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
-            enum.crossRight(rightEnum)(op.operation)
-        }
-        
-        Right(Match(mal.Actual, resultEnum, graph))
-      }
+      //case j @ Join(_, instr, left, right) => {
+      //  lazy val length = sharedPrefixLength(left, right)
+      //  
+      //  val op = instr match {
+      //    case Map2Cross(op) => binaryOp(op)
+      //    case Map2CrossLeft(op) => binaryOp(op)
+      //    case Map2CrossRight(op) => binaryOp(op)
+      //  }
+      //  
+      //  val leftRes = loop(left, assume, splits, ctx)
+      //  val rightRes = loop(right, assume, splits, ctx)
+      //  
+      //  val (leftTpe, rightTpe) = op.operandType
+      //  
+      //  val leftResTyped = leftRes.left map { mask =>
+      //    leftTpe map mask.typed getOrElse mask
+      //  }
+      //  
+      //  val rightResTyped = rightRes.left map { mask =>
+      //    rightTpe map mask.typed getOrElse mask
+      //  }
+      //  
+      //  val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
+      //  val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
+      //  
+      //  val leftEnum = realizeMatch(leftSpec, leftSet)
+      //  val rightEnum = realizeMatch(rightSpec, rightSet)
+      //  
+      //  val resultEnum = instr match {
+      //    case Map2Cross(_) | Map2CrossLeft(_) =>
+      //      val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
+      //      leftEnum.crossLeft(enum)(op.operation)
+      //    
+      //    case Map2CrossRight(_) =>
+      //      val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
+      //      enum.crossRight(rightEnum)(op.operation)
+      //  }
+      //  
+      //  Right(Match(mal.Actual, resultEnum, graph))
+      //}
       
       case Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
