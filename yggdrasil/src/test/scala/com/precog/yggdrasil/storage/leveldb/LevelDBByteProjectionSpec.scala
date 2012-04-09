@@ -32,6 +32,8 @@ object LevelDBByteProjectionSpec {
   val cvDouble = CDouble(7)
   val cvDouble2 = CDouble(9)
   val cvNum = CNum(8)
+  val cvEmptyArray = CEmptyArray
+  val cvEmptyObject = CEmptyObject
 
   val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), CStringFixed(1), Authorities(Set()))
   val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CStringArbitrary, Authorities(Set()))
@@ -81,6 +83,8 @@ object LevelDBByteProjectionSpec {
       case (seq, CLong) => seq :+ cvLong
       case (seq, CDecimalArbitrary) => seq :+ cvNum
       case (seq, CStringArbitrary) => seq :+ cvString
+      case (seq, CEmptyArray) => seq :+ cvEmptyArray
+      case (seq, CEmptyObject) => seq :+ cvEmptyObject
     }
   }
 }
