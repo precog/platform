@@ -357,6 +357,8 @@ histogram
 
       Await.result(shard.storeBatch(msgs, timeout), timeout)
 
+      Thread.sleep(10000)
+
       val result = executor.execute("token", "load(//test/null)")
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
@@ -445,6 +447,8 @@ histogram
       }
 
       Await.result(shard.storeBatch(msgs, timeout), timeout)
+      
+      Thread.sleep(10000)
       
       val result = executor.execute("token", "load(//test/mixed)")
       result must beLike {
