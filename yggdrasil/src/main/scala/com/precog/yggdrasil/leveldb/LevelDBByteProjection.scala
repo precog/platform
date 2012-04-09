@@ -365,6 +365,9 @@ private[leveldb] object CValueReader {
         buf.get(sdecimalarb)
         CNum(sdecimalarb.as[BigDecimal])
 
+      case CEmptyArray            => CEmptyArray
+      case CEmptyObject           => CEmptyObject
+
       case invalid                => sys.error("Invalid type read: " + invalid)
     }
   }

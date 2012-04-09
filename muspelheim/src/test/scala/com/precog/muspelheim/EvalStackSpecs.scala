@@ -523,8 +523,20 @@ trait EvalStackSpecs extends Specification {
           load(//test/empty_array)
         """.stripMargin
         
+        println("empty array = " + eval(input))
+
         eval(input) must not(throwA[Throwable])
-      }.pendingUntilFixed
+      }     
+      
+      "handle query on empty object" >> {
+        val input = """
+          load(//test/a)
+        """.stripMargin
+
+        println("empty object = " + eval(input))
+        
+        eval(input) must not(throwA[Throwable])
+      }
 
       // times out...
       /* "handle chained characteristic functions" in {
