@@ -10,10 +10,10 @@ import org.fusesource.leveldbjni.JniDBFactory._
 import java.io.File
 import java.nio.ByteBuffer
 
-class PerformanceSuite extends
-  LeveldbPerformanceSpec with
-  RoutingPerformanceSpec with
-  YggdrasilPerformanceSpec
-//  RevisedYggdrasilPerformanceSpec //with
-//  YggdrasilStartupErrorSpec //with
-//  YggdrasilProfilingSpec
+class PerformanceSuite 
+  extends LeveldbPerformanceSpec 
+  with RoutingPerformanceSpec 
+//  with YggdrasilPerformanceSpec 
+  with RevisedYggdrasilPerformanceSpec 
+//  with YggdrasilStartupErrorSpec 
+//  with YggdrasilProfilingSpec
