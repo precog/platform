@@ -511,7 +511,7 @@ trait EvalStackSpecs extends Specification {
       
       "handle query on empty object" >> {
         val input = """
-          load(//test/a)
+          load(//test/empty_object)
         """.stripMargin
 
         println("empty object = " + eval(input))

@@ -349,6 +349,8 @@ private[leveldb] object CValueReader {
       case CEmptyArray            => CEmptyArray
       case CEmptyObject           => CEmptyObject
 
+      case CNull                  => CNull
+
       case invalid                => sys.error("Invalid type read: " + invalid)
     }
   }

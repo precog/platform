@@ -34,6 +34,7 @@ object LevelDBByteProjectionSpec {
   val cvNum = CNum(8)
   val cvEmptyArray = CEmptyArray
   val cvEmptyObject = CEmptyObject
+  val cvNull = CNull
 
   val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), CStringFixed(1), Authorities(Set()))
   val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CStringArbitrary, Authorities(Set()))
@@ -85,6 +86,7 @@ object LevelDBByteProjectionSpec {
       case (seq, CStringArbitrary) => seq :+ cvString
       case (seq, CEmptyArray) => seq :+ cvEmptyArray
       case (seq, CEmptyObject) => seq :+ cvEmptyObject
+      case (seq, CNull) => seq :+ cvNull
     }
   }
 }
@@ -95,8 +97,93 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0)
-      //println(sampleData)
 
+      val projDes: List[ProjectionDescriptor] = {
+        sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
+          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+            case (acc, ProjectionData(descriptor, identities, values, _)) =>
+              acc :+ descriptor
+          }
+        }
+      }
+      val byteProj = projDes.foldLeft(List.empty[LevelDBByteProjection]) {
+        case (l, des) => l :+ byteProjectionInstance2(des).sample.get
+      }
+      
+      projDes.zip(byteProj).map { 
+        case (des, byte) =>
+          val identities: Vector[Long] = constructIds(des.indexedColumns.values.toSet.size)
+          val values: Seq[CValue] = constructValues(des.columns)
+          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+
+          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+      }
+    }
+  }
+
+  "a byte projection of an empty array" should {
+    "return the arguments of project, when unproject is applied to project" in {
+      val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+      val dataPath = Path("/test")
+      implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.emptyArraySample)
+
+      val projDes: List[ProjectionDescriptor] = {
+        sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
+          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+            case (acc, ProjectionData(descriptor, identities, values, _)) =>
+              acc :+ descriptor
+          }
+        }
+      }
+      val byteProj = projDes.foldLeft(List.empty[LevelDBByteProjection]) {
+        case (l, des) => l :+ byteProjectionInstance2(des).sample.get
+      }
+      
+      projDes.zip(byteProj).map { 
+        case (des, byte) =>
+          val identities: Vector[Long] = constructIds(des.indexedColumns.values.toSet.size)
+          val values: Seq[CValue] = constructValues(des.columns)
+          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+
+          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+      }
+    }
+  }
+
+  "a byte projection of an empty object" should {
+    "return the arguments of project, when unproject is applied to project" in {
+      val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+      val dataPath = Path("/test")
+      implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.emptyObjectSample)
+
+      val projDes: List[ProjectionDescriptor] = {
+        sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
+          case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+            case (acc, ProjectionData(descriptor, identities, values, _)) =>
+              acc :+ descriptor
+          }
+        }
+      }
+      val byteProj = projDes.foldLeft(List.empty[LevelDBByteProjection]) {
+        case (l, des) => l :+ byteProjectionInstance2(des).sample.get
+      }
+      
+      projDes.zip(byteProj).map { 
+        case (des, byte) =>
+          val identities: Vector[Long] = constructIds(des.indexedColumns.values.toSet.size)
+          val values: Seq[CValue] = constructValues(des.columns)
+          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+
+          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+      }
+    }
+  }
+
+  "a byte projection of null" should {
+    "return the arguments of project, when unproject is applied to project" in {
+      val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+      val dataPath = Path("/test")
+      implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.nullSample)
 
       val projDes: List[ProjectionDescriptor] = {
         sampleData.zipWithIndex.foldLeft(List.empty[ProjectionDescriptor]) {
