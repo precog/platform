@@ -499,6 +499,14 @@ trait EvalStackSpecs extends Specification {
         eval(input) must not(throwA[Throwable])
       }
 
+      "handle query on empty array" >> {
+        val input = """
+          load(//test/empty_array)
+        """.stripMargin
+        
+        eval(input) must not(throwA[Throwable])
+      }.pendingUntilFixed
+
       // times out...
       /* "handle chained characteristic functions" in {
         val input = """
