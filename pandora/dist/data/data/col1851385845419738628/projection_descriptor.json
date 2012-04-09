@@ -1,0 +1,24 @@
+{
+  "columns":[{
+    "descriptor":{
+      "path":"/fastspring_nulls/",
+      "selector":".customer.firstName",
+      "valueType":"String",
+      "authorities":{
+        "uids":["C18ED787-BF07-4097-B819-0415C759C8D5"]
+      }
+    },
+    "index":0
+  }],
+  "sorting":[{
+    "descriptor":{
+      "path":"/fastspring_nulls/",
+      "selector":".customer.firstName",
+      "valueType":"String",
+      "authorities":{
+        "uids":["C18ED787-BF07-4097-B819-0415C759C8D5"]
+      }
+    },
+    "sortBy":"ById"
+  }]
+}
