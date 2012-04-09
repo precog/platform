@@ -504,8 +504,6 @@ trait EvalStackSpecs extends Specification {
           load(//test/empty_array)
         """.stripMargin
         
-        println("empty array = " + eval(input))
-
         eval(input) must not(throwA[Throwable])
       }     
       
@@ -514,8 +512,6 @@ trait EvalStackSpecs extends Specification {
           load(//test/empty_object)
         """.stripMargin
 
-        println("empty object = " + eval(input))
-        
         eval(input) must not(throwA[Throwable])
       }
 
