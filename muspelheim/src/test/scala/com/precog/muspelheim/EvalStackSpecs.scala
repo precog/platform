@@ -503,12 +503,8 @@ trait EvalStackSpecs extends Specification {
         val input = """
           load(//test/empty_array)
         """.stripMargin
-        
-        println(input)
 
-        eval(input) must haveSize(2) 
-        eval(input) mustEqual Set(SArray(Vector(), SObject(Map("foo" -> SArray(Vector())))))
-        eval(input) must not(throwA[Throwable])
+        eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
       }     
       
       "handle query on empty object" >> {
@@ -516,23 +512,15 @@ trait EvalStackSpecs extends Specification {
           load(//test/empty_object)
         """.stripMargin
 
-        println(input)
-
-        eval(input) must haveSize(2)
-        eval(input) mustEqual Set(SObject(Map(), SObject(Map("foo" -> SObject(Map())))))
-        eval(input) must not(throwA[Throwable])
+        eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
       }      
 
-      "handle query on empty object" >> {
+      "handle query on null" >> {
         val input = """
           load(//test/null)
         """.stripMargin
 
-        println(input)
-
-        eval(input) must haveSize(2)
-        eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull))))
-        eval(input) must not(throwA[Throwable])
+        eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
       }
 
       // times out...
