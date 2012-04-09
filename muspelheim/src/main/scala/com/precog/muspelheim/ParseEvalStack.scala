@@ -1,5 +1,5 @@
 package com.precog
-package pandora 
+package muspelheim 
 
 import daze._
 

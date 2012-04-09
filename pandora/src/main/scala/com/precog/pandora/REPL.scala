@@ -40,7 +40,7 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends ParseEvalStack with MemoryDatasetConsumer {
+trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
 
   val dummyUID = "dummyUID"
 
