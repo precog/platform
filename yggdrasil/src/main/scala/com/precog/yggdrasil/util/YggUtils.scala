@@ -1,8 +1,9 @@
 package com.precog.yggdrasil
 package util
 
-import com.precog.common.Path
+import com.precog.common._
 import com.precog.common.util._
+import com.precog.common.kafka._
 import com.precog.yggdrasil.leveldb._
 
 import org.iq80.leveldb._
@@ -13,6 +14,7 @@ import java.nio.ByteBuffer
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonParser
+import blueeyes.json.Printer
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 
@@ -20,6 +22,8 @@ import scopt.mutable.OptionParser
 
 import scala.collection.SortedSet
 import scala.collection.SortedMap
+
+import _root_.kafka.message._
 
 object YggUtils {
 
@@ -43,7 +47,9 @@ colRoot - path to a specific column root (will show a more detailed view of a sp
  """
 
   val commands: Map[String, Command] = List(
-    DescriptorSummary 
+    DescriptorSummary,
+    DumpLocalKafka,
+    DumpCentralKafka
   ).map( c => (c.name, c) )(collection.breakOut)
 
   def main(args: Array[String]) {
@@ -285,4 +291,104 @@ object DescriptorSummary extends Command {
                var selector: Option[JPath] = None,
                var dataDir: String = ".",
                var verbose: Boolean = false)
+}
+
+object DumpLocalKafka extends Command {
+  val name = "dump_local_kafka"
+  val description = "Dump contents of local message file"
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("ygg dump_local_kafka") {
+      intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
+      intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
+      arg("<local-kafka-file>", "local kafka message file", {d: String => config.file = d})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  val eventCodec = new KafkaEventCodec
+
+  def process(config: Config) {
+
+
+    def traverse(itr: Iterator[MessageAndOffset], start: Option[Int], finish: Option[Int], i: Int = 0): Unit = {
+      val beforeFinish = finish.map( _ >= i ).getOrElse(true)
+      val afterStart = start.map( _ <= i ).getOrElse(true)
+      if(beforeFinish && itr.hasNext) {
+        val next = itr.next
+        if(afterStart) {
+          val event = eventCodec.toEvent(next.message)
+          println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
+          println(Printer.pretty(Printer.render(event.data)))
+        }
+        traverse(itr, start, finish, i+1)
+      } else {
+        ()
+      }
+    }
+
+    val ms = new FileMessageSet(new File(config.file), false)
+
+    traverse(ms.iterator, config.start, config.finish)
+  }
+
+  class Config(var file: String = "",
+               var start: Option[Int] = None,
+               var finish: Option[Int] = None)
+}
+
+object DumpCentralKafka extends Command {
+  val name = "dump_central_kafka"
+  val description = "Dump contents of central message file"
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("ygg dump_central_kafka") {
+      intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
+      intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
+      arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  val eventCodec = new KafkaIngestMessageCodec
+
+  def process(config: Config) {
+
+    def traverse(itr: Iterator[MessageAndOffset], start: Option[Int], finish: Option[Int], i: Int = 0): Unit = {
+      val beforeFinish = finish.map( _ >= i ).getOrElse(true)
+      val afterStart = start.map( _ <= i ).getOrElse(true)
+      if(beforeFinish && itr.hasNext) {
+        val next = itr.next
+        if(afterStart) {
+          eventCodec.toEvent(next.message) match {
+            case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
+              println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
+              println(Printer.pretty(Printer.render(data)))
+            case _ =>
+          }
+        }
+        traverse(itr, start, finish, i+1)
+      } else {
+        ()
+      }
+    }
+
+    val ms = new FileMessageSet(new File(config.file), false)
+
+    traverse(ms.iterator, config.start, config.finish)
+  }
+
+  class Config(var file: String = "",
+               var start: Option[Int] = None,
+               var finish: Option[Int] = None)
 }

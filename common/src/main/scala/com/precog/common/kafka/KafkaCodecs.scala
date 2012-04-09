@@ -1,4 +1,4 @@
-package com.precog.ingest
+package com.precog.common
 package kafka
 
 import com.precog.common._

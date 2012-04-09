@@ -252,7 +252,7 @@ object Console extends App {
           with DiskIterableMemoizationComponent 
           with Lifecycle { self =>
         override type Dataset[A] = IterableDataset[A]
-        override type Valueset[A] = Iterable[A]
+        override type Memoable[A] = Iterable[A]
 
         lazy val actorSystem = ActorSystem("repl_actor_system")
         implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)

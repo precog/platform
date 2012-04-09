@@ -149,6 +149,8 @@ object CType extends CTypeSerialization {
     case JDouble(d) => CDouble(d)
     case JBool(b) => CBoolean(b)
     case JNull => CNull
+    case JArray(Nil) => CEmptyArray
+    case JObject(Nil) => CEmptyObject
     case _ => sys.error("unpossible: " + jval.getClass.getName)
   }
 
