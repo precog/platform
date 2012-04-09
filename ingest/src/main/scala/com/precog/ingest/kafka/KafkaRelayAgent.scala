@@ -3,6 +3,7 @@ package ingest
 package kafka
 
 import common._
+import common.kafka._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
