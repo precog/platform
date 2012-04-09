@@ -23,6 +23,7 @@ package util
 import kafka._
 
 import com.precog.common._
+import com.precog.common.kafka._
 import com.precog.common.security._
 import com.precog.common.util._
 
