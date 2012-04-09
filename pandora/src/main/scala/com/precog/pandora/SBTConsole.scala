@@ -61,7 +61,7 @@ object SBTConsole {
                     with ProductionActorConfig
 
     override type Dataset[A] = IterableDataset[A]
-    override type Valueset[A] = Iterable[A]
+    override type Memoable[A] = Iterable[A]
   }
 
   val platform = new Platform { console =>
