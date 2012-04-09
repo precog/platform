@@ -523,6 +523,11 @@ trait EvalStackSpecs extends Specification {
         eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
       }
 
+      "handle load of error-prone fastspring data" >> {
+        (eval("load(//fastspring_nulls)") must haveSize(2)) and
+        (eval("load(//fastspring_mixed_type)") must haveSize(2))
+      }
+
       // times out...
       /* "handle chained characteristic functions" in {
         val input = """
