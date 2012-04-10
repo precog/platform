@@ -14,134 +14,50 @@ import scalaz.iteratee.Input._
 import scalaz.iteratee.IterateeT._
 import scalaz.iteratee.StepT._
 
-trait TableChunk { self =>
-  import TableChunk.TableChunkSchema
+sealed trait Tablet { self =>
+  def idCount: Int
+  def size: Int
 
-  def schema: TableChunkSchema
+  def columns: Map[CMeta, F0[_]]
+  def iterator: RowIterator 
 
-  def iterator: RowIterator
+  def isEmpty: Boolean = size == 0
 
-  def isEmpty: Boolean
-}
+  def apply[B](rowId: Int, meta: CMeta)(f: F1[_, B]): B = columns(meta).ctype.cast1(f).apply(rowId)
+  def apply[B](rowId: Int, m1: CMeta, m2: CMeta)(f: F2[_, _, B]): B = 
 
-object TableChunk {
-  type TableChunkSchema = Seq[(CPath, CType)]
-
-  def empty(schema1: TableChunkSchema): TableChunk = new TableChunk {
-    def schema = schema1
-    
-    def iterator = RowIterator.empty(schema)
-    
-    def isEmpty = true
-  }
-}
-
-trait ColumnBuffer {
-  def append(it: RowState, idx: Int): Unit
-
-  def clear: Unit
-}
-
-class ColumnBufferInt extends ColumnBuffer {
-  val ints = new ArrayIntList()
-
-  def append(it: RowState, idx: Int): Unit = {
-    ints.add(it.intAt(idx))
+  def map(meta: CMeta, refId: Long)(f: F1[_, _]): Tablet = new Tablet {
+    val idCount = self.idCount
+    val size = self.size
+    val columns = self.columns.get(meta) map { f0 =>
+                    self.columns + (CMeta(CDyn(refId), f.returns) -> f0 andThen f)
+                  } getOrElse {
+                    sys.error("No column found in table matching " + meta)
+                  }
   }
 
-  def intAt(idx: Int) = ints.get(idx)
-
-  def clear = ints.clear
-}
-
-trait TableChunkBuffer extends TableChunk {
-  import TableChunk.TableChunkSchema
-
-  val schema: TableChunkSchema
-
-  final val isEmpty: Boolean = length == 0
-
-  def iterator: RowIterator
-
-  private[yggdrasil] val columns: Array[ColumnBuffer]
-
-  var length : Int
-
-  def clear: Unit
-  
-  def append(rowStates: RowState*): Unit
-} 
-
-object TableChunkBuffer {
-  import TableChunk.TableChunkSchema
-
-  def apply(schema: TableChunkSchema): TableChunkBuffer = TableChunkBufferImpl(schema)
-}
-
-private case class TableChunkBufferImpl(final val idCount : Int, schema: Seq[(CPath, CType)]) extends TableChunkBuffer {
-  final private val ids = new Array[ArrayLongList](idCount)
-  final private val columns = new Array[ColumnBuffer](schema.length)
-  var length = 0
-
-  // Constructor setup
-  private var i = 0
-
-  while (i < schema.length) {
-    val ctype = schema(i)._2
-
-    ctype match {
-      case CInt => columns(i) = new ColumnBufferInt
-      case _    => sys.error("Not yet supported")
-    }
-
-    i += 1
-  }
-  // End constructor
-
-  def iterator = new RowIterator {
-    private final var currentPos = 0
-
-    final def isValid = currentPos > 0 && currentPos < length
-    final def advance(i: Int) = if (currentPos + i < length) { currentPos += i; true } else false
-
-    final val idCount = ids.length
-    final val valueCount = columns.length
-
-  }
-
-  def clear: Unit = {
-    length = 0
-    var i = 0
-    while (i < columns.length) {
-      columns(i).clear
-      i += 1
-    }
-  }
-
-  def append(rowStates: RowState*): Unit = {
-    length += 1
-    var stateIndex, idIndex, valueIndex = 0
-    while (stateIndex < rowStates.length) {
-      val it = rowStates(stateIndex)
-
-      var i = 0
-      while (i < it.idCount) {
-        ids(idIndex).add(it.idAt(i))
-        idIndex += 1
-        i += 1
+  def map2(m1: CMeta, m2: CMeta)(f: F2[_, _, _]): Tablet = new Tablet {
+    val size = self.size
+    val columns = {
+      val cfopt = for {
+        c1 <- self.columns.get(m1)
+        c2 <- self.columns.get(m2)
+      } yield {
+        val fl  = m1.ctype.cast2l(f)
+        val flr = m2.ctype.cast2r(fl)
+        fl(m1.ctype.cast0(c1), m2.ctype.cast0(c2))
       }
 
-      var j = 0
-      while (j < it.valueCount) {
-        columns(valueIndex).append(it, j)
-        valueIndex += 1
-        j += 1
+      cfopt map { cf => 
+        self.columns + (CMeta(CDyn(refId), cf.returns) -> cf)
+      } getOrElse {
+        sys.error("No column(s) found in table matching " + m1 + " and/or " + m2)
       }
     }
   }
+
+  def filter(fx: (CMeta, F1[_, Boolean])*): Tablet
 }
-
-
 
 sealed trait CogroupState
 
@@ -150,10 +66,6 @@ case class ReadLeft(leftBuffer: TableChunkBuffer, rightBuffer: TableChunkBuffer,
 case class ReadRight(leftBuffer: TableChunkBuffer, leftRemain: Option[RowIterator], rightBuffer: TableChunkBuffer) extends CogroupState
 case object Exhausted extends CogroupState
 
-
-trait Table {
-  def iterator: Iterator[TableChunk]
-}
 
 object TableOps {
   import TableChunk.TableChunkSchema
