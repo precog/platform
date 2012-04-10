@@ -80,8 +80,8 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     test.elements.startsWith(ref.elements) && 
     test.elements.size > ref.elements.size
 
-  def findChildren(path: Path): Seq[Path] = 
-    projections.foldLeft(Seq[Path]()) {
+  def findChildren(path: Path): Set[Path] = 
+    projections.foldLeft(Set[Path]()) {
       case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { 
         case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
       }
