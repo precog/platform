@@ -68,10 +68,15 @@ object CValue {
   }
 }
 
-sealed trait CType {
-  def format: StorageFormat
+sealed abstract class CType(val format: StorageFormat, val stype: SType) {
+  type CA
 
-  def stype: SType
+  @inline final def cast0(f0: F0[_]): F0[CA] = f0.asInstanceOf[F0[CA]]
+  @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
+  @inline final def cast2l[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
+  @inline final def cast2r[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
+
+  implicit val manifest: Manifest[CA]
 
   @inline private[CType] final def typeIndex = this match {
     case CBoolean => 0
@@ -218,79 +223,72 @@ object CType extends CTypeSerialization {
 //
 case class CString(value: String) extends CValue 
 
-case class CStringFixed(width: Int) extends CType {
-  def format = FixedWidth(width)  
-  val stype = SString
+case class CStringFixed(width: Int) extends CType(FixedWidth(width), SString) {
+  type CA = String
+  implicit val manifest = implicitly[Manifest[String]]
 }
 
-case object CStringArbitrary extends CType {
-  val format = LengthEncoded  
-  val stype = SString
+case object CStringArbitrary extends CType(LengthEncoded, SString) {
+  type CA = String
+  implicit val manifest = implicitly[Manifest[String]]
 }
 
 //
 // Booleans
 //
 case class CBoolean(value: Boolean) extends CValue 
-
-case object CBoolean extends CType {
-  val format = FixedWidth(1)
-  val stype = SBoolean
+case object CBoolean extends CType(FixedWidth(1), SBoolean) {
+  type CA = Boolean
+  implicit val manifest = implicitly[Manifest[Boolean]]
 }
 
 //
 // Numerics
 //
 case class CInt(value: Int) extends CValue 
-
-case object CInt extends CType {
-  val format = FixedWidth(4)
-  val stype = SDecimal
+case object CInt extends CType(FixedWidth(4), SDecimal) {
+  type CA = Int
+  implicit val manifest = implicitly[Manifest[Int]]
 }
 
 case class CLong(value: Long) extends CValue 
-
-case object CLong extends CType {
-  val format = FixedWidth(8)
-  val stype = SDecimal
+case object CLong extends CType(FixedWidth(8), SDecimal) {
+  type CA = Long
+  implicit val manifest = implicitly[Manifest[Long]]
 }
 
 case class CFloat(value: Float) extends CValue 
-
-case object CFloat extends CType {
-  val format = FixedWidth(4)
-  val stype = SDecimal
+case object CFloat extends CType(FixedWidth(4), SDecimal) {
+  type CA = Float
+  implicit val manifest = implicitly[Manifest[Float]]
 }
 
 case class CDouble(value: Double) extends CValue 
-
-case object CDouble extends CType {
-  val format = FixedWidth(8)
-  val stype = SDecimal
+case object CDouble extends CType(FixedWidth(8), SDecimal) {
+  type CA = Double
+  implicit val manifest = implicitly[Manifest[Double]]
 }
 
 case class CNum(value: BigDecimal) extends CValue 
-
-case object CDecimalArbitrary extends CType {
-  val format = LengthEncoded  
-  val stype = SDecimal
+case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
+  type CA = BigDecimal
+  implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
 //
 // Nulls
 //
-case object CEmptyObject extends CValue with CType {
-  val format = FixedWidth(0)
-  val stype = SObject
+case object CNull extends CValue with CType(FixedWidth(0), SNull) {
+  type CA = Null
+  implicit val manifest = implicitly[Manifest[Null]]
 }
 
-case object CEmptyArray extends CValue with CType {
-  val format = FixedWidth(0)
-  val stype = SArray
+case object CEmptyObject extends CType(FixedWidth(0), SObject) {
+  type CA = Null
+  implicit val manifest = implicitly[Manifest[Null]]
 }
 
-case object CNull extends CValue with CType {
-  val format = FixedWidth(0)
-  val stype = SNull
+case object CEmptyArray extends CType(FixedWidth(0), SArray) {
+  type CA = Null
+  implicit val manifest = implicitly[Manifest[Null]]
 }
-

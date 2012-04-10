@@ -25,25 +25,6 @@ import scalaz.Ordering
 import scalaz.Ordering._
 import scalaz.syntax.std.allV._
 
-trait RowState {
-  import TableChunk.TableChunkSchema
-  val schema: TableChunkSchema
-
-  val idCount: Int
-  val valueCount: Int 
-
-  def stringAt(i: Int): String
-  def boolAt(i: Int): Boolean
-  def intAt(i: Int): Int
-  def longAt(i: Int): Long
-  def floatAt(i: Int): Float
-  def doubleAt(i: Int): Double
-  def numAt(i: Int): BigDecimal
-
-  def valueAt(i: Int): CValue
-  def idAt(i: Int): Long
-  def typeAt(i: Int): CType
-}
 
 object RowIterator {
   import TableChunk.TableChunkSchema
