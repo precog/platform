@@ -16,9 +16,6 @@ sealed abstract class CValue {
     case CLong(v) => 3
     case CDouble(v) => 4
     case CNum(v) => 5
-    case CEmptyObject => 6
-    case CEmptyArray => 7
-    case CNull => 8
   }
 
   @inline final def toSValue: SValue = this match {
@@ -28,9 +25,6 @@ sealed abstract class CValue {
     case CLong(v) => SDecimal(v)
     case CDouble(v) => SDecimal(v)
     case CNum(v) => SDecimal(v)
-    case CEmptyObject => SObject(Map())
-    case CEmptyArray => SArray(Vector())
-    case CNull => SNull
   }
 }
 
@@ -52,6 +46,7 @@ object CValue {
 sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   type CA
 
+  @inline final def cast(v: Any): CA = v.asInstanceOf[CA]
   @inline final def cast0(f0: F0[_]): F0[CA] = f0.asInstanceOf[F0[CA]]
   @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
   @inline final def cast2l[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
@@ -145,18 +140,12 @@ trait CTypeSerialization {
 
 
 object CType extends CTypeSerialization {
-  // Note this conversion has a peer for SValues that should always be changed
-  // in conjunction with this mapping.
   @inline
   final def toCValue(jval: JValue): CValue = jval match {
     case JString(s) => CString(s)
     case JInt(i) => sizedIntCValue(i)
     case JDouble(d) => CDouble(d)
     case JBool(b) => CBoolean(b)
-    case JNull => CNull
-    case JArray(Nil) => CEmptyArray
-    case JObject(Nil) => CEmptyObject
-    case _ => sys.error("unpossible: " + jval.getClass.getName)
   }
 
   @inline
@@ -259,17 +248,17 @@ case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
 //
 // Nulls
 //
-case object CNull extends CValue with CType(FixedWidth(0), SNull) {
+case object CNull extends CType(FixedWidth(0), SNull) {
   type CA = Null
-  implicit val manifest = implicitly[Manifest[Null]]
+  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
 case object CEmptyObject extends CType(FixedWidth(0), SObject) {
   type CA = Null
-  implicit val manifest = implicitly[Manifest[Null]]
+  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
 case object CEmptyArray extends CType(FixedWidth(0), SArray) {
   type CA = Null
-  implicit val manifest = implicitly[Manifest[Null]]
+  implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }

@@ -43,21 +43,6 @@ trait LevelDBByteProjection extends ByteProjection {
       case CNum(d) => 
         val dbytes = d.as[Array[Byte]]
         buf.putInt(dbytes.length).put(dbytes)
-      
-      case CEmptyObject => ()
-      case CEmptyArray => ()
-      case CNull => 
-        colDesc.valueType match {
-          case CStringFixed(width)    => buf.put(Array.fill[Byte](width)(0x00))
-          case CStringArbitrary       => buf.putInt(0)
-          case CBoolean               => buf.put(nullByte)
-          case CInt                   => buf.putInt(Int.MaxValue)
-          case CLong                  => buf.putLong(Long.MaxValue)
-          case CFloat                 => buf.putFloat(Float.MaxValue)
-          case CDouble                => buf.putDouble(Double.MaxValue)
-          case CDecimalArbitrary      => buf.putInt(0)
-          case _                      => ()
-        }
     }
     
     def toArray: Array[Byte] = buf.array
@@ -346,10 +331,9 @@ private[leveldb] object CValueReader {
         buf.get(sdecimalarb)
         CNum(sdecimalarb.as[BigDecimal])
 
-      case CEmptyArray            => CEmptyArray
-      case CEmptyObject           => CEmptyObject
-
-      case CNull                  => CNull
+      case CEmptyArray            => null
+      case CEmptyObject           => null
+      case CNull                  => null
 
       case invalid                => sys.error("Invalid type read: " + invalid)
     }
