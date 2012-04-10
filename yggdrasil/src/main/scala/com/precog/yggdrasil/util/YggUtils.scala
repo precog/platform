@@ -270,19 +270,23 @@ object IngestStatus extends Command {
   
 
   def run(args: Array[String]) {
-    val conn = new ZkConnection("localhost:2181")
-    val client = new ZkClient(conn)
     val config = new Config
     val parser = new OptionParser("ygg ingest_status") {
       intOpt("s", "limit", "<sync-limit-messages>", "if sync is greater than the specified limit an error will occur", {s: Int => config.limit = s})
       intOpt("l", "lag", "<time-lag-minutes>", "if update lag is greater than the specified value an error will occur", {l: Int => config.lag = l})
+      opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
     }
     if (parser.parse(args)) {
-      process(conn, client, config)
+      val conn = new ZkConnection(config.zkConn)
+      val client = new ZkClient(conn)
+      try {
+        process(conn, client, config)
+      } finally {
+        client.close
+      }
     } else { 
       parser
     }
-    client.close
   }
 
   val shardCheckpointPath = "/beta/com/precog/ingest/v1/shard/checkpoint/shard01"
@@ -345,5 +349,6 @@ object IngestStatus extends Command {
   }
   
   class Config(var limit: Int = 0,
-               var lag: Int = 60)
+               var lag: Int = 60,
+               var zkConn: String = "localhost:2181")
 }
