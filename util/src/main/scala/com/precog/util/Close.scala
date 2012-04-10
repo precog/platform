@@ -19,20 +19,21 @@
  */
 package com.precog.util
 
-trait Close[A] {
+trait Close[-A] {
   def close(a: A): Unit
 }
 
 object Close {
   import java.io._
-  implicit object DataInputStreamClose extends Close[DataInputStream] {
-    def close(a: DataInputStream) = {
-      a.close
+
+  implicit object InputStreamClose extends Close[InputStream] {
+    def close(in: InputStream) = {
+      in.close
     }
   }
 
-  implicit object DataOutputStreamClose extends Close[DataOutputStream] {
-    def close(a: DataOutputStream) = {
+  implicit object OutputStreamClose extends Close[OutputStream] {
+    def close(a: OutputStream) = {
       a.flush
       a.close
     }

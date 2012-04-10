@@ -26,7 +26,7 @@ import blueeyes.json.JsonAST._
 import daze._
 import daze.memoization._
 
-import pandora.ParseEvalStack
+import muspelheim.ParseEvalStack
 
 import com.precog.common._
 
