@@ -16,6 +16,9 @@ import akka.util.Timeout
 import akka.util.Duration
 import akka.util.duration._
 
+import blueeyes.json.JsonParser
+import blueeyes.json.JsonAST._
+
 import java.io.File
 
 import org.streum.configrity.Configuration
@@ -34,36 +37,34 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
   lazy val shard = new TestShard(config, tmpDir)
   lazy val executor = new TestQueryExecutor(config, shard)
   
+  def insert(shard: TestShard, path: Path, pid: Int, batchSize: Int, batches: Int) {
+    val batch = new Array[EventMessage](batchSize)
+
+    var id = 0
+    var b = 0
+    while(b < batches) {
+      var i = 0
+      while(i < batchSize) {
+        val jval = AdSamples.adCampaignSample.sample.get
+        val event = Event(path, "token", jval, Map.empty)
+        batch(i) = EventMessage(EventId(pid, id), event)
+        i += 1
+        id += 1
+      }
+      val result = shard.storeBatch(batch, timeout)
+      Await.result(result, timeout)
+      
+      b += 1
+    }
+    
+    shard.waitForRoutingActorIdle
+  }
+
   step {    
     Await.result(shard.actorsStart, timeout)
   }
 
   "yggdrasil" should {
-
-    def insert(shard: TestShard, path: Path, pid: Int, batchSize: Int, batches: Int) {
-
-      val batch = new Array[EventMessage](batchSize)
-
-      var id = 0
-      var b = 0
-      while(b < batches) {
-        var i = 0
-        while(i < batchSize) {
-          val jval = AdSamples.adCampaignSample.sample.get
-          val event = Event(path, "token", jval, Map.empty)
-          batch(i) = EventMessage(EventId(pid, id), event)
-          i += 1
-          id += 1
-        }
-        val result = shard.storeBatch(batch, timeout)
-        Await.result(result, timeout)
-        
-        b += 1
-      }
-      
-      shard.waitForRoutingActorIdle
-    }
-
     "insert" in {
       performBatch(10000, 7000) { i =>
         val batchSize = 1000
@@ -100,7 +101,6 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
     "multi-thread read" in {
       insert(shard, Path("/test/small2"), 2, 100, 1)
       val threadCount = 10 
-      
 
       performBatch(10, 2500) { i =>
         val threads = (0.until(threadCount)) map { _ =>
@@ -122,6 +122,184 @@ trait YggdrasilPerformanceSpec extends Specification with PerformanceSpec {
         threads.foreach{ _.start }
         threads.foreach{ _.join }
       } 
+    }
+
+    "handle null scenario" in {
+      val nullReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":null,
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvals = JsonParser.parse(nullReal)
+      val msgs = jvals match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/null"), "token", jval, Map.empty)
+              EventMessage(EventId(1,idx), event)
+          }
+        case _ => sys.error("Unexpected parse result")
+      }
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+
+      val result = executor.execute("token", "load(//test/null)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
+    }
+
+    "handle mixed type scenario" in {
+      val mixedReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":"null",
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvalues = JsonParser.parse(mixedReal)
+      val msgs = jvalues match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/mixed"), "token", jval, Map.empty)
+              EventMessage(EventId(2,idx), event)
+          }
+        case _ => sys.error("Unexpected parse result")
+      }
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+      
+      val result = executor.execute("token", "load(//test/mixed)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
     }
   }
 

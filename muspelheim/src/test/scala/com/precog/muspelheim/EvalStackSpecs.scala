@@ -310,6 +310,19 @@ trait EvalStackSpecs extends Specification {
         eval(input) mustEqual Set()
     }
 
+    "use NotEq correctly" in {
+      val input = """load(//campaigns) where load(//campaigns).gender != "female" """.stripMargin
+
+      val results = evalE(input)
+
+      forall(results) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveSize(5)
+          obj must contain("gender" -> SString("male"))
+        }
+      }
+    }
+
     "evaluate an unquantified characteristic function" in {
       val input = """
         | campaigns := load(//campaigns)
@@ -484,6 +497,35 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) must not(throwA[Throwable])
+      }
+
+      "handle query on empty array" >> {
+        val input = """
+          load(//test/empty_array)
+        """.stripMargin
+
+        eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
+      }     
+      
+      "handle query on empty object" >> {
+        val input = """
+          load(//test/empty_object)
+        """.stripMargin
+
+        eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
+      }      
+
+      "handle query on null" >> {
+        val input = """
+          load(//test/null)
+        """.stripMargin
+
+        eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
+      }
+
+      "handle load of error-prone fastspring data" >> {
+        (eval("load(//fastspring_nulls)") must haveSize(2)) and
+        (eval("load(//fastspring_mixed_type)") must haveSize(2))
       }
 
       // times out...

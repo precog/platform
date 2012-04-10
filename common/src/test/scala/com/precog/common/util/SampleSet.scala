@@ -208,6 +208,12 @@ object AdSamples {
       JField("income", income) :: Nil
     )
   }
+
+  def emptyObjectSample = JObject(List())
+
+  def emptyArraySample = JArray(List())
+
+  def nullSample = JNull
   
   val millisPerDay: Long = 24L * 60 * 60 * 1000
 

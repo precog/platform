@@ -21,6 +21,7 @@ import akka.util.Duration
 import akka.util.duration._
 
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonParser
 
 import java.io.File
 
@@ -273,6 +274,183 @@ histogram
       true must_== true
     }
     
+    "handle null scenario" in {
+      val nullReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":null,
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvals = JsonParser.parse(nullReal)
+      val msgs = jvals match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/null"), "token", jval, Map.empty)
+              EventMessage(EventId(1,idx), event)
+          }
+      }
+
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+
+      val result = executor.execute("token", "load(//test/null)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
+    }
+
+    "handle mixed type scenario" in {
+      val mixedReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":"null",
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvalues = JsonParser.parse(mixedReal)
+      val msgs = jvalues match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/mixed"), "token", jval, Map.empty)
+              EventMessage(EventId(2,idx), event)
+          }
+      }
+
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+      
+      val result = executor.execute("token", "load(//test/mixed)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
+    }
   }
 
   step {
