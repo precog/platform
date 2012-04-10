@@ -128,7 +128,7 @@ Measurement overhead:        %10.02f%%
       baseline * 100.0 / mean
     ))
   }
-  private def ptile(p: Double): Int = {
+  def ptile(p: Double): Int = {
     (p * (testRuns-1)).toInt
   }
   def meanRepTime(): Double = {
