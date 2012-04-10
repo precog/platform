@@ -56,7 +56,6 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     case JInt(i)    => CNum(BigDecimal(i))
     case JDouble(d) => CDouble(d)
     case JBool(b)   => CBoolean(b)
-    case JNull      => CNull
     case x          => sys.error("JValue type not yet supported: " + x.getClass.getName )
   }
 
