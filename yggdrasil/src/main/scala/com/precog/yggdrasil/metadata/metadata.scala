@@ -19,7 +19,7 @@ trait StorageMetadata {
 
   implicit val dispatcher: MessageDispatcher
 
-  def findChildren(path: Path): Future[Seq[Path]]
+  def findChildren(path: Path): Future[Set[Path]]
 
   def findSelectors(path: Path): Future[Seq[JPath]]
   def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
@@ -67,12 +67,12 @@ class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: M
 
 class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
  
-  def findChildren(path: Path): Future[Seq[Path]] = {
+  def findChildren(path: Path): Future[Set[Path]] = {
     metadata.findChildren(path) flatMap { paths =>
       Future.traverse(paths) { path =>
         accessControl.mayAccessPath(uid, path, PathRead) map {
-          case true => Seq(path)
-          case false => Seq.empty
+          case true => Set(path)
+          case false => Set.empty
         }
       }.map{ _.flatten }
     }
@@ -124,7 +124,7 @@ class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDisp
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
-  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Seq[Path]] }
+  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] }
 
   def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
 

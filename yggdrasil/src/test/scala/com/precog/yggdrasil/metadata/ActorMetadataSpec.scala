@@ -180,7 +180,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       val fut = actor ? FindChildren(Path(""))
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[Path]].toSet
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]]
       
       val expected = extractPathsFor(Path(""))(sample)
       
@@ -198,7 +198,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       val fut = actor ? FindChildren(testPath)
 
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[Path]].toSet
+      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]]
       
       val expected = extractPathsFor(testPath)(sample)
       
