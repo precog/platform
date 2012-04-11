@@ -7,6 +7,11 @@ trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] {
 trait F0[@specialized(Boolean, Int, Long, Float, Double) A] extends Returning[A] { outer =>
   def apply(row: Int): A
 
+  def remap(f: Int => Int) = new F0[A] {
+    val returns = outer.returns
+    def apply(row: Int) = outer.apply(f(row))
+  }
+
   def andThen[@specialized(Boolean, Int, Long, Float, Double) B](f: F1[_, B]): F0[B] = new F0[B] {
     val returns = f.returns
     def apply(row: Int): B = if (outer.returns == f.accepts) {
