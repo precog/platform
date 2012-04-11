@@ -124,7 +124,8 @@ trait Slice { source =>
             var result: Ordering = EQ
             while (i < accessors.length && (result eq EQ)) {
               val (ctype, f0) = accessors(i)
-              result = ctype.order(ctype.cast0(f0)(i1), ctype.cast0(f0)(i2))
+              val f0t = ctype.cast0(f0)
+              result = ctype.order(f0t(i1), f0t(i2))
               i += 1
             }
             result
@@ -139,6 +140,35 @@ trait Slice { source =>
       lazy val size = source.size
       lazy val identities = source.identities map { _ remap sortedIndices }
       lazy val columns = source.columns mapValues { _ remap sortedIndices }
+    }
+  }
+
+  def append(other: Slice): Slice = {
+    assert(columns.keySet == other.columns.keySet && idCount == other.idCount) 
+    new Slice {
+      val idCount = source.idCount
+      val size = source.size + other.size
+      val identities = (source.identities zip other.identities) map {
+        case (sf0, of0) => new F0[Long] { 
+          val returns = CLong
+          def apply(row: Int) = if (row < source.size) sf0(row) else of0(row - source.size)
+        }
+      }
+
+      val columns = other.columns.foldLeft(source.columns) {
+        case (acc, (cmeta, of0)) => 
+          val ctype = cmeta.ctype
+          val sf0t = ctype.cast0(acc(cmeta))
+          val of0t = ctype.cast0(of0)
+          acc + (
+            cmeta -> {
+              new F0[ctype.CA] { 
+                val returns: CType { type CA = ctype.CA } = ctype
+                def apply(row: Int) = if (row < source.size) sf0t(row) else of0t(row - source.size)
+              }
+            }
+          )
+      }
     }
   }
 }
