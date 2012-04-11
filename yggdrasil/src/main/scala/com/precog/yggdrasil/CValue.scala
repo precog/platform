@@ -4,8 +4,12 @@ import com.precog.util._
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
+
 import scalaz._
+import scalaz.Ordering._
 import scalaz.syntax.order._
+import scalaz.std._
+import scalaz.std.math._
 import scalaz.std.AllInstances._
 
 sealed abstract class CValue {
@@ -53,6 +57,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   @inline final def cast2r[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
 
   implicit val manifest: Manifest[CA]
+
+  def order(a: CA, b: CA): Ordering
 
   @inline private[CType] final def typeIndex = this match {
     case CBoolean => 0
@@ -195,11 +201,13 @@ case class CString(value: String) extends CValue
 
 case class CStringFixed(width: Int) extends CType(FixedWidth(width), SString) {
   type CA = String
+  def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   implicit val manifest = implicitly[Manifest[String]]
 }
 
 case object CStringArbitrary extends CType(LengthEncoded, SString) {
   type CA = String
+  def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   implicit val manifest = implicitly[Manifest[String]]
 }
 
@@ -209,6 +217,7 @@ case object CStringArbitrary extends CType(LengthEncoded, SString) {
 case class CBoolean(value: Boolean) extends CValue 
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   type CA = Boolean
+  def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Boolean]]
 }
 
@@ -218,30 +227,35 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 case class CInt(value: Int) extends CValue 
 case object CInt extends CType(FixedWidth(4), SDecimal) {
   type CA = Int
+  def order(v1: Int, v2: Int) = intInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Int]]
 }
 
 case class CLong(value: Long) extends CValue 
 case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
+  def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
 case class CFloat(value: Float) extends CValue 
 case object CFloat extends CType(FixedWidth(4), SDecimal) {
   type CA = Float
+  def order(v1: Float, v2: Float) = floatInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Float]]
 }
 
 case class CDouble(value: Double) extends CValue 
 case object CDouble extends CType(FixedWidth(8), SDecimal) {
   type CA = Double
+  def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
 case class CNum(value: BigDecimal) extends CValue 
 case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
+  def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
@@ -250,15 +264,18 @@ case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
 //
 case object CNull extends CType(FixedWidth(0), SNull) {
   type CA = Null
+  def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
 case object CEmptyObject extends CType(FixedWidth(0), SObject) {
   type CA = Null
+  def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
 case object CEmptyArray extends CType(FixedWidth(0), SArray) {
   type CA = Null
+  def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
