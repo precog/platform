@@ -14,12 +14,16 @@ import org.fusesource.leveldbjni.JniDBFactory._
 import java.io.File
 import java.nio.ByteBuffer
 
+import collection.mutable.{Buffer, ListBuffer}
+import collection.JavaConversions._
+
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.Extractor._
 
 import scopt.mutable.OptionParser
 
@@ -30,6 +34,8 @@ import _root_.kafka.message._
 
 import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
+
+import scalaz.{Success, Failure}
 
 object YggUtils {
  
@@ -47,6 +53,7 @@ object YggUtils {
     DumpLocalKafka,
     DumpCentralKafka,
     IngestStatus,
+    ZookeeperTools,
     KafkaConvert
   )
 
@@ -263,10 +270,136 @@ object DumpCentralKafka extends Command {
                var finish: Option[Int] = None)
 }
 
+object ZookeeperTools extends Command {
+
+  val name = "zk"
+  val description = "Misc zookeeper tools"
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("ygg zk") {
+      opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
+      opt("c", "checkpoints", "Show shard checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
+      opt("a", "agents", "Show ingest agent state with prefix", { s: String => config.showAgents = Some(s)})
+      opt("uc", "update_checkpoints", "Update agent state prefix:shard:json", {s: String => config.updateCheckpoint = Some(s)})
+      opt("ua", "update_agents", "Update agent state prefix:ingest:json", {s: String => config.updateAgent = Some(s)})
+    }
+    if (parser.parse(args)) {
+      val conn: ZkConnection = new ZkConnection(config.zkConn)
+      val client: ZkClient = new ZkClient(conn)
+      try {
+        process(conn, client, config)
+      } finally {
+        client.close
+      }
+    } else { 
+      parser
+    }
+  }
+
+  val shardCheckpointPath = "/com/precog/ingest/v1/shard/checkpoint"
+  val ingestAgentPath = "/com/precog/ingest/v1/relay_agent"
+
+  def process(conn: ZkConnection, client: ZkClient, config: Config) {
+    config.checkpointsPath().foreach { path =>
+      showChildren("checkpoints", path, pathsAt(path, client))
+    }
+    config.relayAgentsPath().foreach { path =>
+      showChildren("agents", path, pathsAt(path, client))
+    }
+    config.checkpointUpdate.foreach {
+      case (path, data) =>
+        JsonParser.parse(data).validated[YggCheckpoint] match {
+          case Success(_) =>
+            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
+              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+            })  
+            println("Checkpoint updated: %s with %s".format(path, data))
+          case Failure(e) => println("Invalid json for checkpoint: %s".format(e))
+      }
+    }
+    config.relayAgentUpdate.foreach { 
+      case (path, data) =>
+        JsonParser.parse(data).validated[EventRelayState] match {
+          case Success(_) =>
+            client.updateDataSerialized(path, new DataUpdater[Array[Byte]] {
+              def update(cur: Array[Byte]): Array[Byte] = data.getBytes 
+            })  
+            println("Agent updated: %s with %s".format(path, data))
+          case Failure(e) => println("Invalid json for agent: %s".format(e))
+      }
+    }
+  }
+
+  def showChildren(name: String, path: String, children: Buffer[(String, String)]) { children match {
+      case l if l.size == 0 => 
+        println("no %s at: %s".format(name, path))
+      case children =>
+        println("%s for: %s".format(name, path))
+        children.foreach { 
+          case (child, data) =>
+            println("  %s".format(child))
+            println("    %s".format(data))
+        }
+    }
+  }
+
+  def pathsAt(path: String, client: ZkClient): Buffer[(String, String)] = {
+    val children = client.watchForChilds(path)
+    if(children == null) {
+      ListBuffer[(String, String)]()
+    } else {
+      children.map{ child =>
+        val bytes = client.readData(path + "/" + child).asInstanceOf[Array[Byte]]
+        (child, new String(bytes))
+      }
+    }
+  }
+
+  class Config(var zkConn: String = "localhost:2181",
+               var showCheckpoints: Option[String] = None,
+               var showAgents: Option[String] = None,
+               var updateCheckpoint: Option[String] = None,
+               var updateAgent: Option[String] = None) {
+
+    def checkpointsPath() = showCheckpoints.map { buildPath(_, shardCheckpointPath) } 
+    def relayAgentsPath() = showAgents.map { buildPath(_, ingestAgentPath) } 
+    
+    def buildPath(prefix: String, base: String): String = 
+      if(prefix.trim.size == 0) {
+        base 
+      } else {
+        "/%s%s".format(prefix, base) 
+      }
+
+    def splitOn(delim: Char, s: String): (String, String) = {
+      val t = s.span( _ != delim)
+      (t._1, t._2.tail)
+    }
+
+    def splitUpdate(s: String): (String, String, String) = {
+      val t1 = splitOn(':', s)
+      val t2 = splitOn(':', t1._2)
+      (t1._1, t2._1, t2._2)
+    }
+
+    def checkpointUpdate() = updateCheckpoint.map{ splitUpdate }.map {
+      case (pre, id, data) =>
+        val path = buildPath(pre, shardCheckpointPath) + "/" + id
+        (path, data)
+    }
+
+    def relayAgentUpdate() = updateAgent.map{ splitUpdate }.map {
+      case (pre, id, data) =>
+        val path = buildPath(pre, ingestAgentPath) + "/" + id
+        (path, data)
+    }
+  }
+}
+
 object IngestStatus extends Command {
   val name = "ingest_status"
   val description = "Dump details about ingest status"
-  
 
   def run(args: Array[String]) {
     val config = new Config
