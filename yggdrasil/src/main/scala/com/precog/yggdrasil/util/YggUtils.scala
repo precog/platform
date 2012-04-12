@@ -51,7 +51,6 @@ import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
 
 object YggUtils {
-
  
   def usage(message: String*): String = {
     val initial = message ++ List("Usage: yggutils {command} {flags/args}",""," For details on a particular command enter yggutils {command} -help", "")
@@ -66,7 +65,8 @@ object YggUtils {
     DescriptorSummary,
     DumpLocalKafka,
     DumpCentralKafka,
-    IngestStatus
+    IngestStatus,
+    KafkaConvert
   )
 
   val commandMap: Map[String, Command] = commands.map( c => (c.name, c) )(collection.breakOut)
@@ -205,7 +205,6 @@ object DumpLocalKafka extends Command {
 
   def process(config: Config) {
 
-
     def traverse(itr: Iterator[MessageAndOffset], start: Option[Int], finish: Option[Int], i: Int = 0): Unit = {
       val beforeFinish = finish.map( _ >= i ).getOrElse(true)
       val afterStart = start.map( _ <= i ).getOrElse(true)
@@ -222,7 +221,7 @@ object DumpLocalKafka extends Command {
       }
     }
 
-    val ms = new FileMessageSet(new File(config.file), false)
+    val ms = new FileMessageSet(new File(config.file), false) 
 
     traverse(ms.iterator, config.start, config.finish)
   }
@@ -370,4 +369,49 @@ object IngestStatus extends Command {
   class Config(var limit: Int = 0,
                var lag: Int = 60,
                var zkConn: String = "localhost:2181")
+}
+
+object KafkaConvert extends Command {
+  val name = "kafka_convert"
+  val description = "Convert central message stream to local message stream"
+  
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("ygg kafka_convert") {
+      arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  val eventCodec = new KafkaEventCodec
+  val ingestCodec = new KafkaIngestMessageCodec
+
+  def process(config: Config) {
+    val src = new FileMessageSet(config.src, false) 
+    val dest = new FileMessageSet(config.dest, true) 
+
+    val outMessages = src.iterator.toList.map { mao =>
+      ingestCodec.toEvent(mao.message) match {
+        case EventMessage(_, event) =>
+          eventCodec.toMessage(event)  
+        case _ => sys.error("Unknown message type")
+      }
+    }
+
+    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
+    dest.append(outSet)
+
+    src.close
+    dest.close
+  }
+
+  class Config(var file: String = "") {
+    def src() = new File(file)
+    def dest() = new File(file + ".local")
+  }
 }
