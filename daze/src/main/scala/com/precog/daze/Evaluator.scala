@@ -63,6 +63,7 @@ trait Evaluator extends DAG
     with MemoizationEnvironment
     with ImplLibrary
     with Infixlib
+    with BigDecimalOperations
     with YggConfigComponent { self =>
   
   import Function._
@@ -416,13 +417,61 @@ trait Evaluator extends DAG
           case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
         }
       }
-     
-      case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
+
+      case Join(_, Map2Cross(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {  
+        val length = sharedPrefixLength(left, right)
+        val bif = binaryOp(op)
+
         val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
-        lazy val rightEnum = realizeMatch(rightSpec, rightSet)
-        
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
+        val reduction = f.reduced(tupleEnum)
+
+        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+      }
+
+      case Join(_, Map2CrossLeft(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {
+        val length = sharedPrefixLength(left, right)
+        val bif = binaryOp(op)
+
+        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
+        val reduction = f.reduced(tupleEnum)
+
+        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+      }
+
+      case Join(_, Map2CrossRight(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {
+        val length = sharedPrefixLength(left, right)
+        val bif = binaryOp(op)
+
+        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
+        val reduction = f.reduced(tupleEnum)
+
+        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+      }
+
+      case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
+        lazy val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        lazy val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+
         val back = rightEnum.lastOption match {
           case Some(value) =>
             Match(mal.Op2Single(leftSpec, value, op, true), leftSet, leftGraph2)
@@ -435,10 +484,10 @@ trait Evaluator extends DAG
       }
       
       case Join(_, Map2CrossRight(op), left, right) if left.isSingleton => {
-        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+        lazy val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        lazy val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
-        lazy val leftEnum = realizeMatch(leftSpec, leftSet)
+        val leftEnum = realizeMatch(leftSpec, leftSet)
 
         val back = leftEnum.lastOption match {
           case Some(value) =>
@@ -505,11 +554,22 @@ trait Evaluator extends DAG
         
         lazy val leftEnum = realizeMatch(leftSpec, leftSet)
         lazy val rightEnum = realizeMatch(rightSpec, rightSet)
-        
-        if (leftGraph == rightGraph)
-          Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet, leftGraph))
-        else
-          Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
+
+        op match {
+          case BuiltInFunction2Op(f) if f.requiresReduction => {
+            lazy val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
+
+            lazy val reduction = f.reduced(tupleEnum)
+
+            reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+          }
+          case _ => { 
+            if (leftGraph == rightGraph) 
+              Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet, leftGraph))  
+            else 
+              Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
+          }
+        }
       }
 
       case j @ Join(_, instr, left, right) => {
@@ -651,29 +711,6 @@ trait Evaluator extends DAG
     case op => binaryOp(op).operation
   }
 
-  /**
-   * Newton's approximation to some number of iterations (by default: 50).
-   * Ported from a Java example found here: http://www.java2s.com/Code/Java/Language-Basics/DemonstrationofhighprecisionarithmeticwiththeBigDoubleclass.htm
-   */
-  private[this] def sqrt(d: BigDecimal, k: Int = 50): BigDecimal = {
-    lazy val approx = {   // could do this with a self map, but it would be much slower
-      def gen(x: BigDecimal): Stream[BigDecimal] = {
-        val x2 = (d + x * x) / (x * 2)
-        
-        lazy val tail = if (x2 == x)
-          Stream.empty
-        else
-          gen(x2)
-        
-        x2 #:: tail
-      }
-      
-      gen(d / 3)
-    }
-    
-    approx take k last
-  }
-  
   private def binaryOp(op: BinaryOperation): BIF2 = {
     op match {
       case Add => Infix.Add
