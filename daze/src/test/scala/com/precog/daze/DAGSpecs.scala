@@ -4,7 +4,7 @@ package daze
 import org.specs2.mutable._
 import bytecode._
 
-object DAGSpecs extends Specification with DAG with Stdlib {
+object DAGSpecs extends Specification with DAG with RandomLibrary {
   import instructions._
   import dag._
   

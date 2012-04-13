@@ -8,7 +8,7 @@ import org.specs2.mutable._
 trait EvalStackSpecs extends Specification {
   def eval(str: String, debug: Boolean = false): Set[SValue]
   def evalE(str: String, debug: Boolean = false): Set[SEvent]
-  
+
   "the full stack" should {
     "count a filtered clicks dataset" in {
       val input = """
@@ -41,6 +41,21 @@ trait EvalStackSpecs extends Specification {
 
       "ageRange" >> {
         eval("count(//campaigns.ageRange)") mustEqual Set(SDecimal(100))
+      }
+    }
+
+    "have the correct number of identities in a relate" >> {
+      val input = """
+        | //clicks ~ //campaigns
+        | sum := //clicks.time + //campaigns.cpm
+        | sum + //clicks.time""".stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(10000)
+
+      forall(results) {
+        case (ids, _) => ids must haveSize(2)
       }
     }
 
@@ -298,6 +313,43 @@ trait EvalStackSpecs extends Specification {
         val results2 = results map { case (VectorCase(_), SDecimal(d)) => d.toInt } 
 
         results2 must contain(0).only
+      }
+
+      "Statslib" >> {  //note: there are no identities because these functions involve reductions
+        "Correlation" >> {
+          val input = """
+            | cpm := //campaigns.cpm
+            | std::stats::corr(cpm, 10)""".stripMargin
+
+          val results = evalE(input) 
+          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+
+          results2 must haveSize(0)
+        }
+
+        "Covariance" >> {
+          val input = """
+            | cpm := //campaigns.cpm
+            | std::stats::cov(cpm, 10)""".stripMargin
+
+          val results = evalE(input) 
+          results must haveSize(1)
+
+          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+          results2 must contain(0)
+        }
+
+        "Linear Regression" >> {
+          val input = """
+            | cpm := //campaigns.cpm
+            | std::stats::linReg(cpm, 10)""".stripMargin
+
+          val results = evalE(input) 
+          results must haveSize(1)
+
+          val results2 = results map { case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => Vector(slope, yint) } 
+          results2 must contain(Vector(0, 10))
+        }
       }
     }
  

@@ -382,6 +382,29 @@ class EvaluatorSpecs extends Specification
       }
     }
 
+    "reduce a filtered dataset" >> {
+      val line = Line(0, "")
+
+      val input = dag.Reduce(line, Count,
+        Filter(line, None, None,
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          Join(line, Map2Cross(Gt),
+            Join(line, Map2Cross(DerefObject),
+              dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+              Root(line, PushString("time"))),
+            Root(line, PushNum("0")))))
+
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(100)
+    }
+
     "evaluate cross when one side is a singleton" >> {
       "a reduction on the right side of the cross" >> {
         val line = Line(0, "")

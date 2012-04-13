@@ -1,8 +1,10 @@
-package com.precog.daze
+package com.precog
+package daze
 
+import bytecode.RandomLibrary
 import org.specs2.mutable._
 
-object CrossOrderingSpecs extends Specification with CrossOrdering with Stdlib {
+object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLibrary {
   import instructions._
   import dag._
   
