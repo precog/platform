@@ -7,6 +7,8 @@ sealed trait CRef
 case class CPaths(path: Path, jpath: JPath) extends CRef
 case class CDyn(id: Long) extends CRef
 
-case class CMeta(cref: CRef, ctype: CType)
+case class CMeta(cref: CRef, ctype: CType) {
+  type CA = ctype.CA
+}
 
 // vim: set ts=4 sw=4 et:

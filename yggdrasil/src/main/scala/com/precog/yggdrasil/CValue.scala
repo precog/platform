@@ -50,7 +50,10 @@ object CValue {
 sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   type CA
 
+  val CC: Class[CA]
+
   @inline final def cast(v: Any): CA = v.asInstanceOf[CA]
+  @inline final def arrayCast(v: Array[_]) = v.asInstanceOf[Array[CA]]
   @inline final def cast0(f0: F0[_]): F0[CA] = f0.asInstanceOf[F0[CA]]
   @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
   @inline final def cast2l[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
@@ -201,12 +204,14 @@ case class CString(value: String) extends CValue
 
 case class CStringFixed(width: Int) extends CType(FixedWidth(width), SString) {
   type CA = String
+  val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   implicit val manifest = implicitly[Manifest[String]]
 }
 
 case object CStringArbitrary extends CType(LengthEncoded, SString) {
   type CA = String
+  val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   implicit val manifest = implicitly[Manifest[String]]
 }
@@ -217,6 +222,7 @@ case object CStringArbitrary extends CType(LengthEncoded, SString) {
 case class CBoolean(value: Boolean) extends CValue 
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   type CA = Boolean
+  val CC = classOf[Boolean]
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Boolean]]
 }
@@ -227,6 +233,7 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 case class CInt(value: Int) extends CValue 
 case object CInt extends CType(FixedWidth(4), SDecimal) {
   type CA = Int
+  val CC = classOf[Int]
   def order(v1: Int, v2: Int) = intInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Int]]
 }
@@ -234,6 +241,7 @@ case object CInt extends CType(FixedWidth(4), SDecimal) {
 case class CLong(value: Long) extends CValue 
 case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
+  val CC = classOf[Long]
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Long]]
 }
@@ -241,6 +249,7 @@ case object CLong extends CType(FixedWidth(8), SDecimal) {
 case class CFloat(value: Float) extends CValue 
 case object CFloat extends CType(FixedWidth(4), SDecimal) {
   type CA = Float
+  val CC = classOf[Float]
   def order(v1: Float, v2: Float) = floatInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Float]]
 }
@@ -248,6 +257,7 @@ case object CFloat extends CType(FixedWidth(4), SDecimal) {
 case class CDouble(value: Double) extends CValue 
 case object CDouble extends CType(FixedWidth(8), SDecimal) {
   type CA = Double
+  val CC = classOf[Double]
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[Double]]
 }
@@ -255,27 +265,33 @@ case object CDouble extends CType(FixedWidth(8), SDecimal) {
 case class CNum(value: BigDecimal) extends CValue 
 case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
+  val CC = classOf[BigDecimal]
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
+sealed trait CNullType extends CType
+
 //
 // Nulls
 //
-case object CNull extends CType(FixedWidth(0), SNull) {
+case object CNull extends CType(FixedWidth(0), SNull) with CNullType {
   type CA = Null
+  val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CEmptyObject extends CType(FixedWidth(0), SObject) {
+case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType {
   type CA = Null
+  val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CEmptyArray extends CType(FixedWidth(0), SArray) {
+case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType {
   type CA = Null
+  val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }

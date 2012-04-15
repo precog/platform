@@ -2,9 +2,12 @@ package com.precog.yggdrasil
 
 import com.precog.common.VectorCase
 import scala.annotation.tailrec
-import scalaz._
+import scalaz.{Identity => _, _}
 import scalaz.Scalaz._
 import scalaz.Ordering._
+
+case class SliceF1s(ref: CRef, f1s: Set[F1[_, _]])
+case class SliceF2s(ref1: CRef, ref2: CRef, f2s: Set[F2[_, _, _]])
 
 trait Slice { source =>
   import Slice._
@@ -16,15 +19,6 @@ trait Slice { source =>
   def identities: Seq[F0[Identity]]
   def columns: Map[CMeta, F0[_]]
 
-  def iterator: Iterator[RowState] = new Iterator[RowState] {
-    private var row = 0
-    def hasNext = row < source.size
-    def next = new RowState {
-      def idAt(i: Int) = identities(i)(row)
-      def valueAt(meta: CMeta) = columns(meta)(row)
-    }
-  }
-
   def map(meta: CMeta, refId: Long)(f: F1[_, _]): Slice = new Slice {
     val idCount = source.idCount
     val size = source.size
@@ -35,6 +29,10 @@ trait Slice { source =>
                   } getOrElse {
                     sys.error("No column found in table matching " + meta)
                   }
+  }
+
+  def map(cref: CRef, refId: Long)(f: SliceF1s): Slice = {
+    f.f1s.foldLeft(source) { (slice, f1) => slice.map(CMeta(cref, f1.accepts), refId)(f1) }
   }
 
   def map2(m1: CMeta, m2: CMeta, refId: Long)(f: F2[_, _, _]): Slice = new Slice {
@@ -59,6 +57,14 @@ trait Slice { source =>
       }
     }
   }
+
+  def map2(cref: CRef, refId: Long)(f: SliceF2s): Slice = {
+    f.f2s.foldLeft(source) { (slice, f2) => 
+      val (a1, a2) = f2.accepts
+      slice.map2(CMeta(cref, a1), CMeta(cref, a2), refId)(f2) 
+    }
+  }
+
 
   def filter(fx: (CMeta, F1[_, Boolean])*): Slice = {
     assert(fx forall { case (m, f0) => columns contains m })
@@ -173,6 +179,13 @@ trait Slice { source =>
   }
 }
 
+class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[CMeta, Array[_]]) extends Slice {
+  val idCount = idsData.length
+  val identities = idsData map { F0.forArray(CLong, _) }
+  val columns: Map[CMeta, F0[_]] = 
+    data map { case (m @ CMeta(_, ctype), arr) => m -> F0.forArray[ctype.CA](ctype, ctype.arrayCast(arr)) } toMap
+}
+
 object Slice {
   // scalaz order isn't @specialized
   trait IntOrder {
@@ -220,10 +233,4 @@ object Slice {
     xs(i) = xs(j);
     xs(j) = temp;
   }
-}
-
-trait Table {
-  protected val slices: Iterable[Slice]
-
-  
 }
