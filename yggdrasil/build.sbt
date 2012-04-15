@@ -27,7 +27,7 @@ organization := "com.precog"
 
 scalaVersion := "2.9.1"
 
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
+scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none", "-Xexperimental") //, "-optimise")
 
 fork := true
 

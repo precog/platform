@@ -31,11 +31,35 @@ import scalaz.std.anyVal._
 import scalaz.std.string._
 import scalaz.std.math.bigDecimal._
 
-trait RowState {
-  def compareIdentities(other: RowState, indices: VectorCase[Int]): Ordering = {
+trait RowView {
+  import RowView._
+
+  // A position is a handle that can be used to reset a view to a given position in the stream. 
+  // Positions should as a consequence be used carefully and be unreferenced as soon as possible
+  // because holding a position may imply keeping a reference to an indeterminate amount of the stream in memory.
+  type Position 
+
+  def position: Position
+  def state: State
+  def advance(): State
+  def reset(position: Position): State
+
+  def compareIdentities(other: RowView, indices: VectorCase[Int]): Ordering = {
     var result: Ordering = EQ
     var i = 0
     while (i < indices.length && (result eq EQ)) {
+      val j = indices(i)
+      result = longInstance.order(idAt(j), other.idAt(j))
+      i += 1
+    }
+
+    result
+  }
+
+  def compareIdentityPrefix(other: RowView, limit: Int): Ordering = {
+    var result: Ordering = EQ
+    var i = 0
+    while (i < limit && (result eq EQ)) {
       result = longInstance.order(idAt(i), other.idAt(i))
       i += 1
     }
@@ -43,7 +67,7 @@ trait RowState {
     result
   }
 
-  def compareValues(other: RowState, meta: CMeta*): Ordering = {
+  def compareValues(other: RowView, meta: CMeta*): Ordering = {
     var result: Ordering = EQ
     var i = 0
     while (i < meta.length && (result eq EQ)) {
@@ -66,6 +90,17 @@ trait RowState {
     result
   }
 
-  protected def idAt(i: Int): Identity
-  protected def valueAt(meta: CMeta): Any
+  protected[yggdrasil] def idCount: Int
+  protected[yggdrasil] def columns: Set[CMeta]
+
+  protected[yggdrasil] def idAt(i: Int): Identity
+  protected[yggdrasil] def hasValue(meta: CMeta): Boolean
+  protected[yggdrasil] def valueAt(meta: CMeta): Any
+}
+
+object RowView {
+  sealed trait State 
+  case object BeforeStart extends State
+  case object Data extends State
+  case object AfterEnd extends State
 }
