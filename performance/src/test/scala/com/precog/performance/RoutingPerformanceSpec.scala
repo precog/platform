@@ -100,9 +100,9 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       try {
         println("routing actor performance")
-        //val result = Performance().benchmark(testIngest(), benchParams, benchParams)
+        val result = Performance().benchmark(testIngest(), benchParams, benchParams)
         //perfUtil.uploadResults("routing actor", result)
-        val result = Performance().profile(testIngest())   
+        //val result = Performance().profile(testIngest())   
  
         result.report("routing actor", System.out)
         

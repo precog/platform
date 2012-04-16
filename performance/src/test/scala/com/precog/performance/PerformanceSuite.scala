@@ -32,4 +32,4 @@ import java.nio.ByteBuffer
 class PerformanceSuite 
   extends LeveldbPerformanceSpec 
   with RoutingPerformanceSpec 
-  //with YggdrasilPerformanceSpec 
+  with YggdrasilPerformanceSpec 
