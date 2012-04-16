@@ -2,22 +2,15 @@ package com.precog.yggdrasil
 
 import scalaz.Ordering._
 
-
 trait Table { source =>
   import Table._
 
-  def idCount: Int
-
-  type RV <: RowView
   def rowView: RowView
 
   def cogroup(other: Table)(f: CogroupF): Table = {
-    assert(source.idCount == other.idCount)
-
     new Table {
-      val idCount = source.idCount
-
       def rowView = new CogroupRowView(source.rowView, other.rowView)
+
       class CogroupRowView(private val left: RowView, private val right: RowView) extends RowView { rv =>
         assert((left.state eq RowView.BeforeStart) && (right.state eq RowView.BeforeStart))
 
@@ -30,7 +23,7 @@ trait Table { source =>
         private case object RunLeft extends CogroupState
         private case class Cartesian(start: right.Position) extends CogroupState
 
-        private var lastLeft: left.Position = null.asInstanceOf[left.Position]
+        private var stepLeft: Boolean = true
         private var leftState = left.state
 
         private var lastRight: right.Position = null.asInstanceOf[right.Position]
@@ -51,32 +44,46 @@ trait Table { source =>
         def advance(): RowView.State = if (_state eq RowView.AfterEnd) _state else {
           cs match {
             case Step => 
-              if (lastLeft == null) {
+              if (stepLeft) {
                 leftState = left.advance()
-                if (leftState ne RowView.AfterEnd) lastLeft = left.position
+                stepLeft = (left.state eq RowView.Data)
               }
 
               if (lastRight == null) {
                 rightState = right.advance()
-                if (rightState ne RowView.AfterEnd) lastRight = right.position
+                lastRight = rightState match {
+                  case  RowView.Data => right.position
+                  case _ => null.asInstanceOf[right.Position]
+                }
               }
 
               if ((leftState eq RowView.AfterEnd) && (rightState eq RowView.AfterEnd)) {
                 setState(RowView.AfterEnd)
               } else if (rightState eq RowView.AfterEnd) {
                 fchoice = -1
-                lastLeft = null.asInstanceOf[left.Position] // we will never need to reposition the left
                 setState(leftState)
               } else if (leftState eq RowView.AfterEnd) {
                 fchoice = 1
-                lastRight = null.asInstanceOf[right.Position] // we will never need to reposition the right
+                lastRight = null.asInstanceOf[right.Position] //flag the right to advance
                 setState(rightState)
               } else {
                 left.compareIdentityPrefix(right, idCount) match {
-                  case LT => lastLeft  = null.asInstanceOf[left.Position] // the right is greater, so the left will never need to return to its current position
-                  case GT => lastRight = null.asInstanceOf[right.Position] // the left is greater, so the right will never need to return to its current position
+                  case LT => 
+                    // the right is greater, flag the left to advance to catch it up
+                    // and the right will remain at its current position since lastRight has not
+                    // been modified
+                    stepLeft = true
+                    fchoice = -1
+
+                  case GT => 
+                    // the left is greater, so flag the right to advance, and the left to not do so,
+                    // until the right catches up or passes
+                    stepLeft  = false
+                    lastRight = null.asInstanceOf[right.Position] 
+                    fchoice = 1
+
                   case EQ => 
-                    lastLeft  = left.position
+                    stepLeft  = false // don't advance the left until the right hand side is ahead
                     lastRight = right.position
                     cs = LastEqual
                     fchoice = 0
@@ -86,7 +93,7 @@ trait Table { source =>
               }
 
             case LastEqual =>
-              rightState = right.advance 
+              rightState = right.advance()
               rightState match {
                 case RowView.AfterEnd =>
                   // The right side is out of elements, so, we reposition the right side to the previous
@@ -97,7 +104,7 @@ trait Table { source =>
                   right.reset(lastRight)
                   setState(advance())
 
-                case rs => 
+                case _ => 
                   left.compareIdentityPrefix(right, idCount) match {
                     case LT =>
                       right.reset(lastRight)
@@ -109,26 +116,42 @@ trait Table { source =>
 
                     case EQ =>
                       // We have a run of at least two on the right, since the left was not advanced.
-                      // lastLeft contains the start of the cartesian product on the lef hand side.
                       // in the Cartesian state, we will repeatedly advance the right until it no
                       // longer equals the left.
                       cs = Cartesian(lastRight)
-                      fchoice = 0
                       _state
                   }
               }
 
             case EndLeft =>
               // run on the left side until it is no longer equal to the right position, then be done
-              fchoice = -1
-              setState(left.advance())
+              leftState = left.advance()
+              leftState match {
+                case RowView.AfterEnd => 
+                  setState(RowView.AfterEnd)
+
+                case _ =>
+                  left.compareIdentityPrefix(right, idCount) match {
+                    case LT => sys.error("Inputs on the left-hand side not sorted")
+
+                    case GT =>
+                      // left has surpassed the right; since the right hand side is at the end,
+                      // just take the left element.
+                      fchoice = -1
+                      setState(leftState)
+
+                    case EQ =>
+                      fchoice = 0
+                      setState(leftState)
+                  }
+              }
 
             case RunLeft =>
-              // the next right element is bigger
+              // the next right element is bigger than the current left at this point
               leftState = left.advance 
               leftState match {
                 case RowView.AfterEnd => 
-                  lastLeft = null.asInstanceOf[left.Position]
+                  stepLeft = false // no need to keep advancing the left
                   lastRight = null.asInstanceOf[right.Position] // this will cause the right to advance
                   cs = Step
                   setState(advance())
@@ -138,10 +161,10 @@ trait Table { source =>
                     case LT => sys.error("Inputs on the left-hand side not sorted")
 
                     case GT =>
-                      // left has jumped past right, so we're off the run; advance the right and then 
-                      // start from square one
-                      rightState = right.advance()
-                      lastRight = right.position
+                      // left has jumped past right, so we're off the run; so flag the right to advance and then 
+                      // return to the step state
+                      stepLeft = false
+                      lastRight = null.asInstanceOf[right.Position]
                       cs = Step
                       setState(advance())
 
@@ -153,34 +176,58 @@ trait Table { source =>
               }
 
               case Cartesian(start) =>
+                // fchoice is always 0 when entering the cartesian state
+                
+                def advanceLeft = {
+                  leftState = left.advance()
+                  leftState match {
+                    case RowView.AfterEnd =>
+                      // cartesian is done, right has been advanced, so we ensure that the right doesn't
+                      // skip and return to the step state
+                      stepLeft = false
+                      lastRight = right.position
+                      cs = Step
+                      setState(advance())
+
+                    case _ => 
+                      // save the position on the right, then reset the right to the start of the run
+                      // so that we can compare the advanced left
+                      lastRight = right.position
+                      right.reset(start)
+                      left.compareIdentityPrefix(right, idCount) match {
+                        case LT => 
+                          sys.error("Inputs on the left-hand side not sorted")
+
+                        case EQ => 
+                          //do nothing continuing to re-advance the right over the entire run
+                          _state
+
+                        case GT => 
+                          // left has passed the end of the run on the right, so move the right forward
+                          // to the first element beyond the end of the run
+                          right.reset(lastRight)
+                          cs = Step
+                          setState(advance())
+                      }
+                  }
+                }
+
                 rightState = right.advance()
-                left.compareIdentityPrefix(right, idCount) match {
-                  case LT => 
-                    right.reset(start)
-                    leftState = left.advance()
+                rightState match {
+                  case RowView.AfterEnd => 
+                    advanceLeft
+
+                  case _ => 
                     left.compareIdentityPrefix(right, idCount) match {
                       case LT => 
-                        sys.error("Inputs on the left-hand side not sorted")
+                        advanceLeft
 
+                      case GT => sys.error("Inputs on the right-hand side not sorted")
+                        
                       case EQ => 
-                        //do nothing; fchoice is already 0 and we're still equal
-                        fchoice = 0
+                        // do nothing, since we're still in the cartesian product advancing the right hand side
                         _state
-
-                      case GT => 
-                        //jump past the end of the run on the right
-                        right.reset(lastRight)
-                        cs = Step
-                        setState(advance())
                     }
-
-                  case GT => 
-                    sys.error("Inputs on the right-hand side not sorted")
-                    
-                  case EQ => 
-                    //do nothing; fchoice is already 0 and we're still equal
-                    fchoice = 0
-                    _state
                 }
           }
         }
@@ -190,7 +237,7 @@ trait Table { source =>
           right.reset(position.rpos)
         }
         
-        protected[yggdrasil] def idCount: Int = source.idCount
+        protected[yggdrasil] def idCount: Int = left.idCount min right.idCount
 
         protected[yggdrasil] def columns: Set[CMeta] = {
           fchoice match {
@@ -255,4 +302,7 @@ object Table {
   }
 }
 
+class SliceTable(slices: Iterable[Slice]) {
+  def rowView: RowView = sys.error("todo")
+}
 // vim: set ts=4 sw=4 et:

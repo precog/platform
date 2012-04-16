@@ -49,7 +49,7 @@ package object yggdrasil {
     }
   }
 
-  def indexedIdentitiesOrder(indices: VectorCase[Int]): Order[Identities] = {
+  def indexedIdentitiesOrder(indices: Vector[Int]): Order[Identities] = {
     new Order[Identities] {
       def order(ids1: Identities, ids2: Identities): Ordering = {
         var result: Ordering = EQ

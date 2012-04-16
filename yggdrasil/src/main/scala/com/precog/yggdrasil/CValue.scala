@@ -155,6 +155,7 @@ object CType extends CTypeSerialization {
     case JInt(i) => sizedIntCValue(i)
     case JDouble(d) => CDouble(d)
     case JBool(b) => CBoolean(b)
+    case _ => null
   }
 
   @inline
