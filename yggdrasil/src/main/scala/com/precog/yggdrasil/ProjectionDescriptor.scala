@@ -19,6 +19,8 @@ import scala.collection.immutable.ListMap
 import scalaz._
 import scalaz.Scalaz._
 
+import annotation.tailrec
+
 sealed trait SortBy
 case object ById extends SortBy
 case object ByValue extends SortBy
@@ -52,7 +54,25 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(uids: Set[String])
+case class Authorities(uids: Set[String]) {
+
+  @tailrec
+  final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
+    if(i < l.length) {
+      hashSeq(l, hash * 31 + l(i).hashCode, i+1)
+    } else {
+      hash
+    }     
+  }    
+
+  lazy val hash = {
+    if(uids.size == 0) 1 
+    else if(uids.size == 1) uids.head.hashCode 
+    else hashSeq(uids.toSeq, 1) 
+  }
+
+  override def hashCode(): Int = hash
+}
 
 trait AuthoritiesSerialization {
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
@@ -69,7 +89,23 @@ trait AuthoritiesSerialization {
 
 object Authorities extends AuthoritiesSerialization 
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) 
+case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) {
+  lazy val hash = {
+    var hash = 1
+    hash = hash * 31 + path.hashCode
+    hash = hash * 31 + selector.path.hashCode
+    hash = hash * 31 + valueType.hashCode
+    hash * 31 + authorities.hashCode
+  }
+
+  override def hashCode(): Int = hash
+  
+  override def equals(other: Any): Boolean = other match {
+    case o @ ColumnDescriptor(p, s, vt, a) =>
+      path == p && selector == s && valueType == vt && authorities == a 
+    case _ => false
+  }
+}
 
 trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
@@ -106,9 +142,54 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
 
-  private lazy val _hashCode = scala.runtime.ScalaRunTime._hashCode(ProjectionDescriptor.this)
+  @tailrec private final def hashIt(cols: List[ColumnDescriptor], hash: Int, i: Int = 0): Int = {
+    if(i < cols.length) {
+      val col = cols(i)
+      hashIt(cols, hash * 31 + cols(i).hashCode, i+1)
+    } else {
+      hash
+    }
+  }
 
-  override def hashCode: Int = _hashCode
+  lazy val hash = hashIt(columns, 1)
+
+  override def hashCode: Int = hash 
+  
+  override def equals(other: Any): Boolean = other match {
+    case o @ ProjectionDescriptor(_, _, _) => colsEqual(this, o) && sortEqual(this.sorting, o.sorting)
+    case _ => false
+  }
+
+  @tailrec
+  private final def colsEqual(a: ProjectionDescriptor, b: ProjectionDescriptor, prev: Boolean = true, i: Int = 0): Boolean = {
+    if(a.columns.length != b.columns.length) {
+      false
+    } else if(i < a.columns.length && prev) {
+      val cola = a.columns(i)
+      val colb = b.columns(i) 
+      val local = prev && cola == colb && 
+        ((a.indexedColumns.get(cola), b.indexedColumns.get(colb)) match {
+          case (None, None) => true
+          case (Some(av), Some(bv)) => av == bv
+          case _ => false
+        })
+      
+      colsEqual(a,b,local,i+1)
+    } else {
+      prev      
+    }
+  }
+  
+  @tailrec
+  private final def sortEqual(a: Seq[(ColumnDescriptor, SortBy)], b: Seq[(ColumnDescriptor, SortBy)], prev: Boolean = true, i: Int = 0): Boolean = {
+    if(a.size != b.size) {
+      false
+    } else if(i < a.length && prev) {
+      sortEqual(a,b,prev && a(i) == b(i), i+1)  
+    } else {
+      prev
+    }
+  }
 }
 
 trait ProjectionDescriptorSerialization {
