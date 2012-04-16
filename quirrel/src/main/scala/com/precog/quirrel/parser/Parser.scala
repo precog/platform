@@ -82,7 +82,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | namespacedId ^# { (loc, id) => Dispatch(loc, id, Vector()) }  
     | ticId        ^# TicVar
     
-    | pathLiteral ^# StrLit
+    | pathLiteral ^# { (loc, str) => Dispatch(loc, LoadId, Vector(StrLit(loc, str))) }
     | strLiteral  ^# StrLit
     | numLiteral  ^# NumLit
     | boolLiteral ^# BoolLit

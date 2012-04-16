@@ -31,7 +31,7 @@ trait EvalStackSpecs extends Specification {
   "the full stack" should {
     "count a filtered clicks dataset" in {
       val input = """
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | count(clicks where clicks.time > 0)""".stripMargin
         
       eval(input) mustEqual Set(SDecimal(100))
@@ -39,34 +39,34 @@ trait EvalStackSpecs extends Specification {
 
     "count the campaigns dataset" >> {
       "<root>" >> {
-        eval("count(load(//campaigns))") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns)") mustEqual Set(SDecimal(100))
       }
       
       "gender" >> {
-        eval("count(load(//campaigns).gender)") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns.gender)") mustEqual Set(SDecimal(100))
       }
       
       "platform" >> {
-        eval("count(load(//campaigns).platform)") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns.platform)") mustEqual Set(SDecimal(100))
       }
       
       "campaign" >> {
-        eval("count(load(//campaigns).campaign)") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns.campaign)") mustEqual Set(SDecimal(100))
       }
       
       "cpm" >> {
-        eval("count(load(//campaigns).cpm)") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns.cpm)") mustEqual Set(SDecimal(100))
       }
 
       "ageRange" >> {
-        eval("count(load(//campaigns).ageRange)") mustEqual Set(SDecimal(100))
+        eval("count(//campaigns.ageRange)") mustEqual Set(SDecimal(100))
       }
     }
 
     "use the where operator on a unioned set" >> {
       "campaigns.gender" >> {
         val input = """
-          | a := load(//campaigns) union load(//clicks)
+          | a := //campaigns union //clicks
           |   a where a.gender = "female" """.stripMargin
           
         val results = evalE(input)
@@ -83,7 +83,7 @@ trait EvalStackSpecs extends Specification {
 
       "clicks.platform" >> {
         val input = """
-          | a := load(//campaigns) union load(//clicks)
+          | a := //campaigns union //clicks
           |   a where a.platform = "android" """.stripMargin
           
         val results = evalE(input)
@@ -102,8 +102,8 @@ trait EvalStackSpecs extends Specification {
     "use the where operator on an intersected set" >> {
       "campaigns.gender" >> {
         val input = """
-          | a := load(//campaigns).campaign union load(//campaigns).cpm
-          |   a intersect load(//campaigns).campaign """.stripMargin
+          | a := //campaigns.campaign union //campaigns.cpm
+          |   a intersect //campaigns.campaign """.stripMargin
           
         val results = evalE(input)
         
@@ -117,8 +117,8 @@ trait EvalStackSpecs extends Specification {
 
       "clicks.platform" >> {
         val input = """
-          | a := load(//campaigns).campaign union load(//campaigns).cpm
-          |   a intersect load(//campaigns).cpm """.stripMargin
+          | a := //campaigns.campaign union //campaigns.cpm
+          |   a intersect //campaigns.cpm """.stripMargin
           
         val results = evalE(input)
         
@@ -133,7 +133,7 @@ trait EvalStackSpecs extends Specification {
     }
 
     "use the where operator on a key with string values" in {
-      val input = """load(//campaigns) where load(//campaigns).platform = "android" """
+      val input = """//campaigns where //campaigns.platform = "android" """
       val results = evalE(input)
       
       results must haveSize(72)
@@ -147,7 +147,7 @@ trait EvalStackSpecs extends Specification {
     }
 
     "use the where operator on a key with numeric values" in {
-      val input = "load(//campaigns) where load(//campaigns).cpm = 1 "
+      val input = "//campaigns where //campaigns.cpm = 1 "
       val results = evalE(input)
       
       results must haveSize(34)
@@ -161,7 +161,7 @@ trait EvalStackSpecs extends Specification {
     }
 
     "use the where operator on a key with array values" in {
-      val input = "load(//campaigns) where load(//campaigns).ageRange = [37, 48]"
+      val input = "//campaigns where //campaigns.ageRange = [37, 48]"
       val results = evalE(input)
       
       results must haveSize(39)
@@ -175,14 +175,14 @@ trait EvalStackSpecs extends Specification {
     }
 
     "evaluate the with operator across the campaigns dataset" in {
-      val input = "count(load(//campaigns) with { t: 42 })"
+      val input = "count(//campaigns with { t: 42 })"
       eval(input) mustEqual Set(SDecimal(100))
     }
 
     "perform distinct" >> {
       "on a homogenous set of numbers" >> {
         val input = """
-          | a := load(//campaigns)
+          | a := //campaigns
           |   distinct(a.gender)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"))   
@@ -190,8 +190,8 @@ trait EvalStackSpecs extends Specification {
 
       "on set of strings formed by a union" >> {
         val input = """
-          | gender := load(//campaigns).gender
-          | pageId := load(//clicks).pageId
+          | gender := //campaigns.gender
+          | pageId := //clicks.pageId
           | distinct(gender union pageId)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"), SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))   
@@ -199,7 +199,7 @@ trait EvalStackSpecs extends Specification {
     }
 
     "map object creation over the campaigns dataset" in {
-      val input = "{ aa: load(//campaigns).campaign }"
+      val input = "{ aa: //campaigns.campaign }"
       val results = evalE(input)
       
       results must haveSize(100)
@@ -214,7 +214,7 @@ trait EvalStackSpecs extends Specification {
     
     "perform a naive cartesian product on the campaigns dataset" in {
       val input = """
-        | a := load(//campaigns)
+        | a := //campaigns
         | b := new a
         |
         | a ~ b
@@ -235,19 +235,19 @@ trait EvalStackSpecs extends Specification {
 
     "add sets of different types" >> {
       "a set of numbers and a set of strings" >> {
-        val input = "load(//campaigns).cpm + load(//campaigns).gender"
+        val input = "//campaigns.cpm + //campaigns.gender"
 
         eval(input) mustEqual Set()
       }
 
       "a set of numbers and a set of arrays" >> {
-        val input = "load(//campaigns).cpm + load(//campaigns).ageRange"
+        val input = "//campaigns.cpm + //campaigns.ageRange"
 
         eval(input) mustEqual Set()
       }
 
       "a set of arrays and a set of strings" >> {
-        val input = "load(//campaigns).gender + load(//campaigns).ageRange"
+        val input = "//campaigns.gender + //campaigns.ageRange"
 
         eval(input) mustEqual Set()
       }
@@ -255,7 +255,7 @@ trait EvalStackSpecs extends Specification {
 
     "return only all possible value results from a characteristic function" in {
       val input = """
-        | campaigns := load(//campaigns)
+        | campaigns := //campaigns
         | f('a) :=
         |   campaigns.gender where campaigns.platform = 'a
         |
@@ -273,7 +273,7 @@ trait EvalStackSpecs extends Specification {
     
     "determine a histogram of genders on campaigns" in {
       val input = """
-        | campaigns := load(//campaigns)
+        | campaigns := //campaigns
         | hist('gender) :=
         |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
         | hist""".stripMargin
@@ -285,7 +285,7 @@ trait EvalStackSpecs extends Specification {
 
     "load a nonexistent dataset with a dot in the name" in {
       val input = """
-        | load(//foo.bar)""".stripMargin
+        | //foo.bar""".stripMargin
      
       eval(input) mustEqual Set()
     }
@@ -293,7 +293,7 @@ trait EvalStackSpecs extends Specification {
     "evaluate functions from each library" >> {
       "Stringlib" >> {
         val input = """
-          | gender := distinct(load(//campaigns).gender)
+          | gender := distinct(//campaigns.gender)
           | std::string::concat("alpha ", gender)""".stripMargin
 
         eval(input) mustEqual Set(SString("alpha female"), SString("alpha male"))
@@ -301,7 +301,7 @@ trait EvalStackSpecs extends Specification {
 
       "Mathlib" >> {
         val input = """
-          | cpm := distinct(load(//campaigns).cpm)
+          | cpm := distinct(//campaigns.cpm)
           | selectCpm := cpm where cpm < 10
           | std::math::pow(selectCpm, 2)""".stripMargin
 
@@ -310,7 +310,7 @@ trait EvalStackSpecs extends Specification {
 
       "Timelib" >> {
         val input = """
-          | time := load(//clicks).timeString
+          | time := //clicks.timeString
           | std::time::yearsBetween(time, "2012-02-09T19:31:13.616+10:00")""".stripMargin
 
         val results = evalE(input) 
@@ -323,14 +323,14 @@ trait EvalStackSpecs extends Specification {
     "set critical conditions given an empty set" in {
         val input = """
           | function('a) :=
-          |   load(//campaigns) where load(//campaigns).foo = 'a
+          |   //campaigns where //campaigns.foo = 'a
           | function""".stripMargin
 
         eval(input) mustEqual Set()
     }
 
     "use NotEq correctly" in {
-      val input = """load(//campaigns) where load(//campaigns).gender != "female" """.stripMargin
+      val input = """//campaigns where //campaigns.gender != "female" """.stripMargin
 
       val results = evalE(input)
 
@@ -344,7 +344,7 @@ trait EvalStackSpecs extends Specification {
 
     "evaluate an unquantified characteristic function" in {
       val input = """
-        | campaigns := load(//campaigns)
+        | campaigns := //campaigns
         | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
         | sums('n) :=
         |   m := max(nums where nums < 'n)
@@ -357,7 +357,7 @@ trait EvalStackSpecs extends Specification {
     "evaluate a quantified characteristic function of two parameters" in {
       val input = """
         | fun('a, 'b) := 
-        |   load(//campaigns) where load(//campaigns).ageRange = 'a & load(//campaigns).gender = 'b
+        |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
         | fun([25,36], "female")""".stripMargin
 
       val results = evalE(input) 
@@ -373,7 +373,7 @@ trait EvalStackSpecs extends Specification {
 
     "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
       val input = """
-        | campaigns := load(//campaigns)
+        | campaigns := //campaigns
         | gender := campaigns.gender
         | platform := campaigns.platform
         | equality('a, 'b) :=
@@ -387,8 +387,8 @@ trait EvalStackSpecs extends Specification {
 
     "determine a histogram of genders on category" in {
       val input = """
-        | campaigns := load(//campaigns)
-        | organizations := load(//organizations)
+        | campaigns := //campaigns
+        | organizations := //organizations
         | 
         | hist('revenue, 'campaign) :=
         |   organizations' := organizations where organizations.revenue = 'revenue
@@ -405,7 +405,7 @@ trait EvalStackSpecs extends Specification {
      
     "determine most isolated clicks in time" in {
       val input = """
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | 
         | spacings('time) :=
         |   click := clicks where clicks.time = 'time
@@ -500,7 +500,7 @@ trait EvalStackSpecs extends Specification {
 
       "outliers" >> {
         val input = """
-           | campaigns := load(//campaigns)
+           | campaigns := //campaigns
            | bound := stdDev(campaigns.cpm)
            | avg := mean(campaigns.cpm)
            | outliers := campaigns where campaigns.cpm > (avg + bound)
@@ -512,7 +512,7 @@ trait EvalStackSpecs extends Specification {
       
       "should merge objects without timing out" >> {
         val input = """
-           load(//richie1/test) 
+           //richie1/test 
         """.stripMargin
 
         eval(input) must not(throwA[Throwable])
@@ -520,7 +520,7 @@ trait EvalStackSpecs extends Specification {
 
       "handle query on empty array" >> {
         val input = """
-          load(//test/empty_array)
+          //test/empty_array
         """.stripMargin
 
         eval(input) mustEqual Set(SArray(Vector()), SObject(Map("foo" -> SArray(Vector()))))
@@ -528,7 +528,7 @@ trait EvalStackSpecs extends Specification {
       
       "handle query on empty object" >> {
         val input = """
-          load(//test/empty_object)
+          //test/empty_object
         """.stripMargin
 
         eval(input) mustEqual Set(SObject(Map()), SObject(Map("foo" -> SObject(Map()))))
@@ -536,22 +536,22 @@ trait EvalStackSpecs extends Specification {
 
       "handle query on null" >> {
         val input = """
-          load(//test/null)
+          //test/null
         """.stripMargin
 
         eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
       }
 
       "handle load of error-prone fastspring data" >> {
-        (eval("load(//fastspring_nulls)") must haveSize(2)) and
-        (eval("load(//fastspring_mixed_type)") must haveSize(2))
+        (eval("//fastspring_nulls") must haveSize(2)) and
+        (eval("//fastspring_mixed_type") must haveSize(2))
       }
 
       // times out...
       /* "handle chained characteristic functions" in {
         val input = """
-          | cust := load(//fs1/customers)
-          | tran := load(//fs1/transactions)
+          | cust := //fs1/customers
+          | tran := //fs1/transactions
           | relations('customer) :=
           |   cust' := cust where cust.customer = 'customer
           |   tran' := tran where tran.customer = 'customer

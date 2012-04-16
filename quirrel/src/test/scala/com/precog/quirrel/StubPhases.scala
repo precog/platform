@@ -20,6 +20,8 @@
 package com.precog.quirrel
 
 trait StubPhases extends Phases with RawErrors {
+  protected def LoadId = Identifier(Vector(), "load")
+  
   def bindNames(expr: Expr): Set[Error] = Set()
   def checkProvenance(expr: Expr): Set[Error] = Set()
   def solveCriticalConditions(expr: Expr): Set[Error] = Set()

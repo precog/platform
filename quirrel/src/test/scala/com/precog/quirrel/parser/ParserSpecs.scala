@@ -28,7 +28,7 @@ import org.specs2.mutable._
 import java.io.File
 import scala.io.Source
 
-object ParserSpecs extends Specification with ScalaCheck with Parser with StubPhases {
+object ParserSpecs extends Specification with ScalaCheck with StubPhases with Parser {
   import ast._
   
   "uncomposed expression parsing" should {
@@ -136,9 +136,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "accept a path literal" in {
-      parse("//foo") must beLike { case StrLit(_, "/foo") => ok }
-      parse("//foo/bar/baz") must beLike { case StrLit(_, "/foo/bar/baz") => ok }
-      parse("//cafe-babe42_silly/SILLY") must beLike { case StrLit(_, "/cafe-babe42_silly/SILLY") => ok }
+      // TODO find a way to use LoadId instead
+      parse("//foo") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))) => ok }
+      parse("//foo/bar/baz") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo/bar/baz"))) => ok }
+      parse("//cafe-babe42_silly/SILLY") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/cafe-babe42_silly/SILLY"))) => ok }
     }
     
     "accept a string literal" in {
@@ -804,8 +805,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "correctly nest multiple binds" in {
       val input = """
         | a :=
-        |   b := load(//f)
-        |   c := load(//g)
+        |   b := //f
+        |   c := //g
         |
         |   d
         | e""".stripMargin
