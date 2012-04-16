@@ -28,6 +28,8 @@ object QuirrelConsole {
     with EmptyLibrary {}
 
   trait StubPhases extends Phases with RawErrors {
+    protected def LoadId = Identifier(Vector(), "load")
+    
     def bindNames(tree: Expr) = Set()
     def checkProvenance(tree: Expr) = Set()
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()

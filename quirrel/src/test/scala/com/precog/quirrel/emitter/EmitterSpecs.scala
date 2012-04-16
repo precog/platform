@@ -254,7 +254,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit matched join of wrapped object for object with two fields having same provenance" in {
-      testEmit("clicks := load(//clicks) {foo: clicks, bar: clicks}")(
+      testEmit("clicks := //clicks {foo: clicks, bar: clicks}")(
         Vector(
           PushString("foo"),
           PushString("/clicks"),
@@ -288,7 +288,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit join of wrapped arrays for array with four elements having values from two static provenances" in {
-      testEmit("foo := load(//foo) bar := load(//bar) foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
+      testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -321,7 +321,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for object load" in {
-      testEmit("clicks := load(//clicks) clicks.foo")(
+      testEmit("clicks := //clicks clicks.foo")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -330,7 +330,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for array load" in {
-      testEmit("clicks := load(//clicks) clicks[1]")(
+      testEmit("clicks := //clicks clicks[1]")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -355,7 +355,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit descent for array load with non-constant indices" in {
-      testEmit("clicks := load(//clicks) clicks[clicks]")(
+      testEmit("clicks := //clicks clicks[clicks]")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -375,7 +375,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit filter match for loads from same provenance when performing equality filter" in {
-      testEmit("foo := load(//foo) foo where foo.id = 2")(
+      testEmit("foo := //foo foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
           LoadLocal(Het),
@@ -506,7 +506,7 @@ object EmitterSpecs extends Specification
 
     "emit binary non-reduction" in {
       val f = lib2.head
-      testEmit("""%s::%s(load(//foo).time, load(//foo).timeZone)""".format(f.namespace.mkString("::"), f.name))(
+      testEmit("""%s::%s(//foo.time, //foo.timeZone)""".format(f.namespace.mkString("::"), f.name))(
         Vector(
           PushString("/foo"), 
           LoadLocal(Het), 
@@ -520,7 +520,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit body of fully applied characteristic function" in {
-      testEmit("clicks := load(//clicks) clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
+      testEmit("clicks := //clicks clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         Vector(
           PushString("foo"),
           Dup,
@@ -545,7 +545,7 @@ object EmitterSpecs extends Specification
     "emit body of a fully applied characteristic function with two variables" in {
       testEmit("""
         | fun('a, 'b) := 
-        |   load(//campaigns) where load(//campaigns).ageRange = 'a & load(//campaigns).gender = 'b
+        |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
         | fun([25,36], "female")""".stripMargin)(Vector(
           PushNum("25"),
           Map1(WrapArray),
@@ -588,7 +588,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit match for first-level union provenance" in {
-      testEmit("a := load(//a) b := load(//b) a ~ b (b.x - a.x) * (a.y - b.y)")(
+      testEmit("a := //a b := //b a ~ b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
           LoadLocal(Het),
@@ -666,7 +666,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit split and merge for trivial cf example" in {
-      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day onDay")(
+      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -692,7 +692,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit merge_buckets & for trivial cf example with conjunction" in {
-      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
+      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -727,7 +727,7 @@ object EmitterSpecs extends Specification
     }
 
     "emit merge_buckets | for trivial cf example with disjunction" in {
-      testEmit("clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
+      testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -763,7 +763,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with paired tic variables in critical condition" in {
       testEmit("""
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | foo('a, 'b) :=
         |   clicks' := clicks where clicks.time = 'a & clicks.pageId = 'b
         |   clicks'
@@ -803,7 +803,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with consecutively-constrained paired tic variables on a single set" in {
       testEmit("""
-        | organizations := load(//organizations)
+        | organizations := //organizations
         | 
         | hist('revenue, 'campaign) :=
         |   organizations' := organizations where organizations.revenue = 'revenue
@@ -816,7 +816,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with single, multiply constrained tic variable" in {
       testEmit("""
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | foo('a) :=
         |   bar := clicks where clicks.a = 'a
         |   baz := clicks where clicks.b = 'a
@@ -880,7 +880,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with independent tic variables on same set" in {
       testEmit("""
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | 
         | foo('a, 'b) :=
         |   bar := clicks where clicks.a = 'a
@@ -952,8 +952,8 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with independent tic variables on different sets" in {
       testEmit("""
-        | clicks := load(//clicks)
-        | imps := load(//impressions)
+        | clicks := //clicks
+        | imps := //impressions
         | 
         | foo('a, 'b) :=
         |   bar := clicks where clicks.a = 'a
@@ -1028,7 +1028,7 @@ object EmitterSpecs extends Specification
     
     "emit split and merge for cf example with extra sets" in {
       testEmit("""
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | foo('a) := clicks where clicks = 'a & clicks.b = 42
         | foo""".stripMargin)(Vector(
           PushString("/clicks"),
@@ -1062,10 +1062,12 @@ object EmitterSpecs extends Specification
     }
 
     "emit split and merge for ctr example" in {
-      testEmit("clicks := load(//clicks) " + 
-               "imps   := load(//impressions)" +
-               "ctr('day) := count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)" +
-               "ctr")(
+      testEmit("""
+        | clicks := //clicks
+        | imps := //impressions
+        | ctr('day) :=
+        |   count(clicks where clicks.day = 'day) / count(imps where imps.day = 'day)
+        | ctr""".stripMargin)(
         Vector(
           PushString("/clicks"),
           LoadLocal(Het),
@@ -1123,7 +1125,7 @@ object EmitterSpecs extends Specification
     
     "emit dup for merge results" in {
       val input = """
-        | clicks := load(//clicks)
+        | clicks := //clicks
         | f('c) := count(clicks where clicks = 'c)
         | f.a + f.b""".stripMargin
         
@@ -1162,7 +1164,7 @@ object EmitterSpecs extends Specification
       "deviant-durations.qrl" >> {
         // TODO: Verify match/cross for tic variable solution fragmentsA
         testEmit("""
-          | interactions := load(//interactions)
+          | interactions := //interactions
           | 
           | big1z('userId) :=
           |   userInteractions := interactions where interactions.userId = 'userId
@@ -1266,8 +1268,8 @@ object EmitterSpecs extends Specification
       "first-conversion.qrl" >> {
         testEmit("""
           | firstConversionAfterEachImpression('userId) :=
-          |   conversions' := load(//conversions)
-          |   impressions' := load(//impressions)
+          |   conversions' := //conversions
+          |   impressions' := //impressions
           | 
           |   conversions := conversions' where conversions'.userId = 'userId
           |   impressions := impressions' where impressions'.userId = 'userId
@@ -1505,7 +1507,7 @@ object EmitterSpecs extends Specification
 
       "histogram.qrl" >> {
         testEmit("""
-          | clicks := load(//clicks)
+          | clicks := //clicks
           | 
           | histogram('value) :=
           |   { cnt: count(clicks where clicks = 'value), value: 'value }
@@ -1550,7 +1552,7 @@ object EmitterSpecs extends Specification
       /*
       "interaction-totals.qrl" >> {
         val input = """
-          | interactions := load(//interactions)
+          | interactions := //interactions
           | 
           | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
           | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
@@ -1567,7 +1569,7 @@ object EmitterSpecs extends Specification
       
       "relative-durations.qrl" >> {
         val input = """
-          | interactions := load(//interactions)
+          | interactions := //interactions
           | 
           | relativeDurations('userId, 'value) :=
           |   userInteractions := interactions where interactions.userId = 'userId
