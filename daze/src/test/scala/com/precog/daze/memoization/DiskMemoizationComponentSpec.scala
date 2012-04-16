@@ -53,7 +53,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoiz
   override val defaultPrettyParams = Pretty.Params(2)
 
   override type Dataset[α] = IterableDataset[α]
-  override type Valueset[α] = Iterable[α]
+  override type Memoable[α] = Iterable[α]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -69,6 +69,8 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoiz
   object yggConfig extends DiskMemoizationConfig {
     val memoizationBufferSize = 10
     val memoizationWorkDir = IOUtils.createTmpDir("memotest")
+    val sortBufferSize = 10
+    val sortWorkDir = IOUtils.createTmpDir("sorttest")
   }
 
   val storage = new Storage { }
@@ -81,22 +83,27 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoiz
       withMemoizationContext { ctx =>
         @volatile var i = 0;
         check { (sample: Unshrinkable[List[SEvent]]) => 
+          synchronized { i += 1 } 
+
           try {
-            val events = sample.value
-            synchronized { i += 1 } 
-
-            ctx.memoizing[(Identities, SValue)](i) must beLike {
-              case Left(f) => 
-                val results = Await.result(f(IterableDataset(1, events).iterable), timeout.duration)
-
-                (results.toList must_== events) and {
-                  ctx.memoizing[(Identities, SValue)](i) must beLike {
-                    case Right(d) => 
-                      val results2 = Await.result(d, timeout.duration)
-                      results2.toList must_== events
-                  }
+            var increments = 0
+            val events = new Iterable[SEvent] {
+              def iterator = new Iterator[SEvent] {
+                private val inner = sample.value.iterator
+                def hasNext = inner.hasNext 
+                def next = {
+                  increments += 1
+                  inner.next
                 }
+              }
             }
+
+            val result = ctx.memoize(events, i).toList
+            (result must_== sample.value) and
+            (increments must_== sample.value.size) and
+            (ctx.memoize(events, i).toList must beLike {
+              case results2 => (results2 must_== sample.value) and (increments must_== sample.value.size)
+            })
           } catch {
             case ex => ex.printStackTrace; throw ex
           }

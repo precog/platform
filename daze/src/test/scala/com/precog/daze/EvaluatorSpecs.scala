@@ -71,7 +71,7 @@ class EvaluatorSpecs extends Specification
     with Stdlib
     with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
-  override type Valueset[α] = Iterable[α]
+  override type Memoable[α] = Iterable[α]
 
   import Function._
   

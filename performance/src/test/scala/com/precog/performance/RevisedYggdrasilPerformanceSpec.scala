@@ -40,6 +40,7 @@ import akka.util.Duration
 import akka.util.duration._
 
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonParser
 
 import java.io.File
 
@@ -63,7 +64,9 @@ trait RevisedYggdrasilPerformanceSpec extends Specification with PerformanceSpec
   val tmpDir = newTempDir() 
   lazy val shard = new TestShard(config, tmpDir)
   lazy val executor = new TestQueryExecutor(config, shard)
-  
+
+  val perfUtil = PerformanceUtil.default
+
   step {    
     Await.result(shard.actorsStart, timeout)
   }
@@ -147,6 +150,7 @@ histogram
       
       println("load test sim")
       val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      perfUtil.uploadResults("load_test_sim", result)
       //val result = Performance().profile(test(10))   
       
       result.report("load test sym", System.out)
@@ -157,6 +161,7 @@ histogram
       val tests = 100000
       val batchSize = 1000
       val result = Performance().benchmark(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize), singleParams, singleParams)   
+      perfUtil.uploadResults("insert_100k", result)
       //val result = Performance().profile(insert(shard, Path("/test/insert/"), 0, batchSize, tests / batchSize))   
 
       println("starting insert test")
@@ -174,6 +179,7 @@ histogram
 
       Thread.sleep(10000)
       val result = Performance().benchmark(testRead(), benchParams, benchParams)   
+      perfUtil.uploadResults("read_100k", result)
       //val result = Performance().profile(testRead())   
       result.report("read 100K", System.out)
       true must_== true
@@ -195,6 +201,7 @@ histogram
       }
       
       val result = Performance().benchmark(test(10), benchParams, benchParams)   
+      perfUtil.uploadResults("read_10k_10x", result)
       //val result = Performance().profile(test(100))   
       
       result.report("read 10K elements x 10 times", System.out)
@@ -227,6 +234,7 @@ histogram
       } 
       
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      perfUtil.uploadResults("read_10k_10thread", result)
       //val result = Performance().profile(test(10))   
       
       println("read small thread test")
@@ -256,6 +264,7 @@ count(tests where tests.gender = "male")
       }
       
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      perfUtil.uploadResults("hw2_100k", result)
       //val result = Performance().profile(test(100))   
       
       result.report("hw2 test 100K * 1", System.out)
@@ -286,12 +295,194 @@ histogram
       }
       
       val result = Performance().benchmark(test(1), benchParams, benchParams)   
+      perfUtil.uploadResults("hw3_100k", result)
       //val result = Performance().profile(test(100))   
       
       result.report("hw3 test 100K * 1", System.out)
       true must_== true
     }
     
+    "handle null scenario" in {
+      val nullReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":null,
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvals = JsonParser.parse(nullReal)
+      val msgs = jvals match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/null"), "token", jval, Map.empty)
+              EventMessage(EventId(1,idx), event)
+          }
+      }
+
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+
+      Thread.sleep(10000)
+
+      val result = executor.execute("token", "load(//test/null)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
+    }
+
+    "handle mixed type scenario" in {
+      val mixedReal = """
+[{
+ "event":"activated",
+ "currency":"USD",
+ "customer":{
+   "country":"CA",
+   "email":"john@fastspring.com",
+   "firstName":"John",
+   "lastName":"Smith",
+   "organization":"",
+   "zipcode":"11111"
+ },
+ "endDate":"null",
+ "product":{
+   "name":"Subscription 1"
+ },
+ "quantity":1,
+ "regularPriceUsd":10,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+},{
+ "event":"deactivated",
+ "currency":"USD",
+ "customer":{
+   "country":"US",
+   "email":"ryan@fastspring.com",
+   "firstName":"Ryan",
+   "lastName":"Dewell",
+   "organization":"",
+   "zipcode":"93101"
+ },
+ "endDate":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ },
+ "product":{
+   "name":"ABC Subscription"
+ },
+ "quantity":1,
+ "reason":"canceled",
+ "regularPriceUsd":9,
+ "timestamp":{
+   "date":7,
+   "day":3,
+   "hours":0,
+   "minutes":0,
+   "month":2,
+   "seconds":0,
+   "time":1331078400000,
+   "timezoneOffset":0,
+   "year":112
+ }
+}]
+      """
+      val jvalues = JsonParser.parse(mixedReal)
+      val msgs = jvalues match {
+        case JArray(jvals) =>
+          jvals.zipWithIndex.map {
+            case (jval, idx) =>
+              val event = Event(Path("/test/mixed"), "token", jval, Map.empty)
+              EventMessage(EventId(2,idx), event)
+          }
+      }
+
+      Await.result(shard.storeBatch(msgs, timeout), timeout)
+      
+      Thread.sleep(10000)
+      
+      val result = executor.execute("token", "load(//test/mixed)")
+      result must beLike {
+        case Success(JArray(vals)) => vals.size must_== 2
+      }
+    }
   }
 
   step {

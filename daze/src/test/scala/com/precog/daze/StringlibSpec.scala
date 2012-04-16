@@ -41,7 +41,7 @@ class StringlibSpec extends Specification
   with Stringlib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
-  override type Valueset[α] = Iterable[α]
+  override type Memoable[α] = Iterable[α]
     
 
   import Function._

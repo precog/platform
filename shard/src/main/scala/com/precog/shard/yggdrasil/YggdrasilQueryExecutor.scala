@@ -26,7 +26,7 @@ import blueeyes.json.JsonAST._
 import daze._
 import daze.memoization._
 
-import pandora.ParseEvalStack
+import muspelheim.ParseEvalStack
 
 import com.precog.common._
 
@@ -127,7 +127,7 @@ trait YggdrasilQueryExecutor
     with DiskIterableMemoizationComponent
     with Logging  { self =>
   override type Dataset[E] = IterableDataset[E]
-  override type Valueset[E] = Iterable[E]
+  override type Memoable[E] = Iterable[E]
 
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard[IterableDataset]

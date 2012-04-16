@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.pandora
+package com.precog
+package pandora
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -45,7 +46,7 @@ import yggdrasil.serialization._
 
 object SBTConsole {
   
-  trait Platform  extends ParseEvalStack 
+  trait Platform  extends muspelheim.ParseEvalStack 
                   with IterableDatasetOpsComponent
                   with LevelDBQueryComponent 
                   with DiskIterableMemoizationComponent 
@@ -61,7 +62,7 @@ object SBTConsole {
                     with ProductionActorConfig
 
     override type Dataset[A] = IterableDataset[A]
-    override type Valueset[A] = Iterable[A]
+    override type Memoable[A] = Iterable[A]
   }
 
   val platform = new Platform { console =>

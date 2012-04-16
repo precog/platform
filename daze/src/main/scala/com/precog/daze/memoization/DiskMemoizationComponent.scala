@@ -24,10 +24,8 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.util._
 
-import akka.dispatch.Future
-import akka.dispatch.Promise
-import akka.dispatch.ExecutionContext
 import java.io._
+import java.util.{PriorityQueue, Comparator, Arrays}
 import java.util.zip._
 
 import scala.annotation.tailrec
@@ -42,14 +40,14 @@ import Iteratee._
 trait DiskMemoizationConfig {
   def memoizationBufferSize: Int
   def memoizationWorkDir: File
+  def sortBufferSize: Int
+  def sortWorkDir: File
 }
 
 trait DiskIterableMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
   type YggConfig <: DiskMemoizationConfig
-  type Valueset[α] = Iterable[α]
+  type Memoable[α] = Iterable[α]
   type MemoId = Int
-
-  implicit val asyncContext: ExecutionContext
 
   def withMemoizationContext[A](f: MemoContext => A) = {
     val ctx = new MemoContext { } 
@@ -60,69 +58,15 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
     }
   }
 
-  sealed trait MemoContext extends MemoizationContext[Valueset] { ctx => 
+  sealed trait MemoContext extends MemoizationContext[Iterable] { ctx => 
     type CacheKey[α] = MemoId
-    class CacheValue[A](val value: Promise[Either[Vector[A], File]]) 
-    /*{
-      @volatile private var references = 1
-      def reserve = synchronized {
-        if (references > 0) references += 1
-        else sys.error("Attempt to reserve usage for an expired memo")
-      }
-
-      def release = synchronized {
-        references -= 1
-        if (references == 0) for (Right(file) <- value) file.delete
-      }
-
-      def expire = synchronized {
-        references -= 1
-      }
-    }*/
+    type CacheValue[A] = Iterable[A]
 
     @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
-    @volatile private var files: List[File] = Nil
+    @volatile private var files: Vector[File] = Vector()
 
-    private def datasetFor[A](cv: CacheValue[A])(implicit serialization: IncrementalSerialization[A]): Future[Iterable[A]] = {
-      def wrap(inner: Iterator[A]): Iterator[A] = new Iterator[A] { self =>
-        @volatile private var cacheValue = cv
-        def hasNext = {
-          if (!inner.hasNext) {
-            self.synchronized { 
-              if (cacheValue != null) {
-                //cacheValue.release
-                // ensure that we don't release the same reference twice
-                cacheValue = null.asInstanceOf[CacheValue[A]]
-              }
-            }
-          }
-
-          inner.hasNext
-        }
-
-        def next = inner.next
-      }
-
-      // first, update the reference count
-      //cv.reserve
-
-      // return a dataset that wraps an iterator which will decrement the reference count
-      // on exhaustion
-      cv.value map {
-        case Left(vector) =>
-          new Iterable[A] { 
-            def iterator = wrap(vector.iterator)
-          }
-
-        case Right(file) => 
-          new Iterable[A] { 
-            def iterator = wrap(serialization.reader.read(serialization.iStream(file), true))
-          }
-      }
-    }
-
-    def memoizing[A](memoId: MemoId)(implicit serialization: IncrementalSerialization[A]): Either[Iterable[A] => Future[Iterable[A]], Future[Iterable[A]]] = {
-      def store(iter: Iterator[A]): Either[Vector[A], File] = {
+    def memoize[A](dataset: Iterable[A], memoId: Int)(implicit serialization: IncrementalSerialization[A]): Iterable[A] = {
+      def store(iter: Iterator[A]): CacheValue[A] = {
         @tailrec def buffer(i: Int, acc: Vector[A]): Vector[A] = {
           if (i < yggConfig.memoizationBufferSize && iter.hasNext) buffer(i+1, acc :+ iter.next)
           else acc
@@ -135,34 +79,137 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
 
         val initial = buffer(0, Vector()) 
         if (initial.length < yggConfig.memoizationBufferSize) {
-          Left(initial)
+          initial
         } else {
           val memoFile = new File(yggConfig.memoizationWorkDir, "memo." + memoId)
           using(serialization.oStream(memoFile)) { out =>
             spill(spill(serialization.writer, out, initial.iterator), out, iter).finish(out)
           }
+          files :+= memoFile 
 
-          ctx.synchronized { files = memoFile :: files }
-
-          Right(memoFile)
+          new Iterable[A] { 
+            def iterator = serialization.reader.read(serialization.iStream(memoFile), true)
+          }
         }
       }
 
-
+      // yup, we block the whole world. Yay.
       ctx.synchronized {
         memoCache.get[A](memoId) match {
           case Some(cacheValue) => 
-            Right(datasetFor(cacheValue))
+            cacheValue
 
           case None => 
-            val promise = Promise[Either[Vector[A], File]]
-            val cacheValue: CacheValue[A] = new CacheValue[A](promise)
+            val cacheValue = store(dataset.iterator)
             memoCache += (memoId -> cacheValue)
+            cacheValue
+        }
+      }
+    }
 
-            Left((toMemoize: Iterable[A]) => {
-              promise.completeWith(Future(store(toMemoize.iterator)))
-              datasetFor(cacheValue)
-            })
+    def sort[A](values: Iterable[A], memoId: Int)(implicit buffering: Buffering[A], fs: SortSerialization[A]): Iterable[A] = {
+      val buf = buffering.newBuffer(yggConfig.sortBufferSize)
+
+      def sortFile(i: Int) = new File(yggConfig.sortWorkDir, "sort." + memoId + "." + i)
+
+      def writeSortedChunk(chunkId: Int, limit: Int): File = {
+        buf.sort(limit)
+        val chunkFile = sortFile(chunkId)
+        using(fs.oStream(chunkFile)) { fs.write(_, buf.buffer, limit) }
+        chunkFile
+      }
+
+      @tailrec def writeChunked(files: Vector[File], v: Iterator[A]): Vector[File] = {
+        if (v.hasNext) {
+          val limit = buf.bufferChunk(v)
+          writeChunked(files :+ writeSortedChunk(files.length, limit), v)
+        } else {
+          files
+        }
+      }
+
+      def mergeIterator(toMerge: Vector[(Iterator[A], () => Unit)]): Iterator[A] = {
+        class Cell(iter: Iterator[A]) {
+          var value: A = iter.next
+          def advance(): Unit = {
+            value = if (iter.hasNext) iter.next else null.asInstanceOf[A]
+            this
+          }
+        }
+
+        val cellComparator = buffering.order.contramap((c: Cell) => c.value).toJavaComparator
+        val (streams, closes) = toMerge.unzip
+        
+        // creating a priority queue of size 0 will cause an NPE
+        if (streams.size == 0) {
+          Iterator.empty
+        } else {
+          new Iterator[A] {
+            private val heads: PriorityQueue[Cell] = new PriorityQueue[Cell](streams.size, cellComparator) 
+            streams.foreach(i => heads.add(new Cell(i)))
+
+            def hasNext = {
+              if (heads.isEmpty) closes.foreach(_())
+              !heads.isEmpty
+            }
+
+            def next = {
+              assert(!heads.isEmpty) 
+              val cell = heads.poll
+              val result = cell.value
+              cell.advance
+              if (cell.value != null) heads.offer(cell)
+              result
+            }
+          }
+        }
+      }
+
+      ctx.synchronized {
+        memoCache.get[A](memoId) match {
+          case Some(cacheValue) => cacheValue
+          case None =>
+            // first buffer up to the limit of the iterator, so that we can stay in-memory if possible
+            val limit = buf.bufferChunk(values.iterator)
+            val cacheValue = 
+              if (limit < buf.buffer.length) {
+                // if we fit in memory, just sort then return an iterator over the buffer
+                buf.sort(limit)
+                new Iterable[A] {
+                  def iterator = new Iterator[A] {
+                    private var i = 0
+                    def hasNext = i < limit
+                    def next = {
+                      val tmp = buf.buffer(i)
+                      i += 1
+                      tmp
+                    }
+                  }
+                }
+              } else {
+                // dump the chunk to disk, then dump the remainder of the iterator to disk in chunks
+                // and return an iterator over the full set of files
+                val initialChunkFile = writeSortedChunk(0, limit)
+                val chunkFiles = writeChunked(Vector(initialChunkFile), values.iterator)
+                files ++= chunkFiles
+                new Iterable[A] {
+                  def iterator = mergeIterator {
+                    chunkFiles flatMap { f =>
+                      val stream = fs.iStream(f)
+                      val iter = fs.reader(stream)
+                      if (iter.hasNext) {
+                        Some((iter, () => stream.close)) 
+                      } else {
+                        stream.close
+                        None
+                      }
+                    }
+                  }
+                }
+              }
+
+            memoCache += (memoId -> cacheValue)
+            cacheValue
         }
       }
     }
@@ -172,7 +219,6 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
         ctx.synchronized { 
           memoCache.get[Any](memoId) foreach { cacheValue =>
             memoCache -= memoId
-            //cacheValue.expire // this final release will decrement the reference counter so that it will be freed by the last iterator
           }
         }
       }
@@ -180,104 +226,10 @@ trait DiskIterableMemoizationComponent extends YggConfigComponent with Memoizati
       def purge() = {
         ctx.synchronized {
           for (f <- files) f.delete
-          files = Nil
+          files = Vector()
           memoCache = KMap.empty[CacheKey, CacheValue]
         }
       }
     }
   }
 }
-
-/*
-trait DiskIterateeMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
-  type YggConfig <: DiskMemoizationConfig
-
-  def withMemoizationContext[A](f: MemoContext => A) = f(new MemoContext { })
-
-  sealed trait MemoContext extends IterateeMemoizationContext with BufferingContext { ctx => 
-    type CacheKey[α] = Int
-    type CacheValue[α] = Either[Vector[α], File]
-    @volatile private var memoCache: KMap[CacheKey, CacheValue] = KMap.empty[CacheKey, CacheValue]
-    @volatile private var files: List[File] = Nil
-
-    private def memoizer[X, E, F[_]](memoId: Int)(implicit fs: IterateeFileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, Either[Vector[E], File]] = {
-      import MO._
-
-      def consume(i: Int, acc: Vector[E]): IterateeT[X, E, F, Either[Vector[E], File]] = {
-        if (i < yggConfig.memoizationBufferSize) 
-          cont(
-            (_: Input[E]).fold(
-              el    = el => consume(i + 1, acc :+ el),
-              empty = consume(i, acc),
-              eof   = done(Left(acc), eofInput)))
-        else 
-          (fs.writer(new File(yggConfig.memoizationWorkDir, "memo" + memoId)) &= enumStream[X, E, F](acc.toStream)) map (f => Right(f))
-      }
-
-      consume(0, Vector.empty[E])
-    }
-
-    def buffering[X, E, F[_]](memoId: Int)(implicit fs: IterateeFileSerialization[E], MO: F |>=| IO): IterateeT[X, E, F, EnumeratorP[X, E, IO]] = ctx.synchronized {
-      import MO._
-      memoCache.get(memoId) match {
-        case Some(Left(vector)) => 
-          done[X, E, F, EnumeratorP[X, E, IO]](EnumeratorP.enumPStream[X, E, IO](vector.toStream), eofInput)
-          
-        case Some(Right(file)) => 
-          done[X, E, F, EnumeratorP[X, E, IO]](fs.reader[X](file), eofInput)
-
-        case None =>
-          import MO._
-          memoizer[X, E, F](memoId) map { memo =>
-            EnumeratorP.perform[X, E, IO, Unit](IO(ctx.synchronized { if (!memoCache.isDefinedAt(memoId)) memoCache += (memoId -> memo) })) |+|
-            memo.fold(
-              vector => EnumeratorP.enumPStream[X, E, IO](vector.toStream),
-              file   => fs.reader[X](file)
-            )
-          }
-      }
-    }
-
-    def memoizing[X, E](memoId: Int)(implicit fs: IterateeFileSerialization[E], asyncContext: ExecutionContext): Either[Memoizer[X, E], EnumeratorP[X, E, IO]] = ctx.synchronized {
-      memoCache.get(memoId) match {
-        case Some(Left(vector)) => 
-          Right(EnumeratorP.enumPStream[X, E, IO](vector.toStream))
-          
-        case Some(Right(file)) => 
-          Right(fs.reader[X](file))
-
-        case None => Left(
-          new Memoizer[X, E] {
-            def apply[F[_], A](iter: IterateeT[X, E, F, A])(implicit MO: F |>=| IO) = {
-              import MO._
-              (iter zip memoizer[X, E, F](memoId)) map {
-                case (result, memo) => 
-                  ctx.synchronized { if (!memoCache.isDefinedAt(memoId)) {
-                    for (f <- memo.right) files = f :: files
-                    memoCache += (memoId -> memo) 
-                  }}
-                  result
-              }
-            }
-          }
-        )
-      }
-    }
-
-    object cache extends MemoCache {
-      def expire(memoId: Int) = IO {
-        ctx.synchronized { memoCache -= memoId }
-      }
-
-      def purge = IO {
-        ctx.synchronized {
-          for (f <- files) f.delete
-          files = Nil
-          memoCache = KMap.empty[CacheKey, CacheValue]
-        }
-      }
-    }
-  }
-}
-
-*/

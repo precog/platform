@@ -55,7 +55,6 @@ trait EvaluatorConfig {
   def idSource: IdSource
 }
 
-
 trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
@@ -72,7 +71,7 @@ trait Evaluator extends DAG
   import dag._
 
   type Dataset[E]
-  type Valueset[E]
+  type Memoable[E]
   type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
@@ -84,7 +83,7 @@ trait Evaluator extends DAG
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Valueset, Grouping, E] = ops.extend(d)
+  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
 
   def withContext[A](f: Context => A): A = {
     withMemoizationContext { memoContext => 
@@ -129,7 +128,7 @@ trait Evaluator extends DAG
       case MergeBucketSpec(left, right, and) => {
         val leftGroup = computeMergeGrouping(assume, splits, graph, ctx)(left)
         val rightGroup = computeMergeGrouping(assume, splits, graph, ctx)(right)
-        ops.mergeGroups(leftGroup, rightGroup, !and, ctx.memoizationContext, ctx.expiration)
+        ops.mergeGroups(leftGroup, rightGroup, !and, ctx.memoizationContext)
       }
       
       case SingleBucketSpec(target, solution) => {
@@ -137,7 +136,7 @@ trait Evaluator extends DAG
         val Match(sourceSpec, sourceSet, _) = maybeRealize(loop(common, assume, splits, ctx), common, ctx)
         val source = realizeMatch(sourceSpec, sourceSet)
         
-        val grouping = source.group[SValue](IdGen.nextInt(), ctx.memoizationContext, ctx.expiration) { sv: SValue =>
+        val grouping = source.group[SValue](IdGen.nextInt(), ctx.memoizationContext) { sv: SValue =>
           val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv), common))
           val Match(spec, set, _) = maybeRealize(loop(solution, assume2, splits, ctx), graph, ctx)
           realizeMatch(spec, set)
@@ -232,7 +231,7 @@ trait Evaluator extends DAG
 
       case dag.SetReduce(_, Distinct, parent) => {
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext, ctx.expiration)
+        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext)
         Right(Match(mal.Actual, result, graph))
       }
       
@@ -337,7 +336,7 @@ trait Evaluator extends DAG
           val current = groupings.head
           val rest = groupings.tail
           
-          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext, ctx.expiration) { (key, groups) =>
+          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext) { (key, groups) =>
             val params2 = ops.point(key) +: (Vector(groups.toList: _*) ++ params)
             
             if (rest.isEmpty) {
@@ -372,14 +371,14 @@ trait Evaluator extends DAG
         
         val back = instr match {
           case IUnion if left.provenance.length == right.provenance.length =>
-            leftEnum.union(rightEnum, ctx.memoizationContext, ctx.expiration)
+            leftEnum.union(rightEnum, ctx.memoizationContext)
           
           // apparently Dataset tracks number of identities...
           case IUnion if left.provenance.length != right.provenance.length =>
             leftEnum.paddedMerge(rightEnum, () => ctx.nextId())
           
           case IIntersect if left.provenance.length == right.provenance.length =>
-            leftEnum.intersect(rightEnum, ctx.memoizationContext, ctx.expiration)
+            leftEnum.intersect(rightEnum, ctx.memoizationContext)
           
           case IIntersect if left.provenance.length != right.provenance.length =>
             ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
@@ -498,47 +497,47 @@ trait Evaluator extends DAG
         else
           Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
       }
-      
-      //case j @ Join(_, instr, left, right) => {
-      //  lazy val length = sharedPrefixLength(left, right)
-      //  
-      //  val op = instr match {
-      //    case Map2Cross(op) => binaryOp(op)
-      //    case Map2CrossLeft(op) => binaryOp(op)
-      //    case Map2CrossRight(op) => binaryOp(op)
-      //  }
-      //  
-      //  val leftRes = loop(left, assume, splits, ctx)
-      //  val rightRes = loop(right, assume, splits, ctx)
-      //  
-      //  val (leftTpe, rightTpe) = op.operandType
-      //  
-      //  val leftResTyped = leftRes.left map { mask =>
-      //    leftTpe map mask.typed getOrElse mask
-      //  }
-      //  
-      //  val rightResTyped = rightRes.left map { mask =>
-      //    rightTpe map mask.typed getOrElse mask
-      //  }
-      //  
-      //  val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
-      //  val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
-      //  
-      //  val leftEnum = realizeMatch(leftSpec, leftSet)
-      //  val rightEnum = realizeMatch(rightSpec, rightSet)
-      //  
-      //  val resultEnum = instr match {
-      //    case Map2Cross(_) | Map2CrossLeft(_) =>
-      //      val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext, ctx.expiration)
-      //      leftEnum.crossLeft(enum)(op.operation)
-      //    
-      //    case Map2CrossRight(_) =>
-      //      val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext, ctx.expiration)
-      //      enum.crossRight(rightEnum)(op.operation)
-      //  }
-      //  
-      //  Right(Match(mal.Actual, resultEnum, graph))
-      //}
+
+      case j @ Join(_, instr, left, right) => {
+        lazy val length = sharedPrefixLength(left, right)
+        
+        val op = instr match {
+          case Map2Cross(op) => binaryOp(op)
+          case Map2CrossLeft(op) => binaryOp(op)
+          case Map2CrossRight(op) => binaryOp(op)
+        }
+        
+        val leftRes = loop(left, assume, splits, ctx)
+        val rightRes = loop(right, assume, splits, ctx)
+        
+        val (leftTpe, rightTpe) = op.operandType
+        
+        val leftResTyped = leftRes.left map { mask =>
+          leftTpe map mask.typed getOrElse mask
+        }
+        
+        val rightResTyped = rightRes.left map { mask =>
+          rightTpe map mask.typed getOrElse mask
+        }
+        
+        val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
+        
+        val leftEnum = realizeMatch(leftSpec, leftSet)
+        val rightEnum = realizeMatch(rightSpec, rightSet)
+        
+        val resultEnum = instr match {
+          case Map2Cross(_) | Map2CrossLeft(_) =>
+            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext)
+            leftEnum.crossLeft(enum)(op.operation)
+          
+          case Map2CrossRight(_) =>
+            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext)
+            enum.crossRight(rightEnum)(op.operation)
+        }
+        
+        Right(Match(mal.Actual, resultEnum, graph))
+      }
       
       case Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
@@ -576,10 +575,10 @@ trait Evaluator extends DAG
         
         val resultEnum = cross match {
           case CrossNeutral | CrossLeft =>
-            targetEnum.crossLeft(booleanEnum.memoize(boolean.memoId, ctx.memoizationContext, ctx.expiration)) { case (sv, STrue) => sv }
+            targetEnum.crossLeft(booleanEnum.memoize(boolean.memoId, ctx.memoizationContext)) { case (sv, STrue) => sv }
           
           case CrossRight =>
-            targetEnum.memoize(target.memoId, ctx.memoizationContext, ctx.expiration).crossRight(booleanEnum) { case (sv, STrue) => sv }
+            targetEnum.memoize(target.memoId, ctx.memoizationContext).crossRight(booleanEnum) { case (sv, STrue) => sv }
         }
         
         Right(Match(mal.Actual, resultEnum, graph))
@@ -589,7 +588,7 @@ trait Evaluator extends DAG
         loop(parent, assume, splits, ctx).right map {
           case Match(spec, set, _) => {
             val enum = realizeMatch(spec, set)
-            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId, ctx.memoizationContext, ctx.expiration), graph)
+            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId, ctx.memoizationContext), graph)
           }
         }
       }
@@ -597,7 +596,7 @@ trait Evaluator extends DAG
       case m @ Memoize(parent, _) => {
         loop(parent, assume, splits, ctx).right map {
           case Match(mal.Actual, enum, graph) =>
-            Match(mal.Actual, enum.memoize(m.memoId, ctx.memoizationContext, ctx.expiration), graph)
+            Match(mal.Actual, enum.memoize(m.memoId, ctx.memoizationContext), graph)
           
           case m => m
         }
