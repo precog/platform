@@ -62,6 +62,8 @@ trait LevelDBByteProjection extends ByteProjection {
       case CNum(d) => 
         val dbytes = d.as[Array[Byte]]
         buf.putInt(dbytes.length).put(dbytes)
+
+      case null => ()
     }
     
     def toArray: Array[Byte] = buf.array

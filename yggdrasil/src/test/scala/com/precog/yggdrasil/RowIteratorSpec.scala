@@ -29,6 +29,7 @@ import org.scalacheck.Arbitrary._
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
+/*
 trait RowIteratorSpec {
   type IterBuilder[B <: Buffer, RI <: BufferRowIterator[B]] = (LongBuffer, B, CPath) => RI
   def longBuffer(longs: List[Long]) = LongBuffer.allocate(longs.length).put(longs.toArray).clear().asInstanceOf[LongBuffer]
@@ -128,24 +129,22 @@ object JoinRowIteratorSpec extends Specification with ScalaCheck with RowIterato
   }
 
   "a JoinRowIterator" should {
-    /*
-    "obtain the same results as a strict join" in {
-      check { (i1: LongBufferRowIterator, i2: LongBufferRowIterator) => 
-        val expected = joinLists(i1.keys.array.toList zip i1.values.array.toList, i2.keys.array.toList zip i2.values.array.toList)
-        forall(JoinRowIterator(i1, i2, 1)) { iter =>
-
-        //println("==============")
-        //println("i1 = " + (i1.keys.array.toList zip i1.values.array.toList))
-        //println("i2 = " + (i2.keys.array.toList zip i2.values.array.toList))
-        //println("expected = " + expected)
-
-          var joined: List[(Long, Long, Long)] = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: Nil
-          while (iter.advance(1)) joined = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: joined
-          joined.reverse must_== expected
-        }
-      }
-    }
-    */
+//    "obtain the same results as a strict join" in {
+//      check { (i1: LongBufferRowIterator, i2: LongBufferRowIterator) => 
+//        val expected = joinLists(i1.keys.array.toList zip i1.values.array.toList, i2.keys.array.toList zip i2.values.array.toList)
+//        forall(JoinRowIterator(i1, i2, 1)) { iter =>
+//
+//        //println("==============")
+//        //println("i1 = " + (i1.keys.array.toList zip i1.values.array.toList))
+//        //println("i2 = " + (i2.keys.array.toList zip i2.values.array.toList))
+//        //println("expected = " + expected)
+//
+//          var joined: List[(Long, Long, Long)] = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: Nil
+//          while (iter.advance(1)) joined = (iter.idAt(0), iter.longAt(0), iter.longAt(1)) :: joined
+//          joined.reverse must_== expected
+//        }
+//      }
+//    }
 
     "succeed on failing sample" in {
       val left = List((-4611686018427387904l,-4611686018427387904l),
@@ -194,5 +193,6 @@ object JoinRowIteratorSpec extends Specification with ScalaCheck with RowIterato
     }
   }
 }
+    */
 
 // vim: set ts=4 sw=4 et:
