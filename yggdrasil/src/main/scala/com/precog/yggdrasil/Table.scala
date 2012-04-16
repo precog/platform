@@ -19,6 +19,8 @@
  */
 package com.precog.yggdrasil
 
+import java.lang.ref.SoftReference
+import scala.annotation.tailrec
 import scalaz.Ordering._
 
 trait Table { source =>
@@ -322,6 +324,99 @@ object Table {
 }
 
 class SliceTable(slices: Iterable[Slice]) {
-  def rowView: RowView = sys.error("todo")
+  def rowView: RowView = new RowView {
+    private val iter = slices.iterator
+    private var currentSlice: Slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
+    private var curIdx: Int = -1
+    private var allocatedPositions: List[SoftReference[Position]] = Nil
+
+    private var resetPosition: Position = null.asInstanceOf[Position]
+    private var resetIndex: Int = 0
+
+    class Position(private[SliceTable] val idx: Int, slice: Slice) {
+      // a vector of hard references to 
+      private var slices: Vector[Slice] = Vector(slice)
+      private[SliceTable] def append(slice: Slice): Position = {
+        slices :+= slice
+        this
+      }
+
+      private[SliceTable] def size: Int = slices.length
+      private[SliceTable] def sliceAt(resetIndex: Int) = slices(resetIndex)
+    }
+
+    def position: Position = {
+      val position = new Position(curIdx, currentSlice)
+      allocatedPositions = new SoftReference(position) :: allocatedPositions
+      position
+    }
+
+    def state = if (currentSlice == null) RowView.AfterEnd
+                else if (curIdx > -1) RowView.Data
+                else RowView.BeforeStart
+
+    @tailrec def advance(): RowView.State = {
+      if (resetPosition ne null) {
+        // since we've been reset, we'll use the tail of the reset position until it is exhausted before
+        // advancing the underlying iterator.
+        curIdx += 1
+        if (curIdx > currentSlice.size) {
+          curIdx = -1
+          resetIndex += 1
+          if (resetIndex < resetPosition.size) {
+            currentSlice = resetPosition.sliceAt(resetIndex)
+          } else {
+            // we've exhausted the slices of the reset position, so go ahead and advance the 
+            resetIndex = 0
+            resetPosition = null
+            currentSlice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
+          }
+
+          advance()
+        } else {
+          RowView.Data
+        }
+      } else if (currentSlice eq null) {
+        RowView.AfterEnd 
+      } else {
+        // advance over the slice iterator as normal; whenever we move to a new slice,
+        // update any allocated poitions that haven't been freed to record references
+        // to the slices in the tail of the positions, so that they don't get GCed
+        // before references to them may be needed
+        curIdx += 1
+        if (curIdx > currentSlice.size) {
+          curIdx = -1
+          currentSlice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
+          if (currentSlice ne null) {
+            allocatedPositions = allocatedPositions filter { pref => 
+              val pos = pref.get
+              // yay for evil, side effects in a filter block!
+              if (pos != null) pos.append(currentSlice)
+              pos == null
+            }
+          }
+
+          advance()
+        } else {
+          RowView.Data
+        }
+      }
+    }
+
+    def reset(position: Position): RowView.State = {
+      curIdx = position.idx
+      resetPosition = position
+      if (curIdx == -1) RowView.BeforeStart else RowView.Data
+    }
+
+    protected[yggdrasil] def idCount: Int = currentSlice.idCount
+    protected[yggdrasil] def columns: Set[CMeta] = currentSlice.columns.keySet
+
+    protected[yggdrasil] def idAt(i: Int): Identity = currentSlice.identities(i).apply(curIdx)
+
+    protected[yggdrasil] def hasValue(meta: CMeta): Boolean = currentSlice.columns.contains(meta)
+
+    protected[yggdrasil] def valueAt(meta: CMeta): Any = currentSlice.columns(meta).apply(curIdx)
+  }
 }
 // vim: set ts=4 sw=4 et:
