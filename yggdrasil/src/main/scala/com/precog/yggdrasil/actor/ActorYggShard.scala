@@ -15,8 +15,6 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def yggState: YggState
 
-  //protected implicit def projectionManifest: Manifest[Projection[Dataset]]
-
   private lazy implicit val dispatcher = actorSystem.dispatcher
   private lazy val metadata: StorageMetadata = new ActorStorageMetadata(metadataActor)
   
@@ -27,10 +25,9 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] = {
     implicit val ito = timeout 
-    (projectionsActor ? AcquireProjection(descriptor)) flatMap {
+    (projectionActors ? AcquireProjection(descriptor)) flatMap {
       case ProjectionAcquired(actorRef) =>
-        projectionsActor ! ReleaseProjection(descriptor)
-        //(actorRef ? ProjectionGet).mapTo[Projection[Dataset]]
+        projectionActors ! ReleaseProjection(descriptor)
         (actorRef ? ProjectionGet).map(_.asInstanceOf[Projection[Dataset]])
       
       case ProjectionError(err) =>
@@ -40,7 +37,7 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
     implicit val ito = timeout
-    (routingActor ? Messages(msgs)) map { _ => () }
+    (routingActor ? DirectIngestData(msgs)) map { _ => () }
   }
   
 }

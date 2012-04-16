@@ -19,7 +19,7 @@ import scalaz.Scalaz._
 class MetadataActor(metadata: LocalMetadata) extends Actor {
 
   def receive = {
-   
+
     case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
    
     case FindChildren(path)                   => sender ! metadata.findChildren(path)
@@ -31,7 +31,7 @@ class MetadataActor(metadata: LocalMetadata) extends Actor {
     case FindPathMetadata(path, selector)     => sender ! metadata.findPathMetadata(path, selector)
     
     case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.currentState)
-    
+
   }
 
 }

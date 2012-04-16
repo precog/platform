@@ -47,11 +47,14 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     @tailrec def step(iter: Iterator[ProjectionInsert]) {
       if (iter.hasNext) {
         val insert = iter.next
-        projection.insert(insert.identities, insert.values).unsafePerformIO
+        try {
+          projection.insert(insert.identities, insert.values).unsafePerformIO
+        } catch {
+          case ex => println("blah")
+        }
         step(iter)
       }
     }
-
     step(batch.iterator)
   }
 

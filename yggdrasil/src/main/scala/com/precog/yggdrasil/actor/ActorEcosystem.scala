@@ -17,7 +17,7 @@ import com.weiglewilczek.slf4s.Logging
 trait ActorEcosystem {
   def actorSystem(): ActorSystem
   def metadataActor(): ActorRef
-  def projectionsActor(): ActorRef
+  def projectionActors(): ActorRef
   def routingActor(): ActorRef
   def actorsStart(): Future[Unit]
   def actorsStop(): Future[Unit]
@@ -52,13 +52,14 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
     actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
-  lazy val projectionsActor = {
+  lazy val projectionActors = {
     actorSystem.actorOf(Props(new ProjectionActors(yggState.descriptorLocator, yggState.descriptorIO, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
     val routingTable = new SingleColumnProjectionRoutingTable
-    actorSystem.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionsActor, metadataActor, actorSystem.scheduler)), "router")
+    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), actorSystem.scheduler)), "router")
   }
   
   def actorsStart() = Future[Unit] {
@@ -104,7 +105,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
       _  <- routingActorStop
       _  <- flushMetadata
       _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionsActor, "projection")
+      _  <- actorStop(projectionActors, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
       _  <- Future {
@@ -166,13 +167,14 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
     actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
-  lazy val projectionsActor = {
+  lazy val projectionActors = {
     actorSystem.actorOf(Props(new ProjectionActors(yggState.descriptorLocator, yggState.descriptorIO, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
-    val routingTable = new SingleColumnProjectionRoutingTable 
-    actorSystem.actorOf(Props(new RoutingActor(routingTable, None, projectionsActor, metadataActor, actorSystem.scheduler)), "router")
+    val routingTable = new SingleColumnProjectionRoutingTable
+    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, None, actorSystem.scheduler)), "router")
   }
   
   def actorsStart() = Future[Unit] {
@@ -217,7 +219,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
             }
       _  <- routingActorStop
       _  <- flushMetadata
-      _  <- actorStop(projectionsActor, "projection")
+      _  <- actorStop(projectionActors, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
       _  <- Future {
