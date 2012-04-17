@@ -19,10 +19,9 @@ trait MatchAlgebra extends OperationsAPI with Instructions with DAG {
       }
     }
     
-    // TODO generalize to all statically singleton sets
     case mal.Op2Single(parent, value, op, left) => {
-      val f = resolveBinaryOperation(op)
-      val pf = resolveMatch(parent)
+      lazy val f = resolveBinaryOperation(op)
+      lazy val pf = resolveMatch(parent)
       
       if (left) {
         {

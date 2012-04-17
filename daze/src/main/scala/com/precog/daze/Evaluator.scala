@@ -91,7 +91,7 @@ trait Evaluator extends DAG
       case mal.Actual => set
       case _ => set collect resolveMatch(spec)
     }
-  
+
     def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
       case ZipBucketSpec(left, right) => {
         val leftGroup = computeGrouping(assume, splits, graph, ctx)(left)
@@ -227,18 +227,19 @@ trait Evaluator extends DAG
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
-        val reduced: Dataset[SValue] = red match {
-          case Count => ops.point[SValue](SDecimal(BigDecimal(enum.count)))
+        val reduced: Option[SValue] = red match {
+          case Count => Some(SDecimal(BigDecimal(enum.count)))
           
           case Max => 
-            val max = enum.reduce(Option.empty[BigDecimal]) {
+            val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
               case (None, SDecimal(v)) => Some(v)
               case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
               case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
               case (acc, _) => acc
             }
 
-            max.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (max.isDefined) max map { v => SDecimal(v) }
+            else None
           
           case Min => 
             val min = enum.reduce(Option.empty[BigDecimal]) {
@@ -248,7 +249,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
           
-            min.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (min.isDefined) min map { v => SDecimal(v) }
+            else None
           
           case Sum => 
             val sum = enum.reduce(Option.empty[BigDecimal]) {
@@ -257,7 +259,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sum.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (sum.isDefined) sum map { v => SDecimal(v) }
+            else None
 
           case Mean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
@@ -265,8 +268,8 @@ trait Evaluator extends DAG
               case (total, _) => total
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(total / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(total / count))
           
           case GeometricMean => 
             val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
@@ -274,8 +277,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
           
           case SumSq => 
             val sumsq = enum.reduce(Option.empty[BigDecimal]) {
@@ -284,7 +287,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            sumsq.map(v => ops.point[SValue](SDecimal(v))).getOrElse(ops.empty[SValue](0))
+            if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
+            else None
 
           case Variance => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -292,8 +296,8 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
 
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal((sumsq - (sum * (sum / count))) / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
 
           case StdDev => 
             val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -301,11 +305,11 @@ trait Evaluator extends DAG
               case (acc, _) => acc
             }
             
-            if (count == BigDecimal(0)) ops.empty[SValue](0)
-            else ops.point[SValue](SDecimal(sqrt(count * sumsq - sum * sum) / count))
+            if (count == BigDecimal(0)) None
+            else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
         }
         
-        Right(Match(mal.Actual, reduced, graph))
+        reduced.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
       }
       
       case s @ dag.Split(line, specs, child) => {
@@ -365,8 +369,8 @@ trait Evaluator extends DAG
       }
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
-        right.value.get match {
-          case value @ SString(str) => {
+        right.value match {
+          case Some(value @ SString(str)) => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefObject str }
             
@@ -380,8 +384,8 @@ trait Evaluator extends DAG
       }
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
-        right.value.get match {
-          case value @ SDecimal(num) if num.isValidInt => {
+        right.value match {
+          case Some(value @ SDecimal(num)) if num.isValidInt => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefArray num.toInt }
             
@@ -393,6 +397,40 @@ trait Evaluator extends DAG
           case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
         }
       }
+     
+      case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
+        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        lazy val rightEnum = realizeMatch(rightSpec, rightSet)
+        
+        val back = rightEnum.lastOption match {
+          case Some(value) =>
+            Match(mal.Op2Single(leftSpec, value, op, true), leftSet, leftGraph2)
+          
+          case None =>
+            Match(mal.Actual, ops.empty[SValue](0), graph)
+        }
+        
+        Right(back)
+      }
+      
+      case Join(_, Map2CrossRight(op), left, right) if left.isSingleton => {
+        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+
+        lazy val leftEnum = realizeMatch(leftSpec, leftSet)
+
+        val back = leftEnum.lastOption match {
+          case Some(value) =>
+            Match(mal.Op2Single(rightSpec, value, op, false), rightSet, rightGraph2)
+          
+          case None =>
+            Match(mal.Actual, ops.empty[SValue](0), graph)
+        }
+        
+        Right(back)
+      }
       
       // begin: annoyance with Scala's lousy pattern matcher
       case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
@@ -403,8 +441,8 @@ trait Evaluator extends DAG
       case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
-      }
-      
+      }      
+
       case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
@@ -414,12 +452,12 @@ trait Evaluator extends DAG
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
-      
+
       case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
-      
+
       case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
@@ -454,7 +492,7 @@ trait Evaluator extends DAG
         else
           Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
       }
-      
+
       case j @ Join(_, instr, left, right) => {
         lazy val length = sharedPrefixLength(left, right)
         

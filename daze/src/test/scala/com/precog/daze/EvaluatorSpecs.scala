@@ -371,7 +371,83 @@ class EvaluatorSpecs extends Specification
         result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
       }
     }
-    
+
+    "evaluate cross when one side is a singleton" >> {
+      "a reduction on the right side of the cross" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Cross(Add), 
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.Reduce(line, Count, 
+            Root(line, PushNum("42"))))
+
+        val result = testEval(input)
+
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d
+        }
+
+        result2 must contain(43, 13, 78, 2, 14)
+      }
+
+      "a reduction on the left side of the cross" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Cross(Add), 
+          dag.Reduce(line, Count, 
+            Root(line, PushNum("42"))),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+
+        val result = testEval(input)
+
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d
+        }
+
+        result2 must contain(43, 13, 78, 2, 14)
+      }
+
+      "a root on the right side of the cross" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Cross(Add),  
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          Root(line, PushNum("3")))
+         
+        val result = testEval(input)
+
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d
+        }
+
+        result2 must contain(45, 15, 80, 4, 16)
+      }
+
+      "a root on the left side of the cross" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Cross(Add), 
+          Root(line, PushNum("3")),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+
+        val result = testEval(input)
+
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (VectorCase(_), SDecimal(d)) => d
+        }
+
+        result2 must contain(45, 15, 80, 4, 16)
+      }
+    }
+
     "evaluate wrap_object on single values" in {
       val line = Line(0, "")
       
