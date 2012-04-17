@@ -82,6 +82,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
   def order(a: CA, b: CA): Ordering
 
+  def jvalueFor(a: CA): JValue
+
   @inline private[CType] final def typeIndex = this match {
     case CBoolean => 0
 
@@ -226,6 +228,7 @@ case class CStringFixed(width: Int) extends CType(FixedWidth(width), SString) {
   type CA = String
   val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
+  def jvalueFor(s: String) = JString(s)
   implicit val manifest = implicitly[Manifest[String]]
 }
 
@@ -233,6 +236,7 @@ case object CStringArbitrary extends CType(LengthEncoded, SString) {
   type CA = String
   val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
+  def jvalueFor(s: String) = JString(s)
   implicit val manifest = implicitly[Manifest[String]]
 }
 
@@ -244,6 +248,7 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   type CA = Boolean
   val CC = classOf[Boolean]
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
+  def jvalueFor(v: Boolean) = JBool(v)
   implicit val manifest = implicitly[Manifest[Boolean]]
 }
 
@@ -255,6 +260,7 @@ case object CInt extends CType(FixedWidth(4), SDecimal) {
   type CA = Int
   val CC = classOf[Int]
   def order(v1: Int, v2: Int) = intInstance.order(v1, v2)
+  def jvalueFor(v: Int) = JInt(v)
   implicit val manifest = implicitly[Manifest[Int]]
 }
 
@@ -263,6 +269,7 @@ case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
   val CC = classOf[Long]
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
+  def jvalueFor(v: Long) = JInt(v)
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
@@ -271,6 +278,7 @@ case object CFloat extends CType(FixedWidth(4), SDecimal) {
   type CA = Float
   val CC = classOf[Float]
   def order(v1: Float, v2: Float) = floatInstance.order(v1, v2)
+  def jvalueFor(v: Float) = JDouble(v)
   implicit val manifest = implicitly[Manifest[Float]]
 }
 
@@ -279,6 +287,7 @@ case object CDouble extends CType(FixedWidth(8), SDecimal) {
   type CA = Double
   val CC = classOf[Double]
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
+  def jvalueFor(v: Double) = JDouble(v)
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
@@ -287,6 +296,7 @@ case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
+  def jvalueFor(v: BigDecimal) = JDouble(v.toDouble)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
@@ -299,6 +309,7 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
+  def jvalueFor(v: Null) = JNull
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
@@ -306,6 +317,7 @@ case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
+  def jvalueFor(v: Null) = JObject(Nil)
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
@@ -313,5 +325,6 @@ case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
+  def jvalueFor(v: Null) = JArray(Nil)
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }

@@ -44,6 +44,8 @@ trait RowView {
   def advance(): State
   def reset(position: Position): State
 
+  //def rename(from: CMeta, to: CMeta): RowView
+
   def compareIdentities(other: RowView, indices: VectorCase[Int]): Ordering = {
     var result: Ordering = EQ
     var i = 0
