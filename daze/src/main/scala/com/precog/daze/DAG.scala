@@ -402,6 +402,7 @@ trait DAG extends Instructions {
         case i: PushNum => buildRoot(i)
         case PushTrue => buildRoot(PushTrue)
         case PushFalse => buildRoot(PushFalse)
+        case PushNull => buildRoot(PushNull)
         case PushObject => buildRoot(PushObject)
         case PushArray => buildRoot(PushArray)
         
@@ -485,6 +486,7 @@ trait DAG extends Instructions {
         case PushNum(num) => SDecimal(BigDecimal(num))
         case PushTrue => SBoolean(true)
         case PushFalse => SBoolean(false)
+        case PushNull => SNull
         case PushObject => SObject(Map())
         case PushArray => SArray(Vector())
       })

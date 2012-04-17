@@ -164,6 +164,16 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(false)
+      }      
+
+      "push_null" >> {
+        val line = Line(0, "")
+        val input = Root(line, PushNull)
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        result must contain((VectorCase(), SNull))
       }
       
       "push_object" >> {
@@ -467,7 +477,7 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "evaluate wrap_object on single values" in {
+    "evaluate wrap_object on a single numeric value" in {
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(WrapObject),
@@ -493,6 +503,38 @@ class EvaluatorSpecs extends Specification
         case SDecimal(d) => d mustEqual 42
       }
     }
+
+    "evaluate wrap_object on an object" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(WrapObject),
+        Root(line, PushString("answer")),
+        Join(line, Map2Cross(WrapObject),
+          Root(line, PushString("question")),
+          Root(line, PushNull)))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val optObj = result find {
+        case (VectorCase(), SObject(_)) => true
+        case _ => false
+      } collect {
+        case (_, SObject(obj)) => obj
+      }
+      
+      optObj must beSome
+      val obj = optObj.get
+      
+      obj must haveKey("answer")
+      obj("answer") must beLike {
+        case SObject(obj) => { 
+          obj must haveKey("question")
+          obj("question") mustEqual SNull
+        }
+      }
+    }
     
     "evaluate wrap_object on clicks dataset" in {
       val line = Line(0, "")
@@ -515,7 +557,7 @@ class EvaluatorSpecs extends Specification
       }
     }
     
-    "evaluate wrap_array on a single value" in {
+    "evaluate wrap_array on a single numeric value" in {
       val line = Line(0, "")
       
       val input = Operate(line, WrapArray,
@@ -539,6 +581,30 @@ class EvaluatorSpecs extends Specification
       arr.head must beLike {
         case SDecimal(d) => d mustEqual 42
       }
+    }    
+
+    "evaluate wrap_array on a single null value" in {
+      val line = Line(0, "")
+      
+      val input = Operate(line, WrapArray,
+        Root(line, PushNull))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val optArr = result find {
+        case (VectorCase(), SArray(_)) => true
+        case _ => false
+      } collect {
+        case (_, SArray(arr)) => arr
+      }
+      
+      optArr must beSome
+      val arr = optArr.get
+      
+      arr must haveSize(1)
+      arr.head mustEqual SNull
     }
     
     "evaluate join_object on single values" in {
@@ -715,9 +781,10 @@ class EvaluatorSpecs extends Specification
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SNull) => SNull
       }
       
-      result2 must contain(42, 12, 77, 1, 13)
+      result2 must contain(42, 12, 1, 13, SNull)
     }
     
     "evaluate descent producing a heterogeneous set" in {
@@ -735,9 +802,10 @@ class EvaluatorSpecs extends Specification
         case (VectorCase(_), SDecimal(d)) => d.toInt
         case (VectorCase(_), SString(str)) => str
         case (VectorCase(_), SBoolean(b)) => b
+        case (VectorCase(_), SNull) => SNull
       }
       
-      result2 must contain(42, true, "daniel", 1, 13)
+      result2 must contain(42, true, "daniel", 1, SNull)
     }
     
     "evaluate array dereference on a homogeneous set" in {
@@ -791,9 +859,10 @@ class EvaluatorSpecs extends Specification
         case (VectorCase(_), SDecimal(d)) => d.toInt
         case (VectorCase(_), SString(str)) => str
         case (VectorCase(_), SBoolean(b)) => b
+        case (VectorCase(_), SNull) => SNull
       }
       
-      result2 must contain(42, true, "daniel", 1, 13)
+      result2 must contain(42, true, "daniel", 1, SNull)
     }
     
     "evaluate matched binary numeric operation" in {
@@ -1381,8 +1450,8 @@ class EvaluatorSpecs extends Specification
     }
     
     "evaluate a histogram function" in {
-      val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 18,
-        "john" -> 14, "alissa" -> 7, "franco" -> 14, "matthew" -> 10, "jason" -> 13)
+      val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
+        "john" -> 13, "alissa" -> 7, "franco" -> 13, "matthew" -> 10, "jason" -> 13, SNull -> 3)
       
       val line = Line(0, "")
       
@@ -1412,7 +1481,7 @@ class EvaluatorSpecs extends Specification
       
       val result = testEval(input)
       
-      result must haveSize(9)
+      result must haveSize(10)
       
       forall(result) {
         case (VectorCase(_), SObject(obj)) => {
@@ -1424,8 +1493,13 @@ class EvaluatorSpecs extends Specification
               str must beOneOf("daniel", "kris", "derek", "nick", "john",
                 "alissa", "franco", "matthew", "jason")
             }
+            case SNull => ok
           }
-          val SString(user) = obj("user")
+
+          val user = obj("user") match {
+            case SString(user) => user
+            case SNull => SNull
+          }
             
           obj("num") must beLike {
             case SDecimal(d) => d mustEqual Expected(user)
@@ -1461,11 +1535,41 @@ class EvaluatorSpecs extends Specification
       }
     }
     
+    "evaluate filter with null" in {
+      val line = Line(0, "")
+
+      //
+      // //clicks where //clicks.user = null
+      //
+      //
+      val input = Filter(line, None, None,
+        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+        Join(line, Map2Cross(Eq),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            Root(line, PushString("user"))),
+          Root(line, PushNull)))
+
+      val result = testEval(input)
+
+      result must haveSize(3)
+
+      forall(result) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveKey("user")
+
+          obj("user") must beLike {
+            case SNull => ok
+          }
+        }            
+      }
+    }
+
     "evaluate filter on the results of a histogram function" in {
       val line = Line(0, "")
       
       // 
-      // clicks := dataset(//clicks)
+      // clicks := //clicks
       // histogram('user) :=
       //   { user: 'user, num: count(clicks where clicks.user = 'user) }
       // histogram where histogram.num = 9

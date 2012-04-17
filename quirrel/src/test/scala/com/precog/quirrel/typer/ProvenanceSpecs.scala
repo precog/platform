@@ -150,6 +150,12 @@ object ProvenanceSpecs extends Specification
       val tree = compile("true")
       tree.provenance mustEqual ValueProvenance
       tree.errors must beEmpty
+    }    
+
+    "identify null as value" in {
+      val tree = compile("null")
+      tree.provenance mustEqual ValueProvenance
+      tree.errors must beEmpty
     }
     
     "identify empty object definitions as value" in {

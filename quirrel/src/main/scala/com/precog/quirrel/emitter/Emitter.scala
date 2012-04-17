@@ -381,6 +381,9 @@ trait Emitter extends AST
             case true  => PushTrue
             case false => PushFalse
           })
+
+        case ast.NullLit(loc, _) =>
+          emitInstr(PushNull)
         
         case ast.ObjectDef(loc, props) => 
           def field2ObjInstr(t: (String, Expr)) = emitInstr(PushString(t._1)) >> emitExpr(t._2) >> emitInstr(Map2Cross(WrapObject))
