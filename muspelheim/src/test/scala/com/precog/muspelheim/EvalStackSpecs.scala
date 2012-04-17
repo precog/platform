@@ -413,6 +413,12 @@ trait EvalStackSpecs extends Specification {
           val result = eval("""{ name: "John", age: 29, gender: "male" }""")
           result must haveSize(1)
           result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SString("male"))))
+        }      
+        
+        "object with null" >> {
+          val result = eval("""{ name: "John", age: 29, gender: null }""")
+          result must haveSize(1)
+          result must contain(SObject(Map("name" -> SString("John"), "age" -> SDecimal(29), "gender" -> SNull)))
         }
         
         "boolean" >> {
@@ -425,6 +431,12 @@ trait EvalStackSpecs extends Specification {
           val result = eval("\"hello, world\"")
           result must haveSize(1)
           result must contain(SString("hello, world"))
+        }        
+
+        "null" >> {
+          val result = eval("null")
+          result must haveSize(1)
+          result must contain(SNull)
         }
       }
       
@@ -521,6 +533,15 @@ trait EvalStackSpecs extends Specification {
         """.stripMargin
 
         eval(input) mustEqual Set(SNull, SObject(Map("foo" -> SNull)))
+      }
+
+      "handle filter on null" >> {
+        val input = """
+          //fastspring_nulls where //fastspring_nulls.endDate = null
+        """.stripMargin
+
+        val result = eval(input) 
+        result must haveSize(1)
       }
 
       "handle load of error-prone fastspring data" >> {

@@ -19,6 +19,7 @@ trait DAGPrinter extends DAG {
       case Root(_, PushNum(num)) => num
       case Root(_, PushTrue) => "true"
       case Root(_, PushFalse) => "false"
+      case Root(_, PushNull) => "null"
       case Root(_, PushObject) => "{}"
       case Root(_, PushArray) => "[]"
       

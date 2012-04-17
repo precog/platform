@@ -66,12 +66,29 @@ object EmitterSpecs extends Specification
           PushNum("23.23123")))
     }
 
-    "emit filter of two where'd loads with value provenance" in {
-      testEmit("5 where 2")(
+    "emit literal null" in {
+      testEmit("null")(
         Vector(
-          PushNum("5"),
-          PushNum("2"),
-          FilterCross(0, None)))
+          PushNull))
+    }
+
+    "emit filter of two where'd loads with value provenance" >> {
+      "which are numerics" >> {
+        testEmit("5 where 2")(
+          Vector(
+            PushNum("5"),
+            PushNum("2"),
+            FilterCross(0, None)))
+      }
+
+      "which are null and string" >> {
+        testEmit("""null where "foo" """)(
+          Vector(
+            PushNull,
+            PushString("foo"),
+            FilterCross(0, None)))
+      }
+
     }
 
     "emit cross-join of two with'ed loads with value provenance" in {
@@ -233,11 +250,19 @@ object EmitterSpecs extends Specification
           Map1(New)))
     }
 
-    "emit wrap object for object with single field having constant value" in {
+    "emit wrap object for object with single field having constant numeric value" in {
       testEmit("{foo: 1}")(
         Vector(
           PushString("foo"),
           PushNum("1"),
+          Map2Cross(WrapObject)))
+    }
+
+    "emit wrap object for object with single field having null value" in {
+      testEmit("{foo: null}")(
+        Vector(
+          PushString("foo"),
+          PushNull,
           Map2Cross(WrapObject)))
     }
 
@@ -270,10 +295,17 @@ object EmitterSpecs extends Specification
           Map2Match(JoinObject)))
     }
 
-    "emit wrap array for array with single element having constant value" in {
+    "emit wrap array for array with single element having constant string value" in {
       testEmit("[\"foo\"]")(
         Vector(
           PushString("foo"),
+          Map1(WrapArray)))
+    }
+
+    "emit wrap array for array with single element having null value" in {
+      testEmit("[null]")(
+        Vector(
+          PushNull,
           Map1(WrapArray)))
     }
 
@@ -352,6 +384,20 @@ object EmitterSpecs extends Specification
           PushNum("1"),
           PushTrue,
           FilterCross(0, None)))
+    }
+
+    "emit filter cross for where loads from value provenance" in {
+      testEmit("""//clicks where //clicks.foo = null""")(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          PushString("/clicks"),
+          LoadLocal(Het),
+          PushString("foo"),
+          Map2Cross(DerefObject),
+          PushNull,
+          Map2Cross(Eq),
+          FilterMatch(0, None)))
     }
 
     "emit descent for array load with non-constant indices" in {

@@ -107,6 +107,11 @@ trait AST extends Phases {
         indent + "type: bool\n" +
           indent + "value: " + value
       }
+            
+      case NullLit(loc, value) => {
+        indent + "type: null\n" +
+          indent + "value: " + value
+      }
       
       case ObjectDef(loc, props) => {
         val propStr = props map {
@@ -370,6 +375,9 @@ trait AST extends Phases {
         case (BoolLit(_, value1), BoolLit(_, value2)) =>
           value1 == value2
 
+        case (NullLit(_, value1), NullLit(_, value2)) =>
+          value1 == value2
+
         case (ObjectDef(_, props1), ObjectDef(_, props2)) => {      // TODO ordering
           val sizing = props1.length == props2.length
           val contents = props1 zip props2 forall {
@@ -483,6 +491,8 @@ trait AST extends Phases {
         case NumLit(_, value) => value.hashCode
 
         case BoolLit(_, value) => value.hashCode
+
+        case NullLit(_, value) => value.hashCode
 
         case ObjectDef(_, props) => {
           props map {
@@ -630,6 +640,10 @@ trait AST extends Phases {
     
     final case class BoolLit(loc: LineStream, value: Boolean) extends ExprLeafNode {
       val label = 'bool
+    }
+    
+    final case class NullLit(loc: LineStream, value: String = "null") extends ExprLeafNode {
+      val label = 'null
     }
     
     final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr {
