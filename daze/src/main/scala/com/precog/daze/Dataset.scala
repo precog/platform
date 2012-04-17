@@ -76,7 +76,9 @@ trait DatasetExtensions[Dataset[_], Memoable[_], Grouping[_, _], A] {
   def collect[B](pf: PartialFunction[A, B]): Dataset[B]
 
   def reduce[B](base: B)(f: (B, A) => B): B
-
+  
+  def lastOption: Option[A] = reduce(None: Option[A]) { (_, a) => Some(a) }
+  
   def count: BigInt
 
   //uniq by value, assign new identities

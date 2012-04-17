@@ -370,7 +370,7 @@ trait Evaluator extends DAG
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value match {
-          case value @ Some(SString(str)) => {
+          case Some(value @ SString(str)) => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefObject str }
             
@@ -385,7 +385,7 @@ trait Evaluator extends DAG
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value match {
-          case value @ Some(SDecimal(num)) if num.isValidInt => {
+          case Some(value @ SDecimal(num)) if num.isValidInt => {
             val parent = loop(left, assume, splits, ctx)
             val part1 = parent.left map { _ derefArray num.toInt }
             
@@ -397,56 +397,70 @@ trait Evaluator extends DAG
           case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
         }
       }
-      
-      // begin: annoyance with Scala's lousy pattern matcher
-      case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value, op, true), set, graph2))
-      }
-      
-      case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value, op, true), set, graph2))
-      }      
-
-      case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value, op, true), set, graph2))
-      }
      
-      //case right.isSingleton
       case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
         val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
         lazy val rightEnum = realizeMatch(rightSpec, rightSet)
-
-        Right(Match(mal.Op2Single(leftSpec, rightEnum.reduce(Option.empty[SValue]){ case (_, sv2) => Some(sv2) }, op, true), leftSet, leftGraph2))
+        
+        val back = rightEnum.lastOption match {
+          case Some(value) =>
+            Match(mal.Op2Single(leftSpec, value, op, true), leftSet, leftGraph2)
+          
+          case None =>
+            Match(mal.Actual, ops.empty[SValue](0), graph)
+        }
+        
+        Right(back)
       }
       
-      case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
-      }
-
-      case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
-      }
-            
-      //case left.isSingleton
       case Join(_, Map2CrossRight(op), left, right) if left.isSingleton => {
         val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
         lazy val leftEnum = realizeMatch(leftSpec, leftSet)
 
-        Right(Match(mal.Op2Single(rightSpec, leftEnum.reduce(Option.empty[SValue]){ case (_, sv2) => Some(sv2) }, op, true), rightSet, rightGraph2))
+        val back = leftEnum.lastOption match {
+          case Some(value) =>
+            Match(mal.Op2Single(rightSpec, value, op, false), rightSet, rightGraph2)
+          
+          case None =>
+            Match(mal.Actual, ops.empty[SValue](0), graph)
+        }
+        
+        Right(back)
+      }
+      
+      // begin: annoyance with Scala's lousy pattern matcher
+      case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+      }
+      
+      case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+      }      
+
+      case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
+        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+      }
+      
+      case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
+        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+      }
+
+      case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
+        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
 
       case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
         val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value, op, false), set, graph2))
+        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
       }
       // end: annoyance
       

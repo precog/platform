@@ -19,20 +19,19 @@ trait MatchAlgebra extends OperationsAPI with Instructions with DAG {
       }
     }
     
-    // TODO generalize to all statically singleton sets
     case mal.Op2Single(parent, value, op, left) => {
       lazy val f = resolveBinaryOperation(op)
       lazy val pf = resolveMatch(parent)
       
       if (left) {
         {
-          case sv if pf.isDefinedAt(sv) && (value.map { v => f.isDefinedAt((pf(sv), v)) }.getOrElse(false)) =>
-            value.map { v => f((pf(sv), v)) }.get
+          case sv if pf.isDefinedAt(sv) && f.isDefinedAt((pf(sv), value)) =>
+            f((pf(sv), value))
         }
       } else {
         {
-          case sv if pf.isDefinedAt(sv) && (value.map { v => f.isDefinedAt((v, pf(sv))) }.getOrElse(false)) =>
-            value.map { v => f((v, pf(sv))) }.get
+          case sv if pf.isDefinedAt(sv) && f.isDefinedAt((value, pf(sv))) =>
+            f((value, pf(sv)))
         }
       }
     }
@@ -71,7 +70,7 @@ trait MatchAlgebra extends OperationsAPI with Instructions with DAG {
   object mal {
     case object Actual extends MatchSpec
     case class Op1(parent: MatchSpec, op: UnaryOperation) extends MatchSpec
-    case class Op2Single(parent: MatchSpec, value: Option[SValue], op: BinaryOperation, left: Boolean) extends MatchSpec
+    case class Op2Single(parent: MatchSpec, value: SValue, op: BinaryOperation, left: Boolean) extends MatchSpec
     case class Op2Multi(parent1: MatchSpec, parent2: MatchSpec, op: BinaryOperation) extends MatchSpec
     case class Filter(target: MatchSpec, boolean: MatchSpec) extends MatchSpec
   }
