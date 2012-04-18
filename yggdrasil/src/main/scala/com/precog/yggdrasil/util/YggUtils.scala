@@ -1,12 +1,20 @@
 package com.precog.yggdrasil
 package util
 
+
+import akka.dispatch.Await
+import akka.dispatch.Future
+import akka.util.Timeout
+import akka.util.Duration
+
 import org.joda.time._
 
 import com.precog.common._
 import com.precog.common.util._
 import com.precog.common.kafka._
+import com.precog.common.security._
 import com.precog.yggdrasil.leveldb._
+import com.precog.yggdrasil.actor._
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
@@ -37,6 +45,11 @@ import org.apache.zookeeper.data.Stat
 
 import scalaz.{Success, Failure}
 
+import org.streum.configrity._
+
+import java.util.concurrent.atomic.AtomicInteger
+import scala.io.Source
+
 object YggUtils {
  
   def usage(message: String*): String = {
@@ -54,7 +67,8 @@ object YggUtils {
     DumpCentralKafka,
     IngestStatus,
     ZookeeperTools,
-    KafkaConvert
+    KafkaConvert,
+    BulkImport
   )
 
   val commandMap: Map[String, Command] = commands.map( c => (c.name, c) )(collection.breakOut)
@@ -528,4 +542,80 @@ object KafkaConvert extends Command {
     def src() = new File(file)
     def dest() = new File(file + ".local")
   }
+}
+
+object BulkImport extends Command {
+  val name = "import"
+  val description = "Bulk import of json/csv data directly to data columns"
+  
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("ygg import") {
+      booleanOpt("v", "verbose", "verbose logging", {b: Boolean => config.verbose = b})
+      arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
+        val parts = s.split("=")
+        val t = (parts(0) -> parts(1))
+        config.input = config.input :+ t
+      })
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  def process(config: Config) {
+    val dir = new File("./data") 
+    dir.mkdirs
+
+    object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
+      class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
+
+      }
+      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+      val yggState = YggState(dir, Map.empty, Map.empty)
+    }
+    Await.result(shard.actorsStart, Duration(60, "seconds"))
+    config.input.foreach {
+      case (db, input) =>
+        if(config.verbose) println("Inserting batch: %s:%s".format(db, input))
+        val events = Source.fromFile(input).getLines
+        insert(config, db, events, shard)
+    }
+    if(config.verbose) println("Waiting for shard shutdown")
+    Await.result(shard.actorsStop, Duration(60, "seconds"))
+    if(config.verbose) println("Shutdown")
+  }
+
+  val sid = new AtomicInteger(0)
+
+  def insert(config: Config, db: String, itr: Iterator[String], shard: YggShard[IterableDataset], batch: Vector[EventMessage] = Vector.empty, b: Int = 0): Unit = {
+    val verbose = config.verbose
+    val batchSize = config.batchSize
+    val token = config.token
+    val (curBatch, nb) = if(batch.size >= batchSize || !itr.hasNext) {
+      if(verbose) println("Saving batch - " + b)
+      Await.result(shard.storeBatch(batch, new Timeout(60000)), Duration(60, "seconds"))
+      (Vector.empty[EventMessage], b+1)
+    } else {
+      (batch, b)
+    }
+    if(itr.hasNext) {
+      val data = JsonParser.parse(itr.next) 
+      val event = Event(Path(db), token, data, Map.empty)
+      val em = EventMessage(EventId(0, sid.getAndIncrement), event)
+      insert(config, db, itr, shard, curBatch :+ em, nb)
+    } else {
+      ()
+    }
+  }
+
+  class Config(
+    var input: Vector[(String, String)] = Vector.empty, 
+    val batchSize: Int = 1000, 
+    val token: String = TestTokenManager.rootUID,
+    var verbose: Boolean = false 
+  )
 }
