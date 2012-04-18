@@ -44,10 +44,7 @@ object ShardMetadataActorSpec extends Specification {
 
       val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
 
-      val indexedColumns = ListMap((colDesc -> 0))
-      val sorting = Vector((colDesc -> ById))
-
-      val descriptor = ProjectionDescriptor(indexedColumns, sorting).toOption.get
+      val descriptor = ProjectionDescriptor(1, List(colDesc))
       val values = Vector[CValue](CString("Test123"))
       val metadata = Vector(Set[Metadata]())
 

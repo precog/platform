@@ -39,38 +39,12 @@ trait ArbitraryProjectionDescriptor {
     listColDes
   }
   
-  def genProjectionDescriptor: Gen[Validation[String, ProjectionDescriptor]] = for {
-    listColDes        <- genListColDes
-    indexColumnCount  <- Gen.oneOf(1 to listColDes.size)
-    baseList          <- Gen.value((0 to indexColumnCount - 1).toList)
-    list              <- Gen.listOfN(listColDes.size - indexColumnCount, Gen.oneOf(0 to indexColumnCount - 1))
-    sortBy            <- Gen.listOfN(listColDes.size, Gen.oneOf(Seq(ByValue, ById, ByValueThenId)))
+  def genProjectionDescriptor: Gen[ProjectionDescriptor] = for {
+    identities <- Gen.oneOf(1 to 5)
+    columnDescriptors <- genListColDes
   } yield {
-    val listOfIndices = baseList ++ list
-    val columns = listColDes.zip(listOfIndices).foldLeft(ListMap.empty: ListMap[ColumnDescriptor, Int]) { 
-      case (lm, (colDes, index)) => lm + ((colDes, index))
-    }
-    val sorting = listColDes.zip(sortBy)
-
-    ProjectionDescriptor(columns, sorting)
+    ProjectionDescriptor(identities, columnDescriptors)
   }
-
-/*
-  implicit val arbProjection: Arbitrary[LevelDBByteProjection] = Arbitrary(
-    genProjectionDescriptor flatMap {
-      case Success(desc) => 
-        Gen.value(
-          new LevelDBByteProjection {
-            val descriptor: ProjectionDescriptor = desc
-          }
-        )
-
-      case Failure(reason) => 
-        //println(reason)
-        Gen.fail
-    }
-  )
-  */
 }
 
 

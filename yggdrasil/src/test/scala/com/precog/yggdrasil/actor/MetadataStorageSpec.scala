@@ -34,9 +34,7 @@ class MetadataStorageSpec extends Specification {
 
   val colDesc = ColumnDescriptor(Path("/"), JPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
 
-  val desc = ProjectionDescriptor.trustedApply(1, 
-               ListMap.empty[ColumnDescriptor, Int] + (colDesc -> 0),
-               List((colDesc, ById)))
+  val desc = ProjectionDescriptor(1, List(colDesc))
 
   val testRecord = MetadataRecord(
     ColumnMetadata.Empty,
