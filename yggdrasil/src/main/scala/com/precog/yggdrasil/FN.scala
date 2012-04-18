@@ -42,8 +42,8 @@ trait F0[@specialized(Boolean, Int, Long, Float, Double) A] extends Returning[A]
 }
 
 object F0 {
-  def forArray[A](ctype: CType { type CA = A }, a: Array[A]): F0[A] = new F0[A] {
-    val returns = ctype
+  def forArray[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType, a: Array[A]): F0[A] = new F0[A] {
+    val returns = ctype.asInstanceOf[CType { type CA = A }]
     def apply(row: Int) = a(row)
   }
 }

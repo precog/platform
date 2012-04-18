@@ -72,7 +72,6 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   val CC: Class[CA]
 
   @inline final def cast(v: Any): CA = v.asInstanceOf[CA]
-  @inline final def arrayCast(v: Array[_]) = v.asInstanceOf[Array[CA]]
   @inline final def cast0(f0: F0[_]): F0[CA] = f0.asInstanceOf[F0[CA]]
   @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
   @inline final def cast2l[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
