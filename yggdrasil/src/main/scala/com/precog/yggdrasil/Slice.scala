@@ -179,11 +179,10 @@ trait Slice { source =>
   }
 }
 
-class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[CMeta, Array[_]]) extends Slice {
+class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[CMeta, Object]) extends Slice {
   val idCount = idsData.length
   val identities = idsData map { F0.forArray(CLong, _) }
-  val columns: Map[CMeta, F0[_]] = 
-    data map { case (m @ CMeta(_, ctype), arr) => m -> F0.forArray[ctype.CA](ctype, ctype.arrayCast(arr)) } toMap
+  val columns: Map[CMeta, F0[_]] = data map { case (m @ CMeta(_, ctype), arr) => m -> F0.forArray(ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
 }
 
 object Slice {

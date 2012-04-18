@@ -158,7 +158,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
       case CLong => containerOfN[Array, Long](size, arbitrary[Long])
       case CFloat => containerOfN[Array, Float](size, arbitrary[Float])
       case CDouble => containerOfN[Array, Double](size, arbitrary[Double])
-      case CDecimalArbitrary => containerOfN[Array, BigDecimal](size, arbitrary[BigDecimal])
+      case CDecimalArbitrary => containerOfN[List, Double](size, arbitrary[Double]).map(_.map(v => BigDecimal(v)).toArray)
     }
   }
 
