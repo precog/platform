@@ -40,7 +40,7 @@ class MetadataUpdateHelperSpec extends Specification {
 
   "metadata update helper" should {
     val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
-    val descriptor1 = ProjectionDescriptor(ListMap[ColumnDescriptor, Int]((colDesc1 -> 0)), Seq[(ColumnDescriptor, SortBy)]((colDesc1 -> ById))).toOption.get
+    val descriptor1 = ProjectionDescriptor(1, List(colDesc1))
 
     def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
 

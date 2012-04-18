@@ -177,6 +177,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
       case CLong => containerOfN[Array, Long](size, arbitrary[Long])
       case CFloat => containerOfN[Array, Float](size, arbitrary[Float])
       case CDouble => containerOfN[Array, Double](size, arbitrary[Double])
+      case CDecimalArbitrary => containerOfN[Array, BigDecimal](size, arbitrary[BigDecimal])
     }
   }
 
@@ -205,27 +206,25 @@ class SliceTableSpec extends Specification with ArbitrarySlice {
   "a slice table" should {
     "perform" in {
       implicit val vm = Validation.validationMonad[String]
-      genProjectionDescriptor.sample.toSuccess("No value returned from sample").join[ProjectionDescriptor] match {
-        case Success(descriptor) =>
-          val slices1 = listOf(genSlice(descriptor, 10000)).sample.get
-          val slices2 = listOf(genSlice(descriptor, 10000)).sample.get
+      val descriptor = genProjectionDescriptor.sample.get
 
-          val table1 = new SliceTable(slices1)
-          val table2 = new SliceTable(slices2)
+      val slices1 = listOf(genSlice(descriptor, 10000)).sample.get
+      val slices2 = listOf(genSlice(descriptor, 10000)).sample.get
 
-          val startTime = System.currentTimeMillis
-          val resultTable = table1.cogroup(table2)(new Table.CogroupF {
-            def one = Map()
-            def both = Map()
-          })
+      val table1 = new SliceTable(slices1)
+      val table2 = new SliceTable(slices2)
 
-          resultTable.toJson.size
-          val elapsed = System.currentTimeMillis - startTime
-          println(elapsed)
-          elapsed must beGreaterThan(0L)
+      val startTime = System.currentTimeMillis
+      val resultTable = table1.cogroup(table2)(new Table.CogroupF {
+        def one = Map()
+        def both = Map()
+      })
 
-        case Failure(message) => failure(message)
-      }
+      resultTable.toJson.size
+      val elapsed = System.currentTimeMillis - startTime
+      println(elapsed)
+      elapsed must beGreaterThan(0L)
+
     }
   }
 }

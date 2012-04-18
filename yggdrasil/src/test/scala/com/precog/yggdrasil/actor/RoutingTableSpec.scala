@@ -34,8 +34,7 @@ class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
 
-    def toProjDesc(colDescs: List[ColumnDescriptor]) = 
-      ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
+    def toProjDesc(colDescs: List[ColumnDescriptor]) = ProjectionDescriptor(1, colDescs)
 
     "project an event with one property to a single projection action" in {
       val rt = new SingleColumnProjectionRoutingTable

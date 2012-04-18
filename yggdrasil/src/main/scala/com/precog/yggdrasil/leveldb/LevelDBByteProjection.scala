@@ -69,7 +69,6 @@ trait LevelDBByteProjection extends ByteProjection {
     def toArray: Array[Byte] = buf.array
   }
 
-
   private final def listWidths(cvalues: Seq[CValue]): List[Int] = 
     descriptor.columns.map(_.valueType.format) zip cvalues map {
       case (FixedWidth(w), cv) => w
@@ -78,52 +77,8 @@ trait LevelDBByteProjection extends ByteProjection {
       case _ => sys.error("Column values incompatible with projection descriptor.")
     }
 
-  private final def allocateWidth(valueWidths: Seq[Int]): Int =  
-    descriptor.sorting.foldLeft(0) { 
-      case (width, (col, ById)) =>
-        (width + 8)
-      case (width, (col, ByValue)) => 
-        val valueIndex = descriptor.columns.indexOf(col)
-        (width + valueWidths(valueIndex))
-
-      case (width, (col, ByValueThenId)) => 
-        val valueIndex = descriptor.columns.indexOf(col)
-        (width + valueWidths(valueIndex) + 8)
-    }
-
   object Project {
-
-    final def generalProject(usedIdentities: Set[Int], usedValues: Set[Int], identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
-      lazy val valueWidths = listWidths(cvalues)
-      val indexWidth = allocateWidth(valueWidths) 
-
-      // all of the identities must be included in the key; also, any values of columns that
-      // use by-value ordering must be included in the key.
-      val keyBuffer = new LevelDBWriteBuffer(indexWidth + ((identities.size - usedIdentities.size) * 8))
-      descriptor.sorting.foreach {
-        case (col, ById)          =>
-          keyBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
-        case (col, ByValue)       => keyBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col)))        
-        case (col, ByValueThenId) =>
-          keyBuffer.writeValue(col, cvalues(descriptor.columns.indexOf(col)))
-          keyBuffer.writeIdentity(identities(descriptor.indexedColumns(col)))
-      }
-
-      identities.zipWithIndex.foreach {  
-        case (id, i) => if (!usedIdentities.contains(i)) keyBuffer.writeIdentity(id)
-        case _ =>
-      }
-
-      val valuesBuffer = new LevelDBWriteBuffer(valueWidths.zipWithIndex collect { case (w, i) if !usedValues.contains(i) => w } sum)
-      (cvalues zip descriptor.columns).zipWithIndex.foreach { 
-        case ((v, col), i) if !usedValues.contains(i) => valuesBuffer.writeValue(col, v)
-        case _ => 
-      }
-
-      (keyBuffer.toArray, valuesBuffer.toArray)
-    }
-
-    final def singleProject(usedIdentities: Set[Int], usedValues: Set[Int], identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
+    final def singleProject(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
       lazy val valueWidths = listWidths(cvalues)
       
       val keyBuffer = new LevelDBWriteBuffer(8)
@@ -136,27 +91,8 @@ trait LevelDBByteProjection extends ByteProjection {
     }
   }
   
-  private lazy val (projectUsedIdentities, projectUsedValues): (Set[Int], Set[Int]) = descriptor.sorting.foldLeft((Set.empty[Int], Set.empty[Int])) { 
-    case ((ids, values), (col, ById)) => 
-      (ids + descriptor.indexedColumns(col), values)
-
-    case ((ids, values), (col, ByValue)) => 
-      val valueIndex = descriptor.columns.indexOf(col)
-      (ids, values + valueIndex)
-
-    case ((ids, values), (col, ByValueThenId)) => 
-      val valueIndex = descriptor.columns.indexOf(col)
-      (ids + descriptor.indexedColumns(col), values + valueIndex)
-  }
-  
-
   final def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
-    if(projectUsedIdentities.size == 1 && projectUsedValues.size == 0 &&
-       identities.size == 1 && cvalues.size == 1) {
-      Project.singleProject(projectUsedIdentities, projectUsedValues, identities, cvalues)
-    } else {
-      Project.generalProject(projectUsedIdentities, projectUsedValues, identities, cvalues)
-    }
+    Project.singleProject(identities, cvalues)
   }
   
   private type RBuf = ByteBuffer
@@ -164,66 +100,28 @@ trait LevelDBByteProjection extends ByteProjection {
   private type ValueRead    = ByteBuffer => CValue
       
   private lazy val keyParsers: IndexedSeq[Either[IdentityRead, ValueRead]] = { //should be able to remove the unused variable
-    val (initial, unused) = descriptor.sorting.foldLeft((ArrayBuffer.empty[Either[IdentityRead, ValueRead]], ListSet(0.until(descriptor.identities): _*))) {
-      case ((acc, ids), (col, ById))          => 
-        val identityIndex = descriptor.indexedColumns(col)
-        (acc :+ Left((buf:RBuf) => (identityIndex, CValueReader.readIdentity(buf))), ids - identityIndex)
-
-      case ((acc, ids), (col, ByValue))       => 
-        (acc :+ Right((buf:RBuf) => CValueReader.readValue(buf, col.valueType)), ids)
-
-      case ((acc, ids), (col, ByValueThenId)) => 
-        val identityIndex = descriptor.indexedColumns(col)
-        (
-            acc :+ Right((buf:RBuf) => CValueReader.readValue(buf, col.valueType)) :+ Left((buf:RBuf) => (identityIndex, CValueReader.readIdentity(buf))), 
-            ids - identityIndex
-        )
-    }
-
-    val unusedIdentities: List[IdentityRead] = unused.toList.sorted.map(i => (buf:RBuf) => (i, CValueReader.readIdentity(buf)))
-
-    unusedIdentities.foldLeft(initial) {
-      case (acc, id) => acc :+ Left(id) 
-    }
+    (0 until descriptor.identities) map { i =>
+      Left((buf: RBuf) => (i, CValueReader.readIdentity(buf))): Either[IdentityRead, ValueRead]
+    } 
   }
 
-
   private lazy val valueParsers: List[ValueRead] = {
-    descriptor.columns filter { col => 
-      !(descriptor.sorting exists { 
-        case (`col`, sortBy)  => sortBy == ByValue || sortBy == ByValueThenId
-        case _                => false
-      })
-    } map { col => 
+    descriptor.columns map { col => 
       (buf: RBuf) => CValueReader.readValue(buf, col.valueType)
     }
   }
 
+  /*
   private lazy val mergeDirectives: List[Boolean] = {
     descriptor.columns.reverse.map(col => descriptor.sorting exists { 
       case (`col`, sortBy)  => sortBy == ByValue || sortBy == ByValueThenId 
       case _                => false
     }) 
   }
-
-  private final def mergeValues(keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {  
-    @tailrec def merge(mergeDirectives: List[Boolean], keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue], result: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {
-      mergeDirectives match {
-        case true  :: ms => merge(ms, keyMembers.init, valueMembers, result += keyMembers.last)
-        case false :: ms => merge(ms, keyMembers, valueMembers.init, result += valueMembers.last)
-        case Nil => result.reverse
-      }
-    }
-    merge(mergeDirectives, keyMembers, valueMembers, new ArrayBuffer(3))
-  }
-
-  private final def orderIdentities(identitiesInKey: ArrayBuffer[(Int,Long)]): VectorCase[Long] = {
-    val sorted = identitiesInKey.sorted
-    VectorCase.fromSeq(sorted.map(id => id._2))
-  }
-
+  */
 
   object Unproject {
+    /*
     final def generalUnproject(keyParsers: IndexedSeq[Either[IdentityRead, ValueRead]], 
                                valueParsers: List[ValueRead], 
                                keyBytes: Array[Byte], 
@@ -247,6 +145,7 @@ trait LevelDBByteProjection extends ByteProjection {
 
       (identities, values)
     }
+    */
     
     final def singleUnproject(keyParsers: IndexedSeq[Either[IdentityRead, ValueRead]], 
                                valueParsers: List[ValueRead], 
@@ -261,6 +160,7 @@ trait LevelDBByteProjection extends ByteProjection {
       (Vector1(idParser(keyBuffer)._2), Vector1(valParser(valueBuffer)))
     }
     
+    /*
     private final def mergeValues(keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {  
       @tailrec def merge(mergeDirectives: List[Boolean], keyMembers: ArrayBuffer[CValue], valueMembers: ArrayBuffer[CValue], result: ArrayBuffer[CValue]): ArrayBuffer[CValue] = {
         mergeDirectives match {
@@ -276,15 +176,15 @@ trait LevelDBByteProjection extends ByteProjection {
       val sorted = identitiesInKey.sorted
       VectorCase.fromSeq(sorted.map(id => id._2))
     }
+    */
   }
 
   final def unproject(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue]) = {
-    if(keyParsers != null && keyParsers.size == 1 && 
-       valueParsers != null && valueParsers.size == 1) {
+    //if(keyParsers != null && keyParsers.size == 1 && valueParsers != null && valueParsers.size == 1) {
       Unproject.singleUnproject(keyParsers, valueParsers, keyBytes, valueBytes)
-    } else {
-      Unproject.generalUnproject(keyParsers, valueParsers, keyBytes, valueBytes)
-    }
+    //} else {
+    //  Unproject.generalUnproject(keyParsers, valueParsers, keyBytes, valueBytes)
+    //}
   }
 
   final def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {

@@ -34,7 +34,7 @@ class LocalMetadataSpec extends Specification {
   
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
-    val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+    val desc = ProjectionDescriptor(1, List(colDesc))
     val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }

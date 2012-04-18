@@ -58,11 +58,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   }
 
   def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
-    def projectionDescriptor(e: Event): Set[ProjectionDescriptor] = { e match {
-      case Event(path, tokenId, data, _) => data.flattenWithPath.map {
-        case (sel, value) => ColumnDescriptor(path, sel, typeOf(value), Authorities(Set(tokenId)))
-      }
-    } }.map{ cd => ProjectionDescriptor( ListMap() + (cd -> 0), List[(ColumnDescriptor, SortBy)]() :+ (cd, ById)).toOption.get }.toSet
+    def projectionDescriptor(ev: Event): Set[ProjectionDescriptor] = { 
+      ev.data.flattenWithPath.map {
+        case (sel, value) => ProjectionDescriptor(1, List(ColumnDescriptor(ev.path, sel, typeOf(value), Authorities(Set(ev.tokenId)))))
+      } toSet
+    }
 
     def typeOf(jvalue: JValue): CType = {
       CType.forValue(jvalue).getOrElse(CNull)
@@ -125,7 +125,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     
     def projectionDescriptorMap(path: Path, selector: JPath, cType: CType, token: String) = {
       val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
-      val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+      val desc = ProjectionDescriptor(1, List(colDesc))
       val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
       Map((desc -> metadata))
     }
@@ -188,7 +188,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       }
       
       val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.data), Authorities(Set(e.tokenId)))
-      ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+      ProjectionDescriptor(1, List(colDesc))
     }
     
     "return all children for the root path" ! check { (sample: List[Event]) =>

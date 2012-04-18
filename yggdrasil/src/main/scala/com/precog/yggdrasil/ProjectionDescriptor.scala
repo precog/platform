@@ -37,6 +37,7 @@ import scala.collection.immutable.ListMap
 
 import scalaz._
 import scalaz.Scalaz._
+import scalaz.Validation._
 
 sealed trait SortBy
 case object ById extends SortBy
@@ -117,8 +118,7 @@ with ((Path, JPath, CType, Authorities) => ColumnDescriptor)
 /** 
  * The descriptor for a projection 
  */
-case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) {
-  lazy val columns = indexedColumns.map(_._1).toList 
+case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]) {
   lazy val selectors = columns.map(_.selector).toSet
 
   def columnAt(path: Path, selector: JPath) = columns.find(col => col.path == path && col.selector == selector)
@@ -131,101 +131,36 @@ case class ProjectionDescriptor private (identities: Int, indexedColumns: ListMa
 }
 
 trait ProjectionDescriptorSerialization {
-
-  case class IndexWrapper(colDesc: ColumnDescriptor, index: Int)
-
-  trait IndexWrapperSerialization {
-    implicit val IndexWrapperDecomposer : Decomposer[IndexWrapper] = new Decomposer[IndexWrapper] {
-      def decompose(iw: IndexWrapper) : JValue = JObject (
-        List(JField("descriptor", iw.colDesc.serialize),
-             JField("index", iw.index.serialize))
-      )
-    }
-
-    implicit val IndexWrapperExtractor : Extractor[IndexWrapper] = new Extractor[IndexWrapper] with ValidatedExtraction[IndexWrapper] {
-      override def validated(obj : JValue) : Validation[Error,IndexWrapper] = {
-        ((obj \ "descriptor").validated[ColumnDescriptor] |@|
-         (obj \ "index").validated[Int]).apply(IndexWrapper(_, _))
-      }
-    }
-  }
-
-  object IndexWrapper extends IndexWrapperSerialization
-
-  case class SortWrapper(colDesc: ColumnDescriptor, sortBy: SortBy)
-
-  trait SortWrapperSerialization {
-    implicit val SortWrapperDecomposer : Decomposer[SortWrapper] = new Decomposer[SortWrapper] {
-      def decompose(sw: SortWrapper) : JValue = JObject (
-        List(JField("descriptor", sw.colDesc.serialize),
-             JField("sortBy", sw.sortBy.serialize))
-      )
-    }
-
-    implicit val SortWrapperExtractor : Extractor[SortWrapper] = new Extractor[SortWrapper] with ValidatedExtraction[SortWrapper] {
-      override def validated(obj : JValue) : Validation[Error,SortWrapper] = 
-        ((obj \ "descriptor").validated[ColumnDescriptor] |@|
-         (obj \ "sortBy").validated[SortBy]).apply(SortWrapper(_, _))
-    }
-  }
-
-  object SortWrapper extends SortWrapperSerialization
-
   implicit val ProjectionDescriptorDecomposer : Decomposer[ProjectionDescriptor] = new Decomposer[ProjectionDescriptor] {
     def decompose(pd: ProjectionDescriptor) : JValue = JObject (
-      JField("columns", pd.indexedColumns.toList.map( t => IndexWrapper(t._1, t._2) ).serialize) ::
-      JField("sorting", pd.sorting.map( t => SortWrapper(t._1, t._2) ).serialize) :: 
+      JField("columns", JArray(pd.columns.map(c => JObject(JField("descriptor", c.serialize) :: JField("index", pd.identities) :: Nil)))) :: 
       Nil
     )
   } 
   
   implicit val ProjectionDescriptorExtractor : Extractor[ProjectionDescriptor] = new Extractor[ProjectionDescriptor] with ValidatedExtraction[ProjectionDescriptor] { 
-    override def validated(obj : JValue) : Validation[Error,ProjectionDescriptor] = 
-      ((obj \ "columns").validated[List[IndexWrapper]].map( _.foldLeft(ListMap[ColumnDescriptor, Int]()) { (acc, el) => acc + (el.colDesc -> el.index) }) |@|
-       (obj \ "sorting").validated[List[SortWrapper]].map( _.map{ sw => (sw.colDesc, sw.sortBy)})).apply( (_,_) ) match {
-         case Success((cols, sorting)) => ProjectionDescriptor(cols, sorting).fold(e => Failure(Invalid(e)), v => Success(v))
-         case Failure(e)               => Failure(e)
-       }
+    override def validated(obj : JValue) : Validation[Error,ProjectionDescriptor] = {
+      (obj \ "columns") match {
+        case JArray(elements) => 
+          elements.foldLeft(success[Error, (Vector[ColumnDescriptor], Int)]((Vector.empty[ColumnDescriptor], 0))) {
+            case (Success((columns, identities)), obj @ JObject(fields)) =>
+              val idCount = ((obj \ "index") --> classOf[JInt]).value.toInt
+              (obj \ "descriptor").validated[ColumnDescriptor] map { d =>
+                (columns :+ d, idCount max identities)
+              }
+              
+            case (failure, _) => failure
+          } map {
+            case (columns, identities) => ProjectionDescriptor(identities, columns.toList)
+          }
+
+        case x => Failure(Invalid("Error deserializing projection descriptor: columns formatted incorrectly."))
+      }
+    }
   } 
 }
 
-object ProjectionDescriptor extends ProjectionDescriptorSerialization {
-
-  def trustedApply(identities: Int, indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): ProjectionDescriptor = ProjectionDescriptor(identities, indexedColumns, sorting)
-
-  def apply(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]): Validation[String, ProjectionDescriptor] = {
-    val identities = indexedColumns.values.toSeq.sorted.foldLeft(Option(0)) {
-      // test that identities are 0-based and sequential
-      case (Some(cur), next) if cur == next => Some(cur + 1)
-      case (Some(cur), next) if cur >  next => Some(cur)
-      case _ => None
-    }
-
-    identities.toSuccess("Column identity indexes must be 0-based and must be sequential when sorted")
-    .ensure("A projection may not store values of multiple types for the same selector") { _ =>   
-      indexedColumns.keys.groupBy(c => (c.path, c.selector)).values.forall(_.size == 1)
-    }
-
-    .ensure("Each identity in a projection may not by shared by column descriptors which sort ById or ByValueThenId more than once") { _ =>
-      def sortByIndices(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = {
-        indexedColumns.keys.foldLeft(Map.empty: Map[Int, List[SortBy]]) {
-          case (indexMap, col) => 
-            val sortingMap = sorting.toMap
-            if (indexMap.contains(indexedColumns(col))) indexMap + ((indexedColumns(col), indexMap(indexedColumns(col)) :+ sortingMap(col))) 
-            else indexMap + ((indexedColumns(col), List(sortingMap(col))))
-        }
-      }
-
-      indexedColumns.values.toSet.forall(id => 
-        (sortByIndices(indexedColumns, sorting)(id).count(a => a == ById || a == ByValueThenId) < 2)
-      )
-    }
-
-    .map(new ProjectionDescriptor(_, indexedColumns, sorting))
-  }
-}
-
-
+object ProjectionDescriptor extends ProjectionDescriptorSerialization 
 
 
 trait ByteProjection {

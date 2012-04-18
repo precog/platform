@@ -58,10 +58,7 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
     val authorities = Set.empty + msg.event.tokenId
     val colDesc = ColumnDescriptor(msg.event.path, sel, CType.forValue(value).get, Authorities(authorities))
 
-    val map = new ListMap[ColumnDescriptor, Int]() + (colDesc -> 0)
-    val seq: Seq[(ColumnDescriptor, SortBy)] = (colDesc -> ById) :: Nil
-
-    val projDesc = ProjectionDescriptor.trustedApply(1, map, seq)
+    val projDesc = ProjectionDescriptor(1, List(colDesc))
     val identities = Vector1(msg.eventId.uid)
     val values = Vector1(CType.toCValue(value))
     val metadata = msg.event.metadata.get(sel).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
