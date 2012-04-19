@@ -64,7 +64,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
-    routingActor ! CheckMessages
+    routingActor ! Start 
   }
 
   def actorsStop(): Future[Unit] = {
@@ -179,7 +179,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
-    routingActor ! CheckMessages
+    routingActor ! Start
   }
 
   def actorsStop(): Future[Unit] = {
