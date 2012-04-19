@@ -43,8 +43,6 @@ import scalaz.effect._
 
 import scala.collection.mutable.ListBuffer
 
-case object CheckMessages
-
 case class AcquireProjection(descriptor: ProjectionDescriptor)
 case class AcquireProjectionBatch(descriptors: Iterable[ProjectionDescriptor])
 case class ReleaseProjection(descriptor: ProjectionDescriptor) 
