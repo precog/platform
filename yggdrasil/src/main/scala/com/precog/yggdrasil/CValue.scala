@@ -53,10 +53,15 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   val CC: Class[CA]
 
   @inline final def cast(v: Any): CA = v.asInstanceOf[CA]
-  @inline final def cast0(f0: F0[_]): F0[CA] = f0.asInstanceOf[F0[CA]]
+  @inline final def cast0(f0: Column[_]): Column[CA] = f0.asInstanceOf[Column[CA]]
+
   @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
-  @inline final def cast2l[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
-  @inline final def cast2r[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
+  @inline final def cast2_1[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
+  @inline final def cast2_2[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
+
+  @inline final def cast1P[B](f1: F1P[_, B]): F1P[CA, B] = f1.asInstanceOf[F1P[CA, B]]
+  @inline final def cast2P_1[B, C](f2: F2P[_, B, C]): F2P[CA, B, C] = f2.asInstanceOf[F2P[CA, B, C]]
+  @inline final def cast2P_2[A, C](f2: F2P[A, _, C]): F2P[A, CA, C] = f2.asInstanceOf[F2P[A, CA, C]]
 
   implicit val manifest: Manifest[CA]
 

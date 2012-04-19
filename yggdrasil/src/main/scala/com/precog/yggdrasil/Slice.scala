@@ -16,16 +16,16 @@ trait Slice { source =>
   def size: Int
   def isEmpty: Boolean = size == 0
 
-  def identities: Seq[F0[Identity]]
-  def columns: Map[CMeta, F0[_]]
+  def identities: Seq[Column[Identity]]
+  def columns: Map[CMeta, Column[_]]
 
   def map(meta: CMeta, refId: Long)(f: F1[_, _]): Slice = new Slice {
     val idCount = source.idCount
     val size = source.size
 
     val identities = source.identities
-    val columns = source.columns.get(meta) map { f0 =>
-                    source.columns + (CMeta(CDyn(refId), f.returns) -> (f0 andThen f))
+    val columns = source.columns.get(meta) map { col =>
+                    source.columns + (CMeta(CDyn(refId), f.returns) -> (col |> f))
                   } getOrElse {
                     sys.error("No column found in table matching " + meta)
                   }
@@ -45,8 +45,8 @@ trait Slice { source =>
         c1 <- source.columns.get(m1)
         c2 <- source.columns.get(m2)
       } yield {
-        val fl  = m1.ctype.cast2l(f)
-        val flr = m2.ctype.cast2r(fl)
+        val fl  = m1.ctype.cast2_1(f)
+        val flr = m2.ctype.cast2_2(fl)
         flr(m1.ctype.cast0(c1), m2.ctype.cast0(c2))
       }
 
@@ -155,22 +155,24 @@ trait Slice { source =>
       val idCount = source.idCount
       val size = source.size + other.size
       val identities = (source.identities zip other.identities) map {
-        case (sf0, of0) => new F0[Long] { 
+        case (c1, c2) => new Column[Long] { 
           val returns = CLong
-          def apply(row: Int) = if (row < source.size) sf0(row) else of0(row - source.size)
+          def isDefinedAt(row: Int) = (row >= 0 && row < source.size) || (row - source.size >= 0 && row - source.size < other.size)
+          def apply(row: Int) = if (row < source.size) c1(row) else c2(row - source.size)
         }
       }
 
       val columns = other.columns.foldLeft(source.columns) {
-        case (acc, (cmeta, of0)) => 
+        case (acc, (cmeta, col)) => 
           val ctype = cmeta.ctype
-          val sf0t = ctype.cast0(acc(cmeta))
-          val of0t = ctype.cast0(of0)
+          val c1 = ctype.cast0(acc(cmeta))
+          val c2 = ctype.cast0(col)
           acc + (
             cmeta -> {
-              new F0[ctype.CA] { 
+              new Column[ctype.CA] { 
                 val returns: CType { type CA = ctype.CA } = ctype
-                def apply(row: Int) = if (row < source.size) sf0t(row) else of0t(row - source.size)
+                def isDefinedAt(row: Int) = (row >= 0 && row < source.size) || (row - source.size >= 0 && row - source.size < other.size)
+                def apply(row: Int) = if (row < source.size) c1(row) else c2(row - source.size)
               }
             }
           )
@@ -181,8 +183,8 @@ trait Slice { source =>
 
 class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[CMeta, Object]) extends Slice {
   val idCount = idsData.length
-  val identities = idsData map { F0.forArray(CLong, _) }
-  val columns: Map[CMeta, F0[_]] = data map { case (m @ CMeta(_, ctype), arr) => m -> F0.forArray(ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
+  val identities = idsData map { Column.forArray(CLong, _) }
+  val columns: Map[CMeta, Column[_]] = data map { case (m @ CMeta(_, ctype), arr) => m -> Column.forArray(ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
 }
 
 object Slice {

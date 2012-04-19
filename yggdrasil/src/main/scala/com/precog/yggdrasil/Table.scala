@@ -10,7 +10,7 @@ trait Table { source =>
 
   def rowView: RowView
 
-  def map(meta: CMeta, refId: Long)(f: CF1[_, _]): Table = new Table {
+  def map(meta: CMeta, refId: Long)(f: F1P[_, _]): Table = new Table {
     def rowView = new MapRowView(source.rowView, meta, refId, f)
   }
 
@@ -53,12 +53,12 @@ trait Table { source =>
 
 object Table {
   trait CogroupF {
-    def one:  Map[CMeta, CF1[_, _]]
-    def both: Map[CMeta, CF2[_, _, _]]
+    def one:  CMeta => Option[F1P[_, _]]
+    def both: CMeta => Option[F2P[_, _, _]]
   }
 }
 
-class MapRowView(delegate: RowView, mapMeta: CMeta, refId: Long, f: CF1[_, _]) extends RowView { 
+class MapRowView(delegate: RowView, mapMeta: CMeta, refId: Long, f: F1P[_, _]) extends RowView { 
   class Position(private[MapRowView] val pos: delegate.Position)
 
   private val resultMeta = CMeta(CDyn(refId), f.returns)
@@ -335,14 +335,14 @@ class CogroupRowView(left: RowView, right: RowView, f: Table.CogroupF) extends R
     val ctype = cmeta.ctype
     def applyF1(view: RowView, side: String): Any = {
       if (view.hasValue(cmeta)) {
-        f.one.get(cmeta) map { f1 => f1.applyCast(view.valueAt(cmeta)) } getOrElse { view.valueAt(cmeta) }
+        f.one(cmeta) map { f1 => f1.applyCast(view.valueAt(cmeta)) } getOrElse { view.valueAt(cmeta) }
       } else {
         sys.error("Column " + cmeta + " does not exist in " + side + " of cogroup at " + view.position)
       }
     }
 
     def applyF2: Any = {
-      f.both.get(cmeta) map { f2 => 
+      f.both(cmeta) map { f2 => 
         f2.applyCast(left.valueAt(cmeta), right.valueAt(cmeta))
       } getOrElse {
         sys.error("Could not determine function to combine column values from both the lhs and rhs of cogroup at " + left.position + ", " + right.position)
@@ -459,6 +459,6 @@ class SliceTable(slices: Iterable[Slice]) extends Table {
     protected[yggdrasil] def valueAt(meta: CMeta): Any = currentSlice.columns(meta).apply(curIdx)
   }
 
-  override def map(meta: CMeta, refId: Long)(f: CF1[_, _]): Table = new SliceTable(slices map { slice => slice.map(meta, refId)(f.toF1) })
+  override def map(meta: CMeta, refId: Long)(f: F1P[_, _]): Table = new SliceTable(slices map { slice => slice.map(meta, refId)(f.toF1) })
 }
 // vim: set ts=4 sw=4 et:
