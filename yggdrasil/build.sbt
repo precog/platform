@@ -35,6 +35,7 @@ fork := true
 testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 
 libraryDependencies ++= Seq(
+  "net.sf.opencsv"              % "opencsv"             % "2.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0" % "test",

@@ -20,7 +20,6 @@
 package com.precog.yggdrasil
 package util
 
-
 import akka.dispatch.Await
 import akka.dispatch.Future
 import akka.util.Timeout
@@ -69,6 +68,9 @@ import org.streum.configrity._
 import java.util.concurrent.atomic.AtomicInteger
 import scala.io.Source
 
+import au.com.bytecode.opencsv._
+import java.io._
+
 object YggUtils {
  
   def usage(message: String*): String = {
@@ -87,7 +89,8 @@ object YggUtils {
     IngestStatus,
     ZookeeperTools,
     KafkaConvert,
-    BulkImport
+    BulkImport,
+    CSVConvert
   )
 
   val commandMap: Map[String, Command] = commands.map( c => (c.name, c) )(collection.breakOut)
@@ -124,7 +127,7 @@ object DescriptorSummary extends Command {
   def run(args: Array[String]) {
     println(args.mkString(","))
     val config = new Config
-    val parser = new OptionParser("ygg describe") {
+    val parser = new OptionParser("yggutils describe") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
       opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
       booleanOpt("v", "verbose", "<vebose>", "show selectors as well", {v: Boolean => config.verbose = v})
@@ -210,7 +213,7 @@ object DumpLocalKafka extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg dump_local_kafka") {
+    val parser = new OptionParser("yggutils dump_local_kafka") {
       intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
       intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
       arg("<local-kafka-file>", "local kafka message file", {d: String => config.file = d})
@@ -258,7 +261,7 @@ object DumpCentralKafka extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg dump_central_kafka") {
+    val parser = new OptionParser("yggutils dump_central_kafka") {
       intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
       intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
       arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
@@ -310,7 +313,7 @@ object ZookeeperTools extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg zk") {
+    val parser = new OptionParser("yggutils zk") {
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
       opt("c", "checkpoints", "Show shard checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
       opt("a", "agents", "Show ingest agent state with prefix", { s: String => config.showAgents = Some(s)})
@@ -436,7 +439,7 @@ object IngestStatus extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg ingest_status") {
+    val parser = new OptionParser("yggutils ingest_status") {
       intOpt("s", "limit", "<sync-limit-messages>", "if sync is greater than the specified limit an error will occur", {s: Int => config.limit = s})
       intOpt("l", "lag", "<time-lag-minutes>", "if update lag is greater than the specified value an error will occur", {l: Int => config.lag = l})
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
@@ -525,7 +528,7 @@ object KafkaConvert extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg kafka_convert") {
+    val parser = new OptionParser("yggutils kafka_convert") {
       arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
     }
     if (parser.parse(args)) {
@@ -570,7 +573,7 @@ object BulkImport extends Command {
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("ygg import") {
+    val parser = new OptionParser("yggutils import") {
       booleanOpt("v", "verbose", "verbose logging", {b: Boolean => config.verbose = b})
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
@@ -637,4 +640,75 @@ object BulkImport extends Command {
     val token: String = TestTokenManager.rootUID,
     var verbose: Boolean = false 
   )
+}
+
+object CSVConvert extends Command {
+  val name = "csv"
+  val description = "Convert CSV file to JSON"
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("yggutils csv") {
+      opt("d","delimeter","field delimeter", {s: String => 
+        if(s.length == 1) {
+          config.delimeter = s.charAt(0)
+        } else {
+          sys.error("Invalid delimeter")
+        }
+      })
+      booleanOpt("t","mapTimestamps","Map timestamps to expected format.", {b: Boolean => 
+        config.teaseTimestamps = b
+      })
+      arg("<csv_file>", "csv file to convert (headers required)", {s: String => config.input = s}) 
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  def process(config: Config) {
+    CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps).foreach {
+      case jval => println(Printer.compact(Printer.render(jval)))
+    }
+  }
+
+  class Config(
+    var input: String = "", 
+    var delimeter: Char = ',', 
+    var teaseTimestamps: Boolean = false)
+}
+
+object CSVToJSONConverter {
+  def convert(file: String, delimeter: Char = ',', timestampConversion: Boolean = false): Iterator[JValue] = new Iterator[JValue] {
+
+    private val reader = new CSVReader(new FileReader(file), delimeter)
+    private val header = reader.readNext 
+    private var line = reader.readNext
+
+    def hasNext(): Boolean = line != null 
+
+    def next(): JValue = {
+      val result = JObject(header.zip(line).map{ 
+        case (k, v) => JField(k, parse(v, timestampConversion))
+      }.toList)
+      line = reader.readNext
+      result
+    }
+  }
+
+  private val Timestamp = """^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})\d{0,3}$""".r
+
+  def parse(s: String, ts: Boolean): JValue = {
+    try {
+      JsonParser.parse(s)
+    } catch {
+      case ex =>
+        s match {
+          case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
+          case s                       => JString(s)
+        }
+    }
+  }
 }
