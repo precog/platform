@@ -6,12 +6,13 @@ target/
 .history
 ingest.*.log
 tags
-*.swp
 blueeyes
 client-libraries
 scalaz
 .idea*/
 .ensime
-*~
 quirrel/examples
 hs_err_pid*log
+*~
+*.hprof
+*.swp
