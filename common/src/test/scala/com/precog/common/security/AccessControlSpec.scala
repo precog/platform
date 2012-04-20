@@ -452,6 +452,7 @@ trait TestTokenManagerComponent extends TokenManagerComponent with AkkaDefaults 
 
   lazy val tokenManager = new TokenManager {
     implicit val execContext = defaultFutureDispatch
+    def list() = sys.error("not available")
     def lookup(uid: UID) = Future(map.get(uid))(execContext)
     def lookupDeleted(uid: UID) = sys.error("not available")
     def listChildren(parent: Token): Future[List[Token]] = sys.error("not available")

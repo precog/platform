@@ -50,6 +50,9 @@ trait TokenManager {
 
   implicit def execContext: ExecutionContext
 
+  def close(): Future[Unit] = Future(())
+
+  def list(): Future[Seq[Token]]
   def lookup(uid: UID): Future[Option[Token]]
   def lookupDeleted(uid: UID): Future[Option[Token]]
   def listChildren(parent: Token): Future[List[Token]]
@@ -123,9 +126,19 @@ trait TokenManager {
   }
 }
 
-class MongoTokenManager(private[security] val database: Database, collection: String, deleted: String, timeout: Timeout)(implicit val execContext: ExecutionContext) extends TokenManager {
+class MongoTokenManager(private[security] val mongo: Mongo, private[security] val database: Database, collection: String, deleted: String, timeout: Timeout)(implicit val execContext: ExecutionContext) extends TokenManager {
 
   private implicit val impTimeout = timeout
+
+  override def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
+
+  def list(): Future[Seq[Token]] = {
+    database {
+      selectAll.from(collection)
+    }.map{ result =>
+      result.toList.map(_.deserialize[Token])
+    }
+  }
 
   def lookup(uid: UID): Future[Option[Token]] = find(uid, collection) 
   def lookupDeleted(uid: UID): Future[Option[Token]] = find(uid, deleted) 
@@ -184,7 +197,7 @@ trait MongoTokenManagerComponent extends Logging {
       val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
 
       val mongoTokenManager = 
-        new MongoTokenManager(mongo.database(database), collection, deletedCollection, new Timeout(timeoutMillis))
+        new MongoTokenManager(mongo, mongo.database(database), collection, deletedCollection, new Timeout(timeoutMillis))
 
       val cached = config[Boolean]("cached", false)
 
@@ -200,6 +213,8 @@ trait MongoTokenManagerComponent extends Logging {
 class CachingTokenManager(delegate: TokenManager, settings: CacheSettings[String, Token] = CachingTokenManager.defaultSettings)(implicit val execContext: ExecutionContext) extends TokenManager {
 
   private val tokenCache = Cache.concurrent[String, Token](settings)
+
+  def list(): Future[Seq[Token]] = delegate.list
 
   def lookup(uid: UID): Future[Option[Token]] =
     tokenCache.get(uid) match {
@@ -231,6 +246,8 @@ object CachingTokenManager {
 class TestTokenManager(initialTokens: Map[UID, Token], implicit val execContext: ExecutionContext) extends TokenManager {  
   var tokens = initialTokens
   var deleted = Map[UID, Token]()
+
+  def list(): Future[Seq[Token]] = Future(tokens.values.toList)
 
   def lookup(uid: UID): Future[Option[Token]] = Future(tokens.get(uid))
 
@@ -278,7 +295,7 @@ object TestTokenManager {
   
   val expiredUID = "expired"
   
-  def standardAccountPerms(path: String, owner: UID, mayShare: Boolean = true) =
+  def standardAccountPerms(path: String, mayShare: Boolean = true) =
     Permissions(
       MayAccessPath(Subtree(Path(path)), PathRead, mayShare), 
       MayAccessPath(Subtree(Path(path)), PathWrite, mayShare)
@@ -294,14 +311,14 @@ object TestTokenManager {
     )
 
   val config = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
-    (rootUID, None, standardAccountPerms("/", rootUID, true), Set(), false),
+    (rootUID, None, standardAccountPerms("/", true), Set(), false),
     (publicUID, Some(rootUID), publishPathPerms("/public", rootUID, true), Set(), false),
     (otherPublicUID, Some(rootUID), publishPathPerms("/opublic", rootUID, true), Set(), false),
-    (testUID, Some(rootUID), standardAccountPerms("/unittest", testUID, true), Set(), false),
-    (usageUID, Some(rootUID), standardAccountPerms("/__usage_tracking__", usageUID, true), Set(), false),
-    (cust1UID, Some(rootUID), standardAccountPerms("/user1", cust1UID, true), Set(publicUID), false),
-    (cust2UID, Some(rootUID), standardAccountPerms("/user2", cust2UID, true), Set(publicUID), false),
-    (expiredUID, Some(rootUID), standardAccountPerms("/expired", expiredUID, true), Set(publicUID), true)
+    (testUID, Some(rootUID), standardAccountPerms("/unittest", true), Set(), false),
+    (usageUID, Some(rootUID), standardAccountPerms("/__usage_tracking__", true), Set(), false),
+    (cust1UID, Some(rootUID), standardAccountPerms("/user1", true), Set(publicUID), false),
+    (cust2UID, Some(rootUID), standardAccountPerms("/user2", true), Set(publicUID), false),
+    (expiredUID, Some(rootUID), standardAccountPerms("/expired", true), Set(publicUID), true)
   )
 
   val tokenMap = Map(config map Token.tupled map { t => (t.uid, t) }: _*)
