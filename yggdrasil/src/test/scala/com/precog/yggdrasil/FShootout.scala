@@ -23,7 +23,7 @@ import org.specs2.mutable._
 
 class FShootout extends Specification {
   "function implementations" should {
-    "test out" in {
+    "partials must work correctly" in {
       val col5 = Column.const[Long](CLong, 5L)
       val col4 = Column.const[Long](CLong, 4L)
       val col2 = Column.const[Long](CLong, 2L)
@@ -52,6 +52,33 @@ class FShootout extends Specification {
       (f2(col4, col0) |> f1).isDefinedAt(0) must beFalse
       (f2(col5, col1) |> f1).isDefinedAt(0) must beFalse
       (f2(col4, col1) |> f1 |> f1).isDefinedAt(0) must beFalse
+    }
+
+    "errors must work correctly" in {
+      val col5 = FE0.const[Long](CLong, 5L)
+      val col4 = FE0.const[Long](CLong, 4L)
+      val col2 = FE0.const[Long](CLong, 2L)
+      val col1 = FE0.const[Long](CLong, 1L)
+      val col0 = FE0.const[Long](CLong, 0L)
+      val f2 = DivZeroLongE.toFE2
+
+      f2(col4, col2)(0) must_== 2
+      f2(col4, col0)(0) must throwA[DivZeroLongE.divZeroException.type]
+
+      val f1 = AddOneLongE.toFE1
+      f1(col4)(0) must_== 5
+      f1(col5)(0) must throwA[AddOneLongE.addOneException.type]
+
+      (f1 andThen f1)(col2)(0) must_== 4
+
+      (f1 andThen f1)(col4)(0) must throwA[AddOneLongE.addOneException.type]
+      (f1 andThen f1 andThen f1 andThen f1)(col2)(0) must throwA[AddOneLongE.addOneException.type]
+
+      (f2(col4, col2) |> f1)(0) must_== 3
+
+      (f2(col4, col0) |> f1)(0) must throwA[DivZeroLongE.divZeroException.type]
+      (f2(col5, col1) |> f1)(0) must throwA[AddOneLongE.addOneException.type]
+      (f2(col4, col1) |> f1 |> f1)(0) must throwA[AddOneLongE.addOneException.type]
     }
 
     "draw!" in {
@@ -106,7 +133,7 @@ class FShootout extends Specification {
           var i = 0
           var sum: Long = 0
           var startTime: Long = 0
-          val f = pcomposed(pnum, pden)
+          val f = ecomposed(enum, eden)
           while (i < 10000) {
             if (i == 1000) startTime = System.currentTimeMillis
             var j = 0
