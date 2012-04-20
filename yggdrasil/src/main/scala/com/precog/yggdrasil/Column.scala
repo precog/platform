@@ -35,7 +35,7 @@ trait Column[@specialized(Boolean, Int, Long, Float, Double) A] extends Returnin
 
   private class Thrush[B](f: F1[A, B]) extends Column[B] {
     val returns = f.returns
-    def isDefinedAt(row: Int) = outer.isDefinedAt(row) && f.isDefinedAt(outer)(row)
+    def isDefinedAt(row: Int) = f(outer).isDefinedAt(row)
     def apply(row: Int): B = f(outer)(row)
   }
 }
@@ -58,6 +58,12 @@ object Column {
     val returns = ctype.asInstanceOf[CType { type CA = A }]
     def isDefinedAt(row: Int) = row >= 0 && row < a.length
     def apply(row: Int) = a(row)
+  }
+
+  def const[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType { type CA = A }, a: A): Column[A] = new Column[A] {
+    val returns = ctype
+    def isDefinedAt(row: Int) = true
+    def apply(row: Int) = a
   }
 }
 

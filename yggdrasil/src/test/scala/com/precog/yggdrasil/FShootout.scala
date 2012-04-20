@@ -23,6 +23,37 @@ import org.specs2.mutable._
 
 class FShootout extends Specification {
   "function implementations" should {
+    "test out" in {
+      val col5 = Column.const[Long](CLong, 5L)
+      val col4 = Column.const[Long](CLong, 4L)
+      val col2 = Column.const[Long](CLong, 2L)
+      val col1 = Column.const[Long](CLong, 1L)
+      val col0 = Column.const[Long](CLong, 0L)
+      val f2 = DivZeroLongP.toF2
+
+      f2(col4, col2).isDefinedAt(0) must beTrue
+      f2(col4, col0).isDefinedAt(0) must beFalse
+      f2(col4, col2)(0) must_== 2
+
+      val f1 = AddOneLongP.toF1
+      f1(col5).isDefinedAt(0) must beFalse
+      f1(col4).isDefinedAt(0) must beTrue
+      f1(col4)(0) must_== 5
+
+      (f1 andThen f1)(col2).isDefinedAt(0) must beTrue
+      (f1 andThen f1)(col2)(0) must_== 4
+
+      (f1 andThen f1)(col4).isDefinedAt(0) must beFalse
+      (f1 andThen f1 andThen f1 andThen f1)(col2).isDefinedAt(0) must beFalse
+
+      (f2(col4, col2) |> f1).isDefinedAt(0) must beTrue
+      (f2(col4, col2) |> f1)(0) must_== 3
+
+      (f2(col4, col0) |> f1).isDefinedAt(0) must beFalse
+      (f2(col5, col1) |> f1).isDefinedAt(0) must beFalse
+      (f2(col4, col1) |> f1 |> f1).isDefinedAt(0) must beFalse
+    }
+
     "draw!" in {
       val testNum = Array.iterate[Long](1000000L, 10000)(_ + 1)
 
@@ -34,13 +65,13 @@ class FShootout extends Specification {
       
       val pdf = DivZeroLongP.toF2
       val paf = AddOneLongP.toF1
-      val pcomposed = pdf andThen paf andThen paf andThen paf andThen paf andThen paf
+      val pcomposed = pdf andThen paf andThen paf andThen paf andThen paf 
       val pnum = Column.forArray(CLong, testNum)
       val pden = Column.forArray(CLong, testDenom)
 
       val edf = DivZeroLongE.toFE2
       val eaf = AddOneLongE.toFE1
-      val ecomposed = edf andThen eaf andThen eaf andThen eaf andThen eaf andThen eaf
+      val ecomposed = edf andThen eaf andThen eaf andThen eaf andThen eaf 
       val enum = FE0.forArray(CLong, testNum)
       val eden = FE0.forArray(CLong, testDenom)
 
