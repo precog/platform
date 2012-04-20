@@ -796,7 +796,6 @@ object CSVToJSONConverter {
       JsonParser.parse(s)
     } catch {
       case ex =>
-        System.err.println("Error parsing: " + s)
         s match {
           case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
           case s                       => JString(s)
