@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package util
 
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.Timeout
 import akka.util.Duration
@@ -31,6 +32,8 @@ import blueeyes.json.Printer
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
+import blueeyes.bkka.AkkaDefaults
+import blueeyes.persistence.mongo._
 
 import scopt.mutable.OptionParser
 
@@ -64,14 +67,13 @@ object YggUtils {
   }
 
   val commands = List(
-    DescriptorSummary,
-    DumpLocalKafka,
-    DumpCentralKafka,
-    IngestStatus,
+    DatabaseTools,
+    KafkaTools,
+    IngestTools,
     ZookeeperTools,
-    KafkaConvert,
-    BulkImport,
-    CSVConvert
+    ImportTools,
+    CSVTools,
+    TokenTools
   )
 
   val commandMap: Map[String, Command] = commands.map( c => (c.name, c) )(collection.breakOut)
@@ -101,14 +103,14 @@ trait Command {
   def run(args: Array[String])
 }
 
-object DescriptorSummary extends Command {
-  val name = "describe" 
-  val description = "describe paths and selectors" 
+object DatabaseTools extends Command {
+  val name = "db" 
+  val description = "describe db paths and selectors" 
   
   def run(args: Array[String]) {
     println(args.mkString(","))
     val config = new Config
-    val parser = new OptionParser("yggutils describe") {
+    val parser = new OptionParser("yggutils db") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
       opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
       booleanOpt("v", "verbose", "<vebose>", "show selectors as well", {v: Boolean => config.verbose = v})
@@ -188,16 +190,20 @@ object DescriptorSummary extends Command {
                var verbose: Boolean = false)
 }
 
-object DumpLocalKafka extends Command {
-  val name = "dump_local_kafka"
-  val description = "Dump contents of local message file"
+object KafkaTools extends Command {
+  val name = "kafka"
+  val description = "Tools for monitoring and viewing kafka queues"
 
   def run(args: Array[String]) {
     val config = new Config
-    val parser = new OptionParser("yggutils dump_local_kafka") {
-      intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
-      intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
-      arg("<local-kafka-file>", "local kafka message file", {d: String => config.file = d})
+    val parser = new OptionParser("yggutils kafka") {
+      opt("r", "range", "<start:stop>", "show message range ie: 5:10 :100 10:", {s: String => 
+        val range = MessageRange.parse(s)
+        config.range = range.getOrElse(sys.error("Invalid range specification: " + s))
+      })
+      opt("l", "local", "<local kafka file>", "local kafka file", {s: String => config.dumpLocal = Some(s) })
+      opt("c", "central", "<central kafka file>", "dump central kafka file", {s: String => config.dumpCentral = Some(s) })
+      opt("c2l", "centralToLocal", "<central kafka file>", "convert central kafka file to local kafak", {s: String => config.convertCentral = Some(s) })
     }
     if (parser.parse(args)) {
       process(config)
@@ -206,85 +212,131 @@ object DumpLocalKafka extends Command {
     }
   }
 
-  val eventCodec = new KafkaEventCodec
-
   def process(config: Config) {
+    import config._
+    dumpLocal.foreach { f => dump(new File(f), range, LocalFormat) } 
+    dumpCentral.foreach { f => dump(new File(f), range, CentralFormat) } 
+    convertCentral.foreach { convert(_) }
+  }
 
-    def traverse(itr: Iterator[MessageAndOffset], start: Option[Int], finish: Option[Int], i: Int = 0): Unit = {
-      val beforeFinish = finish.map( _ >= i ).getOrElse(true)
-      val afterStart = start.map( _ <= i ).getOrElse(true)
-      if(beforeFinish && itr.hasNext) {
+  def dump(file: File, range: MessageRange, format: Format) {
+    def traverse(itr: Iterator[MessageAndOffset], 
+                 range: MessageRange,
+                 format: Format,
+                 i: Int = 0): Unit = {
+
+      if(itr.hasNext && !range.done(i)) {
         val next = itr.next
-        if(afterStart) {
-          val event = eventCodec.toEvent(next.message)
-          println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-          println(Printer.pretty(Printer.render(event.data)))
+        if(range.contains(i)) {
+          format.dump(i, next)
         }
-        traverse(itr, start, finish, i+1)
+        traverse(itr, range, format, i+1)
       } else {
         ()
       }
     }
 
-    val ms = new FileMessageSet(new File(config.file), false) 
+    val ms = new FileMessageSet(file, false) 
 
-    traverse(ms.iterator, config.start, config.finish)
+    traverse(ms.iterator, range, format)
   }
+ 
+  def convert(central: String): Unit = convert(new File(central), new File(central + ".local")) 
+  
+  def convert(source: File, destination: File) {
+    val eventCodec = LocalFormat.codec 
+    val ingestCodec = CentralFormat.codec 
+    
+    val src = new FileMessageSet(source, false) 
+    val dest = new FileMessageSet(destination, true) 
 
-  class Config(var file: String = "",
-               var start: Option[Int] = None,
-               var finish: Option[Int] = None)
-}
-
-object DumpCentralKafka extends Command {
-  val name = "dump_central_kafka"
-  val description = "Dump contents of central message file"
-
-  def run(args: Array[String]) {
-    val config = new Config
-    val parser = new OptionParser("yggutils dump_central_kafka") {
-      intOpt("s", "start", "<message-start>", "first message to dump", {s: Int => config.start = Some(s)})
-      intOpt("f", "finish", "<message-finish>", "last message to dump", {f: Int => config.finish = Some(f)})
-      arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
-    }
-    if (parser.parse(args)) {
-      process(config)
-    } else { 
-      parser
-    }
-  }
-
-  val eventCodec = new KafkaIngestMessageCodec
-
-  def process(config: Config) {
-
-    def traverse(itr: Iterator[MessageAndOffset], start: Option[Int], finish: Option[Int], i: Int = 0): Unit = {
-      val beforeFinish = finish.map( _ >= i ).getOrElse(true)
-      val afterStart = start.map( _ <= i ).getOrElse(true)
-      if(beforeFinish && itr.hasNext) {
-        val next = itr.next
-        if(afterStart) {
-          eventCodec.toEvent(next.message) match {
-            case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
-              println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
-              println(Printer.pretty(Printer.render(data)))
-            case _ =>
-          }
-        }
-        traverse(itr, start, finish, i+1)
-      } else {
-        ()
+    val outMessages = src.iterator.toList.map { mao =>
+      ingestCodec.toEvent(mao.message) match {
+        case EventMessage(_, event) =>
+          eventCodec.toMessage(event)  
+        case _ => sys.error("Unknown message type")
       }
     }
 
-    val ms = new FileMessageSet(new File(config.file), false)
+    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
+    dest.append(outSet)
 
-    traverse(ms.iterator, config.start, config.finish)
+    src.close
+    dest.close
   }
 
-  class Config(var file: String = "",
-               var start: Option[Int] = None,
-               var finish: Option[Int] = None)
+  class Config(var convertCentral: Option[String] = None, 
+               var dumpLocal: Option[String] = None,
+               var dumpCentral: Option[String] = None,
+               var range: MessageRange = MessageRange.ALL)
+
+  case class MessageRange(start: Option[Int], finish: Option[Int]) {
+
+    def done(i: Int): Boolean = finish.map { i >= _ }.getOrElse(false)
+
+    def contains(i: Int): Boolean =
+      (start.map{_ <= i}, finish.map{i < _}) match { 
+        case (Some(s), Some(f)) => s && f
+        case (Some(s), None   ) => s
+        case (None   , Some(f)) => f
+        case (None   , None   ) => true
+      }
+  }
+
+  object MessageRange {
+    val ALL = MessageRange(None,None)
+
+    def parse(s: String): Option[MessageRange] = {
+      val parts = s.split(":")
+      if(parts.length == 2) {
+        (parseOffset(parts(0)), parseOffset(parts(1))) match {
+          case (Right(s), Right(f)) => Some(MessageRange(s,f))
+          case _                    => None
+        }
+      } else {
+        None
+      }
+    }
+    
+    def parseOffset(s: String): Either[Unit, Option[Int]] = {
+       try {
+         Right(if(s.trim.length == 0) {
+           None
+         } else {
+           Some(s.toInt)
+         })
+       } catch {
+         case ex => Left("Parse error for: " + s)
+       }
+    }
+  }
+
+  sealed trait Format {
+    def dump(i: Int, msg: MessageAndOffset)
+  }
+
+  case object LocalFormat extends Format {
+    val codec = new KafkaEventCodec
+
+    def dump(i: Int, msg: MessageAndOffset) {
+      val event = codec.toEvent(msg.message)
+      println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
+      println(Printer.pretty(Printer.render(event.data)))
+    }
+  }
+
+  case object CentralFormat extends Format {
+    val codec = new KafkaIngestMessageCodec
+
+    def dump(i: Int, msg: MessageAndOffset) {
+      codec.toEvent(msg.message) match {
+        case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
+          println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
+          println(Printer.pretty(Printer.render(data)))
+        case _ =>
+      }
+    }
+  }
 }
 
 object ZookeeperTools extends Command {
@@ -391,7 +443,7 @@ object ZookeeperTools extends Command {
 
     def splitOn(delim: Char, s: String): (String, String) = {
       val t = s.span( _ != delim)
-      (t._1, t._2.tail)
+      (t._1, t._2.substring(1))
     }
 
     def splitUpdate(s: String): (String, String, String) = {
@@ -414,9 +466,9 @@ object ZookeeperTools extends Command {
   }
 }
 
-object IngestStatus extends Command {
-  val name = "ingest_status"
-  val description = "Dump details about ingest status"
+object IngestTools extends Command {
+  val name = "ingest"
+  val description = "Show details about ingest status"
 
   def run(args: Array[String]) {
     val config = new Config
@@ -502,52 +554,7 @@ object IngestStatus extends Command {
                var zkConn: String = "localhost:2181")
 }
 
-object KafkaConvert extends Command {
-  val name = "kafka_convert"
-  val description = "Convert central message stream to local message stream"
-  
-
-  def run(args: Array[String]) {
-    val config = new Config
-    val parser = new OptionParser("yggutils kafka_convert") {
-      arg("<central-kafka-file>", "central kafka message file", {d: String => config.file = d})
-    }
-    if (parser.parse(args)) {
-      process(config)
-    } else { 
-      parser
-    }
-  }
-
-  val eventCodec = new KafkaEventCodec
-  val ingestCodec = new KafkaIngestMessageCodec
-
-  def process(config: Config) {
-    val src = new FileMessageSet(config.src, false) 
-    val dest = new FileMessageSet(config.dest, true) 
-
-    val outMessages = src.iterator.toList.map { mao =>
-      ingestCodec.toEvent(mao.message) match {
-        case EventMessage(_, event) =>
-          eventCodec.toMessage(event)  
-        case _ => sys.error("Unknown message type")
-      }
-    }
-
-    val outSet = new ByteBufferMessageSet(messages = outMessages.toArray: _*)
-    dest.append(outSet)
-
-    src.close
-    dest.close
-  }
-
-  class Config(var file: String = "") {
-    def src() = new File(file)
-    def dest() = new File(file + ".local")
-  }
-}
-
-object BulkImport extends Command {
+object ImportTools extends Command {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
   
@@ -623,7 +630,7 @@ object BulkImport extends Command {
   )
 }
 
-object CSVConvert extends Command {
+object CSVTools extends Command {
   val name = "csv"
   val description = "Convert CSV file to JSON"
 
@@ -659,6 +666,109 @@ object CSVConvert extends Command {
     var input: String = "", 
     var delimeter: Char = ',', 
     var teaseTimestamps: Boolean = false)
+}
+
+object TokenTools extends Command with AkkaDefaults {
+  val name = "tokens"
+  val description = "Token management utils"
+    
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("yggutils csv") {
+      booleanOpt("l","list","List tokens", { b: Boolean => config.list = b })
+      opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
+      opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
+      opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
+      opt("t","tokens","Tokens collection name", {s: String => config.collection = s }) 
+      opt("r","root","root token for creation", {s: String => config.root = s })
+      opt("a","archive","Collection for deleted tokens", {s: String => config.deleted = Some(s) })
+      opt("s","servers","Mongo server config", {s: String => config.servers = s})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+  
+  def process(config: Config) {
+    try {
+      val tm = tokenManager(config)
+      try {
+        if(config.list) list(config, tm) 
+        config.newAccount.foreach { create(_, config, tm) }
+        config.delete.foreach { delete(_, config, tm) }
+      } finally {
+        Await.result(tm.close(), Duration(10, "seconds"))
+      }
+    } finally {
+      defaultActorSystem.shutdown
+    }
+  }
+
+  def tokenManager(config: Config): TokenManager = {
+    val mongo = RealMongo(config.mongoConfig)
+    new MongoTokenManager(mongo, mongo.database(config.database), config.collection, config.deletedCollection, new Timeout(10000))
+  }
+
+  def list(config: Config, tokenManager: TokenManager) {
+    val f = tokenManager.list
+    Await.result(f, Duration(10, "seconds")).foreach { t =>
+      println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
+      println("  Permissions (Path)")
+      t.permissions.path.foreach { p =>
+        println("    " + p)
+      }
+      println("  Permissions (Data)")
+      t.permissions.data.foreach { p =>
+        println("    " + p)
+      }
+      println("  Grants")
+      t.grants.foreach { g =>
+        println("    " + g)
+      }
+      println()
+    }
+  }
+
+  def create(p: String, config: Config, tokenManager: TokenManager) {
+    val perms = TestTokenManager.standardAccountPerms(p)
+    val f = tokenManager.issueNew(Some(config.root), perms, Set.empty, false)
+    Await.result(f, Duration(10, "seconds"))
+  }
+
+  def delete(t: String, config: Config, tokenManager: TokenManager) {
+    val f = tokenManager.lookup(t).flatMap { _.map { tokenManager.deleteToken(_).map{ _ => () } }.getOrElse{Future(())}}
+    Await.result(f, Duration(10, "seconds"))
+  }
+  
+  class Config(
+    var delete: Option[String] = None, 
+    var newAccount: Option[String] = None,
+    var root: String = TestTokenManager.rootUID,
+    var list: Boolean = false,
+    var database: String = "auth_v1",
+    var collection: String = "tokens",
+    var deleted: Option[String] = None,
+    var servers: String = "localhost") {
+
+    def deletedCollection(): String = {
+      deleted.getOrElse( collection + "_deleted" )
+    }
+
+    def mongoConfig(): Configuration = {
+      Configuration.parse("servers = %s".format(mongoServers()))
+    }
+
+    def mongoServers(): String = {
+      val s = servers.trim
+      if(s.startsWith("[") && s.endsWith("]")) {
+        s
+      } else {
+        "[" + s + "]"
+      }
+    }
+  }
 }
 
 object CSVToJSONConverter {
