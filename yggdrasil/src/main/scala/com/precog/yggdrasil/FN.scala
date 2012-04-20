@@ -7,21 +7,17 @@ trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] {
 trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
   def accepts: CType { type CA = A }
 
-  def isDefinedAt(a: Column[A]): Int => Boolean
-
   def apply(a: Column[A]): Column[B] 
 
   def compose[@specialized(Boolean, Int, Long, Float, Double) C](f: F1[C, A]): F1[C, B] = new F1[C, B] { 
     val accepts = f.accepts
     val returns = outer.returns
-    def isDefinedAt(c: Column[C]) = f andThen outer isDefinedAt c
     def apply(c: Column[C]): Column[B] = c |> f |> outer
   }
   
   def andThen[@specialized(Boolean, Int, Long, Float, Double) C](f: F1[B, C]): F1[A, C] = new F1[A, C] { 
     val accepts = outer.accepts
     val returns = f.returns
-    def isDefinedAt(a: Column[A]) = outer andThen f isDefinedAt a
     def apply(a: Column[A]): Column[C] = a |> outer |> f
   }
 }
@@ -30,15 +26,12 @@ trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean
   import F2._
   def accepts: (CType { type CA = A }, CType { type CA = B })
 
-  def isDefinedAt(a: Column[A], b: Column[B]): Int => Boolean
-
   def apply(a: Column[A], b: Column[B]): Column[C]
 
   def andThen[@specialized(Boolean, Int, Long, Float, Double) D](f: F1[C, D]) = new F2[A, B, D] {
     val accepts = outer.accepts
     val returns = f.returns
 
-    def isDefinedAt(a: Column[A], b: Column[B]): Int => Boolean = (row: Int) => outer(a, b).isDefinedAt(row) && f.isDefinedAt(outer(a, b))(row)
     def apply(a: Column[A], b: Column[B]): Column[D] = (new Col[A, B, C](a, b, outer) /* with MemoizingColumn[C] */) |> f
   }
 }
@@ -47,7 +40,7 @@ object F2 {
   //TODO: Minimize the scalac bug...
   private class Col[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C](a: Column[A], b: Column[B], f2: F2[A, B, C]) extends Column[C] {
     val returns = f2.returns
-    def isDefinedAt(row: Int): Boolean = f2.isDefinedAt(a, b)(row)
+    def isDefinedAt(row: Int): Boolean = f2(a, b).isDefinedAt(row)
     def apply(row: Int): C = f2(a, b)(row)
   }
 }
@@ -109,9 +102,6 @@ trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
       val accepts = outer.accepts
       val returns = outer.returns
 
-      def isDefinedAt(ca: Column[A]): Int => Boolean = 
-        apply(ca).isDefinedAt _
-
       def apply(ca: Column[A]): Column[B] = {
         if (ca != _ca) {
           _ca = ca
@@ -157,9 +147,6 @@ trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
 
       val accepts = outer.accepts
       val returns = outer.returns
-
-      def isDefinedAt(ca: Column[A], cb: Column[B]): Int => Boolean = 
-        apply(ca, cb).isDefinedAt _
 
       def apply(ca: Column[A], cb: Column[B]): Column[C] = {
         if ((ca != _ca) || (cb != _cb)) {
