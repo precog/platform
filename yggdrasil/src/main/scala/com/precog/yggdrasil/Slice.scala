@@ -25,7 +25,8 @@ trait Slice { source =>
 
     val identities = source.identities
     val columns = source.columns.get(meta) map { col =>
-                    source.columns + (CMeta(CDyn(refId), f.returns) -> (col |> f))
+                    val ctype = col.returns
+                    source.columns + (CMeta(CDyn(refId), f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
                   } getOrElse {
                     sys.error("No column found in table matching " + meta)
                   }

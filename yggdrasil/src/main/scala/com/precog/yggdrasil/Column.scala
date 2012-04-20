@@ -6,23 +6,18 @@ trait Column[@specialized(Boolean, Int, Long, Float, Double) A] extends Returnin
 
   def remap(f: PartialFunction[Int, Int]): Column[A] = new Remap(f) with MemoizingColumn[A]
 
-  def |> [@specialized(Boolean, Int, Long, Float, Double) B](f: F1[_, B]): Column[B] = new Thrush(f) with MemoizingColumn[B]
+  def |> [@specialized(Boolean, Int, Long, Float, Double) B](f: F1[A, B]): Column[B] = new Thrush(f) with MemoizingColumn[B]
 
   private class Remap(f: PartialFunction[Int, Int]) extends Column[A] {
     val returns = outer.returns
-    def isDefinedAt(row: Int): Boolean = f.isDefinedAt(row)
-    def apply(row: Int) = outer.apply(f(row))
+    def isDefinedAt(row: Int): Boolean = f.isDefinedAt(row) && outer.isDefinedAt(f(row))
+    def apply(row: Int) = outer(f(row))
   }
 
-  private class Thrush[B](f: F1[_, B]) extends Column[B] {
+  private class Thrush[B](f: F1[A, B]) extends Column[B] {
     val returns = f.returns
-    def isDefinedAt(row: Int) = 
-      outer.isDefinedAt(row) && 
-      outer.returns == f.accepts &&
-      outer.returns.cast1(f).isDefinedAt(outer.returns.cast0(outer))(row)
-
-    def apply(row: Int): B = 
-      outer.returns.cast1(f)(outer.returns.cast0(outer))(row)
+    def isDefinedAt(row: Int) = outer.isDefinedAt(row) && f.isDefinedAt(outer)(row)
+    def apply(row: Int): B = f(outer)(row)
   }
 }
 

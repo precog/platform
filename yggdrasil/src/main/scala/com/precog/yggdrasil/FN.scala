@@ -27,6 +27,7 @@ trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean
 }
 
 trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
+  import F2._
   def accepts: (CType { type CA = A }, CType { type CA = B })
 
   def isDefinedAt(a: Column[A], b: Column[B]): Int => Boolean
@@ -37,23 +38,25 @@ trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean
     val accepts = outer.accepts
     val returns = f.returns
 
-    def isDefinedAt(a: Column[A], b: Column[B]): Int => Boolean = f.isDefinedAt(outer(a, b))
-    def apply(a: Column[A], b: Column[B]): Column[D] = (new FooCol(a, b)) |> f
-  }
-
-  //TODO: Minimize the scalac bug...
-  private class FooCol(a: Column[A], b: Column[B]) extends Col(a, b) with MemoizingColumn[C]
-
-  private class Col(a: Column[A], b: Column[B]) extends Column[C] {
-    val returns = outer.returns
-    def isDefinedAt(row: Int): Boolean = outer.isDefinedAt(a, b)(row)
-    def apply(row: Int): C = outer(a, b)(row)
+    def isDefinedAt(a: Column[A], b: Column[B]): Int => Boolean = (row: Int) => outer(a, b).isDefinedAt(row) && f.isDefinedAt(outer(a, b))(row)
+    def apply(a: Column[A], b: Column[B]): Column[D] = (new Col[A, B, C](a, b, outer) /* with MemoizingColumn[C] */) |> f
   }
 }
 
-// Pure functions that can be promoted to F1s.
+object F2 {
+  //TODO: Minimize the scalac bug...
+  private class Col[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C](a: Column[A], b: Column[B], f2: F2[A, B, C]) extends Column[C] {
+    val returns = f2.returns
+    def isDefinedAt(row: Int): Boolean = f2.isDefinedAt(a, b)(row)
+    def apply(row: Int): C = f2(a, b)(row)
+  }
+}
+
+// Pure functions that can be promoted to FNs.
 
 trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
+  import F1P._
+
   def accepts: CType { type CA = A }
   def isDefinedAt(a: A): Boolean
   def apply(a: A): B
@@ -112,23 +115,25 @@ trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
       def apply(ca: Column[A]): Column[B] = {
         if (ca != _ca) {
           _ca = ca
-          _value = new FooCol(_ca)
+          _value = new Col[A, B](_ca, outer) //with MemoizingColumn[B]
         }
 
         _value
       }
     }
   }
+}
 
-  private class FooCol(ca: Column[A]) extends Col(ca) with MemoizingColumn[B]
-  private class Col(ca: Column[A]) extends Column[B] {
-    val returns = outer.returns
-    def isDefinedAt(row: Int) = ca.isDefinedAt(row) && outer.isDefinedAt(ca(row))
-    def apply(row: Int) = outer.apply(ca(row))
+object F1P {
+  private class Col[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B](ca: Column[A], f: F1P[A, B]) extends Column[B] {
+    val returns = f.returns
+    def isDefinedAt(row: Int) = ca.isDefinedAt(row) && f.isDefinedAt(ca(row))
+    def apply(row: Int) = f(ca(row))
   }
 }
 
 trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
+  import F2P._
   def accepts: (CType { type CA = A }, CType { type CA = B })
   def isDefinedAt(a: A, b: B): Boolean
   def apply(a: A, b: B): C
@@ -139,7 +144,7 @@ trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
     new F2P[A, B, D] {
       val accepts = outer.accepts
       val returns = f.returns
-      def isDefinedAt(a: A, b: B) = f.isDefinedAt(outer(a, b))
+      def isDefinedAt(a: A, b: B) = outer.isDefinedAt(a, b) && f.isDefinedAt(outer(a, b))
       def apply(a: A, b: B): D = f(outer(a, b))
     }
   }
@@ -160,19 +165,20 @@ trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
         if ((ca != _ca) || (cb != _cb)) {
           _ca = ca
           _cb = cb
-          _value = new FooCol(ca, cb) 
+          _value = new Col[A, B, C](ca, cb, outer) //with MemoizingColumn[C]
         }
 
         _value
       }
     }
   }
+}
 
-  private class FooCol(ca: Column[A], cb: Column[B]) extends Col(ca, cb) with MemoizingColumn[C]
-  private class Col(ca: Column[A], cb: Column[B]) extends Column[C] {
-    val returns = outer.returns
-    def isDefinedAt(row: Int) = ca.isDefinedAt(row) && cb.isDefinedAt(row) && outer.isDefinedAt(ca(row), cb(row))
-    def apply(row: Int) = outer.apply(ca(row), cb(row))
+object F2P {
+  private class Col[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C](ca: Column[A], cb: Column[B], f: F2P[A, B, C]) extends Column[C] {
+    val returns = f.returns
+    def isDefinedAt(row: Int) = ca.isDefinedAt(row) && cb.isDefinedAt(row) && f.isDefinedAt(ca(row), cb(row))
+    def apply(row: Int) = f.apply(ca(row), cb(row))
   }
 }
 
