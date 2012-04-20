@@ -113,7 +113,7 @@ object DatabaseTools extends Command {
     val parser = new OptionParser("yggutils db") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
       opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
-      booleanOpt("v", "verbose", "<vebose>", "show selectors as well", {v: Boolean => config.verbose = v})
+      opt("v", "verbose", "show selectors as well", {config.verbose = true})
       arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
     }
     if (parser.parse(args)) {
@@ -562,7 +562,7 @@ object ImportTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
-      booleanOpt("v", "verbose", "verbose logging", {b: Boolean => config.verbose = b})
+      opt("v", "verbose", "verbose logging", { config.verbose = true })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -644,9 +644,8 @@ object CSVTools extends Command {
           sys.error("Invalid delimeter")
         }
       })
-      booleanOpt("t","mapTimestamps","Map timestamps to expected format.", {b: Boolean => 
-        config.teaseTimestamps = b
-      })
+      opt("t","mapTimestamps","Map timestamps to expected format.", { config.teaseTimestamps = true })
+      opt("v","verbose","Map timestamps to expected format.", { config.verbose = true })
       arg("<csv_file>", "csv file to convert (headers required)", {s: String => config.input = s}) 
     }
     if (parser.parse(args)) {
@@ -657,7 +656,7 @@ object CSVTools extends Command {
   }
 
   def process(config: Config) {
-    CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps).foreach {
+    CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps, config.verbose).foreach {
       case jval => println(Printer.compact(Printer.render(jval)))
     }
   }
@@ -665,7 +664,8 @@ object CSVTools extends Command {
   class Config(
     var input: String = "", 
     var delimeter: Char = ',', 
-    var teaseTimestamps: Boolean = false)
+    var teaseTimestamps: Boolean = false,
+    var verbose: Boolean = false)
 }
 
 object TokenTools extends Command with AkkaDefaults {
@@ -675,7 +675,7 @@ object TokenTools extends Command with AkkaDefaults {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
-      booleanOpt("l","list","List tokens", { b: Boolean => config.list = b })
+      opt("l","list","List tokens", { config.list = true })
       opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
       opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
       opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
@@ -772,7 +772,7 @@ object TokenTools extends Command with AkkaDefaults {
 }
 
 object CSVToJSONConverter {
-  def convert(file: String, delimeter: Char = ',', timestampConversion: Boolean = false): Iterator[JValue] = new Iterator[JValue] {
+  def convert(file: String, delimeter: Char = ',', timestampConversion: Boolean = false, verbose: Boolean = false): Iterator[JValue] = new Iterator[JValue] {
 
     private val reader = new CSVReader(new FileReader(file), delimeter)
     private val header = reader.readNext 
@@ -782,7 +782,7 @@ object CSVToJSONConverter {
 
     def next(): JValue = {
       val result = JObject(header.zip(line).map{ 
-        case (k, v) => JField(k, parse(v, timestampConversion))
+        case (k, v) => JField(k, parse(v, timestampConversion, verbose))
       }.toList)
       line = reader.readNext
       result
@@ -791,11 +791,12 @@ object CSVToJSONConverter {
 
   private val Timestamp = """^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}\.\d{3})\d{0,3}$""".r
 
-  def parse(s: String, ts: Boolean): JValue = {
+  def parse(s: String, ts: Boolean = false, verbose: Boolean = false): JValue = {
     try {
       JsonParser.parse(s)
     } catch {
       case ex =>
+        System.err.println("Error parsing: " + s)
         s match {
           case Timestamp(d, t) if (ts) => JString("%sT%sZ".format(d,t))
           case s                       => JString(s)
