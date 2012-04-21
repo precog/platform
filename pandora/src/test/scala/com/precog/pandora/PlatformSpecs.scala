@@ -3,6 +3,7 @@ package pandora
 
 import common.VectorCase
 import common.kafka._
+import common.security._
 
 import daze._
 import daze.memoization._
@@ -41,6 +42,7 @@ class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
     type YggConfig = platformSpecs.YggConfig
     lazy val yggConfig = platformSpecs.yggConfig
     lazy val yggState = shardState 
+    lazy val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
   
   object storage extends Storage

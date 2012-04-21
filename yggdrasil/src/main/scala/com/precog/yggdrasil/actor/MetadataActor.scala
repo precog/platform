@@ -86,7 +86,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     }
   } 
 
-  case class ResolvedSelector(selector: JPath, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
+  case class ResolvedSelector(selector: JPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
     
     // probably should enforce that only one column will match in someway
     // but for now I am assuming it is true (which within this narrow context
@@ -104,7 +104,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
   @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
     projections.flatMap {
       case (desc, meta) => desc.columns.collect {
-        case col @ ColumnDescriptor(_,sel,_,_) if matches(path,selector)(col) => ResolvedSelector(sel, desc, meta)
+        case col @ ColumnDescriptor(_,sel,_,auth) if matches(path,selector)(col) => ResolvedSelector(sel, auth, desc, meta)
       }
     }(collection.breakOut)
 
@@ -162,13 +162,13 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     }
 
     def convertValues(values: Seq[ResolvedSelector]): Set[PathMetadata] = {
-      values.foldLeft(Map[(JPath, CType), Map[ProjectionDescriptor, ColumnMetadata]]()) {
-        case (acc, rs @ ResolvedSelector(sel, desc, meta)) => 
+      values.foldLeft(Map[(JPath, CType), (Authorities, Map[ProjectionDescriptor, ColumnMetadata])]()) {
+        case (acc, rs @ ResolvedSelector(sel, auth, desc, meta)) => 
           val key = (sel, rs.columnType)
-          val update = acc.get(key).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
-          acc + (key -> update)
+          val update = acc.get(key).map(_._2).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
+          acc + (key -> (auth, update))
       }.map {
-        case ((sel, colType), meta) => PathValue(colType, meta) 
+        case ((sel, colType), (auth, meta)) => PathValue(colType, auth, meta) 
       }(collection.breakOut)
     }
 

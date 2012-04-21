@@ -586,6 +586,7 @@ object ImportTools extends Command {
       }
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
       val yggState = YggState(dir, Map.empty, Map.empty)
+      val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
     }
     Await.result(shard.actorsStart, Duration(60, "seconds"))
     config.input.foreach {
