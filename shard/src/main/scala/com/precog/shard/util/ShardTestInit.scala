@@ -28,6 +28,7 @@ import com.precog.yggdrasil.actor._
 import java.io.File
 
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 import akka.util.Duration
 
@@ -51,6 +52,7 @@ object ShardTestInit extends App {
     }
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
     val yggState = YggState(dir, Map.empty, Map.empty)
+    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 
   def usage() {

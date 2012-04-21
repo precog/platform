@@ -33,13 +33,14 @@ import akka.util.Timeout
 trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def yggState: YggState
+  def accessControl: AccessControl
 
   private lazy implicit val dispatcher = actorSystem.dispatcher
   private lazy val metadata: StorageMetadata = new ActorStorageMetadata(metadataActor)
   
   def userMetadataView(uid: String): MetadataView = {
     implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-    new UserMetadataView(uid, new UnlimitedAccessControl, metadata)
+    new UserMetadataView(uid, accessControl, metadata)
   }
   
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] = {

@@ -161,7 +161,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       classifiedChildren map {
         case LeafChild(cType, token)  => 
-          PathValue(cType, projectionDescriptorMap(path, selector, cType, token))
+          PathValue(cType, Authorities(Set(token)), projectionDescriptorMap(path, selector, cType, token))
         case IndexChild(i) =>
           PathIndex(i, extractPathMetadata(path, selector \ i, in))
         case FieldChild(n) =>

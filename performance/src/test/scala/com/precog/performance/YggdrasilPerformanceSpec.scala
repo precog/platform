@@ -22,6 +22,7 @@ package com.precog.performance
 import org.specs2.mutable.Specification
 
 import com.precog.common._
+import com.precog.common.security._
 import com.precog.common.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
@@ -527,7 +528,7 @@ class TestShard(config: Configuration, dataDir: File) extends ActorYggShard[Iter
     lazy val config = TestShard.this.config
   }
   lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
-
+  lazy val accessControl: AccessControl = new UnlimitedAccessControl
   def waitForRoutingActorIdle() {
     val td = Duration(5000, "seconds")
     implicit val to = new Timeout(td)
