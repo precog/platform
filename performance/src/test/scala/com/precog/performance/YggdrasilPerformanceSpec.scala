@@ -383,6 +383,8 @@ histogram
 
       Await.result(shard.storeBatch(msgs, timeout), timeout)
 
+      Thread.sleep(10000)
+
       val result = executor.execute("token", "load(//test/null)")
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
@@ -470,6 +472,8 @@ histogram
       }
 
       Await.result(shard.storeBatch(msgs, timeout), timeout)
+      
+      Thread.sleep(10000)
 
       val result = executor.execute("token", "load(//test/mixed)")
       result must beLike {
@@ -528,7 +532,7 @@ class TestShard(config: Configuration, dataDir: File) extends ActorYggShard[Iter
     lazy val config = TestShard.this.config
   }
   lazy val yggState: YggState = YggState.restore(dataDir).unsafePerformIO.toOption.get 
-  lazy val accessControl: AccessControl = new UnlimitedAccessControl
+  lazy val accessControl: AccessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   def waitForRoutingActorIdle() {
     val td = Duration(5000, "seconds")
     implicit val to = new Timeout(td)
