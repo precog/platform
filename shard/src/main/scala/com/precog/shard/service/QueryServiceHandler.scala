@@ -23,7 +23,7 @@ import com.precog.common.security._
 class QueryServiceHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpResponse[JValue]]] with Logging {
 
-  val Command = """:(\w+)\(([^)]*)\)""".r 
+  val Command = """:(\w+)\s+(.+)""".r 
 
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path, q: String) => 
@@ -33,16 +33,10 @@ extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpRe
         Future(HttpResponse[JValue](HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available.")))
       } else {
         q.trim match {
-          case Command("browse", arg) => 
-            queryExecutor.browse(t.uid, Path(arg)).map {
-              case Success(r) => HttpResponse[JValue](OK, content = Some(r))
-              case Failure(e) => HttpResponse[JValue](BadRequest, content = Some(JString("Error browsing path: " + arg)))
-            }
-          case Command("structure", arg) =>
-            queryExecutor.structure(t.uid, Path(arg)).map {
-              case Success(r) => HttpResponse[JValue](OK, content = Some(r))
-              case Failure(e) => HttpResponse[JValue](BadRequest, content = Some(JString("Error showing structure for path: " + arg)))
-            }
+          case Command("ls", arg) => list(t.uid, Path(arg.trim))
+          case Command("list", arg) => list(t.uid, Path(arg.trim))
+          case Command("ds", arg) => describe(t.uid, Path(arg.trim))
+          case Command("describe", arg) => describe(t.uid, Path(arg.trim))
           case qt =>
             Future(queryExecutor.execute(t.uid, qt) match {
               case Success(result)               => HttpResponse[JValue](OK, content = Some(result))
@@ -56,6 +50,21 @@ extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpRe
             })
         }
       })
+
+  }
+  
+  def list(u: UID, p: Path) = {
+    queryExecutor.browse(u, p).map {
+      case Success(r) => HttpResponse[JValue](OK, content = Some(r))
+      case Failure(e) => HttpResponse[JValue](BadRequest, content = Some(JString("Error listing path: " + p)))
+    }
+  }
+
+  def describe(u: UID, p: Path) = {
+    queryExecutor.structure(u, p).map {
+      case Success(r) => HttpResponse[JValue](OK, content = Some(r))
+      case Failure(e) => HttpResponse[JValue](BadRequest, content = Some(JString("Error describing path: " + p)))
+    }
   }
 
   val metadata = Some(DescriptionMetadata(
