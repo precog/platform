@@ -68,6 +68,7 @@ object YggUtils {
 
   val commands = List(
     DatabaseTools,
+    ChownTools,
     KafkaTools,
     IngestTools,
     ZookeeperTools,
@@ -108,7 +109,6 @@ object DatabaseTools extends Command {
   val description = "describe db paths and selectors" 
   
   def run(args: Array[String]) {
-    println(args.mkString(","))
     val config = new Config
     val parser = new OptionParser("yggutils db") {
       opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
@@ -123,15 +123,43 @@ object DatabaseTools extends Command {
     }
   }
 
-  implicit val tOrdering = new Ordering[(JPath, CType)] {
-    def compare(a: (JPath, CType), b: (JPath, CType)): Int = {
-      val jord = implicitly[Ordering[JPath]]
-      val sord = implicitly[Ordering[String]] 
-      val jo = jord.compare(a._1, b._1)
-      if(jo != 0) {
-        jo 
+  implicit val usord = new Ordering[Seq[UID]] {
+    val sord = implicitly[Ordering[String]]
+
+    def compare(a: Seq[UID], b: Seq[UID]) = order(a,b)
+
+    private def order(a: Seq[UID], b: Seq[UID], i: Int = 0): Int = {
+      if(a.length < i && b.length < i) {
+        val comp = sord.compare(a(i), b(i))
+        if(comp != 0) comp else order(a,b,i+1)
       } else {
-        sord.compare(a._2.toString, b._2.toString)
+        if(a.length == b.length) {
+          0 
+        } else if(a.length < i) {
+          +1 
+        } else {
+          -1
+        }
+      }
+    }
+  }
+
+  implicit val t3ord = new Ordering[(JPath, CType, Seq[UID])] {
+    val jord = implicitly[Ordering[JPath]]
+    val sord = implicitly[Ordering[String]]
+    val ssord = implicitly[Ordering[Seq[UID]]]
+
+    def compare(a: (JPath, CType, Seq[UID]), b: (JPath, CType, Seq[UID])) = {
+      val j = jord.compare(a._1,b._1)
+      if(j != 0) {
+        j 
+      } else {
+        val c = sord.compare(CType.nameOf(a._2), CType.nameOf(b._2))
+        if(c != 0) {
+          c 
+        } else {
+          ssord.compare(a._3, b._3)
+        }
       }
     }
   }
@@ -151,28 +179,29 @@ object DatabaseTools extends Command {
     }
   }
 
-  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType)]] = {
+  def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]] = {
     implicit val pord = new Ordering[Path] {
       val sord = implicitly[Ordering[String]] 
       def compare(a: Path, b: Path) = sord.compare(a.toString, b.toString)
     }
-    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, CType)]]()) {
+
+    descs.foldLeft(SortedMap[Path,SortedSet[(JPath, CType, Seq[UID])]]()) {
       case (acc, desc) =>
        desc.columns.foldLeft(acc) {
-         case (acc, ColumnDescriptor(p, s, t, _)) =>
-           val update = acc.get(p) map { _ + (s -> t) } getOrElse { SortedSet((s, t)) } 
+         case (acc, ColumnDescriptor(p, s, t, u)) =>
+           val update = acc.get(p) map { _ + Tuple3(s, t, u.uids.toSeq) } getOrElse { SortedSet(Tuple3(s, t, u.uids.toSeq)) } 
            acc + (p -> update) 
        }
     }
   }
 
-  def show(summary: SortedMap[Path, SortedSet[(JPath, CType)]], verbose: Boolean) {
+  def show(summary: SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]], verbose: Boolean) {
     summary.foreach { 
       case (p, sels) =>
         println(p)
         if(verbose) {
           sels.foreach {
-            case (s, ct) => println("  %s -> %s".format(s, ct))
+            case (s, ct, u) => println("  %s -> %s %s".format(s, ct, u.mkString("[",",","]")))
           }
           println
         }
@@ -188,6 +217,112 @@ object DatabaseTools extends Command {
                var selector: Option[JPath] = None,
                var dataDir: String = ".",
                var verbose: Boolean = false)
+}
+
+object ChownTools extends Command {
+  val name = "dbchown" 
+  val description = "change ownership" 
+ 
+  val projectionDescriptor = "projection_descriptor.json" 
+
+  def run(args: Array[String]) {
+    val config = new Config
+    val parser = new OptionParser("yggutils dbchown") {
+      opt("p", "path", "<path>", "root data path", {p: String => config.path = Some(Path(p))})
+      opt("s", "selector", "<selector>", "root object selector", {s: String => config.selector = Some(JPath(s))})
+      opt("o", "owners", "<owners>", "new owners TOKEN1,TOKEN2", {s: String => config.owners = s.split(",").toSet})
+      opt("d", "dryrun", "dry run only lists changes to be made", { config.dryrun = true }) 
+      arg("<datadir>", "shard data dir", {d: String => config.dataDir = d})
+    }
+    if (parser.parse(args)) {
+      process(config)
+    } else { 
+      parser
+    }
+  }
+
+  def process(config: Config) {
+    println("Processing %s changing ownership for %s:%s to %s".format(config.dataDir, 
+                                                         config.path.map(_.toString).getOrElse("*"),
+                                                         config.selector.map(_.toString).getOrElse(".*"),
+                                                         config.owners.mkString("[",",","]")))
+   
+    val raw = load(config.dataDir)
+    val filtered = filter(config.path, config.selector, raw)
+    val updated = changeOwners(config.path, config.selector, config.owners, filtered)
+    save(updated, config.dryrun)
+  }
+
+  def load(dataDir: String) = {
+    val dir = new File(dataDir)
+    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
+      (d, readDescriptor(d))
+    }
+  }
+
+  def readDescriptor(dir: File): ProjectionDescriptor = {
+    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, projectionDescriptor))
+    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
+  }
+
+  def filter(path: Option[Path], selector: Option[JPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
+    descs.filter {
+      case (_, proj) =>
+        proj.columns.exists {
+          case col => path.map { _ == col.path }.getOrElse(true) &&
+                      selector.map { _ == col.selector }.getOrElse(true)
+
+        }
+    }
+  }
+
+  def changeOwners(path: Option[Path], selector: Option[JPath], owners: Set[String], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
+    descs.map {
+      case (f, proj) => (f, changeOwners(path, selector, owners, proj))
+    }
+  }
+
+  private def changeOwners(path: Option[Path], selector: Option[JPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
+    val ics = proj.indexedColumns.map {
+      case (col, idx) => (updateColumnDescriptor(path, selector, owners, col), idx)
+    }
+    val srt = proj.sorting.map {
+      case (col, sort) => (updateColumnDescriptor(path, selector, owners, col), sort)
+    }
+
+    ProjectionDescriptor(ics, srt).toOption.get
+  }
+
+  private def updateColumnDescriptor(path: Option[Path], selector: Option[JPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
+      if(path.map { _ == col.path }.getOrElse(true) &&
+         selector.map { _ == col.selector }.getOrElse(true)) {
+        ColumnDescriptor(col.path, col.selector, col.valueType, Authorities(owners))
+      } else { 
+        col
+      }
+  }
+
+  def save(descs: Array[(File, ProjectionDescriptor)], dryrun: Boolean) {
+    descs.foreach {
+      case (f, proj) =>
+        val pd = new File(f, projectionDescriptor)
+        val output = Printer.pretty(Printer.render(proj.serialize))
+        if(dryrun) {
+          println("Replacing %s with\n%s".format(pd, output)) 
+        } else {
+          IOUtils.safeWriteToFile(output, pd).unsafePerformIO match {
+            case Success(_) =>
+            case Failure(e) => println("Error update: %s - %s".format(pd, e))
+          }
+        }
+    }
+  }
+
+  class Config(var owners: Set[String] = Set.empty,
+               var path: Option[Path] = None, 
+               var selector: Option[JPath] = None,
+               var dataDir: String = ".",
+               var dryrun: Boolean = false)
 }
 
 object KafkaTools extends Command {
