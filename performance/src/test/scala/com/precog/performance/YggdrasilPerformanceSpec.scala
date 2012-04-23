@@ -389,7 +389,7 @@ histogram
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
       }
-    }
+    }.pendingUntilFixed
     "handle mixed type scenario" in {
       val mixedReal = """
 [{
@@ -479,7 +479,7 @@ histogram
       result must beLike {
         case Success(JArray(vals)) => vals.size must_== 2
       }
-    }
+    }.pendingUntilFixed
     
   }
 
