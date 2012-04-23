@@ -184,7 +184,7 @@ trait YggdrasilQueryExecutor
         case PathValue(t, _, _) => JString(CType.nameOf(t))
       }.toList)
 
-      JObject(fields :+ JField("values", types))
+      JObject(fields :+ JField("types", types))
     }
 
     futRoot.map { pr => Success(transform(pr.children)) } 
