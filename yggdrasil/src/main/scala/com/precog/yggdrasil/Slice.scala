@@ -25,74 +25,125 @@ import scalaz.{Identity => _, _}
 import scalaz.Scalaz._
 import scalaz.Ordering._
 
-case class SliceF1s(ref: CRef, f1s: Set[F1[_, _]])
-case class SliceF2s(ref1: CRef, ref2: CRef, f2s: Set[F2[_, _, _]])
-
 trait Slice { source =>
   import Slice._
+
+  def identities: Seq[Column[Identity]]
+  def columns: Map[VColumnRef, Column[_]]
 
   def idCount: Int
   def size: Int
   def isEmpty: Boolean = size == 0
 
-  def identities: Seq[Column[Identity]]
-  def columns: Map[CMeta, Column[_]]
+  def compareIdentityPrefix(other: Slice, prefixLength: Int, srow: Int, orow: Int): Ordering = {
+    var ii = 0
+    var result: Ordering = EQ
+    while (ii < prefixLength && (result eq EQ)) {
+      val i1: Long = identities(ii)(srow)
+      val i2: Long = other.identities(ii)(orow)
+      if (i1 < i2) result = LT else if (i1 > i1) result = GT
+      ii += 1
+    }
 
-  def map(meta: CMeta, refId: Long)(f: F1[_, _]): Slice = new Slice {
+    result
+  }
+
+  def map(oldId: VColumnId, newId: VColumnId)(f: F1[_, _]): Slice = new Slice {
+    private val argRef = VColumnRef(oldId, f.accepts)
     val idCount = source.idCount
     val size = source.size
 
     val identities = source.identities
-    val columns = source.columns.get(meta) map { col =>
+    val columns = source.columns.get(argRef) map { col =>
                     val ctype = col.returns
-                    source.columns + (CMeta(CDyn(refId), f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
+                    source.columns + (VColumnRef(newId, f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
                   } getOrElse {
-                    sys.error("No column found in table matching " + meta)
+                    sys.error("No column found in table matching " + argRef)
                   }
   }
 
-  def map(cref: CRef, refId: Long)(f: SliceF1s): Slice = {
-    f.f1s.foldLeft(source) { (slice, f1) => slice.map(CMeta(cref, f1.accepts), refId)(f1) }
+  def remap(pf: PartialFunction[Int, Int]) = new Slice {
+    val idCount = source.idCount
+    val size = source.size
+    val identities = source.identities.map(_.remap(pf))
+    val columns = source.columns.mapValues(_.remap(pf))
   }
 
-  def map2(m1: CMeta, m2: CMeta, refId: Long)(f: F2[_, _, _]): Slice = new Slice {
+  def split(idx: Int): (Slice, Slice) = (
+    new Slice {
+      val idCount = source.idCount
+      val size = idx
+
+      val identities = source.identities map {
+        _ remap {
+          case i if i < idx => i
+        }
+      }
+
+      val columns = source.columns.mapValues {
+        _ remap {
+          case i if i < idx => i
+        }
+      }
+    },
+    new Slice {
+      val idCount = source.idCount
+      val size = source.size - idx
+      val identities = source.identities map {
+        _ remap {
+          case i if i < size => i + idx
+        }
+      }
+
+      val columns = source.columns.mapValues {
+        _ remap {
+          case i if i < size => i + idx
+        }
+      }
+    }
+  )
+    
+
+  def map2(id_1: VColumnId, id_2: VColumnId, newId: VColumnId)(f: F2[_, _, _]): Slice = new Slice {
+    private val ref_1 = VColumnRef(id_1, f.accepts._1)
+    private val ref_2 = VColumnRef(id_2, f.accepts._2)
+    private val refResult = VColumnRef(newId, f.returns) 
+
     val idCount = source.idCount
     val size = source.size
 
     val identities = source.identities
     val columns = {
       val cfopt = for {
-        c1 <- source.columns.get(m1)
-        c2 <- source.columns.get(m2)
+        c1 <- source.columns.get(ref_1)
+        c2 <- source.columns.get(ref_2)
       } yield {
-        val fl  = m1.ctype.cast2_1(f)
-        val flr = m2.ctype.cast2_2(fl)
-        flr(m1.ctype.cast0(c1), m2.ctype.cast0(c2))
+        (f.accepts, f.returns) match {
+          case ((CBoolean, CBoolean), CBoolean) => f.asInstanceOf[F2[Boolean, Boolean, Boolean]](c1.asInstanceOf[Column[Boolean]], c2.asInstanceOf[Column[Boolean]])
+          case ((CInt, CInt), CInt) => f.asInstanceOf[F2[Int, Int, Int]](c1.asInstanceOf[Column[Int]], c2.asInstanceOf[Column[Int]])
+          case ((CLong, CLong), CLong) => f.asInstanceOf[F2[Long, Long, Long]](c1.asInstanceOf[Column[Long]], c2.asInstanceOf[Column[Long]])
+          case ((CFloat, CFloat), CFloat) => f.asInstanceOf[F2[Float, Float, Float]](c1.asInstanceOf[Column[Float]], c2.asInstanceOf[Column[Float]])
+          case ((CDouble, CDouble), CDouble) => f.asInstanceOf[F2[Double, Double, Double]](c1.asInstanceOf[Column[Double]], c2.asInstanceOf[Column[Double]])
+          case _ => f.applyCast(c1, c2)
+        }
       }
 
       cfopt map { cf => 
-        source.columns + (CMeta(CDyn(refId), cf.returns) -> cf)
+        source.columns + (refResult -> cf)
       } getOrElse {
-        sys.error("No column(s) found in table matching " + m1 + " and/or " + m2)
+        sys.error("No column(s) found in table matching " + ref_1 + " and/or " + ref_2)
       }
     }
   }
 
-  def map2(cref: CRef, refId: Long)(f: SliceF2s): Slice = {
-    f.f2s.foldLeft(source) { (slice, f2) => 
-      val (a1, a2) = f2.accepts
-      slice.map2(CMeta(cref, a1), CMeta(cref, a2), refId)(f2) 
-    }
-  }
-
-
-  def filter(fx: (CMeta, F1[_, Boolean])*): Slice = {
-    assert(fx forall { case (m, f0) => columns contains m })
+  def filter(fx: (VColumnId, F1[_, Boolean])*): Slice = {
+    assert(fx forall { case (id, f1) => columns contains VColumnRef(id, f1.accepts) })
     new Slice {
       private lazy val retained: Vector[Int] = {
-        val f0x = fx map { case (m, f0) => m.ctype.cast1(f0)(m.ctype.cast0(columns(m))) }
+        val f1x = fx map { case (id, f1) => f1.applyCast(columns(VColumnRef(id, f1.accepts))) }
+
         @tailrec def check(i: Int, acc: Vector[Int]): Vector[Int] = {
-          if (i < source.size) check(i + 1, if (f0x.forall(_(i))) acc :+ i else acc)
+          if (i < source.size) check(i + 1, if (f1x.forall(_(i))) acc :+ i else acc)
           else acc
         }
 
@@ -137,7 +188,7 @@ trait Slice { source =>
     }
   }
 
-  def sortByValues(meta: CMeta*): Slice = {
+  def sortByValues(meta: VColumnRef*): Slice = {
     assert(meta.length <= source.idCount)
     new Slice {
       private val sortedIndices: Array[Int] = {
@@ -201,10 +252,10 @@ trait Slice { source =>
   }
 }
 
-class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[CMeta, Object]) extends Slice {
+class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[VColumnRef, Object /* Array[_] */]) extends Slice {
   val idCount = idsData.length
   val identities = idsData map { Column.forArray(CLong, _) }
-  val columns: Map[CMeta, Column[_]] = data map { case (m @ CMeta(_, ctype), arr) => m -> Column.forArray(ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
+  val columns: Map[VColumnRef, Column[_]] = data map { case (m @ VColumnRef(_, ctype), arr) => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
 }
 
 object Slice {

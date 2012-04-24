@@ -20,13 +20,15 @@
 package com.precog.yggdrasil
 
 trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] { 
-  def returns: CType { type CA = A }
+  val returns: CType { type CA = A }
 }
 
-trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
+sealed trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
   def accepts: CType { type CA = A }
 
   def apply(a: Column[A]): Column[B] 
+
+  def applyCast(a: Column[_]) = apply(a.asInstanceOf[Column[A]])
 
   def compose[@specialized(Boolean, Int, Long, Float, Double) C](f: F1[C, A]): F1[C, B] = new F1[C, B] { 
     val accepts = f.accepts
@@ -41,10 +43,13 @@ trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean
   }
 }
 
-trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
-  def accepts: (CType { type CA = A }, CType { type CA = B })
+sealed trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
+  val accepts: (CType { type CA = A }, CType { type CA = B })
 
   def apply(a: Column[A], b: Column[B]): Column[C]
+
+  def applyCast(a: Column[_], b: Column[_]): Column[C] = 
+    apply(a.asInstanceOf[Column[A]], b.asInstanceOf[Column[B]])
 
   def andThen[@specialized(Boolean, Int, Long, Float, Double) D](f: F1[C, D]) = new F2[A, B, D] {
     val accepts = outer.accepts
@@ -154,4 +159,14 @@ trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
       }
     }
   }
+}
+
+trait UnaryOpSet {
+  def add(f: F1P[_, _]): UnaryOpSet
+  def choose[A](argt: CType { type CA = A }): F1P[A, _]
+}
+
+trait BinaryOpSet {
+  def add(f: F2P[_, _, _]): BinaryOpSet
+  def choose[A, B](arg1t: CType { type CA = A }, arg2t: CType { type CA = B }): F2P[A, B, _]
 }
