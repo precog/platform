@@ -10,7 +10,11 @@ trait Slice { source =>
   import Slice._
 
   def identities: Seq[Column[Identity]]
-  def columns: Map[VColumnRef, Column[_]]
+  protected[yggdrasil] def columns: Map[VColumnRef[_], Column[_]]
+  def column[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[Column[A]] = {
+    columns.get(ref).map(_.asInstanceOf[Column[A]])
+  }
+
 
   def idCount: Int
   def size: Int
@@ -30,14 +34,14 @@ trait Slice { source =>
   }
 
   def map(oldId: VColumnId, newId: VColumnId)(f: F1[_, _]): Slice = new Slice {
-    private val argRef = VColumnRef(oldId, f.accepts)
+    private val argRef = VColumnRef[f.accepts.CA](oldId, f.accepts)
     val idCount = source.idCount
     val size = source.size
 
     val identities = source.identities
-    val columns = source.columns.get(argRef) map { col =>
+    val columns = source.column(argRef) map { col =>
                     val ctype = col.returns
-                    source.columns + (VColumnRef(newId, f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
+                    source.columns + (VColumnRef[f.returns.CA](newId, f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
                   } getOrElse {
                     sys.error("No column found in table matching " + argRef)
                   }
@@ -169,7 +173,7 @@ trait Slice { source =>
     }
   }
 
-  def sortByValues(meta: VColumnRef*): Slice = {
+  def sortByValues(meta: VColumnRef[_]*): Slice = {
     assert(meta.length <= source.idCount)
     new Slice {
       private val sortedIndices: Array[Int] = {
@@ -233,10 +237,21 @@ trait Slice { source =>
   }
 }
 
-class ArraySlice(val size: Int, idsData: VectorCase[Array[Long]], data: Map[VColumnRef, Object /* Array[_] */]) extends Slice {
+class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Object /* Array[_] */]) extends Slice {
+  assert(idsData.toList.sliding(2) forall { case x :: y :: Nil => x.length == y.length; case _ => true })
   val idCount = idsData.length
+  val size = idsData.map(_.length).reduceLeft(_ min _)
   val identities = idsData map { Column.forArray(CLong, _) }
-  val columns: Map[VColumnRef, Column[_]] = data map { case (m @ VColumnRef(_, ctype), arr) => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) } toMap
+  val columns: Map[VColumnRef[_], Column[_]] = 
+    data map { 
+      case (m @ VColumnRef(_, ctype), arr) =>
+        (ctype: CType) match {
+          case CBoolean => m -> Column.forArray[Boolean](CBoolean, arr.asInstanceOf[Array[Boolean]]) 
+          case CLong    => m -> Column.forArray[Long](CLong, arr.asInstanceOf[Array[Long]]) 
+          case CDouble  => m -> Column.forArray[Double](CDouble, arr.asInstanceOf[Array[Double]]) 
+          case _        => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) 
+        }
+    }
 }
 
 object Slice {

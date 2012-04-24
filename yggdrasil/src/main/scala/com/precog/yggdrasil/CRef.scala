@@ -11,11 +11,12 @@ case class IColumnRef(idx: Int) extends ColumnRef {
   type CA = Long
 }
 
-class VColumnRef private (val id: VColumnId, val ctype: CType) {
+case class VColumnRef[@specialized(Boolean, Long, Double) A](id: VColumnId, ctype: CType { type CA = A }) extends ColumnRef {
   type CA = ctype.CA
 }
 
 object VColumnRef {
+  /*
   @inline def apply[A](id: VColumnId, ctype: CType { type CA = A }): VColumnRef { type CA = A } = {
     new VColumnRef(id, ctype).asInstanceOf[VColumnRef { type CA = A }]
   }
@@ -25,6 +26,7 @@ object VColumnRef {
   }
 
   @inline def cast[A](ref: VColumnRef) = ref.asInstanceOf[VColumnRef { type CA = A }]
+  */
 }
 
 sealed trait VColumnId 
