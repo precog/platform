@@ -35,18 +35,30 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 
-object TableSpec extends Specification {
+object TableSpec extends Specification with ArbitraryProjectionDescriptor with ArbitrarySlice {
   "a table" should {
     "cogroup" in {
       "a static full dataset" >> {
-        val v1 = new TestTable(
-          List(Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L)),
-          Map(VColumnRef(DynColumnId(0), CLong) -> Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L))
+        val r1 = VColumnRef(DynColumnId(0), CLong)
+        val v1 = new Table(
+          1, Set(r1),
+          List(
+            new ArraySlice(
+              VectorCase(Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L)),
+              Map(r1 -> Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L))
+            )
+          )
         )
 
-        val v2 = new TestTable(
-          List(Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L)),
-          Map(VColumnRef(DynColumnId(1), CLong) -> Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L))
+        val r2 = VColumnRef(DynColumnId(1), CLong)
+        val v2 = new Table(
+          1, Set(r2), 
+          List(
+            new ArraySlice(
+              VectorCase(Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L)),
+              Map(r2 -> Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L))
+            )
+          )
         )
 
         val expected = Vector(
@@ -66,45 +78,46 @@ object TableSpec extends Specification {
           middle3((8L, 8L)) 
         )
 
-        val results = v1.cogroup(v2) {
-          new CogroupMerge {
-            def apply[A](ref: VColumnRef { type CA = A }): Option[F2P[A, A, _]] = None
-          }
+        val results = v1.cogroup(v2)(CogroupMerge.second)
+        val slice = results.slices.iterator.next
+
+        expected.zipWithIndex.foldLeft(ok: MatchResult[Any]) {
+          case (result, (Left3(v), i)) =>
+            result and 
+            (slice.column(VColumnRef(DynColumnId(0), CLong)).get.isDefinedAt(i) must beTrue) and
+            (slice.column(VColumnRef(DynColumnId(0), CLong)).get.apply(i) must_== v)
+
+          case (result, (Middle3((l, r)), i)) =>
+            result and 
+            (slice.column(VColumnRef(DynColumnId(0), CLong)).get.isDefinedAt(i) must beTrue) and
+            (slice.column(VColumnRef(DynColumnId(0), CLong)).get.apply(i) must_== l) and
+            (slice.column(VColumnRef(DynColumnId(1), CLong)).get.isDefinedAt(i) must beTrue) and
+            (slice.column(VColumnRef(DynColumnId(1), CLong)).get.apply(i) must_== r) 
+
+          case (result, (Right3(v), i)) =>
+            result and 
+            (slice.column(VColumnRef(DynColumnId(1), CLong)).get.isDefinedAt(i) must beTrue) and
+            (slice.column(VColumnRef(DynColumnId(1), CLong)).get.apply(i) must_== v) 
         }
+      }
 
-        val rowView = results.rowView
+      "perform" in {
+        implicit val vm = Validation.validationMonad[String]
+        val descriptor = genProjectionDescriptor.sample.get
 
-        (rowView.state must_== RowView.BeforeStart) and 
-        (rowView.advance must_== RowView.Data) and 
-        expected.foldLeft(ok: MatchResult[Any]) {
-          case (result, e @ Left3(v)) =>
-            result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(VColumnRef(DynColumnId(0), CLong))) and
-            (rowView.valueAt[Long](VColumnRef(DynColumnId(0), CLong)) must_== v) and
-            (rowView.advance must beLike {
-              case RowView.Data => ok
-              case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
-            }) 
+        val slices1 = listOf(genSlice(descriptor, 10000)).sample.get
+        val slices2 = listOf(genSlice(descriptor, 10000)).sample.get
 
-          case (result, e @Middle3((l, r))) =>
-            result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(VColumnRef(DynColumnId(0), CLong), VColumnRef(DynColumnId(1), CLong))) and
-            (rowView.valueAt[Long](VColumnRef(DynColumnId(0), CLong)) must_== l) and
-            (rowView.valueAt[Long](VColumnRef(DynColumnId(1), CLong)) must_== r) and
-            (rowView.advance must beLike {
-              case RowView.Data => ok
-              case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
-            }) 
+        val table1 = new Table(slices1.head.idCount, slices1.head.columns.keySet, slices1)
+        val table2 = new Table(slices2.head.idCount, slices2.head.columns.keySet, slices2)
 
-          case (result, e @Right3(v)) =>
-            result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(VColumnRef(DynColumnId(1), CLong))) and
-            (rowView.valueAt[Long](VColumnRef(DynColumnId(1), CLong)) must_== v) and
-            (rowView.advance must beLike {
-              case RowView.Data => ok
-              case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
-            }) 
-        }
+        val startTime = System.currentTimeMillis
+        val resultTable = table1.cogroup(table2)(CogroupMerge.second)
+
+        resultTable.toJson.size
+        val elapsed = System.currentTimeMillis - startTime
+        println(elapsed)
+        elapsed must beGreaterThan(0L)
       }
 
       /*
@@ -130,104 +143,3 @@ object TableSpec extends Specification {
     }
   }
 }
-
-class TestTable(ids: List[Array[Long]], values: Map[VColumnRef, Array[_]]) extends Table { table =>
-  def idCount = ids.size
-
-  def rowView = new RowView {
-    type Position = Int
-
-    private var pos = -1
-    private var _state = RowView.BeforeStart
-
-    def position = pos
-    def state = _state
-    def advance = {
-      pos += 1
-      if (ids.forall(l => pos < l.length)) RowView.Data else RowView.AfterEnd
-    }
-
-    def reset(newPos: Position) = {
-      pos = newPos
-      if (pos < 0) RowView.BeforeStart
-      else if (ids.forall(l => pos < l.length)) RowView.Data
-      else RowView.AfterEnd
-    }
-
-    
-    protected[yggdrasil] def idCount: Int = table.idCount
-    protected[yggdrasil] def columns: Set[VColumnRef] = table.values.keySet
-
-    protected[yggdrasil] def idAt(i: Int): Identity = ids(i)(pos)
-    protected[yggdrasil] def hasValue(meta: VColumnRef): Boolean = {
-      pos >= 0 && table.values.contains(meta) && table.values(meta).length > pos
-    }
-    protected[yggdrasil] def valueAt(meta: VColumnRef): Any = table.values(meta)(pos)
-  }
-}
-
-trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
-  def genColumn(col: ColumnDescriptor, size: Int): Gen[Array[_]] = {
-    col.valueType match {
-      case CStringArbitrary => containerOfN[Array, String](size, arbitrary[String])
-      case CStringFixed(w) =>  containerOfN[Array, String](size, arbitrary[String].filter(_.length < w))
-      case CBoolean => containerOfN[Array, Boolean](size, arbitrary[Boolean])
-      case CInt => containerOfN[Array, Int](size, arbitrary[Int])
-      case CLong => containerOfN[Array, Long](size, arbitrary[Long])
-      case CFloat => containerOfN[Array, Float](size, arbitrary[Float])
-      case CDouble => containerOfN[Array, Double](size, arbitrary[Double])
-      case CDecimalArbitrary => containerOfN[List, Double](size, arbitrary[Double]).map(_.map(v => BigDecimal(v)).toArray)
-    }
-  }
-
-  def genSlice(p: ProjectionDescriptor, size: Int): Gen[Slice] = {
-    def sequence[T](l: List[Gen[T]], acc: Gen[List[T]]): Gen[List[T]] = {
-      l match {
-        case x :: xs => acc.flatMap(l => sequence(xs, x.map(xv => xv :: l)))
-        case Nil => acc
-      }
-    }
-
-    for {
-      ids <- listOfN(p.identities, listOfN(size, arbitrary[Long]).map(_.sorted.toArray))
-      data <- sequence(p.columns.map(cd => genColumn(cd, size).map(col => (cd, col))), value(Nil))
-    } yield {
-      val dataMap = data map {
-        case (ColumnDescriptor(path, selector, ctype, _), arr) => (VColumnRef(NamedColumnId(path, selector), ctype) -> arr)
-      }
-
-      new ArraySlice(size, VectorCase(ids: _*), dataMap.toMap)
-    }
-  }
-}
-
-class SliceTableSpec extends Specification with ArbitrarySlice {
-  "a slice table" should {
-    "perform" in {
-      implicit val vm = Validation.validationMonad[String]
-      val descriptor = genProjectionDescriptor.sample.get
-
-      val slices1 = listOf(genSlice(descriptor, 10000)).sample.get
-      val slices2 = listOf(genSlice(descriptor, 10000)).sample.get
-
-      val table1 = new SliceTable(slices1.head.columns.keySet, slices1)
-      val table2 = new SliceTable(slices2.head.columns.keySet, slices2)
-
-      val startTime = System.currentTimeMillis
-      val resultTable = table1.cogroup(table2)(
-        new CogroupMerge {
-          def apply[A](ref: VColumnRef { type CA = A }): Option[F2P[A, A, _]] = None
-        }
-      )
-
-      resultTable.toJson.size
-      val elapsed = System.currentTimeMillis - startTime
-      println(elapsed)
-      elapsed must beGreaterThan(0L)
-
-    }
-  }
-}
-
-
-// vim: set ts=4 sw=4 et:

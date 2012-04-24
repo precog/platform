@@ -19,37 +19,23 @@
  */
 package com.precog.yggdrasil
 
-import blueeyes.json.JPath
-import com.precog.common.Path
-
-sealed trait ColumnRef {
-  type CA
+trait CogroupMerge {
+  def apply[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[F2P[A, A, A]]
 }
 
-case class IColumnRef(idx: Int) extends ColumnRef {
-  type CA = Long
-}
-
-case class VColumnRef[@specialized(Boolean, Long, Double) A](id: VColumnId, ctype: CType { type CA = A }) extends ColumnRef {
-  type CA = ctype.CA
-}
-
-object VColumnRef {
-  /*
-  @inline def apply[A](id: VColumnId, ctype: CType { type CA = A }): VColumnRef { type CA = A } = {
-    new VColumnRef(id, ctype).asInstanceOf[VColumnRef { type CA = A }]
+object CogroupMerge {
+  object second extends CogroupMerge {
+    def apply[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[F2P[A, A, A]] = {
+      Some(
+        new F2P[A, A, A] { 
+          val returns = ref.ctype
+          val accepts = (ref.ctype, ref.ctype)
+          def isDefinedAt(a1: A, a2: A) = true
+          def apply(a1: A, a2: A) = a2 
+        }
+      )
+    }
   }
-
-  def unapply(ref: VColumnRef): Option[(VColumnId, CType)] = {
-    Some((ref.id, ref.ctype))
-  }
-
-  @inline def cast[A](ref: VColumnRef) = ref.asInstanceOf[VColumnRef { type CA = A }]
-  */
 }
-
-sealed trait VColumnId 
-case class NamedColumnId(path: Path, selector: JPath) extends VColumnId
-case class DynColumnId(id: Long) extends VColumnId
 
 // vim: set ts=4 sw=4 et:

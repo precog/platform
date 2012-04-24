@@ -24,7 +24,7 @@ trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] {
 }
 
 sealed trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
-  def accepts: CType { type CA = A }
+  val accepts: CType { type CA = A }
 
   def apply(a: Column[A]): Column[B] 
 
