@@ -35,10 +35,24 @@ trait MemoizingColumn[@specialized(Boolean, Int, Long, Float, Double) A] extends
 }
 
 object Column {
-  def forArray[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType, a: Array[A]): Column[A] = new Column[A] {
-    val returns = ctype.asInstanceOf[CType { type CA = A }]
-    def isDefinedAt(row: Int) = row >= 0 && row < a.length
-    def apply(row: Int) = a(row)
+  def forArray[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType { type CA = A }, a: Array[A]): Column[A] = {
+//    ctype match {
+//      case v @ CBoolean          => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CStringFixed(_)   => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CStringArbitrary  => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CInt              => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CLong             => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CFloat            => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CDouble           => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case v @ CDecimalArbitrary => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+//      case CNull | CEmptyArray | CEmptyObject => EQ
+//    }
+
+    new Column[A] {
+      val returns = ctype.asInstanceOf[CType { type CA = A }]
+      def isDefinedAt(row: Int) = row >= 0 && row < a.length
+      def apply(row: Int) = a(row)
+    }
   }
 
   def const[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType { type CA = A }, a: A): Column[A] = new Column[A] {

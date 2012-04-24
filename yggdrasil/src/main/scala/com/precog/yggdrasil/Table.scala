@@ -2,21 +2,37 @@ package com.precog.yggdrasil
 
 import blueeyes.json.JsonAST._
 import java.lang.ref.SoftReference
+
+import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
 import scalaz.Ordering._
 
+/*
 trait Table { source =>
-  import Table._
+  val foci: Set[VColumnRef]
 
   def rowView: RowView
 
-  def map(meta: CMeta, refId: Long)(f: F1P[_, _]): Table = new Table {
-    def rowView = new MapRowView(source.rowView, meta, refId, f)
+  def map(f: F1P[_, _])(implicit nextRef: () => Long): Table = {
+    foci.filter(_.ctype == f.accepts).foldLeft(this) {
+      case (t, cmeta) if cmeta.ctype == f.accepts => t.map(cmeta.id, nextRef)(f)
+    }
   }
 
-  def cogroup(other: Table)(f: CogroupF): Table = {
+  def map(colId: VColumnId, nextRef: () => Long)(f: F1P[_, _]): Table = new Table {
+    private val mappings = source.foci collect { 
+      case ref @ VColumnRef(id, ctype) if id == colId && ctype == f.accepts => (VColumnRef(DynColumnId(nextRef()), f.returns): VColumnRef, ref)
+    } toMap
+
+    val foci = mappings.keySet
+
+    def rowView = new MapRowView(source.rowView, mappings, f)
+  }
+
+  def cogroup(other: Table)(merge: CogroupMerge): Table = {
     new Table {
-      def rowView = new CogroupRowView(source.rowView, other.rowView, f)
+      val foci = source.foci ++ other.foci
+      def rowView: RowView = new CogroupRowView(source.rowView, other.rowView, merge)
     }
   }
 
@@ -39,8 +55,8 @@ trait Table { source =>
             case RowView.AfterEnd => null.asInstanceOf[JValue]
             case _ =>
               view.columns.foldLeft[JValue](JNull) {
-                case (jv, meta @ CMeta(CPaths(_, selector), ctype)) => 
-                  jv.set(selector, ctype.jvalueFor(ctype.cast(view.valueAt(meta))))
+                case (jv, ref @ VColumnRef(NamedColumnId(_, selector), ctype)) => 
+                  jv.set(selector, ctype.jvalueFor(view.valueAt[ctype.CA](VColumnRef.cast[ctype.CA](ref))))
 
                 case (jv, _) => jv
               }
@@ -51,38 +67,41 @@ trait Table { source =>
   }
 }
 
-object Table {
-  trait CogroupF {
-    def one:  CMeta => Option[F1P[_, _]]
-    def both: CMeta => Option[F2P[_, _, _]]
-  }
-}
-
-class MapRowView(delegate: RowView, mapMeta: CMeta, refId: Long, f: F1P[_, _]) extends RowView { 
+class MapRowView(delegate: RowView, mappings: Map[VColumnRef, VColumnRef], f: F1P[_, _]) extends RowView { 
   class Position(private[MapRowView] val pos: delegate.Position)
-
-  private val resultMeta = CMeta(CDyn(refId), f.returns)
 
   def state = delegate.state
   def advance() = delegate.advance()
   def position = new Position(delegate.position)
   def reset(position: Position) = delegate.reset(position.pos)
 
-  protected[yggdrasil] def idCount: Int = delegate.idCount
-  protected[yggdrasil] def columns: Set[CMeta] = delegate.columns + resultMeta
+  protected[yggdrasil] val idCount: Int = delegate.idCount
+  protected[yggdrasil] val columns: Set[VColumnRef] = delegate.columns ++ mappings.keySet
 
   protected[yggdrasil] def idAt(i: Int): Identity = delegate.idAt(i)
-  protected[yggdrasil] def hasValue(meta: CMeta): Boolean = columns.contains(meta)
-  protected[yggdrasil] def valueAt(meta: CMeta): Any = {
-    if (meta == resultMeta) { 
-      f.applyCast(delegate.valueAt(mapMeta))
-    } else {
-      delegate.valueAt(meta)
+  protected[yggdrasil] def hasValue(meta: VColumnRef): Boolean = columns.contains(meta)
+  protected[yggdrasil] def valueAt[@specialized(Boolean, Int, Long, Float, Double) A](rref: VColumnRef { type CA = A }): A = {
+    import VColumnRef.cast
+    mappings.get(rref) map {
+      case aref @ VColumnRef(id, CBoolean) => f.asInstanceOf[F1P[Boolean, A]](delegate.valueAt(cast[Boolean](aref)))
+      case aref @ VColumnRef(id, CInt)     => f.asInstanceOf[F1P[Int, A]](delegate.valueAt(cast[Int](aref)))
+      case aref @ VColumnRef(id, CLong)    => f.asInstanceOf[F1P[Long, A]](delegate.valueAt(cast[Long](aref)))
+      case aref @ VColumnRef(id, CFloat)   => f.asInstanceOf[F1P[Float, A]](delegate.valueAt(cast[Float](aref)))
+      case aref @ VColumnRef(id, CDouble)  => f.asInstanceOf[F1P[Double, A]](delegate.valueAt(cast[Double](aref)))
+      case aref @ VColumnRef(id, argt)     => f.asInstanceOf[F1P[argt.CA, A]](delegate.valueAt(cast[argt.CA](aref)))
+    } getOrElse {
+      delegate.valueAt[rref.CA](rref)
     }
   }
 }
+*/
 
-class CogroupRowView(left: RowView, right: RowView, f: Table.CogroupF) extends RowView { 
+trait CogroupMerge {
+  def apply[A](ctype: VColumnRef { type CA = A }): Option[F2P[A, A, A]]
+}
+
+/*
+class CogroupRowView(left: RowView, right: RowView, merge: CogroupMerge) extends RowView { 
   assert((left.state eq RowView.BeforeStart) && (right.state eq RowView.BeforeStart))
 
   class Position(private[CogroupRowView] val lpos: left.Position, private[CogroupRowView] val rpos: right.Position)
@@ -310,7 +329,7 @@ class CogroupRowView(left: RowView, right: RowView, f: Table.CogroupF) extends R
   
   protected[yggdrasil] def idCount: Int = left.idCount min right.idCount
 
-  protected[yggdrasil] def columns: Set[CMeta] = {
+  protected[yggdrasil] def columns: Set[VColumnRef] = {
     fchoice match {
       case -1 => left.columns
       case  0 => left.columns ++ right.columns
@@ -323,7 +342,7 @@ class CogroupRowView(left: RowView, right: RowView, f: Table.CogroupF) extends R
     case 1 => right.idAt(idx)
   }
 
-  protected[yggdrasil] def hasValue(cmeta: CMeta): Boolean = {
+  protected[yggdrasil] def hasValue(cmeta: VColumnRef): Boolean = {
     fchoice match {
       case -1 => left.hasValue(cmeta)
       case  0 => left.hasValue(cmeta) || right.hasValue(cmeta)
@@ -331,39 +350,42 @@ class CogroupRowView(left: RowView, right: RowView, f: Table.CogroupF) extends R
     }
   }
 
-  protected[yggdrasil] def valueAt(cmeta: CMeta): Any = {
-    val ctype = cmeta.ctype
-    def applyF1(view: RowView, side: String): Any = {
-      if (view.hasValue(cmeta)) {
-        f.one(cmeta) map { f1 => f1.applyCast(view.valueAt(cmeta)) } getOrElse { view.valueAt(cmeta) }
+  protected[yggdrasil] def valueAt[@specialized(Boolean, Int, Long, Float, Double) A](ref: VColumnRef { type CA = A }): A = {
+    def value(view: RowView, side: String): A = {
+      if (view.hasValue(ref)) {
+        view.valueAt[ref.CA](ref)
       } else {
-        sys.error("Column " + cmeta + " does not exist in " + side + " of cogroup at " + view.position)
+        sys.error("Column " + ref + " does not exist in " + side + " of cogroup at " + view.position)
       }
     }
 
-    def applyF2: Any = {
-      f.both(cmeta) map { f2 => 
-        f2.applyCast(left.valueAt(cmeta), right.valueAt(cmeta))
+    def merged: A = {
+      merge(ref) map { f2 => 
+        val t_1 = f2.accepts._1
+        val t_2 = f2.accepts._2
+        f2.asInstanceOf[F2P[A, A, A]](left.valueAt[A](ref), right.valueAt[A](ref))
       } getOrElse {
         sys.error("Could not determine function to combine column values from both the lhs and rhs of cogroup at " + left.position + ", " + right.position)
       }
     }
 
     fchoice match {
-      case -1 => applyF1(left, "lhs")
+      case -1 => value(left, "lhs")
 
       case  0 => 
-        if (left.hasValue(cmeta) && right.hasValue(cmeta)) applyF2
-        else if (left.hasValue(cmeta)) applyF1(left, "lhs")
-        else if (right.hasValue(cmeta)) applyF1(right, "rhs")
-        else sys.error("Column " + cmeta + " does not exist.")
+        if (left.hasValue(ref) && right.hasValue(ref)) merged
+        else if (left.hasValue(ref)) value(left, "lhs")
+        else if (right.hasValue(ref)) value(right, "rhs")
+        else sys.error("Column " + ref + " does not exist.")
 
-      case  1 => applyF1(right, "rhs")
+      case  1 => value(right, "rhs")
     }
   }
 }
+*/
 
-class SliceTable(slices: Iterable[Slice]) extends Table {
+class Table(val idCount: Int, val foci: Set[VColumnRef], val slices: Iterable[Slice]) { self  =>
+  /*
   def rowView: RowView = new RowView {
     private val iter = slices.iterator
     private var currentSlice: Slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
@@ -450,15 +472,299 @@ class SliceTable(slices: Iterable[Slice]) extends Table {
     }
 
     protected[yggdrasil] def idCount: Int = currentSlice.idCount
-    protected[yggdrasil] def columns: Set[CMeta] = currentSlice.columns.keySet
+    protected[yggdrasil] def columns: Set[VColumnRef] = currentSlice.columns.keySet
 
     protected[yggdrasil] def idAt(i: Int): Identity = currentSlice.identities(i).apply(curIdx)
 
-    protected[yggdrasil] def hasValue(meta: CMeta): Boolean = currentSlice.columns.contains(meta)
+    protected[yggdrasil] def hasValue(ref: VColumnRef): Boolean = currentSlice.columns.contains(ref)
 
-    protected[yggdrasil] def valueAt(meta: CMeta): Any = currentSlice.columns(meta).apply(curIdx)
+    protected[yggdrasil] def valueAt[@specialized(Boolean, Int, Long, Float, Double) A](ref: VColumnRef { type CA = A }): A = currentSlice.columns(ref)(curIdx).asInstanceOf[A]
+  }
+  */
+
+  def map(colId: VColumnId, nextRef: () => Long)(f: F1P[_, _]): Table = {
+    val oldRef = VColumnRef(colId, f.accepts)
+    val newId  = DynColumnId(nextRef())
+    val newRef = VColumnRef(newId, f.returns)
+    new Table(idCount, foci - oldRef + newRef, slices map { slice => slice.map(colId, newId)(f.toF1) })
   }
 
-  override def map(meta: CMeta, refId: Long)(f: F1P[_, _]): Table = new SliceTable(slices map { slice => slice.map(meta, refId)(f.toF1) })
+  def cogroup(other: Table)(merge: CogroupMerge): Table = {
+    sealed trait CogroupState
+    case object StepLeftCheckRight extends CogroupState
+    case object StepLeftDoneRight extends CogroupState
+    case object StepRightCheckLeft extends CogroupState
+    case object StepRightDoneLeft extends CogroupState
+    case object LastEqual extends CogroupState
+    case object RunLeft extends CogroupState
+    case object Done extends CogroupState
+    case object Cartesian extends CogroupState
+
+    new Table(
+      idCount,
+      foci ++ other.foci,
+      new Iterable[Slice] {
+        def iterator = new Iterator[Slice] {
+          private val prefixLength = self.idCount min other.idCount
+          private val leftIter = self.slices.iterator
+          private val rightIter = other.slices.iterator
+          
+          private var leftSlice = if (leftIter.hasNext) leftIter.next else null.asInstanceOf[Slice]
+          private var rightSlice = if (rightIter.hasNext) rightIter.next else null.asInstanceOf[Slice]
+
+          private var leftIdx = 0 
+          private var rightIdx = 0
+          private var firstRightEq: Int = -1
+          private var nextRight: Int = -1
+
+          private var leftBuffer: ArrayBuffer[Int] = new ArrayBuffer[Int]()
+          private var rightBuffer: ArrayBuffer[Int] = new ArrayBuffer[Int]()
+
+          def bufferRemap(buf: ArrayBuffer[Int]): PartialFunction[Int, Int] = {
+            case i if (i < buf.size) && buf(i) != -1 => buf(i)
+          }
+
+          private var state: CogroupState =
+            if (leftSlice == null) {
+              if (rightSlice == null) Done else StepRightDoneLeft
+            } else {
+              if (rightSlice == null) StepLeftDoneRight else StepLeftCheckRight
+            }
+
+          private var curSlice = precomputeNext()
+
+          def hasNext: Boolean = curSlice != null
+          
+          def next: Slice = {
+            val tmp = curSlice
+            curSlice = precomputeNext()
+            tmp
+          }
+
+          @tailrec private def precomputeNext(): Slice = {
+            state match {
+              case StepLeftCheckRight => 
+                if (leftIdx < leftSlice.size) {
+                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                    case LT => 
+                      leftBuffer += leftIdx
+                      rightBuffer += -1
+
+                      leftIdx += 1
+
+                    case GT =>
+                      state = StepRightCheckLeft
+
+                    case EQ =>
+                      leftBuffer += leftIdx
+                      rightBuffer += rightIdx
+                      state = LastEqual
+                  }
+
+                  precomputeNext()
+                } else {
+                  val result = emit()
+                  if (leftIter.hasNext) {
+                    leftSlice = leftIter.next 
+                    leftIdx = 0
+                  } else {
+                    state = StepRightDoneLeft
+                  }
+                  result
+                }
+
+              case LastEqual =>
+                firstRightEq = rightIdx
+                rightIdx += 1
+
+                if (rightIdx < rightSlice.size) {
+                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                    case LT => 
+                      leftIdx += 1
+                      state = StepLeftCheckRight
+
+                    case GT =>
+                      sys.error("Inputs on the right not sorted.")
+                      
+                    case EQ => 
+                      leftBuffer += leftIdx
+                      rightBuffer += rightIdx
+                      rightIdx += 1
+                      state = Cartesian
+                  }
+                } else {
+                  if (rightIter.hasNext) {
+                    rightSlice = (rightSlice append rightIter.next)
+                  } else {
+                    state = StepLeftDoneRight
+                    leftIdx += 1
+                  }
+                }
+
+                precomputeNext()
+
+              case Cartesian =>
+                leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                  case LT => 
+                    nextRight = rightIdx
+                    rightIdx = firstRightEq
+                    leftIdx += 1
+                    
+                    if (leftIdx >= leftSlice.size && leftIter.hasNext) {
+                      leftSlice = (leftSlice append leftIter.next)
+                    
+                      leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                        case LT => sys.error("Inputs on the left not sorted")
+                        case GT => 
+                          rightIdx = nextRight
+                          state = StepLeftCheckRight
+                          if (leftBuffer.size > leftSlice.size) emit() else precomputeNext()
+                        
+                        case EQ => 
+                          leftBuffer += leftIdx
+                          rightBuffer += rightIdx
+                          rightIdx += 1
+                          precomputeNext()
+                      }
+                    } else {
+                      state = StepRightDoneLeft
+                      if (leftBuffer.size > leftSlice.size) emit() else precomputeNext()
+                    }
+
+                  case GT =>
+                    sys.error("Inputs on the right not sorted.")
+                    
+                  case EQ => 
+                    leftBuffer += leftIdx
+                    rightBuffer += rightIdx
+                    rightIdx += 1
+
+                    if (rightIdx >= rightSlice.size && rightIter.hasNext) {
+                      rightSlice = rightSlice append rightIter.next
+                    }
+
+                    precomputeNext()
+                }
+              }
+          }
+
+          private def emit(): Slice = {
+            val result = new Slice {
+              private val remappedLeft  = leftSlice.remap(bufferRemap(leftBuffer))
+              private val remappedRight = rightSlice.remap(bufferRemap(rightBuffer))
+
+              val idCount = self.idCount + other.idCount
+              val size = leftBuffer.size
+              val identities = remappedLeft.identities ++ remappedRight.identities
+
+              val columns = remappedRight.columns.foldLeft(remappedLeft.columns) {
+                case (acc, (rref, rcol)) => 
+                  val mergef = merge[rref.CA](rref).get
+                  acc.get(rref) match {
+                    case Some(lcol) => acc + (rref -> (rref.ctype match {
+                      case CBoolean => new Column[Boolean] {
+                        private val lc = lcol.asInstanceOf[Column[Boolean]]
+                        private val rc = rcol.asInstanceOf[Column[Boolean]]
+                        private val mf = mergef.asInstanceOf[F2P[Boolean, Boolean, Boolean]]
+
+                        val returns = CBoolean
+                        
+                        def isDefinedAt(row: Int) = lc.isDefinedAt(row) || rc.isDefinedAt(row)
+                        
+                        def apply(row: Int): Boolean = {
+                          if (lc.isDefinedAt(row)) {
+                            if (rc.isDefinedAt(row)) {
+                              mf(lc(row), rc(row))
+                            } else {
+                              rc(row)        
+                            }
+                          } else {
+                            lc(row)
+                          }
+                        }
+                      }
+
+                      case CLong    => new Column[Long] {
+                        private val lc = lcol.asInstanceOf[Column[Long]]
+                        private val rc = rcol.asInstanceOf[Column[Long]]
+                        private val mf = mergef.asInstanceOf[F2P[Long, Long, Long]]
+
+                        val returns = CLong
+
+                        def isDefinedAt(row: Int) = lc.isDefinedAt(row) || rc.isDefinedAt(row)
+
+                        def apply(row: Int): Long = {
+                          if (lc.isDefinedAt(row)) {
+                            if (rc.isDefinedAt(row)) {
+                              mf(lc(row), rc(row))
+                            } else {
+                              rc(row)        
+                            }
+                          } else {
+                            lc(row)
+                          }
+                        }
+                      }
+
+                      case CDouble  => new Column[Double] {
+                        private val lc = lcol.asInstanceOf[Column[Double]]
+                        private val rc = rcol.asInstanceOf[Column[Double]]
+                        private val mf = mergef.asInstanceOf[F2P[Double, Double, Double]]
+
+                        val returns = CDouble
+
+                        def isDefinedAt(row: Int) = lc.isDefinedAt(row) || rc.isDefinedAt(row)
+
+                        def apply(row: Int): Double = {
+                          if (lc.isDefinedAt(row)) {
+                            if (rc.isDefinedAt(row)) {
+                              mf(lc(row), rc(row))
+                            } else {
+                              rc(row)        
+                            }
+                          } else {
+                            lc(row)
+                          }
+                        }
+                      }
+
+                      case ctype    => new Column[ctype.CA] {
+                        private val lc = lcol.asInstanceOf[Column[ctype.CA]]
+                        private val rc = rcol.asInstanceOf[Column[ctype.CA]]
+                        private val mf = mergef.asInstanceOf[F2P[ctype.CA, ctype.CA, ctype.CA]]
+
+                        val returns: CType { type CA = ctype.CA } = ctype
+
+                        def isDefinedAt(row: Int) = lc.isDefinedAt(row) || rc.isDefinedAt(row)
+
+                        def apply(row: Int): ctype.CA = {
+                          if (lc.isDefinedAt(row)) {
+                            if (rc.isDefinedAt(row)) {
+                              mf(lc(row), rc(row))
+                            } else {
+                              rc(row)        
+                            }
+                          } else {
+                            lc(row)
+                          }
+                        }
+                      }
+                    }))
+                  }
+              }
+            }
+
+            leftSlice = leftSlice.split(leftIdx)._2
+            rightSlice = rightSlice.split(rightIdx)._2
+            leftIdx = 0
+            rightIdx = 0
+            leftBuffer = new ArrayBuffer[Int]()
+            rightBuffer = new ArrayBuffer[Int]()
+            result
+          }
+        }
+      }
+    )
+  }
 }
 // vim: set ts=4 sw=4 et:

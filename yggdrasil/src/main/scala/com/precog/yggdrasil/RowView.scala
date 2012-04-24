@@ -12,6 +12,8 @@ import scalaz.std.anyVal._
 import scalaz.std.string._
 import scalaz.std.math.bigDecimal._
 
+sealed trait DataRef
+
 trait RowView {
   import RowView._
 
@@ -25,7 +27,7 @@ trait RowView {
   def advance(): State
   def reset(position: Position): State
 
-  //def rename(from: CMeta, to: CMeta): RowView
+  def rename[T <: ColumnRef](from: T, to: T): RowView = sys.error("make abstract")
 
   def compareIdentities(other: RowView, indices: VectorCase[Int]): Ordering = {
     var result: Ordering = EQ
@@ -50,20 +52,47 @@ trait RowView {
     result
   }
 
-  def compareValues(other: RowView, meta: CMeta*): Ordering = {
+  def compareValues(other: RowView, meta: VColumnRef*): Ordering = {
+    import VColumnRef.cast
     var result: Ordering = EQ
     var i = 0
     while (i < meta.length && (result eq EQ)) {
       val m = meta(i)
       result = m.ctype match {
-        case v @ CBoolean          => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CStringFixed(_)   => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CStringArbitrary  => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CInt              => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CLong             => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CFloat            => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CDouble           => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
-        case v @ CDecimalArbitrary => v.cast(valueAt(m)) ?|? v.cast(other.valueAt(m))
+        case CBoolean          => 
+          val v = valueAt[Boolean](cast[Boolean](m))
+          if (v == other.valueAt[Boolean](cast[Boolean](m))) EQ else if (v) GT else LT
+
+        case CInt              => 
+          val v = valueAt[Int](cast[Int](m))
+          val ov = other.valueAt[Int](cast[Int](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
+        case CLong             =>  
+          val v = valueAt[Long](cast[Long](m))
+          val ov = other.valueAt[Long](cast[Long](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
+        case CFloat            =>  
+          val v = valueAt[Float](cast[Float](m))
+          val ov = other.valueAt[Float](cast[Float](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
+        case CDouble           =>  
+          val v = valueAt[Double](cast[Double](m))
+          val ov = other.valueAt[Double](cast[Double](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
+        case CStringArbitrary | CStringFixed(_) =>
+          val v = valueAt[String](cast[String](m))
+          val ov = other.valueAt[String](cast[String](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
+        case CDecimalArbitrary =>
+          val v = valueAt[BigDecimal](cast[BigDecimal](m))
+          val ov = other.valueAt[BigDecimal](cast[BigDecimal](m))
+          if (v > ov) GT else if (v == ov) EQ else LT
+
         case CNull | CEmptyArray | CEmptyObject => EQ
       }                                
 
@@ -74,11 +103,17 @@ trait RowView {
   }
 
   protected[yggdrasil] def idCount: Int
-  protected[yggdrasil] def columns: Set[CMeta]
+  protected[yggdrasil] def columns: Set[VColumnRef]
 
   protected[yggdrasil] def idAt(i: Int): Identity
-  protected[yggdrasil] def hasValue(meta: CMeta): Boolean
-  protected[yggdrasil] def valueAt(meta: CMeta): Any
+  protected[yggdrasil] def hasValue(meta: VColumnRef): Boolean
+  protected[yggdrasil] def valueAt[@specialized(Boolean, Int, Long, Float, Double) A](ref: VColumnRef { type CA = A }): A 
+  protected[yggdrasil] def dataAt[@specialized(Boolean, Int, Long, Float, Double) A](ref: ColumnRef { type CA = A }): A = {
+    ref match {
+      case IColumnRef(idx) => idAt(idx).asInstanceOf[A]
+      case ref: VColumnRef { type CA = A } => valueAt(ref)
+    }
+  }
 }
 
 object RowView {
@@ -86,4 +121,6 @@ object RowView {
   case object BeforeStart extends State
   case object Data extends State
   case object AfterEnd extends State
+
+  //def vCompare[A](id: VColumnId, ctype: CType { type CA = A }, l: RowView, r: RowView) = macro vCompareImpl[A]
 }

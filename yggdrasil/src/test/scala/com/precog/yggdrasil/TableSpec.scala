@@ -22,12 +22,12 @@ object TableSpec extends Specification {
       "a static full dataset" >> {
         val v1 = new TestTable(
           List(Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L)),
-          Map(CMeta(CDyn(0), CLong) -> Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L))
+          Map(VColumnRef(DynColumnId(0), CLong) -> Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L))
         )
 
         val v2 = new TestTable(
           List(Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L)),
-          Map(CMeta(CDyn(1), CLong) -> Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L))
+          Map(VColumnRef(DynColumnId(1), CLong) -> Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L))
         )
 
         val expected = Vector(
@@ -48,9 +48,8 @@ object TableSpec extends Specification {
         )
 
         val results = v1.cogroup(v2) {
-          new Table.CogroupF {
-            def one = Map()
-            def both = Map()
+          new CogroupMerge {
+            def apply[A](ref: VColumnRef { type CA = A }): Option[F2P[A, A, _]] = None
           }
         }
 
@@ -61,8 +60,8 @@ object TableSpec extends Specification {
         expected.foldLeft(ok: MatchResult[Any]) {
           case (result, e @ Left3(v)) =>
             result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(CMeta(CDyn(0), CLong))) and
-            (rowView.valueAt(CMeta(CDyn(0), CLong)) must_== v) and
+            (rowView.columns must_== Set(VColumnRef(DynColumnId(0), CLong))) and
+            (rowView.valueAt[Long](VColumnRef(DynColumnId(0), CLong)) must_== v) and
             (rowView.advance must beLike {
               case RowView.Data => ok
               case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
@@ -70,9 +69,9 @@ object TableSpec extends Specification {
 
           case (result, e @Middle3((l, r))) =>
             result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(CMeta(CDyn(0), CLong), CMeta(CDyn(1), CLong))) and
-            (rowView.valueAt(CMeta(CDyn(0), CLong)) must_== l) and
-            (rowView.valueAt(CMeta(CDyn(1), CLong)) must_== r) and
+            (rowView.columns must_== Set(VColumnRef(DynColumnId(0), CLong), VColumnRef(DynColumnId(1), CLong))) and
+            (rowView.valueAt[Long](VColumnRef(DynColumnId(0), CLong)) must_== l) and
+            (rowView.valueAt[Long](VColumnRef(DynColumnId(1), CLong)) must_== r) and
             (rowView.advance must beLike {
               case RowView.Data => ok
               case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
@@ -80,8 +79,8 @@ object TableSpec extends Specification {
 
           case (result, e @Right3(v)) =>
             result and (rowView.idCount must_== 1) and
-            (rowView.columns must_== Set(CMeta(CDyn(1), CLong))) and
-            (rowView.valueAt(CMeta(CDyn(1), CLong)) must_== v) and
+            (rowView.columns must_== Set(VColumnRef(DynColumnId(1), CLong))) and
+            (rowView.valueAt[Long](VColumnRef(DynColumnId(1), CLong)) must_== v) and
             (rowView.advance must beLike {
               case RowView.Data => ok
               case RowView.AfterEnd => rowView.advance must_== RowView.AfterEnd
@@ -113,7 +112,7 @@ object TableSpec extends Specification {
   }
 }
 
-class TestTable(ids: List[Array[Long]], values: Map[CMeta, Array[_]]) extends Table { table =>
+class TestTable(ids: List[Array[Long]], values: Map[VColumnRef, Array[_]]) extends Table { table =>
   def idCount = ids.size
 
   def rowView = new RowView {
@@ -138,13 +137,13 @@ class TestTable(ids: List[Array[Long]], values: Map[CMeta, Array[_]]) extends Ta
 
     
     protected[yggdrasil] def idCount: Int = table.idCount
-    protected[yggdrasil] def columns: Set[CMeta] = table.values.keySet
+    protected[yggdrasil] def columns: Set[VColumnRef] = table.values.keySet
 
     protected[yggdrasil] def idAt(i: Int): Identity = ids(i)(pos)
-    protected[yggdrasil] def hasValue(meta: CMeta): Boolean = {
+    protected[yggdrasil] def hasValue(meta: VColumnRef): Boolean = {
       pos >= 0 && table.values.contains(meta) && table.values(meta).length > pos
     }
-    protected[yggdrasil] def valueAt(meta: CMeta): Any = table.values(meta)(pos)
+    protected[yggdrasil] def valueAt(meta: VColumnRef): Any = table.values(meta)(pos)
   }
 }
 
@@ -175,7 +174,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
       data <- sequence(p.columns.map(cd => genColumn(cd, size).map(col => (cd, col))), value(Nil))
     } yield {
       val dataMap = data map {
-        case (ColumnDescriptor(path, selector, ctype, _), arr) => (CMeta(CPaths(path, selector), ctype) -> arr)
+        case (ColumnDescriptor(path, selector, ctype, _), arr) => (VColumnRef(NamedColumnId(path, selector), ctype) -> arr)
       }
 
       new ArraySlice(size, VectorCase(ids: _*), dataMap.toMap)
@@ -192,14 +191,15 @@ class SliceTableSpec extends Specification with ArbitrarySlice {
       val slices1 = listOf(genSlice(descriptor, 10000)).sample.get
       val slices2 = listOf(genSlice(descriptor, 10000)).sample.get
 
-      val table1 = new SliceTable(slices1)
-      val table2 = new SliceTable(slices2)
+      val table1 = new SliceTable(slices1.head.columns.keySet, slices1)
+      val table2 = new SliceTable(slices2.head.columns.keySet, slices2)
 
       val startTime = System.currentTimeMillis
-      val resultTable = table1.cogroup(table2)(new Table.CogroupF {
-        def one = Map()
-        def both = Map()
-      })
+      val resultTable = table1.cogroup(table2)(
+        new CogroupMerge {
+          def apply[A](ref: VColumnRef { type CA = A }): Option[F2P[A, A, _]] = None
+        }
+      )
 
       resultTable.toJson.size
       val elapsed = System.currentTimeMillis - startTime
