@@ -43,9 +43,21 @@ trait Slice { source =>
     var ii = 0
     var result: Ordering = EQ
     while (ii < prefixLength && (result eq EQ)) {
-      val i1: Long = identities(ii)(srow)
-      val i2: Long = other.identities(ii)(orow)
-      if (i1 < i2) result = LT else if (i1 > i1) result = GT
+      val i1: Column[Long] = identities(ii)
+      val i2: Column[Long] = other.identities(ii)
+      if (i1.isDefinedAt(srow)) {
+        if (i2.isDefinedAt(orow)) {
+          if      (i1(srow) < i2(orow)) result = LT 
+          else if (i1(srow) > i2(orow)) result = GT
+        } else {
+          result = GT
+        }
+      } else {
+        if (i2.isDefinedAt(orow)) {
+          result = LT
+        }
+      }
+
       ii += 1
     }
 
@@ -254,6 +266,11 @@ trait Slice { source =>
       }
     }
   }
+
+  def toString(row: Int): String = {
+    (identities map { idcol => idcol(row) }).mkString("(", ",", ") -> ") +
+    (columns.collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col(row).toString }).mkString("[", ", ", "]")
+  }
 }
 
 class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Object /* Array[_] */]) extends Slice {
@@ -266,7 +283,9 @@ class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Obje
       case (m @ VColumnRef(_, ctype), arr) =>
         (ctype: CType) match {
           case CBoolean => m -> Column.forArray[Boolean](CBoolean, arr.asInstanceOf[Array[Boolean]]) 
+          case CInt    => m -> Column.forArray[Int](CInt, arr.asInstanceOf[Array[Int]]) 
           case CLong    => m -> Column.forArray[Long](CLong, arr.asInstanceOf[Array[Long]]) 
+          case CFloat  => m -> Column.forArray[Float](CFloat, arr.asInstanceOf[Array[Float]]) 
           case CDouble  => m -> Column.forArray[Double](CDouble, arr.asInstanceOf[Array[Double]]) 
           case _        => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) 
         }

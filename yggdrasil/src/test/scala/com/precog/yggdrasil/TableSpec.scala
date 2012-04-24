@@ -101,6 +101,7 @@ object TableSpec extends Specification with ArbitraryProjectionDescriptor with A
         }
       }
 
+      /*
       "perform" in {
         implicit val vm = Validation.validationMonad[String]
         val descriptor = genProjectionDescriptor.sample.get
@@ -120,7 +121,6 @@ object TableSpec extends Specification with ArbitraryProjectionDescriptor with A
         elapsed must beGreaterThan(0L)
       }
 
-      /*
       "a static single pair dataset" in {
         // Catch bug where equal at the end of input produces middle, right
         val v1s = IterableDataset(1, Vector(rec(0)))
