@@ -15,14 +15,14 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
     new Table(idCount, foci - oldRef + newRef, slices map { slice => slice.map(colId, newId)(f.toF1) })
   }
 
+  def normalize: Table = new Table(idCount, foci, slices.filterNot(_.isEmpty))
+
   def cogroup(other: Table)(merge: CogroupMerge): Table = {
     sealed trait CogroupState
     case object StepLeftCheckRight extends CogroupState
     case object StepLeftDoneRight extends CogroupState
     case object StepRightCheckLeft extends CogroupState
     case object StepRightDoneLeft extends CogroupState
-    case object LastEqual extends CogroupState
-    case object RunLeft extends CogroupState
     case object Cartesian extends CogroupState
     case object Done extends CogroupState
 
@@ -37,6 +37,13 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           
           private var leftSlice = if (leftIter.hasNext) leftIter.next else null.asInstanceOf[Slice]
           private var rightSlice = if (rightIter.hasNext) rightIter.next else null.asInstanceOf[Slice]
+
+          private var maxSliceSize = 
+            if (leftSlice == null) { 
+              if (rightSlice == null) 0 else rightSlice.size 
+            } else { 
+              if (rightSlice == null) leftSlice.size else leftSlice.size max rightSlice.size
+            }
 
           private var leftIdx = 0 
           private var rightIdx = 0
@@ -68,241 +75,205 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           }
 
           @tailrec private def precomputeNext(): Slice = {
-            if (state != Done) println((state, leftSlice.toString(leftIdx), rightSlice.toString(rightIdx)))
+            @inline def nonEmptyLeftSlice = leftIdx < leftSlice.size
+            @inline def emptyLeftSlice = leftIdx >= leftSlice.size
+            @inline def nonEmptyRightSlice = rightIdx < rightSlice.size
+            @inline def emptyRightSlice = rightIdx >= rightSlice.size
+            @inline def compareIdentities = leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) 
+
             state match {
               case StepLeftCheckRight => 
-                if (leftIdx < leftSlice.size) {
-                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                if (nonEmptyLeftSlice) {
+                  compareIdentities match {
                     case LT => 
-                      bufferLeft()
-                      leftIdx += 1
+                      bufferAdvanceLeft()
 
                     case GT =>
-                      bufferRight()
-                      rightIdx += 1
+                      bufferAdvanceRight()
                       state = StepRightCheckLeft
 
                     case EQ =>
                       bufferBoth()
-                      state = LastEqual
+                      firstRightEq = rightIdx
+                      state = Cartesian
                   }
 
                   precomputeNext()
                 } else {
-                  val result = emitSlice()
-                  if (leftIter.hasNext) {
-                    leftSlice = leftIter.next 
-                    leftIdx = 0
-                  } else {
-                    state = StepRightDoneLeft
-                  }
-
-                  result
+                  val result = emitSliceOnOverflow(true, false, StepRightDoneLeft)
+                  if (result != null) result else precomputeNext()
                 }
 
               case StepLeftDoneRight =>
-                if (leftIdx < leftSlice.size) {
-                  bufferLeft()
-                  leftIdx += 1
+                if (nonEmptyLeftSlice) {
+                  bufferAdvanceLeft()
                   precomputeNext()
                 } else {
-                  val result = emitSlice()
-                  if (leftIter.hasNext) {
-                    leftSlice = leftIter.next 
-                    leftIdx = 0
-                  } else {
-                    state = Done
-                  }
-
-                  result
+                  val result = emitSliceOnOverflow(true, false, Done)
+                  if (result != null) result else precomputeNext()
                 }
 
               case StepRightCheckLeft => 
-                if (rightIdx < rightSlice.size) {
-                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                if (nonEmptyRightSlice) {
+                  compareIdentities match {
                     case LT => 
-                      bufferLeft()
-                      leftIdx += 1
+                      bufferAdvanceLeft()
                       state = StepLeftCheckRight
 
                     case GT =>
-                      bufferRight()
-                      rightIdx += 1
+                      bufferAdvanceRight()
 
                     case EQ =>
                       bufferBoth()
-                      state = LastEqual
+                      firstRightEq = rightIdx
+                      state = Cartesian
                   }
 
                   precomputeNext()
                 } else {
-                  val result = emitSlice()
-                  if (rightIter.hasNext) {
-                    rightSlice = rightIter.next 
-                    rightIdx = 0
-                  } else {
-                    state = StepLeftDoneRight
-                  }
-
-                  result
+                  val result = emitSliceOnOverflow(false, true, StepLeftDoneRight)
+                  if (result != null) result else precomputeNext()
                 }
 
               case StepRightDoneLeft =>
-                if (rightIdx < rightSlice.size) {
-                  bufferRight()
-                  rightIdx += 1
+                if (nonEmptyRightSlice) {
+                  bufferAdvanceRight()
                   precomputeNext()
                 } else {
-                  val result = emitSlice()
-                  if (rightIter.hasNext) {
-                    rightSlice = rightIter.next 
-                    rightIdx = 0
-                  } else {
-                    state = Done
-                  }
-
-                  result
+                  val result = emitSliceOnOverflow(false, true, Done)
+                  if (result != null) result else precomputeNext()
                 }
-
-              case LastEqual =>
-                firstRightEq = rightIdx
-                rightIdx += 1
-
-                if (rightIdx < rightSlice.size) {
-                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
-                    case LT => 
-                      // there is potentially a run on the left; when we reach the end of the run we need
-                      // to readvance the right
-                      leftIdx += 1
-                      rightIdx -= 1
-                      state = RunLeft
-
-                    case GT =>
-                      sys.error("Inputs on the right not sorted.")
-                      
-                    case EQ => 
-                      bufferBoth()
-                      state = Cartesian
-                  }
-                } else {
-                  if (rightIter.hasNext) {
-                    rightSlice = (rightSlice append rightIter.next)
-                  } else {
-                    state = StepLeftDoneRight
-                    leftIdx += 1
-                  }
-                }
-
-                precomputeNext()
-
-              case RunLeft =>
-                if (leftIdx < leftSlice.size) {
-                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
-                    case LT => 
-                      sys.error("Inputs on the left not sorted") 
-
-                    case GT => 
-                      rightIdx += 1
-                      state = StepLeftCheckRight
-
-                    case EQ => 
-                      bufferBoth()
-                      leftIdx += 1
-                  }
-                } else {
-                  if (leftIter.hasNext) {
-                    leftIdx = 0
-                    leftSlice = leftIter.next
-                  } else {
-                    state = StepRightDoneLeft
-                  }
-                } 
-
-                precomputeNext()
 
               case Cartesian =>
-                rightIdx += 1
-                while (rightIdx >= rightSlice.size && rightIter.hasNext) rightSlice = (rightSlice append rightIter.next)
-                if (rightIdx >= rightSlice.size) {
-                  rightIdx = firstRightEq
-                  leftIdx += 1
-                  while (leftIdx >= leftSlice.size && leftIter.hasNext) leftSlice = (leftSlice append leftIter.next)
-                  if (leftIdx >= leftSlice.size) {
-                    state = Done
-                  }
+                @inline def ensureRightSliceNonEmpty(): Boolean = {
+                  while (rightIdx >= rightSlice.size && rightIter.hasNext) rightSlice = (rightSlice append rightIter.next)
+                  nonEmptyRightSlice
                 }
 
-                if (state != Done) {
-                  leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+                @inline def ensureLeftSliceNonEmpty(): Boolean = {
+                  while (leftIdx >= leftSlice.size && leftIter.hasNext) leftSlice = (leftSlice append leftIter.next)
+                  nonEmptyLeftSlice
+                }
+
+                rightIdx += 1
+                if (ensureRightSliceNonEmpty()) {
+                  compareIdentities match {
                     case LT => 
                       nextRight = rightIdx
                       rightIdx = firstRightEq
                       leftIdx += 1
-                      while (leftIdx >= leftSlice.size && leftIter.hasNext) leftSlice = (leftSlice append leftIter.next)
-                      
-                      if (leftIdx < leftSlice.size) {
-                        leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) match {
+
+                      if (ensureLeftSliceNonEmpty()) {
+                        compareIdentities match {
                           case LT => sys.error("Inputs on the left not sorted")
                           case GT => 
-                            if (leftBuffer.size > leftSlice.size) {
-                              val result = emitSlice()
-                              rightIdx = nextRight
-                              state = StepLeftCheckRight
-                              result
-                            } else {
-                              rightIdx = nextRight
-                              state = StepLeftCheckRight
-                              precomputeNext()
-                            }
+                            state = StepLeftCheckRight
+                            rightIdx = nextRight
+                            val result = emitSliceOnOverflow(false, false, null)
+                            if (result != null) result else precomputeNext()
                           
                           case EQ => 
                             bufferBoth()
                             precomputeNext()
                         }
                       } else {
-                        if (leftBuffer.size > leftSlice.size) {
-                          val result = emitSlice() 
-                          rightIdx = nextRight
-                          state = StepRightDoneLeft
-                          result
-                        } else {
-                          rightIdx = nextRight
-                          state = StepRightDoneLeft
-                          precomputeNext()
-                        }
+                        state = StepRightDoneLeft
+                        rightIdx = nextRight
+                        val result = emitSliceOnOverflow(false, false, null)
+                        if (result != null) result else precomputeNext()
                       }
 
-                    case GT =>
-                      sys.error("Inputs on the right not sorted.")
-                      
+                    case GT => 
+                      sys.error("Inputs on the right not sorted")
+
                     case EQ => 
                       bufferBoth()
                       precomputeNext()
                   }
                 } else {
-                  precomputeNext()
+                  rightIdx = firstRightEq
+                  leftIdx += 1
+                  if (ensureLeftSliceNonEmpty()) {
+                    compareIdentities match {
+                      case LT => sys.error("Inputs on the left not sorted")
+                      case GT => 
+                        state = StepLeftDoneRight
+                        val result = emitSliceOnOverflow(false, false, null)
+                        if (result != null) result else precomputeNext()
+                          
+                      case EQ => 
+                        bufferBoth()
+                        precomputeNext()
+                    }
+                  } else {
+                    state = Done
+                    emitSlice()
+                  }
                 }
 
-              case Done => emitSlice()
+              case Done => null.asInstanceOf[Slice]
             }
           }
 
-          private def bufferLeft(): Unit = {
-            println("Buffering left")
+          private def bufferAdvanceLeft(): Unit = {
             leftBuffer += leftIdx
             rightBuffer += -1
+            leftIdx += 1
           }
 
-          private def bufferRight(): Unit = {
-            println("Buffering right")
+          private def bufferAdvanceRight(): Unit = {
             leftBuffer += -1
             rightBuffer += rightIdx
+            rightIdx += 1
           }
 
           private def bufferBoth(): Unit = {
-            println("Buffering equal")
             leftBuffer += leftIdx
             rightBuffer += rightIdx
+          }
+
+          private def emitSliceOnOverflow(advanceLeft: Boolean, advanceRight: Boolean, advancingState: CogroupState): Slice = {
+            if (leftBuffer.size >= maxSliceSize) {
+              val result = emitSlice()
+
+              if (advanceLeft) {
+                if (leftIter.hasNext) {
+                  leftSlice = leftIter.next
+                  leftIdx = 0
+                } else {
+                  state = advancingState
+                }
+              } else if (advanceRight) {
+                if (rightIter.hasNext) {
+                  rightSlice = rightIter.next
+                  rightIdx = 0
+                } else {
+                  state = advancingState
+                }
+              }
+
+              result
+            } else {
+              if (advanceLeft) {
+                if (leftIter.hasNext) {
+                  leftSlice = leftSlice append leftIter.next
+                  null
+                } else {
+                  state = advancingState
+                  if (state == Done) emitSlice() else null
+                }
+              } else if (advanceRight) {
+                if (rightIter.hasNext) {
+                  rightSlice = rightSlice append rightIter.next
+                  null
+                } else {
+                  state = advancingState
+                  if (state == Done) emitSlice() else null
+                }
+              } else {
+                null
+              } 
+            }
           }
 
           private def emitSlice(): Slice = {
