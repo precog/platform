@@ -718,6 +718,7 @@ object ImportTools extends Command {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("v", "verbose", "verbose logging", { config.verbose = true })
+      opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -781,7 +782,7 @@ object ImportTools extends Command {
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
-    val token: String = TestTokenManager.rootUID,
+    var token: String = TestTokenManager.rootUID,
     var verbose: Boolean = false 
   )
 }
