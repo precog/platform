@@ -3,6 +3,7 @@ package util
 
 import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import java.net.InetAddress
   
 import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
@@ -17,6 +18,8 @@ import scalaz._
 import Scalaz._
 
 import com.weiglewilczek.slf4s._
+
+import org.streum.configrity.Configuration
 
 import org.I0Itec.zkclient.ZkClient 
 import org.I0Itec.zkclient.DataUpdater
@@ -167,25 +170,23 @@ object VectorClock extends VectorClockSerialization {
   def empty = apply(Map.empty)
 }
 
-class ZookeeperSystemCoordination(private val zkc: ZkClient, 
-                      basePaths: Seq[String],
-                      prefix: String) extends SystemCoordination with Logging {
+class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) extends SystemCoordination with Logging {
 
   lazy val initialSequenceId = 0
 
   lazy val active = "active"
   lazy val delimeter = "/"
 
-  lazy val producerIdBasePaths = List("producer", "id")
-  lazy val relayAgentBasePaths = List("relay_agent")
+  lazy val producerIdBasePaths = List("ingest", "producer_id")
+  lazy val relayAgentBasePaths = List("ingest", "relay_agent")
   lazy val shardCheckpointBasePaths = List("shard", "checkpoint")
 
-  lazy val basePath = delimeter + basePaths.mkString(delimeter)  
+  lazy val basePath = delimeter + "precog-" + uid.systemId 
 
   private def makeBase(elements: List[String]) = basePath + delimeter + elements.mkString(delimeter)
 
   lazy val producerIdBase = makeBase(producerIdBasePaths)
-  lazy val producerIdPath = producerIdBase + delimeter + prefix  
+  lazy val producerIdPath = producerIdBase + delimeter + uid.hostId + uid.serviceId 
 
   lazy val relayAgentBase = makeBase(relayAgentBasePaths)
   
@@ -196,12 +197,12 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
   def acquireProducerId(): Int = {
     val data = jvalueToBytes(ProducerState(initialSequenceId).serialize)
-    createPersistentSequential(producerIdBase, prefix, data) 
+    createPersistentSequential(producerIdBase, producerIdPath, data) 
   }
 
-  private def createPersistentSequential(path: String, prefix: String, data: Array[Byte]): Int = {
-    zkc.createPersistent(path, true)
-    val actualPath = zkc.createPersistentSequential(path + delimeter + prefix, data)
+  private def createPersistentSequential(base: String, path: String, data: Array[Byte]): Int = {
+    zkc.createPersistent(base, true)
+    val actualPath = zkc.createPersistentSequential(path,  data)
     actualPath.substring(actualPath.length - 10).toInt
   }
 
@@ -211,7 +212,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
     producerId
   }
 
-  private def producerPath(producerId: Int): String = producerIdBase + delimeter + prefix + "%010d".format(producerId)
+  private def producerPath(producerId: Int): String = producerIdPath + "%010d".format(producerId)
   private def producerActivePath(producerId: Int): String = producerPath(producerId) + delimeter + active
 
   def unregisterProducerId(producerId: Int) {
@@ -356,19 +357,19 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
   def close() = zkc.close()
 }
 
+case class ServiceUID(systemId: String, hostId: String, serviceId: String)
+
 object ZookeeperSystemCoordination {
 
-  def apply(zkHosts: String, basePaths: Seq[String], prefix: String) = {
+  def apply(zkHosts: String, uid: ServiceUID) = {
     val zkc = new ZkClient(zkHosts)
-    new ZookeeperSystemCoordination(zkc, basePaths, prefix)
+    new ZookeeperSystemCoordination(zkc, uid)
   }
 
-  val prefix = "prodId-"
-  val paths = List("com", "precog", "ingest", "v1")
-
-  val testHosts = "localhost:2181"
-  def testZookeeperSystemCoordination(hosts: String = testHosts) = ZookeeperSystemCoordination(hosts, "test" :: paths, prefix)
-
-  val prodHosts = "localhost:2181"
-  def prodZookeeperSystemCoordination(hosts: String = prodHosts) = ZookeeperSystemCoordination(hosts, paths, prefix)
+  def extractServiceUID(config: Configuration): ServiceUID = {
+    val systemId = config[String]("systemId", "test")
+    val hostId = config[String]("hostId", InetAddress.getLocalHost.getHostName)
+    val serviceId = config[String]("serviceId", System.getProperty("precog.serviceId", ""))
+    ServiceUID(systemId, hostId, serviceId)
+  }
 }
