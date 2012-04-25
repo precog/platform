@@ -1,5 +1,4 @@
-package com.precog
-package daze
+package com.precog.yggdrasil
 
 import akka.actor._
 import akka.dispatch._
@@ -12,7 +11,6 @@ import blueeyes.json.JsonParser
 
 import com.precog.common._
 import com.precog.common.util._
-import com.precog.yggdrasil._
 import com.precog.yggdrasil.util._
 import com.precog.util._
 import SValue._

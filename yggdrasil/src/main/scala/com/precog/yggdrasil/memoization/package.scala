@@ -1,4 +1,4 @@
-package com.precog.daze
+package com.precog.yggdrasil
 
 package object memoization {
   type MemoId = Int

@@ -1,4 +1,5 @@
 package com.precog.yggdrasil
+package table
 
 trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] { 
   val returns: CType { type CA = A }

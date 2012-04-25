@@ -1,7 +1,6 @@
-package com.precog.daze
+package com.precog.yggdrasil
 
 import com.precog.common.{Path, VectorCase}
-import com.precog.yggdrasil._
 
 import akka.actor.ActorSystem
 import akka.dispatch.Await

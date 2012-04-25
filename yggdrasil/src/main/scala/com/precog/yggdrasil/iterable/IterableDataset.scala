@@ -1,7 +1,9 @@
 package com.precog.yggdrasil
+package iterable
+
+import com.precog.common.VectorCase
 
 import scala.annotation.tailrec
-import com.precog.common.VectorCase
 import scalaz.Functor
 
 case class IterableDataset[A](idCount: Int, iterable: Iterable[(Identities, A)]) {

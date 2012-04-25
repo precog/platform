@@ -1,9 +1,8 @@
-package com.precog
-package daze
+package com.precog.yggdrasil
+package iterable
 
 import memoization._
-import yggdrasil._
-import yggdrasil.serialization._
+import serialization._
 import com.precog.common._
 import com.precog.common.util.IOUtils
 import com.precog.util.IdGen

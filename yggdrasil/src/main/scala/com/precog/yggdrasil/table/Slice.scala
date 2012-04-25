@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
+package table
 
 import com.precog.common.VectorCase
+
 import scala.annotation.tailrec
 import scalaz.{Identity => _, _}
 import scalaz.Scalaz._
@@ -10,11 +12,11 @@ trait Slice { source =>
   import Slice._
 
   def identities: Seq[Column[Identity]]
+
   protected[yggdrasil] def columns: Map[VColumnRef[_], Column[_]]
   def column[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[Column[A]] = {
     columns.get(ref).map(_.asInstanceOf[Column[A]])
   }
-
 
   def idCount: Int
   def size: Int

@@ -1,9 +1,8 @@
-package com.precog.daze
+package com.precog.yggdrasil
 package memoization
 
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.serialization._
-import com.precog.util._
+import serialization._
+import util._
 
 import java.io._
 import java.util.{PriorityQueue, Comparator, Arrays}

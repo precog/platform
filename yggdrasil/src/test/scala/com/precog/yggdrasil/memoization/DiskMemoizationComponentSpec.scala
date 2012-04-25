@@ -1,4 +1,4 @@
-package com.precog.daze
+package com.precog.yggdrasil
 package memoization
 
 import akka.actor.ActorSystem

@@ -1,8 +1,7 @@
-package com.precog
-package daze
+package com.precog.yggdrasil
+package iterable
 
-import yggdrasil._
-import yggdrasil.serialization._
+import serialization._
 import memoization._
 import com.precog.common.VectorCase
 import com.precog.util._
