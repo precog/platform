@@ -1,5 +1,6 @@
 package com.precog.yggdrasil
 
+import table._
 import com.precog.util._
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._

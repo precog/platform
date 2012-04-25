@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package memoization
 
+import iterable._
 import serialization._
 import util._
 
@@ -24,7 +25,7 @@ trait DiskMemoizationConfig {
   def sortWorkDir: File
 }
 
-trait DiskIterableMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
+trait DiskMemoizationComponent extends YggConfigComponent with MemoizationEnvironment { self =>
   type YggConfig <: DiskMemoizationConfig
   type Memoable[α] = Iterable[α]
   type MemoId = Int
