@@ -11,10 +11,13 @@ if /etc/init.d/monit stop; then
 fi
 
 # Stop and start the service
-stop ingest-v1
+if status beta-shard-v1 | grep running; then
+    stop beta-shard-v1
+fi
+
 sleep 5
 
-if ! RESULT=`start ingest-v1 2>&1` > /dev/null ; then
+if ! RESULT=`start beta-shard-v1 2>&1` > /dev/null ; then
         if echo "$RESULT" | grep -v "already running" > /dev/null ; then
 		echo "Failure: $RESULT"
 		exit 1
@@ -31,7 +34,7 @@ fi
 sleep 30
 
 echo "Checking health"
-curl -v -f -G "http://localhost:30050/blueeyes/services/ingest/v1/health"
+#curl -v -f -G "http://localhost:30082/blueeyes/services/quirrel/v1/health"
 echo "Completed health check"
 
 exit 0

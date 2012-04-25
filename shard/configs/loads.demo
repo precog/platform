@@ -1,0 +1,6 @@
+conf=demo/demo-shard-v1.conf
+default=demo/demo-shard-v1.default
+init=demo/demo-shard-v1.init
+/etc/monit/conf.d/demo-shard-v1.monit=demo/demo-shard-v1.monit
+/etc/precog/demo-shard-v1.logging.xml=demo/demo-shard-v1.logging.xml
+postinstall=demo/postinstall.sh

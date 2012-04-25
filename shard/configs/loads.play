@@ -1,0 +1,6 @@
+conf=play/play-shard-v1.conf
+default=play/play-shard-v1.default
+init=play/play-shard-v1.init
+/etc/monit/conf.d/play-shard-v1.monit=play/play-shard-v1.monit
+/etc/precog/play-shard-v1.logging.xml=play/play-shard-v1.logging.xml
+postinstall=play/postinstall.sh

@@ -1,0 +1,24 @@
+check process beta-shard-v1 with pidfile /var/run/precog/beta-shard-v1.pid
+  start program = "/usr/sbin/service beta-shard-v1 start" with timeout 30 seconds
+  stop program  = "/usr/sbin/service beta-shard-v1 stop"
+  if failed port 30082 protocol http and request '/blueeyes/services/shard/v1/health' with timeout 15 seconds for 3 cycles 
+     then exec "/opt/precog/threaddump.sh beta-shard-v1"
+  if failed port 30082 protocol http and request '/blueeyes/services/shard/v1/health' with timeout 15 seconds for 8 cycles 
+     then restart
+  if 3 restarts within 10 cycles then timeout
+  group beta-shard-v1
+
+# Watch server log for issues
+check file beta-shard-v1.server.log with path /var/log/precog/beta-shard-v1.server.log
+  if match "Exception" for 3 cycles then alert
+  depends on beta-shard-v1
+  group beta-shard-v1
+
+
+#check file beta-shard-v1-health.log with path /var/log/precog/beta-shard-v1-health.log
+#  start program  = "/usr/bin/touch -c /var/log/precog/beta-shard-v1-health.log && /bin/chown precog:precog /var/log/precog/beta-shard-v1-health.log"
+#  stop program  = "/bin/rm /var/log/precog/beta-shard-v1-health.log"
+#  if timestamp > 20 minutes then alert
+#  if match "ERROR" for 3 cycles then alert
+#  depends on beta-shard-v1
+#  group beta-shard-v1

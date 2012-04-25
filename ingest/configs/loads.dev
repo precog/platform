@@ -1,6 +1,0 @@
-conf=dev/ingest-v1.conf.test
-default=dev/ingest-v1.default
-init=dev/ingest-v1.init
-/etc/monit/conf.d/ingest-v1.monit=dev/ingest-v1.monit
-/etc/reportgrid/ingest-v1.logging.xml=dev/ingest-v1.logging.xml
-postinstall=dev/postinstall.sh

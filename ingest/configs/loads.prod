@@ -1,6 +1,0 @@
-conf=prod/analytics-v1.conf
-default=prod/analytics-v1.default
-init=prod/analytics-v1.init
-/etc/monit/conf.d/analytics-v1.monit=prod/analytics-v1.monit
-/etc/reportgrid/analytics-v1.logging.xml=prod/analytics-v1.logging.xml
-postinstall=prod/postinstall.sh
