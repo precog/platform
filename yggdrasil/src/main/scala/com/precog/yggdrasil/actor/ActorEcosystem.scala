@@ -33,6 +33,8 @@ import com.precog.common.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 
+import java.net.InetAddress
+
 import blueeyes.json.JsonAST._
 
 case object Status
@@ -48,7 +50,7 @@ trait ActorEcosystem {
 }
 
 trait ProductionActorConfig extends BaseConfig {
-  def shardId(): String = "shard" + System.getProperty("precog.shard.suffix", "") 
+  def shardId(): String = serviceUID.hostId + serviceUID.serviceId 
 
   def kafkaHost(): String = config[String]("kafka.batch.host")
   def kafkaPort(): Int = config[Int]("kafka.batch.port")
@@ -59,6 +61,8 @@ trait ProductionActorConfig extends BaseConfig {
   def zookeeperPrefix(): String = config[String]("zookeeper.prefix")   
 
   def statusTimeout(): Long = config[Long]("actors.status.timeout", 30000)
+
+  def serviceUID(): ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 }
 
 trait ProductionActorEcosystem extends ActorEcosystem with Logging {
@@ -184,7 +188,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   private lazy val metadataSyncCancel = actorSystem.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
   
   private lazy val systemCoordination = {
-    ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.zookeeperBase, yggConfig.zookeeperPrefix) 
+    ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
   }
   
   private lazy val checkpoints = new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
