@@ -17,18 +17,23 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.yggdrasil
+package iterable
 
-import yggdrasil._
+trait OperationsAPI extends StorageEngineQueryComponent with DatasetOpsComponent 
 
-trait TableDatasetOpsComponent extends DatasetOpsComponent {
-  type Dataset[α] = Table
-  type Memoable[α] = RowView
-  type Grouping[α, β] = GroupTable
-
-  trait Ops extends DatasetOps[Dataset, Memoable, Grouping]
+trait StorageEngineQueryComponent {
+  type Dataset[E]
+  type Grouping[K, A]
+  type QueryAPI <: StorageEngineQueryAPI[Dataset[(Identities, Seq[CValue])]]
+  val query: QueryAPI
 }
 
+trait DatasetOpsComponent {
+  type Dataset[E]
+  type Memoable[E]
+  type Grouping[K, A]
+  type Ops <: DatasetOps[Dataset, Memoable, Grouping] with GroupingOps[Dataset, Memoable, Grouping]
+  val ops: Ops
+}
 
-// vim: set ts=4 sw=4 et:

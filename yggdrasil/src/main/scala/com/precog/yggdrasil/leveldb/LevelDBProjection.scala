@@ -30,20 +30,14 @@ import org.fusesource.leveldbjni.JniDBFactory._
 import org.fusesource.leveldbjni.DataWidth
 
 import java.io._
-import java.nio.Buffer
 import java.nio.ByteBuffer
-import java.util.Map.Entry
 import java.util.concurrent.TimeoutException
-import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
 import scala.collection.JavaConverters._
-import scala.collection.Iterator
 import scala.collection.mutable.ArrayBuffer
-import scala.io.Source
 
-import scalaz.{Ordering => _, Source => _, _}
-import scalaz.Scalaz._
+import scalaz.{Ordering => _, _}
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.iteratee.Input._
@@ -54,83 +48,9 @@ import scalaz.syntax.biFunctor
 import scalaz.Scalaz._
 import IterateeT._
 
-import blueeyes.json.JPath
-import blueeyes.json.JsonAST._
-import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
-import blueeyes.json.Printer
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
-
-object LevelDBProjectionComparator {
-
-  import Printer._
-
-  def apply(_descriptor: ProjectionDescriptor) = new DBComparator {
-    val projection: ByteProjection = new LevelDBByteProjection {
-      val descriptor = _descriptor
-    }
-
-    def name = compact(render(_descriptor.serialize))
-    def compare(k1: Array[Byte], k2: Array[Byte]) = projection.keyOrder.order(k1, k2).toInt
-
-    // default implementations
-    def findShortestSeparator(start: Array[Byte], limit: Array[Byte]) = start
-    def findShortSuccessor(key: Array[Byte]) = key
-  }
-}
-
-object LevelDBProjection {
-  private final val comparatorMetadataFilename = "comparator"
-
-  def apply(baseDir : File, descriptor: ProjectionDescriptor): ValidationNEL[Throwable, LevelDBProjection] = {
-    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
-                   else baseDir.success[Throwable]
-
-    baseDirV.toValidationNel map { (bd: File) => new LevelDBProjection(bd, descriptor) }
-  }
-
-//  val descriptorFile = "projection_descriptor.json"
-//  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
-
-//  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
-//    import java.io._
-//
-//    val df = new File(baseDir, filename)
-//
-//    def read = 
-//      if (df.exists) Some {
-//        IO {
-//          val reader = new FileReader(df)
-//          try {
-//            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
-//          } finally {
-//            reader.close
-//          }
-//        }
-//      } else {
-//        None
-//      }
-//
-//    def sync(data: T) = IO {
-//      Validation.fromTryCatch {
-//        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
-//        val writer = new FileWriter(tmpFile)
-//        try {
-//          compact(render(data.serialize(decomposer)), writer)
-//        } finally {
-//          writer.close
-//        }
-//        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
-//        Success(())
-//      }
-//    }
-//  }
-}
-
-class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset] {
-  import LevelDBProjection._
+trait LevelDBProjection extends LevelDBByteProjection {
+  val baseDir: File
+  val descriptor: ProjectionDescriptor
 
   val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
@@ -141,17 +61,14 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   private val createOptions = (new Options)
     .createIfMissing(true)
     .maxOpenFiles(maxOpenFiles)
-  private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
-  //private lazy val valIndexFile: DB = {
-  //   factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
-  //}
+
+  protected lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
-  def close: IO[Unit] = IO {
+  def close = {
     logger.info("Closing column index files")
     idIndexFile.close()
-    //valIndexFile.close()
   }
 
   def sync: IO[Unit] = IO { } 
@@ -166,7 +83,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     positions.tail.reverse
   }
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = {
     val (idBytes, valueBytes) = project(id, v)
 
     if (shouldSync) {
@@ -238,48 +155,11 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  private final val emptyJavaIterator = new java.util.Iterator[KeyValuePair] {
+  protected def emptyJavaIterator = new java.util.Iterator[KeyValuePair] {
     def hasNext() = false
     def next() = throw new NoSuchElementException("Empty iterator")
     def remove() = throw new UnsupportedOperationException("Iterators cannot remove")
   }
-
-  def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = IterableDataset[Seq[CValue]](1, new Iterable[(Identities,Seq[CValue])]{
-    def iterator = new Iterator[(Identities,Seq[CValue])] {
-      val iter = idIndexFile.iterator.asInstanceOf[JniDBIterator]
-      iter.seekToFirst
-
-      val reader = new ChunkReader(iter, expiresAt)
-      reader.start()
-
-      private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
-
-      private final def nextIterator = 
-        currentChunk.fold(
-          empty = throw new TimeoutException("Iteration expired"),
-          el    = chunk => chunk.getIterator(),
-          eof   = emptyJavaIterator
-        )
-
-      private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator
-
-      def hasNext: Boolean = if(currentChunk.isEof) false else {
-        if (chunkIterator.hasNext) true else {
-          currentChunk.foreach(chunk => reader.returnBuffers(chunk))
-          currentChunk = reader.chunkQueue.take()
-          chunkIterator = nextIterator
-          chunkIterator.hasNext
-        }
-      }
-
-      def next: (Identities,Seq[CValue]) = {
-        val kvPair = chunkIterator.next()
-        unproject(kvPair.getKey, kvPair.getValue)
-      }
-    }
-  })
-
-  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
 
 //  def traverseIndexEnumerator[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
 //    import MO._

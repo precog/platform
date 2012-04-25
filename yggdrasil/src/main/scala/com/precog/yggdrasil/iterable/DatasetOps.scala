@@ -17,11 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
+package iterable
 
 import serialization._
 import memoization._
+import scalaz.{Identity => _, Order, NonEmptyList => NEL}
 
 trait DatasetOps[Dataset[_], Memoable[_], Grouping[_, _]] {
   implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Memoable, Grouping, A]
@@ -111,4 +112,4 @@ trait DatasetExtensions[Dataset[_], Memoable[_], Grouping[_, _], A] {
   def group[K](memoId: Int, memoCtx: MemoizationContext[Memoable])(keyFor: A => Dataset[K])(implicit ord: Order[K], kvs: SortSerialization[(K, Identities, A)], ms: IncrementalSerialization[(Identities, A)]): Grouping[K, Dataset[A]]
 }
 
-// vim: set ts=4 sw=4 et:
+

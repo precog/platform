@@ -50,7 +50,7 @@ trait ProjectionResults {
   def enumerator : EnumeratorT[Unit, Seq[CValue], IO]
 }
 
-class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionDescriptor, scheduler: Scheduler) extends Actor with Logging {
+class ProjectionActor[Dataset](val projection: Projection[Dataset], scheduler: Scheduler) extends Actor with Logging {
   def asCValue(jval: JValue): CValue = jval match { 
     case JString(s) => CString(s)
     case JInt(i)    => CNum(BigDecimal(i))
@@ -65,7 +65,7 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     @tailrec def step(iter: Iterator[ProjectionInsert]) {
       if (iter.hasNext) {
         val insert = iter.next
-        projection.insert(insert.identities, insert.values).unsafePerformIO
+        projection.insert(insert.identities, insert.values)
         step(iter)
       }
     }
@@ -77,7 +77,7 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
     case Stop => //close the db
       if(refCount == 0) {
         logger.debug("Closing projection.")
-        projection.close.unsafePerformIO
+        projection.close
       } else {
         logger.debug("Deferring close ref count [%d]".format(refCount))
         scheduler.scheduleOnce(1 second, self, Stop) 
@@ -89,7 +89,7 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
 
     case ProjectionInsert(identities, values) => 
       //logger.debug("Projection insert")
-      projection.insert(identities, values).unsafePerformIO
+      projection.insert(identities, values)
       sender ! ()
     
     case ProjectionBatchInsert(inserts) =>

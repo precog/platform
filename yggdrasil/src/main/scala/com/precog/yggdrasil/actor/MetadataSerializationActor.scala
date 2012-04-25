@@ -142,8 +142,9 @@ object MetadataStorage {
 
 class FilesystemMetadataStorage(protected val dirMapping: ProjectionDescriptor => IO[File]) extends MetadataStorage with FilesystemFileOps
 
+  /*
 object MetadataUtil {
-  def repairMetadata(descriptor: ProjectionDescriptor, 
+  def repairMetadata[Dataset](descriptor: ProjectionDescriptor, 
                      projection: LevelDBProjection, 
                      record: MetadataRecord): IO[Validation[Throwable, ColumnMetadata]] = IO {
     Validation.fromTryCatch {
@@ -165,6 +166,7 @@ object MetadataUtil {
     sys.error("todo")
   }
 }
+  */
 
 trait FileOps {
 

@@ -35,14 +35,13 @@ package object yggdrasil {
   type Identity = Long
   type Identities = VectorCase[Identity]
   type SEvent = (Identities, SValue)
-  type SColumn = (Identities, CValue)
 
   object Identities {
-    def Empty = VectorCase.empty[Identity]
+    val Empty = VectorCase.empty[Identity]
   }
 
   object SEvent {
-    def apply(id: Identities, sv: SValue): SEvent = (id, sv)
+    @inline def apply(id: Identities, sv: SValue): SEvent = (id, sv)
   }
 
   def prefixIdentityOrdering(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {

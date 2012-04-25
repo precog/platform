@@ -54,14 +54,13 @@ trait ProductionActorConfig extends BaseConfig {
   def zookeeperPrefix(): String = config[String]("zookeeper.prefix")   
 }
 
-trait ProductionActorEcosystem extends ActorEcosystem with Logging {
-
+trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfigComponent {
   val pre = "[Yggdrasil Shard]"
 
   type YggConfig <: ProductionActorConfig
 
-  def yggState(): YggState
-  def yggConfig(): YggConfig
+  def yggState: YggState
+  def projectionFactory: ProjectionFactory
 
   lazy val actorSystem = ActorSystem("production_actor_system")
   private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -72,7 +71,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   }
   
   lazy val projectionsActor = {
-    actorSystem.actorOf(Props(new ProjectionActors(yggState.descriptorLocator, yggState.descriptorIO, actorSystem.scheduler)), "projections")
+    actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
@@ -152,7 +151,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   }
  
   private lazy val metadataStorage = {
-    new FilesystemMetadataStorage(yggState.descriptorLocator)
+    new FilesystemMetadataStorage(yggState.descriptorStorage.storageLocation _)
   }
 
   private lazy val metadataSerializationActor = {
@@ -169,13 +168,13 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   private lazy val checkpoints = new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
 }
 
-trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
+trait StandaloneActorEcosystem extends ActorEcosystem with YggConfigComponent with Logging {
   type YggConfig <: ProductionActorConfig
   
   val pre = "[Yggdrasil Shard]"
 
-  def yggState(): YggState
-  def yggConfig(): YggConfig
+  def yggState: YggState
+  def projectionFactory: ProjectionFactory
 
   lazy val actorSystem = ActorSystem("standalone_actor_system")
   private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -186,7 +185,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   }
   
   lazy val projectionsActor = {
-    actorSystem.actorOf(Props(new ProjectionActors(yggState.descriptorLocator, yggState.descriptorIO, actorSystem.scheduler)), "projections")
+    actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
@@ -252,7 +251,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   private val metadataSyncPeriod = Duration(1, "minutes")
   
   private lazy val metadataStorage = {
-    new FilesystemMetadataStorage(yggState.descriptorLocator)
+    new FilesystemMetadataStorage(yggState.descriptorStorage.storageLocation _)
   }
   
   private lazy val metadataSerializationActor = {

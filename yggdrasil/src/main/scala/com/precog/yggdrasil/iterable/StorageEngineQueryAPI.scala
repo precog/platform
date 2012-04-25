@@ -17,13 +17,12 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog.yggdrasil
 
-import com.precog.yggdrasil.SValue
 import com.precog.common.Path
 
-trait StorageEngineQueryAPI[Dataset[_]] {
-  def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue]
+trait StorageEngineQueryAPI[Dataset] {
+  def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset
   def mask(userUID: String, path: Path): DatasetMask[Dataset]
 }
 

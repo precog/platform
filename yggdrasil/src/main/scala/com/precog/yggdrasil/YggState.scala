@@ -44,6 +44,11 @@ import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
 import scalaz.effect.IO
 
+trait ProjectionDescriptorStorage {
+  def storageLocation(descriptor: ProjectionDescriptor): IO[File]
+  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]]
+}
+
 case class YggState(
   dataDir: File,
   descriptors: Map[ProjectionDescriptor, File], 
@@ -62,22 +67,27 @@ case class YggState(
 
   def newDescriptorDir(descriptor: ProjectionDescriptor, parent: File): File = newRandomDir(parent)
 
-  val descriptorLocator = (descriptor: ProjectionDescriptor) => IO {
-    descriptorState.get(descriptor) match {
-      case Some(x) => x
-      case None    => {
-        val newDir = newDescriptorDir(descriptor, dataDir)
-        descriptorState += (descriptor -> newDir)
-        newDir
+  object descriptorStorage extends ProjectionDescriptorStorage {
+    def storageLocation(descriptor: ProjectionDescriptor) = IO {
+      descriptorState.get(descriptor) match {
+        case Some(x) => x
+        case None    => {
+          val newDir = newDescriptorDir(descriptor, dataDir)
+          descriptorState += (descriptor -> newDir)
+          newDir
+        }
+      }
+    }
+
+    def saveDescriptor(descriptor: ProjectionDescriptor) = {
+      for {
+        f <- storageLocation(descriptor).map( d => new File(d, descriptorName))
+        v <- IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
+      } yield {
+        v map (_ => f)
       }
     }
   }
-
-  val descriptorIO = (descriptor: ProjectionDescriptor) =>
-    descriptorLocator(descriptor).map( d => new File(d, descriptorName) ).flatMap {
-      f => IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), f)
-    }.map(_ => ())
-
 }
 
 object YggState extends Logging {
