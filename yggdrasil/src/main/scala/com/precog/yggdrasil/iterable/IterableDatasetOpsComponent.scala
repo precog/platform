@@ -1,15 +1,18 @@
 package com.precog.yggdrasil
 package iterable
 
+import Buffering._
 import serialization._
 import memoization._
 import com.precog.common.VectorCase
-import com.precog.util._
+import com.precog.util.{KMap, IdGen}
 
 import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.duration._
 import blueeyes.util.Clock
+
+import java.io.File
 
 import scala.annotation.tailrec
 import scalaz.{NonEmptyList => NEL, Identity => _, _}
@@ -25,7 +28,9 @@ case class Cartesian[+ER](bufferedRight: Vector[ER]) extends CogroupState[ER]
 
 case class IterableGrouping[K, A](iterator: Iterator[(K, A)])
 
-trait IterableDatasetOpsConfig extends SortConfig {
+trait IterableDatasetOpsConfig {
+  def sortBufferSize: Int
+  def sortWorkDir: File
   def clock: Clock
 }
 

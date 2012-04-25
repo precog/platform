@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package memoization
 
 import serialization._
+import iterable.Buffering
 
 trait MemoizationEnvironment {
   type Memoable[E]

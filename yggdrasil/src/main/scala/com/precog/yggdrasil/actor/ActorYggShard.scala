@@ -11,7 +11,7 @@ import akka.dispatch.Future
 import akka.pattern.ask
 import akka.util.Timeout
 
-trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
+trait ActorYggShard[Dataset] extends YggShard[Dataset] with ActorEcosystem {
   
   def yggState: YggState
 

@@ -20,12 +20,9 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
 import Iteratee._
 
-trait SortConfig {
+trait YggEnumOpsConfig {
   def sortBufferSize: Int
   def sortWorkDir: File
-}
-
-trait YggEnumOpsConfig extends SortConfig {
   def flatMapTimeout: Duration
 }
 

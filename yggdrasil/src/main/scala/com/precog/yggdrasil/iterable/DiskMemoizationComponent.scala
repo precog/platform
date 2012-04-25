@@ -4,6 +4,7 @@ package memoization
 import iterable._
 import serialization._
 import util._
+import com.precog.util._
 
 import java.io._
 import java.util.{PriorityQueue, Comparator, Arrays}

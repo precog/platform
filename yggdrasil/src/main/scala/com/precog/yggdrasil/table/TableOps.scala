@@ -1,9 +1,9 @@
-package com.precog
-package daze
+package com.precog.yggdrasil
+package table
 
-import yggdrasil._
-import yggdrasil.serialization._
+import serialization._
 import memoization._
+import com.precog.common.Path
 
 trait TableOps {
   implicit def extend(t: Table): TableExtensions
@@ -11,11 +11,13 @@ trait TableOps {
   def empty(idCount: Int): Table
 
   def singleton[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType { type CA = A }, value: A): Table
+
+  def fullProjection(userUID: String, path: Path, expiresAt: Long): Table
+
+  def mask(userUID: String, path: Path): DatasetMask[Table]
 }
 
 trait TableExtensions {
-  type Memoable[α] = Table
-
   def value: Table
 
   // join must drop a prefix of identities from d2 up to the shared prefix length
@@ -31,32 +33,30 @@ trait TableExtensions {
   def paddedMerge(t: Table, nextId: () => Identity): Table
 
   // merge sorted uniq by identities and values. Input datasets must have equal identity counts
-  def union(t: Table, memoCtx: MemoizationContext[Memoable])(implicit ss: TableSerialization): Table
+  def union(t: Table, memoCtx: MemoizationContext[Iterable]): Table
 
   // inputs are sorted in identity order - merge by identity, sorting any runs of equal identities
   // using the value ordering, equal identity, equal value are the only events that persist
   // Input datasets must have equal identity counts
-  def intersect(d2: Dataset[A], memoCtx: MemoizationContext[Memoable])(implicit ord: Order[A], ss: SortSerialization[IA]): Dataset[A] 
+  def intersect(d2: Table, memoCtx: MemoizationContext[Iterable]): Table
 
-  def map[B](f: A => B): Dataset[B] 
+  def collect(f: F1P[_, _]): Table
 
-  def collect[B](pf: PartialFunction[A, B]): Dataset[B]
-
-  def reduce[B](base: B)(f: (B, A) => B): B
+  def reduce[B](base: B)(f: F2P[B, _, B]): B
 
   def count: BigInt
 
   //uniq by value, assign new identities
-  def uniq(nextId: () => Identity, memoId: Int, ctx: MemoizationContext[Memoable])(implicit buffering: Buffering[A], fs: SortSerialization[A]): Dataset[A] 
+  def uniq(nextId: () => Identity, memoId: Int, ctx: MemoizationContext[Iterable]): Table
 
   // identify(None) strips all identities
-  def identify(nextId: Option[() => Identity]): Dataset[A]
+  def identify(nextId: Option[() => Identity]): Table
 
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
-  def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit fs: SortSerialization[IA]): Dataset[A] 
+  def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Iterable]): Table
   
-  def memoize(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
+  def memoize(memoId: Int, memoCtx: MemoizationContext[Iterable]): Table
 
 }
 

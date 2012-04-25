@@ -1,12 +1,12 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
+package iterable
 
 trait OperationsAPI extends StorageEngineQueryComponent with DatasetOpsComponent 
 
 trait StorageEngineQueryComponent {
   type Dataset[E]
   type Grouping[K, A]
-  type QueryAPI <: StorageEngineQueryAPI[Dataset]
+  type QueryAPI <: StorageEngineQueryAPI[Dataset[(Identities, Seq[CValue])]]
   val query: QueryAPI
 }
 
