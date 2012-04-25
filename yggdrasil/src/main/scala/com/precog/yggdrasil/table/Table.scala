@@ -18,6 +18,7 @@
  *
  */
 package com.precog.yggdrasil
+package table
 
 import blueeyes.json.JsonAST._
 import java.lang.ref.SoftReference

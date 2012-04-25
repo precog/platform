@@ -17,22 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.yggdrasil
 package memoization
 
-import yggdrasil._
-import yggdrasil.serialization._
-
-import akka.dispatch.Future
-import akka.dispatch.ExecutionContext
-
-import java.io._
-import scalaz._
-import scalaz.effect._
-import scalaz.iteratee._
-import IterateeT._
-
+import serialization._
 
 trait MemoizationEnvironment {
   type Memoable[E]

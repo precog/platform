@@ -17,15 +17,15 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.yggdrasil
+package iterable
 
-import akka.dispatch.Future
-import yggdrasil._
-import yggdrasil.serialization._
+import serialization._
 import memoization._
 import com.precog.common.VectorCase
 import com.precog.util._
+
+import akka.dispatch.Future
 
 import scala.annotation.tailrec
 import scalaz._

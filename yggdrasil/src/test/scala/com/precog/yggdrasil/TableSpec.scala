@@ -18,6 +18,7 @@
  *
  */
 package com.precog.yggdrasil
+package table
 
 import blueeyes.json.JsonAST._
 import com.precog.common.VectorCase
@@ -38,63 +39,6 @@ import org.scalacheck.Arbitrary.arbitrary
 object TableSpec extends Specification with ArbitraryProjectionDescriptor with ArbitrarySlice {
   "a table" should {
     "cogroup" in {
-      /*
-      "for abitrary datasets" in {
-        implicit val idCount = genFixedIdCount(1)
-        check { (p: DSPair[Long]) => {
-          val (l1, l2) = p
-          
-          implicit val idSort = IdentitiesOrder.toScalaOrdering
-
-          val l1List = l1.iterable.toList.sorted
-          val l2List = l2.iterable.toList.sorted
-
-          type ResultList = List[Record[Either3[Long, (Long,Long), Long]]]
-
-          val tOrder = tupledIdentitiesOrder[Long](IdentitiesOrder)
-
-          @tailrec def computeCogroup(l: List[Record[Long]], r: List[Record[Long]], acc: ResultList): ResultList = {
-            (l,r) match {
-              case (lh :: lt, rh :: rt) => tOrder.order(lh,rh) match {
-                case EQ => {
-                  val (leftSpan, leftRemain) = l.partition(tOrder.order(_, lh) == EQ)
-                  val (rightSpan, rightRemain) = r.partition(tOrder.order(_, rh) == EQ)
-
-                  val cartesian = leftSpan.flatMap { lv => rightSpan.map { rv => (rv._1, middle3((lv._2,rv._2))) } }
-
-                  computeCogroup(leftRemain, rightRemain, acc ::: cartesian)
-                }
-                case LT => {
-                  val (leftRun, leftRemain) = l.partition(tOrder.order(_, rh) == LT)
-                  
-                  computeCogroup(leftRemain, r, acc ::: leftRun.map { case (i,v) => (i, left3(v)) })
-                }
-                case GT => {
-                  val (rightRun, rightRemain) = r.partition(tOrder.order(lh, _) == GT)
-
-                  computeCogroup(l, rightRemain, acc ::: rightRun.map { case (i,v) => (i, right3(v)) })
-                }
-              }
-              case (Nil, _) => acc ::: r.map { case (i,v) => (i, right3(v)) }
-              case (_, Nil) => acc ::: l.map { case (i,v) => (i, left3(v)) }
-            }
-          }
-
-          val expected = computeCogroup(l1List, l2List, Nil)
-
-          val result = IterableDataset(1, l1List.toIterable).cogroup(IterableDataset(1, l2List.toIterable)) {
-            new CogroupF[Long, Long, Either3[Long, (Long, Long), Long]] {
-              def left(i: Long) = left3(i)
-              def both(i1: Long, i2: Long) = middle3((i1, i2))
-              def right(i: Long) = right3(i)
-            }
-          }.iterable.toList
-
-          result must containAllOf(expected).only.inOrder
-        }}
-      }
-      */
-
       "a static full dataset" >> {
         val r1 = VColumnRef(DynColumnId(0), CLong)
         val v1 = new Table(

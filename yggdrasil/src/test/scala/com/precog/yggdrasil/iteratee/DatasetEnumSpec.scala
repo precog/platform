@@ -17,8 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.yggdrasil
+package iteratee
 
 import scalaz.effect._
 import scalaz.iteratee._

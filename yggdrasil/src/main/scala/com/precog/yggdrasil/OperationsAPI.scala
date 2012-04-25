@@ -18,7 +18,7 @@
  *
  */
 package com.precog
-package daze
+package yggdrasil
 
 trait OperationsAPI extends StorageEngineQueryComponent with DatasetOpsComponent 
 

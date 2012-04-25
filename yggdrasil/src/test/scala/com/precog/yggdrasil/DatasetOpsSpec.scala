@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog.yggdrasil
 
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck

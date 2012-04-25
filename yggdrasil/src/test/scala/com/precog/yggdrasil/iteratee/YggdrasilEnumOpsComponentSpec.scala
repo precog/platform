@@ -17,10 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
-
-import yggdrasil._
+package com.precog.yggdrasil
+package iteratee
 
 import akka.actor.ActorSystem
 import akka.dispatch.Await

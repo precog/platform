@@ -18,10 +18,9 @@
  *
  */
 package com.precog
-package daze
+package yggdrasil
 
-import yggdrasil._
-import yggdrasil.serialization._
+import serialization._
 import memoization._
 
 trait DatasetOps[Dataset[_], Memoable[_], Grouping[_, _]] {

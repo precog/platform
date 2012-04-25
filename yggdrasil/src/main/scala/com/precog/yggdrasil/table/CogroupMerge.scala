@@ -18,6 +18,7 @@
  *
  */
 package com.precog.yggdrasil
+package table
 
 trait CogroupMerge {
   def apply[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[F2P[A, A, A]]

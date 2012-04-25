@@ -17,8 +17,16 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog
-package daze
+package com.precog.yggdrasil
+
+import actor._
+import metadata._
+import util._
+import com.precog.util._
+import SValue._
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.common.util._
 
 import akka.actor._
 import akka.dispatch._
@@ -29,24 +37,12 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
-import com.precog.common._
-import com.precog.common.security._
-import com.precog.common.util._
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.metadata._
-import com.precog.yggdrasil.util._
-import com.precog.util._
-import SValue._
-
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.AllInstances._
-import Iteratee._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
-import org.specs2.mutable._
 
 trait StubYggShardComponent extends YggShardComponent {
   type Dataset[α]

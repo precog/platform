@@ -17,10 +17,10 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.daze
+package com.precog.yggdrasil
+package iteratee
 
-import com.precog.yggdrasil._
-import com.precog.yggdrasil.util._
+import util._
 import com.precog.util._
 
 import akka.dispatch.Await
