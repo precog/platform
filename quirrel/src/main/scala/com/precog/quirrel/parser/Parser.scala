@@ -171,7 +171,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
   
-  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr
+  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  
   
   private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
   
@@ -230,7 +230,7 @@ trait Parser extends RegexParsers with Filters with AST {
     case _ => true
   }
   
-  // %%
+  // %% 
   
   private def buildDeepRelate(loc: LineStream, relations: Vector[Expr], e: Expr): Expr = {
     val builders = relations zip (relations drop 1) map {
