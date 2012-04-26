@@ -9,7 +9,7 @@ import org.scalacheck.Arbitrary._
 
 import scalaz.Either._
 
-trait DatasetExtensionsSpec extends Specification with ScalaCheck {
+trait DatasetOpsSpec extends Specification with ScalaCheck {
   type Dataset = Table
   type Record[A] = (Identities, A)
 
@@ -19,7 +19,7 @@ trait DatasetExtensionsSpec extends Specification with ScalaCheck {
   def checkCogroup = {
     type CogroupResult[A] = Stream[Record[Either3[A, (A, A), A]]]
 
-    @tailrec def computeCogroup[A](l: Stream[Record[A], r: Stream[Record[A]], acc: CogroupResult[A])(implicit ord: Order[Record[A]]): CogroupResult[A] = {
+    @tailrec def computeCogroup[A](l: Stream[Record[A]], r: Stream[Record[A]], acc: CogroupResult[A])(implicit ord: Order[Record[A]]): CogroupResult[A] = {
       (l,r) match {
         case (lh ::# lt, rh ::# rt) => ord.order(lh, rh) match {
           case EQ => {
