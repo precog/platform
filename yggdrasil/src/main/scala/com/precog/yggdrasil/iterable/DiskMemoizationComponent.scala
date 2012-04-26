@@ -1,7 +1,7 @@
 package com.precog.yggdrasil
 package memoization
 
-import iterable._
+import iterable.Buffering
 import serialization._
 import util._
 import com.precog.util._
@@ -11,6 +11,7 @@ import java.util.{PriorityQueue, Comparator, Arrays}
 import java.util.zip._
 
 import scala.annotation.tailrec
+import scala.collection.Iterable
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._

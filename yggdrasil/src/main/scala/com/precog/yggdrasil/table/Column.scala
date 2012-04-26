@@ -1,21 +1,21 @@
 package com.precog.yggdrasil
 package table
 
-trait Column[@specialized(Boolean, Long, Double) A] extends Returning[A] with (Int => A) { outer =>
+trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] with (Int => A) { outer =>
   def isDefinedAt(row: Int): Boolean
   def apply(row: Int): A
 
-  def remap(f: PartialFunction[Int, Int]): Column[A] = new Remap(f) with MemoizingColumn[A]
+  def remap(f: PartialFunction[Int, Int]): Column[A] = new RemapColumn(f) with MemoizingColumn[A]
 
-  def |> [@specialized(Boolean, Long, Double) B](f: F1[A, B]): Column[B] = new Thrush(f) with MemoizingColumn[B]
+  def map[@specialized(Boolean, Long, Double) B](f: F1[A, B]): Column[B] = new MapColumn(f) with MemoizingColumn[B]
 
-  private class Remap(f: PartialFunction[Int, Int]) extends Column[A] {
+  private class RemapColumn(f: PartialFunction[Int, Int]) extends Column[A] {
     val returns = outer.returns
     def isDefinedAt(row: Int): Boolean = f.isDefinedAt(row) && outer.isDefinedAt(f(row))
     def apply(row: Int) = outer(f(row))
   }
 
-  private class Thrush[B](f: F1[A, B]) extends Column[B] {
+  private class MapColumn[B](f: F1[A, B]) extends Column[B] {
     val returns = f.returns
     def isDefinedAt(row: Int) = f(outer).isDefinedAt(row)
     def apply(row: Int): B = f(outer)(row)

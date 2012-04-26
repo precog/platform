@@ -73,7 +73,8 @@ trait LevelDBProjectionFactory extends ProjectionFactory with ProjectionDescript
       }
     })
 
-    @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
+    @inline 
+    final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
   }
 }
 

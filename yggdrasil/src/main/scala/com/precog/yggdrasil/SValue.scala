@@ -215,7 +215,7 @@ trait SValueInstances {
 object SValue extends SValueInstances {
   // Note this conversion has a peer for CValues that should always be changed
   // in conjunction with this mapping.
-  @inline
+   @inline
   def fromJValue(jv: JValue): SValue = jv match {
     case JObject(fields) => SObject(fields.map{ case JField(name, v) => (name, fromJValue(v)) }(collection.breakOut))
     case JArray(elements) => SArray((elements map fromJValue)(collection.breakOut))

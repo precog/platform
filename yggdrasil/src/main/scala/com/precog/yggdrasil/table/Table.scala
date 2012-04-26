@@ -76,11 +76,20 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           }
 
           @tailrec private def precomputeNext(): Slice = {
-            @inline def nonEmptyLeftSlice = leftIdx < leftSlice.size
-            @inline def emptyLeftSlice = leftIdx >= leftSlice.size
-            @inline def nonEmptyRightSlice = rightIdx < rightSlice.size
-            @inline def emptyRightSlice = rightIdx >= rightSlice.size
-            @inline def compareIdentities = leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) 
+            @inline 
+            def nonEmptyLeftSlice = leftIdx < leftSlice.size
+
+            @inline 
+            def emptyLeftSlice = leftIdx >= leftSlice.size
+            
+            @inline 
+            def nonEmptyRightSlice = rightIdx < rightSlice.size
+
+            @inline 
+            def emptyRightSlice = rightIdx >= rightSlice.size
+
+            @inline 
+            def compareIdentities = leftSlice.compareIdentityPrefix(rightSlice, prefixLength, leftIdx, rightIdx) 
 
             state match {
               case StepLeftCheckRight => 
@@ -146,12 +155,14 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                 }
 
               case Cartesian =>
-                @inline def ensureRightSliceNonEmpty(): Boolean = {
+                @inline 
+                def ensureRightSliceNonEmpty(): Boolean = {
                   while (rightIdx >= rightSlice.size && rightIter.hasNext) rightSlice = (rightSlice append rightIter.next)
                   nonEmptyRightSlice
                 }
 
-                @inline def ensureLeftSliceNonEmpty(): Boolean = {
+                @inline 
+                def ensureLeftSliceNonEmpty(): Boolean = {
                   while (leftIdx >= leftSlice.size && leftIter.hasNext) leftSlice = (leftSlice append leftIter.next)
                   nonEmptyLeftSlice
                 }

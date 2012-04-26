@@ -14,20 +14,24 @@ import scalaz.std.math._
 import scalaz.std.AllInstances._
 
 sealed abstract class CValue {
-  @inline private[CValue] final def typeIndex: Int = this match {
+  @inline 
+  private[CValue] final def typeIndex: Int = this match {
     case CString(v) => 0
     case CBoolean(v) => 1
     case CInt(v) => 2
     case CLong(v) => 3
-    case CDouble(v) => 4
-    case CNum(v) => 5
+    case CFloat(v) => 4
+    case CDouble(v) => 5
+    case CNum(v) => 6
   }
 
-  @inline final def toSValue: SValue = this match {
+  @inline 
+  final def toSValue: SValue = this match {
     case CString(v) => SString(v)
     case CBoolean(v) => if (v) STrue else SFalse
     case CInt(v) => SDecimal(v)
     case CLong(v) => SDecimal(v)
+    case CFloat(v) => SDecimal(v)
     case CDouble(v) => SDecimal(v)
     case CNum(v) => SDecimal(v)
   }
@@ -53,16 +57,29 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
   val CC: Class[CA]
 
-  @inline final def cast(v: Any): CA = v.asInstanceOf[CA]
-  @inline final def cast0(f0: Column[_]): Column[CA] = f0.asInstanceOf[Column[CA]]
+  @inline 
+  final def cast(v: Any): CA = v.asInstanceOf[CA]
 
-  @inline final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
-  @inline final def cast2_1[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
-  @inline final def cast2_2[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
+  @inline 
+  final def cast0(f0: Column[_]): Column[CA] = f0.asInstanceOf[Column[CA]]
 
-  @inline final def cast1P[B](f1: F1P[_, B]): F1P[CA, B] = f1.asInstanceOf[F1P[CA, B]]
-  @inline final def cast2P_1[B, C](f2: F2P[_, B, C]): F2P[CA, B, C] = f2.asInstanceOf[F2P[CA, B, C]]
-  @inline final def cast2P_2[A, C](f2: F2P[A, _, C]): F2P[A, CA, C] = f2.asInstanceOf[F2P[A, CA, C]]
+  @inline 
+  final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
+
+  @inline 
+  final def cast2_1[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
+
+  @inline 
+  final def cast2_2[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
+
+  @inline 
+  final def cast1P[B](f1: F1P[_, B]): F1P[CA, B] = f1.asInstanceOf[F1P[CA, B]]
+
+  @inline 
+  final def cast2P_1[B, C](f2: F2P[_, B, C]): F2P[CA, B, C] = f2.asInstanceOf[F2P[CA, B, C]]
+
+  @inline 
+  final def cast2P_2[A, C](f2: F2P[A, _, C]): F2P[A, CA, C] = f2.asInstanceOf[F2P[A, CA, C]]
 
   implicit val manifest: Manifest[CA]
 
@@ -70,7 +87,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
   def jvalueFor(a: CA): JValue
 
-  @inline private[CType] final def typeIndex = this match {
+  @inline 
+  private[CType] final def typeIndex = this match {
     case CBoolean => 0
 
     case CStringFixed(_) => 1

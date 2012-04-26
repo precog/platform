@@ -55,7 +55,7 @@ trait Slice { source =>
     val identities = source.identities
     val columns = source.column(argRef) map { col =>
                     val ctype = col.returns
-                    source.columns + (VColumnRef[f.returns.CA](newId, f.returns) -> (ctype.cast0(col) |> ctype.cast1(f)))
+                    source.columns + (VColumnRef[f.returns.CA](newId, f.returns) -> (ctype.cast0(col) map ctype.cast1(f)))
                   } getOrElse {
                     sys.error("No column found in table matching " + argRef)
                   }
@@ -317,7 +317,8 @@ object Slice {
     }
   }
 
-  @inline private def swap(xs: Array[Int], i: Int, j: Int) {
+  @inline 
+  private def swap(xs: Array[Int], i: Int, j: Int) {
     val temp = xs(i);
     xs(i) = xs(j);
     xs(j) = temp;

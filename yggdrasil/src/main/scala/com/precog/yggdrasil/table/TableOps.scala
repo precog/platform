@@ -10,7 +10,7 @@ trait TableOps {
 
   def empty(idCount: Int): Table
 
-  def singleton[@specialized(Boolean, Int, Long, Float, Double) A](ctype: CType { type CA = A }, value: A): Table
+  def singleton[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, value: A): Table
 
   def fullProjection(userUID: String, path: Path, expiresAt: Long): Table
 
