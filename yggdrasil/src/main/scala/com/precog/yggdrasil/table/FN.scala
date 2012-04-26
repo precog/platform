@@ -20,31 +20,31 @@
 package com.precog.yggdrasil
 package table
 
-trait Returning[@specialized(Boolean, Int, Long, Float, Double) A] { 
+trait FN[@specialized(Boolean, Long, Double) A] { 
   val returns: CType { type CA = A }
 }
 
-sealed trait F1[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
+sealed trait F1[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B] extends FN[B] { outer =>
   val accepts: CType { type CA = A }
 
   def apply(a: Column[A]): Column[B] 
 
   def applyCast(a: Column[_]) = apply(a.asInstanceOf[Column[A]])
 
-  def compose[@specialized(Boolean, Int, Long, Float, Double) C](f: F1[C, A]): F1[C, B] = new F1[C, B] { 
+  def compose[@specialized(Boolean, Long, Double) C](f: F1[C, A]): F1[C, B] = new F1[C, B] { 
     val accepts = f.accepts
     val returns = outer.returns
-    def apply(c: Column[C]): Column[B] = c |> f |> outer
+    def apply(c: Column[C]): Column[B] = c map f map outer
   }
   
-  def andThen[@specialized(Boolean, Int, Long, Float, Double) C](f: F1[B, C]): F1[A, C] = new F1[A, C] { 
+  def andThen[@specialized(Boolean, Long, Double) C](f: F1[B, C]): F1[A, C] = new F1[A, C] { 
     val accepts = outer.accepts
     val returns = f.returns
-    def apply(a: Column[A]): Column[C] = a |> outer |> f
+    def apply(a: Column[A]): Column[C] = a map outer map f
   }
 }
 
-sealed trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
+sealed trait F2[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B, @specialized(Boolean, Long, Double) C] extends FN[C] { outer =>
   val accepts: (CType { type CA = A }, CType { type CA = B })
 
   def apply(a: Column[A], b: Column[B]): Column[C]
@@ -52,24 +52,25 @@ sealed trait F2[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(
   def applyCast(a: Column[_], b: Column[_]): Column[C] = 
     apply(a.asInstanceOf[Column[A]], b.asInstanceOf[Column[B]])
 
-  def andThen[@specialized(Boolean, Int, Long, Float, Double) D](f: F1[C, D]) = new F2[A, B, D] {
+  def andThen[@specialized(Boolean, Long, Double) D](f: F1[C, D]) = new F2[A, B, D] {
     val accepts = outer.accepts
     val returns = f.returns
 
-    def apply(a: Column[A], b: Column[B]): Column[D] = outer(a, b) |> f
+    def apply(a: Column[A], b: Column[B]): Column[D] = outer(a, b) map f
   }
 }
 
 // Pure functions that can be promoted to FNs.
 
-trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B] extends Returning[B] { outer =>
+trait F1P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B] extends FN[B] { outer =>
   def accepts: CType { type CA = A }
   def isDefinedAt(a: A): Boolean
   def apply(a: A): B
 
-  @inline final def applyCast(a: Any): B = apply(accepts.cast(a))
+  @inline 
+  final def applyCast(a: Any): B = apply(accepts.cast(a))
 
-  final def compose[@specialized(Boolean, Int, Long, Float, Double) C](f: F1P[C, A]): F1P[C, B] =  {
+  final def compose[@specialized(Boolean, Long, Double) C](f: F1P[C, A]): F1P[C, B] =  {
     new F1P[C, B] {
       private var _c: C = _
       private var _b: B = _
@@ -88,7 +89,7 @@ trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
     }
   }
 
-  final def andThen[@specialized(Boolean, Int, Long, Float, Double) C](f: F1P[B, C]): F1P[A, C] = {
+  final def andThen[@specialized(Boolean, Long, Double) C](f: F1P[B, C]): F1P[A, C] = {
     new F1P[A, C] {
       private var _a: A = _
       private var _c: C = _
@@ -121,14 +122,15 @@ trait F1P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolea
   }
 }
 
-trait F2P[@specialized(Boolean, Int, Long, Float, Double) A, @specialized(Boolean, Int, Long, Float, Double) B, @specialized(Boolean, Int, Long, Float, Double) C] extends Returning[C] { outer =>
+trait F2P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B, @specialized(Boolean, Long, Double) C] extends FN[C] { outer =>
   def accepts: (CType { type CA = A }, CType { type CA = B })
   def isDefinedAt(a: A, b: B): Boolean
   def apply(a: A, b: B): C
 
-  @inline final def applyCast(a: Any, b: Any): C = apply(accepts._1.cast(a), accepts._2.cast(b))
+  @inline 
+  final def applyCast(a: Any, b: Any): C = apply(accepts._1.cast(a), accepts._2.cast(b))
 
-  final def andThen[@specialized(Boolean, Int, Long, Float, Double) D](f: F1P[C, D]): F2P[A, B, D] = {
+  final def andThen[@specialized(Boolean, Long, Double) D](f: F1P[C, D]): F2P[A, B, D] = {
     new F2P[A, B, D] {
       private var _a: A = _
       private var _b: B = _

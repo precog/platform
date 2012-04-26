@@ -41,7 +41,8 @@ package object yggdrasil {
   }
 
   object SEvent {
-    @inline def apply(id: Identities, sv: SValue): SEvent = (id, sv)
+    @inline 
+    def apply(id: Identities, sv: SValue): SEvent = (id, sv)
   }
 
   def prefixIdentityOrdering(ids1: Identities, ids2: Identities, prefixLength: Int): Ordering = {

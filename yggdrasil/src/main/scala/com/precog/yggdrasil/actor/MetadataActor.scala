@@ -36,9 +36,7 @@ import akka.dispatch.Future
 import scalaz.Scalaz._
 
 class MetadataActor(metadata: LocalMetadata) extends Actor {
-
   def receive = {
-   
     case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
    
     case FindChildren(path)                   => sender ! metadata.findChildren(path)
@@ -50,10 +48,9 @@ class MetadataActor(metadata: LocalMetadata) extends Actor {
     case FindPathMetadata(path, selector)     => sender ! metadata.findPathMetadata(path, selector)
     
     case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.currentState)
-    
   }
-
 }
+
 
 class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) {
   
@@ -94,9 +91,11 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
   }
 
   def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, ColumnMetadata] = {
-    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+    @inline 
+    def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
 
-    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
+    @inline 
+    def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
       col.path == path && isEqualOrChild(selector, col.selector)
     }
 
@@ -114,13 +113,16 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       descriptor.columns.filter( _.selector == selector )(0).valueType
   }
   
-  @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
+  @inline 
+  final def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
 
-  @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
+  @inline 
+  final def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
     col.path == path && isEqualOrChild(selector, col.selector)
   }
 
-  @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
+  @inline 
+  final def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
     projections.flatMap {
       case (desc, meta) => desc.columns.collect {
         case col @ ColumnDescriptor(_,sel,_,_) if matches(path,selector)(col) => ResolvedSelector(sel, desc, meta)
@@ -128,13 +130,14 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     }(collection.breakOut)
 
   def findPathMetadata(path: Path, selector: JPath): PathRoot = {
-    
-    @inline def isLeaf(ref: JPath, test: JPath) = {
+    @inline 
+    def isLeaf(ref: JPath, test: JPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length - 1 == ref.nodes.length
     }
     
-    @inline def isObjectBranch(ref: JPath, test: JPath) = {
+    @inline 
+    def isObjectBranch(ref: JPath, test: JPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length > ref.nodes.length &&
       (test.nodes(ref.nodes.length) match {
@@ -143,7 +146,8 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       })
     }
     
-    @inline def isArrayBranch(ref: JPath, test: JPath) = {
+    @inline 
+    def isArrayBranch(ref: JPath, test: JPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length > ref.nodes.length &&
       (test.nodes(ref.nodes.length) match {
@@ -205,14 +209,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
   }
 
 
-
-  trait PathMatch
-
-  case class ExactPath(columnType: CType)
-  case class ChildPath(path: JPath)
-
   def toStorageMetadata(messageDispatcher: MessageDispatcher): StorageMetadata = new StorageMetadata {
-
     implicit val dispatcher = messageDispatcher 
 
     def update(inserts: Seq[InsertComplete]) = Future {
@@ -234,13 +231,11 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     def findPathMetadata(path: Path, selector: JPath) = Future {
       LocalMetadata.this.findPathMetadata(path, selector)
     }
-
   }
-
 }
 
-object MetadataUpdateHelper {
 
+object MetadataUpdateHelper {
   def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: Map[ProjectionDescriptor, ColumnMetadata]): ColumnMetadata = {
     val initialMetadata = projections.get(desc).getOrElse(initMetadata(desc))
     val userAndValueMetadata = addValueMetadata(values, metadata.map { Metadata.toTypedMap _ })
