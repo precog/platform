@@ -22,6 +22,8 @@ package table
 
 import com.precog.common.VectorCase
 
+import blueeyes.json.JsonAST._
+
 import scala.annotation.tailrec
 import scalaz.{Identity => _, _}
 import scalaz.Scalaz._
@@ -66,6 +68,13 @@ trait Slice { source =>
     result
   }
 
+  def remap(pf: PartialFunction[Int, Int]) = new Slice {
+    val idCount = source.idCount
+    val size = source.size
+    val identities = source.identities.map(_.remap(pf))
+    val columns = source.columns.mapValues(_.remap(pf))
+  }
+
   def map(oldId: VColumnId, newId: VColumnId)(f: F1[_, _]): Slice = new Slice {
     private val argRef = VColumnRef[f.accepts.CA](oldId, f.accepts)
     val idCount = source.idCount
@@ -79,48 +88,6 @@ trait Slice { source =>
                     sys.error("No column found in table matching " + argRef)
                   }
   }
-
-  def remap(pf: PartialFunction[Int, Int]) = new Slice {
-    val idCount = source.idCount
-    val size = source.size
-    val identities = source.identities.map(_.remap(pf))
-    val columns = source.columns.mapValues(_.remap(pf))
-  }
-
-  def split(idx: Int): (Slice, Slice) = (
-    new Slice {
-      val idCount = source.idCount
-      val size = idx
-
-      val identities = source.identities map {
-        _ remap {
-          case i if i < idx => i
-        }
-      }
-
-      val columns = source.columns.mapValues {
-        _ remap {
-          case i if i < idx => i
-        }
-      }
-    },
-    new Slice {
-      val idCount = source.idCount
-      val size = source.size - idx
-      val identities = source.identities map {
-        _ remap {
-          case i if i < size => i + idx
-        }
-      }
-
-      val columns = source.columns.mapValues {
-        _ remap {
-          case i if i < size => i + idx
-        }
-      }
-    }
-  )
-    
 
   def map2(id_1: VColumnId, id_2: VColumnId, newId: VColumnId)(f: F2[_, _, _]): Slice = new Slice {
     private val ref_1 = VColumnRef(id_1, f.accepts._1)
@@ -172,6 +139,19 @@ trait Slice { source =>
       lazy val size = retained.size
       lazy val identities = source.identities map { _ remap retained }
       lazy val columns = source.columns mapValues { _ remap retained }
+    }
+  }
+
+  def retain(refs: Set[ColumnRef]) = {
+    new Slice {
+      val idCount = source.idCount
+      val size = source.size
+      val identities = {
+        val icols: List[(Int, Column[Long])] = refs.collect({ case IColumnRef(idx) if idx < source.identities.length => (idx, source.identities(idx)) })(collection.breakOut)
+        icols sortBy { _._1 } map { _._2 }
+      }
+
+      val columns = source.columns.filterKeys(refs)
     }
   }
 
@@ -238,6 +218,40 @@ trait Slice { source =>
     }
   }
 
+  def split(idx: Int): (Slice, Slice) = (
+    new Slice {
+      val idCount = source.idCount
+      val size = idx
+
+      val identities = source.identities map {
+        _ remap {
+          case i if i < idx => i
+        }
+      }
+
+      val columns = source.columns.mapValues {
+        _ remap {
+          case i if i < idx => i
+        }
+      }
+    },
+    new Slice {
+      val idCount = source.idCount
+      val size = source.size - idx
+      val identities = source.identities map {
+        _ remap {
+          case i if i < size => i + idx
+        }
+      }
+
+      val columns = source.columns.mapValues {
+        _ remap {
+          case i if i < size => i + idx
+        }
+      }
+    }
+  )
+
   def append(other: Slice): Slice = {
     assert(columns.keySet == other.columns.keySet && idCount == other.idCount) 
     new Slice {
@@ -266,6 +280,15 @@ trait Slice { source =>
             }
           )
       }
+    }
+  }
+
+  def toJson(row: Int): JValue = {
+    columns.foldLeft[JValue](JNull) {
+      case (jv, (ref @ VColumnRef(NamedColumnId(_, selector), ctype), col)) if (col.isDefinedAt(row)) => 
+        jv.set(selector, ctype.jvalueFor(col(row)))
+
+      case (jv, _) => jv
     }
   }
 

@@ -37,7 +37,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
   def normalize: Table = new Table(idCount, foci, slices.filterNot(_.isEmpty))
 
-  def cogroup(other: Table)(merge: CogroupMerge): Table = {
+  def cogroup(other: Table, prefixLength: Int)(merge: CogroupMerge): Table = {
     sealed trait CogroupState
     case object StepLeftCheckRight extends CogroupState
     case object StepLeftDoneRight extends CogroupState
@@ -51,7 +51,6 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
       foci ++ other.foci,
       new Iterable[Slice] {
         def iterator = new Iterator[Slice] {
-          private val prefixLength = self.idCount min other.idCount
           private val leftIter = self.slices.iterator
           private val rightIter = other.slices.iterator
           
@@ -314,7 +313,25 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
               val idCount = self.idCount + other.idCount
               val size = leftBuffer.size
-              val identities = remappedLeft.identities ++ remappedRight.identities
+              val identities = {
+                val (li, lr) = remappedLeft.identities.splitAt(prefixLength)
+                val (ri, rr) = remappedRight.identities.splitAt(prefixLength)
+                val sharedPrefix = (li zip ri) map {
+                  case (c1, c2) => new Column[Long] {
+                    val returns = CLong
+                    def isDefinedAt(row: Int) = c1.isDefinedAt(row) || c2.isDefinedAt(row)
+                    def apply(row: Int) = {
+                      if (c1.isDefinedAt(row)) {
+                        c1(row) // identities must be equal, or c2 must be undefined
+                      } else {
+                        if (c2.isDefinedAt(row)) c2(row) else sys.error("impossible")
+                      }
+                    }
+                  }
+                }
+
+                sharedPrefix ++ lr ++ rr
+              }
 
               val columns = remappedRight.columns.foldLeft(remappedLeft.columns) {
                 case (acc, (rref, rcol)) => 
@@ -430,39 +447,28 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
     )
   }
 
+  def retain(refs: Set[ColumnRef]) = self.slices map { _.retain(refs) }
+
   def toJson: Iterable[JValue] = {
     new Iterable[JValue] {
       def iterator = new Iterator[JValue] {
         private val iter = self.slices.iterator
         private var slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
         private var idx = 0
-        private var _next: JValue = precomputeNext()
 
-        def hasNext = _next != null
+        def hasNext = (slice != null && idx < slice.size) || iter.hasNext
 
-        def next = {
-          val tmp = _next
-          _next = precomputeNext()
-          tmp
-        }
-
-        @tailrec private def precomputeNext(): JValue = {
+        @tailrec def next() = {
           if (slice == null) {
-            null.asInstanceOf[JValue]
+            sys.error("next() called past end of iterator")
           } else if (idx < slice.size) {
-            val result = slice.columns.foldLeft[JValue](JNull) {
-              case (jv, (ref @ VColumnRef(NamedColumnId(_, selector), ctype), col)) if (col.isDefinedAt(idx)) => 
-                jv.set(selector, ctype.jvalueFor(col(idx)))
-
-              case (jv, _) => jv
-            }
-
+            val result = slice.toJson(idx)
             idx += 1
             result
           } else {
             slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
             idx = 0
-            precomputeNext()
+            next() //recursive call is okay because hasNext must have returned true to get here
           }
         }
       }

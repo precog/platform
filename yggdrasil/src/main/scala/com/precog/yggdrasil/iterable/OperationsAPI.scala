@@ -24,8 +24,7 @@ trait OperationsAPI extends StorageEngineQueryComponent with DatasetOpsComponent
 
 trait StorageEngineQueryComponent {
   type Dataset[E]
-  type Grouping[K, A]
-  type QueryAPI <: StorageEngineQueryAPI[Dataset[(Identities, Seq[CValue])]]
+  type QueryAPI <: StorageEngineQueryAPI[Dataset]
   val query: QueryAPI
 }
 

@@ -18,10 +18,10 @@
  *
  */
 package com.precog.yggdrasil
-package memoization
+package iterable
 
-import iterable.Buffering
 import serialization._
+import memoization._
 import util._
 import com.precog.util._
 
