@@ -839,8 +839,6 @@ extends DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] {
 
   def reduce[B](base: B)(f: (B, A) => B): B = value.iterator.foldLeft(base)(f)
 
-  //def extract[B](f: A => B): B = value.iterator.foldLeft(Option.empty[B])(f)
-
   def count: BigInt = value.iterable.size
 
   def uniq(nextId: () => Identity, memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit buffering: Buffering[A], fs: SortSerialization[A]): IterableDataset[A] = {
@@ -928,6 +926,12 @@ extends DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] {
   def sortByValue(memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit ord: Order[A], fs: SortSerialization[IA]): IterableDataset[A] = {
     implicit val order = valueOrder[A]
     implicit val buffering = Buffering.refBuffering[(Identities, A)](order, implicitly[ClassManifest[(Identities, A)]])
+
+    IterableDataset(value.idCount, memoCtx.sort(value.iterable, memoId))
+  }
+
+  def sortByIdentity(memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit fs: SortSerialization[IA]): IterableDataset[A] = {
+    implicit val order = tupledIdentitiesOrder[A](IdentitiesOrder)
 
     IterableDataset(value.idCount, memoCtx.sort(value.iterable, memoId))
   }
