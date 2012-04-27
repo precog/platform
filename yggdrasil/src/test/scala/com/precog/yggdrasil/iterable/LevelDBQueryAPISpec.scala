@@ -1,4 +1,5 @@
 package com.precog.yggdrasil
+package iterable
 
 import akka.actor._
 import akka.dispatch._
@@ -16,39 +17,8 @@ import com.precog.util._
 import SValue._
 
 import java.io.File
-import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.std.anyVal._
-import scalaz.std.list._
-import Iteratee._
 
-import scala.collection.immutable.SortedMap
-import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
-
-trait StubLevelDBQueryComponent extends LevelDBQueryComponent 
-with StubYggShardComponent with IterableDatasetOpsComponent {
-  trait YggConfig extends SortConfig with LevelDBQueryConfig with IterableDatasetOpsConfig {
-    val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
-    val clock = blueeyes.util.Clock.System
-    val sortBufferSize: Int = 1000
-    val sortWorkDir: File = new File("/tmp")
-  }
-
-  override type Dataset[E] = IterableDataset[E]
-
-  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
-  implicit def asyncContext = ExecutionContext.defaultExecutionContext
-  def sampleSize = 1 
-
-  val testUID = "testUID"
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
-
-  object yggConfig extends YggConfig
-
-  object query extends QueryAPI
-  object ops extends Ops
-}
 
 class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
   object storage extends Storage

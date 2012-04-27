@@ -25,7 +25,7 @@ trait ProjectionFactory {
 trait Projection[Dataset] {
   def descriptor: ProjectionDescriptor
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Projection[Dataset]
 
   def getAllPairs(expiresAt: Long) : Dataset
 

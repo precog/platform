@@ -1,28 +1,35 @@
-package com.precog.storage
+package com.precog.yggdrasil
 package leveldb
+
+import iterable.LevelDBProjectionFactory
+import com.precog.common.util.IOUtils
+import com.precog.util.Interval
 
 import java.io.File
 import java.nio.ByteBuffer
+
+import scalaz._
+import scalaz.std.list._ 
+import scalaz.effect.IO 
+
+import com.weiglewilczek.slf4s.Logging
 
 import org.scalacheck.{Arbitrary,Gen}
 import org.specs2.ScalaCheck
 import org.specs2.matcher.ThrownMessages
 import org.specs2.mutable.{BeforeAfter,Specification}
 import org.specs2.specification.Scope
-import com.precog.util.Bijection
-import com.precog.yggdrasil.leveldb.LevelDBProjection
 
-import scalaz.IdT
-import scalaz.syntax.traverse._ 
-import scalaz.std.list._ 
-import scalaz.effect.IO 
-import scalaz.iteratee.Iteratee._
 
-import com.weiglewilczek.slf4s.Logging
+class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging with LevelDBProjectionFactory {
+  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
+    IO { IOUtils.createTmpDir("columnSpec") }
+  }
 
-import com.precog.util.Interval
+  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]] = {
+    storageLocation(descriptor) map { Success(_) }
+  }
 
-class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging {
   trait columnSetup extends Scope with BeforeAfter {
     val dataDir = File.createTempFile("ColumnSpec", ".db")
     logger.info("Using %s for dbtest".format(dataDir))
@@ -42,26 +49,26 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
 
   "Columns" should {
     "Fail to create a new column without a provided comparator" in new columnSetup {
-      LevelDBProjection(dataDir,sys.error("todo")).isFailure must_== true
+      projection(dataDir,sys.error("todo")).isFailure must_== true
     }
 
     "Create a new column with a provided comparator" in new columnSetup {
-      val c = LevelDBProjection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
+      val c = projection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
       c.isSuccess must_== true
-      c.map(_.close.unsafePerformIO)
+      c.map(_.close)
     }
 
     "Open an existing column with a restored comparator" in new columnSetup {
-      val initial = LevelDBProjection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
+      val initial = projection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
       initial.isSuccess must_== true
-      initial.map(_.close.unsafePerformIO).flatMap(_ => LevelDBProjection(dataDir, sys.error("todo"))).isSuccess must_== true
+      initial.map(_.close).flatMap(_ => projection(dataDir, sys.error("todo"))).isSuccess must_== true
     }
 
 //    "Properly persist and restore values" in new columnSetup {
 //      val size = 1000
 //      val seed = 42l
 //      val testRange = Interval(Some(size / 4l),Some(size / 2l))
-//      val db = LevelDBProjection(dataDir, sys.error("todo")) // Some(ProjectionComparator.Long) 
+//      val db = projection(dataDir, sys.error("todo")) // Some(ProjectionComparator.Long) 
 //      db.isSuccess must_== true
 //      db.map { c =>
 //        import IdT._

@@ -1,4 +1,5 @@
 package com.precog.yggdrasil
+package table
 
 import com.precog.common._
 import org.scalacheck.Gen

@@ -41,9 +41,11 @@ trait RawJsonShardComponent extends YggShardComponent {
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
       val chunkSize = 2000
 
-      def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
+      def insert(ids: Identities, values: Seq[CValue], shouldSync: Boolean = false) = copy(data = data + row)
 
       def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
+
+      def close() = ()
     }
 
     private val identity = new java.util.concurrent.atomic.AtomicInteger(0)

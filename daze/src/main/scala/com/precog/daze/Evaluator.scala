@@ -23,10 +23,6 @@ import scalaz.syntax.traverse._
 import scalaz.std.list._
 import scalaz.std.partialFunction._
 
-trait IdSource {
-  def nextId(): Long
-}
-
 trait EvaluatorConfig {
   implicit def valueSerialization: SortSerialization[SValue]
   implicit def eventSerialization: SortSerialization[(Identities, SValue)]

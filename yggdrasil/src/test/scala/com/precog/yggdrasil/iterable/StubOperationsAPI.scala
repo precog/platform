@@ -1,4 +1,5 @@
 package com.precog.yggdrasil
+package iterable
 
 import com.precog.common.{Path, VectorCase}
 
@@ -29,11 +30,7 @@ object StubOperationsAPI {
   implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 }
 
-trait StubOperationsAPI 
-    extends StorageEngineQueryComponent
-    with IterableDatasetOpsComponent { self =>
-  type YggConfig <: DatasetConsumersConfig with EvaluatorConfig with YggEnumOpsConfig with IterableDatasetOpsConfig
-
+trait StubOperationsAPI extends StorageEngineQueryComponent with IterableDatasetOpsComponent { self =>
   implicit val asyncContext = StubOperationsAPI.asyncContext
   
   import ops._
@@ -48,10 +45,10 @@ trait StubOperationsAPI
 
     def chunkSize: Int
     
-    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]], valueType: Option[SType]) extends DatasetMask[Dataset] {
-      def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector :+ Right(field))
-      def derefArray(index: Int): DatasetMask[Dataset] = copy(selector = selector :+ Left(index))
-      def typed(tpe: SType): DatasetMask[Dataset] = copy(valueType = Some(tpe))
+    private case class StubDatasetMask(userUID: String, path: Path, selector: Vector[Either[Int, String]], valueType: Option[SType]) extends DatasetMask[Dataset[SValue]] {
+      def derefObject(field: String): DatasetMask[Dataset[SValue]] = copy(selector = selector :+ Right(field))
+      def derefArray(index: Int): DatasetMask[Dataset[SValue]] = copy(selector = selector :+ Left(index))
+      def typed(tpe: SType): DatasetMask[Dataset[SValue]] = copy(valueType = Some(tpe))
       
       def realize(expiresAt: Long): Dataset[SValue] = {
         fullProjection(userUID, path, expiresAt) collect unlift(mask)
@@ -78,7 +75,7 @@ trait StubOperationsAPI
     def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = 
       IterableDataset(1, new Iterable[(Identities, SValue)] { def iterator = readJSON(path) })
     
-    def mask(userUID: String, path: Path): DatasetMask[Dataset] = StubDatasetMask(userUID, path, Vector(), None)
+    def mask(userUID: String, path: Path): DatasetMask[Dataset[SValue]] = StubDatasetMask(userUID, path, Vector(), None)
     
     private def readJSON(path: Path): Iterator[SEvent] = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
