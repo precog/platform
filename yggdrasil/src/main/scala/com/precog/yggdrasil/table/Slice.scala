@@ -4,6 +4,7 @@ package table
 import com.precog.common.VectorCase
 
 import blueeyes.json.JsonAST._
+import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
 import scalaz.{Identity => _, _}
@@ -49,7 +50,7 @@ trait Slice { source =>
     result
   }
 
-  def remap(pf: PartialFunction[Int, Int]) = new Slice {
+  def remap(pf: F1P[Int, Int]) = new Slice {
     val idCount = source.idCount
     val size = source.size
     val identities = source.identities.map(_.remap(pf))
@@ -105,21 +106,25 @@ trait Slice { source =>
   def filter(fx: (VColumnId, F1[_, Boolean])*): Slice = {
     assert(fx forall { case (id, f1) => columns contains VColumnRef(id, f1.accepts) })
     new Slice {
-      private lazy val retained: Vector[Int] = {
+      private lazy val retained: ArrayIntList = {
         val f1x = fx map { case (id, f1) => f1.applyCast(columns(VColumnRef(id, f1.accepts))) }
 
-        @tailrec def check(i: Int, acc: Vector[Int]): Vector[Int] = {
-          if (i < source.size) check(i + 1, if (f1x.forall(_(i))) acc :+ i else acc)
-          else acc
+        @inline @tailrec def fill(i: Int, acc: ArrayIntList): ArrayIntList = {
+          if (i < source.size) {
+            if (f1x.forall(_(i))) acc.add(i)
+            fill(i + 1, acc)
+          } else {
+            acc
+          }
         }
 
-        check(0, Vector())
+        fill(0, new ArrayIntList())
       }
 
       val idCount = source.idCount
       lazy val size = retained.size
-      lazy val identities = source.identities map { _ remap retained }
-      lazy val columns = source.columns mapValues { _ remap retained }
+      lazy val identities = source.identities map { _ remap F1P.bufferRemap(retained) }
+      lazy val columns = source.columns mapValues { _ remap F1P.bufferRemap(retained) }
     }
   }
 
@@ -162,8 +167,8 @@ trait Slice { source =>
       
       val idCount = source.idCount
       lazy val size = source.size
-      lazy val identities = source.identities map { _ remap sortedIndices }
-      lazy val columns = source.columns mapValues { _ remap sortedIndices }
+      lazy val identities = source.identities map { _ remap F1P.bufferRemap(sortedIndices) }
+      lazy val columns = source.columns mapValues { _ remap F1P.bufferRemap(sortedIndices) }
     }
   }
 
@@ -194,8 +199,8 @@ trait Slice { source =>
       
       val idCount = source.idCount
       lazy val size = source.size
-      lazy val identities = source.identities map { _ remap sortedIndices }
-      lazy val columns = source.columns mapValues { _ remap sortedIndices }
+      lazy val identities = source.identities map { _ remap F1P.bufferRemap(sortedIndices) }
+      lazy val columns = source.columns mapValues { _ remap F1P.bufferRemap(sortedIndices) }
     }
   }
 
@@ -204,32 +209,27 @@ trait Slice { source =>
       val idCount = source.idCount
       val size = idx
 
-      val identities = source.identities map {
-        _ remap {
-          case i if i < idx => i
-        }
+      private val prefixRemap = new F1P[Int, Int] {
+        val accepts, returns = CInt
+        def isDefinedAt(i: Int) = i < idx
+        def apply(i: Int) = i
       }
 
-      val columns = source.columns.mapValues {
-        _ remap {
-          case i if i < idx => i
-        }
-      }
+      val identities = source.identities map { _ remap prefixRemap }
+      val columns = source.columns.mapValues { _ remap prefixRemap }
     },
     new Slice {
       val idCount = source.idCount
       val size = source.size - idx
-      val identities = source.identities map {
-        _ remap {
-          case i if i < size => i + idx
-        }
+
+      private val suffixRemap = new F1P[Int, Int] {
+        val accepts, returns = CInt
+        def isDefinedAt(i: Int) = i < size
+        def apply(i: Int) = i + idx
       }
 
-      val columns = source.columns.mapValues {
-        _ remap {
-          case i if i < size => i + idx
-        }
-      }
+      val identities = source.identities map { _ remap suffixRemap }
+      val columns = source.columns.mapValues { _ remap suffixRemap }
     }
   )
 
@@ -289,9 +289,9 @@ class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Obje
       case (m @ VColumnRef(_, ctype), arr) =>
         (ctype: CType) match {
           case CBoolean => m -> Column.forArray[Boolean](CBoolean, arr.asInstanceOf[Array[Boolean]]) 
-          case CInt    => m -> Column.forArray[Int](CInt, arr.asInstanceOf[Array[Int]]) 
+          case CInt     => m -> Column.forArray[Int](CInt, arr.asInstanceOf[Array[Int]]) 
           case CLong    => m -> Column.forArray[Long](CLong, arr.asInstanceOf[Array[Long]]) 
-          case CFloat  => m -> Column.forArray[Float](CFloat, arr.asInstanceOf[Array[Float]]) 
+          case CFloat   => m -> Column.forArray[Float](CFloat, arr.asInstanceOf[Array[Float]]) 
           case CDouble  => m -> Column.forArray[Double](CDouble, arr.asInstanceOf[Array[Double]]) 
           case _        => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) 
         }
@@ -299,6 +299,15 @@ class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Obje
 }
 
 object Slice {
+  def apply(idsData: Seq[Column[Long]], data: Map[VColumnRef[_], Column[_]], dataSize: Int) = {
+    new Slice {
+      val idCount = idsData.length
+      val size = dataSize
+      val identities = idsData
+      val columns = data
+    }
+  }
+
   // scalaz order isn't @specialized
   trait IntOrder {
     def order(i1: Int, i2: Int): Ordering

@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
 package table
 
+import org.apache.commons.collections.primitives.ArrayIntList
+
 trait FN[@specialized(Boolean, Long, Double) A] { 
   val returns: CType { type CA = A }
 }
@@ -100,6 +102,20 @@ trait F1P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Dou
         def apply(row: Int) = outer(ca(row))
       }
     }
+  }
+}
+
+object F1P {
+  def bufferRemap(buf: ArrayIntList): F1P[Int, Int] = new F1P[Int, Int] {
+    val accepts, returns = CInt
+    def isDefinedAt(i: Int) = (i < buf.size) && buf.get(i) != -1
+    def apply(i: Int) = buf.get(i)
+  }
+
+  def bufferRemap(buf: Array[Int]): F1P[Int, Int] = new F1P[Int, Int] {
+    val accepts, returns = CInt
+    def isDefinedAt(i: Int) = (i < buf.length) && buf(i) != -1
+    def apply(i: Int) = buf(i)
   }
 }
 
