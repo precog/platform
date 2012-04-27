@@ -65,7 +65,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
     }
 
     def typeOf(jvalue: JValue): CType = {
-      CType.forValue(jvalue).getOrElse(CNull)
+      CType.forJValue(jvalue).getOrElse(CNull)
     }
 
     def columnMetadata(columns: Seq[ColumnDescriptor]): ColumnMetadata = 
@@ -175,7 +175,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
           data.flattenWithPath.collect {
             case (s, v) if isEqualOrChild(selector, s) => 
                val ns = s.nodes.slice(selector.length, s.length-1)
-              (JPath(ns), CType.forValue(v).get, token)
+              (JPath(ns), CType.forJValue(v).get, token)
           }
       }.flatten.toSet
 
@@ -184,7 +184,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
     def toProjectionDescriptor(e: Event, selector: JPath) = {
       def extractType(selector: JPath, data: JValue): CType = {
-        data.flattenWithPath.find( _._1 == selector).flatMap[CType]( t => CType.forValue(t._2) ).getOrElse(sys.error("bang"))
+        data.flattenWithPath.find( _._1 == selector).flatMap[CType]( t => CType.forJValue(t._2) ).getOrElse(sys.error("bang"))
       }
       
       val colDesc = ColumnDescriptor(e.path, selector, extractType(selector, e.data), Authorities(Set(e.tokenId)))

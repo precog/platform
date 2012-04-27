@@ -59,7 +59,7 @@ trait StubYggShardComponent[Dataset] extends YggShardComponent[Dataset] {
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
       val chunkSize = 2000
 
-      def insert(ids: Identities, values: Seq[CValue], shouldSync: Boolean = false) = copy(data = data + ((ids, values)))
+      def insert(ids: Identities, values: Seq[CValue], shouldSync: Boolean = false) = copy(data = data + ((ids, values.filter(_ != null))))
 
       def getAllPairs(expiresAt: Long): Dataset = dataset(1, data)
 

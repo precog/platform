@@ -20,7 +20,11 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.common.VectorCase
+
 import blueeyes.json.JsonAST._
+import org.apache.commons.collections.primitives.ArrayIntList
+
 import java.lang.ref.SoftReference
 
 import scala.collection.mutable.ArrayBuffer
@@ -69,12 +73,8 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           private var firstRightEq: Int = -1
           private var nextRight: Int = -1
 
-          private var leftBuffer: ArrayBuffer[Int] = new ArrayBuffer[Int]()
-          private var rightBuffer: ArrayBuffer[Int] = new ArrayBuffer[Int]()
-
-          def bufferRemap(buf: ArrayBuffer[Int]): PartialFunction[Int, Int] = {
-            case i if (i < buf.size) && buf(i) != -1 => buf(i)
-          }
+          private var leftBuffer = new ArrayIntList(maxSliceSize)
+          private var rightBuffer = new ArrayIntList(maxSliceSize)
 
           private var state: CogroupState =
             if (leftSlice == null) {
@@ -246,20 +246,20 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           }
 
           private def bufferAdvanceLeft(): Unit = {
-            leftBuffer += leftIdx
-            rightBuffer += -1
+            leftBuffer.add(leftIdx)
+            rightBuffer.add(-1)
             leftIdx += 1
           }
 
           private def bufferAdvanceRight(): Unit = {
-            leftBuffer += -1
-            rightBuffer += rightIdx
+            leftBuffer.add(-1)
+            rightBuffer.add(rightIdx)
             rightIdx += 1
           }
 
           private def bufferBoth(): Unit = {
-            leftBuffer += leftIdx
-            rightBuffer += rightIdx
+            leftBuffer.add(leftIdx)
+            rightBuffer.add(rightIdx)
           }
 
           private def emitSliceOnOverflow(advanceLeft: Boolean, advanceRight: Boolean, advancingState: CogroupState): Slice = {
@@ -308,8 +308,8 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
           private def emitSlice(): Slice = {
             val result = new Slice {
-              private val remappedLeft  = leftSlice.remap(bufferRemap(leftBuffer))
-              private val remappedRight = rightSlice.remap(bufferRemap(rightBuffer))
+              private val remappedLeft  = leftSlice.remap(F1P.bufferRemap(leftBuffer))
+              private val remappedRight = rightSlice.remap(F1P.bufferRemap(rightBuffer))
 
               val idCount = self.idCount + other.idCount
               val size = leftBuffer.size
@@ -438,8 +438,8 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
             rightSlice = rightSlice.split(rightIdx)._2
             leftIdx = 0
             rightIdx = 0
-            leftBuffer = new ArrayBuffer[Int]()
-            rightBuffer = new ArrayBuffer[Int]()
+            leftBuffer = new ArrayIntList(maxSliceSize)
+            rightBuffer = new ArrayIntList(maxSliceSize)
             result
           }
         }
@@ -449,10 +449,12 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
   def retain(refs: Set[ColumnRef]) = self.slices map { _.retain(refs) }
 
-  def toJson: Iterable[JValue] = {
-    new Iterable[JValue] {
-      def iterator = new Iterator[JValue] {
-        private val iter = self.slices.iterator
+  def toJson: Iterable[JValue] = toEvents.map(_._2)
+
+  def toEvents: Iterable[(Identities, JValue)] = {
+    new Iterable[(Identities, JValue)] {
+      def iterator = new Iterator[(Identities, JValue)] {
+        private val iter = self.normalize.slices.iterator
         private var slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
         private var idx = 0
 
@@ -462,7 +464,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
           if (slice == null) {
             sys.error("next() called past end of iterator")
           } else if (idx < slice.size) {
-            val result = slice.toJson(idx)
+            val result = (VectorCase(slice.identities.map(_(idx)): _*), slice.toJson(idx))
             idx += 1
             result
           } else {

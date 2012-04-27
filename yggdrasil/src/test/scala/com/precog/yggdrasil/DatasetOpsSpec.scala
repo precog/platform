@@ -22,18 +22,19 @@ package com.precog.yggdrasil
 import table._
 import blueeyes.json.JsonAST._
 
-import org.specs2.mutable.Specification
-import org.specs2.ScalaCheck
-import org.scalacheck.Gen
-import org.scalacheck.Gen._
-import org.scalacheck.Arbitrary
-import org.scalacheck.Arbitrary._
-
 import scalaz._
 import scalaz.Ordering._
 import scalaz.Either3._
 import scalaz.std.tuple._
 import scala.annotation.tailrec
+
+import org.specs2._
+import org.specs2.mutable.Specification
+import org.scalacheck._
+import org.scalacheck.Gen
+import org.scalacheck.Gen._
+import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary._
 
 trait DatasetOpsSpec extends Specification with ScalaCheck with SValueGenerators {
   type Dataset = Table
@@ -41,15 +42,24 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with SValueGenerators
 
   implicit def order[A] = tupledIdentitiesOrder[A]()
 
-  def fromJson(jv: Stream[Record[JValue]]): Dataset
+  case class SampleData(idCount: Int, data: Stream[Record[JValue]])
+
+  def fromJson(sampleData: SampleData): Dataset
   def toJson(dataset: Dataset): Stream[Record[JValue]]
 
   def checkCogroup = {
     type CogroupResult[A] = Stream[Record[Either3[A, (A, A), A]]]
-    implicit val arbRecords = Arbitrary(containerOf[Stream, Record[JValue]](sevent(2, 3) map { case (ids, sv) => (ids, sv.toJValue) }))
+    implicit val arbData = Arbitrary(
+      for {
+        idCount <- choose(0, 3) 
+        data <- containerOf[Stream, Record[JValue]](sevent(idCount, 3) map { case (ids, sv) => (ids, sv.toJValue) })
+      } yield {
+        SampleData(idCount, data)
+      }
+    )
 
     @tailrec def computeCogroup[A](l: Stream[Record[A]], r: Stream[Record[A]], acc: CogroupResult[A])(implicit ord: Order[Record[A]]): CogroupResult[A] = {
-      (l,r) match {
+      (l, r) match {
         case (lh #:: lt, rh #:: rt) => ord.order(lh, rh) match {
           case EQ => {
             val (leftSpan, leftRemain) = l.partition(ord.order(_, lh) == EQ)
@@ -75,16 +85,26 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with SValueGenerators
       }
     }
 
-    check { (l: Stream[Record[JValue]], r: Stream[Record[JValue]]) =>
-      val expected = computeCogroup(l, r, Stream()) map {
-        case (ids, Left3(jv)) => (ids, jv)
-        case (ids, Middle3((jv1, jv2))) => (ids, jv1 ++ jv2)
-        case (ids, Right3(jv)) => (ids, jv)
+    check { (l: SampleData, r: SampleData) =>
+      try {
+        val expected = computeCogroup(l.data, r.data, Stream()) map {
+          case (ids, Left3(jv)) => (ids, jv)
+          case (ids, Middle3((jv1, jv2))) => (ids, jv1 ++ jv2)
+          case (ids, Right3(jv)) => (ids, jv)
+        }
+
+        val ltable = fromJson(l)
+        println(l.data.toList)
+        println(ltable.toEvents.toList)
+        val rtable = fromJson(r)
+        println(r.data.toList)
+        println(rtable.toEvents.toList)
+        val result = toJson(ltable.cogroup(rtable, 1)(CogroupMerge.second))
+
+        result must containAllOf(expected).only.inOrder
+      } catch {
+        case ex => ex.printStackTrace; throw ex
       }
-
-      val result = toJson(fromJson(l).cogroup(fromJson(r), 1)(CogroupMerge.second))
-
-      result must containAllOf(expected).only.inOrder
     }
   }
 }

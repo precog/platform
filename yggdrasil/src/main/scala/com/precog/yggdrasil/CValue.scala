@@ -203,7 +203,7 @@ object CType extends CTypeSerialization {
   }
 
   @inline
-  final def forValue(jval: JValue): Option[CType] = jval match {
+  final def forJValue(jval: JValue): Option[CType] = jval match {
     case JBool(_)     => Some(CBoolean)
     case JInt(bi)     => Some(sizedIntCType(bi))
     case JDouble(_)   => Some(CDouble)
@@ -215,7 +215,7 @@ object CType extends CTypeSerialization {
   }
 
   @inline
-  private final def sizedIntCValue(bi: BigInt): CValue = {
+  final def sizedIntCValue(bi: BigInt): CValue = {
     if(bi.isValidInt) {
       CInt(bi.intValue)
     } else if(isValidLong(bi)) {

@@ -52,13 +52,19 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
     // pull each projection from the database, then for all the selectors that are provided
     // by tat projection, merge the values
     protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long): Future[IterableDataset[SValue]] = {
-      def appendToObject(sv: SValue, instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
+      def appendToObject(sv: SValue, instructions: Set[(CType, JPath, Int)], cvalues: Seq[CValue]) = {
         instructions.foldLeft(sv) {
-          case (sv, (selector, columnIndex)) => sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
+          case (sv, (ctype, selector, columnIndex)) => 
+            ctype match {
+              case CEmptyObject => sv.set(selector, SObject.Empty).getOrElse(sv)
+              case CEmptyArray => sv.set(selector, SArray.Empty).getOrElse(sv)
+              case CNull => sv.set(selector, SNull).getOrElse(sv)
+              case _ => sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
+            }
         }
       }
 
-      def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): (SValue, Set[(JPath, Int)]) = {
+      def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): (SValue, Set[(CType, JPath, Int)]) = {
         Tuple2(
           selectors.flatMap(_.dropPrefix(prefix).flatMap(_.head)).toList match {
             case List(JPathField(_)) => SObject.Empty
@@ -67,7 +73,9 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
             case _ => sys.error("Inconsistent JSON structure: " + selectors)
           },
           selectors map { s =>
-            (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
+            val columnIndex = descriptor.columns.indexWhere(col => col.path == path && s == col.selector)
+
+            (descriptor.columns(columnIndex).valueType, s.dropPrefix(prefix).get, columnIndex)
           }
         )
       }
