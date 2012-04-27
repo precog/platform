@@ -17,12 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.storage
+package com.precog.yggdrasil
 package leveldb
 
+import iterable.LevelDBProjectionFactory
+import com.precog.common.util.IOUtils
 import com.precog.common.VectorCase
 import com.precog.util.Bijection
-import com.precog.yggdrasil.leveldb.LevelDBProjection
 
 import org.iq80.leveldb._
 import org.scalacheck.Arbitrary
@@ -36,9 +37,18 @@ import java.nio.ByteBuffer
 import java.util.concurrent.{CyclicBarrier,LinkedBlockingQueue}
 import java.util.Random
 
-import scala.math.Ordering
+import scalaz._
+import scalaz.effect.IO 
 
-object ContinuousSpeedTest {
+object ContinuousSpeedTest extends LevelDBProjectionFactory {
+  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
+    IO { IOUtils.createTmpDir("continuousSpeedTest") }
+  }
+
+  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]] = {
+    storageLocation(descriptor) map { Success(_) }
+  }
+
   def main (argv : Array[String]) {
     val (actorCount, chunkSize, basedir, seed, dataType) = argv match {
       case Array(ac,tc,bd,s,dtype) => (ac.toInt, tc.toInt, bd, s.toLong, dtype)
@@ -104,8 +114,8 @@ object ContinuousSpeedTest {
       }
     }
 
-    def column(n: String, comparator: DBComparator): LevelDBProjection = {
-      LevelDBProjection(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { errors =>
+    def column(n: String, comparator: DBComparator) = {
+      projection(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { errors =>
         errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
       }
     }

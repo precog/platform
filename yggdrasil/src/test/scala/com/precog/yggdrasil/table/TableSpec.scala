@@ -79,7 +79,7 @@ object TableSpec extends Specification with ArbitraryProjectionDescriptor with A
           middle3((8L, 8L)) 
         )
 
-        val results = v1.cogroup(v2)(CogroupMerge.second)
+        val results = v1.cogroup(v2, 1)(CogroupMerge.second)
         val slice = results.slices.iterator.next
 
         expected.zipWithIndex.foldLeft(ok: MatchResult[Any]) {

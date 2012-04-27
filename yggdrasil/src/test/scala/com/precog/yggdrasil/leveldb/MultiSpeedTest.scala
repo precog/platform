@@ -17,13 +17,13 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.storage
+package com.precog.yggdrasil
 package leveldb
-import com.precog.common.VectorCase
-import com.precog.util.Bijection
-import com.precog.yggdrasil.leveldb.LevelDBProjection
 
-import org.scalacheck.Arbitrary
+import iterable.LevelDBProjectionFactory
+import com.precog.common.util.IOUtils
+import com.precog.common.VectorCase
+
 import akka.util.Timeout
 import akka.util.duration._
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
@@ -36,9 +36,20 @@ import java.io.File
 import java.math.BigDecimal
 import java.nio.ByteBuffer
 
+import scalaz._
+import scalaz.effect.IO 
+
 import org.scalacheck.Arbitrary
 
-object MultiSpeedTest {
+object MultiSpeedTest extends LevelDBProjectionFactory {
+  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
+    IO { IOUtils.createTmpDir("columnSpec") }
+  }
+
+  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]] = {
+    storageLocation(descriptor) map { Success(_) }
+  }
+
   case class Insert(id : Long, value : BigDecimal)
   case object KillMeNow
   case class ShutdownComplete(name : String, totalInserts : Int)
@@ -57,16 +68,20 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
-      private val column = LevelDBProjection(new File(basedir, name), sys.error("todo") /*Some(ProjectionComparator.BigDecimal)*/) ||| {
+      private val column = projection(new File(basedir, name), sys.error("todo") /*Some(ProjectionComparator.BigDecimal)*/) ||| {
         errors => errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
       }
 
       private var count = 0
       
       def receive = {
-        case Insert(id,v) => column.insert(VectorCase(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/).map(_ => count += 1).unsafePerformIO
+        case Insert(id,v) => 
+          column.insert(VectorCase(id), sys.error("todo")/*v.as[Array[Byte]].as[ByteBuffer]*/)
+          count += 1
 
-        case KillMeNow => column.close.map(_ => sender ? (ShutdownComplete(name, count))).map(_ => self ! PoisonPill).unsafePerformIO
+        case KillMeNow => 
+          column.close
+          (sender ? (ShutdownComplete(name, count))).onComplete(_ => self ! PoisonPill)
       }
     }
 

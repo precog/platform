@@ -17,26 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.storage
-package leveldb
+package com.precog.yggdrasil
 
-import com.precog.common.VectorCase
-import com.precog.util.Bijection
-import com.precog.yggdrasil.leveldb.LevelDBProjection
-
-import java.io.File
-import java.math.BigDecimal
-import java.nio.ByteBuffer
-
-object SimpleTest {
-  def main (argv : Array[String]) {
-    val c = LevelDBProjection(new File("/tmp/test"), sys.error("todo") /* Some(ProjectionComparator.BigDecimal)*/) ||| {
-      errors => for (err <- errors.list) err.printStackTrace
-                sys.error("Errors prevented creation of LevelDBProjection")
-    }
-
-    c.insert(VectorCase(12364534l), sys.error("todo") /*new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer]*/)
-  }
+trait IdSource {
+  def nextId(): Long
 }
+
 
 // vim: set ts=4 sw=4 et:

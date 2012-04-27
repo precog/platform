@@ -17,21 +17,30 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.storage
+package com.precog.yggdrasil
 package leveldb
 
+import iterable.LevelDBProjectionFactory
+import com.precog.common.util.IOUtils
 import com.precog.common.VectorCase
-import com.precog.util.Bijection
-import com.precog.yggdrasil.leveldb.LevelDBProjection
+
+import java.io.File
+import java.nio.ByteBuffer
+
+import scalaz._
+import scalaz.effect.IO 
 
 import org.scalacheck.Arbitrary
 
-import java.io.File
-import java.math.BigDecimal
-import java.nio.ByteBuffer
-import scalaz.effect._
+object SpeedTests extends LevelDBProjectionFactory {
+  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
+    IO { IOUtils.createTmpDir("columnSpec") }
+  }
 
-object SpeedTests {
+  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]] = {
+    storageLocation(descriptor) map { Success(_) }
+  }
+
   def main (argv : Array[String]) {
     val (chunks,chunksize) = argv match {
       case Array(c,cs) => (c.toInt,cs.toInt)
@@ -41,7 +50,7 @@ object SpeedTests {
       }
     }
 
-    val column = LevelDBProjection(new File("/tmp/speed"), sys.error("todo") /*ProjectionComparator.BigDecimal*/) ||| {
+    val column = projection(new File("/tmp/speed"), sys.error("todo") /*ProjectionComparator.BigDecimal*/) ||| {
       errors => for (err <- errors.list) err.printStackTrace
                 sys.error("Errors prevented creation of a LevelDB projection.")
     }
@@ -63,15 +72,17 @@ object SpeedTests {
       val toInsert = (1 to chunksize).map{ id =>
         for {v     <- biGen.sample
              scale <- intGen.sample} 
-          yield (id + offset * 100, new java.math.BigDecimal(v.underlying, scale))
+          yield (id + offset * 100, BigDecimal(new java.math.BigDecimal(v.underlying, scale)))
       }
 
       time("writes") {
-        toInsert.foldLeft(IO(())) { case (io, Some((id, value))) => io.flatMap(_ => column.insert(VectorCase(id), sys.error("todo") /*value.as[Array[Byte]].as[ByteBuffer]*/)) } unsafePerformIO
+        for ((id, value) <- toInsert.flatten) {
+          column.insert(VectorCase(id), Seq(CNum(value)))
+        }
       }
     }
 
-    column.close.unsafePerformIO
+    column.close
 
     val count = chunks * chunksize
     val totalduration = results.map(_._2).sum

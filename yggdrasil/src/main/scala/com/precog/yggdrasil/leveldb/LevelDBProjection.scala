@@ -83,7 +83,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
     positions.tail.reverse
   }
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Unit = {
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): this.type = {
     val (idBytes, valueBytes) = project(id, v)
 
     if (shouldSync) {
@@ -91,6 +91,8 @@ trait LevelDBProjection extends LevelDBByteProjection {
     } else {
       idIndexFile.put(idBytes, valueBytes)
     }
+
+    this
   }
 
   ///////////////////

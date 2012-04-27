@@ -18,7 +18,7 @@
  *
  */
 package com.precog.yggdrasil
-package memoization
+package iterable
 
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
@@ -49,11 +49,11 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent[IterableDataset[Seq[CValue]]] with ScalaCheck with ArbitrarySValue {
   override val defaultPrettyParams = Pretty.Params(2)
 
-  override type Dataset[α] = IterableDataset[α]
-  override type Memoable[α] = Iterable[α]
+  type Dataset[α] = IterableDataset[α]
+  //override type Memoable[α] = Iterable[α]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)

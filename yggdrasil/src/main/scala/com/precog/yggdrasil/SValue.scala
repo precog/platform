@@ -260,7 +260,6 @@ object SValue extends SValueInstances {
   }
 
   def asJSON(sv: SValue): String = pretty(render(sv.toJValue))
-
 }
 
 
