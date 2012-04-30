@@ -31,6 +31,8 @@ trait Phases {
   private val Phases: List[Phase] =
     bindNames _ :: checkProvenance _ :: solveCriticalConditions _ :: inferBuckets _ :: Nil
   
+  protected def LoadId: Identifier
+  
   def bindNames(expr: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
   def solveCriticalConditions(expr: Expr): Set[Error]

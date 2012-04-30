@@ -202,6 +202,7 @@ trait BytecodeWriter extends Writer with Version {
         case PushFalse => (0x83, 0.toShort, 0)
         case PushObject => (0x84, 0.toShort, 0)
         case PushArray => (0x85, 0.toShort, 0)
+        case PushNull => (0x86, 0.toShort, 0)
       }
       
       buffer.put(opcode.toByte)

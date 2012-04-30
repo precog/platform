@@ -104,7 +104,7 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
         case PathIndex(idx, children) =>
           children.flatMap(search(_, selector \ idx, acc))
 
-        case PathValue(valueType, descriptors) => 
+        case PathValue(valueType, _, descriptors) => 
           descriptors.headOption map { case (d, _) => acc + ((selector, valueType.stype, d)) } getOrElse acc
       }
     }

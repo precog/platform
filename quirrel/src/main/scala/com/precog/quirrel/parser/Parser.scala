@@ -82,10 +82,11 @@ trait Parser extends RegexParsers with Filters with AST {
     | namespacedId ^# { (loc, id) => Dispatch(loc, id, Vector()) }  
     | ticId        ^# TicVar
     
-    | pathLiteral ^# StrLit
+    | pathLiteral ^# { (loc, str) => Dispatch(loc, LoadId, Vector(StrLit(loc, str))) }
     | strLiteral  ^# StrLit
     | numLiteral  ^# NumLit
     | boolLiteral ^# BoolLit
+    | nullLiteral ^# NullLit
     
     | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
     | "[" ~ nullableActuals ~ "]" ^# { (loc, _, as, _) => ArrayDef(loc, as) }
@@ -175,8 +176,10 @@ trait Parser extends RegexParsers with Filters with AST {
       "true"  ^^^ true
     | "false" ^^^ false
   )
+
+  private lazy val nullLiteral = """null\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|neg".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|neg|null".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true

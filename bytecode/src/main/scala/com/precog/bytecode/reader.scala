@@ -193,6 +193,7 @@ trait BytecodeReader extends Reader {
         case 0x83 => Some(PushFalse)
         case 0x84 => Some(PushObject)
         case 0x85 => Some(PushArray)
+        case 0x86 => Some(PushNull)
         
         case _ => None
       }

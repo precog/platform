@@ -47,6 +47,7 @@ object EvaluationError {
 trait QueryExecutor {
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray]
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]]
+  def structure(userUID: String, path: Path): Future[Validation[String, JObject]]
   def startup: Future[Unit]
   def shutdown: Future[Unit]
 }
@@ -59,9 +60,8 @@ trait NullQueryExecutor extends QueryExecutor {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
   
-  def browse(userUID: String, path: Path) = {
-    sys.error("feature no available") 
-  }
+  def browse(userUID: String, path: Path) = sys.error("feature no available") 
+  def structure(userUID: String, path: Path) = sys.error("feature no available")
 
   def startup = Future(())
   def shutdown = Future { actorSystem.shutdown }

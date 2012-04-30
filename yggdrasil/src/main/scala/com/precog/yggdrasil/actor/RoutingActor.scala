@@ -26,6 +26,9 @@ import com.precog.common._
 import akka.actor.Actor
 import akka.actor.Scheduler
 import akka.actor.ActorRef
+import akka.dispatch.Await
+import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.util.duration._
@@ -33,6 +36,11 @@ import akka.util.Duration
 
 import com.weiglewilczek.slf4s._
 
+import annotation.tailrec
+import collection.mutable
+import java.util.concurrent.atomic.AtomicLong
+
+import scalaz._
 
 object RoutingActor {
   private val pathDelimeter = "//"
@@ -51,185 +59,203 @@ object RoutingActor {
   private[actor] implicit val timeout: Timeout = 30 seconds
 }
 
+case object Start 
 case object ControlledStop
-case object Restart 
 case class AwaitShutdown(replyTo: ActorRef)
 
-class RoutingActor(routingTable: RoutingTable, ingestActor: Option[ActorRef], projectionActors: ActorRef, metadataActor: ActorRef, scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
-  
-  import RoutingActor._
+class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestActor: Option[ActorRef], scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with ReadAheadEventIngest with Logging {
 
-  private var inShutdown = false
+  private val initiated = new AtomicLong(0)
+  private val processed = new AtomicLong(0)
 
   def receive = {
-
-    case Restart => 
-      inShutdown = false
+    case Start =>
+      start
       sender ! ()
-
     case ControlledStop =>
-      inShutdown = true 
+      initiateShutdown
       self ! AwaitShutdown(sender)
 
     case as @ AwaitShutdown(replyTo) =>
-      if(inserted.isEmpty) {
+      val pending = pendingBatches
+      if(pending <= 0) {
         logger.debug("Routing actor shutdown - Complete")
         replyTo ! ()
       } else {
-        logger.debug("Routing actor shutdown - Pending inserts (%d)".format(inserted.size)) 
+        logger.debug("Routing actor shutdown - Pending batches (%d)".format(pending)) 
         scheduler.scheduleOnce(shutdownCheck, self, as)
       }
-
-    case CheckMessages =>
-      if(!inShutdown) {
-        //logger.debug("Routing Actor - Check Messages")
-        ingestActor foreach { actor => actor ! GetMessages(self) }
-      }
-    
-    case NoMessages =>
-      //logger.debug("Routing Actor - No Messages")
-      scheduleNextCheck
-    
-    case Messages(messages) =>
-      //logger.debug("Routing Actor - Processing Message Batch (%d)".format(messages.size))
-      batchProcessMessages(messages)
+    case r @ NoIngestData    => processResult(r) 
+    case r @ IngestErrors(_) => processResult(r) 
+    case r @ IngestData(_)   => processResult(r)
+    case DirectIngestData(d) =>
+      initiated.incrementAndGet
+      processResult(IngestData(d)) 
       sender ! ()
-    
-    case ic @ InsertComplete(_, _, _, _) =>
-      //logger.debug("Insert Complete")
-      markInsertComplete(ic)
-    
-    case ibc @ InsertBatchComplete(inserts) =>
-      var i = 0
-      while(i < inserts.size) {
-        markInsertComplete(inserts(i))
-        i += 1
-      }
-
+    case m                   => logger.error("Unexpected ingest actor message: " + m.getClass.getName) 
   }
 
-  def scheduleNextCheck {
+  def processResult(ingestResult: IngestResult) {
+    handleResult(ingestResult)
+    processed.incrementAndGet
+  }
+
+  def pendingBatches(): Long = initiated.get - processed.get
+
+  def scheduleIngestRequest(delay: Long) {
+    ingestActor.map { actor =>
+      initiated.incrementAndGet
+      if(delay <= 0) {
+        actor ! GetMessages(self)
+      } else {
+        scheduler.scheduleOnce(Duration(delay, "millis"), actor, GetMessages(self))
+      }
+    }
+  }
+}
+
+trait ReadAheadEventIngest extends Logging {
+  def store: EventStore
+  def idleDelayMillis: Long
+ 
+  def scheduleIngestRequest(delay: Long): Unit
+
+  private var inShutdown = false
+  private val delayIngestFollowup = GetIngestAfter(idleDelayMillis)
+
+  val initialAction = GetIngestNow
+  
+  def start() {
+    inShutdown = false
+    handleNext(initialAction)
+  }
+  
+  def handleNext(nextAction: IngestAction) {
     if(!inShutdown) {
-      scheduler.scheduleOnce(Duration(1, "second"), self, CheckMessages)
+      nextAction match {
+        case GetIngestNow =>
+          scheduleIngestRequest(0)
+        case GetIngestAfter(delay) =>
+          scheduleIngestRequest(delay)
+        case NoIngest =>
+          // noop
+      }
     }
   }
 
-  def batchProcessMessages(messages: Seq[IngestMessage]) {
+  def handleResult(result: IngestResult) {
+    handleNext(nextAction(result))
+    process(result)
+  }
+
+  def initiateShutdown() {
+    inShutdown = true
+  }
+  
+  def nextAction(ingest: IngestResult): IngestAction = ingest match { 
+    case NoIngestData => 
+      delayIngestFollowup
+    case IngestErrors(errors) => 
+      logErrors(errors)
+      delayIngestFollowup 
+    case IngestData(_) => 
+      GetIngestNow 
+  }
+
+  def process(ingest: IngestResult) = ingest match {
+    case IngestData(messages) =>
+      store.store(messages)
+    case NoIngestData         =>
+      // noop
+    case IngestErrors(_)      =>
+      // noop
+  }
+  
+  private def logErrors(errors: Seq[String]) = errors.foreach( logger.error(_) )
+}
+
+class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration, implicit val timeout: Timeout, implicit val execContext: ExecutionContext) extends Logging {
+
+  type ActionMap = mutable.Map[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
+
+  def store(events: Seq[IngestMessage]): ValidationNEL[Throwable, Unit] = {
     import scala.collection.mutable
 
-    var actions = mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
-
-    var m = 0
-    while(m < messages.size) {
-      messages(m) match {
-        case SyncMessage(_, _, _) => // TODO
-
-        case em @ EventMessage(eventId, _) =>
-
-          val projectionUpdates = routingTable.route(em)
-          markInsertsPending(eventId, projectionUpdates.size)  
-
-          var i = 0
-          while(i < projectionUpdates.size) {
-            val update = projectionUpdates(i)
-            val insert = ProjectionInsert(update.identities, update.values)
-            val complete = InsertComplete(eventId, update.descriptor, update.values, update.metadata)
-            val (inserts, completes) = actions.get(update.descriptor) getOrElse { (Vector.empty, Vector.empty) }
-            val newActions = (inserts :+ insert, completes :+ complete) 
-            actions += (update.descriptor -> newActions)
-            i += 1
-          }
-      }
-      m += 1
-    }
-
-    val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
-    acquire.onComplete { 
-      case Left(t) =>
-        logger.error("Exception acquiring projection actor: ", t)
-
-      case Right(ProjectionBatchAcquired(actorMap)) => 
-        
-        val descItr = actions.keys.iterator
-        while(descItr.hasNext) {
-          val desc = descItr.next
-          val (inserts, completes) = actions(desc)
-          val actor = actorMap(desc)
-          val fut = actor ? ProjectionBatchInsert(inserts)
-          fut.onComplete { _ => 
-            self ! InsertBatchComplete(completes)
-            projectionActors ! ReleaseProjection(desc)
-          }
-        }
-        
-      case Right(ProjectionError(errs)) =>
-        for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
-    }
+    var actions = buildActions(events)
+    val future = dispatchActions(actions)
+    Await.result(future, batchTimeout)
   }
 
-  def processMessages(messages: Seq[IngestMessage]) {
-    var m = 0
-    while(m < messages.size) {
-      messages(m) match {
-        case SyncMessage(_, _, _) => // TODO
+  def buildActions(events: Seq[IngestMessage]): ActionMap = {
+    
+    def updateActions(event: IngestMessage, actions: ActionMap): ActionMap = {
+      event match {
+        case SyncMessage(_, _, _) => actions 
 
         case em @ EventMessage(eventId, _) =>
 
-          val projectionUpdates = routingTable.route(em)
+          @tailrec
+          def update(updates: Array[ProjectionData], actions: ActionMap, i: Int = 0): ActionMap = {
 
-          markInsertsPending(eventId, projectionUpdates.size)  
-
-          var cnt = 0
-          while(cnt < projectionUpdates.length) {
-            val pd = projectionUpdates(cnt)
-            val acquire = projectionActors ? AcquireProjection(pd.descriptor)
-            acquire.onComplete { 
-              case Left(t) =>
-                logger.error("Exception acquiring projection actor: ", t)
-
-              case Right(ProjectionAcquired(proj)) => 
-                val fut = proj ? ProjectionInsert(pd.identities, pd.values)
-                fut.onComplete { _ => 
-                  self ! InsertComplete(eventId, pd.descriptor, pd.values, pd.metadata)
-                  projectionActors ! ReleaseProjection(pd.descriptor)
-                }
-                
-              case Right(ProjectionError(errs)) =>
-                for(err <- errs.list) logger.error("Error acquiring projection actor: ", err)
+            def applyUpdates(update: ProjectionData, actions: ActionMap): ActionMap = {
+              val insert = ProjectionInsert(update.identities, update.values)
+              val complete = InsertComplete(eventId, update.descriptor, update.values, update.metadata)
+              val (inserts, completes) = actions.get(update.descriptor) getOrElse { (Vector.empty, Vector.empty) }
+              val newActions = (inserts :+ insert, completes :+ complete) 
+              actions += (update.descriptor -> newActions)
             }
-            cnt += 1
+
+            if(i < updates.length) {
+              update(updates, applyUpdates(updates(i), actions), i+1)
+            } else {
+              actions
+            }
           }
+
+          update(routingTable.route(em), actions)
       }
-      m += 1
     }
+  
+    @tailrec
+    def build(events: Seq[IngestMessage], actions: ActionMap, i: Int = 0): ActionMap = {
+      if(i < events.length) {
+        build(events, updateActions(events(i), actions), i+1)
+      } else {
+        actions
+      }
+    }
+
+    build(events, mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])])
   }
 
-  import scala.collection.mutable
+  def dispatchActions(actions: ActionMap): Future[ValidationNEL[Throwable, Unit]] = {
+    val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
+    acquire.flatMap {
+      case ProjectionBatchAcquired(actorMap) =>
+        val futs: List[Future[ProjectionDescriptor]] = actions.keys.map{ desc =>
+          val (inserts, completes)  = actions(desc)
+          val actor = actorMap(desc)
+          (actorMap(desc) ? ProjectionBatchInsert(inserts)).flatMap { _ =>
+            metadataActor ? UpdateMetadata(completes)
+          }.map { _ => desc }
+        }(collection.breakOut)
 
-  private var expectation = mutable.Map[EventId, Int]()
-  private val inserted = mutable.Map[EventId, mutable.ListBuffer[InsertComplete]]()
+        Future.sequence[ProjectionDescriptor, List](futs).flatMap{ descs => 
+          projectionActors ? ReleaseProjectionBatch(descs)
+        }.map{ _ => Success(()) }
 
-  def markInsertsPending(eventId: EventId, expected: Int) { 
-    expectation += (eventId -> expected)
-  }
-
-  def markInsertComplete(insert: InsertComplete) { 
-    val eventId = insert.eventId
-    val inserts = inserted.get(eventId) map { _ += insert } getOrElse(mutable.ListBuffer(insert))
-    if(inserts.size >= expectation(eventId)) {
-      expectation -= eventId
-      inserted -= eventId
-      //logger.debug("Event insert complete: updating metadata")
-      metadataActor ! UpdateMetadata(inserts)
-    } else {
-      inserted += (eventId -> inserts) 
-    }
-    if(expectation.isEmpty) {
-      //logger.debug("Batch complete")
-      self ! CheckMessages
+      case ProjectionError(errs) =>
+        Future(Failure(errs))
     }
   }
 }
 
 case class InsertComplete(eventId: EventId, descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 case class InsertBatchComplete(inserts: Seq[InsertComplete])
+
+case class DirectIngestData(messages: Seq[IngestMessage])
+
+sealed trait IngestAction
+case object NoIngest extends IngestAction
+case object GetIngestNow extends IngestAction
+case class GetIngestAfter(delay: Long) extends IngestAction

@@ -35,6 +35,8 @@ trait GenOpcode extends ImplLibrary {
 }
 
 trait ImplLibrary extends Library {
+  type Dataset[E]
+
   lazy val lib1 = _lib1
   lazy val lib2 = _lib2
 
@@ -49,11 +51,15 @@ trait ImplLibrary extends Library {
   trait BuiltInFunc2Impl extends BuiltInFunc2 {
     val operation: PartialFunction[(SValue, SValue), SValue]
     val operandType: (Option[SType], Option[SType])
+    
+    val requiresReduction: Boolean = false
+    def reduced(enum: Dataset[SValue]): Option[SValue] = None
   }
 
   type BIF1 <: BuiltInFunc1Impl
   type BIF2 <: BuiltInFunc2Impl
 }
 
-trait Stdlib extends Timelib with Infixlib with Mathlib with Stringlib
+trait Stdlib extends Timelib with Infixlib with Mathlib with Stringlib with Statslib
+
 

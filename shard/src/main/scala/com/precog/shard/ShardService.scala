@@ -47,7 +47,7 @@ trait ShardService extends
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def queryExecutorFactory(config: Configuration): QueryExecutor
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl): QueryExecutor
 
   def tokenManagerFactory(config: Configuration): TokenManager
 
@@ -57,18 +57,18 @@ trait ShardService extends
         startup {
           import context._
 
-          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"))
           
           println(config)
           println(config.detach("security"))
 
           val theTokenManager = tokenManagerFactory(config.detach("security"))
 
-
           val accessControl = new TokenBasedAccessControl {
             val executionContext = defaultFutureDispatch
             val tokenManager = theTokenManager
           }
+          
+          val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
 
           queryExecutor.startup.map { _ =>
             ShardState(

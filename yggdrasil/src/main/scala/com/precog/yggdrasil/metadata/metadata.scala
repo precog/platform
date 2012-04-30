@@ -38,12 +38,10 @@ trait StorageMetadata {
 
   implicit val dispatcher: MessageDispatcher
 
-  def findChildren(path: Path): Future[Seq[Path]]
-
+  def findChildren(path: Path): Future[Set[Path]]
   def findSelectors(path: Path): Future[Seq[JPath]]
   def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]]
   def findPathMetadata(path: Path, selector: JPath): Future[PathRoot]
-
 
   def findProjections(path: Path): Future[Map[ProjectionDescriptor, ColumnMetadata]] = {
     findSelectors(path).flatMap { selectors => 
@@ -70,9 +68,9 @@ case class PathRoot(children: Set[PathMetadata])
 
 case class PathField(name: String, children: Set[PathMetadata]) extends PathMetadata
 case class PathIndex(idx: Int, children: Set[PathMetadata]) extends PathMetadata
-case class PathValue(valueType: CType, descriptors: Map[ProjectionDescriptor, ColumnMetadata]) extends PathMetadata {
+case class PathValue(valueType: CType, authorities: Authorities, descriptors: Map[ProjectionDescriptor, ColumnMetadata]) extends PathMetadata {
   def update(desc: ProjectionDescriptor, meta: ColumnMetadata) = 
-    PathValue(valueType, descriptors + (desc -> meta))
+    PathValue(valueType, authorities, descriptors + (desc -> meta))
 }
 
 trait MetadataView extends StorageMetadata
@@ -86,12 +84,13 @@ class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: M
 
 class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
  
-  def findChildren(path: Path): Future[Seq[Path]] = {
+  def findChildren(path: Path): Future[Set[Path]] = {
     metadata.findChildren(path) flatMap { paths =>
-      Future.traverse(paths) { path =>
-        accessControl.mayAccessPath(uid, path, PathRead) map {
-          case true => Seq(path)
-          case false => Seq.empty
+      Future.traverse(paths) { p =>
+        val tPath = path / p
+        accessControl.mayAccessPath(uid, tPath, PathRead) map {
+          case true => Set(p)
+          case false => Set.empty
         }
       }.map{ _.flatten }
     }
@@ -121,7 +120,39 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
   }
   
   def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = {
-    metadata.findPathMetadata(path, selector)
+    def filter1(children: Set[PathMetadata]): Future[Set[PathMetadata]] = {
+      val mapped = children.foldLeft(Set.empty[Future[Option[PathMetadata]]]) {
+        case (acc, PathField(name, children)) => acc + filter1(children).map{ c => Option(PathField(name, c)) }
+        case (acc, PathIndex(index, children)) => acc + filter1(children).map{ c => Option(PathIndex(index, c)) }
+        case (acc, p @ PathValue(_, authorities, _)) =>
+          acc + accessControl.mayAccessData(uid, path, authorities.uids, DataQuery).map {
+            case true => Option(p)
+            case false => None 
+          }
+      }
+      Future.fold(mapped)(Set.empty[PathMetadata]) {
+        case (acc, pm) => pm.map { acc + _ }.getOrElse(acc)
+      }
+    }
+    def filter2(children: Set[PathMetadata]): Set[PathMetadata] = {
+       children.foldLeft(Set.empty[PathMetadata]){
+         case (acc, PathField(name, children)) =>
+           val fc = filter2(children)
+           if(fc.size > 0) { acc + PathField(name, fc) } else { acc }
+         case (acc, PathIndex(index, children)) => 
+           val fc = filter2(children)
+           if(fc.size > 0) { acc + PathIndex(index, fc) } else { acc }
+         case (acc, p @ PathValue(_, _, _)) => acc + p
+       }
+    }
+    accessControl.mayAccessPath(uid, path, PathRead).flatMap {
+      case true =>
+        metadata.findPathMetadata(path, selector).flatMap{ pr => 
+          filter1(pr.children).map{ filter2 }.map{ PathRoot }
+        }
+      case false =>
+        Future(PathRoot(Set.empty))
+    }
   }
 
   def traverseFilter[A, B](as: Traversable[(A, B)])(f: ((A, B)) => Future[Boolean]): Future[Map[A, B]] = {
@@ -132,18 +163,14 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
   }
 
   def traverseForall[A](as: Traversable[A])(f: A => Future[Boolean]): Future[Boolean] =
-    if(as.size == 0) {
-      Future(true)
-    } else {
-      Future.reduce(as.map(f))(_ && _)
-    }
+    if(as.size == 0) { Future(true) } else { Future.reduce(as.map(f))(_ && _) }
 }
 
 class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
-  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Seq[Path]] }
+  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] }
 
   def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
 

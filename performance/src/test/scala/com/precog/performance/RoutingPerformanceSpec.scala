@@ -43,6 +43,9 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
     "route" in { 
       implicit val stopTimeout: Timeout = Duration(60, "seconds")
 
+      val benchParams = BenchmarkParameters(5, 500, Some(500), false)
+      val singleParams = BenchmarkParameters(5, 500, Some(500), false)
+
       val inserts = 100000
 
       val system = ActorSystem("routing_actor_test")
@@ -61,7 +64,6 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
            { jval => Event(Path("/"), "token", jval, Map()) } map 
            { event => EventMessage(0, seq.getAndIncrement, event) }
 
-      val barrier = new CountDownLatch(1)
  
       val metadataActor: ActorRef = 
         system.actorOf(Props(new MockMetadataActor()), "mock_metadata_actor")
@@ -75,21 +77,36 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       
       val ingestActor: ActorRef = 
-        system.actorOf(Props(new MockIngestActor(inserts / batchSize, barrier, batch)), "mock_shard_ingest")
-      val routingActor: ActorRef = 
-        system.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionActors, metadataActor, system.scheduler, Duration(5, "millis"))), "router")
+        system.actorOf(Props(new MockIngestActor(inserts / batchSize, batch)), "mock_shard_ingest")
       
-      try { 
-        performBatch(inserts, 5000) { i =>
-        
-          routingActor ! CheckMessages
+      val routingActor: ActorRef = {
+        val routingTable = new SingleColumnProjectionRoutingTable
+        val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(system))
+        system.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), system.scheduler)), "router") 
+      }
+     
+      def testIngest() = {
+          val barrier = new CountDownLatch(1)
+
+          ingestActor ! MockIngestReset(barrier)
+          routingActor ! Start 
           
           barrier.await
 
           val fut = routingActor ? ControlledStop
           
           Await.result(fut, Duration(60, "seconds"))      
-        }    
+      }
+
+      try {
+        println("routing actor performance")
+        val result = Performance().benchmark(testIngest(), benchParams, benchParams)
+        //perfUtil.uploadResults("routing actor", result)
+        //val result = Performance().profile(testIngest())   
+ 
+        result.report("routing actor", System.out)
+        
+        true must_== true
       } finally {
         system.shutdown
       }
@@ -97,25 +114,30 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
   }
 }
 
+case class MockIngestReset(barrier: CountDownLatch)
+
 class MockMetadataActor extends Actor {
   def receive = {
-    case UpdateMetadata(_) =>
+    case UpdateMetadata(_) => sender ! ()
     case _                 => println("Unplanned metadata actor action")
   }
 }
 
-class MockIngestActor(toSend: Int, barrier: CountDownLatch, messageBatch: Seq[IngestMessage]) extends Actor {
-
+class MockIngestActor(toSend: Int, messageBatch: Seq[IngestMessage]) extends Actor {
+  private var barrier: CountDownLatch = null
   private var sent = 0
 
   def receive = {
+    case MockIngestReset(b) => 
+      barrier = b
+      sent = 0
     case GetMessages(replyTo) =>
       sent += 1
       if(sent < toSend) {
-        replyTo ! Messages(messageBatch) 
+        replyTo ! IngestData(messageBatch) 
       } else {
         barrier.countDown
-        replyTo ! NoMessages
+        replyTo ! NoIngestData
       }
     case ()                    =>
 
@@ -135,6 +157,7 @@ class MockProjectionActors(projectionActor: ActorRef) extends Actor {
       }
       sender ! ProjectionBatchAcquired(map)
     case ReleaseProjection(_) =>
+    case ReleaseProjectionBatch(_) => sender ! ()
     case _                     =>  println("Unplanned projection actors action")
   } 
 }

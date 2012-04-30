@@ -116,7 +116,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         back ++ recursive
       }
       
-      case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => {
+      case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_, _) => {
         expr.provenance = ValueProvenance
         expr.constrainingExpr = constraints get expr.provenance
         Set()
@@ -693,7 +693,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case Paren(_, child) => computeResultProvenance(child, relations, varAssumptions)
     
-    case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => body.provenance
+    case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_, _) => body.provenance
   }
   
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {

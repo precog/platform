@@ -17,15 +17,38 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.quirrel
+package com.precog.daze
 
-trait StubPhases extends Phases with RawErrors {
-  protected def LoadId = Identifier(Vector(), "load")
-  
-  def bindNames(expr: Expr): Set[Error] = Set()
-  def checkProvenance(expr: Expr): Set[Error] = Set()
-  def solveCriticalConditions(expr: Expr): Set[Error] = Set()
-  def inferBuckets(expr: Expr): Set[Error] = Set()
-  def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
-  def findGroups(expr: Expr): Map[String, Set[GroupTree]] = Map()
+trait BigDecimalOperations { 
+  /**
+   * Newton's approximation to some number of iterations (by default: 50).
+   * Ported from a Java example found here: http://www.java2s.com/Code/Java/Language-Basics/DemonstrationofhighprecisionarithmeticwiththeBigDoubleclass.htm
+   */
+
+  def sqrt(d: BigDecimal, k: Int = 50): BigDecimal = {
+    if (d > 0) {
+      lazy val approx = {   // could do this with a self map, but it would be much slower
+        def gen(x: BigDecimal): Stream[BigDecimal] = {
+          val x2 = (d + x * x) / (x * 2)
+          
+          lazy val tail = if (x2 == x)
+            Stream.empty
+          else
+            gen(x2)
+          
+          x2 #:: tail
+        }
+        
+        gen(d / 3)
+      }
+      
+      approx take k last
+    } else if (d == 0) {
+      0
+    } else {
+      sys.error("square root of a negative number")
+    }
+  }
 }
+
+  

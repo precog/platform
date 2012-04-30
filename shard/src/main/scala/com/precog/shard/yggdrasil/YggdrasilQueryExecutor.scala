@@ -21,6 +21,7 @@ package com.precog
 package shard
 package yggdrasil 
 
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import daze._
@@ -29,6 +30,7 @@ import daze.memoization._
 import muspelheim.ParseEvalStack
 
 import com.precog.common._
+import com.precog.common.security._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.metadata._
@@ -88,7 +90,7 @@ trait YggdrasilQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(config: Configuration): QueryExecutor = {
+  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
     val yConfig = wrapConfig(config)
     val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
       for( state <- YggState.restore(yConfig.dataDir) ) yield {
@@ -106,6 +108,7 @@ trait YggdrasilQueryExecutorComponent {
               type YggConfig = YggdrasilQueryExecutorConfig
               lazy val yggConfig = yConfig
               lazy val yggState = yState
+              lazy val accessControl = extAccessControl
             }
           }
         }
@@ -157,6 +160,34 @@ trait YggdrasilQueryExecutor
     storage.userMetadataView(userUID).findChildren(path) map {
       case paths => success(JArray(paths.map( p => JString(p.toString))(collection.breakOut)))
     }
+  }
+
+  def structure(userUID: String, path: Path): Future[Validation[String, JObject]] = {
+    val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
+
+    def transform(children: Set[PathMetadata]): JObject = {
+      val (primitives, compounds) = children.partition {
+        case PathValue(_, _, _) => true
+        case _                  => false
+      }
+
+      val fields = compounds.map {
+        case PathIndex(i, children) =>
+          val path = "[%d]".format(i)
+          JField(path, transform(children))
+        case PathField(f, children) =>
+          val path = "." + f
+          JField(path, transform(children))
+      }.toList
+
+      val types = JArray(primitives.map { 
+        case PathValue(t, _, _) => JString(CType.nameOf(t))
+      }.toList)
+
+      JObject(fields :+ JField("types", types))
+    }
+
+    futRoot.map { pr => Success(transform(pr.children)) } 
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {

@@ -127,7 +127,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
     "create token with overrides" in {
-      val perms = standardAccountPerms("/overrides/", "*")
+      val perms = standardAccountPerms("/overrides/")
       val createToken = TokenCreate(Some(perms), Some(Set(publicUID)), Some(true))
       create(rootUID, createToken) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(OK, _), _, Some(jdl), _) => 
@@ -153,7 +153,7 @@ class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
       }}
     }
     "don't create if token cannot grant permissions" in {
-      val perms = standardAccountPerms("/", rootUID)
+      val perms = standardAccountPerms("/")
       val createToken = TokenCreate(Some(perms), None, None)
       create(cust1UID, createToken) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token may not grant the requested permissions")), _) => ok

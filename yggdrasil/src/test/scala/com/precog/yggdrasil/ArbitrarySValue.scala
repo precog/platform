@@ -45,7 +45,7 @@ trait SValueGenerators {
 
   def sobject(depth: Int): Gen[SValue] = {
     for {
-      size <- choose(1, 3)
+      size <- choose(0, 3)
       names <- listOfN(size, identifier)
       values <- listOfN(size, svalue(depth - 1))  
     } yield {
@@ -55,7 +55,7 @@ trait SValueGenerators {
 
   def sarray(depth: Int): Gen[SValue] = {
     for {
-      size <- choose(1, 3)
+      size <- choose(0, 3)
       l <- listOfN(size, svalue(depth - 1))
     } yield SArray(Vector(l: _*))
   }

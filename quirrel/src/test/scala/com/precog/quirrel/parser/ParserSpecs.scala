@@ -28,7 +28,7 @@ import org.specs2.mutable._
 import java.io.File
 import scala.io.Source
 
-object ParserSpecs extends Specification with ScalaCheck with Parser with StubPhases {
+object ParserSpecs extends Specification with ScalaCheck with StubPhases with Parser {
   import ast._
   
   "uncomposed expression parsing" should {
@@ -136,9 +136,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "accept a path literal" in {
-      parse("//foo") must beLike { case StrLit(_, "/foo") => ok }
-      parse("//foo/bar/baz") must beLike { case StrLit(_, "/foo/bar/baz") => ok }
-      parse("//cafe-babe42_silly/SILLY") must beLike { case StrLit(_, "/cafe-babe42_silly/SILLY") => ok }
+      // TODO find a way to use LoadId instead
+      parse("//foo") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))) => ok }
+      parse("//foo/bar/baz") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo/bar/baz"))) => ok }
+      parse("//cafe-babe42_silly/SILLY") must beLike { case Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/cafe-babe42_silly/SILLY"))) => ok }
     }
     
     "accept a string literal" in {
@@ -184,6 +185,10 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "accept a boolean literal" in {
       parse("true") must beLike { case BoolLit(_, true) => ok }
       parse("false") must beLike { case BoolLit(_, false) => ok }
+    }    
+
+    "accept a null literal" in {
+      parse("null") must beLike { case NullLit(_, "null") => ok }
     }
     
     "accept an object definition with no properties" in {
@@ -221,13 +226,19 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       parse("{ a: 1, b: 2, cafe: 3, star_BUckS: 4 }") must beLike {
         case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", NumLit(_, "3")), ("star_BUckS", NumLit(_, "4")))) => ok
       }
+    }    
+
+    "accept an object definition with a null property" in {
+      parse("{ a: 1, b: 2, cafe: { foo: null }, star_BUckS: null }") must beLike {
+        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", ObjectDef(_, Vector(("foo", NullLit(_, "null"))))), ("star_BUckS", NullLit(_, "null")))) => ok
+      }
     }
     
     "reject an object definition with undelimited properties" in {
       parse("{ a: 1, b: 2 cafe: 3, star_BUckS: 4 }") must throwA[ParseException]
       parse("{ a: 1 b: 2 cafe: 3 star_BUckS: 4 }") must throwA[ParseException]
-    }
-    
+    }    
+
     "accept an array definition with no actuals" in {
       parse("[]") must beLike { case ArrayDef(_, Vector()) => ok }
     }
@@ -314,11 +325,13 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "reject a dispatch with one actual and named as a keyword" in {
       parse("true(1)") must throwA[ParseException]
       parse("false(1)") must throwA[ParseException]
+      parse("null(1)") must throwA[ParseException]
     }
 
     "reject a dispatch with one actual and a namespace with a keyword" in {
       parse("true :: x :: y(1)") must throwA[ParseException]
       parse("a :: b :: false(1)") must throwA[ParseException]
+      parse("a :: null(b) :: c") must throwA[ParseException]
     }
     
     "accept a dispatch with multiple actuals" in {
@@ -337,6 +350,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       parse("new(1, 2, 3)") must throwA[ParseException]
       parse("true(1, 2, 3)") must throwA[ParseException]
       parse("false(1, 2, 3)") must throwA[ParseException]
+      parse("null(1, 2, 3)") must throwA[ParseException]
     }
 
     "reject a dispatch with multiple actuals named as a keyword and a namespace" in {
@@ -345,7 +359,7 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       parse("a :: b :: false(1, 2, 3)") must throwA[ParseException]
     }
     
-    "accept an infix operation" >> {
+    "accept an infix operation with numerics as left and right" >> {
       "where" >> {
         parse("1 where 2") must beLike {
           case Where(_, NumLit(_, "1"), NumLit(_, "2")) => ok
@@ -365,6 +379,30 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       "intersect" >> {
         parse("1 intersect 2") must beLike {
           case Intersect(_, NumLit(_, "1"), NumLit(_, "2")) => ok
+        }
+      }
+    }
+    
+    "accept an infix operation with null and strings" >> {
+      "where" >> {
+        parse("""null where "foo"""") must beLike {
+          case Where(_, NullLit(_, "null"), StrLit(_, "foo")) => ok
+        }
+      }
+      
+      "with" >> {
+        parse(""""foo" with null""") must beLike {
+          case With(_, StrLit(_, "foo"), NullLit(_, "null")) => ok
+        }
+      }
+      "union" >> {
+        parse("""null union "foo"""") must beLike {
+          case Union(_, NullLit(_, "null"), StrLit(_, "foo")) => ok
+        }
+      }
+      "intersect" >> {
+        parse(""""foo" intersect null""") must beLike {
+          case Intersect(_, StrLit(_, "foo"), NullLit(_, "null")) => ok
         }
       }
     }
@@ -804,8 +842,8 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
     "correctly nest multiple binds" in {
       val input = """
         | a :=
-        |   b := load(//f)
-        |   c := load(//g)
+        |   b := //f
+        |   c := //g
         |
         |   d
         | e""".stripMargin
@@ -927,6 +965,11 @@ object ParserSpecs extends Specification with ScalaCheck with Parser with StubPh
       "intersect" >> {
         parse("intersectfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
+        }
+      }      
+      "null" >> {
+        parse("nullfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "nullfoo"), Vector()) => ok
         }
       }
     }

@@ -402,6 +402,7 @@ trait DAG extends Instructions {
         case i: PushNum => buildRoot(i)
         case PushTrue => buildRoot(PushTrue)
         case PushFalse => buildRoot(PushFalse)
+        case PushNull => buildRoot(PushNull)
         case PushObject => buildRoot(PushObject)
         case PushArray => buildRoot(PushArray)
         
@@ -443,7 +444,7 @@ trait DAG extends Instructions {
     
     def value: Option[SValue] = None
     
-    def isSingleton: Boolean
+    def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
     
     lazy val memoId = IdGen.nextInt()
     
@@ -453,6 +454,7 @@ trait DAG extends Instructions {
   }
   
   object dag {
+    //tic variable node
     case class SplitParam(loc: Line, index: Int)(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
@@ -465,6 +467,7 @@ trait DAG extends Instructions {
       val containsSplitArg = true
     }
     
+    //grouping node (e.g. foo where foo.a = 'b)
     case class SplitGroup(loc: Line, index: Int, provenance: Vector[Provenance])(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
@@ -483,6 +486,7 @@ trait DAG extends Instructions {
         case PushNum(num) => SDecimal(BigDecimal(num))
         case PushTrue => SBoolean(true)
         case PushFalse => SBoolean(false)
+        case PushNull => SNull
         case PushObject => SObject(Map())
         case PushArray => SArray(Vector())
       })

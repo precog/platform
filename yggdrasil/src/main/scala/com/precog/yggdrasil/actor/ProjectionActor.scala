@@ -69,7 +69,6 @@ class ProjectionActor[Dataset](val projection: Projection[Dataset], scheduler: S
         step(iter)
       }
     }
-
     step(batch.iterator)
   }
 
