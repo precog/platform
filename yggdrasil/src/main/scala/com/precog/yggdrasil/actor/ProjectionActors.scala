@@ -24,12 +24,10 @@ import scalaz.effect._
 
 import scala.collection.mutable.ListBuffer
 
-case object CheckMessages
-
 case class AcquireProjection(descriptor: ProjectionDescriptor)
 case class AcquireProjectionBatch(descriptors: Iterable[ProjectionDescriptor])
 case class ReleaseProjection(descriptor: ProjectionDescriptor) 
-case class ReleaseProjectionBatch(descriptors: Array[ProjectionDescriptor]) 
+case class ReleaseProjectionBatch(descriptors: Seq[ProjectionDescriptor]) 
 
 trait ProjectionResult
 object ProjectionResult {
@@ -74,13 +72,15 @@ class ProjectionActors(projectionFactory: ProjectionFactory, descriptorStorage: 
 
     case ReleaseProjection(descriptor: ProjectionDescriptor) =>
       unmark(projectionActor(descriptor))
+      sender ! ()
     
-    case ReleaseProjectionBatch(descriptors: Array[ProjectionDescriptor]) =>
+    case ReleaseProjectionBatch(descriptors: Seq[ProjectionDescriptor]) =>
       var cnt = 0
       while(cnt < descriptors.length) {
         unmark(projectionActor(descriptors(cnt)))
         cnt += 1
       }
+      sender ! ()
   }
 
   def mark(result: ProjectionResult): Unit = result match {

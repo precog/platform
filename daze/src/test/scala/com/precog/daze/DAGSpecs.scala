@@ -4,7 +4,7 @@ package daze
 import org.specs2.mutable._
 import bytecode._
 
-object DAGSpecs extends Specification with DAG with Stdlib {
+object DAGSpecs extends Specification with DAG with RandomLibrary {
   import instructions._
   import dag._
   
@@ -24,6 +24,10 @@ object DAGSpecs extends Specification with DAG with Stdlib {
       
       "push_false" >> {
         decorate(Vector(Line(0, ""), PushFalse)) mustEqual Right(Root(Line(0, ""), PushFalse))
+      }      
+
+      "push_null" >> {
+        decorate(Vector(Line(0, ""), PushNull)) mustEqual Right(Root(Line(0, ""), PushNull))
       }
       
       "push_object" >> {
@@ -50,13 +54,13 @@ object DAGSpecs extends Specification with DAG with Stdlib {
     }
     
     "parse out reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushTrue, instructions.Reduce(Count)))
-      result mustEqual Right(dag.Reduce(Line(0, ""), Count, Root(Line(0, ""), PushTrue)))
+      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(Count)))
+      result mustEqual Right(dag.Reduce(Line(0, ""), Count, Root(Line(0, ""), PushFalse)))
     }    
 
     "parse out set-reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushTrue, instructions.SetReduce(Distinct)))
-      result mustEqual Right(dag.SetReduce(Line(0, ""), Distinct, Root(Line(0, ""), PushTrue)))
+      val result = decorate(Vector(Line(0, ""), PushNull, instructions.SetReduce(Distinct)))
+      result mustEqual Right(dag.SetReduce(Line(0, ""), Distinct, Root(Line(0, ""), PushNull)))
     }
     
     "parse a single-level split" in {
@@ -269,7 +273,7 @@ object DAGSpecs extends Specification with DAG with Stdlib {
         line,
         PushNum("42"),
         PushTrue,
-        PushFalse,
+        PushNull,
         Bucket,
         instructions.Split(1, 2),
         Drop,
@@ -279,7 +283,7 @@ object DAGSpecs extends Specification with DAG with Stdlib {
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushNull))),
             Join(`line`, Map2Match(Add),
               Root(`line`, PushNum("42")),
               sg @ SplitGroup(`line`, 1, Vector())))) => {

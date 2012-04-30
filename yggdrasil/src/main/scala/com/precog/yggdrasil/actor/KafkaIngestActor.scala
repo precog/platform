@@ -61,12 +61,12 @@ trait ShardIngestActor extends Actor with Logging {
         replyTo ! messages 
       } catch {
         case e => 
-          logger.error("Error get message batch from kafka.", e) 
-          replyTo ! NoMessages
+          logger.error("Error getting message batch from kafka.", e) 
+          replyTo ! IngestErrors(List("Error getting message batch from kafka."))
       }
   }
 
-  def getMessages(): MessageResponse = readMessages 
+  def getMessages(): IngestResult = readMessages 
 
   def readMessages(): Seq[IngestMessage]
 
@@ -74,13 +74,18 @@ trait ShardIngestActor extends Actor with Logging {
 
 case class GetMessages(sendTo: ActorRef)
 
-trait MessageResponse
+//trait MessageResponse
 
-case object NoMessages extends MessageResponse
-case class Messages(messages: Seq[IngestMessage]) extends MessageResponse
+//case object NoMessages extends MessageResponse
+//case class Messages(messages: Seq[IngestMessage]) extends MessageResponse
 
-object MessageResponse {
-  implicit def seqToMessageResponse(messages: Seq[IngestMessage]): MessageResponse =
-    if(messages.isEmpty) NoMessages else Messages(messages)
+sealed trait IngestResult
+case object NoIngestData extends IngestResult
+case class IngestErrors(errors: Seq[String]) extends IngestResult
+case class IngestData(messages: Seq[IngestMessage]) extends IngestResult
+
+object IngestResult {
+  implicit def seqToIngestResult(messages: Seq[IngestMessage]): IngestResult =
+    if(messages.isEmpty) NoIngestData else IngestData(messages)
 
 }

@@ -20,6 +20,7 @@ parallelExecution in test := false
 
 libraryDependencies ++= Seq(
   "commons-primitives"          %  "commons-primitives" % "1.0",
+  "net.sf.opencsv"              % "opencsv"             % "2.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0" % "test",
@@ -29,7 +30,7 @@ libraryDependencies ++= Seq(
   "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
   "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
   "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
-  "com.github.scopt"            %% "scopt"              % "2.0.0",
+  "com.github.scopt"            %% "scopt"              % "2.0.1",
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9" % "test",
   "org.specs2"                  %% "specs2"             % "1.8" % "test",
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),

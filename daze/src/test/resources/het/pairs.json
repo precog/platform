@@ -1,8 +1,9 @@
 true
-{"first":42,"second":6}
+{"first":42,"second":null}
 {"twelf":42,"coq":6,"sasylf":false}
+null
 {"first":12,"second":0}
-{"first":77,"second":-38}
+{"first":null,"second":-38}
 12
 46
 {"first":1,"second":166}

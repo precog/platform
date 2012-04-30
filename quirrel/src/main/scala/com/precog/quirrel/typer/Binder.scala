@@ -6,11 +6,13 @@ import bytecode.Library
 
 trait Binder extends parser.AST with Library {
   import ast._
+  
+  protected override lazy val LoadId = Identifier(Vector(), "load")
 
   object BuiltIns {
     val Count          = BuiltIn(Identifier(Vector(), "count"), 1, true)
     val GeometricMean  = BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
-    val Load           = BuiltIn(Identifier(Vector(), "load"), 1, false)
+    val Load           = BuiltIn(LoadId, 1, false)
     val Max            = BuiltIn(Identifier(Vector(), "max"), 1, true)
     val Mean           = BuiltIn(Identifier(Vector(), "mean"), 1, true)
     val Median         = BuiltIn(Identifier(Vector(), "median"), 1, true)
@@ -68,6 +70,8 @@ trait Binder extends parser.AST with Library {
       case NumLit(_, _) => Set()
       
       case BoolLit(_, _) => Set()
+
+      case NullLit(_, _) => Set()
       
       case ObjectDef(_, props) => {
         val results = for ((_, e) <- props)

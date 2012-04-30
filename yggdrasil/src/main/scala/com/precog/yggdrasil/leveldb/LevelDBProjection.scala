@@ -42,6 +42,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
   private val createOptions = (new Options)
     .createIfMissing(true)
     .maxOpenFiles(maxOpenFiles)
+    .blockSize(1024 * 1024) // Based on rudimentary benchmarking. Gains in the high single digit percents
 
   protected lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
 

@@ -15,24 +15,24 @@ import com.precog.common.kafka._
 import com.weiglewilczek.slf4s.Logging
 
 trait ActorEcosystem {
-  def actorSystem(): ActorSystem
-  def metadataActor(): ActorRef
-  def projectionsActor(): ActorRef
-  def routingActor(): ActorRef
+  def actorSystem: ActorSystem
+  def metadataActor: ActorRef
+  def projectionActors: ActorRef
+  def routingActor: ActorRef
   def actorsStart(): Future[Unit]
   def actorsStop(): Future[Unit]
 }
 
 trait ProductionActorConfig extends BaseConfig {
-  def shardId(): String = "shard" + System.getProperty("precog.shard.suffix", "") 
+  def shardId: String = "shard" + System.getProperty("precog.shard.suffix", "") 
 
-  def kafkaHost(): String = config[String]("kafka.batch.host")
-  def kafkaPort(): Int = config[Int]("kafka.batch.port")
-  def kafkaTopic(): String = config[String]("kafka.batch.topic") 
+  def kafkaHost: String = config[String]("kafka.batch.host")
+  def kafkaPort: Int = config[Int]("kafka.batch.port")
+  def kafkaTopic: String = config[String]("kafka.batch.topic") 
 
-  def zookeeperHosts(): String = config[String]("zookeeper.hosts")
-  def zookeeperBase(): List[String] = config[List[String]]("zookeeper.basepath")
-  def zookeeperPrefix(): String = config[String]("zookeeper.prefix")   
+  def zookeeperHosts: String = config[String]("zookeeper.hosts")
+  def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
+  def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 }
 
 trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfigComponent {
@@ -51,18 +51,19 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfi
     actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
-  lazy val projectionsActor = {
+  lazy val projectionActors = {
     actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
     val routingTable = new SingleColumnProjectionRoutingTable
-    actorSystem.actorOf(Props(new RoutingActor(routingTable, Some(ingestActor), projectionsActor, metadataActor, actorSystem.scheduler)), "router")
+    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), actorSystem.scheduler)), "router")
   }
   
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
-    routingActor ! CheckMessages
+    routingActor ! Start 
   }
 
   def actorsStop(): Future[Unit] = {
@@ -103,7 +104,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfi
       _  <- routingActorStop
       _  <- flushMetadata
       _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionsActor, "projection")
+      _  <- actorStop(projectionActors, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
       _  <- Future {
@@ -165,18 +166,19 @@ trait StandaloneActorEcosystem extends ActorEcosystem with YggConfigComponent wi
     actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
   }
   
-  lazy val projectionsActor = {
+  lazy val projectionActors = {
     actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
   }
   
   lazy val routingActor = {
-    val routingTable = new SingleColumnProjectionRoutingTable 
-    actorSystem.actorOf(Props(new RoutingActor(routingTable, None, projectionsActor, metadataActor, actorSystem.scheduler)), "router")
+    val routingTable = new SingleColumnProjectionRoutingTable
+    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, None, actorSystem.scheduler)), "router")
   }
   
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
-    routingActor ! CheckMessages
+    routingActor ! Start
   }
 
   def actorsStop(): Future[Unit] = {
@@ -216,7 +218,7 @@ trait StandaloneActorEcosystem extends ActorEcosystem with YggConfigComponent wi
             }
       _  <- routingActorStop
       _  <- flushMetadata
-      _  <- actorStop(projectionsActor, "projection")
+      _  <- actorStop(projectionActors, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
       _  <- Future {

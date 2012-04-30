@@ -9,6 +9,7 @@ import com.codecommit.gll.LineStream
 import com.precog._
 
 import common.kafka._
+import common.security._
 
 import daze._
 import daze.util._
@@ -96,6 +97,7 @@ object SBTConsole {
       //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
       val yggConfig = console.yggConfig
       val yggState = shardState
+      val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
     
     object ops extends Ops 

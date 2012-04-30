@@ -83,9 +83,18 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         shakeTree(tree) must beLike {
           case BoolLit(LineStream(), true) => ok
         }
+      }      
+
+      "null literal" >> {
+        val tree = NullLit(LineStream(), "null")
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case NullLit(LineStream(), "null") => ok
+        }
       }
       
-      "object" >> {
+      "object with numeric fields" >> {
         val tree = ObjectDef(LineStream(), Vector(("a", NumLit(LineStream(), "1")), ("b", NumLit(LineStream(), "2"))))
         bindRoot(tree, tree)
         
@@ -94,12 +103,30 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         }
       }
       
-      "array" >> {
+      "object with string and null fields" >> {
+        val tree = ObjectDef(LineStream(), Vector(("a", NullLit(LineStream(), "null")), ("b", StrLit(LineStream(), "foo"))))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case ObjectDef(LineStream(), Vector(("a", NullLit(LineStream(), "null")), ("b", StrLit(LineStream(), "foo")))) => ok
+        }
+      }
+      
+      "array with numeric fields" >> {
         val tree = ArrayDef(LineStream(), Vector(NumLit(LineStream(), "1"), NumLit(LineStream(), "2")))
         bindRoot(tree, tree)
         
         shakeTree(tree) must beLike {
           case ArrayDef(LineStream(), Vector(NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))) => ok
+        }
+      }      
+
+      "array with string and null fields" >> {
+        val tree = ArrayDef(LineStream(), Vector(NullLit(LineStream(), "null"), StrLit(LineStream(), "foo")))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case ArrayDef(LineStream(), Vector(NullLit(LineStream(), "null"), StrLit(LineStream(), "foo"))) => ok
         }
       }
       

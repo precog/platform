@@ -1,4 +1,6 @@
 true
+null
+{"baz": null}
 "daniel"
 [-9, -42, 42, 87, 4]
 {"foo":"bar"}

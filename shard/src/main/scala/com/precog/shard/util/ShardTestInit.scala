@@ -9,6 +9,7 @@ import com.precog.yggdrasil.actor._
 import java.io.File
 
 import akka.dispatch.Await
+import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 import akka.util.Duration
 
@@ -32,6 +33,7 @@ object ShardTestInit extends App {
     }
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
     val yggState = YggState(dir, Map.empty, Map.empty)
+    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 
   def usage() {
@@ -45,12 +47,6 @@ object ShardTestInit extends App {
     Await.result(shard.actorsStart, Duration(30, "seconds"))
     val timeout = Timeout(30000) 
     loads.foreach{ insert(_, timeout) }
-
-    // Shutdown is not currently waiting for all inflight
-    // requests to this is a brute force way to get load
-    // testing underway.
-    Thread.sleep(60000)
-
     Await.result(shard.actorsStop, Duration(30, "seconds"))
   }
 

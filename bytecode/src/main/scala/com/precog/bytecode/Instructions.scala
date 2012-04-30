@@ -51,6 +51,7 @@ trait Instructions extends Library {
       case PushNum(_) => (0, 1)
       case PushTrue => (0, 1)
       case PushFalse => (0, 1)
+      case PushNull => (0, 1)
       case PushObject => (0, 1)
       case PushArray => (0, 1)
     }
@@ -112,6 +113,7 @@ trait Instructions extends Library {
     case class PushNum(num: String) extends Instruction with DataInstr with RootInstr
     case object PushTrue extends Instruction with RootInstr
     case object PushFalse extends Instruction with RootInstr
+    case object PushNull extends Instruction with RootInstr
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
     

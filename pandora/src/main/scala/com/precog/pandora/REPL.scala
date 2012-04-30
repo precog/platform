@@ -15,6 +15,7 @@ import jline.TerminalFactory
 import jline.console.ConsoleReader
 
 import com.precog.common.kafka._
+import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
 import yggdrasil.serialization._
@@ -265,6 +266,7 @@ object Console extends App {
           //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
           lazy val yggConfig = replConfig
           lazy val yggState = shardState
+          lazy val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
         object ops extends Ops 

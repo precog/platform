@@ -20,6 +20,8 @@ import scalaz._
 import scalaz.Scalaz._
 import scalaz.Validation._
 
+import annotation.tailrec
+
 sealed trait SortBy
 case object ById extends SortBy
 case object ByValue extends SortBy
@@ -53,7 +55,25 @@ trait SortBySerialization {
 
 object SortBy extends SortBySerialization
 
-case class Authorities(uids: Set[String])
+case class Authorities(uids: Set[String]) {
+
+  @tailrec
+  final def hashSeq(l: Seq[String], hash: Int, i: Int = 0): Int = {
+    if(i < l.length) {
+      hashSeq(l, hash * 31 + l(i).hashCode, i+1)
+    } else {
+      hash
+    }     
+  }    
+
+  lazy val hash = {
+    if(uids.size == 0) 1 
+    else if(uids.size == 1) uids.head.hashCode 
+    else hashSeq(uids.toSeq, 1) 
+  }
+
+  override def hashCode(): Int = hash
+}
 
 trait AuthoritiesSerialization {
   implicit val AuthoritiesDecomposer: Decomposer[Authorities] = new Decomposer[Authorities] {
@@ -70,7 +90,23 @@ trait AuthoritiesSerialization {
 
 object Authorities extends AuthoritiesSerialization 
 
-case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) 
+case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) {
+  lazy val hash = {
+    var hash = 1
+    hash = hash * 31 + path.hashCode
+    hash = hash * 31 + selector.path.hashCode
+    hash = hash * 31 + valueType.hashCode
+    hash * 31 + authorities.hashCode
+  }
+
+  override def hashCode(): Int = hash
+  
+  override def equals(other: Any): Boolean = other match {
+    case o @ ColumnDescriptor(p, s, vt, a) =>
+      path == p && selector == s && valueType == vt && authorities == a 
+    case _ => false
+  }
+}
 
 trait ColumnDescriptorSerialization {
   implicit val ColumnDescriptorDecomposer : Decomposer[ColumnDescriptor] = new Decomposer[ColumnDescriptor] {
@@ -105,10 +141,6 @@ case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]
   def columnAt(path: Path, selector: JPath) = columns.find(col => col.path == path && col.selector == selector)
 
   def satisfies(col: ColumnDescriptor) = columns.contains(col)
-
-  private lazy val _hashCode = scala.runtime.ScalaRunTime._hashCode(ProjectionDescriptor.this)
-
-  override def hashCode: Int = _hashCode
 }
 
 trait ProjectionDescriptorSerialization {

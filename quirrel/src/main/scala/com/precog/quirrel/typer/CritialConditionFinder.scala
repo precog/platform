@@ -28,6 +28,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       case StrLit(_, _) => Map()
       case NumLit(_, _) => Map()
       case BoolLit(_, _) => Map()
+      case NullLit(_, _) => Map()
       
       case ObjectDef(_, props) => {
         val maps = props map { case (_, expr) => loop(root, expr, currentWhere) }
@@ -166,7 +167,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       case _ => false
     }
     
-    case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) => false
+    case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_, _) => false
     
     case ObjectDef(_, props) => props exists { case (_, e) => referencesTicVar(root)(e) }
     

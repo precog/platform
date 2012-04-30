@@ -72,6 +72,9 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
           out.writeInt(bytes.length)
           out.write(bytes, 0, bytes.length)
         
+        case Some(SNull) => out.writeInt(0)
+        case Some(SArray(values)) if(values.size == 0) => out.writeInt(0)
+        case Some(SObject(fields)) if(fields.size == 0) => out.writeInt(0)
         case _ => sys.error("Value structure " + sv.structure + " for value " + sv.toString + " does not correspond to write header " + structure)
       }
     }
@@ -108,6 +111,18 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
         val bytes: Array[Byte] = new Array(length)
         in.readFully(bytes)
         CNum(bytes.as[BigDecimal])
+
+      case CNull => 
+        assert(in.readInt() == 0)
+        null
+      
+      case CEmptyObject => 
+        assert(in.readInt() == 0)
+        null
+      
+      case CEmptyArray => 
+        assert(in.readInt() == 0)
+        null
     }
   }
 
