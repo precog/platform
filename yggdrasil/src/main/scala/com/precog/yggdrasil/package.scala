@@ -95,6 +95,13 @@ package object yggdrasil {
       } else idComp
     }
   }
+
+  def valueOrder[A](implicit ord: Order[A]): Order[(Identities, A)] = new Order[(Identities, A)] {
+    type IA = (Identities, A)
+    def order(x: IA, y: IA): Ordering = {
+      ord.order(x._2, y._2)
+    }
+  }
 }
 
 

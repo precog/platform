@@ -109,6 +109,8 @@ trait DatasetExtensions[Dataset[_], Memoable[_], Grouping[_, _], A] {
   // reorders identities such that the prefix is in the order of the vector of indices supplied, and the order of
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
   def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit fs: SortSerialization[IA]): Dataset[A] 
+
+  def sortByValue(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit ord: Order[A], fs: SortSerialization[IA]): Dataset[A]
   
   def memoize(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
 
