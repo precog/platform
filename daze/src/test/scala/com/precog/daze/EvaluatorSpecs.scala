@@ -253,6 +253,40 @@ class EvaluatorSpecs extends Specification
       result2 must contain(42, 12, 77, 1, 13)
     }
 
+    "join two sets with a match" >> {
+      "from different paths" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Match(Add),
+          Join(line, Map2Cross(DerefObject), 
+            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            Root(line, PushString("time"))),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            Root(line, PushString("height"))))
+
+        val result = testEval(input)
+
+        result must haveSize(500)
+      }
+
+      "from the same path" >> {
+        val line = Line(0, "")
+
+        val input = Join(line, Map2Match(Add),
+          Join(line, Map2Cross(DerefObject), 
+            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            Root(line, PushString("weight"))),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            Root(line, PushString("height"))))
+
+        val result = testEval(input)
+
+        result must haveSize(5)
+      }
+    }
+
     "evaluate a binary numeric operation mapped over homogeneous numeric set" >> {
       "addition" >> {
         val line = Line(0, "")
