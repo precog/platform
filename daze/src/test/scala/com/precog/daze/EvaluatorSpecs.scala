@@ -1774,7 +1774,7 @@ class EvaluatorSpecs extends Specification
         result2 must contain(29)
       }
       
-      "median" >> {
+      "median with odd number of elements" >> {
         val line = Line(0, "")
         
         val input = dag.Reduce(line, Median,
@@ -1789,7 +1789,41 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(13)
-      }.pendingUntilFixed
+      }
+      
+      "median with even number of elements" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Median,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers5")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d
+        }
+        
+        result2 must contain(2)
+      }      
+
+      "median with singleton" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Median,
+          Root(line, PushNum("42")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SDecimal(d)) => d
+        }
+        
+        result2 must contain(42)
+      }
       
       "mode" >> {
         val line = Line(0, "")
@@ -1802,11 +1836,45 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
+          case (VectorCase(), SArray(d)) => d
         }
         
-        result2 must contain(1)
-      }.pendingUntilFixed
+        result2 must contain(Vector(SDecimal(1)))
+      }      
+
+      "mode with a singleton" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Mode,
+          Root(line, PushNum("42")))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SArray(d)) => d
+        }
+        
+        result2 must contain(Vector(SDecimal(42)))
+      }
+
+      "mode where each value appears exactly once" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Mode,
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SArray(d)) => d
+        }
+        
+        result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
+      }
       
       "max" >> {
         val line = Line(0, "")
@@ -1979,9 +2047,9 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(13)
-      }.pendingUntilFixed
+      }
       
-      "mode" >> {
+      "mode in the case there is only one" >> {
         val line = Line(0, "")
         
         val input = dag.Reduce(line, Mode,
@@ -1992,11 +2060,28 @@ class EvaluatorSpecs extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
+          case (VectorCase(), SArray(d)) => d
         }
         
-        result2 must contain(1)
-      }.pendingUntilFixed
+        result2 must contain(Vector(SDecimal(1)))
+      }
+      
+      "mode in the case there is more than one" >> {
+        val line = Line(0, "")
+        
+        val input = dag.Reduce(line, Mode,
+          dag.LoadLocal(line, None, Root(line, PushString("/het/random")), Het))
+          
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SArray(d)) => d
+        }
+        
+        result2 must contain(Vector(SDecimal(4), SString("a")))
+      }
       
       "max" >> {
         val line = Line(0, "")

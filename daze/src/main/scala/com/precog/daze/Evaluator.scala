@@ -223,8 +223,7 @@ trait Evaluator extends DAG
         Right(Match(mal.Op1(spec, op), set, graph2))
       }
       
-      // TODO mode and median
-      case dag.Reduce(_, red, parent) => {
+      case r @ dag.Reduce(_, red, parent) => {
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         val enum = realizeMatch(spec, set)
         
@@ -308,6 +307,67 @@ trait Evaluator extends DAG
             
             if (count == BigDecimal(0)) None
             else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
+
+          case Median => 
+            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
+
+            val count = enum2.reduce(BigDecimal(0)) {
+              case (count, SDecimal(v)) => count + 1
+              case (acc, _) => acc
+            }
+            
+            if (count == BigDecimal(0)) None
+            else {
+              val (c, median) = if (count.toInt % 2 == 0) {
+                val index = (count.toInt / 2, (count.toInt / 2) + 1)
+              
+                enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
+                  case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
+                  case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
+                    (count + 1, 
+                      if (prev.isDefined) prev map { x => (x + v) / 2 } 
+                      else None)  
+                  }
+                  case (acc, _) => acc
+                } 
+              } else {
+                val index = (count.toInt / 2) + 1
+              
+                enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
+                  case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
+                  case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
+                  case (acc, _) => acc
+                }
+              }
+              if (median.isDefined) median map { v => SDecimal(v) }
+              else None
+            }
+
+          case Mode =>
+            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
+
+            val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
+              case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
+              case ((Some(currentRun), count, modes, maxCount), sv) => {
+                if (currentRun == sv) {
+                  if (count >= maxCount)
+                    (Some(sv), count + 1, List(sv), maxCount + 1)
+                  else if (count + 1 == maxCount)
+                    (Some(sv), count + 1, modes :+ sv, maxCount)
+                  else
+                    (Some(sv), count + 1, modes, maxCount)
+                } else {
+                  if (maxCount == 1)
+                    (Some(sv), 1, modes :+ sv, maxCount)
+                  else
+                    (Some(sv), 1, modes, maxCount)
+                }
+              }
+
+              case(acc, _) => acc
+            }
+            
+            Some(SArray(Vector(modes: _*))) 
         }
         
         reduced.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
