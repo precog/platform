@@ -69,11 +69,7 @@ class StatslibSpec extends Specification
   implicit def add_~=(d: Double) = new AlmostEqual(d)
   implicit val precision = Precision(0.000000000000001)
 
-
-  //todo add cases for division by zero in the evaluator
-  //todo add cases for handling a single value as a parameter
-
-  "for homogenous sets, the appropriate stats funciton" should {
+  "for homogenous sets, the appropriate stats function" should {
     "compute linear correlation" in {
       val line = Line(0, "")
       
@@ -137,6 +133,32 @@ class StatslibSpec extends Specification
         case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
           val bool1 = slope.toDouble ~= 0.6862906545903664
           val bool2 = yint.toDouble ~= 67.54013997529848
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
+    }  
+
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("height"))),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          val bool1 = slope.toDouble ~= 38.867859767424704
+          val bool2 = yint.toDouble ~= -46.97865418113425
           Vector(bool1, bool2)
         }
       }
@@ -215,9 +237,35 @@ class StatslibSpec extends Specification
       
       result2 must contain(Vector(true, true))
     }  
+
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("height"))),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          val bool1 = slope.toDouble ~= 38.867859767424704
+          val bool2 = yint.toDouble ~= -46.97865418113425
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
+    }  
   }    
   
-  "for the same homogenous set, the appropriate stats funciton" should {
+  "for the same homogenous set, the appropriate stats function" should {
     "compute linear correlation" in {
       val line = Line(0, "")
       
@@ -286,7 +334,33 @@ class StatslibSpec extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
-    }  
+    } 
+
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("height"))),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          Root(line, PushString("height"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          val bool1 = slope.toDouble ~= 56.59154084773969
+          val bool2 = yint.toDouble ~= -166.69026355890486
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
+    }   
   }  
   
   "for heterogenous sets, the appropriate stats function" should {
@@ -358,6 +432,32 @@ class StatslibSpec extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
+    }  
+
+    "compute the correct coefficients in a simple log regression" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          Root(line, PushString("height"))),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          Root(line, PushString("weight"))))
+
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          val bool1 = slope.toDouble ~= 38.867859767424704
+          val bool2 = yint.toDouble ~= -46.97865418113425
+          Vector(bool1, bool2)
+        }
+      }
+      
+      result2 must contain(Vector(true, true))
     }  
   } 
 
@@ -434,6 +534,73 @@ class StatslibSpec extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
-   }  
+    } 
+
+    "compute the correct coefficients in a simple log regression" >> {
+      "with a positive constant y-value" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            Root(line, PushString("height"))),
+          Root(line, PushNum("5")))
+
+        val result = testEval(input)
+        
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+            val bool1 = slope.toDouble ~= 0
+            val bool2 = yint.toDouble ~= 5
+            Vector(bool1, bool2)
+          }
+        }
+        
+        result2 must contain(Vector(true, true))
+      }
+
+      "with a negative constant x-value" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
+          Operate(line, Neg, 
+            Root(line, PushNum("5"))),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            Root(line, PushString("height"))))
+
+        val result = testEval(input)
+        
+        result must haveSize(0)
+      }
+
+      "with a negative x-value in one object" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight_neg")), Het),
+            Root(line, PushString("height"))),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight_neg")), Het),
+            Root(line, PushString("weight"))))
+
+        val result = testEval(input)
+        
+        result must haveSize(1) 
+        
+        val result2 = result collect {
+          case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+            val bool1 = slope.toDouble ~= 38.867859767424704
+            val bool2 = yint.toDouble ~= -46.97865418113425
+            Vector(bool1, bool2)
+          }
+        }
+        
+        result2 must contain(Vector(true, true))
+      }
+    }   
   }
 }
