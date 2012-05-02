@@ -90,7 +90,7 @@ trait Binder extends parser.AST with Library {
       
       case BoolLit(_, _) => Set()
 
-      case NullLit(_, _) => Set()
+      case NullLit(_) => Set()
       
       case ObjectDef(_, props) => {
         val results = for ((_, e) <- props)

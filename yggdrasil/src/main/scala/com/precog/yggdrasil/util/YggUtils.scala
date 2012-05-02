@@ -830,6 +830,7 @@ object TokenTools extends Command with AkkaDefaults {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
       opt("l","list","List tokens", { config.list = true })
+      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
       opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
       opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
       opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
@@ -849,9 +850,10 @@ object TokenTools extends Command with AkkaDefaults {
     try {
       val tm = tokenManager(config)
       try {
-        if(config.list) list(config, tm) 
-        config.newAccount.foreach { create(_, config, tm) }
-        config.delete.foreach { delete(_, config, tm) }
+        if(config.list) list(tm) 
+        config.listChildren.foreach(listChildren(_, tm))
+        config.newAccount.foreach { create(_, config.root, tm) }
+        config.delete.foreach { delete(_, tm) }
       } finally {
         Await.result(tm.close(), Duration(10, "seconds"))
       }
@@ -865,46 +867,58 @@ object TokenTools extends Command with AkkaDefaults {
     new MongoTokenManager(mongo, mongo.database(config.database), config.collection, config.deletedCollection, new Timeout(10000))
   }
 
-  def list(config: Config, tokenManager: TokenManager) {
-    val f = tokenManager.list
-    Await.result(f, Duration(10, "seconds")).foreach { t =>
-      println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
-      println("  Permissions (Path)")
-      t.permissions.path.foreach { p =>
-        println("    " + p)
-      }
-      println("  Permissions (Data)")
-      t.permissions.data.foreach { p =>
-        println("    " + p)
-      }
-      println("  Grants")
-      t.grants.foreach { g =>
-        println("    " + g)
-      }
-      println()
+  def list(tokenManager: TokenManager) {
+    for (tokens <- tokenManager.list) {
+      tokens.foreach(printToken)
     }
   }
 
-  def create(p: String, config: Config, tokenManager: TokenManager) {
+  def printToken(t: Token): Unit = {
+    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
+    println("  Permissions (Path)")
+    t.permissions.path.foreach { p =>
+      println("    " + p)
+    }
+    println("  Permissions (Data)")
+    t.permissions.data.foreach { p =>
+      println("    " + p)
+    }
+    println("  Grants")
+    t.grants.foreach { g =>
+      println("    " + g)
+    }
+    println()
+  }
+
+  def listChildren(tokenId: String, tokenManager: TokenManager) = {
+    for (Some(parent) <- tokenManager.lookup(tokenId); children <- tokenManager.listChildren(parent)) {
+      children.foreach(printToken)
+    }
+  }
+
+  def create(p: String, root: String, tokenManager: TokenManager) = {
     val perms = TestTokenManager.standardAccountPerms(p)
-    val f = tokenManager.issueNew(Some(config.root), perms, Set.empty, false)
+    val f = tokenManager.issueNew(Some(root), perms, Set.empty, false)
     Await.result(f, Duration(10, "seconds"))
   }
 
-  def delete(t: String, config: Config, tokenManager: TokenManager) {
-    val f = tokenManager.lookup(t).flatMap { _.map { tokenManager.deleteToken(_).map{ _ => () } }.getOrElse{Future(())}}
-    Await.result(f, Duration(10, "seconds"))
+  def delete(t: String, tokenManager: TokenManager) = {
+    for (Some(token) <- tokenManager.lookup(t); t <- tokenManager.deleteToken(token)) {
+      println("Deleted token: ")
+      printToken(token)
+    }
   }
   
-  class Config(
-    var delete: Option[String] = None, 
-    var newAccount: Option[String] = None,
-    var root: String = TestTokenManager.rootUID,
-    var list: Boolean = false,
-    var database: String = "auth_v1",
-    var collection: String = "tokens",
-    var deleted: Option[String] = None,
-    var servers: String = "localhost") {
+  class Config {
+    var delete: Option[String] = None
+    var newAccount: Option[String] = None
+    var root: String = TestTokenManager.rootUID
+    var list: Boolean = false
+    var listChildren: Option[String] = None
+    var database: String = "auth_v1"
+    var collection: String = "tokens"
+    var deleted: Option[String] = None
+    var servers: String = "localhost" 
 
     def deletedCollection(): String = {
       deleted.getOrElse( collection + "_deleted" )
