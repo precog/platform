@@ -32,7 +32,7 @@ libraryDependencies ++= Seq(
   "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
   "com.github.scopt"            %% "scopt"              % "2.0.1",
   "org.scala-tools.testing"     %% "scalacheck"         % "1.9" % "test",
-  "org.specs2"                  %% "specs2"             % "1.8" % "test",
+  "org.specs2"                  %% "specs2"             % "1.10-SNAPSHOT" % "test",
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing(),
   "org.apfloat"                 %  "apfloat"            % "1.6.3"

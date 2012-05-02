@@ -1,7 +1,7 @@
 package com.precog.yggdrasil
 package table
 
-trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] with (Int => A) { outer =>
+trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] { outer =>
   def isDefinedAt(row: Int): Boolean
   def apply(row: Int): A
 
@@ -43,6 +43,10 @@ case class ArrayColumn[@specialized(Boolean, Long, Double) A](ctype: CType { typ
   @inline final def resize(limit: Int): ArrayColumn[A] = {
     assert(limit <= this.limit)
     ArrayColumn(ctype, data, limit)
+  }
+
+  override def toString = {
+    "ArrayColumn(" + ctype + ", " + data.mkString("[", ",", "]") + ", " + limit + ")"
   }
 }
 
