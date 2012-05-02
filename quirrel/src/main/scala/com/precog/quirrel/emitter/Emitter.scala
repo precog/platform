@@ -363,7 +363,7 @@ trait Emitter extends AST
             case false => PushFalse
           })
 
-        case ast.NullLit(loc, _) =>
+        case ast.NullLit(loc) =>
           emitInstr(PushNull)
         
         case ast.ObjectDef(loc, props) => 

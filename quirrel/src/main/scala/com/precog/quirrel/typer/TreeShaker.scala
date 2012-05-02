@@ -52,7 +52,7 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     case e @ StrLit(_, _) => (e, Set(), Set())
     case e @ NumLit(_, _) => (e, Set(), Set())
     case e @ BoolLit(_, _) => (e, Set(), Set())
-    case e @ NullLit(_, _) => (e, Set(), Set())
+    case e @ NullLit(_) => (e, Set(), Set())
     
     case ObjectDef(loc, props) => {
       val mapped = props map {

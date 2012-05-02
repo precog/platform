@@ -67,7 +67,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | strLiteral  ^# StrLit
     | numLiteral  ^# NumLit
     | boolLiteral ^# BoolLit
-    | nullLiteral ^# NullLit
+    | nullLiteral ^# { (loc, _) => NullLit(loc) }
     
     | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
     | "[" ~ nullableActuals ~ "]" ^# { (loc, _, as, _) => ArrayDef(loc, as) }

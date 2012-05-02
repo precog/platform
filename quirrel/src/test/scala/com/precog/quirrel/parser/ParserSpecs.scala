@@ -169,7 +169,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }    
 
     "accept a null literal" in {
-      parse("null") must beLike { case NullLit(_, "null") => ok }
+      parse("null") must beLike { case NullLit(_) => ok }
     }
     
     "accept an object definition with no properties" in {
@@ -211,7 +211,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
 
     "accept an object definition with a null property" in {
       parse("{ a: 1, b: 2, cafe: { foo: null }, star_BUckS: null }") must beLike {
-        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", ObjectDef(_, Vector(("foo", NullLit(_, "null"))))), ("star_BUckS", NullLit(_, "null")))) => ok
+        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", ObjectDef(_, Vector(("foo", NullLit(_))))), ("star_BUckS", NullLit(_)))) => ok
       }
     }
     
@@ -366,24 +366,24 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "accept an infix operation with null and strings" >> {
       "where" >> {
-        parse("""null where "foo"""") must beLike {
-          case Where(_, NullLit(_, "null"), StrLit(_, "foo")) => ok
+        parse("""null where "foo" """) must beLike {
+          case Where(_, NullLit(_), StrLit(_, "foo")) => ok
         }
       }
       
       "with" >> {
         parse(""""foo" with null""") must beLike {
-          case With(_, StrLit(_, "foo"), NullLit(_, "null")) => ok
+          case With(_, StrLit(_, "foo"), NullLit(_)) => ok
         }
       }
       "union" >> {
-        parse("""null union "foo"""") must beLike {
-          case Union(_, NullLit(_, "null"), StrLit(_, "foo")) => ok
+        parse("""null union "foo" """) must beLike {
+          case Union(_, NullLit(_), StrLit(_, "foo")) => ok
         }
       }
       "intersect" >> {
         parse(""""foo" intersect null""") must beLike {
-          case Intersect(_, StrLit(_, "foo"), NullLit(_, "null")) => ok
+          case Intersect(_, StrLit(_, "foo"), NullLit(_)) => ok
         }
       }
     }
