@@ -26,8 +26,108 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
+import org.joda.time.DateTime
+
 import scalaz._
 import Scalaz._
+
+package object nsecurity {
+
+  type TokenID = String
+  type GrantID = String
+
+  case class NToken(tid: TokenID, name: String, grants: Set[GrantID]) {
+    def addGrants(add: Set[GrantID]): NToken = 
+      copy(grants = grants ++ add)
+    def removeGrants(remove: Set[GrantID]): NToken =
+      copy(grants = grants -- remove)
+  }
+
+  case class ResolvedGrant(gid: GrantID, grant: Grant)
+
+  sealed trait Grant {
+    def accessType: AccessType
+    def issuer: Option[GrantID]
+    def path: Path
+    def expiration: Option[DateTime]
+  
+    def isExpired(ref: DateTime) = expiration.map { ref.isAfter(_) }.getOrElse(false)
+
+  }
+
+  sealed trait OwnerIgnorantGrant extends Grant {
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration): Grant
+  }
+
+  sealed trait OwnerAwareGrant extends Grant {
+    def owner: TokenID
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration): Grant
+  }
+
+  sealed trait AccessType 
+
+  case class WriteGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant { 
+    val accessType = WriteGrant
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, expiration)
+  }
+  object WriteGrant extends AccessType
+
+  case class OwnerGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant {
+    val accessType = OwnerGrant
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, expiration)
+  }
+  object OwnerGrant extends AccessType
+
+  case class ReadGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReadGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  object ReadGrant extends AccessType
+
+  case class ReduceGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  object ReduceGrant extends AccessType
+
+  case class ModifyGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  object ModifyGrant extends AccessType
+
+  case class TransformGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  object TransformGrant extends AccessType
+
+  object Grant {
+
+    val ALL = Set[AccessType](WriteGrant, OwnerGrant, ReadGrant, ReduceGrant, ModifyGrant, TransformGrant)
+    val RRT = Set[AccessType](ReadGrant, ReduceGrant, TransformGrant)
+
+    def grantSet(
+        issuer: Option[GrantID], 
+        path: Path, 
+        owner: TokenID, 
+        expiration: Option[DateTime], 
+        grantTypes: Set[AccessType]): Set[Grant] = grantTypes.map {
+      case WriteGrant => WriteGrant(issuer, path, expiration)
+      case OwnerGrant => OwnerGrant(issuer, path, expiration)
+      case ReadGrant => ReadGrant(issuer, path, owner, expiration)
+      case ReduceGrant => ReduceGrant(issuer, path, owner, expiration)
+      case ModifyGrant => ModifyGrant(issuer, path, owner, expiration)
+      case TransformGrant => TransformGrant(issuer, path, owner, expiration)
+    }
+  }
+}
 
 package object security {
   

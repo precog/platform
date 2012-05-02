@@ -24,11 +24,172 @@ import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 
 import blueeyes.json.JPath
+import org.joda.time.DateTime
+
+import nsecurity._
+
+import scala.collection.mutable
 
 trait AccessControl {
   def mayGrant(uid: UID, permissions: Permissions): Future[Boolean]
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean]
   def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean]
+}
+
+trait NewTokenManager {
+
+  def newUUID() = java.util.UUID.randomUUID.toString
+
+  def newTokenID(): String = (newUUID() + "-" + newUUID()).toUpperCase
+  def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
+ 
+  def newToken(name: String, grants: Set[GrantID]): NToken
+  def newGrant(grant: Grant): ResolvedGrant
+
+  def findToken(tid: TokenID): Option[NToken]
+  def findGrant(gid: GrantID): Option[ResolvedGrant]
+  def findGrantChildren(gid: GrantID): Set[ResolvedGrant]
+
+  def addGrants(token: NToken, grants: Set[GrantID]): NToken
+  def removeGrants(token: NToken, grants: Set[GrantID]): NToken
+
+  def deleteToken(token: NToken): Unit 
+  def deleteGrant(grant: ResolvedGrant): Unit
+
+} 
+
+class TransientTokenManager(tokens: mutable.Map[TokenID, NToken] = mutable.Map.empty, 
+                       grants: mutable.Map[GrantID, Grant] = mutable.Map.empty) extends NewTokenManager {
+
+  def newToken(name: String, grants: Set[GrantID]): NToken = {
+    val newToken = NToken(newTokenID, name, grants)
+    tokens.put(newToken.tid, newToken)
+    newToken
+  }
+
+  def newGrant(grant: Grant): ResolvedGrant = {
+    val newGrant = ResolvedGrant(newGrantID, grant)
+    grants.put(newGrant.gid, grant)
+    newGrant
+  }
+
+  def findToken(tid: TokenID): Option[NToken] = tokens.get(tid)
+
+  def findGrant(gid: GrantID): Option[ResolvedGrant] = grants.get(gid).map { ResolvedGrant(gid, _) }
+  def findGrantChildren(gid: GrantID): Set[ResolvedGrant] =
+    grants.filter{ 
+      case (_, grant) => grant.issuer.map { _ == gid }.getOrElse(false) 
+    }.map{ ResolvedGrant.tupled.apply }(collection.breakOut)
+
+  def addGrants(token: NToken, add: Set[GrantID]): NToken = {
+    val updated = token.addGrants(add)
+    tokens.put(updated.tid, updated)
+    updated
+  }
+  def removeGrants(token: NToken, remove: Set[GrantID]): NToken = {
+    val updated = token.removeGrants(remove)
+    tokens.put(updated.tid, updated)
+    updated
+  }
+
+  def deleteToken(token: NToken) = tokens.remove(token.tid)
+  def deleteGrant(grant: ResolvedGrant) = grants.remove(grant.gid)
+}
+
+class TokenManagerAccessControl(tokens: NewTokenManager)(implicit execContext: ExecutionContext) extends AccessControl {
+  def mayGrant(uid: UID, permissions: Permissions): Future[Boolean] = Future {
+    sys.error("todo")
+  }
+
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = Future {
+    pathAccess match {
+      case PathRead => mayAccess(uid, path, Set(uid), ReadGrant) 
+      case PathWrite => mayAccess(uid, path, Set.empty, WriteGrant)
+    }
+  }
+
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean] = Future {
+    mayAccess(uid, path, owners, ReadGrant)
+  }
+ 
+  def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): Boolean = {
+    tokens.findToken(uid).map { t => 
+       hasValidGrants(t, path, owners, accessType)
+    }.getOrElse(false)
+  }
+
+  def hasValidGrants(t: NToken, path: Path, owners: Set[UID], accessType: AccessType): Boolean = {
+    accessType match {
+      case WriteGrant =>
+        t.grants.exists{ gid =>
+          tokens.findGrant(gid).map { 
+            case ResolvedGrant(_, grant @ WriteGrant(_, _, _)) =>
+              grant.path.equalOrChild(path) && isValid(grant)
+            case _ => false
+          }.getOrElse(false)
+        }
+      case OwnerGrant =>
+        t.grants.exists{ gid =>
+          tokens.findGrant(gid).map { 
+            case ResolvedGrant(_, grant @ OwnerGrant(_, _, _)) =>
+              grant.path.equalOrChild(path) && isValid(grant)
+            case _ => false
+          }.getOrElse(false)
+        }
+      case ReadGrant =>
+        if(owners.isEmpty) false
+        else owners.forall { owner =>
+          t.grants.exists{ gid =>
+            tokens.findGrant(gid).map { 
+              case ResolvedGrant(_, grant @ ReadGrant(_, _, o, _)) =>
+                grant.path.equalOrChild(path) && isValid(grant) && owner == o 
+              case _ => false
+            }.getOrElse(false)
+          }
+        }
+      case ReduceGrant =>
+        if(owners.isEmpty) false
+        else owners.forall { owner =>
+          t.grants.exists{ gid =>
+            tokens.findGrant(gid).map { 
+              case ResolvedGrant(_, grant @ ReduceGrant(_, _, o, _)) =>
+                grant.path.equalOrChild(path) && isValid(grant) && owner == o 
+              case _ => false
+            }.getOrElse(false)
+          }
+        }
+      case ModifyGrant =>
+        if(owners.isEmpty) false
+        else owners.forall { owner =>
+          t.grants.exists{ gid =>
+            tokens.findGrant(gid).map { 
+              case ResolvedGrant(_, grant @ ModifyGrant(_, _, o, _)) =>
+                grant.path.equalOrChild(path) && isValid(grant) && owner == o 
+              case _ => false
+            }.getOrElse(false)
+          }
+        }
+      case TransformGrant =>
+        if(owners.isEmpty) false
+        else owners.forall { owner =>
+          t.grants.exists{ gid =>
+            tokens.findGrant(gid).map { 
+              case ResolvedGrant(_, grant @ TransformGrant(_, _, o, _)) =>
+                grant.path.equalOrChild(path) && isValid(grant) && owner == o 
+              case _ => false
+            }.getOrElse(false)
+          }
+        }
+    }
+  }
+
+  def isValid(grant: Grant): Boolean = {
+    !grant.isExpired(new DateTime()) && grant.issuer.map { 
+      tokens.findGrant(_).map { parentGrant => 
+        grant.accessType == parentGrant.grant.accessType && isValid(parentGrant.grant) 
+      }.getOrElse(false) 
+    }.getOrElse(true) 
+  }
 }
 
 class UnlimitedAccessControl(implicit executionContext: ExecutionContext) extends AccessControl {
