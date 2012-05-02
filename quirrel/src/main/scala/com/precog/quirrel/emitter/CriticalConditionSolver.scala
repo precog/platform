@@ -25,7 +25,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
     case BoolLit(_, _) => Set()
-    case NullLit(_, _) => Set()
+    case NullLit(_) => Set()
     
     case ObjectDef(_, props) =>
       (props map { case (_, e) => solveCriticalConditions(e) }).fold(Set[Error]()) { _ ++ _ }

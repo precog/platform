@@ -44,19 +44,36 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "have the correct number of identities in a relate" >> {
-      val input = """
-        | //clicks ~ //campaigns
-        | sum := //clicks.time + //campaigns.cpm
-        | sum + //clicks.time""".stripMargin
+    "have the correct number of identities and values in a relate" >> {
+      "with the sum plus the LHS" >> {
+        val input = """
+          | //clicks ~ //campaigns
+          | sum := //clicks.time + //campaigns.cpm
+          | sum + //clicks.time""".stripMargin
 
-      val results = evalE(input)
+        val results = evalE(input)
 
-      results must haveSize(10000)
+        results must haveSize(10000)
 
-      forall(results) {
-        case (ids, _) => ids must haveSize(2)
+        forall(results) {
+          case (ids, _) => ids must haveSize(2)
+        }
       }
+      
+      "with the sum plus the RHS" >> {
+        val input = """
+          | //clicks ~ //campaigns
+          | sum := //clicks.time + //campaigns.cpm
+          | sum + //campaigns.cpm""".stripMargin
+
+        val results = evalE(input)
+
+        results must haveSize(10000)
+
+        forall(results) {
+          case (ids, _) => ids must haveSize(2)
+        }
+      }.pendingUntilFixed
     }
 
     "use the where operator on a unioned set" >> {

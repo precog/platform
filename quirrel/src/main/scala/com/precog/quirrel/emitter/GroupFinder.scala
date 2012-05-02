@@ -28,7 +28,7 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
       case StrLit(_, _) => Map()
       case NumLit(_, _) => Map()
       case BoolLit(_, _) => Map()
-      case NullLit(_, _) => Map()
+      case NullLit(_) => Map()
       
       case ObjectDef(_, props) => {
         val maps = props map { case (_, expr) => loop(root, expr, currentWhere) }
