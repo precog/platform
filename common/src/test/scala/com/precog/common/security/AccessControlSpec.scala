@@ -1,6 +1,8 @@
 package com.precog.common
 package security
 
+import nsecurity._
+
 import org.specs2.mutable._
 
 import akka.util.Duration
@@ -10,46 +12,48 @@ import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
 
+import scala.collection
+
+import org.joda.time.DateTime
+
 import scalaz._
 
-object AccessControlSpec extends Specification with AccessControlTestValues with AccessControlHelpers with AkkaDefaults {
-  implicit val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
-    implicit val executionContext = defaultFutureDispatch
-    val tokenConfig = accessControlTokenConfig
-  }
+object AccessControlSpec extends Specification with TokenManagerTestValues with AccessControlHelpers with AkkaDefaults {
 
-  "access control" should {
+  implicit val accessControl = new TokenManagerAccessControl(tokens)
+
+  "legacy access control" should {
     "control path access" in {
       "allow access" in {
-        val accessRoot = mayAccessPath(rootUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(rootUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(rootToken.tid, "/", _: PathAccess, Set(rootToken.tid))
+        val accessChild = mayAccessPath(rootToken.tid, "/child", _: PathAccess, Set(rootToken.tid))
       
         accessRoot(PathRead) must beTrue
         accessChild(PathRead) must beTrue
         accessRoot(PathWrite) must beTrue
         accessChild(PathWrite) must beTrue
       }
-      "allow access via grant" in {
-        val accessRoot = mayAccessPath(grantUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(grantUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beTrue
-        accessChild(PathRead) must beTrue
-        accessRoot(PathWrite) must beTrue
-        accessChild(PathWrite) must beTrue
-      }
-      "limit access to constrained perms" in {
-        val accessRoot = mayAccessPath(childUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(childUID, "/child", _: PathAccess)
+      "limit access" in {
+        val accessRoot = mayAccessPath(rootLikeToken.tid, "/", _: PathAccess, Set(rootLikeToken.tid))
+        val accessChild = mayAccessPath(rootLikeToken.tid, "/child", _: PathAccess, Set(rootLikeToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beTrue
         accessRoot(PathWrite) must beFalse
         accessChild(PathWrite) must beTrue
       }
+      "allow access via grant" in {
+        val accessRoot = mayAccessPath(superToken.tid, "/", _: PathAccess, Set(rootToken.tid))
+        val accessChild = mayAccessPath(superToken.tid, "/child", _: PathAccess, Set(rootToken.tid))
+
+        accessRoot(PathRead) must beTrue
+        accessChild(PathRead) must beTrue
+        accessRoot(PathWrite) must beTrue
+        accessChild(PathWrite) must beTrue
+      }
       "limit access via grant" in {
-        val accessRoot = mayAccessPath(limitedGrantUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(limitedGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(childToken.tid, "/", _: PathAccess, Set(childToken.tid))
+        val accessChild = mayAccessPath(childToken.tid, "/child", _: PathAccess, Set(childToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beTrue
@@ -57,17 +61,9 @@ object AccessControlSpec extends Specification with AccessControlTestValues with
         accessChild(PathWrite) must beTrue
       }
       "deny access to invalid uid" in {
-        val accessRoot = mayAccessPath(invalidUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(invalidUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when issuer uid is invalid" in {
-        val accessRoot = mayAccessPath(invalidChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(invalidChildUID, "/child", _: PathAccess)
+        val invalidUID = "not-there"
+        val accessRoot = mayAccessPath(invalidUID, "/", _: PathAccess, Set(invalidUID))
+        val accessChild = mayAccessPath(invalidUID, "/child", _: PathAccess, Set(invalidUID))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -75,8 +71,8 @@ object AccessControlSpec extends Specification with AccessControlTestValues with
         accessChild(PathWrite) must beFalse
       }
       "deny access to invalid grant" in {
-        val accessRoot = mayAccessPath(invalidGrantUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(invalidGrantUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidGrantToken.tid, "/", _: PathAccess, Set(invalidGrantToken.tid))
+        val accessChild = mayAccessPath(invalidGrantToken.tid, "/child", _: PathAccess, Set(invalidGrantToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -84,62 +80,17 @@ object AccessControlSpec extends Specification with AccessControlTestValues with
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant issuer is invalid" in {
-        val accessRoot = mayAccessPath(invalidGrantChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(invalidGrantChildUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(invalidGrantParentToken.tid, "/", _: PathAccess, Set(invalidGrantParentToken.tid))
+        val accessChild = mayAccessPath(invalidGrantParentToken.tid, "/child", _: PathAccess, Set(invalidGrantParentToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
         accessRoot(PathWrite) must beFalse
         accessChild(PathWrite) must beFalse
       }
-      "deny access with no perms" in {
-        val accessRoot = mayAccessPath(noPermsUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(noPermsUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when issuer no longer has perms" in {
-        val accessRoot = mayAccessPath(noPermsChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(noPermsChildUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when grant issuer no longer has perms" in {
-        val accessRoot = mayAccessPath(noPermsGrantUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(noPermsGrantUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when issuer may not share perms" in {
-        val accessRoot = mayAccessPath(noShareChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(noShareChildUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when grant issuer may not share perms" in {
-        val accessRoot = mayAccessPath(noShareGrantUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(noShareGrantUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when expired" in {
-        val accessRoot = mayAccessPath(expiredUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(expiredUID, "/child", _: PathAccess)
+      "deny access with no grants" in {
+        val accessRoot = mayAccessPath(noPermsToken.tid, "/", _: PathAccess, Set(noPermsToken.tid))
+        val accessChild = mayAccessPath(noPermsToken.tid, "/child", _: PathAccess, Set(noPermsToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -147,26 +98,17 @@ object AccessControlSpec extends Specification with AccessControlTestValues with
         accessChild(PathWrite) must beFalse
       }
       "deny access when grant expired" in {
-        val accessRoot = mayAccessPath(grantExpiredUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(grantExpiredUID, "/child", _: PathAccess)
+        val accessRoot = mayAccessPath(expiredToken.tid, "/", _: PathAccess, Set(expiredToken.tid))
+        val accessChild = mayAccessPath(expiredToken.tid, "/child", _: PathAccess, Set(expiredToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
         accessRoot(PathWrite) must beFalse
         accessChild(PathWrite) must beFalse
       }
-      "deny access when issuer expired" in {
-        val accessRoot = mayAccessPath(expiredChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(expiredChildUID, "/child", _: PathAccess)
-      
-        accessRoot(PathRead) must beFalse
-        accessChild(PathRead) must beFalse
-        accessRoot(PathWrite) must beFalse
-        accessChild(PathWrite) must beFalse
-      }
-      "deny access when grant issuer expired" in {
-        val accessRoot = mayAccessPath(grantExpiredChildUID, "/", _: PathAccess)
-        val accessChild = mayAccessPath(grantExpiredChildUID, "/child", _: PathAccess)
+      "deny access when grant parent expired" in {
+        val accessRoot = mayAccessPath(expiredParentToken.tid, "/", _: PathAccess, Set(expiredParentToken.tid))
+        val accessChild = mayAccessPath(expiredParentToken.tid, "/child", _: PathAccess, Set(expiredParentToken.tid))
       
         accessRoot(PathRead) must beFalse
         accessChild(PathRead) must beFalse
@@ -176,82 +118,77 @@ object AccessControlSpec extends Specification with AccessControlTestValues with
     }
     "control data access" in {
       "allow access" in {
-        mayAccessData(rootUID, "/", Set(rootUID), DataQuery) must beTrue
-        mayAccessData(rootUID, "/child", Set(rootUID), DataQuery) must beTrue
+        mayAccessData(rootToken.tid, "/", Set(rootToken.tid), DataQuery) must beTrue
+        mayAccessData(rootToken.tid, "/child", Set(rootToken.tid), DataQuery) must beTrue
       }
       "limit access" in {
-        mayAccessData(childUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(childUID, "/child", Set(rootUID), DataQuery) must beTrue
+        mayAccessData(childToken.tid, "/", Set(childToken.tid), DataQuery) must beFalse
+        mayAccessData(childToken.tid, "/child", Set(childToken.tid), DataQuery) must beTrue
       }
       "deny access to invalid uid" in {
-        mayAccessData(invalidUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(invalidUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(invalidUID, "/", Set(invalidUID), DataQuery) must beFalse
+        mayAccessData(invalidUID, "/child", Set(invalidUID), DataQuery) must beFalse
       }
-      "deny access when issuer uid is invalid" in {
-        mayAccessData(invalidChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(invalidChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+      "deny access to invalid grant" in {
+        mayAccessData(invalidGrantToken.tid, "/", Set(invalidGrantToken.tid), DataQuery) must beFalse
+        mayAccessData(invalidGrantToken.tid, "/child", Set(invalidGrantToken.tid), DataQuery) must beFalse
+      }
+      "deny access when parent grant invalid" in {
+        mayAccessData(invalidGrantParentToken.tid, "/", Set(invalidGrantParentToken.tid), DataQuery) must beFalse
+        mayAccessData(invalidGrantParentToken.tid, "/child", Set(invalidGrantParentToken.tid), DataQuery) must beFalse
       }
       "deny access with no perms" in {
-        mayAccessData(noDataPermsUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(noDataPermsUID, "/child", Set(rootUID), DataQuery) must beFalse
-      }
-      "deny access when issuer no longer has perms" in {
-        mayAccessData(noDataPermsChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(noDataPermsChildUID, "/child", Set(rootUID), DataQuery) must beFalse
-      }
-      "deny access when issuer may not perms" in {
-        mayAccessData(noDataShareChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(noDataShareChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(noPermsToken.tid, "/", Set(noPermsToken.tid), DataQuery) must beFalse
+        mayAccessData(noPermsToken.tid, "/child", Set(noPermsToken.tid), DataQuery) must beFalse
       }
       "deny access when expired" in {
-        mayAccessData(expiredUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(expiredUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredToken.tid, "/", Set(expiredToken.tid), DataQuery) must beFalse
+        mayAccessData(expiredToken.tid, "/child", Set(expiredToken.tid), DataQuery) must beFalse
       }
       "deny access when issuer expired" in {
-        mayAccessData(expiredChildUID, "/", Set(rootUID), DataQuery) must beFalse
-        mayAccessData(expiredChildUID, "/child", Set(rootUID), DataQuery) must beFalse
+        mayAccessData(expiredParentToken.tid, "/", Set(expiredParentToken.tid), DataQuery) must beFalse
+        mayAccessData(expiredParentToken.tid, "/child", Set(expiredParentToken.tid), DataQuery) must beFalse
       }
     }
   }
 }
 
-object AccessControlUseCasesSpec extends Specification with AccessControlTestValues with AccessControlHelpers with AkkaDefaults {
+object AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerTestValues with AccessControlHelpers with AkkaDefaults {
  
-  implicit val accessControl = new TokenBasedAccessControl with TestTokenManagerComponent {
-    implicit val executionContext = defaultFutureDispatch
-    val tokenConfig = useCaseTokenConfig
-  }
+  implicit val accessControl = new TokenManagerAccessControl(tokens)
 
   "access control" should {
     "handle proposed use cases" in {
       "addon grants sandboxed to user paths" in {
-        mayAccessPath(customerUID, "/customer", PathRead) must beTrue
-        mayAccessPath(customerUID, "/knownCustomer", PathRead) must beTrue
-        mayAccessPath(customerUID, "/unknownCustomer", PathRead) must beFalse
-
-        mayAccessData(customerUID, "/customer", Set(customerUID), DataQuery) must beTrue
-        mayAccessData(customerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beTrue
-        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID), DataQuery) must beTrue
-        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID), DataQuery) must beTrue
-
-        mayAccessData(customerUID, "/knownCustomer", Set(knownCustomerUID, customerUID, addonCustomerGrantUID), DataQuery) must beFalse
-        mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID), DataQuery) must beFalse
-        mayAccessData(customerUID, "/unknownCustomer", Set(unknownCustomerUID, addonCustomerGrantUID), DataQuery) must beFalse
-        mayAccessData(customerUID, "/unknownCustomer", Set(addonCustomerGrantUID), DataQuery) must beFalse
+        mayAccessData(customer.tid, "/customer", Set(customer.tid), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/customer", Set(customer.tid), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/customer", Set(addon.tid), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/customer", Set(customer.tid, addon.tid), DataQuery) must beTrue
+        
+        mayAccessData(customer.tid, "/friend", Set(friend.tid), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/friend", Set(friend.tid, customer.tid), DataQuery) must beTrue
+        
+        mayAccessData(customer.tid, "/friend", Set(addon.tid), DataQuery) must beFalse
+        mayAccessData(customer.tid, "/friend", Set(friend.tid, customer.tid, addon.tid), DataQuery) must beFalse
+        
+        mayAccessData(customer.tid, "/stranger", Set(stranger.tid), DataQuery) must beFalse
+        mayAccessData(customer.tid, "/stranger", Set(addon.tid), DataQuery) must beFalse
+        mayAccessData(customer.tid, "/stranger", Set(stranger.tid, addon.tid), DataQuery) must beFalse
       }
       "addon grants can be passed to our customer's customers" in {
-        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID), DataQuery) must beTrue
-        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonUID), DataQuery) must beTrue
-        mayAccessData(customersCustomerUID, "/customer", Set(customerUID), DataQuery) must beFalse
-        mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonUID), DataQuery) must beFalse
+        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid), DataQuery) must beTrue
+        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addon.tid), DataQuery) must beTrue
+        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid), DataQuery) must beFalse
+        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid, addon.tid), DataQuery) must beFalse
       }
       "ability to access data created by an agent (child) of the granter" in {
-        mayAccessData(customerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beTrue
-        mayAccessData(customersCustomerUID, "/customer", Set(customerUID, addonAgentUID), DataQuery) must beFalse
-        mayAccessData(customersCustomerUID, "/customer/cust-id", Set(customersCustomerUID, addonAgentUID), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/customer", Set(customer.tid, addonAgent.tid), DataQuery) must beTrue
+        mayAccessData(customersCustomer.tid, "/customer", Set(customer.tid, addonAgent.tid), DataQuery) must beFalse
+        mayAccessData(customersCustomer.tid, "/customer/cust-id", Set(customersCustomer.tid, addonAgent.tid), DataQuery) must beTrue
       }
       "ability to grant revokable public access" in {
-        mayAccessData(customerUID, "/addon/public", Set(addonUID), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/addon/public", Set(addon.tid), DataQuery) must beTrue
+        mayAccessData(customer.tid, "/addon/revoked_public", Set(addon.tid), DataQuery) must beFalse
       }
     }
   }
@@ -261,184 +198,235 @@ trait AccessControlHelpers {
 
   val testTimeout = Duration(30, "seconds")
 
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess)(implicit ac: AccessControl): Boolean = {
-    Await.result(ac.mayAccessPath(uid, path, pathAccess), testTimeout)
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, owners: Set[GrantID] = Set.empty)(implicit ac: AccessControl): Boolean = {
+    pathAccess match {
+      case PathWrite => 
+        Await.result(ac.mayAccessPath(uid, path, pathAccess), testTimeout)
+      case PathRead =>
+        Await.result(ac.mayAccessData(uid, path, owners, DataQuery), testTimeout)
+    }
   }
   def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess)(implicit ac: AccessControl): Boolean = {
     Await.result(ac.mayAccessData(uid, path, owners, dataAccess), testTimeout)
   }
 }
 
-trait AccessControlTestValues { 
+trait TokenManagerTestValues {
 
-  implicit def stringToPath(path: String) = Path(path)
-
-  val rootUID = "root"
-  val childUID = "childPerms"
- 
-  val grantUID = "grant"
-  val grantGrantUID = "grantGrant"
-  val limitedGrantUID = "limitedGrant"
-  val limitedGrantGrantUID = "limitedGrantGrant"
-  
   val invalidUID = "invalid"
-  val invalidChildUID = "invalidChild"
-  val invalidGrantUID = "invalidGrant"
-  val invalidGrantChildUID = "invalidGrantChild"
 
-  val noPermsUID = "noPerms"
-  val noPermsChildUID = "noPermsChild"
-  val noPermsGrantUID = "noPermsGrant"
-  val noDataPermsUID = "noDataPerms"
-  val noDataPermsChildUID = "noDataPermsChild"
- 
-  val expiredUID = "expired"
-  val expiredChildUID = "expiredChild"
-  val grantExpiredUID = "grantExpired"
-  val grantExpiredChildUID = "grantExpiredChild"
+  implicit def stringToPath(path: String): Path = Path(path)
   
-  val noShareUID = "noShare"
-  val noShareChildUID = "noShareChild"
-  val noShareGrantUID = "noShareGrant"
-  val noDataShareUID = "noDataShare"
-  val noDataShareChildUID = "noDataShareChild"
- 
-  val customerUID = "customer"
-  val customersCustomerUID = "customersCustomer"
-  val knownCustomerUID = "knownCustomer"
-  val knownCustomerGrantUID = "knownCustomerGrant"
-  val unknownCustomerUID = "unknownCustomer"
- 
-  val addonUID = "addon"
-  val addonPublicUID = "addonPublic"
-  val addonAgentUID = "addonAgent"
+  val farFuture = new DateTime(Long.MaxValue)
+  val farPast = new DateTime(Long.MinValue)
+
+  val tokens = new TransientTokenManager
+
+  def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
+    val token = tokens.newToken(name, Set.empty)
+    val grants = f(token)
+    (tokens.addGrants(token, grants), grants)
+  }
+
+  val (rootToken, rootGrants) = newToken("root") { t =>
+    Grant.grantSet(None, "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.gid }
+  }
   
-  val addonCustomerGrantUID = "addonCustomerGrant"
-  val addonKnownCustomerGrantUID = "addonKnownCustomerGrant"
-  val addonUnknownCustomerGrantUID = "addonUnknownCustomerGrant"
- 
-  val mayReadRoot = MayAccessPath(Subtree("/"), PathRead, true)
-  val mayWriteRoot = MayAccessPath(Subtree("/"), PathWrite, true)
-  val mayQueryRoot = MayAccessData(Subtree("/"), OwnerAndDescendants(rootUID), DataQuery, true)
-
-  val mayReadRootNS = MayAccessPath(Subtree("/"), PathRead, false)
-  val mayWriteRootNS = MayAccessPath(Subtree("/"), PathWrite, false)
-  val mayQueryRootNS = MayAccessData(Subtree("/"), OwnerAndDescendants(rootUID), DataQuery, false)
+  val (rootLikeToken, rootLikeGrants) = newToken("rootLike") { t =>
+    Grant.grantSet(None, "/child", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.gid }
+  }
   
-  val mayReadChild = MayAccessPath(Subtree("/child"), PathRead, true)
-  val mayWriteChild = MayAccessPath(Subtree("/child"), PathWrite, true)
-  val mayQueryChild = MayAccessData(Subtree("/child"), OwnerAndDescendants(rootUID), DataQuery, true)
+  val (superToken, superGrants) = newToken("super") { t =>
+    rootGrants.map{ g =>
+      val rg = tokens.findGrant(g).get
+      val derivedGrant = rg.grant match {
+        case oi: OwnerIgnorantGrant => 
+          oi.derive(issuer = Some(rg.gid))
+        case oa: OwnerAwareGrant => 
+          oa.derive(issuer = Some(rg.gid))
+      }
+      tokens.newGrant(derivedGrant).gid
+    }
+  }
 
-  def readWritePerms(path: Path, mayShare: Boolean) = 
-    Permissions(
-      MayAccessPath(Subtree(path), PathRead, mayShare), 
-      MayAccessPath(Subtree(path), PathWrite, mayShare)
-    )()
-  
-  def readWriteQueryPerms(path: Path, owner: UID, mayShare: Boolean) = 
-    Permissions(
-      MayAccessPath(Subtree(path), PathRead, mayShare), 
-      MayAccessPath(Subtree(path), PathWrite, mayShare)
-    )(
-      MayAccessData(Subtree(path), OwnerAndDescendants(owner), DataQuery, mayShare)
-    )
-  
-  def queryPerms(path: Path, owner: UID, mayShare: Boolean) =
-    Permissions()(
-      MayAccessData(Subtree(path), OwnerAndDescendants(owner), DataQuery, mayShare)
-    )
-  
-  val accessControlTokenConfig = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
-    (rootUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-    (childUID, Some(rootUID), Permissions(mayReadChild, mayWriteChild)(mayQueryChild), Set(), false),
+  val (childToken, childGrants) = newToken("child") { t =>
+    rootGrants.map{ g =>
+      val rg = tokens.findGrant(g).get
+      val derivedGrant = rg.grant match {
+        case oi: OwnerIgnorantGrant => 
+          oi.derive(issuer = Some(rg.gid), path = "/child")
+        case oa: OwnerAwareGrant => 
+          oa.derive(issuer = Some(rg.gid), path = "/child", owner = t.tid)
+      }
+      tokens.newGrant(derivedGrant).gid
+    }
+  }
 
-    (grantGrantUID, Some(rootUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-    (grantUID, None, Permissions()(), Set(grantGrantUID), false),
-    (limitedGrantGrantUID, Some(rootUID), Permissions(mayReadChild, mayWriteChild)(mayQueryChild), Set(), false),
-    (limitedGrantUID, None, Permissions()(), Set(limitedGrantGrantUID), false),
-    
-    (invalidGrantUID, None, Permissions()(), Set(invalidUID), false),
-    (invalidChildUID, Some(invalidUID), Permissions(mayReadRoot, mayWriteRoot)(), Set(), false),
-    (invalidGrantChildUID, Some(invalidUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
+  val invalidGrantID = "not going to find it"
 
-    (noPermsUID, None, Permissions()(), Set(), false),
-    (noPermsChildUID, Some(noPermsUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-    (noPermsGrantUID, None, Permissions()(), Set(noPermsChildUID), false),
-    (noDataPermsUID, None, Permissions(mayReadRoot, mayWriteRoot)(), Set(), false),
-    (noDataPermsChildUID, Some(noDataPermsUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
+  val (invalidGrantToken, invalidGrantGrants) = newToken("invalidGrant") { t =>
+    0.until(6).map { invalidGrantID + _ }(collection.breakOut)
+  }
 
-    (expiredUID, None, Permissions(mayReadRoot, mayWriteRoot)(), Set(), true),
-    (expiredChildUID, Some(expiredUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-    (grantExpiredUID, None, Permissions()(), Set(expiredUID), false),
-    (grantExpiredChildUID, None, Permissions()(), Set(expiredChildUID), false),
+  val (invalidGrantParentToken, invalidGrantParentGrants) = newToken("invalidGrantParent") { t =>
+    Grant.grantSet(Some(invalidGrantID), "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.gid }
+  }
 
-    (noShareUID, None, Permissions(mayReadRootNS, mayWriteRootNS)(mayQueryRootNS), Set(), false),
-    (noShareChildUID, Some(noShareUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-    (noShareGrantUID, None, Permissions()(), Set(noShareChildUID), false),
-    (noDataShareUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRootNS), Set(), false),
-    (noDataShareChildUID, Some(noShareUID), Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false)
-  )
- 
-  def standardAccountPerms(path: Path, owner: UID, mayShare: Boolean = true) =
-    Permissions(
-      MayAccessPath(Subtree(path), PathRead, mayShare), 
-      MayAccessPath(Subtree(path), PathWrite, mayShare)
-    )(
-      MayAccessData(Subtree("/"), OwnerAndDescendants(owner), DataQuery, mayShare)
-    )
+  val noPermsToken = tokens.newToken("noPerms", Set.empty)
 
-  def customerAddonPerms(customerPath: Path, addonOwner: UID, mayShare: Boolean = true) =
-    Permissions(
-    )(
-      MayAccessData(Subtree(customerPath), OwnerAndDescendants(addonOwner), DataQuery, mayShare)
-    )
+  val (expiredToken, expiredGrants) = newToken("expiredGrants") { t =>
+    Grant.grantSet(None, "/", t.tid, Some(farPast), Grant.ALL).map{ tokens.newGrant }.map{ _.gid }
+  }
 
-  def publishPathPerms(path: Path, owner: UID, mayShare: Boolean = true) =
-    Permissions(
-      MayAccessPath(Subtree(path), PathRead, mayShare)
-    )(
-      MayAccessData(Subtree(path), OwnerAndDescendants(owner), DataQuery, mayShare)
-    )
-
-  val useCaseTokenConfig = List[(UID, Option[UID], Permissions, Set[UID], Boolean)](
-    (rootUID, None, Permissions(mayReadRoot, mayWriteRoot)(mayQueryRoot), Set(), false),
-
-    (addonUID, Some(rootUID), standardAccountPerms("/addon", addonUID, true), Set(), false),
-
-    (addonAgentUID, Some(addonUID), readWritePerms("/addon", false), Set(), false),
-    
-    (addonPublicUID, Some(addonUID), publishPathPerms("/addon/public", addonUID, true), Set(), false),
-   
-    (addonCustomerGrantUID, Some(addonUID), customerAddonPerms("/customer", addonUID), Set(), false),
-    (addonKnownCustomerGrantUID, Some(addonUID), customerAddonPerms("/knownCustomer", addonUID), Set(), false),
-    (addonUnknownCustomerGrantUID, Some(addonUID), customerAddonPerms("/unknownCustomer", addonUID), Set(), false),
-
-    (customerUID, Some(rootUID), standardAccountPerms("/customer", customerUID, true), Set(addonCustomerGrantUID, knownCustomerGrantUID, addonPublicUID), false),
-    (customersCustomerUID, Some(customerUID), readWriteQueryPerms("/customer/cust-id", customersCustomerUID, false) ++ queryPerms("/customer/cust-id", addonUID, false), Set(), false),
-    
-    (knownCustomerUID, Some(rootUID), standardAccountPerms("/knownCustomer", knownCustomerUID, true), Set(addonKnownCustomerGrantUID), false),
-    (knownCustomerGrantUID, Some(knownCustomerUID), readWriteQueryPerms("/knownCustomer", knownCustomerUID, true), Set(), false),
-
-    (unknownCustomerUID, Some(rootUID), standardAccountPerms("/unknownCustomer", unknownCustomerUID, true), Set(addonUnknownCustomerGrantUID), false)
-  )
+  val (expiredParentToken, expiredParentTokens) = newToken("expiredParentGrants") { t =>
+    expiredGrants.map { g =>
+      val rg = tokens.findGrant(g).get
+      val derivedGrant = rg.grant match {
+        case oi: OwnerIgnorantGrant => 
+          oi.derive(issuer = Some(rg.gid), path = "/child")
+        case oa: OwnerAwareGrant => 
+          oa.derive(issuer = Some(rg.gid), path = "/child", owner = t.tid)
+      }
+      tokens.newGrant(derivedGrant).gid
+    }
+  }
 }
 
-trait TestTokenManagerComponent extends TokenManagerComponent with AkkaDefaults {
+trait UseCasesTokenManagerTestValues {
+  implicit def stringToPath(path: String): Path = Path(path)
+ 
 
-  def tokenConfig: List[(UID, Option[UID], Permissions, Set[UID], Boolean)]
+  val farFuture = new DateTime(Long.MaxValue)
+  val farPast = new DateTime(Long.MinValue)
 
-  lazy val map = Map( tokenConfig map {
-    case (uid, issuer, perms, grants, canShare) => (uid -> Token(uid, issuer, perms, grants, canShare))
-  }: _*)
+  val tokens = new TransientTokenManager
 
-  lazy val tokenManager = new TokenManager {
-    implicit val execContext = defaultFutureDispatch
-    def list() = sys.error("not available")
-    def lookup(uid: UID) = Future(map.get(uid))(execContext)
-    def lookupDeleted(uid: UID) = sys.error("not available")
-    def listChildren(parent: Token): Future[List[Token]] = sys.error("not available")
-    def issueNew(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean): Future[Validation[String, Token]] = sys.error("not available")
-    def deleteToken(token: Token): Future[Token] = sys.error("not available")
-    def updateToken(token: Token): Future[Validation[String, Token]] = sys.error("not available")
+  def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
+    val token = tokens.newToken(name, Set.empty)
+    val grants = f(token)
+    (tokens.addGrants(token, grants), grants)
   }
+  
+  def newCustomer(name: String, parentGrants: Set[GrantID]): (NToken, Set[GrantID]) = {
+    newToken(name) { t =>
+      parentGrants.map{ g =>
+        val rg = tokens.findGrant(g).get
+        val derivedGrant = rg.grant match {
+          case oi: OwnerIgnorantGrant => 
+            oi.derive(issuer = Some(rg.gid), path = "/" + name)
+          case oa: OwnerAwareGrant => 
+            oa.derive(issuer = Some(rg.gid), path = "/", owner = t.tid)
+        }
+        tokens.newGrant(derivedGrant).gid
+      }
+    }
+  }
+
+  def addGrants(token: NToken, grants: Set[GrantID]): Option[NToken] = {
+    tokens.findToken(token.tid).map { t => tokens.addGrants(t, grants); t }
+  }
+
+  val (root, rootGrants) = newToken("root") { t =>
+    Grant.grantSet(None, "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.gid }
+  }
+
+  val (customer, customerGrants) = newCustomer("customer", rootGrants)
+  val (friend, friendGrants) = newCustomer("friend", rootGrants)
+  val (stranger, strangerGrants) = newCustomer("stranger", rootGrants)
+  val (addon, addonGrants) = newCustomer("addon", rootGrants)
+
+  val (addonAgent, addonAgentGrants) = newToken("addon_agent") { t =>
+    addonGrants.map { g =>
+      val rg = tokens.findGrant(g).get
+      val derivedGrant = rg.grant match {
+        case oi: OwnerIgnorantGrant => 
+          oi.derive(issuer = Some(rg.gid))
+        case oa: OwnerAwareGrant => 
+          oa.derive(issuer = Some(rg.gid), owner = t.tid)
+      }
+      tokens.newGrant(derivedGrant).gid
+    }
+  }
+
+  val customerFriendGrants = friendGrants.map { gid =>
+    tokens.findGrant(gid).flatMap { 
+      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) =>
+        Some(rg.derive(issuer = Some(gid)))
+      case _ => None
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+
+  val customerAddonGrants = addonGrants.map { gid =>
+    tokens.findGrant(gid).flatMap { 
+      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) =>
+        Some(rg.derive(issuer = Some(gid), path = "/customer"))
+      case _ => None
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+  
+  val customerAddonAgentGrants = addonAgentGrants.map { gid =>
+    tokens.findGrant(gid).map { 
+      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
+        oi.derive(issuer = Some(gid), path = "/customer")
+      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
+        oa.derive(issuer = Some(gid), path = "/customer")
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+
+  val customerAddonPublicGrants = addonGrants.map { gid =>
+    tokens.findGrant(gid).flatMap { 
+      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) => 
+        Some(rg.derive(issuer = Some(gid), path = "/addon/public"))
+      case _ => None
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+
+  val customerAddonPublicRevokedGrants = addonGrants.map { gid =>
+    tokens.findGrant(gid).flatMap { 
+      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) => 
+        Some(rg.derive(issuer = Some(gid), path = "/addon/public_revoked", expiration = Some(farPast)))
+      case _ => None
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+
+  tokens.addGrants(customer, 
+    customerFriendGrants ++ 
+    customerAddonGrants ++ 
+    customerAddonAgentGrants ++
+    customerAddonPublicGrants ++
+    customerAddonPublicRevokedGrants)
+
+  val (customersCustomer, customersCustomerGrants) = newToken("customers_customer") { t =>
+    tokens.findToken(customer.tid).get.grants.map { g =>
+      val rg = tokens.findGrant(g).get
+      val derivedGrant = rg.grant match {
+        case oi: OwnerIgnorantGrant => 
+          oi.derive(issuer = Some(rg.gid), path = "/customer/cust-id")
+        case oa: OwnerAwareGrant => 
+          oa.derive(issuer = Some(rg.gid), path = "/customer/cust-id", owner = t.tid)
+      }
+      tokens.newGrant(derivedGrant).gid
+    }
+  }
+
+  val customersCustomerAddonsGrants = tokens.findToken(customer.tid).get.grants.map { gid =>
+    tokens.findGrant(gid).map { 
+      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
+        oi.derive(issuer = Some(gid), path = "/customer/cust-id")
+      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
+        oa.derive(issuer = Some(gid), path = "/customer/cust-id")
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+  
+  val customersCustomerAddonAgentGrants = addonAgentGrants.map { gid =>
+    tokens.findGrant(gid).map { 
+      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
+        oi.derive(issuer = Some(gid), path = "/customer/cust-id")
+      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
+        oa.derive(issuer = Some(gid), path = "/customer/cust-id")
+    }
+  }.collect { case Some(g) => g }.map { tokens.newGrant(_).gid }
+
+  tokens.addGrants(customersCustomer, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
+
 }
