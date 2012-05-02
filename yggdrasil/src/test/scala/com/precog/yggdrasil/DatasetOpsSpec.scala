@@ -47,37 +47,44 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with SValueGenerators
   def fromJson(sampleData: SampleData): Dataset
   def toJson(dataset: Dataset): Stream[Record[JValue]]
 
+  implicit val arbData = Arbitrary(
+    for {
+      idCount <- choose(0, 3) 
+      data <- containerOf[Stream, Record[JValue]](sevent(idCount, 3) map { case (ids, sv) => (ids, sv.toJValue) })
+    } yield {
+      SampleData(idCount, data)
+    }
+  )
+
+  def checkMappings = {
+    check { (sample: SampleData) =>
+      val dataset = fromJson(sample)
+      dataset.toEvents.toList must containAllOf(sample.data.toList).only
+    }
+  }
+
   def checkCogroup = {
     type CogroupResult[A] = Stream[Record[Either3[A, (A, A), A]]]
-    implicit val arbData = Arbitrary(
-      for {
-        idCount <- choose(0, 3) 
-        data <- containerOf[Stream, Record[JValue]](sevent(idCount, 3) map { case (ids, sv) => (ids, sv.toJValue) })
-      } yield {
-        SampleData(idCount, data)
-      }
-    )
-
-    @tailrec def computeCogroup[A](l: Stream[Record[A]], r: Stream[Record[A]], acc: CogroupResult[A])(implicit ord: Order[Record[A]]): CogroupResult[A] = {
+    @tailrec def computeCogroup[A](l: Stream[Record[A]], r: Stream[Record[A]], acc: CogroupResult[A], idPrefix: Int)(implicit ord: Order[Record[A]]): CogroupResult[A] = {
       (l, r) match {
         case (lh #:: lt, rh #:: rt) => ord.order(lh, rh) match {
           case EQ => {
             val (leftSpan, leftRemain) = l.partition(ord.order(_, lh) == EQ)
             val (rightSpan, rightRemain) = r.partition(ord.order(_, rh) == EQ)
 
-            val cartesian = leftSpan.flatMap { case (_, lv) => rightSpan.map { case (ids, rv) => (ids, middle3((lv, rv))) } }
+            val cartesian = leftSpan.flatMap { case (idl, lv) => rightSpan.map { case (idr, rv) => (idl ++ idr.drop(idPrefix), middle3((lv, rv))) } }
 
-            computeCogroup(leftRemain, rightRemain, acc ++ cartesian)
+            computeCogroup(leftRemain, rightRemain, acc ++ cartesian, idPrefix)
           }
           case LT => {
             val (leftRun, leftRemain) = l.partition(ord.order(_, rh) == LT)
             
-            computeCogroup(leftRemain, r, acc ++ leftRun.map { case (i, v) => (i, left3(v)) })
+            computeCogroup(leftRemain, r, acc ++ leftRun.map { case (i, v) => (i, left3(v)) }, idPrefix)
           }
           case GT => {
             val (rightRun, rightRemain) = r.partition(ord.order(lh, _) == GT)
 
-            computeCogroup(l, rightRemain, acc ++ rightRun.map { case (i, v) => (i, right3(v)) })
+            computeCogroup(l, rightRemain, acc ++ rightRun.map { case (i, v) => (i, right3(v)) }, idPrefix)
           }
         }
         case (Stream.Empty, _) => acc ++ r.map { case (i,v) => (i, right3(v)) }
@@ -87,19 +94,19 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with SValueGenerators
 
     check { (l: SampleData, r: SampleData) =>
       try {
-        val expected = computeCogroup(l.data, r.data, Stream()) map {
+        val expected = computeCogroup(l.data, r.data, Stream(), l.idCount min r.idCount) map {
           case (ids, Left3(jv)) => (ids, jv)
           case (ids, Middle3((jv1, jv2))) => (ids, jv1 ++ jv2)
           case (ids, Right3(jv)) => (ids, jv)
         }
 
         val ltable = fromJson(l)
-        println(l.data.toList)
-        println(ltable.toEvents.toList)
+        println("l.data: " + l.data.toList)
+        println("l.table: " + ltable.toEvents.toList)
         val rtable = fromJson(r)
-        println(r.data.toList)
-        println(rtable.toEvents.toList)
-        val result = toJson(ltable.cogroup(rtable, 1)(CogroupMerge.second))
+        println("r.data: " + r.data.toList)
+        println("r.table: " + rtable.toEvents.toList)
+        val result = toJson(ltable.cogroup(rtable, ltable.idCount min rtable.idCount)(CogroupMerge.second))
 
         result must containAllOf(expected).only.inOrder
       } catch {
