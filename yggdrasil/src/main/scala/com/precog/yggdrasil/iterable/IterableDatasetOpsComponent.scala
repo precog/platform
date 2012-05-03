@@ -53,6 +53,7 @@ trait IterableDatasetOpsConfig {
   def clock: Clock
 }
 
+
 trait IterableDatasetOpsComponent extends DatasetOpsComponent with YggConfigComponent {
   type YggConfig <: IterableDatasetOpsConfig
   type Dataset[α] = IterableDataset[α]
@@ -944,6 +945,13 @@ extends DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] {
 
   def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit fs: SortSerialization[IA]): IterableDataset[A] = {
     implicit val order = tupledIdentitiesOrder[A](indexedIdentitiesOrder(indices))
+    IterableDataset(value.idCount, memoCtx.sort(value.iterable, memoId))
+  }
+
+  def sortByValue(memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit ord: Order[A], fs: SortSerialization[IA]): IterableDataset[A] = {
+    implicit val order = valueOrder[A]
+    implicit val buffering = Buffering.refBuffering[(Identities, A)](order, implicitly[ClassManifest[(Identities, A)]])
+
     IterableDataset(value.idCount, memoCtx.sort(value.iterable, memoId))
   }
 
