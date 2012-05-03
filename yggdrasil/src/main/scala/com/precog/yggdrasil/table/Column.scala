@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
 package table
 
+import scala.collection.mutable.BitSet
+
 trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] { outer =>
   def isDefinedAt(row: Int): Boolean
   def apply(row: Int): A
@@ -35,29 +37,70 @@ trait MemoizingColumn[@specialized(Boolean, Long, Double) A] extends Column[A] {
   }
 }
 
-case class ArrayColumn[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, data: Array[A], limit: Int) extends Column[A] {
-  val returns = ctype.asInstanceOf[CType { type CA = A }]
-  @inline final def isDefinedAt(row: Int) = row >= 0 && row < limit && row < data.length
+class ArrayColumn[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, data: Array[A], limit: Int, definedAt: BitSet) extends Column[A] {
+  val returns = ctype//.asInstanceOf[CType { type CA = A }]
+  @inline final def isDefinedAt(row: Int) = row >= 0 && row < limit && row < data.length && definedAt(row)
   @inline final def apply(row: Int) = data(row)
-  @inline final def update(row: Int, a: A) = data(row) = a
-  @inline final def resize(limit: Int): ArrayColumn[A] = {
-    assert(limit <= this.limit)
-    ArrayColumn(ctype, data, limit)
+
+  @inline final def update(row: Int, a: A) = {
+    data(row) = a
+    definedAt(row) = true
+  }
+
+  @inline final def prefix(limit: Int): ArrayColumn[A] = {
+    assert(limit <= this.limit && limit >= 0)
+    new ArrayColumn(ctype, data, limit, definedAt)
   }
 
   override def toString = {
-    "ArrayColumn(" + ctype + ", " + data.mkString("[", ",", "]") + ", " + limit + ")"
+    val repr = (row: Int) => if (isDefinedAt(row)) apply(row).toString else '_'
+    "ArrayColumn(" + ctype + ", " + (0 until limit).map(repr).mkString("[", ",", "]") + ", " + limit + ")"
   }
 }
 
 object ArrayColumn {
-  def apply[@specialized(Boolean, Long, Double) A: ClassManifest](ctype: CType { type CA = A }, size: Int): ArrayColumn[A] = ArrayColumn(ctype, new Array[A](size), size)
+  def apply[@specialized(Boolean, Long, Double) A: ClassManifest](ctype: CType { type CA = A }, size: Int): ArrayColumn[A] = {
+    val definedAt = new BitSet(size)
+    for (i <- 0 until size) definedAt(i) = false
+    new ArrayColumn(ctype, new Array[A](size), size, definedAt)
+  }
+}
+
+sealed abstract class NullColumn(definedAt: BitSet) extends Column[Null] {
+  @inline final def isDefinedAt(row: Int) = definedAt(row)
+  @inline final def apply(row: Int) = null
+
+  object defined {
+    def update(row: Int, value: Boolean) = definedAt(row) = value
+  }
+
+  override def toString = {
+    val limit = definedAt.reduce(_ max _)
+    val repr = (row: Int) => if (definedAt(row)) 'x' else '_'
+    "NullColumn(" + returns + ", " + (0 until limit).map(repr).mkString("[", ",", "]") + ", " + limit + ")"
+  }
+}
+
+class CNullColumn(size: Int) extends NullColumn(new BitSet(size)) {
+  val returns = CNull
+}
+
+class CEmptyObjectColumn(size: Int) extends NullColumn(new BitSet(size)) {
+  val returns = CEmptyObject
+}
+
+class CEmptyArrayColumn(size: Int) extends NullColumn(new BitSet(size)) {
+  val returns = CEmptyArray
 }
 
 object Column {
-  @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A]): Column[A] = ArrayColumn[A](ctype, a, a.length)
+  @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A]): Column[A] = forArray(ctype, a, a.length)
 
-  @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A], limit: Int): Column[A] = ArrayColumn[A](ctype, a, limit)
+  @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A], limit: Int): Column[A] = {
+    val definedAt = new BitSet(limit)
+    for (i <- 0 until limit) definedAt(i) = true
+    new ArrayColumn[A](ctype, a, limit, definedAt)
+  }
 
   @inline def const[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: A): Column[A] = new Column[A] {
     val returns = ctype
