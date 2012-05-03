@@ -48,6 +48,7 @@ import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
 
 import scalaz.{Success, Failure}
+import scalaz.syntax.std.booleanV._
 
 import org.streum.configrity._
 
@@ -828,19 +829,17 @@ object TokenTools extends Command with AkkaDefaults {
   }
   
   def process(config: Config) {
-    try {
-      val tm = tokenManager(config)
-      try {
-        if(config.list) list(tm) 
-        config.listChildren.foreach(listChildren(_, tm))
-        config.newAccount.foreach { create(_, config.root, tm) }
-        config.delete.foreach { delete(_, tm) }
-      } finally {
-        Await.result(tm.close(), Duration(10, "seconds"))
+    val tm = tokenManager(config)
+    val actions = (config.list).option(list(tm)).toSeq ++
+                  config.listChildren.map(listChildren(_, tm)) ++
+                  config.newAccount.map(create(_, config.root, tm)) ++
+                  config.delete.map(delete(_, tm))
+
+    Future.sequence(actions) onComplete {
+      _ => tm.close() onComplete {
+        _ => defaultActorSystem.shutdown
       }
-    } finally {
-      defaultActorSystem.shutdown
-    }
+    } 
   }
 
   def tokenManager(config: Config): TokenManager = {
@@ -848,8 +847,8 @@ object TokenTools extends Command with AkkaDefaults {
     new MongoTokenManager(mongo, mongo.database(config.database), config.collection, config.deletedCollection, new Timeout(10000))
   }
 
-  def list(tokenManager: TokenManager) {
-    for (tokens <- tokenManager.list) {
+  def list(tokenManager: TokenManager) = {
+    for (tokens <- tokenManager.list) yield {
       tokens.foreach(printToken)
     }
   }
@@ -872,19 +871,18 @@ object TokenTools extends Command with AkkaDefaults {
   }
 
   def listChildren(tokenId: String, tokenManager: TokenManager) = {
-    for (Some(parent) <- tokenManager.lookup(tokenId); children <- tokenManager.listChildren(parent)) {
+    for (Some(parent) <- tokenManager.lookup(tokenId); children <- tokenManager.listChildren(parent)) yield {
       children.foreach(printToken)
     }
   }
 
   def create(p: String, root: String, tokenManager: TokenManager) = {
     val perms = TestTokenManager.standardAccountPerms(p)
-    val f = tokenManager.issueNew(Some(root), perms, Set.empty, false)
-    Await.result(f, Duration(10, "seconds"))
+    tokenManager.issueNew(Some(root), perms, Set.empty, false)
   }
 
   def delete(t: String, tokenManager: TokenManager) = {
-    for (Some(token) <- tokenManager.lookup(t); t <- tokenManager.deleteToken(token)) {
+    for (Some(token) <- tokenManager.lookup(t); t <- tokenManager.deleteToken(token)) yield {
       println("Deleted token: ")
       printToken(token)
     }
