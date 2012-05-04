@@ -68,6 +68,8 @@ trait ShardService extends
                 } ~ 
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
+            } ~ path("actors/status") {
+              get(new ActorStatusHandler(state.queryExecutor))
             }
           }
         } ->

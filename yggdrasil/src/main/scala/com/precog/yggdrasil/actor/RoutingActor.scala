@@ -15,6 +15,8 @@ import akka.util.Timeout
 import akka.util.duration._
 import akka.util.Duration
 
+import blueeyes.json.JsonAST._
+
 import com.weiglewilczek.slf4s._
 
 import annotation.tailrec
@@ -50,6 +52,8 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
   private val processed = new AtomicLong(0)
 
   def receive = {
+    case Status =>
+      sender ! status()
     case Start =>
       start
       sender ! ()
@@ -75,6 +79,9 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
       sender ! ()
     case m                   => logger.error("Unexpected ingest actor message: " + m.getClass.getName) 
   }
+
+  def status(): JValue = JObject.empty ++ JField("Routing", JObject.empty ++
+      JField("initiated", JInt(initiated.get)) ++ JField("processed", JInt(initiated.get)))
 
   def processResult(ingestResult: IngestResult) {
     handleResult(ingestResult)

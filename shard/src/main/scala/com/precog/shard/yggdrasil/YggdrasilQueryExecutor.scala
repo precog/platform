@@ -171,6 +171,10 @@ trait YggdrasilQueryExecutor
     futRoot.map { pr => Success(transform(pr.children)) } 
   }
 
+  def status(): Future[Validation[String, JValue]] = {
+    storage.actorsStatus.map { success(_) } 
+  }
+
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
     withContext { ctx =>
       val result = consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }

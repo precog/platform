@@ -13,11 +13,15 @@ import com.weiglewilczek.slf4s._
 
 import _root_.kafka.message._
 
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema.Decomposer
+import blueeyes.json.xschema.DefaultSerialization._
+
 class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
 
   private val bufferSize = 1024 * 1024
 
-  private var lastCheckpoint = checkpoints.latestCheckpoint 
+  private[actor] var lastCheckpoint = checkpoints.latestCheckpoint 
 
   def readMessages(): Seq[IngestMessage] = {
     val messages = readMessageBatch(lastCheckpoint.offset)
@@ -45,7 +49,10 @@ class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer
   def readMessageBatch(offset: Long): Seq[MessageAndOffset] = {
     consumer.ingestBatch(offset, bufferSize)
   }
-  
+ 
+  def status(): JValue = JObject.empty ++ JField("Ingest", JObject.empty ++
+        JField("lastCheckpoint", lastCheckpoint.serialize))
+
   override def postStop() {
     consumer.close
   }
@@ -54,6 +61,7 @@ class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer
 trait ShardIngestActor extends Actor with Logging {
 
   def receive = {
+    case Status => sender ! status()
     case GetMessages(replyTo) => 
       logger.debug("Ingest Actor - Read Batch")
       try {
@@ -70,6 +78,7 @@ trait ShardIngestActor extends Actor with Logging {
 
   def readMessages(): Seq[IngestMessage]
 
+  def status(): JValue
 }
 
 case class GetMessages(sendTo: ActorRef)

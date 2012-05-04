@@ -172,7 +172,9 @@ trait TestQueryExecutor extends QueryExecutor {
       JField("test2", JString("bar"))
     ))))
   }
-  
+ 
+  def status() = Future(Success(JArray(List(JString("status")))))
+
   def startup = Future(())
   def shutdown = Future { actorSystem.shutdown }
 }

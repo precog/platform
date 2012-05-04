@@ -7,7 +7,11 @@ import com.precog.common._
 import com.precog.common.util._
 
 import blueeyes.json._
+import blueeyes.json.JsonAST._
 import blueeyes.json.JPath
+
+import blueeyes.json.xschema.Decomposer
+import blueeyes.json.xschema.DefaultSerialization._
 
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -19,6 +23,8 @@ import scalaz.Scalaz._
 class MetadataActor(metadata: LocalMetadata) extends Actor {
 
   def receive = {
+
+    case Status                               => sender ! metadata.status()
 
     case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
    
@@ -43,6 +49,9 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
   private var messageClock = initialClock 
 
   def currentState() = SaveMetadata(projections, messageClock)
+
+  def status(): JValue = JObject.empty ++ JField("Metadata", JObject.empty ++
+    JField("messageClock", messageClock.serialize))
 
   def update(inserts: Seq[InsertComplete]): Unit = {
     import MetadataUpdateHelper._ 
