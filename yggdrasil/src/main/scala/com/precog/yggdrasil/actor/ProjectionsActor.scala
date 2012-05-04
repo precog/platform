@@ -28,6 +28,7 @@ import akka.actor.Props
 import akka.actor.Scheduler
 import akka.actor.ActorRef
 
+import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy
@@ -57,6 +58,11 @@ case class ProjectionError(ex: NonEmptyList[Throwable]) extends ProjectionResult
 class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO, scheduler: Scheduler) extends Actor with Logging {
 
   def receive = {
+
+    case Status =>
+      val status = JObject.empty ++
+        JField("Projections", JObject.empty ++ JField("cacheSize", JInt(projectionActors.size)))
+      sender ! status 
 
     case AcquireProjection(descriptor: ProjectionDescriptor) =>
       val proj = projectionActor(descriptor)

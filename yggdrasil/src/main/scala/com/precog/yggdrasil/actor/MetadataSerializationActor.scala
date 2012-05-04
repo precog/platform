@@ -45,6 +45,8 @@ import java.io.File
 
 class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataStorage: MetadataStorage) extends Actor with Logging {
   def receive = {
+    case Status =>
+      sender ! status()
     case SaveMetadata(metadata, messageClock) => 
       logger.debug("Syncing metadata")
       val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
@@ -69,6 +71,11 @@ class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataStorage: M
       case Failure(t) => t 
     }}
   }
+
+  def status(): JValue = JObject.empty ++ JField("Metadata Serialization", JObject.empty ++
+          JField("lastCheckpoint", checkpoints.latestCheckpoint) ++
+          JField("pendingCheckpointCount", checkpoints.pendingCheckpointCount) ++
+          JField("pendingCheckpoints", JArray(checkpoints.pendingCheckpointValue.map{ _.serialize }.toList)))
 
 }
 

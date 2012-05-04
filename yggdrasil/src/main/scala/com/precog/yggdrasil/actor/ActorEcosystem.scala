@@ -33,6 +33,10 @@ import com.precog.common.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 
+import blueeyes.json.JsonAST._
+
+case object Status
+
 trait ActorEcosystem {
   def actorSystem(): ActorSystem
   def metadataActor(): ActorRef
@@ -40,6 +44,7 @@ trait ActorEcosystem {
   def routingActor(): ActorRef
   def actorsStart(): Future[Unit]
   def actorsStop(): Future[Unit]
+  def actorsStatus(): Future[JArray]
 }
 
 trait ProductionActorConfig extends BaseConfig {
@@ -52,6 +57,8 @@ trait ProductionActorConfig extends BaseConfig {
   def zookeeperHosts(): String = config[String]("zookeeper.hosts")
   def zookeeperBase(): List[String] = config[List[String]]("zookeeper.basepath")
   def zookeeperPrefix(): String = config[String]("zookeeper.prefix")   
+
+  def statusTimeout(): Long = config[Long]("actors.status.timeout", 30000)
 }
 
 trait ProductionActorEcosystem extends ActorEcosystem with Logging {
@@ -84,6 +91,19 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
     routingActor ! Start 
+  }
+
+  private lazy val actorsWithStatus = List(
+    projectionActors,
+    metadataActor,
+    routingActor,
+    ingestActor,
+    metadataSerializationActor
+  )
+
+  def actorsStatus(): Future[JArray] = {
+    implicit val to = Timeout(yggConfig.statusTimeout)
+    Future.sequence( actorsWithStatus.map { actor => (actor ? Status).mapTo[JValue] } ).map { JArray(_) }
   }
 
   def actorsStop(): Future[Unit] = {
@@ -199,6 +219,10 @@ trait StandaloneActorEcosystem extends ActorEcosystem with Logging {
   def actorsStart() = Future[Unit] {
     this.metadataSyncCancel
     routingActor ! Start
+  }
+  
+  def actorsStatus(): Future[JArray] = Future {
+    JArray(List(JString("StandaloneActorEcosystem status not yet implemented.")))
   }
 
   def actorsStop(): Future[Unit] = {
