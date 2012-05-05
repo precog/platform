@@ -60,7 +60,11 @@ trait ShardService extends
           }
         } ->
         request { (state: ShardState) =>
-          jsonp[ByteChunk] {
+          jvalue {
+            path("/actors/status") {
+                get(new ActorStatusHandler(state.queryExecutor))
+            }
+          } ~ jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("vfs") {
                 query {
@@ -68,8 +72,6 @@ trait ShardService extends
                 } ~ 
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
-            } ~ path("actors/status") {
-              get(new ActorStatusHandler(state.queryExecutor))
             }
           }
         } ->
