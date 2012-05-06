@@ -34,10 +34,10 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
           import context._
           val theTokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = new TokenBasedAccessControl {
-            val executionContext = defaultFutureDispatch
-            val tokenManager = theTokenManager
-          }
+          val accessControl = sys.error("todo") // new TokenBasedAccessControl {
+          //  val executionContext = defaultFutureDispatch
+          //  val tokenManager = theTokenManager
+          //}
 
           Future(TokenServiceState(theTokenManager, accessControl))
         } ->

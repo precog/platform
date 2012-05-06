@@ -44,10 +44,10 @@ trait ShardService extends
 
           val theTokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = new TokenBasedAccessControl {
-            val executionContext = defaultFutureDispatch
-            val tokenManager = theTokenManager
-          }
+          val accessControl = sys.error("todo") //new TokenBasedAccessControl {
+          //  val executionContext = defaultFutureDispatch
+          //  val tokenManager = theTokenManager
+          //}
           
           val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
 
