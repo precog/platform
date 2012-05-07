@@ -104,3 +104,15 @@ case class UnableToDetermineDefiningSet(id: String) extends ErrorType {
 case object GroupSetInvolvingMultipleParameters extends ErrorType {
   override def toString = "cannot solve group set involving multiple function parameters"
 }
+
+case class InseparablePairedTicVariables(vars: Set[TicId]) extends ErrorType {
+  override def toString = "cannot separate function parameters %s for group set".format(vars mkString ", ")
+}
+
+case class UnableToSolveTicVariable(tv: TicId) extends ErrorType {
+  override def toString = "cannot solve function parameter %s".format(tv)
+}
+
+case object GroupTargetSetNotIndependent extends ErrorType {
+  override def toString = "dependent target set for group conditional"
+}

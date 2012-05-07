@@ -8,15 +8,23 @@ import scala.collection.mutable.Builder
 import parser._
 import typer._
 
-trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
+trait GroupSolver extends AST with GroupFinder with Solver {
   import Function._
   
   import ast._
   import group._
   
+  import buckets._
+  
   override def inferBuckets(tree: Expr): Set[Error] = tree match {
-    case expr @ Let(_, _, _, left, right) =>
-      inferBuckets(left) ++ inferBuckets(right)
+    case expr @ Let(_, _, _, left, right) => {
+      val leftErrors = inferBuckets(left)
+      
+      val (spec, errors) = solveForest(expr, expr.groups)(IntersectBucketSpec)
+      expr.buckets = spec
+      
+      leftErrors ++ errors ++ inferBuckets(right)
+    }
     
     case Import(_, _, child) => inferBuckets(child)
     
@@ -42,41 +50,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     case Deref(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
-    case d @ Dispatch(_, _, actuals) => {
-      val actualErrors = (actuals map inferBuckets).fold(Set[Error]()) { _ ++ _ }
-      
-      val ourErrors = d.binding match {
-        case UserDef(let) => {
-          val remaining = let.params drop actuals.length
-          val work = let.groups filterKeys remaining.contains
-          
-          val solvedData = work map {
-            case (name, forest) => name -> solveGroupForest(d, name, forest)
-          }
-          
-          val errors = solvedData.values map { case (errorSet, _) => errorSet } flatten
-          val solutions = solvedData collect {
-            case (name, (_, Some(solution))) => name -> solution
-          }
-          
-          d.buckets = solutions
-          
-          val finalErrors = if (remaining forall solutions.contains)
-            Set()
-          else
-            Set(remaining filterNot solutions.contains map UnableToDetermineDefiningSet map { Error(d, _) }: _*)
-          
-          errors ++ finalErrors
-        }
-        
-        case _ => {
-          d.buckets = Map()
-          Set()
-        }
-      }
-      
-      actualErrors ++ ourErrors
-    }
+    case d @ Dispatch(_, _, actuals) =>
+      (actuals map inferBuckets).fold(Set[Error]()) { _ ++ _ }
     
     case Where(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
@@ -133,161 +108,200 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     case Paren(_, child) => inferBuckets(child)
   }
   
-  private def solveCondition(name: String, expr: Expr): Either[Set[Error], (Option[Solution], Set[Expr])] = expr match {
-    case And(_, left, right) => {
-      val recLeft = solveCondition(name, left)
-      val recRight = solveCondition(name, right)
-      
-      // desugared due to SI-5589
-      val sol = recLeft.right flatMap {
-        case (leftSol, leftExtras) => {
-          recRight.right map {
-            case (rightSol, rightExtras) => {
-              val merged = for (a <- leftSol; b <- rightSol) yield Conjunction(a, b)
-              val completeSol = merged orElse leftSol orElse rightSol
-              
-              val leftExtras2 = leftSol map const(leftExtras) getOrElse Set(left)
-              val rightExtras2 = rightSol map const(rightExtras) getOrElse Set(right)
-              
-              (completeSol, leftExtras2 ++ rightExtras2)
-            }
+  private def reduceConditions(conds: Set[(Option[BucketSpec], Set[Error])])(f: (BucketSpec, BucketSpec) => BucketSpec) = {
+    conds.foldLeft((None: Option[BucketSpec], Set[Error]())) {
+      case ((None, acc), (Some(spec), errors)) => (Some(spec), acc ++ errors)
+      case ((Some(spec1), acc), (Some(spec2), errors)) => (Some(IntersectBucketSpec(spec1, spec2)), acc ++ errors)
+      case ((Some(spec), acc), (None, errors)) => (Some(spec), acc ++ errors)
+      case ((None, acc), (None, errors)) => (None, acc ++ errors)
+    }
+  }
+  
+  private def solveForest(b: Let, forest: Set[GroupTree])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
+    val (conditions, reductions) = forest partition {
+      case c: Condition => true
+      case r: Reduction => false
+    }
+    
+    val (optCondSpec, condErrors) = {
+      val processed = conditions collect {
+        case Condition(origin @ Where(_, target, pred)) => {
+          if (listTicVars(b, target).isEmpty) {
+            val (result, errors) = solveCondition(b, pred)
+            (result map { Group(origin, target, _) }, errors)
+          } else {
+            (None, Set(Error(origin, GroupTargetSetNotIndependent)))
           }
         }
       }
+      mergeSpecs(processed)(f)
+    }
+    
+    val typedReductions = reductions collect { case r: Reduction => r }
+    
+    val (optRedSpec, redErrors) = mergeSpecs(typedReductions map solveReduction(b))(UnionBucketSpec)
+    
+    val andSpec = for (cond <- optCondSpec; red <- optRedSpec)
+      yield UnionBucketSpec(cond, red)
+    
+    val spec = andSpec orElse optCondSpec orElse optRedSpec
+    
+    (spec, condErrors ++ redErrors)
+  }
+  
+  private def solveCondition(b: Let, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
+    case And(_, left, right) => {
+      val (leftSpec, leftErrors) = solveCondition(b, left)
+      val (rightSpec, rightErrors) = solveCondition(b, left)
       
-      // TODO this misses errors sometimes
-      for {
-        leftErr <- sol.left
-        rightErr <- recRight.left
-      } yield leftErr ++ rightErr
+      val andSpec = for (ls <- leftSpec; rs <- rightSpec)
+        yield IntersectBucketSpec(ls, rs)
+      
+      (andSpec orElse leftSpec orElse rightSpec, leftErrors ++ rightErrors)
     }
     
     case Or(_, left, right) => {
-      val recLeft = solveCondition(name, left)
-      val recRight = solveCondition(name, right)
+      val (leftSpec, leftErrors) = solveCondition(b, left)
+      val (rightSpec, rightErrors) = solveCondition(b, left)
       
-      // desugared due to SI-5589
-      val maybeSol = recLeft.right flatMap {
-        case (leftSol, leftExtras) => {
-          recRight.right map {
-            case (rightSol, rightExtras) => {
-              for {
-                a <- leftSol
-                b <- rightSol
-                
-                if leftExtras.isEmpty
-                if rightExtras.isEmpty
-              } yield (Disjunction(a, b), Set[Expr]())
-            }
-          }
-        }
-      }
+      val andSpec = for (ls <- leftSpec; rs <- rightSpec)
+        yield UnionBucketSpec(ls, rs)
       
-      val sol = maybeSol.right flatMap {
-        case Some((solution, errors)) => Right((Some(solution), errors))
-        case None => Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
-      }
-      
-      // TODO this misses errors sometimes
-      for {
-        leftErr <- sol.left
-        rightErr <- recRight.left
-      } yield leftErr ++ rightErr
+      (andSpec orElse leftSpec orElse rightSpec, leftErrors ++ rightErrors)
     }
     
-    case _ if containsTicVar(name)(expr) => {
-      val result = expr match {
-        case expr: RelationExpr => solveRelation(expr) { case TicVar(_, `name`) => true }
-        case expr: Comp => solveComplement(expr) { case TicVar(_, `name`) => true }
-        case _ => None
-      }
+    case expr: RelationExpr if !listTicVars(b, expr).isEmpty => {
+      val vars = listTicVars(b, expr)
       
-      result map { e => Right((Some(Definition(e)), Set[Expr]())) } getOrElse Left(Set(Error(expr, UnableToSolveCriticalCondition(name))))
-    }
-    
-    case _ if containsAnotherTicVar(name)(expr) =>
-      Left(Set(Error(expr, GroupSetInvolvingMultipleParameters)))
-    
-    case _ => Right((None, Set(expr)))
-  }
-  
-  private def solveGroupForest(d: Dispatch, name: String, groups: Set[GroupTree]): (Set[Error], Option[Bucket]) = {
-    if (groups exists { case Condition(_) => true case _ => false }) {
-      // TODO ensure commonality (is this needed?)
-      
-      val UserDef(b) = d.binding
-      val hasDependence = groups exists {
-        case Condition(where) => isDependent(b)(where.left)
-        case _ => false
-      }
-      
-      if (hasDependence) {
-        (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
+      if (vars.size > 1) {
+        (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
-        val solutions = groups collect {
-          case Condition(where) =>
-            (where, solveCondition(name, where.right))
-        }
+        val tv = vars.head
+        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == UserDef(b) }
         
-        // if it's None all the way down, then we already have the error
-        val successes = for ((expr, result) <- solutions; (Some(solution), extras) <- result.right.toSeq)
-          yield Group(expr, expr.left, solution, extras)
-        
-        val errors = (solutions flatMap { _._2.left.toSeq }).fold(Set[Error]()) { _ ++ _ }
-        
-        val (addend, result) = if (!successes.isEmpty)
-          (None, Some(successes reduce IntersectBucket))
+        if (result.isDefined)
+          (result map { UnfixedSolution(tv, _) }, Set())
         else
-          (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
-        
-        (addend map (errors +) getOrElse errors, result)
+          (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
       }
-    } else if (groups exists { case Reduction(_, _) => true case _ => false }) {
-      val (errors, successes) = groups collect {
-        case Reduction(_, children) => solveGroupForest(d, name, children)
-      } unzip
-      
-      val result = sequence(successes) map { _ reduce UnionBucket }
-      
-      if (result.isEmpty)
-        (errors.flatten + Error(d, UnableToDetermineDefiningSet(name)), result)
-      else
-        (errors.flatten, result)
-    } else {
-      (Set(Error(d, UnableToDetermineDefiningSet(name))), None)
-    }
-  }
-  
-  private def isDependent(b: Let): Expr => Boolean = isSubtree {
-    case t: TicVar if t.binding == UserDef(b) => true
-    
-    case d: Dispatch => d.binding match {
-      case UserDef(let) => isDependent(b)(let.left)
-      case _ => false
     }
     
-    case _ => false
+    case expr: Comp if !listTicVars(b, expr).isEmpty => {
+      val vars = listTicVars(b, expr)
+      
+      if (vars.size > 1) {
+        (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
+      } else {
+        val tv = vars.head
+        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == UserDef(b) }
+        
+        if (result.isDefined)
+          (result map { UnfixedSolution(tv, _) }, Set())
+        else
+          (None, Set(Error(expr, UnableToSolveTicVariable(tv))))
+      }
+    }
+    
+    case _ if listTicVars(b, expr).isEmpty => (Some(Extra(expr)), Set())
+    
+    case _ => (None, listTicVars(b, expr) map UnableToSolveTicVariable map { Error(expr, _) })
   }
   
-  private def containsTicVar(name: String): Expr => Boolean = isSubtree {
-    case TicVar(_, `name`) => true
-    case _ => false
-  }
+  private def solveReduction(b: Let)(red: Reduction): (Option[BucketSpec], Set[Error]) = 
+    solveForest(b, red.children)(IntersectBucketSpec)
   
-  private def containsAnotherTicVar(name: String): Expr => Boolean = isSubtree {
-    case TicVar(_, name2) => name != name2
-    case _ => false
-  }
-  
-  private def sequence[A](set: Set[Option[A]]): Option[Set[A]] = {
-    set.foldLeft(Some(Set()): Option[Set[A]]) { (acc, opt) =>
-      for (s <- acc; v <- opt) yield s + v
+  private def mergeSpecs(specs: TraversableOnce[(Option[BucketSpec], Set[Error])])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
+    specs.fold((None: Option[BucketSpec], Set[Error]())) {
+      case ((leftAcc, leftErrors), (rightAcc, rightErrors)) => {
+        val merged = for (left <- leftAcc; right <- rightAcc)
+          yield f(left, right)
+        
+        (merged orElse leftAcc orElse rightAcc, leftErrors ++ rightErrors)
+      }
     }
   }
   
-  sealed trait Bucket
+  private def listTicVars(b: Let, expr: Expr): Set[TicId] = expr match {
+    case Let(_, _, _, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case New(_, child) => listTicVars(b, child)
+    case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
+    case t @ TicVar(_, name) if t.binding == UserDef(b) => Set(name)
+    case TicVar(_, _) => Set()
+    case StrLit(_, _) => Set()
+    case NumLit(_, _) => Set()
+    case BoolLit(_, _) => Set()
+    case NullLit(_) => Set()
+    case ObjectDef(_, props) => (props.unzip._2 map { listTicVars(b, _) }).fold(Set()) { _ ++ _ }
+    case ArrayDef(_, values) => (values map { listTicVars(b, _) }).fold(Set()) { _ ++ _ }
+    case Descent(_, child, _) => listTicVars(b, child)
+    case Deref(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    
+    case d @ Dispatch(_, _, actuals) => {
+      val leftSet = d.binding match {
+        case UserDef(b2) => listTicVars(b, b2.left)
+        case _ => Set[TicId]()
+      }
+      (actuals map { listTicVars(b, _) }).fold(leftSet) { _ ++ _ }
+    }
+    
+    case Where(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case With(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Union(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Intersect(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Add(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Sub(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Mul(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Div(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Lt(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case LtEq(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Gt(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case GtEq(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Eq(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case NotEq(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case And(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Or(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
+    case Comp(_, child) => listTicVars(b, child)
+    case Neg(_, child) => listTicVars(b, child)
+    case Paren(_, child) => listTicVars(b, child)
+  }
   
-  case class UnionBucket(left: Bucket, right: Bucket) extends Bucket
-  case class IntersectBucket(left: Bucket, right: Bucket) extends Bucket
-  case class Group(origin: Where, target: Expr, forest: Solution, extras: Set[Expr]) extends Bucket
+
+  sealed trait BucketSpec {
+    import buckets._
+    
+    final def derive(id: TicId, expr: Expr): BucketSpec = this match {
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(left.derive(id, expr), right.derive(id, expr))
+      
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(left.derive(id, expr), right.derive(id, expr))
+      
+      case Group(origin, target, forest) =>
+        Group(origin, target, forest.derive(id, expr))
+      
+      case UnfixedSolution(`id`, solution) =>
+        FixedSolution(id, solution, expr)
+      
+      case s @ UnfixedSolution(_, _) => s
+      
+      case f @ FixedSolution(id2, _, _) => {
+        assert(id != id2)
+        f
+      }
+      
+      case e @ Extra(_) => e
+    }
+  }
+  
+  object buckets {
+    case class UnionBucketSpec(left: BucketSpec, right: BucketSpec) extends BucketSpec
+    case class IntersectBucketSpec(left: BucketSpec, right: BucketSpec) extends BucketSpec
+    
+    case class Group(origin: Where, target: Expr, forest: BucketSpec) extends BucketSpec
+    
+    case class UnfixedSolution(id: TicId, solution: Expr) extends BucketSpec
+    case class FixedSolution(id: TicId, solution: Expr, expr: Expr) extends BucketSpec
+    
+    case class Extra(expr: Expr) extends BucketSpec
+  }
 }
