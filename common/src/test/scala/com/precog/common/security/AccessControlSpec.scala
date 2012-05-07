@@ -30,6 +30,7 @@ import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 
 import blueeyes.bkka.AkkaDefaults
+import blueeyes.persistence.mongo.mock.MockMongo
 
 import scala.collection
 
@@ -237,25 +238,37 @@ trait TokenManagerTestValues extends AkkaDefaults {
 
   implicit def stringToPath(path: String): Path = Path(path)
   
-  val farFuture = new DateTime(Long.MaxValue)
-  val farPast = new DateTime(Long.MinValue)
+  val farFuture = new DateTime().plusYears(1000)
+  val farPast = new DateTime().minusYears(1000)
 
-  val tokens = new TransientTokenManager
+  val mongo = new MockMongo
+  val database = mongo.database("test_database")
+
+  val tokens = new NewMongoTokenManager(mongo, database)
+
 
   def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
-    val token = Await.result(tokens.newToken(name, Set.empty), timeout)
-    val grants = f(token)
-    (Await.result(tokens.addGrants(token, grants), timeout), grants)
+    try {
+      val token = Await.result(tokens.newToken(name, Set.empty), timeout)
+      val grants = f(token)
+      (Await.result(tokens.addGrants(token.tid, grants), timeout).get, grants)
+    } catch {
+      case ex => ex.printStackTrace; throw ex
+    }
   }
-
+  
   val (rootToken, rootGrants) = newToken("root") { t =>
+    try {
     Await.result(Future.sequence(Grant.grantSet(None, "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid } }), timeout)
+    } catch {
+      case ex => println(ex); throw ex
+    }
   }
   
   val (rootLikeToken, rootLikeGrants) = newToken("rootLike") { t =>
     Await.result(Future.sequence(Grant.grantSet(None, "/child", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid }}), timeout)
   }
-  
+ 
   val (superToken, superGrants) = newToken("super") { t =>
     Await.result(Future.sequence(rootGrants.map{ g =>
       tokens.findGrant(g).flatMap { og => tokens.newGrant(og.get match {
@@ -304,22 +317,27 @@ trait TokenManagerTestValues extends AkkaDefaults {
       }).map { _.gid } }
     }), timeout)
   }
+
 }
 
 trait UseCasesTokenManagerTestValues extends AkkaDefaults {
+
   val timeout = Duration(30, "seconds")
   
   implicit def stringToPath(path: String): Path = Path(path)
 
-  val farFuture = new DateTime(Long.MaxValue)
-  val farPast = new DateTime(Long.MinValue)
+  val farFuture = new DateTime().plusYears(1000)
+  val farPast = new DateTime().minusYears(1000)
 
-  val tokens = new TransientTokenManager
+  val mongo = new MockMongo
+  val database = mongo.database("test_database")
+
+  val tokens = new NewMongoTokenManager(mongo, database)
 
   def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
     Await.result(tokens.newToken(name, Set.empty).flatMap { t =>
       val g = f(t)
-      tokens.addGrants(t, g).map { (_, g) } 
+      tokens.addGrants(t.tid, g).map { t => (t.get, g) } 
     }, timeout)
   }
   
@@ -339,7 +357,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
   def addGrants(token: NToken, grants: Set[GrantID]): Option[NToken] = {
     Await.result(tokens.findToken(token.tid).flatMap { _ match {
       case None => Future(None)
-      case Some(t) => tokens.addGrants(t, grants).map { Some(_) }
+      case Some(t) => tokens.addGrants(t.tid, grants)
     }}, timeout)
   }
 
@@ -404,7 +422,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
     }}
   }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
 
-  tokens.addGrants(customer, 
+  tokens.addGrants(customer.tid, 
     customerFriendGrants ++ 
     customerAddonGrants ++ 
     customerAddonAgentGrants ++
@@ -440,6 +458,6 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
     }}
   }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
 
-  tokens.addGrants(customersCustomer, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
+  tokens.addGrants(customersCustomer.tid, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
 
 }

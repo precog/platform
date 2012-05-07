@@ -23,15 +23,35 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.DefaultSerialization.{DateTimeDecomposer => _, DateTimeExtractor => _, _}
 import blueeyes.json.xschema.Extractor._
 
 import org.joda.time.DateTime
+import org.joda.time.format.ISODateTimeFormat
 
 import scalaz._
 import Scalaz._
 
 package object nsecurity {
+  private val tidSafePrefix = 30 
+  private val gidSafePrefix = 30 
+
+  private val isoFormat = ISODateTimeFormat.dateTime
+
+  implicit val TZDateTimeDecomposer: Decomposer[DateTime] = new Decomposer[DateTime] {
+    override def decompose(d: DateTime): JValue = JString(isoFormat.print(d))
+  }
+
+  implicit val TZDateTimeExtractor: Extractor[DateTime] = new Extractor[DateTime] with ValidatedExtraction[DateTime] {    
+    override def validated(obj: JValue): Validation[Error, DateTime] = obj match {
+      case JString(dt) => Success(isoFormat.parseDateTime(dt))
+      case _           => Failure(Invalid("Date time must be represented as JSON string"))
+    }
+  }
+
+  implicit val OptionDateTimeDecomposer: Decomposer[Option[DateTime]] = OptionDecomposer[DateTime]
+  implicit val OptionDateTimeExtractor: Extractor[Option[DateTime]] = OptionExtractor[DateTime]
+   
 
   type TokenID = String
   type GrantID = String
@@ -42,8 +62,61 @@ package object nsecurity {
     def removeGrants(remove: Set[GrantID]): NToken =
       copy(grants = grants -- remove)
   }
+  
+  trait NTokenSerialization {
+
+    val UnsafeTokenDecomposer: Decomposer[NToken] = new Decomposer[NToken] {
+      override def decompose(t: NToken): JValue = JObject(List(
+        JField("name", t.name),
+        JField("tid", t.tid),
+        JField("gids", t.grants.serialize)
+      )) 
+    }
+
+    implicit val SafeTokenDecomposer: Decomposer[NToken] = new Decomposer[NToken] {
+      override def decompose(t: NToken): JValue = JObject(List(
+        JField("name", t.name),
+        JField("tid_prefix", t.tid.substring(0, tidSafePrefix)),
+        JField("gid_prefixes", t.grants.map{ _.substring(0, gidSafePrefix)}.serialize)
+      )) 
+    }
+
+    implicit val TokenExtractor: Extractor[NToken] = new Extractor[NToken] with ValidatedExtraction[NToken] {    
+      override def validated(obj: JValue): Validation[Error, NToken] = 
+        ((obj \ "tid").validated[TokenID] |@|
+         (obj \ "name").validated[String] |@|
+         (obj \ "gids").validated[Set[GrantID]]).apply(NToken(_,_,_))
+    }
+  }
+
+  object NToken extends NTokenSerialization
 
   case class ResolvedGrant(gid: GrantID, grant: Grant)
+  
+  trait ResolvedGrantSerialization {
+
+    val UnsafeResolvedGrantDecomposer: Decomposer[ResolvedGrant] = new Decomposer[ResolvedGrant] {
+      override def decompose(g: ResolvedGrant): JValue = JObject(List(
+        JField("gid", g.gid),
+        JField("grant", g.grant.serialize(Grant.UnsafeGrantDecomposer))
+      )) 
+    }
+
+    implicit val SafeResolvedGrantDecomposer: Decomposer[ResolvedGrant] = new Decomposer[ResolvedGrant] {
+      override def decompose(g: ResolvedGrant): JValue = JObject(List(
+        JField("gid_prefix", g.gid.substring(0, gidSafePrefix)),
+        JField("grant", g.grant.serialize)
+      )) 
+    }
+
+    implicit val ResolvedGrantExtractor: Extractor[ResolvedGrant] = new Extractor[ResolvedGrant] with ValidatedExtraction[ResolvedGrant] {    
+      override def validated(obj: JValue): Validation[Error, ResolvedGrant] = 
+        ((obj \ "gid").validated[GrantID] |@|
+         (obj \ "grant").validated[Grant]).apply(ResolvedGrant(_,_))
+    }
+  }
+
+  object ResolvedGrant extends ResolvedGrantSerialization with ((GrantID, Grant) => ResolvedGrant)
 
   sealed trait Grant {
     def accessType: AccessType
@@ -52,64 +125,51 @@ package object nsecurity {
     def expiration: Option[DateTime]
   
     def isExpired(ref: DateTime) = expiration.map { ref.isAfter(_) }.getOrElse(false)
+  }
+  
+  trait GrantSerialization {
 
+    val UnsafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
+      override def decompose(g: Grant): JValue = g match { 
+        case g @ WriteGrant(_, _, _) => g.serialize(WriteGrant.UnsafeWriteGrantDecomposer)
+        case g @ OwnerGrant(_, _, _) => g.serialize(OwnerGrant.UnsafeOwnerGrantDecomposer)
+        case g @ ReadGrant(_, _, _, _) => g.serialize(ReadGrant.UnsafeReadGrantDecomposer)
+        case g @ ReduceGrant(_, _, _, _) => g.serialize(ReduceGrant.UnsafeReduceGrantDecomposer)
+        case g @ ModifyGrant(_, _, _, _) => g.serialize(ModifyGrant.UnsafeModifyGrantDecomposer)
+        case g @ TransformGrant(_, _, _, _) => g.serialize(TransformGrant.UnsafeTransformGrantDecomposer)
+      }
+    }
+
+    implicit val SafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
+      override def decompose(g: Grant): JValue = g match { 
+        case g @ WriteGrant(_, _, _) => g.serialize(WriteGrant.SafeWriteGrantDecomposer)
+        case g @ OwnerGrant(_, _, _) => g.serialize(OwnerGrant.SafeOwnerGrantDecomposer)
+        case g @ ReadGrant(_, _, _, _) => g.serialize(ReadGrant.SafeReadGrantDecomposer)
+        case g @ ReduceGrant(_, _, _, _) => g.serialize(ReduceGrant.SafeReduceGrantDecomposer)
+        case g @ ModifyGrant(_, _, _, _) => g.serialize(ModifyGrant.SafeModifyGrantDecomposer)
+        case g @ TransformGrant(_, _, _, _) => g.serialize(TransformGrant.SafeTransformGrantDecomposer)
+      }
+    }
+
+    implicit val GrantExtractor: Extractor[Grant] = new Extractor[Grant] with ValidatedExtraction[Grant] {    
+      override def validated(obj: JValue): Validation[Error, Grant] = 
+        (obj \ "type").validated[String] match {
+          case Success(t) => t match {
+            case WriteGrant.name => obj.validated[WriteGrant]
+            case OwnerGrant.name => obj.validated[OwnerGrant]
+            case ReadGrant.name => obj.validated[ReadGrant]
+            case ReduceGrant.name => obj.validated[ReduceGrant]
+            case ModifyGrant.name => obj.validated[ModifyGrant]
+            case TransformGrant.name => obj.validated[TransformGrant]
+            case _ => Failure(Invalid("Unknown grant type: " + t))
+          }
+          case Failure(e) => Failure(e)
+        }
+    }
   }
 
-  sealed trait OwnerIgnorantGrant extends Grant {
-    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration): Grant
-  }
-
-  sealed trait OwnerAwareGrant extends Grant {
-    def owner: TokenID
-    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration): Grant
-  }
-
-  sealed trait AccessType 
-
-  case class WriteGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant { 
-    val accessType = WriteGrant
-    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, expiration)
-  }
-  object WriteGrant extends AccessType
-
-  case class OwnerGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant {
-    val accessType = OwnerGrant
-    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, expiration)
-  }
-  object OwnerGrant extends AccessType
-
-  case class ReadGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
-    val accessType = ReadGrant
-    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, owner, expiration)
-  }
-  object ReadGrant extends AccessType
-
-  case class ReduceGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
-    val accessType = ReduceGrant
-    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, owner, expiration)
-  }
-  object ReduceGrant extends AccessType
-
-  case class ModifyGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
-    val accessType = ReduceGrant
-    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, owner, expiration)
-  }
-  object ModifyGrant extends AccessType
-
-  case class TransformGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
-    val accessType = ReduceGrant
-    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
-      copy(issuer, path, owner, expiration)
-  }
-  object TransformGrant extends AccessType
-
-  object Grant {
-
+  object Grant extends GrantSerialization {
+  
     val ALL = Set[AccessType](WriteGrant, OwnerGrant, ReadGrant, ReduceGrant, ModifyGrant, TransformGrant)
     val RRT = Set[AccessType](ReadGrant, ReduceGrant, TransformGrant)
 
@@ -127,6 +187,265 @@ package object nsecurity {
       case TransformGrant => TransformGrant(issuer, path, owner, expiration)
     }
   }
+
+  sealed trait OwnerIgnorantGrant extends Grant {
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration): Grant
+  }
+
+  sealed trait OwnerAwareGrant extends Grant {
+    def owner: TokenID
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration): Grant
+  }
+
+  sealed trait AccessType {
+    def name: String
+  }
+
+  case class WriteGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant { 
+    val accessType = WriteGrant
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, expiration)
+  }
+
+  trait WriteGrantSerialization {
+
+    val UnsafeWriteGrantDecomposer: Decomposer[WriteGrant] = new Decomposer[WriteGrant] {
+      override def decompose(g: WriteGrant): JValue = JObject(List(
+        JField("type", WriteGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val SafeWriteGrantDecomposer: Decomposer[WriteGrant] = new Decomposer[WriteGrant] {
+      override def decompose(g: WriteGrant): JValue = JObject(List(
+        JField("type", WriteGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val WriteGrantExtractor: Extractor[WriteGrant] = new Extractor[WriteGrant] with ValidatedExtraction[WriteGrant] {    
+      override def validated(obj: JValue): Validation[Error, WriteGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(WriteGrant(_,_,_))
+    }
+  }
+
+  object WriteGrant extends AccessType with WriteGrantSerialization {
+    val name = "write_grant" 
+  }
+
+  case class OwnerGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant {
+    val accessType = OwnerGrant
+    def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, expiration)
+  }
+
+  trait OwnerGrantSerialization {
+    
+    val UnsafeOwnerGrantDecomposer: Decomposer[OwnerGrant] = new Decomposer[OwnerGrant] {
+      override def decompose(g: OwnerGrant): JValue = JObject(List(
+        JField("type", OwnerGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val SafeOwnerGrantDecomposer: Decomposer[OwnerGrant] = new Decomposer[OwnerGrant] {
+      override def decompose(g: OwnerGrant): JValue = JObject(List(
+        JField("type", OwnerGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val OwnerGrantExtractor: Extractor[OwnerGrant] = new Extractor[OwnerGrant] with ValidatedExtraction[OwnerGrant] {    
+      override def validated(obj: JValue): Validation[Error, OwnerGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(OwnerGrant(_,_,_))
+    }
+
+  }
+
+  object OwnerGrant extends AccessType with OwnerGrantSerialization {
+    val name = "owner_grant"
+  }
+
+  case class ReadGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReadGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration.serialize)
+  }
+
+  trait ReadGrantSerialization {
+    
+    val UnsafeReadGrantDecomposer: Decomposer[ReadGrant] = new Decomposer[ReadGrant] {
+      override def decompose(g: ReadGrant): JValue = JObject(List(
+        JField("type", ReadGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("owner", g.owner),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val SafeReadGrantDecomposer: Decomposer[ReadGrant] = new Decomposer[ReadGrant] {
+      override def decompose(g: ReadGrant): JValue = JObject(List(
+        JField("type", ReadGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val ReadGrantExtractor: Extractor[ReadGrant] = new Extractor[ReadGrant] with ValidatedExtraction[ReadGrant] {    
+      override def validated(obj: JValue): Validation[Error, ReadGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "owner").validated[TokenID] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(ReadGrant(_,_,_,_))
+    }
+
+  }
+
+  object ReadGrant extends AccessType with ReadGrantSerialization {
+    val name = "read_grant"
+  }
+
+  case class ReduceGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  
+  trait ReduceGrantSerialization {
+    
+    val UnsafeReduceGrantDecomposer: Decomposer[ReduceGrant] = new Decomposer[ReduceGrant] {
+      override def decompose(g: ReduceGrant): JValue = JObject(List(
+        JField("type", ReduceGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("owner", g.owner),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val SafeReduceGrantDecomposer: Decomposer[ReduceGrant] = new Decomposer[ReduceGrant] {
+      override def decompose(g: ReduceGrant): JValue = JObject(List(
+        JField("type", ReduceGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val ReduceGrantExtractor: Extractor[ReduceGrant] = new Extractor[ReduceGrant] with ValidatedExtraction[ReduceGrant] {    
+      override def validated(obj: JValue): Validation[Error, ReduceGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "owner").validated[TokenID] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(ReduceGrant(_,_,_,_))
+    }
+
+  }
+
+  object ReduceGrant extends AccessType with ReduceGrantSerialization {
+    val name = "reduce_grant"
+  }
+
+  case class ModifyGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  
+  trait ModifyGrantSerialization {
+    
+    val UnsafeModifyGrantDecomposer: Decomposer[ModifyGrant] = new Decomposer[ModifyGrant] {
+      override def decompose(g: ModifyGrant): JValue = JObject(List(
+        JField("type", ModifyGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("owner", g.owner),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val SafeModifyGrantDecomposer: Decomposer[ModifyGrant] = new Decomposer[ModifyGrant] {
+      override def decompose(g: ModifyGrant): JValue = JObject(List(
+        JField("type", ModifyGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("expiration", g.expiration.serialize)
+      )) 
+    }
+
+    implicit val ModifyGrantExtractor: Extractor[ModifyGrant] = new Extractor[ModifyGrant] with ValidatedExtraction[ModifyGrant] {    
+      override def validated(obj: JValue): Validation[Error, ModifyGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "owner").validated[TokenID] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(ModifyGrant(_,_,_,_))
+    }
+
+  }
+
+  object ModifyGrant extends AccessType with ModifyGrantSerialization {
+    val name = "modify_grant"
+  }
+
+  case class TransformGrant(issuer: Option[GrantID], path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwareGrant {
+    val accessType = ReduceGrant
+    def derive(issuer: Option[GrantID], path: Path = path, owner: TokenID = owner, expiration: Option[DateTime] = expiration) =
+      copy(issuer, path, owner, expiration)
+  }
+  
+  trait TransformGrantSerialization {
+    
+    val UnsafeTransformGrantDecomposer: Decomposer[TransformGrant] = new Decomposer[TransformGrant] {
+      override def decompose(g: TransformGrant): JValue = JObject(List(
+        JField("type", TransformGrant.name),
+        JField("issuer", g.issuer.serialize),
+        JField("path", g.path),
+        JField("owner", g.owner),
+        JField("expiration", g.expiration)
+      )) 
+    }
+
+    implicit val SafeTransformGrantDecomposer: Decomposer[TransformGrant] = new Decomposer[TransformGrant] {
+      override def decompose(g: TransformGrant): JValue = JObject(List(
+        JField("type", TransformGrant.name),
+        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("path", g.path),
+        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("expiration", g.expiration)
+      )) 
+    }
+
+    implicit val TransformGrantExtractor: Extractor[TransformGrant] = new Extractor[TransformGrant] with ValidatedExtraction[TransformGrant] {    
+      override def validated(obj: JValue): Validation[Error, TransformGrant] = 
+        ((obj \ "issuer").validated[Option[GrantID]] |@|
+         (obj \ "path").validated[Path] |@|
+         (obj \ "owner").validated[TokenID] |@|
+         (obj \ "expiration").validated[Option[DateTime]]).apply(TransformGrant(_,_,_,_))
+    }
+
+  }
+
+  object TransformGrant extends AccessType with TransformGrantSerialization {
+    val name = "transform_grant"
+  }
+
 }
 
 package object security {
