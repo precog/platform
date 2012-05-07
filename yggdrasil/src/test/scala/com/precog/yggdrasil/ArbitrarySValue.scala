@@ -53,7 +53,7 @@ trait SValueGenerators {
 
   def sevent(idCount: Int, vdepth: Int): Gen[SEvent] = {
     for {
-      ids <- listOfN(idCount, arbitrary[Long])
+      ids <- listOfN(idCount, posNum[Long])
       value <- svalue(vdepth)
     } yield (VectorCase(ids: _*), value)
   }

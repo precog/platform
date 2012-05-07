@@ -10,6 +10,7 @@ import scala.annotation.tailrec
 import scalaz.{Identity => _, _}
 import scalaz.Scalaz._
 import scalaz.Ordering._
+import scalaz.Validation._
 
 trait Slice { source =>
   import Slice._
@@ -17,6 +18,7 @@ trait Slice { source =>
   def identities: Seq[Column[Identity]]
 
   protected[yggdrasil] def columns: Map[VColumnRef[_], Column[_]]
+
   def column[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[Column[A]] = {
     columns.get(ref).map(_.asInstanceOf[Column[A]])
   }
@@ -267,15 +269,24 @@ trait Slice { source =>
   def toJson(row: Int): JValue = {
     columns.foldLeft[JValue](JNull) {
       case (jv, (ref @ VColumnRef(NamedColumnId(_, selector), ctype), col)) if (col.isDefinedAt(row)) => 
-        jv.set(selector, ctype.jvalueFor(col(row)))
+        jv.unsafeInsert(selector, ctype.jvalueFor(col(row)))
 
       case (jv, _) => jv
     }
   }
 
+  def toValidatedJson(row: Int): ValidationNEL[Throwable, JValue] = {
+    columns.foldLeft[ValidationNEL[Throwable, JValue]](success(JNull)) {
+      case (jvv, (ref @ VColumnRef(NamedColumnId(_, selector), ctype), col)) if (col.isDefinedAt(row)) => 
+        jvv flatMap { (_: JValue).insert(selector, ctype.jvalueFor(col(row))).toValidationNel }
+
+      case (jvv, _) => jvv
+    }
+  }
+
   def toString(row: Int): String = {
-    (identities map { idcol => idcol(row) }).mkString("(", ",", ") -> ") +
-    (columns.collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col(row).toString }).mkString("[", ", ", "]")
+    (identities collect { case idcol      if idcol.isDefinedAt(row) => idcol(row) }).mkString("(", ",", ") -> ") +
+    (columns    collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col(row) }).mkString("[", ", ", "]")
   }
 }
 
