@@ -39,7 +39,6 @@ object QuirrelConsole {
   val compiler = new Parser
     with Binder
     with ProvenanceChecker
-    with CriticalConditionSolver
     with GroupSolver
     with Compiler
     with Emitter
@@ -53,7 +52,6 @@ object QuirrelConsole {
     def checkProvenance(tree: Expr) = Set()
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
     def findGroups(expr: Expr): Map[String, Set[GroupTree]] = Map()
-    def solveCriticalConditions(expr: Expr) = Set()
     def inferBuckets(expr: Expr) = Set()
   }
 
