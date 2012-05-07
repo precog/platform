@@ -15,6 +15,11 @@ import scala.collection.mutable
 import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
 
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.Extractor._
+
 trait AccessControl {
   def mayGrant(uid: UID, permissions: Permissions): Future[Boolean]
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean]
@@ -35,11 +40,11 @@ trait NewTokenManager {
   def findGrant(gid: GrantID): Future[Option[ResolvedGrant]]
   def findGrantChildren(gid: GrantID): Future[Set[ResolvedGrant]]
 
-  def addGrants(token: NToken, grants: Set[GrantID]): Future[NToken]
-  def removeGrants(token: NToken, grants: Set[GrantID]): Future[NToken]
+  def addGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[NToken]]
+  def removeGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[NToken]]
 
-  def deleteToken(token: NToken): Future[Unit]
-  def deleteGrant(grant: ResolvedGrant): Future[Unit]
+  def deleteToken(tid: TokenID): Future[Option[NToken]]
+  def deleteGrant(gid: GrantID): Future[Set[ResolvedGrant]]
 
   def close(): Future[Unit]
 } 
@@ -68,19 +73,26 @@ class TransientTokenManager(tokens: mutable.Map[TokenID, NToken] = mutable.Map.e
     }.map{ ResolvedGrant.tupled.apply }(collection.breakOut)
   }
 
-  def addGrants(token: NToken, add: Set[GrantID]) = Future {
-    val updated = token.addGrants(add)
-    tokens.put(updated.tid, updated)
-    updated
+  def addGrants(tid: TokenID, add: Set[GrantID]) = Future {
+    tokens.get(tid).map { t =>
+      val updated = t.addGrants(add)
+      tokens.put(tid, updated)
+      updated
+    }
   }
-  def removeGrants(token: NToken, remove: Set[GrantID]) = Future {
-    val updated = token.removeGrants(remove)
-    tokens.put(updated.tid, updated)
-    updated
+  def removeGrants(tid: TokenID, remove: Set[GrantID]) = Future {
+    tokens.get(tid).map { t =>
+      val updated = t.removeGrants(remove)
+      tokens.put(tid, updated)
+      updated
+    }
   }
 
-  def deleteToken(token: NToken) = Future { tokens.remove(token.tid) }
-  def deleteGrant(grant: ResolvedGrant) = Future { grants.remove(grant.gid) }
+  def deleteToken(tid: TokenID) = Future { tokens.remove(tid) }
+  def deleteGrant(gid: GrantID) = Future { grants.remove(gid) match {
+    case Some(x) => Set(ResolvedGrant(gid, x))
+    case _       => Set.empty
+  }}
 
   def close() = Future(())
 }
@@ -92,12 +104,99 @@ case class NewMongoTokenManagerSettings(
   deletedGrants: String = "grants_deleted",
   timeout: Timeout = new Timeout(30000))
 
-//class NewMongoTokenManager(private[security] val mongo: Mongo, private[security] val database: Database, settings: NewMongoTokenManagerSettings)(implicit val execContext: ExecutionContext) extends NewTokenManager {
-//
-//  private implicit val impTimeout = settings.timeout
-//
-//  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
-//}
+object NewMongoTokenManagerSettings {
+  val defaults = NewMongoTokenManagerSettings()
+}
+
+
+class NewMongoTokenManager(
+    private[security] val mongo: Mongo, 
+    private[security] val database: Database, 
+    settings: NewMongoTokenManagerSettings = NewMongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends NewTokenManager {
+
+  private implicit val impTimeout = settings.timeout
+  
+  def newToken(name: String, grants: Set[GrantID]) = {
+    val newToken = NToken(newTokenID, name, grants)
+    database(insert(newToken.serialize(NToken.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
+      _ => newToken 
+    }
+  }
+
+  def newGrant(grant: Grant) = {
+    val ng = ResolvedGrant(newGrantID, grant)
+    database(insert(ng.serialize(ResolvedGrant.UnsafeResolvedGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { _ => ng }
+  }
+
+  def findToken(tid: TokenID) = database {
+    selectOne().from(settings.tokens).where("tid" === tid) 
+  }.map {
+    _.map(_.deserialize[NToken])
+  }
+
+  def findGrant(gid: GrantID) = database {
+    selectOne().from(settings.grants).where("gid" === gid)
+  }.map {
+    _.map { _.deserialize[ResolvedGrant] }
+  }
+  
+  def findGrantChildren(gid: GrantID) = database {
+    selectAll.from(settings.grants).where("issuer" === gid)
+  }.map {
+    _.map(_.deserialize[ResolvedGrant])(collection.breakOut)
+  }
+
+  def addGrants(tid: TokenID, add: Set[GrantID]) = updateToken(tid) { t =>
+    Some(t.addGrants(add))
+  }
+  
+  def removeGrants(tid: TokenID, remove: Set[GrantID]) = updateToken(tid) { t =>
+    Some(t.removeGrants(remove))
+  }
+
+  private def updateToken(tid: TokenID)(f: NToken => Option[NToken]): Future[Option[NToken]] = {
+    findToken(tid).flatMap {
+      case Some(t) =>
+        f(t) match {
+          case Some(nt) if nt != t => 
+            database {
+              val updateObj = nt.serialize(NToken.UnsafeTokenDecomposer).asInstanceOf[JObject]
+              update(settings.tokens).set(updateObj).where("tid" === tid)
+            }.map{ _ => Some(nt) }
+          case _ => Future(Some(t))
+        }
+      case None    => Future(None)
+    }
+  }
+  
+
+  def deleteToken(tid: TokenID): Future[Option[NToken]] = 
+    findToken(tid).flatMap { 
+      case ot @ Some(t) => 
+        for {
+          _ <- database(insert(t.serialize(NToken.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.deletedTokens))
+          _ <- database(remove.from(settings.tokens).where("tid" === tid))
+        } yield { ot }
+      case None    => Future(None)
+    } 
+
+  def deleteGrant(gid: GrantID): Future[Set[ResolvedGrant]] = {
+    findGrantChildren(gid).flatMap { gc => 
+      Future.sequence(gc.map { g => deleteGrant(g.gid)}).map { _.flatten }.flatMap { gds =>
+        findGrant(gid).flatMap { 
+          case og @ Some(g) => 
+            for {
+              _ <- database(insert(g.serialize(ResolvedGrant.UnsafeResolvedGrantDecomposer).asInstanceOf[JObject]).into(settings.deletedGrants))
+              _ <- database(remove.from(settings.grants).where("gid" === gid))
+            } yield { gds + g }
+          case None    => Future(gds)
+        }
+      }
+    }
+  }
+
+  def close() = database.disconnect.fallbackTo(Future(())).flatMap{_ => mongo.close}
+}
 
 class TokenManagerAccessControl(tokens: NewTokenManager)(implicit execContext: ExecutionContext) extends AccessControl {
   def mayGrant(uid: UID, permissions: Permissions): Future[Boolean] = Future {
