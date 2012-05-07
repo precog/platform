@@ -145,7 +145,10 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
-  private lazy val propertyName = """[a-zA-Z_][a-zA-Z_0-9]*""".r
+  private lazy val propertyName = (
+      """[a-zA-Z_][a-zA-Z_0-9]*""".r
+    | """`([^`\\]|\\.)+`""".r ^^ canonicalizePropertyName
+  )
   
   private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
   
@@ -236,6 +239,15 @@ trait Parser extends RegexParsers with Filters with AST {
   }
   
   private def canonicalizePath(str: String): String = str substring 1
+  
+  private def canonicalizePropertyName(str: String): String = {
+    val (back, _) = str.substring(1, str.length - 1).foldLeft(("", false)) {
+      case ((acc, false), '\\') => (acc, true)
+      case ((acc, _), c) => (acc + c, false)
+    }
+    
+    back
+  }
   
   case class ParseException(failures: Set[Failure]) extends RuntimeException {
     def mkString = {
