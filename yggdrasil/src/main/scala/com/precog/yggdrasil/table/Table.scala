@@ -29,6 +29,8 @@ import java.lang.ref.SoftReference
 
 import scala.collection.mutable.ArrayBuffer
 import scala.annotation.tailrec
+
+import scalaz._
 import scalaz.Ordering._
 
 class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable[Slice]) { self  =>
@@ -85,7 +87,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
           private var curSlice = precomputeNext()
 
-          def hasNext: Boolean = curSlice != null
+          def hasNext: Boolean = curSlice ne null
           
           def next: Slice = {
             val tmp = curSlice
@@ -129,7 +131,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                   precomputeNext()
                 } else {
                   val result = emitSliceOnOverflow(true, false, StepRightDoneLeft)
-                  if (result != null) result else precomputeNext()
+                  if (result ne null) result else precomputeNext()
                 }
 
               case StepLeftDoneRight =>
@@ -138,7 +140,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                   precomputeNext()
                 } else {
                   val result = emitSliceOnOverflow(true, false, Done)
-                  if (result != null) result else precomputeNext()
+                  if (result ne null) result else precomputeNext()
                 }
 
               case StepRightCheckLeft => 
@@ -160,7 +162,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                   precomputeNext()
                 } else {
                   val result = emitSliceOnOverflow(false, true, StepLeftDoneRight)
-                  if (result != null) result else precomputeNext()
+                  if (result ne null) result else precomputeNext()
                 }
 
               case StepRightDoneLeft =>
@@ -169,7 +171,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                   precomputeNext()
                 } else {
                   val result = emitSliceOnOverflow(false, true, Done)
-                  if (result != null) result else precomputeNext()
+                  if (result ne null) result else precomputeNext()
                 }
 
               case Cartesian =>
@@ -200,7 +202,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                             state = StepLeftCheckRight
                             rightIdx = nextRight
                             val result = emitSliceOnOverflow(false, false, null)
-                            if (result != null) result else precomputeNext()
+                            if (result ne null) result else precomputeNext()
                           
                           case EQ => 
                             bufferBoth()
@@ -210,7 +212,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                         state = StepRightDoneLeft
                         rightIdx = nextRight
                         val result = emitSliceOnOverflow(false, false, null)
-                        if (result != null) result else precomputeNext()
+                        if (result ne null) result else precomputeNext()
                       }
 
                     case GT => 
@@ -229,7 +231,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                       case GT => 
                         state = StepLeftDoneRight
                         val result = emitSliceOnOverflow(false, false, null)
-                        if (result != null) result else precomputeNext()
+                        if (result ne null) result else precomputeNext()
                           
                       case EQ => 
                         bufferBoth()
@@ -321,11 +323,9 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                     val returns = CLong
                     def isDefinedAt(row: Int) = c1.isDefinedAt(row) || c2.isDefinedAt(row)
                     def apply(row: Int) = {
-                      if (c1.isDefinedAt(row)) {
-                        c1(row) // identities must be equal, or c2 must be undefined
-                      } else {
-                        if (c2.isDefinedAt(row)) c2(row) else sys.error("impossible")
-                      }
+                      if (c1.isDefinedAt(row)) c1(row) // identities must be equal, or c2 must be undefined
+                      else if (c2.isDefinedAt(row)) c2(row) 
+                      else sys.error("impossible")
                     }
                   }
                 }
@@ -422,10 +422,10 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
                             if (rc.isDefinedAt(row)) {
                               mf(lc(row), rc(row))
                             } else {
-                              rc(row)        
+                              lc(row)        
                             }
                           } else {
-                            lc(row)
+                            rc(row)
                           }
                         }
                       }
@@ -452,25 +452,45 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
   def toJson: Iterable[JValue] = toEvents.map(_._2)
 
   def toEvents: Iterable[(Identities, JValue)] = {
-    new Iterable[(Identities, JValue)] {
-      def iterator = new Iterator[(Identities, JValue)] {
+    toEvents { (slice: Slice, row: Int) => slice.toJson(row) }
+  }
+
+  def toValidatedEvents: Iterable[(Identities, ValidationNEL[Throwable, JValue])] = {
+    toEvents { (slice: Slice, row: Int) => slice.toValidatedJson(row) }
+  }
+
+  private def toEvents[A](f: (Slice, Int) => A): Iterable[(Identities, A)] = {
+    new Iterable[(Identities, A)] {
+      def iterator = new Iterator[(Identities, A)] {
         private val iter = self.normalize.slices.iterator
         private var slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
         private var idx = 0
+        private var _next = precomputeNext()
 
-        def hasNext = (slice != null && idx < slice.size) || iter.hasNext
+        def hasNext = _next ne null
 
-        @tailrec def next() = {
+        def next() = {
+          val tmp = _next
+          _next = precomputeNext()
+          tmp
+        }
+       
+        @tailrec def precomputeNext(): (Identities, A) = {
           if (slice == null) {
-            sys.error("next() called past end of iterator")
+            null.asInstanceOf[(Identities, A)]
           } else if (idx < slice.size) {
-            val result = (VectorCase(slice.identities.map(_(idx)): _*), slice.toJson(idx))
-            idx += 1
-            result
+            if (slice.identities.isEmpty || slice.identities.exists(_.isDefinedAt(idx))) {
+              val result = (VectorCase(slice.identities map { c => if (c.isDefinedAt(idx)) c(idx) else -1L }: _*), f(slice, idx))
+              idx += 1
+              result
+            } else {
+              idx += 1
+              precomputeNext()
+            }
           } else {
             slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
             idx = 0
-            next() //recursive call is okay because hasNext must have returned true to get here
+            precomputeNext() //recursive call is okay because hasNext must have returned true to get here
           }
         }
       }
