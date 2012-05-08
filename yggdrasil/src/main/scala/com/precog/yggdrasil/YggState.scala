@@ -34,9 +34,15 @@ case class YggState(
 
   import YggState._
 
+  private def dirUUID(): String = {
+    val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
+    (1.until(4).map { _*3 }.foldLeft(Vector.empty[String]) {
+      case (acc, i) => acc :+ uuid.substring(0,i)
+    }.mkString("/", "/", "/")) + uuid
+  }
+
   def newRandomDir(parent: File): File = {
-    val newDir = File.createTempFile("col", "", parent)
-    newDir.delete
+    val newDir = new File(parent, dirUUID)
     newDir.mkdirs
     newDir
   }
@@ -72,9 +78,24 @@ object YggState extends Logging {
     }}
   }
 
+  def walkDirs(baseDir: File): IO[Seq[File]] = {
+   
+    def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
+
+    def walk(baseDir: File): Seq[File] = {
+      if(containsDescriptor(baseDir)) {
+        Vector(baseDir)
+      } else {
+        baseDir.listFiles.filter(_.isDirectory).flatMap{ walk(_) }
+      }
+    }
+
+    IO { walk(baseDir) }
+  }
+
   def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
     def loadMap(baseDir: File) = 
-      IOUtils.walkSubdirs(baseDir) flatMap { 
+      walkDirs(baseDir) flatMap { 
         _.foldLeft( IO(Map.empty[ProjectionDescriptor, File]) ) { (acc, dir) =>
           logger.debug("loading: " + dir)
           read(dir) flatMap {

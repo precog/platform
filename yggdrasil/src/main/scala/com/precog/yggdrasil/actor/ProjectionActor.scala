@@ -49,8 +49,9 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
         val insert = iter.next
         try {
           projection.insert(insert.identities, insert.values).unsafePerformIO
+          //logger.debug("Projection insert complete")
         } catch {
-          case ex => println("blah")
+          case ex => logger.error("Error inserting into level db column", ex) 
         }
         step(iter)
       }
@@ -60,11 +61,11 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
 
   def receive = {
     case Stop => //close the db
-      if(refCount == 0) {
-        logger.debug("Closing projection.")
+      if(refCount <= 0) {
+        //logger.debug("Closing projection.")
         projection.close.unsafePerformIO
       } else {
-        logger.debug("Deferring close ref count [%d]".format(refCount))
+        logger.debug("Deferring close ref count [%d - %s]".format(refCount, descriptor))
         scheduler.scheduleOnce(1 second, self, Stop) 
       }
 

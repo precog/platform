@@ -171,7 +171,10 @@ class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadat
 
     var actions = buildActions(events)
     val future = dispatchActions(actions)
-    Await.result(future, batchTimeout)
+    //logger.debug("Starting insert batch store")
+    val result = Await.result(future, batchTimeout)
+    //logger.debug("Finished with insert batch store: " + result)
+    result
   }
 
   def buildActions(events: Seq[IngestMessage]): ActionMap = {
