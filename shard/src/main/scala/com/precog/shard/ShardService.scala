@@ -61,19 +61,16 @@ trait ShardService extends
           println(config)
           println(config.detach("security"))
 
-          val theTokenManager = tokenManagerFactory(config.detach("security"))
+          val tokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = sys.error("todo") //new TokenBasedAccessControl {
-          //  val executionContext = defaultFutureDispatch
-          //  val tokenManager = theTokenManager
-          //}
+          val accessControl = new TokenManagerAccessControl(tokenManager)
           
           val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
 
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              theTokenManager,
+              tokenManager,
               accessControl
             )
           }

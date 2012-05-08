@@ -51,14 +51,11 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
       healthMonitor(timeout, List(eternity)) { monitor => context =>
         startup {
           import context._
-          val theTokenManager = tokenManagerFactory(config.detach("security"))
+          val tokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = sys.error("todo") // new TokenBasedAccessControl {
-          //  val executionContext = defaultFutureDispatch
-          //  val tokenManager = theTokenManager
-          //}
+          val accessControl = new TokenManagerAccessControl(tokenManager)
 
-          Future(TokenServiceState(theTokenManager, accessControl))
+          Future(TokenServiceState(tokenManager, accessControl))
         } ->
         request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {

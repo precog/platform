@@ -32,7 +32,7 @@ import org.joda.time.format.ISODateTimeFormat
 import scalaz._
 import Scalaz._
 
-package object nsecurity {
+package object security {
   private val tidSafePrefix = 30 
   private val gidSafePrefix = 30 
 
@@ -52,44 +52,43 @@ package object nsecurity {
   implicit val OptionDateTimeDecomposer: Decomposer[Option[DateTime]] = OptionDecomposer[DateTime]
   implicit val OptionDateTimeExtractor: Extractor[Option[DateTime]] = OptionExtractor[DateTime]
    
-
   type TokenID = String
   type GrantID = String
 
-  case class NToken(tid: TokenID, name: String, grants: Set[GrantID]) {
-    def addGrants(add: Set[GrantID]): NToken = 
+  case class Token(tid: TokenID, name: String, grants: Set[GrantID]) {
+    def addGrants(add: Set[GrantID]): Token = 
       copy(grants = grants ++ add)
-    def removeGrants(remove: Set[GrantID]): NToken =
+    def removeGrants(remove: Set[GrantID]): Token =
       copy(grants = grants -- remove)
   }
   
-  trait NTokenSerialization {
+  trait TokenSerialization {
 
-    val UnsafeTokenDecomposer: Decomposer[NToken] = new Decomposer[NToken] {
-      override def decompose(t: NToken): JValue = JObject(List(
+    val UnsafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
+      override def decompose(t: Token): JValue = JObject(List(
         JField("name", t.name),
         JField("tid", t.tid),
         JField("gids", t.grants.serialize)
       )) 
     }
 
-    implicit val SafeTokenDecomposer: Decomposer[NToken] = new Decomposer[NToken] {
-      override def decompose(t: NToken): JValue = JObject(List(
+    implicit val SafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
+      override def decompose(t: Token): JValue = JObject(List(
         JField("name", t.name),
         JField("tid_prefix", t.tid.substring(0, tidSafePrefix)),
         JField("gid_prefixes", t.grants.map{ _.substring(0, gidSafePrefix)}.serialize)
       )) 
     }
 
-    implicit val TokenExtractor: Extractor[NToken] = new Extractor[NToken] with ValidatedExtraction[NToken] {    
-      override def validated(obj: JValue): Validation[Error, NToken] = 
+    implicit val TokenExtractor: Extractor[Token] = new Extractor[Token] with ValidatedExtraction[Token] {    
+      override def validated(obj: JValue): Validation[Error, Token] = 
         ((obj \ "tid").validated[TokenID] |@|
          (obj \ "name").validated[String] |@|
-         (obj \ "gids").validated[Set[GrantID]]).apply(NToken(_,_,_))
+         (obj \ "gids").validated[Set[GrantID]]).apply(Token(_,_,_))
     }
   }
 
-  object NToken extends NTokenSerialization
+  object Token extends TokenSerialization
 
   case class ResolvedGrant(gid: GrantID, grant: Grant)
   
@@ -446,9 +445,33 @@ package object nsecurity {
     val name = "transform_grant"
   }
 
+  // legacy security features held over until complete token/grant refactor complete
+
+  type UID = String
+
+  sealed trait PathAccess {
+    def symbol: String
+  }
+
+  case object PathRead extends PathAccess {
+    val symbol = "PATH_READ"
+  }
+
+  case object PathWrite extends PathAccess {
+    val symbol = "PATH_WRITE"
+  }
+
+  sealed trait DataAccess {
+    def symbol: String
+  }
+  
+  case object DataQuery extends DataAccess {
+    val symbol = "DATA_QUERY"
+  }
+
 }
 
-package object security {
+package object osecurity {
   
   type UID = String
 
