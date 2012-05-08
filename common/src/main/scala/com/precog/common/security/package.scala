@@ -17,6 +17,11 @@ package object security {
   private val tidSafePrefix = 30 
   private val gidSafePrefix = 30 
 
+  private def safeTokenID(tid: TokenID): String = safePrefix(tid, tidSafePrefix) 
+  private def safeGrantID(gid: GrantID): String = safePrefix(gid, gidSafePrefix) 
+
+  private def safePrefix(s: String, prefix: Int): String = s.substring(0, math.min(s.length-1, prefix))
+
   private val isoFormat = ISODateTimeFormat.dateTime
 
   implicit val TZDateTimeDecomposer: Decomposer[DateTime] = new Decomposer[DateTime] {
@@ -56,8 +61,8 @@ package object security {
     implicit val SafeTokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
       override def decompose(t: Token): JValue = JObject(List(
         JField("name", t.name),
-        JField("tid_prefix", t.tid.substring(0, tidSafePrefix)),
-        JField("gid_prefixes", t.grants.map{ _.substring(0, gidSafePrefix)}.serialize)
+        JField("tid_prefix", safeTokenID(t.tid)),
+        JField("gid_prefixes", t.grants.map{ safeGrantID }.serialize)
       )) 
     }
 
@@ -84,7 +89,7 @@ package object security {
 
     implicit val SafeResolvedGrantDecomposer: Decomposer[ResolvedGrant] = new Decomposer[ResolvedGrant] {
       override def decompose(g: ResolvedGrant): JValue = JObject(List(
-        JField("gid_prefix", g.gid.substring(0, gidSafePrefix)),
+        JField("gid_prefix", safeGrantID(g.gid)),
         JField("grant", g.grant.serialize)
       )) 
     }
@@ -201,7 +206,7 @@ package object security {
     implicit val SafeWriteGrantDecomposer: Decomposer[WriteGrant] = new Decomposer[WriteGrant] {
       override def decompose(g: WriteGrant): JValue = JObject(List(
         JField("type", WriteGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
         JField("path", g.path),
         JField("expiration", g.expiration.serialize)
       )) 
@@ -239,7 +244,7 @@ package object security {
     implicit val SafeOwnerGrantDecomposer: Decomposer[OwnerGrant] = new Decomposer[OwnerGrant] {
       override def decompose(g: OwnerGrant): JValue = JObject(List(
         JField("type", OwnerGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
         JField("path", g.path),
         JField("expiration", g.expiration.serialize)
       )) 
@@ -279,9 +284,9 @@ package object security {
     implicit val SafeReadGrantDecomposer: Decomposer[ReadGrant] = new Decomposer[ReadGrant] {
       override def decompose(g: ReadGrant): JValue = JObject(List(
         JField("type", ReadGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
         JField("path", g.path),
-        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("owner_prefix", safeTokenID(g.owner)),
         JField("expiration", g.expiration.serialize)
       )) 
     }
@@ -321,9 +326,9 @@ package object security {
     implicit val SafeReduceGrantDecomposer: Decomposer[ReduceGrant] = new Decomposer[ReduceGrant] {
       override def decompose(g: ReduceGrant): JValue = JObject(List(
         JField("type", ReduceGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
         JField("path", g.path),
-        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("owner_prefix", safeTokenID(g.owner)),
         JField("expiration", g.expiration.serialize)
       )) 
     }
@@ -363,9 +368,9 @@ package object security {
     implicit val SafeModifyGrantDecomposer: Decomposer[ModifyGrant] = new Decomposer[ModifyGrant] {
       override def decompose(g: ModifyGrant): JValue = JObject(List(
         JField("type", ModifyGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID }.serialize),
         JField("path", g.path),
-        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("owner_prefix", safeTokenID(g.owner)),
         JField("expiration", g.expiration.serialize)
       )) 
     }
@@ -405,9 +410,9 @@ package object security {
     implicit val SafeTransformGrantDecomposer: Decomposer[TransformGrant] = new Decomposer[TransformGrant] {
       override def decompose(g: TransformGrant): JValue = JObject(List(
         JField("type", TransformGrant.name),
-        JField("issuer_prefix", g.issuer.map { _.substring(0, gidSafePrefix) }.serialize),
+        JField("issuer_prefix", g.issuer.map { safeGrantID(_) }.serialize),
         JField("path", g.path),
-        JField("owner_prefix", g.owner.substring(0, tidSafePrefix)),
+        JField("owner_prefix", safeTokenID(g.owner)),
         JField("expiration", g.expiration)
       )) 
     }
