@@ -69,7 +69,243 @@ class StatslibSpec extends Specification
   implicit def add_~=(d: Double) = new AlmostEqual(d)
   implicit val precision = Precision(0.000000000000001)
 
-  "for homogenous sets, the appropriate stats function" should {
+  "homogenous sets" should {
+    "compute incrementalRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+
+      val result = testEval(input)
+
+      result must haveSize(6)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(1,2,3,4,5,6).only  
+    }
+
+    "compute incrementalRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, None, None,
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+        Join(line, Map2Cross(Eq),
+          dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)),
+          Root(line, PushNum("2"))))
+        
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(12)
+    }
+
+    "compute incrementalRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Add),
+        dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)),
+        Root(line, PushNum("2")))
+        
+      val result = testEval(input)
+
+      result must haveSize(5)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(3,4,5,6,7).only  
+    }
+  }  
+  
+  "heterogenous sets" should {
+    "compute incrementalRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+
+      val result = testEval(input)
+
+      result must haveSize(6)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(1,2,3,4,5,6).only  
+    }
+
+    "compute incrementalRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, None, None,
+        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+        Join(line, Map2Cross(Eq),
+          dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het)),
+          Root(line, PushNum("2"))))
+        
+      val result = testEval(input)
+
+      result must haveSize(1)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(12)
+    }
+
+    "compute incrementalRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Add),
+        dag.Operate(line, BuiltInFunction1Op(IncrementalRank),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het)),
+        Root(line, PushNum("2")))
+        
+      val result = testEval(input)
+
+      result must haveSize(5)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(3,4,5,6,7).only  
+    }
+  }  
+  
+  "homogenous sets" should {
+    "compute duplicateRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(1,2,3,4,5,6).only  
+    }
+
+    "compute duplicateRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, None, None,
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het),
+        Join(line, Map2Cross(Eq),
+          dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+          Root(line, PushNum("4"))))
+        
+      val result = testEval(input)
+
+      result must haveSize(3)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(11)
+    }
+
+    "compute duplicateRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Add),
+        dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+        Root(line, PushNum("2")))
+        
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(3,4,5,6,7,8).only  
+    }
+  }
+
+  "heterogenous sets" should {
+    "compute duplicateRank" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het))
+
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(1,2,3,4,5,6).only  
+    }
+
+    "compute duplicateRank within a filter" in {
+      val line = Line(0, "")
+
+      val input = Filter(line, None, None,
+        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        Join(line, Map2Cross(Eq),
+          dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+          Root(line, PushNum("4"))))
+        
+      val result = testEval(input)
+
+      result must haveSize(3)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(11)
+    }
+
+    "compute duplicateRank within a join" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Add),
+        dag.Operate(line, BuiltInFunction1Op(DuplicateRank),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+        Root(line, PushNum("2")))
+        
+      val result = testEval(input)
+
+      result must haveSize(9)
+
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+      }
+
+      result2 must contain(3,4,5,6,7,8).only  
+    }
+  }
+
+  "for homogenous sets, the appropriate stats funciton" should {
     "compute linear correlation" in {
       val line = Line(0, "")
       

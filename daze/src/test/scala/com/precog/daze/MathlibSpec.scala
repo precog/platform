@@ -73,7 +73,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -89,7 +89,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -105,7 +105,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -121,7 +121,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -137,7 +137,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(3)
+      result must haveSize(4)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -153,7 +153,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(2)
+      result must haveSize(3)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -169,7 +169,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -185,7 +185,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -201,7 +201,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -217,7 +217,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -233,7 +233,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -249,7 +249,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -265,7 +265,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(3)
+      result must haveSize(4)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -281,7 +281,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(3)
+      result must haveSize(4)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -297,7 +297,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -313,7 +313,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -329,7 +329,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -345,7 +345,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -361,7 +361,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -377,7 +377,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -393,7 +393,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -409,7 +409,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -425,7 +425,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -441,7 +441,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(2)
+      result must haveSize(3)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -457,7 +457,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -473,7 +473,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(3)
+      result must haveSize(4)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -489,7 +489,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -506,7 +506,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -523,7 +523,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -540,7 +540,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -557,7 +557,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -574,7 +574,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -591,7 +591,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -608,7 +608,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
@@ -625,7 +625,7 @@ class MathlibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(5)
+      result must haveSize(6)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d

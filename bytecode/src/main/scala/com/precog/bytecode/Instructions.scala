@@ -212,7 +212,7 @@ trait Instructions extends Library {
     
     case object Max extends Reduction
     case object Min extends Reduction
-    
+
     case object StdDev extends Reduction
     case object Sum extends Reduction
     case object SumSq extends Reduction
