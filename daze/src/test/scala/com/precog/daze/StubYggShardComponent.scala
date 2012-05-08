@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import akka.actor._
+import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.Timeout
 import akka.util.duration._
@@ -40,9 +40,6 @@ import com.precog.util._
 import SValue._
 
 import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.std.AllInstances._
-import Iteratee._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
@@ -91,8 +88,8 @@ trait StubYggShardComponent extends YggShardComponent {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] =
-      Future(projections(descriptor))
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] =
+      Future((projections(descriptor), new Release(IO(()))))
   }
 }
 

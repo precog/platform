@@ -30,6 +30,8 @@ import akka.dispatch.Future
 import akka.pattern.ask
 import akka.util.Timeout
 
+import scalaz.effect._
+
 trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def yggState: YggState
@@ -43,12 +45,13 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
     new UserMetadataView(uid, accessControl, metadata)
   }
   
-  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] = {
+  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
     implicit val ito = timeout 
     (projectionActors ? AcquireProjection(descriptor)) flatMap {
       case ProjectionAcquired(actorRef) =>
-        projectionActors ! ReleaseProjection(descriptor)
-        (actorRef ? ProjectionGet).map(_.asInstanceOf[Projection[Dataset]])
+        val release = new Release(IO(projectionActors ! ReleaseProjection(descriptor)))
+
+        (actorRef ? ProjectionGet).map(p => (p.asInstanceOf[Projection[Dataset]], release))
       
       case ProjectionError(err) =>
         sys.error("Error acquiring projection actor: " + err)

@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import akka.actor._
+import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.Timeout
 import akka.util.duration._
@@ -38,13 +38,9 @@ import SValue._
 
 import java.io.File
 import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.std.anyVal._
 import scalaz.std.list._
-import Iteratee._
 
-import scala.collection.immutable.SortedMap
-import scala.collection.immutable.TreeMap
 import org.specs2.mutable._
 
 trait StubLevelDBQueryComponent extends LevelDBQueryComponent 
@@ -76,14 +72,14 @@ class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
-      val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000)
+      val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000, new Release(IO(())))
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
@@ -102,7 +98,7 @@ class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent 
 
   "fullProjection" should {
     "restore objects with null components" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
@@ -187,7 +183,7 @@ class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponen
 
   "fullProjection" should {
     "restore objects with null components" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }

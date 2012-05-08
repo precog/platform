@@ -61,17 +61,17 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     /**
      *
      */
-    override def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = {
+    override def fullProjection(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset[SValue] = {
       Await.result(
-        fullProjectionFuture(userUID, path, expiresAt),
+        fullProjectionFuture(userUID, path, expiresAt, release),
         (expiresAt - yggConfig.clock.now().getMillis) millis
       )
     }
 
-    private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long): Future[Dataset[SValue]] = {
+    private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset[SValue]] = {
       for {
         pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
-        dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt)
+        dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
       } yield dataset
     }
 
@@ -87,11 +87,11 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
       def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
-      def realize(expiresAt: Long): Dataset[SValue] = Await.result(
+      def realize(expiresAt: Long, release: Release): Dataset[SValue] = Await.result(
         (selector, tpe) match {
           case (Some(s), None | Some(SObject) | Some(SArray)) => 
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
-              assemble(path, s, sources(s, pathRoot), expiresAt)
+              assemble(path, s, sources(s, pathRoot), expiresAt, release)
             }
 
           case (Some(s), Some(tpe)) => 
@@ -99,7 +99,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
               assemble(path, s, sources(s, pathRoot) filter { 
                 case (_, `tpe`, _) => true
                 case _ => false
-              }, expiresAt)
+              }, expiresAt, release)
             }
 
           case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
@@ -107,10 +107,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
               assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { 
                 case (_, `tpe`, _) => true 
                 case _ => false
-              }, expiresAt)
+              }, expiresAt, release)
             }
 
-          case (_      , _        ) => fullProjectionFuture(userUID, path, expiresAt)
+          case (_      , _        ) => fullProjectionFuture(userUID, path, expiresAt, release)
         },
         (expiresAt - yggConfig.clock.now().getMillis) millis
       )
@@ -133,7 +133,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       root.children.flatMap(search(_, selector, Set.empty[(JPath, SType, ProjectionDescriptor)]))
     }
 
-    def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
+    def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
       // pull each projection from the database, then for all the selectors that are provided
       // by tat projection, merge the values
       def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {
@@ -161,9 +161,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case (descriptor, selectors) :: x :: xs => 
             val (init, instr) = buildInstructions(descriptor, selectors)
             for {
-              projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
               dataset    <- joinNext(x :: xs)
             } yield {
+              release += prelease.release
               val result = projection.getAllPairs(expiresAt).cogroup(dataset) {
                 new CogroupF[Seq[CValue], SValue, SValue] {
                   def left(l: Seq[CValue]) = appendToObject(init, instr, l)
@@ -177,10 +178,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case (descriptor, selectors) :: Nil =>
             val (init, instr) = buildInstructions(descriptor, selectors)
             for {
-              projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
             } yield {
-              val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
-              result
+              release += prelease.release
+              ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
             }
         }
 
