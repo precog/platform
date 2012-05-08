@@ -218,7 +218,13 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     "reject an object definition with undelimited properties" in {
       parse("{ a: 1, b: 2 cafe: 3, star_BUckS: 4 }") must throwA[ParseException]
       parse("{ a: 1 b: 2 cafe: 3 star_BUckS: 4 }") must throwA[ParseException]
-    }    
+    }
+    
+    "accept an object definition with backtic-delimited properties" in {
+      parse("{ `$see! what I can do___`: 1, `test \\` ing \\\\ with $%^&*!@#$ me!`: 2 }") must beLike {
+        case ObjectDef(_, Vector(("$see! what I can do___", NumLit(_, "1")), ("test ` ing \\ with $%^&*!@#$ me!", NumLit(_, "2")))) => ok
+      }
+    }
 
     "accept an array definition with no actuals" in {
       parse("[]") must beLike { case ArrayDef(_, Vector()) => ok }
@@ -260,6 +266,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     "reject property descent with invalid property" in {
       parse("1.-sdf") must throwA[ParseException]
       parse("1.42lkj") must throwA[ParseException]
+    }
+    
+    "accept a property descent with a backtic-delimited property" in {
+      parse("1.`$see! what I can do___`") must beLike { case Descent(_, NumLit(_, "1"), "$see! what I can do___") => ok }
+      parse("1.`test \\` ing \\\\ with $%^&*!@#$ me!`") must beLike { case Descent(_, NumLit(_, "1"), "test ` ing \\ with $%^&*!@#$ me!") => ok }
     }
     
     "accept an array dereference" in {

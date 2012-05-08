@@ -28,11 +28,11 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
   implicit def asyncContext: akka.dispatch.ExecutionContext
   
   class QueryAPI extends LevelDBProjectionOps[IterableDataset[SValue]](yggConfig.clock, storage) with StorageEngineQueryAPI[IterableDataset] {
-    def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = load(userUID, path, expiresAt)
+    def fullProjection(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset[SValue] = load(userUID, path, expiresAt, release)
 
     // pull each projection from the database, then for all the selectors that are provided
     // by tat projection, merge the values
-    protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long): Future[IterableDataset[SValue]] = {
+    protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long, release: Release): Future[IterableDataset[SValue]] = {
       def appendToObject(sv: SValue, instructions: Set[(CType, JPath, Int)], cvalues: Seq[CValue]) = {
         instructions.foldLeft(sv) {
           case (sv, (ctype, selector, columnIndex)) => 
@@ -65,9 +65,10 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
         case (descriptor, selectors) :: x :: xs => 
           val (init, instr) = buildInstructions(descriptor, selectors)
           for {
-            projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+            (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
             dataset    <- joinNext(x :: xs)
           } yield {
+            release += prelease.release
             ops.extend(projection.getAllPairs(expiresAt)).cogroup(dataset) {
               new CogroupF[Seq[CValue], SValue, SValue] {
                 def left(l: Seq[CValue]) = appendToObject(init, instr, l)
@@ -80,10 +81,10 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
         case (descriptor, selectors) :: Nil =>
           val (init, instr) = buildInstructions(descriptor, selectors)
           for {
-            projection <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+            (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
           } yield {
-            val result = ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
-            result
+            release += prelease.release
+            ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
           }
       }
 

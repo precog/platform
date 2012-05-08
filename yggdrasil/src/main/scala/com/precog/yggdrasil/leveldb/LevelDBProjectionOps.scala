@@ -21,17 +21,17 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
   /**
    *
    */
-  def load(userUID: String, path: Path, expiresAt: Long): Dataset = {
+  def load(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset = {
     Await.result(
-      loadFuture(userUID, path, expiresAt),
+      loadFuture(userUID, path, expiresAt, release),
       (expiresAt - clock.now().getMillis) millis
     )
   }
 
-  private def loadFuture(userUID: String, path: Path, expiresAt: Long): Future[Dataset] = {
+  private def loadFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset] = {
     for {
       pathRoot <- shardMetadata.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
-      dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt)
+      dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
     } yield dataset
   }
 
@@ -47,11 +47,11 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
 
     def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
-    def realize(expiresAt: Long): Dataset = Await.result(
+    def realize(expiresAt: Long, release: Release): Dataset = Await.result(
       (selector, tpe) match {
         case (Some(s), None | Some(SObject) | Some(SArray)) => 
           shardMetadata.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
-            assemble(path, s, sources(s, pathRoot), expiresAt)
+            assemble(path, s, sources(s, pathRoot), expiresAt, release)
           }
 
         case (Some(s), Some(tpe)) => 
@@ -59,7 +59,7 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
             assemble(path, s, sources(s, pathRoot) filter { 
               case (_, `tpe`, _) => true
               case _ => false
-            }, expiresAt)
+            }, expiresAt, release)
           }
 
         case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
@@ -67,10 +67,10 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
             assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { 
               case (_, `tpe`, _) => true 
               case _ => false
-            }, expiresAt)
+            }, expiresAt, release)
           }
 
-        case (_      , _        ) => loadFuture(userUID, path, expiresAt)
+        case (_      , _        ) => loadFuture(userUID, path, expiresAt, release)
       },
       (expiresAt - clock.now().getMillis) millis
     )
@@ -93,7 +93,7 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
     root.children.flatMap(search(_, selector, Set.empty[(JPath, SType, ProjectionDescriptor)]))
   }
 
-  protected def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long)(implicit asyncContext: ExecutionContext): Future[Dataset] = {
+  protected def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset] = {
     // determine the projections from which to retrieve data
     // todo: for right now, this is implemented greedily such that the first
     // projection containing a desired column wins. It should be implemented
@@ -114,9 +114,9 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: YggSha
       }
     }
 
-    retrieveAndJoin(path, prefix, retrievals, expiresAt)
+    retrieveAndJoin(path, prefix, retrievals, expiresAt, release)
   }
 
-  protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long): Future[Dataset]
+  protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long, release: Release): Future[Dataset]
 }
 // vim: set ts=4 sw=4 et:

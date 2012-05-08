@@ -9,7 +9,7 @@ import com.precog.common._
 import com.precog.common.security._
 import com.precog.common.util._
 
-import akka.actor._
+import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.Timeout
 import akka.util.duration._
@@ -19,8 +19,6 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
 import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.std.AllInstances._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
@@ -68,8 +66,8 @@ trait StubYggShardComponent[Dataset] extends YggShardComponent[Dataset] {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] =
-      Future(projections(descriptor))
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] =
+      Future((projections(descriptor), new Release(IO(()))))
   }
 }
 

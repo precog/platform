@@ -1,7 +1,7 @@
 package com.precog.yggdrasil
 package iterable
 
-import akka.actor._
+import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.Timeout
 import akka.util.duration._
@@ -17,6 +17,7 @@ import com.precog.util._
 import SValue._
 
 import java.io.File
+import scalaz.effect.IO
 
 import org.specs2.mutable._
 
@@ -25,14 +26,14 @@ class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
 
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
-      val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000)
+      val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000, new Release(IO(())))
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
@@ -51,7 +52,7 @@ class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent 
 
   "fullProjection" should {
     "restore objects with null components" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }
@@ -136,7 +137,7 @@ class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponen
 
   "fullProjection" should {
     "restore objects with null components" in {
-      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000)
+      val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
       dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
     }

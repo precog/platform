@@ -89,10 +89,10 @@ trait RawJsonShardComponent extends YggShardComponent {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[Projection[Dataset]] = {
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
       Future {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        projections(descriptor)
+        (projections(descriptor), new Release(scalaz.effect.IO(())))
       }
     }
   }

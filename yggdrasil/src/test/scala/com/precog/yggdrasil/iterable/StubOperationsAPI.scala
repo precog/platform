@@ -50,8 +50,8 @@ trait StubOperationsAPI extends StorageEngineQueryComponent with IterableDataset
       def derefArray(index: Int): DatasetMask[Dataset[SValue]] = copy(selector = selector :+ Left(index))
       def typed(tpe: SType): DatasetMask[Dataset[SValue]] = copy(valueType = Some(tpe))
       
-      def realize(expiresAt: Long): Dataset[SValue] = {
-        fullProjection(userUID, path, expiresAt) collect unlift(mask)
+      def realize(expiresAt: Long, release: Release): Dataset[SValue] = {
+        fullProjection(userUID, path, expiresAt, release) collect unlift(mask)
       }
       
       private def mask(sv: SValue): Option[SValue] = {
@@ -72,7 +72,7 @@ trait StubOperationsAPI extends StorageEngineQueryComponent with IterableDataset
       }
     }
     
-    def fullProjection(userUID: String, path: Path, expiresAt: Long): Dataset[SValue] = 
+    def fullProjection(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset[SValue] = 
       IterableDataset(1, new Iterable[(Identities, SValue)] { def iterator = readJSON(path) })
     
     def mask(userUID: String, path: Path): DatasetMask[Dataset[SValue]] = StubDatasetMask(userUID, path, Vector(), None)
