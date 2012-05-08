@@ -61,6 +61,7 @@ trait Evaluator extends DAG
     def memoizationContext: MemoContext
     def expiration: Long
     def nextId(): Long
+    def release: Release
   }
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
@@ -73,6 +74,7 @@ trait Evaluator extends DAG
         val memoizationContext = memoContext
         val expiration = System.currentTimeMillis + yggConfig.maxEvalDuration.toMillis 
         def nextId() = yggConfig.idSource.nextId()
+        val release = new Release(IO())
       }
 
       f(ctx)
@@ -86,7 +88,7 @@ trait Evaluator extends DAG
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
-      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration), graph) }).fold(identity, identity)
+      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration, ctx.release), graph) }).fold(identity, identity)
     
     def realizeMatch(spec: MatchSpec, set: Dataset[SValue]): Dataset[SValue] = spec match {
       case mal.Actual => set
@@ -203,7 +205,7 @@ trait Evaluator extends DAG
           case None => {
             val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
             val loaded = realizeMatch(spec, set) collect { 
-              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
+              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration, ctx.release)
             } 
 
             Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))

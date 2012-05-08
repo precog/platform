@@ -173,7 +173,9 @@ trait YggdrasilQueryExecutor
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
     withContext { ctx =>
-      consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      val result = consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      ctx.release.release.unsafePerformIO
+      result
     }
   }
 
