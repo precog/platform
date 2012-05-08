@@ -118,9 +118,9 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
         case HttpResponse(HttpStatus(BadRequest, _), _, _, _) => ok 
       }}
     }
-    "reject track request when token is expired" in {
+    "reject track request when grant is expired" in {
       track(testValue, Some(ExpiredTokenUID)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok 
+        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("Your token does not have permissions to write at this location.")), _) => ok 
       }}
     }
     "reject track request when path is not accessible by token" in {
