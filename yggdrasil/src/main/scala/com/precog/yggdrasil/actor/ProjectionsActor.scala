@@ -116,8 +116,7 @@ class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descripto
   
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
-      maximumWeightedCapacity = 100000,
+      expirationPolicy = ExpirationPolicy(Some(5), Some(5), TimeUnit.MINUTES), 
       evict = { 
         (descriptor, actor) => descriptorIO(descriptor).map(_ => actor ! Stop).unsafePerformIO
       }
