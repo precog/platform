@@ -37,15 +37,12 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
           import context._
 
           val eventStore = eventStoreFactory(config.detach("eventStore"))
-          val theTokenManager = tokenManagerFactory(config.detach("security"))
-          val accessControl = sys.error("todo") //new TokenBasedAccessControl { 
-          //  val executionContext = defaultFutureDispatch
-          //  val tokenManager = theTokenManager  
-          //}
+          val tokenManager = tokenManagerFactory(config.detach("security"))
+          val accessControl = new TokenManagerAccessControl(tokenManager)
 
           eventStore.start map { _ =>
             IngestState(
-              theTokenManager,
+              tokenManager,
               accessControl,
               eventStore,
               usageLoggingFactory(config.detach("usageLogging"))

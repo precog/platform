@@ -1,8 +1,6 @@
 package com.precog.common
 package security
 
-import nsecurity._
-
 import org.specs2.mutable._
 
 import akka.util.Duration
@@ -225,10 +223,10 @@ trait TokenManagerTestValues extends AkkaDefaults {
   val mongo = new MockMongo
   val database = mongo.database("test_database")
 
-  val tokens = new NewMongoTokenManager(mongo, database)
+  val tokens = new MongoTokenManager(mongo, database)
 
 
-  def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
+  def newToken(name: String)(f: Token => Set[GrantID]): (Token, Set[GrantID]) = {
     try {
       val token = Await.result(tokens.newToken(name, Set.empty), timeout)
       val grants = f(token)
@@ -313,16 +311,16 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
   val mongo = new MockMongo
   val database = mongo.database("test_database")
 
-  val tokens = new NewMongoTokenManager(mongo, database)
+  val tokens = new MongoTokenManager(mongo, database)
 
-  def newToken(name: String)(f: NToken => Set[GrantID]): (NToken, Set[GrantID]) = {
+  def newToken(name: String)(f: Token => Set[GrantID]): (Token, Set[GrantID]) = {
     Await.result(tokens.newToken(name, Set.empty).flatMap { t =>
       val g = f(t)
       tokens.addGrants(t.tid, g).map { t => (t.get, g) } 
     }, timeout)
   }
   
-  def newCustomer(name: String, parentGrants: Set[GrantID]): (NToken, Set[GrantID]) = {
+  def newCustomer(name: String, parentGrants: Set[GrantID]): (Token, Set[GrantID]) = {
     newToken(name) { t =>
       Await.result(Future.sequence(parentGrants.map{ g =>
         tokens.findGrant(g).map { _.get match {
@@ -335,7 +333,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
     }
   }
 
-  def addGrants(token: NToken, grants: Set[GrantID]): Option[NToken] = {
+  def addGrants(token: Token, grants: Set[GrantID]): Option[Token] = {
     Await.result(tokens.findToken(token.tid).flatMap { _ match {
       case None => Future(None)
       case Some(t) => tokens.addGrants(t.tid, grants)

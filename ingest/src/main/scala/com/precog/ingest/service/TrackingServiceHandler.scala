@@ -42,13 +42,13 @@ class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStor
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>
-      accessControl.mayAccessPath(t.uid, p, PathWrite) flatMap { mayAccess =>
+      accessControl.mayAccessPath(t.tid, p, PathWrite) flatMap { mayAccess =>
         if(mayAccess) {
           request.content map { futureContent =>
             try { 
               for {
                 event <- futureContent
-                _ <- eventStore.save(Event.fromJValue(p, event, t.uid), insertTimeout)
+                _ <- eventStore.save(Event.fromJValue(p, event, t.tid), insertTimeout)
               } yield {
                 // could return the eventId to the user?
                 HttpResponse[JValue](OK)

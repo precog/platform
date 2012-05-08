@@ -25,9 +25,9 @@ class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessCo
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path) => {
-      accessControl.mayAccessPath(t.uid, p, PathRead).flatMap { 
+      accessControl.mayAccessPath(t.tid, p, PathRead).flatMap { 
         case true =>
-          queryExecutor.browse(t.uid, p) map {
+          queryExecutor.browse(t.tid, p) map {
             case Success(result) => HttpResponse[JValue](OK, content = Some(result))
             case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
           }
