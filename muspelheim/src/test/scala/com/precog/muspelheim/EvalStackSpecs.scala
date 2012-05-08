@@ -322,6 +322,88 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
+    "evaluate incremental rank" >> {
+      "returning a set of ranks without matching" >> {
+        val input = "std::stats::incrementalRank(//campaigns.cpm)"
+
+        val results = eval(input)
+
+        results must haveSize(100)  
+
+        results mustEqual ((1 to 100) map { k => SDecimal(k) }).toSet
+      }
+
+      "using a join on a value" >> {
+        val input = "std::stats::incrementalRank(//campaigns.cpm) + 2"
+
+        val results = eval(input)
+
+        results must haveSize(100)  
+
+        results mustEqual ((3 to 102) map { k => SDecimal(k) }).toSet
+      }
+
+      "using where" >> {
+        val input = """
+          | campaigns := //campaigns 
+          | campaigns where std::stats::incrementalRank(campaigns.cpm) = 35""".stripMargin
+
+        eval(input) must haveSize(1)
+      }
+
+      "using where and with" in {
+        val input = """
+          | campaigns := //campaigns
+          | cpmRanked := campaigns with {rank: std::stats::incrementalRank(campaigns.cpm)}
+          |   cpmRanked where cpmRanked.rank <= 10""".stripMargin
+
+        val results = eval(input) 
+        
+        results must haveSize(10)
+      }      
+      
+      "on a set of strings" in {
+        val input = """
+          | std::stats::incrementalRank(//campaigns.userId)""".stripMargin
+
+        val results = eval(input) 
+        
+        results must haveSize(0)
+      }
+    }
+
+    "evaluate duplicate rank" >> {
+      "using where" >> {
+        val input = """
+          | campaigns := //campaigns 
+          | campaigns where std::stats::duplicateRank(campaigns.cpm) = 4""".stripMargin
+
+        eval(input) must haveSize(2)
+      }
+
+      "using where and with" in {
+        val input = """
+          | campaigns := //campaigns
+          | cpmRanked := campaigns with {rank: std::stats::duplicateRank(campaigns.cpm)}
+          |   count(cpmRanked where cpmRanked.rank <= 5)""".stripMargin
+
+        val results = eval(input) 
+        
+        results must haveSize(1)
+
+        results mustEqual Set(SDecimal(39))
+      }      
+      
+      "on a set of strings" in {
+        val input = """
+          | std::stats::duplicateRank(//campaigns.userId)""".stripMargin
+
+        val results = eval(input) 
+        
+        results must haveSize(0)
+      }
+    }
+
     "evaluate functions from each library" >> {
       "Stringlib" >> {
         val input = """

@@ -59,6 +59,7 @@ trait Evaluator extends DAG
     with MemoizationEnvironment
     with ImplLibrary
     with Infixlib
+    with Statslib
     with BigDecimalOperations
     with YggConfigComponent { self =>
   
@@ -76,6 +77,7 @@ trait Evaluator extends DAG
     def memoizationContext: MemoContext
     def expiration: Long
     def nextId(): Long
+    def release: Release
   }
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
@@ -88,6 +90,7 @@ trait Evaluator extends DAG
         val memoizationContext = memoContext
         val expiration = System.currentTimeMillis + yggConfig.maxEvalDuration.toMillis 
         def nextId() = yggConfig.idSource.nextId()
+        val release = new Release(IO())
       }
 
       f(ctx)
@@ -101,7 +104,7 @@ trait Evaluator extends DAG
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
-      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration), graph) }).fold(identity, identity)
+      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration, ctx.release), graph) }).fold(identity, identity)
     
     def realizeMatch(spec: MatchSpec, set: Dataset[SValue]): Dataset[SValue] = spec match {
       case mal.Actual => set
@@ -218,7 +221,7 @@ trait Evaluator extends DAG
           case None => {
             val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
             val loaded = realizeMatch(spec, set) collect { 
-              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration)
+              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration, ctx.release)
             } 
 
             Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))
@@ -232,10 +235,53 @@ trait Evaluator extends DAG
         Right(Match(mal.Actual, result, graph))
       }
       
-      case Operate(_, op, parent) => {
+      case o @ Operate(_, op, parent) => {
         // TODO unary typing
         val Match(spec, set, graph2) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        Right(Match(mal.Op1(spec, op), set, graph2))
+        lazy val enum = realizeMatch(spec, set)
+
+        op match {
+          case BuiltInFunction1Op(r @ IncrementalRank) => { //ranks incrementally: (3,7,7,7,9,12,12) -> (1,2,3,4,5,6,7)
+            var count = 0
+
+            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
+            val enum3: Dataset[SValue] = enum2 collect {
+              case s @ SDecimal(v) => {
+                count += 1
+                SDecimal(count)
+              }
+            }
+            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+
+            Right(Match(mal.Actual, enum4, graph))  
+          }
+
+          case BuiltInFunction1Op(r @ DuplicateRank) => {  //ranks incrementally where equal numbers get same rank: (2,7,7,7,9,12,12) -> (1,2,2,2,3,4,4)
+            var count = 0
+            var previous: Option[SValue] = Option.empty[SValue]
+
+            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
+            val enum3: Dataset[SValue] = enum2 collect {
+              case s @ SDecimal(v) => {
+                if (Some(s) == previous) {
+                  previous = Some(s)
+
+                  SDecimal(count)
+                } else {
+                  previous = Some(s)
+                  count += 1
+
+                  SDecimal(count)
+                }
+              }
+            }
+            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+
+            Right(Match(mal.Actual, enum4, graph))  
+          }
+
+          case _ => Right(Match(mal.Op1(spec, op), set, graph2))
+        }
       }
       
       case r @ dag.Reduce(_, red, parent) => {
@@ -478,8 +524,8 @@ trait Evaluator extends DAG
         val length = sharedPrefixLength(left, right)
         val bif = binaryOp(op)
 
-        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
@@ -494,8 +540,8 @@ trait Evaluator extends DAG
         val length = sharedPrefixLength(left, right)
         val bif = binaryOp(op)
 
-        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
@@ -510,8 +556,8 @@ trait Evaluator extends DAG
         val length = sharedPrefixLength(left, right)
         val bif = binaryOp(op)
 
-        val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
+        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
 
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)

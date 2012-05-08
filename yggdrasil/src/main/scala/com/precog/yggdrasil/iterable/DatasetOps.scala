@@ -107,7 +107,11 @@ trait DatasetExtensions[Dataset[_], Memoable[_], Grouping[_, _], A] {
   // the remaining identities is unchanged (but the ids are retained as a suffix) then sort by identity
   def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit fs: SortSerialization[IA]): Dataset[A] 
 
+  // reorders events so that they are in value order
   def sortByValue(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit ord: Order[A], fs: SortSerialization[IA]): Dataset[A]
+
+  // reorders events so that they are in identity order
+  def sortByIdentity(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit fs: SortSerialization[IA]) : Dataset[A]
   
   def memoize(memoId: Int, memoCtx: MemoizationContext[Memoable])(implicit serialization: IncrementalSerialization[(Identities, A)]): Dataset[A] 
 
