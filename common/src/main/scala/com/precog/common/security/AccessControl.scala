@@ -38,20 +38,20 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
 
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = 
     pathAccess match {
-      case PathRead => mayAccess(uid, path, Set(uid), ReadGrant) 
-      case PathWrite => mayAccess(uid, path, Set.empty, WriteGrant)
+      case PathRead => mayAccess(uid, path, Set(uid), ReadPermission) 
+      case PathWrite => mayAccess(uid, path, Set.empty, WritePermission)
     }
 
   def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean] = 
-    mayAccess(uid, path, owners, ReadGrant)
+    mayAccess(uid, path, owners, ReadPermission)
  
   def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
     tokens.findToken(uid).flatMap{ _.map { t => 
-       hasValidGrants(t, path, owners, accessType)
+       hasValidPermissions(t, path, owners, accessType)
     }.getOrElse(Future(false)) }
   }
 
-  def hasValidGrants(t: Token, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
+  def hasValidPermissions(t: Token, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
 
     def exists(fs: Iterable[Future[Boolean]]): Future[Boolean] = {
       if(fs.size == 0) Future(false)
@@ -64,62 +64,62 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
     }
 
     accessType match {
-      case WriteGrant =>
+      case WritePermission =>
         exists(t.grants.map{ gid =>
           tokens.findGrant(gid).flatMap( _.map { 
-            case ResolvedGrant(_, grant @ WriteGrant(_, _, _)) =>
-              isValid(grant).map { _ && grant.path.equalOrChild(path) }
+            case g @ Grant(_, _, WritePermission(p, _)) =>
+              isValid(g).map { _ && p.equalOrChild(path) }
             case _ => Future(false)
           }.getOrElse(Future(false))
         )})
-      case OwnerGrant =>
+      case OwnerPermission =>
         exists(t.grants.map{ gid =>
           tokens.findGrant(gid).flatMap( _.map { 
-            case ResolvedGrant(_, grant @ OwnerGrant(_, _, _)) =>
-              isValid(grant).map { _ && grant.path.equalOrChild(path) }
+            case g @ Grant(_, _, OwnerPermission(p, _)) =>
+              isValid(g).map { _ && p.equalOrChild(path) }
             case _ => Future(false)
           }.getOrElse(Future(false))
         )})
-      case ReadGrant =>
+      case ReadPermission =>
         if(owners.isEmpty) Future(false)
         else forall(owners.map { owner =>
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map {
-              case ResolvedGrant(_, grant @ ReadGrant(_, _, o, _)) =>
-                isValid(grant).map { _ && grant.path.equalOrChild(path) && owner == o }
+              case g @ Grant(_, _, ReadPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
               case _ => Future(false)
             }.getOrElse(Future(false))
           )})
         })
-      case ReduceGrant =>
+      case ReducePermission =>
         if(owners.isEmpty) Future(false)
         else forall( owners.map { owner =>
           exists( t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
-              case ResolvedGrant(_, grant @ ReduceGrant(_, _, o, _)) =>
-                isValid(grant).map { _ && grant.path.equalOrChild(path) && owner == o }
+              case g @ Grant(_, _, ReducePermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
               case _ => Future(false)
             }.getOrElse(Future(false))
           )})
         })
-      case ModifyGrant =>
+      case ModifyPermission =>
         if(owners.isEmpty) Future(false)
         else forall(owners.map { owner =>
           exists(t.grants.map { gid =>
             tokens.findGrant(gid).flatMap( _.map {
-              case ResolvedGrant(_, grant @ ModifyGrant(_, _, o, _)) =>
-                isValid(grant).map { _ && grant.path.equalOrChild(path) && owner == o }
+              case g @ Grant(_, _, ModifyPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
               case _ => Future(false)
             }.getOrElse(Future(false))
           )})
         })
-      case TransformGrant =>
+      case TransformPermission =>
         if(owners.isEmpty) Future(false)
         else forall(owners.map { owner =>
           exists(t.grants.map { gid =>
             tokens.findGrant(gid).flatMap( _.map { 
-              case ResolvedGrant(_, grant @ TransformGrant(_, _, o, _)) =>
-                isValid(grant).map { _ && grant.path.equalOrChild(path) && owner == o }
+              case g @ Grant(_, _, TransformPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
               case _ => Future(false)
             }.getOrElse(Future(false))
           )})
@@ -130,9 +130,9 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
   def isValid(grant: Grant): Future[Boolean] = {
     (grant.issuer.map { 
       tokens.findGrant(_).flatMap { _.map { parentGrant => 
-        isValid(parentGrant.grant).map { _ && grant.accessType == parentGrant.grant.accessType }
+        isValid(parentGrant).map { _ && grant.permission.accessType == parentGrant.permission.accessType }
       }.getOrElse(Future(false)) } 
-    }.getOrElse(Future(true))).map { _ && !grant.isExpired(new DateTime()) }
+    }.getOrElse(Future(true))).map { _ && !grant.permission.isExpired(new DateTime()) }
   }
 }
 

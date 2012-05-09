@@ -73,6 +73,7 @@ trait MongoTokenManagerComponent extends Logging {
   }
 }
 
+
 trait TokenManager {
 
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
@@ -81,27 +82,28 @@ trait TokenManager {
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
   def newToken(name: String, grants: Set[GrantID]): Future[Token]
-  def newGrant(grant: Grant): Future[ResolvedGrant]
+  def newGrant(issuer: Option[GrantID], permission: Permission): Future[Grant]
 
   def listTokens(): Future[Seq[Token]]
-  def listGrants(): Future[Seq[ResolvedGrant]]
+  def listGrants(): Future[Seq[Grant]]
   
   def findToken(tid: TokenID): Future[Option[Token]]
-  def findGrant(gid: GrantID): Future[Option[ResolvedGrant]]
-  def findGrantChildren(gid: GrantID): Future[Set[ResolvedGrant]]
-  
+  def findGrant(gid: GrantID): Future[Option[Grant]]
+  def findGrantChildren(gid: GrantID): Future[Set[Grant]]
+ 
+
   def listDeletedTokens(): Future[Seq[Token]]
-  def listDeletedGrants(): Future[Seq[ResolvedGrant]]
+  def listDeletedGrants(): Future[Seq[Grant]]
 
   def findDeletedToken(tid: TokenID): Future[Option[Token]]
-  def findDeletedGrant(gid: GrantID): Future[Option[ResolvedGrant]]
-  def findDeletedGrantChildren(gid: GrantID): Future[Set[ResolvedGrant]]
+  def findDeletedGrant(gid: GrantID): Future[Option[Grant]]
+  def findDeletedGrantChildren(gid: GrantID): Future[Set[Grant]]
 
   def addGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[Token]]
   def removeGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[Token]]
 
   def deleteToken(tid: TokenID): Future[Option[Token]]
-  def deleteGrant(gid: GrantID): Future[Set[ResolvedGrant]]
+  def deleteGrant(gid: GrantID): Future[Set[Grant]]
 
   def close(): Future[Unit]
 } 
@@ -118,24 +120,20 @@ class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.emp
     newToken
   }
 
-  def newGrant(grant: Grant) = Future {
-    val newGrant = ResolvedGrant(newGrantID, grant)
-    grants.put(newGrant.gid, grant)
+  def newGrant(issuer: Option[GrantID], perm: Permission) = Future {
+    val newGrant = Grant(newGrantID, issuer, perm)
+    grants.put(newGrant.gid, newGrant)
     newGrant
   }
 
   def listTokens() = Future[Seq[Token]] { tokens.values.toList }
-  def listGrants() = Future[Seq[ResolvedGrant]] { grants.map {
-    case (gid, grant) => ResolvedGrant(gid, grant)
-  }.toSeq }
+  def listGrants() = Future[Seq[Grant]] { grants.values.toList }
 
   def findToken(tid: TokenID) = Future { tokens.get(tid) }
 
-  def findGrant(gid: GrantID) = Future { grants.get(gid).map { ResolvedGrant(gid, _) } } 
-  def findGrantChildren(gid: GrantID) = Future {
-    grants.filter{ 
-      case (_, grant) => grant.issuer.map { _ == gid }.getOrElse(false) 
-    }.map{ ResolvedGrant.tupled.apply }(collection.breakOut)
+  def findGrant(gid: GrantID) = Future { grants.get(gid) }
+  def findGrantChildren(gid: GrantID) = Future[Set[Grant]] {
+    grants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
   def addGrants(tid: TokenID, add: Set[GrantID]) = Future {
@@ -147,17 +145,13 @@ class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.emp
   }
 
   def listDeletedTokens() = Future[Seq[Token]] { deletedTokens.values.toList }
-  def listDeletedGrants() = Future[Seq[ResolvedGrant]] { deletedGrants.map {
-    case (gid, grant) => ResolvedGrant(gid, grant)
-  }.toSeq }
+  def listDeletedGrants() = Future[Seq[Grant]] { deletedGrants.values.toList }
 
   def findDeletedToken(tid: TokenID) = Future { deletedTokens.get(tid) }
 
-  def findDeletedGrant(gid: GrantID) = Future { deletedGrants.get(gid).map { ResolvedGrant(gid, _) } }
-  def findDeletedGrantChildren(gid: GrantID) = Future {
-    deletedGrants.filter{
-      case (_, grant) => grant.issuer.map { _ == gid }.getOrElse(false)
-    }.map{ ResolvedGrant.tupled.apply }(collection.breakOut)
+  def findDeletedGrant(gid: GrantID) = Future { deletedGrants.get(gid) }
+  def findDeletedGrantChildren(gid: GrantID) = Future[Set[Grant]] {
+    deletedGrants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
  def removeGrants(tid: TokenID, remove: Set[GrantID]) = Future {
@@ -177,7 +171,7 @@ class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.emp
   def deleteGrant(gid: GrantID) = Future { grants.remove(gid) match {
     case Some(x) =>
       deletedGrants.put(gid, x)
-      Set(ResolvedGrant(gid, x))
+      Set(x)
     case _       =>
       Set.empty
   }}
@@ -210,9 +204,9 @@ class MongoTokenManager(
     }
   }
 
-  def newGrant(grant: Grant) = {
-    val ng = ResolvedGrant(newGrantID, grant)
-    database(insert(ng.serialize(ResolvedGrant.UnsafeResolvedGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { _ => ng }
+  def newGrant(issuer: Option[GrantID], perm: Permission) = {
+    val ng = Grant(newGrantID, issuer, perm)
+    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { _ => ng }
   }
 
   private def findOneMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
@@ -235,18 +229,18 @@ class MongoTokenManager(
     database { selectAll.from(collection) }.map { _.map(_.deserialize(extract)).toSeq }
 
   def listTokens() = findAll[Token](settings.tokens)
-  def listGrants() = findAll[ResolvedGrant](settings.grants)
+  def listGrants() = findAll[Grant](settings.grants)
 
   def findToken(tid: TokenID) = findOneMatching[Token]("tid", tid, settings.tokens)
-  def findGrant(gid: GrantID) = findOneMatching[ResolvedGrant]("gid", gid, settings.grants)
+  def findGrant(gid: GrantID) = findOneMatching[Grant]("gid", gid, settings.grants)
 
   def findGrantChildren(gid: GrantID) = findAllMatching("issuer", gid, settings.grants)
 
   def listDeletedTokens() = findAll[Token](settings.tokens)
-  def listDeletedGrants() = findAll[ResolvedGrant](settings.grants)
+  def listDeletedGrants() = findAll[Grant](settings.grants)
 
   def findDeletedToken(tid: TokenID) = findOneMatching[Token]("tid", tid, settings.deletedTokens)
-  def findDeletedGrant(gid: GrantID) = findOneMatching[ResolvedGrant]("gid", gid, settings.deletedGrants)
+  def findDeletedGrant(gid: GrantID) = findOneMatching[Grant]("gid", gid, settings.deletedGrants)
 
   def findDeletedGrantChildren(gid: GrantID) = findAllMatching("issuer", gid, settings.deletedGrants)
 
@@ -284,13 +278,13 @@ class MongoTokenManager(
       case None    => Future(None)
     } 
 
-  def deleteGrant(gid: GrantID): Future[Set[ResolvedGrant]] = {
+  def deleteGrant(gid: GrantID): Future[Set[Grant]] = {
     findGrantChildren(gid).flatMap { gc =>
       Future.sequence(gc.map { g => deleteGrant(g.gid)}).map { _.flatten }.flatMap { gds =>
         findGrant(gid).flatMap {
           case og @ Some(g) =>
             for {
-              _ <- database(insert(g.serialize(ResolvedGrant.UnsafeResolvedGrantDecomposer).asInstanceOf[JObject]).into(settings.deletedGrants))
+              _ <- database(insert(g.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.deletedGrants))
               _ <- database(remove.from(settings.grants).where("gid" === gid))
             } yield { gds + g }
           case None    => Future(gds)
@@ -313,8 +307,8 @@ class CachingTokenManager(manager: TokenManager, settings: CachingTokenManagerSe
 
   def newToken(name: String, grants: Set[GrantID]) =
     manager.newToken(name, grants).map { _ ->- add }
-  def newGrant(grant: Grant) =
-    manager.newGrant(grant).map { _ ->- add }
+  def newGrant(issuer: Option[GrantID], permission: Permission) =
+    manager.newGrant(issuer, permission).map { _ ->- add }
 
   def listTokens() = manager.listTokens
   def listGrants() = manager.listGrants
@@ -327,8 +321,8 @@ class CachingTokenManager(manager: TokenManager, settings: CachingTokenManagerSe
     case t    => Future(t)
   }
   def findGrant(gid: GrantID) = grantCache.get(gid) match {
-    case None    => manager.findGrant(gid).map { _.map { _ ->- add } }
-    case Some(g) => Future(Some(ResolvedGrant(gid, g)))
+    case None        => manager.findGrant(gid).map { _.map { _ ->- add } }
+    case s @ Some(_) => Future(s)
   }
   def findGrantChildren(gid: GrantID) = manager.findGrantChildren(gid)
 
@@ -347,10 +341,10 @@ class CachingTokenManager(manager: TokenManager, settings: CachingTokenManagerSe
     manager.deleteGrant(gid) map { _.map { _ ->- remove } }
 
   private def add(t: Token) = tokenCache.put(t.tid, t)
-  private def add(g: ResolvedGrant) = grantCache.put(g.gid, g.grant)
+  private def add(g: Grant) = grantCache.put(g.gid, g)
 
   private def remove(t: Token) = tokenCache.remove(t.tid)
-  private def remove(g: ResolvedGrant) = grantCache.remove(g.gid)
+  private def remove(g: Grant) = grantCache.remove(g.gid)
 
   def close() = manager.close
 
@@ -375,24 +369,26 @@ object TestTokenManager extends AkkaDefaults {
 
   val expiredUID = "expired"
 
-  def standardAccountPerms(prefix: String, issuerPrefix: Option[String], p: String, owner: TokenID, expiration: Option[DateTime]) = {
-    val path = Path(p)
-    List(
-      ResolvedGrant(prefix + "_write", WriteGrant(issuerPrefix.map{ _ + "_write" }, path, expiration)),
-      ResolvedGrant(prefix + "_owner", OwnerGrant(issuerPrefix.map{ _ + "_owner" }, path, expiration)),
-      ResolvedGrant(prefix + "_read", ReadGrant(issuerPrefix.map{ _ + "_read" }, path, owner, expiration)),
-      ResolvedGrant(prefix + "_reduce", ReduceGrant(issuerPrefix.map{ _ + "_reduce" }, path, owner, expiration)),
-      ResolvedGrant(prefix + "_modify", ModifyGrant(issuerPrefix.map{ _ + "_modify" }, path, owner, expiration)),
-      ResolvedGrant(prefix + "_transform", TransformGrant(issuerPrefix.map{ _ + "_transform" }, path, owner, expiration))
-    )
+  def standardAccountPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]) = {
+    List[(String, (Path, Option[DateTime]) => Permission)](
+      ("write", WritePermission(_, _)),
+      ("owner", OwnerPermission(_, _)),
+      ("read", ReadPermission(_, owner, _)),
+      ("reduce", ReducePermission(_, owner, _)),
+      ("modify", ModifyPermission(_, owner, _)),
+      ("transform", TransformPermission(_, owner, _))
+    ).map {
+      case (suffix, f) => Grant(prefix + "_" + suffix, issuerPrefix.map { _ + "_" + suffix }, f(Path(path), expiration))
+    }
   }
 
-  def publishPathPerms(prefix: String, issuerPrefix: Option[String], p: String, owner: TokenID, expiration: Option[DateTime]) = {
-    val path = Path(p)
-    List(
-      ResolvedGrant(prefix + "_read", ReadGrant(issuerPrefix.map{ _ + "_read" }, path, owner, expiration)),
-      ResolvedGrant(prefix + "_reduce", ReduceGrant(issuerPrefix.map{ _ + "_reduce" }, path, owner, expiration))
-    )
+  def publishPathPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]) = {
+    List[(String, (Path, Option[DateTime]) => Permission)](
+      ("read", ReadPermission(_, owner, _)),
+      ("reduce", ReducePermission(_, owner, _))
+    ).map {
+      case (suffix, f) => Grant(prefix + "_" + suffix, issuerPrefix.map { _ + "_" + suffix }, f(Path(path), expiration))
+    }
   }
 
   val grantList = List(
@@ -406,7 +402,7 @@ object TestTokenManager extends AkkaDefaults {
     publishPathPerms("opublic", Some("root"), "/opublic", "opublic", None)
   )
 
-  val grants: mutable.Map[GrantID, Grant] = grantList.flatten.map { g => (g.gid -> g.grant) }(collection.breakOut)
+  val grants: mutable.Map[GrantID, Grant] = grantList.flatten.map { g => (g.gid -> g) }(collection.breakOut)
 
   val tokens: mutable.Map[TokenID, Token] = List[Token](
     Token("root", "root", grantList(0).map { _.gid }(collection.breakOut)),

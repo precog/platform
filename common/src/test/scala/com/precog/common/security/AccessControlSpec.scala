@@ -238,35 +238,34 @@ trait TokenManagerTestValues extends AkkaDefaults {
   
   val (rootToken, rootGrants) = newToken("root") { t =>
     try {
-    Await.result(Future.sequence(Grant.grantSet(None, "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
     } catch {
       case ex => println(ex); throw ex
     }
   }
   
   val (rootLikeToken, rootLikeGrants) = newToken("rootLike") { t =>
-    Await.result(Future.sequence(Grant.grantSet(None, "/child", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid }}), timeout)
+    Await.result(Future.sequence(Grant.grantSet("/child", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
   }
  
   val (superToken, superGrants) = newToken("super") { t =>
     Await.result(Future.sequence(rootGrants.map{ g =>
-      tokens.findGrant(g).flatMap { og => tokens.newGrant(og.get match {
-        case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-          oi.derive(issuer = Some(gid))
-        case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-          oa.derive(issuer = Some(gid))
-      }).map{ _.gid } }
+      tokens.findGrant(g).flatMap {
+        case Some(g) => 
+          tokens.newGrant(Some(g.gid), g.permission) }.map { _.gid }
     }),timeout)
   }
 
   val (childToken, childGrants) = newToken("child") { t =>
     Await.result(Future.sequence(rootGrants.map{ g =>
-      tokens.findGrant(g).flatMap { og => tokens.newGrant(og.get match {
-        case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-          oi.derive(issuer = Some(gid), path = "/child")
-        case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-          oa.derive(issuer = Some(gid), path = "/child", owner = t.tid)
-      }).map { _.gid } }
+      tokens.findGrant(g).flatMap { 
+        case Some(g) =>
+          tokens.newGrant(Some(g.gid), g match {
+            case Grant(_, _, oi: OwnerIgnorantPermission) => 
+              oi.derive(path = "/child")
+            case Grant(_, _, oa: OwnerAwarePermission) => 
+              oa.derive(path = "/child", owner = t.tid)
+          }).map { _.gid } }
     }), timeout)
   }
 
@@ -277,23 +276,25 @@ trait TokenManagerTestValues extends AkkaDefaults {
   }
 
   val (invalidGrantParentToken, invalidGrantParentGrants) = newToken("invalidGrantParent") { t =>
-    Await.result(Future.sequence(Grant.grantSet(Some(invalidGrantID), "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
   }
 
   val noPermsToken = Await.result(tokens.newToken("noPerms", Set.empty), timeout)
 
   val (expiredToken, expiredGrants) = newToken("expiredGrants") { t =>
-    Await.result(Future.sequence(Grant.grantSet(None, "/", t.tid, Some(farPast), Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid }}), timeout)
+    Await.result(Future.sequence(Grant.grantSet("/", t.tid, Some(farPast), Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
   }
 
   val (expiredParentToken, expiredParentTokens) = newToken("expiredParentGrants") { t =>
     Await.result(Future.sequence(expiredGrants.map { g =>
-      tokens.findGrant(g).flatMap { og => tokens.newGrant( og.get match {
-        case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-          oi.derive(issuer = Some(gid), path = "/child")
-        case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-          oa.derive(issuer = Some(gid), path = "/child", owner = t.tid)
-      }).map { _.gid } }
+      tokens.findGrant(g).flatMap { 
+        case Some(g) =>
+          tokens.newGrant(Some(g.gid), g match {
+            case Grant(_, _, oi: OwnerIgnorantPermission) => 
+              oi.derive(path = "/child")
+            case Grant(_, _, oa: OwnerAwarePermission) => 
+              oa.derive(path = "/child", owner = t.tid)
+          }).map { _.gid } }
     }), timeout)
   }
 
@@ -323,16 +324,17 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
   def newCustomer(name: String, parentGrants: Set[GrantID]): (Token, Set[GrantID]) = {
     newToken(name) { t =>
       Await.result(Future.sequence(parentGrants.map{ g =>
-        tokens.findGrant(g).map { _.get match {
-          case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-            oi.derive(issuer = Some(gid), path = "/" + name)
-          case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-            oa.derive(issuer = Some(gid), path = "/", owner = t.tid)
-        }}.flatMap { tokens.newGrant(_).map { _.gid } } }
-      ), timeout)
+        tokens.findGrant(g).flatMap { 
+          case Some(g) => tokens.newGrant(Some(g.gid), g match {
+            case Grant(gid, _, oi: OwnerIgnorantPermission) => 
+              oi.derive(path = "/" + name)
+            case Grant(gid, _, oa: OwnerAwarePermission) => 
+              oa.derive(path = "/", owner = t.tid)
+          }).map { _.gid }}
+      }), timeout)
     }
   }
-
+ 
   def addGrants(token: Token, grants: Set[GrantID]): Option[Token] = {
     Await.result(tokens.findToken(token.tid).flatMap { _ match {
       case None => Future(None)
@@ -341,7 +343,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
   }
 
   val (root, rootGrants) = newToken("root") { t =>
-    Await.result(Future.sequence(Grant.grantSet(None, "/", t.tid, None, Grant.ALL).map{ tokens.newGrant }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
   }
 
   val (customer, customerGrants) = newCustomer("customer", rootGrants)
@@ -351,55 +353,56 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
 
   val (addonAgent, addonAgentGrants) = newToken("addon_agent") { t =>
     Await.result(Future.sequence(addonGrants.map { g =>
-      tokens.findGrant(g).map { _.get match {
-        case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-          oi.derive(issuer = Some(gid))
-        case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-          oa.derive(issuer = Some(gid), owner = t.tid)
-      }}.flatMap { tokens.newGrant }.map { _.gid }
+      tokens.findGrant(g).flatMap { 
+        case Some(g) => tokens.newGrant(Some(g.gid), g match {
+            case Grant(gid, _, oi: OwnerIgnorantPermission) => 
+              oi
+            case Grant(gid, _, oa: OwnerAwarePermission) => 
+              oa.derive(owner = t.tid)
+          }).map { _.gid } }
     }), timeout)
   }
 
   val customerFriendGrants: Set[GrantID] = Await.result(Future.sequence(friendGrants.map { gid =>
     tokens.findGrant(gid).map { _.flatMap {
-      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) =>
-        Some(rg.derive(issuer = Some(gid)))
+      case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
+        Some((Some(gid), rg))
       case _ => None
     }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map{ _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map{ _.gid } } ) }, timeout)
 
   val customerAddonGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
     tokens.findGrant(gid).map { _.flatMap { 
-      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) =>
-        Some(rg.derive(issuer = Some(gid), path = "/customer"))
+      case Grant(_, _, rg @ ReadPermission(_, _, _)) =>
+        Some(Some(gid), rg.derive(path = "/customer"))
       case _ => None
     }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
   
   val customerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
     tokens.findGrant(gid).map { _.map {
-      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
-        oi.derive(issuer = Some(gid), path = "/customer")
-      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
-        oa.derive(issuer = Some(gid), path = "/customer")
+      case Grant(_, _, oi: OwnerIgnorantPermission) => 
+        (Some(gid), oi.derive(path = "/customer"))
+      case Grant(_, _, oa: OwnerAwarePermission) => 
+        (Some(gid), oa.derive(path = "/customer"))
     }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
 
   val customerAddonPublicGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
     tokens.findGrant(gid).map { _.flatMap {
-      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) => 
-        Some(rg.derive(issuer = Some(gid), path = "/addon/public"))
+      case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
+        Some((Some(gid), rg.derive(path = "/addon/public")))
       case _ => None
     }}
-  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
 
   val customerAddonPublicRevokedGrants: Set[GrantID] = Await.result(Future.sequence(addonGrants.map { gid =>
     tokens.findGrant(gid).map { _.flatMap {
-      case ResolvedGrant(_, rg @ ReadGrant(_, _, _, _)) => 
-        Some(rg.derive(issuer = Some(gid), path = "/addon/public_revoked", expiration = Some(farPast)))
+      case Grant(_, _, rg @ ReadPermission(_, _, _)) => 
+        Some((Some(gid), rg.derive(path = "/addon/public_revoked", expiration = Some(farPast))))
       case _ => None
     }}
-  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence[GrantID, Set](og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
 
   tokens.addGrants(customer.tid, 
     customerFriendGrants ++ 
@@ -410,32 +413,33 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
 
   val (customersCustomer, customersCustomerGrants) = newToken("customers_customer") { t =>
     Await.result(tokens.findToken(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { g =>
-      tokens.findGrant(g).flatMap { og => tokens.newGrant(og.get match {
-        case ResolvedGrant(gid, oi: OwnerIgnorantGrant) => 
-          oi.derive(issuer = Some(gid), path = "/customer/cust-id")
-        case ResolvedGrant(gid, oa: OwnerAwareGrant) => 
-          oa.derive(issuer = Some(gid), path = "/customer/cust-id", owner = t.tid)
+      tokens.findGrant(g).flatMap { 
+      case Some(g) => tokens.newGrant(Some(g.gid), g match {
+        case Grant(_, _, oi: OwnerIgnorantPermission) => 
+          oi.derive(path = "/customer/cust-id")
+        case Grant(_, _, oa: OwnerAwarePermission) => 
+          oa.derive(path = "/customer/cust-id", owner = t.tid)
       }).map { _.gid }
     }})}, timeout)
   }
 
   val customersCustomerAddonsGrants: Set[GrantID] = Await.result(tokens.findToken(customer.tid).flatMap { ot => Future.sequence(ot.get.grants.map { gid =>
     tokens.findGrant(gid).map { _.map {
-      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
-        oi.derive(issuer = Some(gid), path = "/customer/cust-id")
-      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
-        oa.derive(issuer = Some(gid), path = "/customer/cust-id")
+      case Grant(_, _, oi: OwnerIgnorantPermission) => 
+        (Some(gid), oi.derive(path = "/customer/cust-id"))
+      case Grant(_, _, oa: OwnerAwarePermission) => 
+        (Some(gid), oa.derive(path = "/customer/cust-id"))
     }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }}, timeout)
+  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }}, timeout)
   
   val customersCustomerAddonAgentGrants: Set[GrantID] = Await.result(Future.sequence(addonAgentGrants.map { gid =>
     tokens.findGrant(gid).map { _.map { 
-      case ResolvedGrant(_, oi: OwnerIgnorantGrant) => 
-        oi.derive(issuer = Some(gid), path = "/customer/cust-id")
-      case ResolvedGrant(_, oa: OwnerAwareGrant) => 
-        oa.derive(issuer = Some(gid), path = "/customer/cust-id")
+      case Grant(_, _, oi: OwnerIgnorantPermission) => 
+        (Some(gid), oi.derive(path = "/customer/cust-id"))
+      case Grant(_, _, oa: OwnerAwarePermission) => 
+        (Some(gid), oa.derive(path = "/customer/cust-id"))
     }}
-  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { tokens.newGrant(_).map { _.gid } } ) }, timeout)
+  }).flatMap { og => Future.sequence(og.collect { case Some(g) => g }.map { t => tokens.newGrant(t._1, t._2).map { _.gid } } ) }, timeout)
 
   tokens.addGrants(customersCustomer.tid, customersCustomerAddonsGrants ++ customersCustomerAddonAgentGrants)
 
