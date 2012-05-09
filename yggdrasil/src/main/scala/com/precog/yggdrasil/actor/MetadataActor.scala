@@ -55,7 +55,7 @@ class MetadataActor(metadata: LocalMetadata) extends Actor {
 
     case FindPathMetadata(path, selector)     => sender ! metadata.findPathMetadata(path, selector)
     
-    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.currentState)
+    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.dirtyState)
 
   }
 
@@ -63,11 +63,26 @@ class MetadataActor(metadata: LocalMetadata) extends Actor {
 
 class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) {
   
-  private var projections = initialProjections
+  private var projections: Map[ProjectionDescriptor, (Boolean, ColumnMetadata)] = initialProjections.map { 
+    case (p, cm) => (p -> (false, cm))
+  }
 
   private var messageClock = initialClock 
 
-  def currentState() = SaveMetadata(projections, messageClock)
+  def currentState() = SaveMetadata(projections.map {
+    case (p, (_, cm)) => (p -> cm)
+  }, messageClock)
+
+  def dirtyState() = {
+    val dirty = projections.collect {
+      case (p, (dirty, cm)) if dirty => (p -> cm)
+    }
+    projections = projections.map {
+      case (p, (_, cm)) => (p -> (false -> cm))
+    }
+    SaveMetadata(dirty, messageClock)
+  }
+  
 
   def status(): JValue = JObject.empty ++ JField("Metadata", JObject.empty ++
     JField("messageClock", messageClock.serialize))
@@ -77,7 +92,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
    
     val (projUpdate, clockUpdate) = inserts.foldLeft(projections, messageClock){ 
       case ((projs, clock), insert) =>
-        (projs + (insert.descriptor -> applyMetadata(insert.descriptor, insert.values, insert.metadata, projs)),
+        (projs + (insert.descriptor -> (true -> applyMetadata(insert.descriptor, insert.values, insert.metadata, projs))),
          clock.update(insert.eventId.producerId, insert.eventId.sequenceId))
     }
 
@@ -109,8 +124,8 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       col.path == path && isEqualOrChild(selector, col.selector)
     }
 
-    projections.filter {
-      case (descriptor, _) => descriptor.columns.exists(matches(path, selector))
+    projections.collect {
+      case (descriptor, (_, cm)) if(descriptor.columns.exists(matches(path, selector))) => (descriptor -> cm)
     }
   } 
 
@@ -131,7 +146,7 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
 
   @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
     projections.flatMap {
-      case (desc, meta) => desc.columns.collect {
+      case (desc, (_, meta)) => desc.columns.collect {
         case col @ ColumnDescriptor(_,sel,_,auth) if matches(path,selector)(col) => ResolvedSelector(sel, auth, desc, meta)
       }
     }(collection.breakOut)
@@ -250,8 +265,8 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
 
 object MetadataUpdateHelper {
 
-  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: Map[ProjectionDescriptor, ColumnMetadata]): ColumnMetadata = {
-    val initialMetadata = projections.get(desc).getOrElse(initMetadata(desc))
+  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: Map[ProjectionDescriptor, (Boolean, ColumnMetadata)]): ColumnMetadata = {
+    val initialMetadata = projections.get(desc).map{ _._2 }.getOrElse(initMetadata(desc))
     val userAndValueMetadata = addValueMetadata(values, metadata.map { Metadata.toTypedMap _ })
 
     combineMetadata(desc, initialMetadata, userAndValueMetadata)

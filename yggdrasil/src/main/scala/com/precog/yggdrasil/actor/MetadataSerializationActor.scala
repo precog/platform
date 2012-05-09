@@ -34,6 +34,7 @@ import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
 import akka.actor.Actor
+import akka.dispatch.Future
 
 import scalaz._
 import scalaz.effect._
@@ -43,21 +44,44 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 
+case object SaveComplete
+
 class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataStorage: MetadataStorage) extends Actor with Logging {
+
+  private var inProgress = false
+
+  import context._
+
   def receive = {
     case Status =>
       sender ! status()
     case SaveMetadata(metadata, messageClock) => 
-      logger.debug("Syncing metadata")
-      val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
-      if(!errors.isEmpty) {
-        logger.error("Error saving metadata: (%d errors to follow)".format(errors.size))
-        errors.zipWithIndex.foreach {
-          case (t, i) => logger.error("Metadata save error #%d".format(i+1), t)
-        }
+      if(!inProgress) { 
+        Future {
+          inProgress = true
+          try {
+            logger.debug("Syncing metadata")
+            val start = System.nanoTime
+            val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
+            if(!errors.isEmpty) {
+              logger.error("Error saving metadata: (%d errors to follow)".format(errors.size))
+              errors.zipWithIndex.foreach {
+                case (t, i) => logger.error("Metadata save error #%d".format(i+1), t)
+              }
+            }
+            logger.debug("Registering metadata checkpoint: " + messageClock)
+            checkpoints.metadataPersisted(messageClock)
+            val time = (System.nanoTime - start)/1000000000.0
+            logger.info("Metadata checkpoint complete %d updates in %.02fs".format(metadata.size, time))
+          } finally {
+            self ! SaveComplete 
+          }
+        } 
+      } else {
+        logger.warn("Skipping metadata sync because previous is already in progress")
       }
-      logger.debug("Registering metadata checkpoint: " + messageClock)
-      checkpoints.metadataPersisted(messageClock)
+    case SaveComplete =>
+      inProgress = false
   }
 
   private def safelyUpdateMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], clock: VectorClock): IO[List[Throwable]] = {

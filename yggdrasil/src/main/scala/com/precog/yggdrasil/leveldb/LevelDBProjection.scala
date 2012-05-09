@@ -150,7 +150,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   private final val syncOptions = (new WriteOptions).sync(true)
 
   def close: IO[Unit] = IO {
-    logger.info("Closing column index files")
+    logger.debug("Closing column index files")
     idIndexFile.close()
     //valIndexFile.close()
   }
