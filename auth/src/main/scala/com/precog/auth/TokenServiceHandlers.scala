@@ -45,7 +45,7 @@ import scalaz.Scalaz._
 
 import org.joda.time.DateTime
 
-class GetTokenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) =>
       Future(HttpResponse[JValue](OK, content = Some(t.serialize)))
@@ -54,67 +54,79 @@ class GetTokenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDi
   val metadata = None
 }
 
-class AddTokenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) =>
-      request.content.map { _ => 
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "TODO"), content = Some(JString("TODO"))))
-      }.getOrElse{ 
-        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Post body with new token json object required."), content = Some(JObject(JField("error", "Post body with new token json object required.")::Nil))))
-      }
-    }
-  }
-  val metadata = None
-}
-
-class GetGrantsHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class AddTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class AddGrantHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class RemoveGrantHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class AddGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class GetGrantChildrenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class RemoveGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class AddGrantChildrenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class GetGrantChildHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class AddGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
 
-class RemoveGrantChildHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+class GetGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
   }
   val metadata = None
 }
+
+class RemoveGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => {
+    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+  }
+  val metadata = None
+}
+
+class TokenManagement(tokenManager: TokenManager) {
+
+  def findTokenAndGrants(tid: TokenID): Future[Option[(Token, Set[Grant])]] = sys.error("todo")
+
+  def newToken(issuer: TokenID, request: NewTokenRequest): Future[Validation[String, Token]] = sys.error("todo")
+
+  def findTokenGrants(tid: TokenID): Future[Set[Grant]] = sys.error("todo") 
+  def addTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
+  def deleteTokenGrant(tid: TokenID, gid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
+
+  def findGrantChildren(tid: TokenID, gid: GrantID): Future[Set[Grant]] = sys.error("todo")
+  def newGrantChild(tid: TokenID, gid: GrantID, request: NewGrantRequest): Future[Validation[String, Grant]] = sys.error("todo")
+  def deleteGrantChild(tid: TokenID, gid: GrantID, childGid: GrantID): Future[Validation[String, Unit]] = sys.error("todo")
+
+  def close() = tokenManager.close()
+}
+
 
 case class NewTokenRequest(name: String, grants: List[NewGrantRequest], readback: Boolean)
 
@@ -129,21 +141,22 @@ trait NewTokenRequestSerialization {
 
 object NewTokenRequest extends NewTokenRequestSerialization
 
-case class NewGrantRequest(accessType: String, path: Path, owner: Option[String], expiration: Option[DateTime]) {
-  def asGrant(issuer: Option[GrantID]): Validation[String, Grant] = {
-    AccessType.fromString(accessType) match {
-      case Some(WriteGrant) =>
-        Success(WriteGrant(issuer, path, expiration))
-      case Some(OwnerGrant) =>
-        Success(OwnerGrant(issuer, path, expiration))
-      case Some(ReadGrant) =>
-        owner.map { o => Success(ReadGrant(issuer, path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(ReduceGrant) =>
-        owner.map { o => Success(ReduceGrant(issuer, path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(ModifyGrant) =>
-        owner.map { o => Success(ModifyGrant(issuer, path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
-      case Some(TransformGrant) =>
-        owner.map { o => Success(TransformGrant(issuer, path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
+case class NewGrantRequest(accessTypeString: String, path: Path, owner: Option[String], expiration: Option[DateTime]) {
+  val accessType = AccessType.fromString(accessTypeString) 
+  def toPermission(): Validation[String, Permission] = {
+    accessType match {
+      case Some(WritePermission) =>
+        Success(WritePermission(path, expiration))
+      case Some(OwnerPermission) =>
+        Success(OwnerPermission(path, expiration))
+      case Some(ReadPermission) =>
+        owner.map { o => Success(ReadPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
+      case Some(ReducePermission) =>
+        owner.map { o => Success(ReducePermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
+      case Some(ModifyPermission) =>
+        owner.map { o => Success(ModifyPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
+      case Some(TransformPermission) =>
+        owner.map { o => Success(TransformPermission(path, o, expiration)) }.getOrElse{ Failure("Unable to create grant without owner") }
       case None => Failure("Unknown access type: " + accessType)
     } 
   }

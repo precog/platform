@@ -34,7 +34,7 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class TokenServiceState(tokenManager: TokenManager, accessControl: AccessControl)
+case class TokenServiceState(tokenManager: TokenManager, tokenManagement: TokenManagement)
 
 trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
   import BijectionsChunkJson._
@@ -53,27 +53,25 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
           import context._
           val tokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = new TokenManagerAccessControl(tokenManager)
-
-          Future(TokenServiceState(tokenManager, accessControl))
+          Future(TokenServiceState(tokenManager, new TokenManagement(tokenManager)))
         } ->
         request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
               path("/token") {
-                get(new GetTokenHandler(state.tokenManager)) ~
-                post(new AddTokenHandler(state.tokenManager)) ~
+                get(new GetTokenHandler(state.tokenManagement)) ~
+                post(new AddTokenHandler(state.tokenManagement)) ~
                 path("/grants") {
-                  get(new GetGrantsHandler(state.tokenManager)) ~
-                  post(new AddGrantHandler(state.tokenManager)) ~
+                  get(new GetGrantsHandler(state.tokenManagement)) ~
+                  post(new AddGrantHandler(state.tokenManagement)) ~
                   path("/'grantId") {
-                    delete(new RemoveGrantHandler(state.tokenManager)) ~
+                    delete(new RemoveGrantHandler(state.tokenManagement)) ~
                     path("/children") {
-                      get(new GetGrantChildrenHandler(state.tokenManager)) ~
-                      post(new AddGrantChildrenHandler(state.tokenManager)) ~
+                      get(new GetGrantChildrenHandler(state.tokenManagement)) ~
+                      post(new AddGrantChildrenHandler(state.tokenManagement)) ~
                       path("/'childGrantId") {
-                        get(new GetGrantChildHandler(state.tokenManager)) ~
-                        delete(new RemoveGrantChildHandler(state.tokenManager))
+                        get(new GetGrantChildHandler(state.tokenManagement)) ~
+                        delete(new RemoveGrantChildHandler(state.tokenManagement))
                       }
                     }
                   }
