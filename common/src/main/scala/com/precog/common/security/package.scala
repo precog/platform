@@ -205,6 +205,16 @@ package object security {
     def name: String
   }
 
+  object AccessType {
+    
+    val knownAccessTypes: Map[String, AccessType] = List(
+      WriteGrant, OwnerGrant,
+      ReadGrant, ReduceGrant, ModifyGrant, TransformGrant
+    ).map { at => (at.name, at) }(collection.breakOut)
+    
+    def fromString(s: String): Option[AccessType] = knownAccessTypes.get(s)
+  }
+
   case class WriteGrant(issuer: Option[GrantID], path: Path, expiration: Option[DateTime]) extends OwnerIgnorantGrant { 
     val accessType = WriteGrant
     def derive(issuer: Option[GrantID], path: Path = path, expiration: Option[DateTime] = expiration) =

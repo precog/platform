@@ -60,14 +60,24 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
         request { (state: TokenServiceState) =>
           jsonp[ByteChunk] {
             token(state.tokenManager) {
-              path("/tokens") {
+              path("/token") {
                 get(new GetTokenHandler(state.tokenManager)) ~
-                // Note the update handler needs to be before the create
-                // handler as it's arguements are a super set of the create
-                // call thus requires first refusal
-                post(new UpdateTokenHandler(state.tokenManager)) ~
-                post(new CreateTokenHandler(state.tokenManager, state.accessControl)) ~
-                delete(new DeleteTokenHandler(state.tokenManager)) 
+                post(new AddTokenHandler(state.tokenManager)) ~
+                path("/grants") {
+                  get(new GetGrantsHandler(state.tokenManager)) ~
+                  post(new AddGrantHandler(state.tokenManager)) ~
+                  path("/'grantId") {
+                    delete(new RemoveGrantHandler(state.tokenManager)) ~
+                    path("/children") {
+                      get(new GetGrantChildrenHandler(state.tokenManager)) ~
+                      post(new AddGrantChildrenHandler(state.tokenManager)) ~
+                      path("/'childGrantId") {
+                        get(new GetGrantChildHandler(state.tokenManager)) ~
+                        delete(new RemoveGrantChildHandler(state.tokenManager))
+                      }
+                    }
+                  }
+                }
               }
             }
           }
