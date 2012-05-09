@@ -238,9 +238,12 @@ class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadat
     build(events, mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])])
   }
 
+  val batchCounter = new AtomicLong(0)
+
   def dispatchActions(actions: ActionMap): Future[ValidationNEL[Throwable, Unit]] = {
+    logger.info("Pending batches: " + batchCounter.get)
     val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
-    acquire.flatMap {
+    acquire.map { x => batchCounter.incrementAndGet; x }.flatMap {
       case ProjectionBatchAcquired(actorMap) =>
         val futs: List[Future[ProjectionDescriptor]] = actions.keys.map{ desc =>
           val (inserts, completes)  = actions(desc)
@@ -252,7 +255,10 @@ class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadat
 
         Future.sequence[ProjectionDescriptor, List](futs).flatMap{ descs => 
           projectionActors ? ReleaseProjectionBatch(descs)
-        }.map{ _ => Success(()) }
+        }.map{ _ => 
+          batchCounter.decrementAndGet 
+          Success(()) 
+        }
 
       case ProjectionError(errs) =>
         Future(Failure(errs))

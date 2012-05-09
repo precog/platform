@@ -55,7 +55,7 @@ case class YggState(
 
   private def dirUUID(): String = {
     val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
-    (1.until(4).map { _*3 }.foldLeft(Vector.empty[String]) {
+    (1.until(3).map { _*2 }.foldLeft(Vector.empty[String]) {
       case (acc, i) => acc :+ uuid.substring(0,i)
     }.mkString("/", "/", "/")) + uuid
   }
