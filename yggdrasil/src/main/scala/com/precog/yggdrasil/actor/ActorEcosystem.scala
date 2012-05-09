@@ -146,7 +146,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   // Internal only actors
   //
   
-  private val metadataSyncPeriod = Duration(1, "minutes")
+  private val metadataSyncPeriod = Duration(5, "minutes")
   
   
   private lazy val ingestBatchConsumer = {

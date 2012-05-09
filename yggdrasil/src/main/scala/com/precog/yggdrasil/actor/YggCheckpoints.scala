@@ -55,12 +55,12 @@ class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordi
   }
   
   override def messagesConsumed(checkpoint: YggCheckpoint) {
-    logger.debug("Recording new consumption checkpoint: " + checkpoint)
+    logger.info("Recording new consumption checkpoint: " + checkpoint)
     super.messagesConsumed(checkpoint)
   }
 
   override def metadataPersisted(messageClock: VectorClock) {
-    logger.debug("Recording new metadata checkpoint: " + messageClock)
+    logger.info("Recording new metadata checkpoint: " + messageClock)
     super.metadataPersisted(messageClock)
   }
 
