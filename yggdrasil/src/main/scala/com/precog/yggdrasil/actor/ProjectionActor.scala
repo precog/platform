@@ -16,7 +16,7 @@ import scala.annotation.tailrec
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 
-case object Stop
+case class Stop(retriesRemaining: Int = 30)
 
 case object IncrementRefCount
 case object DecrementRefCount
@@ -49,7 +49,6 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
         val insert = iter.next
         try {
           projection.insert(insert.identities, insert.values).unsafePerformIO
-          //logger.debug("Projection insert complete")
         } catch {
           case ex => logger.error("Error inserting into level db column", ex) 
         }
@@ -60,13 +59,13 @@ class ProjectionActor(val projection: LevelDBProjection, descriptor: ProjectionD
   }
 
   def receive = {
-    case Stop => //close the db
-      if(refCount <= 0) {
+    case Stop(retries) => //close the db
+      if(refCount <= 0 || retries <= 0) {
         //logger.debug("Closing projection.")
         projection.close.unsafePerformIO
       } else {
         logger.debug("Deferring close ref count [%d - %s]".format(refCount, descriptor))
-        scheduler.scheduleOnce(1 second, self, Stop) 
+        scheduler.scheduleOnce(10 second, self, Stop(retries-1)) 
       }
 
     case IncrementRefCount => refCount += 1
