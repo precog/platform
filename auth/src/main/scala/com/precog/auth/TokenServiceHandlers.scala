@@ -36,57 +36,91 @@ class GetTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: Mes
 }
 
 class AddTokenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
-  val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+  val service: HttpRequest[Future[JValue]] => Validation[NotServed, Token => Future[HttpResponse[JValue]]] = (request: HttpRequest[Future[JValue]]) => {
+    Success { (t: Token) => 
+      request.content.map { _.flatMap { _.validated[NewTokenRequest] match {
+        case Success(r) =>
+          tokenManagement.newToken(t.tid, r).map { 
+            case Success(r) => 
+              HttpResponse[JValue](OK, content = Some(r.serialize))
+            case Failure(e) => 
+              HttpResponse[JValue](HttpStatus(BadRequest, "Error creating new token."), content = Some(JObject(List(
+                JField("error", "Error creating new token: " + e)
+              ))))
+          }
+        case Failure(e) =>
+          Future(HttpResponse[JValue](HttpStatus(BadRequest, "Invalid new token request body."), content = Some(JObject(List(
+            JField("error", "Invalid new token request body: " + e)
+          )))))
+      }}}.getOrElse {
+        Future(HttpResponse[JValue](HttpStatus(BadRequest, "Missing new token request body."), content = Some(JString("Missing new token request body."))))
+      }
+    }
   }
   val metadata = None
 }
 
 class GetGrantsHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      tokenManagement.findTokenGrants(t.tid).map { grants =>
+        HttpResponse[JValue](OK, content = Some(JArray(grants.map { _.serialize }(collection.breakOut)))) 
+      }
+    }
   }
   val metadata = None
 }
 
 class AddGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
 
 class RemoveGrantHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
 
 class GetGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
 
 class AddGrantChildrenHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
 
 class GetGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
 
 class RemoveGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
-    Success { (t: Token) => Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) }
+    Success { (t: Token) => 
+      Future(HttpResponse[JValue](BadRequest, content = Some(JString("todo")))) 
+    }
   }
   val metadata = None
 }
