@@ -52,8 +52,12 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
         for (j <- 0 until ids.length) idsAcc(j)(i) = ids(j)
 
         val newAcc = jv.flattenWithPath.foldLeft(colAcc) {
+          case (acc, (jpath, JNothing)) => acc
           case (acc, (jpath, v)) =>
-            val ctype = CType.forJValue(v).get
+            val ctype = CType.forJValue(v) getOrElse {
+              sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv)
+            }
+
             val ref = VColumnRef[ctype.CA](NamedColumnId(testPath, jpath), ctype)
 
             val col: Column[_] = v match {
@@ -168,17 +172,9 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
 
     "verify bijection from JSON" in checkMappings
     "in cogroup" >> {
-      //"survive pathology1" in testCogroupPathology1
-      /*
-      "survive pathology2" in {
-        skipped
-        testCogroupPathology2
+      "survive scalacheck" in { 
+        check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
       }
-      */
-      //"survive pathology3" in testCogroupPathology3
-      //"survive pathology4" in testCogroupPathology4
-      "survive pathology5" in testCogroupPathology5
-      //"survive scalacheck" in { check { (l: SampleData, r: SampleData) => testCogroup(l, r) } }
     }
   }
 }

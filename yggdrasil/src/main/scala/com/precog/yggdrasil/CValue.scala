@@ -191,8 +191,56 @@ trait CTypeSerialization {
   }
 }
 
-
 object CType extends CTypeSerialization {
+
+  // CStringFixed(width)
+  // CStringArbitrary
+  // CBoolean
+  // CInt
+  // CLong
+  // CFloat
+  // CDouble
+  // CDecimalArbitrary
+  // CNull
+  // CEmptyObject
+  // CEmptyArray
+
+  def unify(t1: CType, t2: CType): Option[CType] = {
+    (t1, t2) match {
+      case (CInt, CInt) => Some(CInt )
+      case (CInt, CLong) => Some(CLong)
+      case (CInt, CFloat) => Some(CFloat)
+      case (CInt, CDouble) => Some(CDouble)
+      case (CInt, CDecimalArbitrary) => Some(CDecimalArbitrary)
+      case (CLong, CInt) => Some(CLong)
+      case (CLong, CLong) => Some(CLong)
+      case (CLong, CFloat) => Some(CFloat)
+      case (CLong, CDouble) => Some(CDouble)
+      case (CLong, CDecimalArbitrary) => Some(CDecimalArbitrary)
+      case (CFloat, CInt) => Some(CFloat)
+      case (CFloat, CLong) => Some(CFloat)
+      case (CFloat, CFloat) => Some(CFloat)
+      case (CFloat, CDouble) => Some(CDouble)
+      case (CFloat, CDecimalArbitrary) => Some(CDecimalArbitrary)
+      case (CDouble, CInt) => Some(CDouble)
+      case (CDouble, CLong) => Some(CDouble)
+      case (CDouble, CFloat) => Some(CDouble)
+      case (CDouble, CDouble) => Some(CDouble)
+      case (CDouble, CDecimalArbitrary) => Some(CDecimalArbitrary)
+      case (CDecimalArbitrary, CInt) => Some(CDecimalArbitrary)
+      case (CDecimalArbitrary, CLong) => Some(CDecimalArbitrary)
+      case (CDecimalArbitrary, CFloat) => Some(CDecimalArbitrary)
+      case (CDecimalArbitrary, CDouble) => Some(CDecimalArbitrary)
+      case (CDecimalArbitrary, CDecimalArbitrary) => Some(CDecimalArbitrary)
+
+      case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => Some(if (w1 > w2) f1 else f2)
+      case (CStringFixed(_), CStringArbitrary) => Some(CStringArbitrary)
+      case (CStringArbitrary, CStringArbitrary) => Some(CStringArbitrary)
+      case (CStringArbitrary, CStringFixed(_)) => Some(CStringArbitrary)
+
+      case _ => None
+    }
+  }
   @inline
   final def toCValue(jval: JValue): CValue = jval match {
     case JString(s) => CString(s)

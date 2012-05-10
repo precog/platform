@@ -20,7 +20,11 @@
 package com.precog.yggdrasil
 package table
 
+import functions._
+
 import scala.collection.mutable.BitSet
+import scalaz.std.option._
+import scalaz.syntax.apply._
 
 trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] { outer =>
   def isDefinedAt(row: Int): Boolean
@@ -40,6 +44,55 @@ trait Column[@specialized(Boolean, Long, Double) A] extends FN[A] { outer =>
     val returns = f.returns
     def isDefinedAt(row: Int) = f(outer).isDefinedAt(row)
     def apply(row: Int): B = f(outer)(row)
+  }
+
+  def isCompatible(ctype: CType) = {
+    CType.unify(returns, ctype).isDefined
+  }
+
+  def coerceInt: Option[Column[Int]] = {
+    returns.asInstanceOf[CType] match {
+      case CInt => Some(this.asInstanceOf[Column[Int]])
+      case _ => None
+    }
+  }
+
+  def coerceLong: Option[Column[Long]] = {
+    returns.asInstanceOf[CType] match {
+      case CInt => Some(this.asInstanceOf[Column[Int]].map(CoerceIntLong.toF1))
+      case CLong => Some(this.asInstanceOf[Column[Long]])
+      case _ => None
+    }
+  }
+
+  def coerceFloat: Option[Column[Float]] = {
+    returns.asInstanceOf[CType] match {
+      case CInt => Some(this.asInstanceOf[Column[Int]].map(CoerceIntFloat.toF1))
+      case CLong => Some(this.asInstanceOf[Column[Long]].map(CoerceLongFloat.toF1))
+      case CFloat => Some(this.asInstanceOf[Column[Float]])
+      case _ => None
+    }
+  }
+
+  def coerceDouble: Option[Column[Double]] = {
+    returns.asInstanceOf[CType] match {
+      case CInt => Some(this.asInstanceOf[Column[Int]].map(CoerceIntDouble.toF1))
+      case CLong => Some(this.asInstanceOf[Column[Long]].map(CoerceLongDouble.toF1))
+      case CFloat => Some(this.asInstanceOf[Column[Float]].map(CoerceFloatDouble.toF1))
+      case CDouble => Some(this.asInstanceOf[Column[Double]])
+      case _ => None
+    }
+  }
+
+  def coerceDecimal: Option[Column[BigDecimal]] = {
+    returns.asInstanceOf[CType] match {
+      case CInt => Some(this.asInstanceOf[Column[Int]].map(CoerceIntDecimal.toF1))
+      case CLong => Some(this.asInstanceOf[Column[Long]].map(CoerceLongDecimal.toF1))
+      case CFloat => Some(this.asInstanceOf[Column[Float]].map(CoerceFloatDecimal.toF1))
+      case CDouble => Some(this.asInstanceOf[Column[Double]].map(CoerceDoubleDecimal.toF1))
+      case CDecimalArbitrary => Some(this.asInstanceOf[Column[BigDecimal]])
+      case _ => None
+    }
   }
 }
 
@@ -125,6 +178,17 @@ object Column {
     val returns = ctype
     def isDefinedAt(row: Int) = true
     def apply(row: Int) = a
+  }
+
+  def unify(c1: Column[_], c2: Column[_]): Option[Column[_]] = {
+    CType.unify(c1.returns, c2.returns) flatMap {
+      case CInt => c1.coerceInt.flatMap(c1 => c2.coerceInt.map(c2 => F2.unify(CInt)(c1, c2)))
+      case CLong => c1.coerceLong.flatMap(c1 => c2.coerceLong.map(c2 => F2.unify(CLong)(c1, c2)))
+      case CFloat => c1.coerceFloat.flatMap(c1 => c2.coerceFloat.map(c2 => F2.unify(CFloat)(c1, c2)))
+      case CDouble => c1.coerceDouble.flatMap(c1 => c2.coerceDouble.map(c2 => F2.unify(CDouble)(c1, c2)))
+      case CDecimalArbitrary => c1.coerceDecimal.flatMap(c1 => c2.coerceDecimal.map(c2 => F2.unify(CDecimalArbitrary)(c1, c2)))
+      case cstring => None
+    }
   }
 }
 

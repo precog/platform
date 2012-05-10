@@ -55,7 +55,7 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
         case (ColumnDescriptor(path, selector, ctype, _), arr) => (VColumnRef[ctype.CA](NamedColumnId(path, selector), ctype) -> arr)
       }
 
-      new ArraySlice(VectorCase(ids: _*), dataMap.toMap)
+      ArraySlice(VectorCase(ids: _*), dataMap.toMap)
     }
   }
 }

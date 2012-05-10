@@ -20,6 +20,8 @@
 package com.precog.yggdrasil
 
 import blueeyes.json.JPath
+import blueeyes.json.JPathField
+import blueeyes.json.JPathIndex
 import blueeyes.json.JsonAST._
 import com.precog.common.VectorCase
 
@@ -32,6 +34,113 @@ import org.scalacheck.Arbitrary._
 import scalaz.Order
 import scalaz.std.list._
 import scalaz.std.anyVal._
+
+trait CValueGenerators {
+  type JSchema = Seq[(JPath, CType)]
+  def schema(depth: Int): Gen[JSchema] = {
+    if (depth <= 0) leafSchema
+    else oneOf(1, 2, 3) flatMap {
+      case 1 => objectSchema(depth, choose(1, 3))
+      case 2 => arraySchema(depth, choose(1, 3))
+      case 3 => leafSchema
+    }
+  }
+
+  def objectSchema(depth: Int, sizeGen: Gen[Int]): Gen[JSchema] = {
+    for {
+      size <- sizeGen
+      names <- listOfN(size, identifier)
+      subschemas <- listOfN(size, schema(depth - 1))  
+    } yield {
+      for {
+        (name, subschema) <- names zip subschemas
+        (jpath, ctype)    <- subschema
+      } yield {
+        (JPathField(name) \ jpath, ctype)
+      }
+    }
+  }
+
+  def arraySchema(depth: Int, sizeGen: Gen[Int]): Gen[JSchema] = {
+    for {
+      size <- sizeGen
+      subschemas <- listOfN(size, schema(depth - 1))
+    } yield {
+      for {
+        (idx, subschema) <- (0 until size) zip subschemas
+        (jpath, ctype)   <- subschema
+      } yield {
+        (JPathIndex(idx) \ jpath, ctype)
+      }
+    }
+  }
+
+  def leafSchema: Gen[JSchema] = ctype map { t => (JPath.Identity -> t) :: Nil }
+
+  def ctype: Gen[CType] = oneOf(
+    chooseNum(10, 1000).map(CStringFixed(_)),
+    CStringArbitrary,
+    CBoolean,
+    CInt,
+    CLong,
+    CFloat,
+    CDouble,
+    CDecimalArbitrary,
+    CNull,
+    CEmptyObject,
+    CEmptyArray
+  )
+
+  def jvalue(ctype: CType): Gen[JValue] = ctype match {
+    case CStringFixed(width) => alphaStr map (JString(_))
+    case CStringArbitrary => alphaStr map (JString(_))
+    case CBoolean => arbitrary[Boolean] map (JBool(_))
+    case CInt => arbitrary[Int] map (JInt(_))
+    case CLong => arbitrary[Long] map (JInt(_))
+    case CFloat => arbitrary[Float] map (JDouble(_))
+    case CDouble => arbitrary[Double] map (JDouble(_))
+    case CDecimalArbitrary => arbitrary[Double] map (JDouble(_))
+    case CNull => JNull
+    case CEmptyObject => JObject.empty 
+    case CEmptyArray => JArray.empty
+  }
+
+  def jvalue(schema: Seq[(JPath, CType)]): Gen[JValue] = {
+    schema.foldLeft(Gen.value[JValue](JNothing)) {
+      case (gen, (jpath, ctype)) => 
+        for {
+          acc <- gen
+          jv  <- jvalue(ctype)
+        } yield {
+          acc.unsafeInsert(jpath, jv)
+        }
+    }
+  }
+
+  def genEventColumns(genSchema: Gen[JSchema]): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
+    for {
+      idCount <- choose(1, 3) 
+      jschema <- genSchema
+      data <- containerOf[Stream, (Identities, Seq[(JPath, JValue)])](
+                for {
+                  ids <- listOfN(idCount, posNum[Long])
+                  values <- Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) })
+                } yield {
+                  (VectorCase(ids: _*), values)
+                }
+              )
+    } yield {
+      (idCount, data)
+    }
+
+  def assemble(parts: Seq[(JPath, JValue)]): JValue = {
+    val result = parts.foldLeft[JValue](JNothing) { 
+      case (acc, (selector, jv)) => acc.unsafeInsert(selector, jv) 
+    }
+
+    if (result != JNothing) result else sys.error("Cannot build object from " + parts)
+  }
+}
 
 trait SValueGenerators {
   def svalue(depth: Int): Gen[SValue] = {

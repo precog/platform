@@ -26,7 +26,7 @@ trait FN[@specialized(Boolean, Long, Double) A] {
   val returns: CType { type CA = A }
 }
 
-sealed trait F1[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B] extends FN[B] { outer =>
+trait F1[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B] extends FN[B] { outer =>
   val accepts: CType { type CA = A }
 
   def apply(a: Column[A]): Column[B] 
@@ -46,7 +46,7 @@ sealed trait F1[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Lon
   }
 }
 
-sealed trait F2[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B, @specialized(Boolean, Long, Double) C] extends FN[C] { outer =>
+trait F2[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B, @specialized(Boolean, Long, Double) C] extends FN[C] { outer =>
   val accepts: (CType { type CA = A }, CType { type CA = B })
 
   def apply(a: Column[A], b: Column[B]): Column[C]
@@ -59,6 +59,27 @@ sealed trait F2[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Lon
     val returns = f.returns
 
     def apply(a: Column[A], b: Column[B]): Column[D] = outer(a, b) map f
+  }
+}
+
+object F2 {
+  def unify[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }): F2[A, A, A] = new F2[A, A, A] {
+    val accepts = (ctype, ctype)
+    val returns = ctype
+
+    def apply(a: Column[A], b: Column[A]): Column[A] = new Column[A] {
+      val returns = ctype
+      def isDefinedAt(row: Int) = a.isDefinedAt(row) || b.isDefinedAt(row)
+      def apply(row: Int) = if (a.isDefinedAt(row)) {
+        if (b.isDefinedAt(row)) b(row) else a(row)
+      } else {
+        if (b.isDefinedAt(row)) {
+          b(row)
+        } else {
+          throw new IllegalStateException("Attempt to retrieve undefined value for row: " + row)
+        }
+      }
+    }
   }
 }
 
@@ -110,7 +131,7 @@ trait F1P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Dou
     }
   }
 
-  final def toF1: F1[A, B] = {
+  final val toF1: F1[A, B] = {
     new F1[A, B] {
       val accepts = outer.accepts
       val returns = outer.returns
@@ -122,6 +143,10 @@ trait F1P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Dou
       }
     }
   }
+}
+
+trait TotalF1P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Double) B] extends F1P[A, B] {
+  def isDefinedAt(a: A) = true
 }
 
 object F1P {
@@ -167,7 +192,7 @@ trait F2P[@specialized(Boolean, Long, Double) A, @specialized(Boolean, Long, Dou
     }
   }
 
-  final def toF2: F2[A, B, C] = {
+  final val toF2: F2[A, B, C] = {
     new F2[A, B, C] {
       val accepts = outer.accepts
       val returns = outer.returns
