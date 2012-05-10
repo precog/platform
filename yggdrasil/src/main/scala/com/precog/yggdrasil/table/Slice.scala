@@ -236,7 +236,17 @@ trait Slice { source =>
   )
 
   def append(other: Slice): Slice = {
-    assert(columns.keySet == other.columns.keySet && idCount == other.idCount) 
+    // try {
+    //   assert(columns.keySet == other.columns.keySet && idCount == other.idCount) 
+    // } catch {
+    //   case ex => 
+    //     println("Slice append mismatch: ")
+    //     println("left columns = " + columns.keySet)
+    //     println("right columns = " + other.columns.keySet)
+    //     println("identities = " + (idCount, other.idCount))
+    //     ex.printStackTrace; throw ex
+    // }
+
     new Slice {
       val idCount = source.idCount
       val size = source.size + other.size
@@ -267,9 +277,19 @@ trait Slice { source =>
   }
 
   def toJson(row: Int): JValue = {
-    columns.foldLeft[JValue](JNull) {
+    val steps = new scala.collection.mutable.ArrayBuffer[(VColumnRef[_], JValue)]()
+
+    columns.foldLeft[JValue](JNothing) {
       case (jv, (ref @ VColumnRef(NamedColumnId(_, selector), ctype), col)) if (col.isDefinedAt(row)) => 
-        jv.unsafeInsert(selector, ctype.jvalueFor(col(row)))
+        steps += ((ref, jv))
+        try {
+          jv.unsafeInsert(selector, ctype.jvalueFor(col(row)))
+        } catch { 
+          case ex => 
+            steps.foreach(s => println(s + "\n\n"))
+            ex.printStackTrace
+            throw ex
+        }
 
       case (jv, _) => jv
     }
@@ -290,13 +310,13 @@ trait Slice { source =>
   }
 }
 
-class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Object /* Array[_] */]) extends Slice {
-  assert(idsData.toList.sliding(2) forall { case x :: y :: Nil => x.length == y.length; case _ => true })
-  val idCount = idsData.length
-  val size = idsData.map(_.length).reduceLeft(_ min _)
-  val identities = idsData map { Column.forArray(CLong, _) }
-  val columns: Map[VColumnRef[_], Column[_]] = 
-    data map { 
+object ArraySlice {
+  def apply(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Object /* Array[_] */]) = {
+    assert(idsData.toList.sliding(2) forall { case x :: y :: Nil => x.length == y.length; case _ => true })
+
+    val size = idsData.map(_.length).reduceLeft(_ min _)
+    val identities = idsData map { Column.forArray(CLong, _) }
+    val columns: Map[VColumnRef[_], Column[_]] = data map { 
       case (m @ VColumnRef(_, ctype), arr) =>
         (ctype: CType) match {
           case CBoolean => m -> Column.forArray[Boolean](CBoolean, arr.asInstanceOf[Array[Boolean]]) 
@@ -307,9 +327,32 @@ class ArraySlice(idsData: VectorCase[Array[Long]], data: Map[VColumnRef[_], Obje
           case _        => m -> Column.forArray[ctype.CA](ctype, arr.asInstanceOf[Array[ctype.CA]]) 
         }
     }
+
+    Slice(identities, Slice.normalize(columns), size)
+  }
 }
 
 object Slice {
+  def normalize(data: Map[VColumnRef[_], Column[_]]): Map[VColumnRef[_], Column[_]] = {
+    val pathed = data.foldLeft(Map.empty[VColumnId, Map[CType, Column[_]]]) {
+      case (acc, (VColumnRef(id, ctype), col)) => acc + {
+        id -> {
+          val tmap = acc.getOrElse(id, Map.empty[CType, Column[_]]) 
+          tmap.values.find(_.isCompatible(ctype)).flatMap(Column.unify(col, _)) match {
+            case Some(tcol) => tmap + (ctype -> tcol)
+            case None => tmap + (ctype -> col)
+          }
+        }
+      }
+    }
+
+    pathed.foldLeft(Map.empty[VColumnRef[_], Column[_]]) {
+      case (acc, (id, tmap)) => tmap.foldLeft(acc) {
+        case (acc, (ctype, col)) => acc + (VColumnRef[ctype.CA](id, ctype) -> col)
+      }
+    }
+  }
+
   def apply(idsData: Seq[Column[Long]], data: Map[VColumnRef[_], Column[_]], dataSize: Int) = {
     new Slice {
       val idCount = idsData.length

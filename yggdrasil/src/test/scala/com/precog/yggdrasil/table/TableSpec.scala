@@ -25,7 +25,7 @@ object TableSpec extends Specification with ArbitraryProjectionDescriptor with A
         val v1 = new Table(
           1, Set(r1),
           List(
-            new ArraySlice(
+            ArraySlice(
               VectorCase(Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L)),
               Map(r1 -> Array(0L, 1L, 3L, 3L, 5L, 7L, 8L, 8L))
             )
@@ -36,7 +36,7 @@ object TableSpec extends Specification with ArbitraryProjectionDescriptor with A
         val v2 = new Table(
           1, Set(r2), 
           List(
-            new ArraySlice(
+            ArraySlice(
               VectorCase(Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L)),
               Map(r2 -> Array(0L, 2L, 3L, 4L, 5L, 5L, 6L, 8L, 8L))
             )
