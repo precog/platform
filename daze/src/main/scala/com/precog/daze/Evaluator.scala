@@ -215,7 +215,10 @@ trait Evaluator extends DAG
       case Root(_, instr) =>
         Right(Match(mal.Actual, ops.point(graph.value.get), graph))    // TODO don't be stupid
       
-      case dag.New(_, parent) => loop(parent, assume, splits, ctx)
+      case dag.New(_, parent) =>{
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
+        Right(Match(mal.Actual, realizeMatch(spec, set) identify Some(() => ctx.nextId), graph))
+      }
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
@@ -488,19 +491,19 @@ trait Evaluator extends DAG
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
         
-        val back = instr match {
+        val back = instr match { 
           case IUnion if left.provenance.length == right.provenance.length =>
             leftEnum.union(rightEnum, ctx.memoizationContext)
           
           // apparently Dataset tracks number of identities...
-          case IUnion if left.provenance.length != right.provenance.length =>
-            leftEnum.paddedMerge(rightEnum, () => ctx.nextId())
-          
+          case IUnion /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
+
           case IIntersect if left.provenance.length == right.provenance.length =>
             leftEnum.intersect(rightEnum, ctx.memoizationContext)
           
-          case IIntersect if left.provenance.length != right.provenance.length =>
-            ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
+          case IIntersect /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
         }
         
         Right(Match(mal.Actual, back, graph))

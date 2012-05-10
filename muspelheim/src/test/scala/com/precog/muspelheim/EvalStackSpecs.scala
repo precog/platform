@@ -197,11 +197,79 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "use the where operator on an intersected set" >> {
+    "basic intersect and union queries" >> {
+      {
+        val input = "4 intersect 4"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+        }
+      }
+      {
+        val input = "4 union 5"
+        val results = evalE(input)
+
+        results must haveSize(2)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { Set(4,5) must contain(d) }
+        }
+      }
+      {
+        val input = "//clicks intersect //views"
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+      {
+        val input = "{foo: 3} union 9"
+        val results = evalE(input)
+
+        results must haveSize(2)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+          case (VectorCase(_), SObject(obj)) => { obj must contain("foo" -> 3) }
+        }
+      }
+      {
+        val input = "obj := {foo: 5} obj.foo intersect 5"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 5 }
+        }
+      }
+      {
+        val input = "arr := [1,2,3] arr[0] intersect 1"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 1 }
+        }
+      }
+      {
+        val input = "{foo: //clicks.pageId, bar: //clicks.userId} union //views"
+        val results = evalE(input)
+
+        results must haveSize(200)
+      }
+    }
+
+    "intersect a union" >> {
       "campaigns.gender" >> {
         val input = """
-          | a := //campaigns.campaign union //campaigns.cpm
-          |   a intersect //campaigns.campaign """.stripMargin
+          | campaign := //campaigns.campaign
+          | cpm := //campaigns.cpm
+          | a := campaign union cpm
+          |   a intersect campaign """.stripMargin
           
         val results = evalE(input)
         
@@ -213,10 +281,23 @@ trait EvalStackSpecs extends Specification {
         }
       }
 
+      "union the same set when two different variables are assigned to it" >> {
+          val input = """
+            | a := //clicks
+            | b := //clicks
+            | a union b""".stripMargin
+
+          val results = evalE(input)
+
+          results must haveSize(100)
+      }      
+
       "clicks.platform" >> {
         val input = """
-          | a := //campaigns.campaign union //campaigns.cpm
-          |   a intersect //campaigns.cpm """.stripMargin
+          | campaign := //campaigns.campaign
+          | cpm := //campaigns.cpm
+          | a := campaign union cpm
+          |   a intersect cpm """.stripMargin
           
         val results = evalE(input)
         
@@ -228,6 +309,18 @@ trait EvalStackSpecs extends Specification {
           }
         }
       }
+    }
+
+    "union with an object" >> {
+      val input = """
+        campaigns := //campaigns
+        clicks := //clicks
+        obj := {foo: campaigns.cpm, bar: campaigns.campaign}
+        obj union clicks""".stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(200)
     }
 
     "use the where operator on a key with string values" in {
@@ -388,7 +481,46 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
-    "evaluate rank" >> {
+    "deref an array with a where" in {
+      val input = """
+        | a := [3,4,5]
+        | a where a[0] = 1""".stripMargin
+
+      val results = eval(input)
+
+      results must haveSize(0)
+    }
+
+    "deref an object with a where" in {
+      val input = """
+        | a := {foo: 5}
+        | a where a.foo = 1""".stripMargin
+
+      val results = eval(input)
+
+      results must haveSize(0)
+    }
+
+    "evaluate incremental rank" >> {
+      "returning a set of ranks without matching" >> {
+        val input = "std::stats::incrementalRank(//campaigns.cpm)"
+
+        val results = eval(input)
+
+        results must haveSize(100)  
+
+        results mustEqual ((1 to 100) map { k => SDecimal(k) }).toSet
+      }
+
+      "using a join on a value" >> {
+        val input = "std::stats::incrementalRank(//campaigns.cpm) + 2"
+
+        val results = eval(input)
+
+        results must haveSize(100)  
+
+        results mustEqual ((3 to 102) map { k => SDecimal(k) }).toSet
+      }
 
       "using where" >> {
         val input = """
