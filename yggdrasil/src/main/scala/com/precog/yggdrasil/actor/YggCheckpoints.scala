@@ -14,7 +14,9 @@ trait YggCheckpoints {
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
-    pendingCheckpoints = pendingCheckpoints :+ checkpoint 
+    if(!pendingCheckpoints.contains(checkpoint)) {
+      pendingCheckpoints = pendingCheckpoints :+ checkpoint 
+    }
   }
 
   def metadataPersisted(messageClock: VectorClock) {
