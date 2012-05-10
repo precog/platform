@@ -93,6 +93,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging {
   }
   
   def actorsStart() = Future[Unit] {
+    logger.info("Starting actor ecosystem")
     this.metadataSyncCancel
     routingActor ! Start 
   }
