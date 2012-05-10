@@ -159,11 +159,11 @@ trait Parser extends RegexParsers with Filters with AST {
     | """`([^`\\]|\\.)+`""".r ^^ canonicalizePropertyName
   )
   
-  private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
+  private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath 
   
-  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  
+  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  //"
   
-  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r 
   
   private lazy val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true

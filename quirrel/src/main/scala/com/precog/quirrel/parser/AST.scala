@@ -326,6 +326,15 @@ trait AST extends Phases {
     private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
     def constrainingExpr = _constrainingExpr()
     private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
+
+    private val _accumulatedProvenance = attribute[Option[Vector[Provenance]]](checkProvenance)
+    def accumulatedProvenance = _accumulatedProvenance()
+    def accumulatedProvenance_=(acc: Option[Vector[Provenance]]) = _accumulatedProvenance() = acc
+    
+    lazy val cardinality: Option[Int] = {
+      if (accumulatedProvenance.isDefined) accumulatedProvenance map { _.length }
+      else None
+    }
     
     private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
       if (this eq root) {
@@ -615,6 +624,10 @@ trait AST extends Phases {
       private val _assumptions = attribute[Map[String, Provenance]](checkProvenance)
       def assumptions = _assumptions()
       private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
+      
+      private val _accumulatedAssumptions = attribute[Map[String, Option[Vector[Provenance]]]](checkProvenance)
+      def accumulatedAssumptions = _accumulatedAssumptions()
+      private[quirrel] def accumulatedAssumptions_=(map: Map[String, Option[Vector[Provenance]]]) = _accumulatedAssumptions() = map
       
       private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
       def unconstrainedParams = _unconstrainedParams()
