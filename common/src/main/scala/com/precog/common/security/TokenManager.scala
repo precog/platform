@@ -97,7 +97,11 @@ trait TokenManager {
 
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
 
-  private[security] def newTokenID(): String = (newUUID() + "-" + newUUID()).toUpperCase
+  // 256 bit token ID
+  //private[security] def newTokenID(): String = (newUUID() + "-" + newUUID()).toUpperCase
+  // 128 bit token ID
+  private[security] def newTokenID(): String = newUUID().toUpperCase
+  // 384 bit grant ID
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
   def newToken(name: String, grants: Set[GrantID]): Future[Token]
