@@ -33,13 +33,6 @@ import scalaz._
 import Scalaz._
 
 package object security {
-  private val tidSafePrefix = 30 
-  private val gidSafePrefix = 30 
-
-  private def safeTokenID(tid: TokenID): String = safePrefix(tid, tidSafePrefix) 
-  private def safeGrantID(gid: GrantID): String = safePrefix(gid, gidSafePrefix) 
-
-  private def safePrefix(s: String, prefix: Int): String = s.substring(0, math.min(s.length-1, prefix))
 
   private val isoFormat = ISODateTimeFormat.dateTime
 
@@ -59,6 +52,22 @@ package object security {
    
   type TokenID = String
   type GrantID = String
+  type UID = String
+}
+
+package security {
+
+  object Util {
+    val tidSafePrefix = 30 
+    val gidSafePrefix = 30 
+
+    def safeTokenID(tid: TokenID): String = safePrefix(tid, tidSafePrefix) 
+    def safeGrantID(gid: GrantID): String = safePrefix(gid, gidSafePrefix) 
+
+    def safePrefix(s: String, prefix: Int): String = s.substring(0, math.min(s.length-1, prefix))
+  }
+
+  import Util._ 
 
   case class Token(tid: TokenID, name: String, grants: Set[GrantID]) {
     def addGrants(add: Set[GrantID]): Token = 
@@ -123,25 +132,8 @@ package object security {
     }
   }
 
-  object Grant extends GrantSerialization {
-  
-    val ALL = Set[AccessType](WritePermission, OwnerPermission, ReadPermission, ReducePermission, ModifyPermission, TransformPermission)
-    val RRT = Set[AccessType](ReadPermission, ReducePermission, TransformPermission)
+  object Grant extends GrantSerialization 
 
-    def grantSet(
-        path: Path, 
-        owner: TokenID, 
-        expiration: Option[DateTime], 
-        grantTypes: Set[AccessType]): Set[Permission] = grantTypes.map {
-      case WritePermission => WritePermission(path, expiration)
-      case OwnerPermission => OwnerPermission(path, expiration)
-      case ReadPermission => ReadPermission(path, owner, expiration)
-      case ReducePermission => ReducePermission(path, owner, expiration)
-      case ModifyPermission => ModifyPermission(path, owner, expiration)
-      case TransformPermission => TransformPermission(path, owner, expiration)
-    }
-  }
-  
   trait Permission {
     def accessType: AccessType
     def path: Path
@@ -191,7 +183,25 @@ package object security {
     }
   }
 
-  object Permission extends PermissionSerialization
+  object Permission extends PermissionSerialization {
+    
+    val ALL = Set[AccessType](WritePermission, OwnerPermission, ReadPermission, ReducePermission, ModifyPermission, TransformPermission)
+    val RRT = Set[AccessType](ReadPermission, ReducePermission, TransformPermission)
+    
+    def permissions(
+        path: Path, 
+        owner: TokenID, 
+        expiration: Option[DateTime], 
+        grantTypes: Set[AccessType]): Set[Permission] = grantTypes.map {
+      case WritePermission => WritePermission(path, expiration)
+      case OwnerPermission => OwnerPermission(path, expiration)
+      case ReadPermission => ReadPermission(path, owner, expiration)
+      case ReducePermission => ReducePermission(path, owner, expiration)
+      case ModifyPermission => ModifyPermission(path, owner, expiration)
+      case TransformPermission => TransformPermission(path, owner, expiration)
+    }
+
+  }
 
   sealed trait OwnerIgnorantPermission extends Permission {
     def derive(path: Path = path, expiration: Option[DateTime] = expiration): Permission
@@ -446,8 +456,6 @@ package object security {
 
   // legacy security features held over until complete token/grant refactor complete
 
-  type UID = String
-
   sealed trait PathAccess {
     def symbol: String
   }
@@ -470,221 +478,3 @@ package object security {
 
 }
 
-package object osecurity {
-  
-  type UID = String
-
-  sealed trait PathRestriction {
-    def matches(path: Path): Boolean
-  }
-
-  trait PathRestrictionSerialization {
-    implicit val PathRestrictionDecomposer: Decomposer[PathRestriction] = new Decomposer[PathRestriction] {
-      override def decompose(pathSpec: PathRestriction): JValue = pathSpec match {
-        case Subtree(path: Path) => JObject(List(
-          JField("subtree", JString(path.toString))
-        ))
-      }
-    }
-
-    implicit val PathRestrictionExtractor: Extractor[PathRestriction] = new Extractor[PathRestriction] with ValidatedExtraction[PathRestriction] {    
-      override def validated(obj: JValue): Validation[Error, PathRestriction] = obj match {
-        case JObject(JField("subtree", JString(p)) :: Nil) => Success(Subtree(Path(p)))
-        case _                                             => Failure(Invalid("Unable to parse path restriction."))
-      }
-    }
-  }
-
-  object PathRestriction extends PathRestrictionSerialization
-  
-  //case object AnyPath extends PathRestriction
-  case class Subtree(path: Path) extends PathRestriction {
-    def matches(test: Path) = { 
-      path.equalOrChild(test)
-    }   
-  }
- 
-  sealed trait OwnerRestriction
-
-  trait OwnerRestrictionSerialization {
-    implicit val OwnerRestrictionDecomposer: Decomposer[OwnerRestriction] = new Decomposer[OwnerRestriction] {
-      override def decompose(ownerSpec: OwnerRestriction): JValue = ownerSpec match {
-        case OwnerAndDescendants(owner) => JObject(List(
-          JField("ownerRestriction", JString(owner))
-
-        ))
-        case HolderAndDescendants => JObject(List(
-          JField("ownerRestriction", JString("[HOLDER]"))
-        ))
-      }
-    }
-
-    implicit val OwnerRestrictionExtractor: Extractor[OwnerRestriction] = new Extractor[OwnerRestriction] with ValidatedExtraction[OwnerRestriction] {    
-      override def validated(obj: JValue): Validation[Error, OwnerRestriction] = obj match {
-        case JObject(JField("ownerRestriction", JString(o)) :: Nil) => o match {
-          case "[HOLDER]" => Success(HolderAndDescendants)
-          case o   => Success(OwnerAndDescendants(o))
-        }
-        case _                                             => Failure(Invalid("Unable to parse owner restriction."))
-      }
-    }
-  }
-
-  object OwnerRestriction extends OwnerRestrictionSerialization
-
-  //case class AnyOwner extends OwnerRestriction
-  case class OwnerAndDescendants(owner: UID) extends OwnerRestriction
-  case object HolderAndDescendants extends OwnerRestriction
-
-  sealed trait PathAccess {
-    def symbol: String
-  }
-  
-  trait PathAccessSerialization {
-    implicit val PathAccessDecomposer: Decomposer[PathAccess] = new Decomposer[PathAccess] {
-      override def decompose(pathAccess: PathAccess): JValue = JString(pathAccess.symbol)
-    }
-
-    implicit val PathAccessExtractor: Extractor[PathAccess] = new Extractor[PathAccess] with ValidatedExtraction[PathAccess] {    
-      override def validated(obj: JValue): Validation[Error, PathAccess] = obj match {
-        case JString(PathRead.symbol)  => Success(PathRead)
-        case JString(PathWrite.symbol) => Success(PathWrite)
-        case _                         => Failure(Invalid("Unable to parse path access value."))
-      }
-    }
-  }
-
-  object PathAccess extends PathAccessSerialization
-
-  case object PathRead extends PathAccess {
-    val symbol = "PATH_READ"
-  }
-
-  case object PathWrite extends PathAccess {
-    val symbol = "PATH_WRITE"
-  }
-
-  sealed trait DataAccess {
-    def symbol: String
-  }
-  
-  trait DataAccessSerialization {
-    implicit val DataAccessDecomposer: Decomposer[DataAccess] = new Decomposer[DataAccess] {
-      override def decompose(dataAccess: DataAccess): JValue = JString(dataAccess.symbol)
-    }
-
-    implicit val DataAccessExtractor: Extractor[DataAccess] = new Extractor[DataAccess] with ValidatedExtraction[DataAccess] {    
-      override def validated(obj: JValue): Validation[Error, DataAccess] = obj match {
-        case JString(DataQuery.symbol) => Success(DataQuery)
-        case _                         => Failure(Invalid("Unable to parse data access value."))
-      }
-    }
-  }
-
-  object DataAccess extends DataAccessSerialization
-
-  case object DataQuery extends DataAccess {
-    val symbol = "DATA_QUERY"
-  }
-
-  case class MayAccessPath(pathSpec: PathRestriction, pathAccess: PathAccess, mayShare: Boolean)
-
-  trait MayAccessPathSerialization {
-    implicit val MayAccessPathDecomposer: Decomposer[MayAccessPath] = new Decomposer[MayAccessPath] {
-      override def decompose(mayAccessPath: MayAccessPath): JValue = JObject(List( 
-        JField("pathSpec", mayAccessPath.pathSpec),
-        JField("pathAccess", mayAccessPath.pathAccess),
-        JField("mayShare", mayAccessPath.mayShare)
-      ))    
-    }
-
-    implicit val MayAccessPathExtractor: Extractor[MayAccessPath] = new Extractor[MayAccessPath] with ValidatedExtraction[MayAccessPath] {    
-      override def validated(obj: JValue): Validation[Error, MayAccessPath] =
-        ((obj \ "pathSpec").validated[PathRestriction] |@|
-         (obj \ "pathAccess").validated[PathAccess] |@|
-         (obj \ "mayShare").validated[Boolean]).apply(MayAccessPath(_,_,_))
-    }
-  }
-
-  object MayAccessPath extends MayAccessPathSerialization
-
-  case class MayAccessData(pathSpec: PathRestriction, ownershipSpec: OwnerRestriction, dataAccess: DataAccess, mayShare: Boolean)
-  
-  trait MayAccessDataSerialization {
-    implicit val MayAccessDataDecomposer: Decomposer[MayAccessData] = new Decomposer[MayAccessData] {
-      override def decompose(mayAccessData: MayAccessData): JValue = JObject(List( 
-        JField("pathSpec", mayAccessData.pathSpec.serialize),
-        JField("ownershipSpec", mayAccessData.ownershipSpec.serialize),
-        JField("dataAccess", mayAccessData.dataAccess),
-        JField("mayShare", mayAccessData.mayShare)
-      ))    
-    }
-
-    implicit val MayAccessDataExtractor: Extractor[MayAccessData] = new Extractor[MayAccessData] with ValidatedExtraction[MayAccessData] {    
-      override def validated(obj: JValue): Validation[Error, MayAccessData] = 
-        ((obj \ "pathSpec").validated[PathRestriction] |@|
-         (obj \ "ownershipSpec").validated[OwnerRestriction] |@|
-         (obj \ "dataAccess").validated[DataAccess] |@|
-         (obj \ "mayShare").validated[Boolean]).apply(MayAccessData(_,_,_,_))
-    }
-  }
-
-  object MayAccessData extends MayAccessDataSerialization
-  
-  case class Permissions(path: Set[MayAccessPath], data: Set[MayAccessData]) {
-    def ++(that: Permissions) = Permissions(this.path ++ that.path, this.data ++ that.data)
-    def sharable: Permissions = 
-      Permissions( 
-        this.path.filter{ _.mayShare },
-        this.data.filter{ _.mayShare }
-      )
-  }
-  
-  trait PermissionsSerialization {
-    implicit val PermissionsDecomposer: Decomposer[Permissions] = new Decomposer[Permissions] {
-      override def decompose(perms: Permissions): JValue = JObject(List( 
-        JField("path", perms.path.serialize),
-        JField("data", perms.data.serialize)
-      ))    
-    }
-
-    implicit val PermissionsExtractor: Extractor[Permissions] = new Extractor[Permissions] with ValidatedExtraction[Permissions] {    
-      override def validated(obj: JValue): Validation[Error, Permissions] =
-        ((obj \ "path").validated[Set[MayAccessPath]] |@|
-         (obj \ "data").validated[Set[MayAccessData]]).apply(Permissions(_,_))
-    }
-  }
-
-  object Permissions extends PermissionsSerialization {
-    def apply(path: MayAccessPath*)(data: MayAccessData*): Permissions = Permissions(path.toSet, data.toSet)
-    val empty = Permissions(Set.empty[MayAccessPath], Set.empty[MayAccessData])
-  }
-
-  case class Token(uid: UID, issuer: Option[UID], permissions: Permissions, grants: Set[UID], expired: Boolean) {
-    val isValid = !expired
-  }
-
-  trait TokenSerialization {
-    implicit val TokenDecomposer: Decomposer[Token] = new Decomposer[Token] {
-      override def decompose(token: Token): JValue = JObject(List( 
-        JField("uid", token.uid),
-        JField("issuer", token.issuer.serialize),
-        JField("permissions", token.permissions),
-        JField("grants", token.grants.serialize),
-        JField("expired", token.expired)
-      ))    
-    }
-
-    implicit val TokenExtractor: Extractor[Token] = new Extractor[Token] with ValidatedExtraction[Token] {    
-      override def validated(obj: JValue): Validation[Error, Token] =
-        ((obj \ "uid").validated[UID] |@|
-         (obj \ "issuer").validated[Option[UID]] |@|
-         (obj \ "permissions").validated[Permissions] |@|
-         (obj \ "grants").validated[Set[UID]] |@|
-         (obj \ "expired").validated[Boolean]).apply(Token(_,_,_,_,_))
-    }
-  }
-
-  object Token extends TokenSerialization with ((UID, Option[UID], Permissions, Set[UID], Boolean) => Token)
-
-}
