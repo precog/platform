@@ -238,14 +238,14 @@ trait TokenManagerTestValues extends AkkaDefaults {
   
   val (rootToken, rootGrants) = newToken("root") { t =>
     try {
-    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
     } catch {
       case ex => println(ex); throw ex
     }
   }
   
   val (rootLikeToken, rootLikeGrants) = newToken("rootLike") { t =>
-    Await.result(Future.sequence(Grant.grantSet("/child", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
+    Await.result(Future.sequence(Permission.permissions("/child", t.tid, None, Permission.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
   }
  
   val (superToken, superGrants) = newToken("super") { t =>
@@ -276,13 +276,13 @@ trait TokenManagerTestValues extends AkkaDefaults {
   }
 
   val (invalidGrantParentToken, invalidGrantParentGrants) = newToken("invalidGrantParent") { t =>
-    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ tokens.newGrant(Some(invalidGrantID), _) }.map{ _.map { _.gid } }), timeout)
   }
 
   val noPermsToken = Await.result(tokens.newToken("noPerms", Set.empty), timeout)
 
   val (expiredToken, expiredGrants) = newToken("expiredGrants") { t =>
-    Await.result(Future.sequence(Grant.grantSet("/", t.tid, Some(farPast), Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
+    Await.result(Future.sequence(Permission.permissions("/", t.tid, Some(farPast), Permission.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid }}), timeout)
   }
 
   val (expiredParentToken, expiredParentTokens) = newToken("expiredParentGrants") { t =>
@@ -343,7 +343,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
   }
 
   val (root, rootGrants) = newToken("root") { t =>
-    Await.result(Future.sequence(Grant.grantSet("/", t.tid, None, Grant.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
+    Await.result(Future.sequence(Permission.permissions("/", t.tid, None, Permission.ALL).map{ tokens.newGrant(None, _) }.map{ _.map { _.gid } }), timeout)
   }
 
   val (customer, customerGrants) = newCustomer("customer", rootGrants)
