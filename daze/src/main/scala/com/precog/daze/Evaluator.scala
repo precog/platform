@@ -245,14 +245,26 @@ trait Evaluator extends DAG
         lazy val enum = realizeMatch(spec, set)
 
         op match {
-          case BuiltInFunction1Op(r @ IncrementalRank) => { //ranks incrementally: (3,7,7,7,9,12,12) -> (1,2,3,4,5,6,7)
-            var count = 0
+          case BuiltInFunction1Op(Rank) => { // (3,7,7,7,9,12,12,15) -> (1,2,2,2,5,6,7,7,9)
+            var countTotal = 0
+            var countEach = 1
+            var previous: Option[SValue] = Option.empty[SValue]
 
             val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
             val enum3: Dataset[SValue] = enum2 collect {
               case s @ SDecimal(v) => {
-                count += 1
-                SDecimal(count)
+                if (Some(s) == previous) {
+                  previous = Some(s)
+                  countEach += 1
+
+                  SDecimal(countTotal)
+                } else {
+                  previous = Some(s)
+                  countTotal += countEach 
+                  countEach = 1
+                
+                  SDecimal(countTotal)
+                }
               }
             }
             val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
@@ -260,7 +272,7 @@ trait Evaluator extends DAG
             Right(Match(mal.Actual, enum4, graph))  
           }
 
-          case BuiltInFunction1Op(r @ DuplicateRank) => {  //ranks incrementally where equal numbers get same rank: (2,7,7,7,9,12,12) -> (1,2,2,2,3,4,4)
+          case BuiltInFunction1Op(DenseRank) => {  // (2,7,7,7,9,12,12,15) -> (1,2,2,2,3,4,4,5)
             var count = 0
             var previous: Option[SValue] = Option.empty[SValue]
 

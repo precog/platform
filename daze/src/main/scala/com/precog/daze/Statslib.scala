@@ -31,7 +31,7 @@ trait Statslib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
   
   val StatsNamespace = Vector("std", "stats")
 
-  override def _lib1 = super._lib1 ++ Set(IncrementalRank, DuplicateRank)
+  override def _lib1 = super._lib1 ++ Set(DenseRank, Rank)
   override def _lib2 = super._lib2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression)
 
   //private implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
@@ -147,7 +147,7 @@ trait Statslib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
     }
   }
 
-  trait Rank {
+  trait RankFunction {
     val operandType = Some(SDecimal)
 
     val operation: PartialFunction[SValue, SValue] = { 
@@ -155,7 +155,7 @@ trait Statslib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
     }
   }
 
-  object IncrementalRank extends BIF1(StatsNamespace, "incrementalRank") with Rank
-  object DuplicateRank extends BIF1(StatsNamespace, "duplicateRank") with Rank
+  object DenseRank extends BIF1(StatsNamespace, "denseRank") with RankFunction
+  object Rank extends BIF1(StatsNamespace, "rank") with RankFunction
 
 }
