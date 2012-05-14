@@ -226,7 +226,7 @@ trait Evaluator extends DAG
         lazy val enum = realizeMatch(spec, set)
 
         op match {
-          case BuiltInFunction1Op(Rank) => { // (3,7,7,7,9,12,12,15) -> (1,2,2,2,5,6,7,7,9)
+          case BuiltInFunction1Op(Rank) => { // (3,7,7,7,9,12,12,15) -> (1,2,2,2,5,6,6,8)
             var countTotal = 0
             var countEach = 1
             var previous: Option[SValue] = Option.empty[SValue]
