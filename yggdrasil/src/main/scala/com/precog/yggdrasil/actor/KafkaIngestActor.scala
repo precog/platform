@@ -37,13 +37,12 @@ import blueeyes.json.xschema.Decomposer
 import blueeyes.json.xschema.DefaultSerialization._
 
 class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
-
   private val bufferSize = 1024 * 1024
 
   private[actor] var lastCheckpoint = checkpoints.latestCheckpoint 
 
   def readMessages(): Seq[IngestMessage] = {
-    val messages = readMessageBatch(lastCheckpoint.offset)
+    val messages = consumer.ingestBatch(lastCheckpoint.offset, bufferSize)
 
     val (out, clock, offset) = messages.foldLeft( (Vector[IngestMessage](), lastCheckpoint.messageClock, lastCheckpoint.offset ) ) {
       case ((acc, clock, offset), msgAndOffset) => 
@@ -65,10 +64,6 @@ class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer
     lastCheckpoint = newCheckpoint
   }
 
-  def readMessageBatch(offset: Long): Seq[MessageAndOffset] = {
-    consumer.ingestBatch(offset, bufferSize)
-  }
- 
   def status(): JValue = JObject.empty ++ JField("Ingest", JObject.empty ++
         JField("lastCheckpoint", lastCheckpoint.serialize))
 
@@ -78,7 +73,6 @@ class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer
 }
 
 trait ShardIngestActor extends Actor with Logging {
-
   def receive = {
     case Status => sender ! status()
     case GetMessages(replyTo) => 

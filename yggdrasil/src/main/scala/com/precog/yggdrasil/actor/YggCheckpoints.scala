@@ -28,7 +28,6 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz.{Success, Failure}
 
 trait YggCheckpoints {
-
   protected var lastCheckpoint = YggCheckpoint(0L, VectorClock.empty)
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
@@ -62,11 +61,6 @@ trait YggCheckpoints {
   protected def saveRecoveryPoint(checkpoint: YggCheckpoint): Unit
 }
 
-class TestYggCheckpoints extends YggCheckpoints with Logging {
-  protected def saveRecoveryPoint(checkpoint: YggCheckpoint) {
-    logger.info("[PLACEHOLDER - TODO] saving shard recovery point to zookeeper. " + checkpoint)
-  } 
-}
 
 class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) extends YggCheckpoints with Logging {
   
