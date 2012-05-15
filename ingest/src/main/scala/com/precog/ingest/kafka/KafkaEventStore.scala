@@ -56,7 +56,6 @@ class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 
 }
 
 class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {
-  
   private val localTopic = config[String]("topic")
   private val localProperties = {
     val props = JProperties.configurationToProperties(config)
@@ -76,6 +75,5 @@ class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDi
   }
 
   def stop(): Future[Unit] = Future { producer.close } 
-
 }
 
