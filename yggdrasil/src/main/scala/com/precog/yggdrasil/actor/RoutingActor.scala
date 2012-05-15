@@ -162,8 +162,7 @@ trait ReadAheadEventIngest extends Logging {
   private def logErrors(errors: Seq[String]) = errors.foreach( logger.error(_) )
 }
 
-class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration, implicit val timeout: Timeout, implicit val execContext: ExecutionContext) extends Logging {
-
+class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration)(implicit timeout: Timeout, execContext: ExecutionContext) extends Logging {
   type ActionMap = mutable.Map[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
 
   def store(events: Seq[IngestMessage]): ValidationNEL[Throwable, Unit] = {
@@ -178,7 +177,6 @@ class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadat
   }
 
   def buildActions(events: Seq[IngestMessage]): ActionMap = {
-    
     def updateActions(event: IngestMessage, actions: ActionMap): ActionMap = {
       event match {
         case SyncMessage(_, _, _) => actions 

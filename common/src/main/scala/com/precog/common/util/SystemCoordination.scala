@@ -36,6 +36,7 @@ trait SystemCoordination {
   def close(): Unit
 }
 
+
 sealed trait IdSequence {
   def isEmpty(): Boolean
   def next(): (Int, Int)
@@ -45,6 +46,7 @@ case object EmptyIdSequence extends IdSequence {
   def isEmpty(): Boolean = true
   def next() = sys.error("No ids available from empty id sequence block")
 }
+
 
 case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId: Int) extends IdSequence {    
   private val currentSequenceId = new AtomicInteger(firstSequenceId)
@@ -76,6 +78,7 @@ trait IdSequenceBlockSerialization {
 }
 
 object IdSequenceBlock extends IdSequenceBlockSerialization
+
 
 case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: IdSequenceBlock) {
   override def toString() = "EventRelayState[ offset: %d prodId: %d seqId: %d in [%d,%d] ]".format(
@@ -237,8 +240,13 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
     zkc.updateDataSerialized(producerPath(producerId), updater) 
 
     updater.newProducerState match {
-      case Some(ProducerState(next)) => IdSequenceBlock(producerId, next - blockSize + 1, next) 
-      case None => sys.error("Unable to get new producer sequence block")
+      case Some(ProducerState(next)) => 
+        // updating the producer state advances the state counter by blockSize, meaning 
+        // that the start start of the block is derived by subtraction
+        IdSequenceBlock(producerId, next - blockSize + 1, next) 
+
+      case None => 
+        sys.error("Unable to get new producer sequence block")
     }
   }
 
