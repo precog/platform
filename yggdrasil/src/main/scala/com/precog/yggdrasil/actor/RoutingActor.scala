@@ -65,10 +65,13 @@ case object Start
 case object ControlledStop
 case class AwaitShutdown(replyTo: ActorRef)
 
-class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestActor: Option[ActorRef], scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
-
+class BatchStoreActor(routingDispatch: RoutingDispatch, idleDelay: Duration, ingestActor: Option[ActorRef], scheduler: Scheduler, shutdownCheck: Duration) extends Actor with Logging {
   private val initiated = new AtomicLong(0)
   private val processed = new AtomicLong(0)
+  private var inShutdown = false
+
+  private val initialAction = GetIngestNow
+  private val delayIngestFollowup = GetIngestAfter(idleDelay)
 
   def receive = {
     case Status =>
@@ -113,22 +116,13 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
 
   def pendingBatches(): Long = initiated.get - processed.get
 
-  def scheduleIngestRequest(delay: Long) {
+  def scheduleIngestRequest(delay: Duration) {
     for (actor <- ingestActor) {
       initiated.incrementAndGet
-      if (delay <= 0) {
-        actor ! GetMessages(self)
-      } else {
-        scheduler.scheduleOnce(Duration(delay, "millis"), actor, GetMessages(self))
-      }
+      scheduler.scheduleOnce(delay, actor, GetMessages(self))
     }
   }
 
-  private var inShutdown = false
-  private val delayIngestFollowup = GetIngestAfter(idleDelayMillis)
-
-  val initialAction = GetIngestNow
-  
   def start() {
     inShutdown = false
     handleNext(initialAction)
@@ -142,7 +136,7 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
     if(!inShutdown) {
       nextAction match {
         case GetIngestNow =>
-          scheduleIngestRequest(0)
+          scheduleIngestRequest(Duration.Zero)
         case GetIngestAfter(delay) =>
           scheduleIngestRequest(delay)
         case NoIngest =>
@@ -164,7 +158,7 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
   private implicit val ValidationMonad = Validation.validationMonad[Throwable]
   def process(ingest: IngestResult, replyTo: ActorRef) = ingest match {
     case IngestData(messages) =>
-      store.store(messages) onComplete { e => 
+      routingDispatch.storeAll(messages) onComplete { e => 
         processed.incrementAndGet
         sender ! Validation.fromEither(e).join
       }
@@ -186,4 +180,4 @@ case class DirectIngestData(messages: Seq[IngestMessage])
 sealed trait IngestAction
 case object NoIngest extends IngestAction
 case object GetIngestNow extends IngestAction
-case class GetIngestAfter(delay: Long) extends IngestAction
+case class GetIngestAfter(delay: Duration) extends IngestAction

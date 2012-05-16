@@ -45,74 +45,65 @@ import scalaz._
 case class InsertComplete(eventId: EventId, descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 case class InsertBatchComplete(inserts: Seq[InsertComplete])
 
-class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration)(implicit timeout: Timeout, execContext: ExecutionContext) extends Logging {
+class RoutingDispatch(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration)(implicit timeout: Timeout, execContext: ExecutionContext) extends Logging {
   type ActionMap = mutable.Map[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
 
-  def store(events: Seq[IngestMessage]): Future[Validation[Throwable, Unit]] = {
+  val batchCounter = new AtomicLong(0)
+
+  def storeAll(events: Iterable[IngestMessage]): Future[Validation[Throwable, Unit]] = {
     import scala.collection.mutable
 
     var actionMap = buildActions(events)
     dispatchActions(actionMap)
   }
 
-  def buildActions(events: Seq[IngestMessage]): ActionMap = {
-    def updateActions(event: IngestMessage, actions: ActionMap): ActionMap = {
-      event match {
-        case SyncMessage(_, _, _) => actions 
+  def buildActions(events: Iterable[IngestMessage]): ActionMap = {
+    val actions = mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
 
-        case em @ EventMessage(eventId, _) =>
+    @inline @tailrec
+    def update(eventId: EventId, updates: Iterator[ProjectionData]): Unit = {
+      if (updates.hasNext) {
+        val ProjectionData(descriptor, identities, values, metadata) = updates.next()
+        val insert = ProjectionInsert(identities, values)
+        val complete = InsertComplete(eventId, descriptor, values, metadata)
 
-          @tailrec
-          def update(updates: Array[ProjectionData], actions: ActionMap, i: Int = 0): ActionMap = {
-
-            def applyUpdates(update: ProjectionData, actions: ActionMap): ActionMap = {
-              val insert = ProjectionInsert(update.identities, update.values)
-              val complete = InsertComplete(eventId, update.descriptor, update.values, update.metadata)
-              val (inserts, completes) = actions.get(update.descriptor) getOrElse { (Vector.empty, Vector.empty) }
-              val newActions = (inserts :+ insert, completes :+ complete) 
-              actions += (update.descriptor -> newActions)
-            }
-
-            if(i < updates.length) {
-              update(updates, applyUpdates(updates(i), actions), i+1)
-            } else {
-              actions
-            }
-          }
-
-          update(routingTable.route(em), actions)
-      }
+        val (inserts, completes) = actions.getOrElse(descriptor, (Vector.empty, Vector.empty))
+        val newActions = (inserts :+ insert, completes :+ complete) 
+        
+        actions += (descriptor -> newActions)
+        update(eventId, updates)
+      } 
     }
-  
-    @tailrec
-    def build(events: Seq[IngestMessage], actions: ActionMap, i: Int = 0): ActionMap = {
-      if(i < events.length) {
-        build(events, updateActions(events(i), actions), i+1)
-      } else {
-        actions
+
+    @inline @tailrec
+    def build(events: Iterator[IngestMessage]): Unit = {
+      if (events.hasNext) {
+        events.next() match {
+          case em @ EventMessage(eventId, _) => update(eventId, routingTable.route(em).iterator)
+          case _ => ()
+        }
+
+        build(events)
       }
     }
 
-    build(events, mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])])
+    build(events.iterator)
+    actions
   }
 
-  val batchCounter = new AtomicLong(0)
-
   def dispatchActions(actions: ActionMap): Future[Validation[Throwable, Unit]] = {
-    logger.info("Pending batches: " + batchCounter.get)
-    val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
-
-    acquire.map { x => batchCounter.incrementAndGet; x }.flatMap {
+    (projectionActors ? AcquireProjectionBatch(actions.keys)) flatMap {
       case ProjectionBatchAcquired(actorMap) =>
         for {
+          _     <-  Future(batchCounter.incrementAndGet)
+
           descs <-  Future.sequence {
-                      actions.keys map { desc =>
-                        val (inserts, completes)  = actions(desc)
-                        val actor = actorMap(desc)
-                        for {
-                          _ <- actorMap(desc) ? ProjectionBatchInsert(inserts)
-                          _ <- metadataActor  ? UpdateMetadata(completes)
-                        } yield desc
+                      actions map {
+                        case (desc, (inserts, completes)) =>
+                          for {
+                            _ <- actorMap(desc) ? ProjectionBatchInsert(inserts)
+                            _ <- metadataActor  ? UpdateMetadata(completes)
+                          } yield desc
                       }
                     }
 
@@ -122,8 +113,8 @@ class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadat
           Success(()) 
         }
 
-      case ProjectionError(errs) =>
-        Future(Failure(errs))
+      case ProjectionError(ex) =>
+        Future(Failure(ex))
     }
   }
 }

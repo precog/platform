@@ -41,7 +41,7 @@ trait StandaloneActorEcosystem extends BaseActorEcosystem with YggConfigComponen
 
   lazy val actorSystem = ActorSystem("standalone_actor_system")
 
-  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, None, actorSystem.scheduler)), "router")
+  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(routingDispatch, yggConfig.batchStoreDelay, None, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
   
   def actorsStatus(): Future[JArray] = Future {
     JArray(List(JString("StandaloneActorEcosystem status not yet implemented.")))

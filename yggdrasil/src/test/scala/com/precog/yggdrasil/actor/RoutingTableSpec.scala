@@ -53,10 +53,9 @@ class RoutingTableSpec extends Specification {
 
       val actions = rt.route(msg)
 
-      val expected : Array[ProjectionData] = 
-        Array(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)))
+      val expected = Seq(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)))
 
-      actions must_== expected 
+      actions must containAllOf(expected).only
     }
 
     "project an event with n properties to n projection actions" in {
@@ -78,12 +77,12 @@ class RoutingTableSpec extends Specification {
 
       val actions = rt.route(msg)
 
-      val expected : Array[ProjectionData] = Array(
+      val expected = Seq(
         ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)),
         ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CInt(123)), List(Set.empty))
       )
 
-      actions must_== expected
+      actions must containAllOf(expected).only
       
     }
   }
