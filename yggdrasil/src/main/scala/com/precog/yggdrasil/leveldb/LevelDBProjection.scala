@@ -64,49 +64,12 @@ object LevelDBProjectionComparator {
 object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 
-  def apply(baseDir : File, descriptor: ProjectionDescriptor): ValidationNEL[Throwable, LevelDBProjection] = {
-    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
+  def forDescriptor(baseDir : File, descriptor: ProjectionDescriptor): Validation[Throwable, LevelDBProjection] = {
+    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new IOException("Could not create database basedir " + baseDir): Throwable).fail[File] 
                    else baseDir.success[Throwable]
 
-    baseDirV.toValidationNel map { (bd: File) => new LevelDBProjection(bd, descriptor) }
+    baseDirV map { (bd: File) => new LevelDBProjection(bd, descriptor) }
   }
-
-//  val descriptorFile = "projection_descriptor.json"
-//  def descriptorSync(baseDir: File): Sync[ProjectionDescriptor] = new CommonSync[ProjectionDescriptor](baseDir, descriptorFile)
-
-//  private class CommonSync[T](baseDir: File, filename: String)(implicit extractor: Extractor[T], decomposer: Decomposer[T]) extends Sync[T] {
-//    import java.io._
-//
-//    val df = new File(baseDir, filename)
-//
-//    def read = 
-//      if (df.exists) Some {
-//        IO {
-//          val reader = new FileReader(df)
-//          try {
-//            { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated(extractor)
-//          } finally {
-//            reader.close
-//          }
-//        }
-//      } else {
-//        None
-//      }
-//
-//    def sync(data: T) = IO {
-//      Validation.fromTryCatch {
-//        val tmpFile = File.createTempFile(filename, ".tmp", baseDir)
-//        val writer = new FileWriter(tmpFile)
-//        try {
-//          compact(render(data.serialize(decomposer)), writer)
-//        } finally {
-//          writer.close
-//        }
-//        tmpFile.renameTo(df) // TODO: This is only atomic on POSIX systems
-//        Success(())
-//      }
-//    }
-//  }
 }
 
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset] {

@@ -1,5 +1,4 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package actor 
 
 import com.precog.common._
@@ -24,6 +23,7 @@ import collection.mutable
 import java.util.concurrent.atomic.AtomicLong
 
 import scalaz._
+import scalaz.syntax.bind._
 
 object RoutingActor {
   private val pathDelimeter = "//"
@@ -46,7 +46,7 @@ case object Start
 case object ControlledStop
 case class AwaitShutdown(replyTo: ActorRef)
 
-class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestActor: Option[ActorRef], scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with ReadAheadEventIngest with Logging {
+class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestActor: Option[ActorRef], scheduler: Scheduler, shutdownCheck: Duration = Duration(1, "second")) extends Actor with Logging {
 
   private val initiated = new AtomicLong(0)
   private val processed = new AtomicLong(0)
@@ -54,9 +54,11 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
   def receive = {
     case Status =>
       sender ! status()
+
     case Start =>
       start
       sender ! ()
+
     case ControlledStop =>
       initiateShutdown
       self ! AwaitShutdown(sender)
@@ -70,43 +72,38 @@ class BatchStoreActor(val store: EventStore, val idleDelayMillis: Long, ingestAc
         logger.debug("Routing actor shutdown - Pending batches (%d)".format(pending)) 
         scheduler.scheduleOnce(shutdownCheck, self, as)
       }
-    case r @ NoIngestData    => processResult(r) 
-    case r @ IngestErrors(_) => processResult(r) 
-    case r @ IngestData(_)   => processResult(r)
+
+    case r @ NoIngestData    => processResult(r, sender) 
+    case r @ IngestErrors(_) => processResult(r, sender) 
+    case r @ IngestData(_)   => processResult(r, sender)
+
     case DirectIngestData(d) =>
       initiated.incrementAndGet
-      processResult(IngestData(d)) 
-      sender ! ()
+      processResult(IngestData(d), sender) 
+
     case m                   => logger.error("Unexpected ingest actor message: " + m.getClass.getName) 
   }
 
   def status(): JValue = JObject.empty ++ JField("Routing", JObject.empty ++
       JField("initiated", JInt(initiated.get)) ++ JField("processed", JInt(initiated.get)))
 
-  def processResult(ingestResult: IngestResult) {
-    handleResult(ingestResult)
-    processed.incrementAndGet
+  def processResult(ingestResult: IngestResult, replyTo: ActorRef) {
+    handleNext(nextAction(ingestResult))
+    process(ingestResult, replyTo)
   }
 
   def pendingBatches(): Long = initiated.get - processed.get
 
   def scheduleIngestRequest(delay: Long) {
-    ingestActor.map { actor =>
+    for (actor <- ingestActor) {
       initiated.incrementAndGet
-      if(delay <= 0) {
+      if (delay <= 0) {
         actor ! GetMessages(self)
       } else {
         scheduler.scheduleOnce(Duration(delay, "millis"), actor, GetMessages(self))
       }
     }
   }
-}
-
-trait ReadAheadEventIngest extends Logging {
-  def store: EventStore
-  def idleDelayMillis: Long
- 
-  def scheduleIngestRequest(delay: Long): Unit
 
   private var inShutdown = false
   private val delayIngestFollowup = GetIngestAfter(idleDelayMillis)
@@ -116,6 +113,10 @@ trait ReadAheadEventIngest extends Logging {
   def start() {
     inShutdown = false
     handleNext(initialAction)
+  }
+  
+  def initiateShutdown() {
+    inShutdown = true
   }
   
   def handleNext(nextAction: IngestAction) {
@@ -131,15 +132,6 @@ trait ReadAheadEventIngest extends Logging {
     }
   }
 
-  def handleResult(result: IngestResult) {
-    handleNext(nextAction(result))
-    process(result)
-  }
-
-  def initiateShutdown() {
-    inShutdown = true
-  }
-  
   def nextAction(ingest: IngestResult): IngestAction = ingest match { 
     case NoIngestData => 
       delayIngestFollowup
@@ -150,103 +142,25 @@ trait ReadAheadEventIngest extends Logging {
       GetIngestNow 
   }
 
-  def process(ingest: IngestResult) = ingest match {
+  private implicit val ValidationMonad = Validation.validationMonad[Throwable]
+  def process(ingest: IngestResult, replyTo: ActorRef) = ingest match {
     case IngestData(messages) =>
-      store.store(messages)
+      store.store(messages) onComplete { e => 
+        processed.incrementAndGet
+        sender ! Validation.fromEither(e).join
+      }
+
     case NoIngestData         =>
+      processed.incrementAndGet
       // noop
+
     case IngestErrors(_)      =>
+      processed.incrementAndGet
       // noop
   }
   
   private def logErrors(errors: Seq[String]) = errors.foreach( logger.error(_) )
 }
-
-class EventStore(routingTable: RoutingTable, projectionActors: ActorRef, metadataActor: ActorRef, batchTimeout: Duration)(implicit timeout: Timeout, execContext: ExecutionContext) extends Logging {
-  type ActionMap = mutable.Map[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])]
-
-  def store(events: Seq[IngestMessage]): ValidationNEL[Throwable, Unit] = {
-    import scala.collection.mutable
-
-    var actions = buildActions(events)
-    val future = dispatchActions(actions)
-    //logger.debug("Starting insert batch store")
-    val result = Await.result(future, batchTimeout)
-    //logger.debug("Finished with insert batch store: " + result)
-    result
-  }
-
-  def buildActions(events: Seq[IngestMessage]): ActionMap = {
-    def updateActions(event: IngestMessage, actions: ActionMap): ActionMap = {
-      event match {
-        case SyncMessage(_, _, _) => actions 
-
-        case em @ EventMessage(eventId, _) =>
-
-          @tailrec
-          def update(updates: Array[ProjectionData], actions: ActionMap, i: Int = 0): ActionMap = {
-
-            def applyUpdates(update: ProjectionData, actions: ActionMap): ActionMap = {
-              val insert = ProjectionInsert(update.identities, update.values)
-              val complete = InsertComplete(eventId, update.descriptor, update.values, update.metadata)
-              val (inserts, completes) = actions.get(update.descriptor) getOrElse { (Vector.empty, Vector.empty) }
-              val newActions = (inserts :+ insert, completes :+ complete) 
-              actions += (update.descriptor -> newActions)
-            }
-
-            if(i < updates.length) {
-              update(updates, applyUpdates(updates(i), actions), i+1)
-            } else {
-              actions
-            }
-          }
-
-          update(routingTable.route(em), actions)
-      }
-    }
-  
-    @tailrec
-    def build(events: Seq[IngestMessage], actions: ActionMap, i: Int = 0): ActionMap = {
-      if(i < events.length) {
-        build(events, updateActions(events(i), actions), i+1)
-      } else {
-        actions
-      }
-    }
-
-    build(events, mutable.Map.empty[ProjectionDescriptor, (Seq[ProjectionInsert], Seq[InsertComplete])])
-  }
-
-  val batchCounter = new AtomicLong(0)
-
-  def dispatchActions(actions: ActionMap): Future[ValidationNEL[Throwable, Unit]] = {
-    logger.info("Pending batches: " + batchCounter.get)
-    val acquire = projectionActors ? AcquireProjectionBatch(actions.keys)
-    acquire.map { x => batchCounter.incrementAndGet; x }.flatMap {
-      case ProjectionBatchAcquired(actorMap) =>
-        val futs: List[Future[ProjectionDescriptor]] = actions.keys.map{ desc =>
-          val (inserts, completes)  = actions(desc)
-          val actor = actorMap(desc)
-          (actorMap(desc) ? ProjectionBatchInsert(inserts)).flatMap { _ =>
-            metadataActor ? UpdateMetadata(completes)
-          }.map { _ => desc }
-        }(collection.breakOut)
-
-        Future.sequence[ProjectionDescriptor, List](futs).flatMap{ descs => 
-          projectionActors ? ReleaseProjectionBatch(descs)
-        }.map{ _ => 
-          batchCounter.decrementAndGet 
-          Success(()) 
-        }
-
-      case ProjectionError(errs) =>
-        Future(Failure(errs))
-    }
-  }
-}
-
-case class InsertComplete(eventId: EventId, descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
-case class InsertBatchComplete(inserts: Seq[InsertComplete])
 
 case class DirectIngestData(messages: Seq[IngestMessage])
 

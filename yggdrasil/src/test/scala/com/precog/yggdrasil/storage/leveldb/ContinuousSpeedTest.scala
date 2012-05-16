@@ -86,8 +86,8 @@ object ContinuousSpeedTest {
     }
 
     def column(n: String, comparator: DBComparator): LevelDBProjection = {
-      LevelDBProjection(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { errors =>
-        errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
+      LevelDBProjection.forDescriptor(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { 
+        errors => throw errors
       }
     }
 /*
