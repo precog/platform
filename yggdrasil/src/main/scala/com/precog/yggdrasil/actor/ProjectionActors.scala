@@ -38,11 +38,13 @@ import com.weiglewilczek.slf4s._
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import scalaz._
-import scalaz.syntax.std.optionV._
-import scalaz.effect._
-
 import scala.collection.mutable.ListBuffer
+
+import scalaz._
+import scalaz.Validation._
+import scalaz.effect._
+import scalaz.syntax.std.optionV._
+
 
 case class AcquireProjection(descriptor: ProjectionDescriptor)
 case class AcquireProjectionBatch(descriptors: Iterable[ProjectionDescriptor])
@@ -53,7 +55,7 @@ trait ProjectionResult
 
 case class ProjectionAcquired(proj: ActorRef) extends ProjectionResult
 case class ProjectionBatchAcquired(projs: Map[ProjectionDescriptor, ActorRef]) extends ProjectionResult
-case class ProjectionError(ex: NonEmptyList[Throwable]) extends ProjectionResult
+case class ProjectionError(ex: Throwable) extends ProjectionResult
 
 class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO, scheduler: Scheduler) extends Actor with Logging {
 
@@ -124,23 +126,23 @@ class ProjectionActors(descriptorLocator: ProjectionDescriptorLocator, descripto
   )
 
   private def projectionActor(descriptor: ProjectionDescriptor): ProjectionResult = {
-    import ProjectionActors._
-    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
-      LevelDBProjection(initDescriptor(descriptor).unsafePerformIO, descriptor).map(p => context.actorOf(Props(new ProjectionActor(p, descriptor, scheduler))))
+    val actor = projectionActors.get(descriptor) map { success[Throwable, ActorRef] } getOrElse {
+      for (projection <- LevelDBProjection.forDescriptor(initDescriptor(descriptor).unsafePerformIO, descriptor)) yield {
+        context.actorOf(Props(new ProjectionActor(projection, descriptor, scheduler)))
+      } 
     }
 
     actor.foreach(projectionActors.putIfAbsent(descriptor, _))
-    actor
+    ProjectionActors.validationToResult(actor)
   }
 
   def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
     descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
   }
-
 }
 
 object ProjectionActors {
-  implicit def validationToResult(validation: ValidationNEL[Throwable, ActorRef]): ProjectionResult = validation match {
+  def validationToResult(validation: Validation[Throwable, ActorRef]): ProjectionResult = validation match {
     case Success(proj) => ProjectionAcquired(proj)
     case Failure(exs) => ProjectionError(exs)
   }
