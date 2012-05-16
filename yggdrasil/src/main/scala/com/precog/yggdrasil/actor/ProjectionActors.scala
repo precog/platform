@@ -9,6 +9,7 @@ import akka.actor.Props
 import akka.actor.Scheduler
 import akka.actor.ActorRef
 
+import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
 import blueeyes.persistence.cache.ExpirationPolicy
@@ -18,11 +19,13 @@ import com.weiglewilczek.slf4s._
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import scalaz._
-import scalaz.syntax.std.optionV._
-import scalaz.effect._
-
 import scala.collection.mutable.ListBuffer
+
+import scalaz._
+import scalaz.Validation._
+import scalaz.effect._
+import scalaz.syntax.std.optionV._
+
 
 case class AcquireProjection(descriptor: ProjectionDescriptor)
 case class AcquireProjectionBatch(descriptors: Iterable[ProjectionDescriptor])
@@ -31,7 +34,7 @@ case class ReleaseProjectionBatch(descriptors: Seq[ProjectionDescriptor])
 
 trait ProjectionResult
 object ProjectionResult {
-  def apply(validation: ValidationNEL[Throwable, ActorRef]): ProjectionResult = validation match {
+  def apply(validation: Validation[Throwable, ActorRef]): ProjectionResult = validation match {
     case Success(proj) => ProjectionAcquired(proj)
     case Failure(exs) => ProjectionError(exs)
   }
@@ -39,10 +42,16 @@ object ProjectionResult {
 
 case class ProjectionAcquired(proj: ActorRef) extends ProjectionResult
 case class ProjectionBatchAcquired(projs: Map[ProjectionDescriptor, ActorRef]) extends ProjectionResult
-case class ProjectionError(ex: NonEmptyList[Throwable]) extends ProjectionResult
+case class ProjectionError(ex: Throwable) extends ProjectionResult
 
 class ProjectionActors(projectionFactory: ProjectionFactory, descriptorStorage: ProjectionDescriptorStorage, scheduler: Scheduler) extends Actor with Logging {
   def receive = {
+
+    case Status =>
+      val status = JObject.empty ++
+        JField("Projections", JObject.empty ++ JField("cacheSize", JInt(projectionActors.size)))
+      sender ! status 
+
     case AcquireProjection(descriptor: ProjectionDescriptor) =>
       val proj = projectionActor(descriptor)
       mark(proj)
@@ -95,7 +104,7 @@ class ProjectionActors(projectionFactory: ProjectionFactory, descriptorStorage: 
   
   val projectionActors = Cache.concurrent[ProjectionDescriptor, ActorRef](
     CacheSettings(
-      expirationPolicy = ExpirationPolicy(None, None, TimeUnit.SECONDS), 
+      expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
       evict = { 
         (descriptor, actor) => descriptorStorage.saveDescriptor(descriptor).map(_ => actor ! Stop).unsafePerformIO
       }
@@ -103,7 +112,7 @@ class ProjectionActors(projectionFactory: ProjectionFactory, descriptorStorage: 
   )
 
   private def projectionActor(descriptor: ProjectionDescriptor): ProjectionResult = {
-    val actor = projectionActors.get(descriptor).toSuccess(new RuntimeException("No cached actor available."): Throwable).toValidationNel.orElse {
+    val actor = projectionActors.get(descriptor) map { success[Throwable, ActorRef] } getOrElse {
       projectionFactory.projection(descriptor).map(projection => context.actorOf(Props(new ProjectionActor(projection, scheduler))))
     }
 
@@ -111,4 +120,3 @@ class ProjectionActors(projectionFactory: ProjectionFactory, descriptorStorage: 
     ProjectionResult(actor)
   }
 }
-

@@ -694,6 +694,7 @@ object ImportTools extends Command {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("v", "verbose", "verbose logging", { config.verbose = true })
+      opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -761,7 +762,7 @@ object ImportTools extends Command {
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
-    val token: String = TestTokenManager.rootUID,
+    var token: String = TestTokenManager.rootUID,
     var verbose: Boolean = false 
   )
 }
@@ -812,7 +813,7 @@ object TokenTools extends Command with AkkaDefaults {
     val config = new Config
     val parser = new OptionParser("yggutils csv") {
       opt("l","list","List tokens", { config.list = true })
-      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
+//      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
       opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
       opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
       opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
@@ -831,7 +832,7 @@ object TokenTools extends Command with AkkaDefaults {
   def process(config: Config) {
     val tm = tokenManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
-                  config.listChildren.map(listChildren(_, tm)) ++
+//                  config.listChildren.map(listChildren(_, tm)) ++
                   config.newAccount.map(create(_, config.root, tm)) ++
                   config.delete.map(delete(_, tm))
 
@@ -844,49 +845,50 @@ object TokenTools extends Command with AkkaDefaults {
 
   def tokenManager(config: Config): TokenManager = {
     val mongo = RealMongo(config.mongoConfig)
-    new MongoTokenManager(mongo, mongo.database(config.database), config.collection, config.deletedCollection, new Timeout(10000))
+    new MongoTokenManager(mongo, mongo.database(config.database), config.mongoSettings)
   }
 
   def list(tokenManager: TokenManager) = {
-    for (tokens <- tokenManager.list) yield {
+    for (tokens <- tokenManager.listTokens) yield {
       tokens.foreach(printToken)
     }
   }
 
-  def printToken(t: Token): Unit = {
-    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
-    println("  Permissions (Path)")
-    t.permissions.path.foreach { p =>
-      println("    " + p)
-    }
-    println("  Permissions (Data)")
-    t.permissions.data.foreach { p =>
-      println("    " + p)
-    }
-    println("  Grants")
-    t.grants.foreach { g =>
-      println("    " + g)
-    }
-    println()
-  }
+  def printToken(t: Token): Unit = sys.error("todo")
+//  {
+//    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
+//    println("  Permissions (Path)")
+//    t.permissions.path.foreach { p =>
+//      println("    " + p)
+//    }
+//    println("  Permissions (Data)")
+//    t.permissions.data.foreach { p =>
+//      println("    " + p)
+//    }
+//    println("  Grants")
+//    t.grants.foreach { g =>
+//      println("    " + g)
+//    }
+//    println()
+//  }
 
-  def listChildren(tokenId: String, tokenManager: TokenManager) = {
-    for (Some(parent) <- tokenManager.lookup(tokenId); children <- tokenManager.listChildren(parent)) yield {
-      children.foreach(printToken)
-    }
-  }
+//  def listChildren(tokenId: String, tokenManager: TokenManager) = {
+//    for (Some(parent) <- tokenManager.findToken(tokenId); children <- tokenManager.listChildren(parent)) yield {
+//      children.foreach(printToken)
+//    }
+//  }
 
-  def create(p: String, root: String, tokenManager: TokenManager) = {
-    val perms = TestTokenManager.standardAccountPerms(p)
-    tokenManager.issueNew(Some(root), perms, Set.empty, false)
-  }
+  def create(p: String, root: String, tokenManager: TokenManager) = sys.error("todo") 
+//    val perms = TestTokenManager.standardAccountPerms(p)
+//    tokenManager.issueNew(Some(root), perms, Set.empty, false)
+//  }
 
-  def delete(t: String, tokenManager: TokenManager) = {
-    for (Some(token) <- tokenManager.lookup(t); t <- tokenManager.deleteToken(token)) yield {
-      println("Deleted token: ")
-      printToken(token)
-    }
-  }
+  def delete(t: String, tokenManager: TokenManager) = sys.error("todo")
+//    for (Some(token) <- tokenManager.findToken(t); t <- tokenManager.deleteToken(token)) yield {
+//      println("Deleted token: ")
+//      printToken(token)
+//    }
+//  }
   
   class Config {
     var delete: Option[String] = None
@@ -902,6 +904,10 @@ object TokenTools extends Command with AkkaDefaults {
     def deletedCollection(): String = {
       deleted.getOrElse( collection + "_deleted" )
     }
+
+    def mongoSettings(): MongoTokenManagerSettings = MongoTokenManagerSettings(
+      tokens = collection, deletedTokens = deletedCollection
+    )
 
     def mongoConfig(): Configuration = {
       Configuration.parse("servers = %s".format(mongoServers()))

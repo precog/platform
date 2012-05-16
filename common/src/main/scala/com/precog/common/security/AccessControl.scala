@@ -3,230 +3,136 @@ package security
 
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
+import akka.util.Timeout
 
+import blueeyes._
+import blueeyes.bkka.AkkaDefaults
 import blueeyes.json.JPath
+import org.joda.time.DateTime
+
+import scala.collection.mutable
+
+import blueeyes.persistence.mongo._
+import blueeyes.persistence.cache._
+
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
+import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.json.xschema.Extractor._
+
+import java.util.concurrent.TimeUnit._
 
 trait AccessControl {
-  def mayGrant(uid: UID, permissions: Permissions): Future[Boolean]
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean]
   def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean]
+  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType): Future[Boolean]
 }
 
 class UnlimitedAccessControl(implicit executionContext: ExecutionContext) extends AccessControl {
-  def mayGrant(uid: UID, permissions: Permissions) = Future(true)
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess) = Future(true)
   def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess) = Future(true)
+  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Future(true)
 }
 
-trait TokenBasedAccessControl extends AccessControl with TokenManagerComponent {
+class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: ExecutionContext) extends AccessControl {
 
-  implicit def executionContext: ExecutionContext
-
-  def mayGrant(uid: UID, permissions: Permissions) = {
-    tokenManager.lookup(uid) flatMap {
-      case None => Future(false)
-      case Some(t) =>
-        val pathsValid = Future.reduce(permissions.path.map { p => validPathGrant(t, p) }){ _ && _ }
-        val dataValid = Future.reduce(permissions.data.map { p => validDataGrant(t, p) }){ _ && _ }
-            
-        (pathsValid zip dataValid) map { t => t._1 && t._2 }
-    }
-  }
-
-  private def validPathGrant(token: Token, path: MayAccessPath): Future[Boolean] = Future {
-    token.permissions.sharable.path.map { ref =>
-      pathSpecSubset(ref.pathSpec, path.pathSpec) && ref.pathAccess == path.pathAccess
-    }.reduce{ _ || _ }
-  }
-
-  private def sharablePermissions(token: Token): Future[Permissions] = {
-
-    val foldPerms = Future.fold(_: Set[Future[Permissions]])(token.permissions.sharable) {
-      case (acc, el) => acc ++ el
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = 
+    pathAccess match {
+      case PathRead => mayAccess(uid, path, Set(uid), ReadPermission) 
+      case PathWrite => mayAccess(uid, path, Set.empty, WritePermission)
     }
 
-    val extractPerms = (_: Token).grants.map { tokenManager.lookup(_).map {
-      case Some(t) => t.permissions.sharable
-      case None    => Permissions.empty
-    }}
-
-    extractPerms andThen foldPerms apply token
-  }
-  
-  private def validDataGrant(token: Token, data: MayAccessData): Future[Boolean] = {
-    val tests: Set[Future[Boolean]] = token.permissions.sharable.data.map { ref =>
-      ownerSpecSubset(token.uid, ref.ownershipSpec, token.uid, data.ownershipSpec) map {
-        _ && pathSpecSubset(ref.pathSpec, data.pathSpec) && ref.dataAccess == data.dataAccess
-      }
-    }
-    Future.reduce(tests.toList){ _ || _ }
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean] = 
+    mayAccess(uid, path, owners, ReadPermission)
+ 
+  def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
+    tokens.findToken(uid).flatMap{ _.map { t => 
+       hasValidPermissions(t, path, owners, accessType)
+    }.getOrElse(Future(false)) }
   }
 
-  private def pathSpecSubset(ref: PathRestriction, test: PathRestriction): Boolean =
-    (ref, test) match {
-      case (Subtree(r), Subtree(t)) => r.equalOrChild(t)
-      case _                        => false
-    }
+  def hasValidPermissions(t: Token, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
 
-  private def ownerSpecSubset(refUID: UID, ref: OwnerRestriction, testUID: UID, test: OwnerRestriction): Future[Boolean] = {
-
-    def effectiveUID(ownerSpec: OwnerRestriction, holder: UID) = ownerSpec match {
-      case OwnerAndDescendants(o) => o
-      case HolderAndDescendants   => holder 
-    }
-
-    def childOrEqual(ruid: UID, tuid: UID) = 
-      if(ruid == tuid) {
-        Future(true)
-      } else {
-        tokenManager.lookup(ruid) flatMap {
-          case None    => Future(false)
-          case Some(rt) =>
-            tokenManager.getDescendant(rt, tuid) map { _.isDefined }
-          }
-      }
-
-    childOrEqual(effectiveUID(ref, refUID), effectiveUID(test, testUID))
-  }
-
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = {
-    mayAccessPath(uid, path, pathAccess, false)
-  }
-
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, sharingRequired: Boolean): Future[Boolean] = {
-    tokenManager lookup(uid) flatMap { _.map { mayAccessPath(_, path, pathAccess, sharingRequired) } getOrElse { Future(false) } }
-  }
-
-  def sharedIfRequired(sharingRequired: Boolean, mayShare: Boolean) = !(sharingRequired && !mayShare)
-
-  def mayAccessPath(token: Token, testPath: Path, testPathAccess: PathAccess, sharingRequired: Boolean): Future[Boolean] = {
-
-    type Perm = (Option[UID], MayAccessPath)
-
-    def findMatchingPermission: Future[Set[Perm]] = {
-      def extractMatchingPermissions(issuer: Option[UID], perms: Set[MayAccessPath]): Set[Perm] =
-        perms collect {
-          case perm @ MayAccessPath(pathSpec, pathAccess, mayShare) 
-            if pathAccess == testPathAccess && 
-             pathSpec.matches(testPath) &&
-             sharedIfRequired(sharingRequired, mayShare) => (issuer, perm)
-        }
-      
-      val localPermissions = extractMatchingPermissions(token.issuer, token.permissions.path)
-      
-      val grantedPermissions: Future[Set[Perm]] = {
-        val nested: Set[Future[Set[Perm]]] = token.grants map {
-          tokenManager lookup(_) map { 
-            _.map{ grantToken =>
-              if(grantToken.isValid) {
-                extractMatchingPermissions(grantToken.issuer, grantToken.permissions.path)     
-              } else {
-                Set.empty[Perm] 
-              }
-            }.getOrElse(Set.empty[Perm])
-          }
-        }
-        Future.sequence(nested).map{ _.flatten }
-      }
-
-      grantedPermissions map { localPermissions ++ _ }
-    } 
-
-    def hasValidatedPermission: Future[Boolean] = {
-      findMatchingPermission flatMap { perms =>
-        if(perms.size == 0) { Future(false) } else {
-          Future.reduce(perms.map {
-            case (None, perm)         => Future(true)
-            case (Some(issuer), perm) => mayAccessPath(issuer, testPath, testPathAccess, true)
-          })(_ || _)
-        }
-      }
+    def exists(fs: Iterable[Future[Boolean]]): Future[Boolean] = {
+      if(fs.size == 0) Future(false)
+      else Future.reduce(fs){ case (a,b) => a || b }
     }
     
-    hasValidatedPermission map { _ && token.isValid } 
-  }
- 
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean] = {
-    mayAccessData(uid, path, owners, dataAccess, false)
-  }
-
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess, sharingRequired: Boolean): Future[Boolean] = {
-    tokenManager lookup(uid) flatMap { _.map { mayAccessData(_, path, owners, dataAccess, sharingRequired) }.getOrElse{ Future(false) } }
-  }
-
-  def mayAccessData(token: Token, testPath: Path, testOwners: Set[UID], testDataAccess: DataAccess, sharingRequired: Boolean): Future[Boolean] = {
-  
-    type Perm = (Option[UID], MayAccessData)
-
-    def findMatchingPermission(holderUID: UID, testOwner: UID): Future[Set[Perm]] = {
-     
-      // start work here!!!!
-
-      def extractMatchingPermissions(issuer: Option[UID], perms: Set[MayAccessData]): Future[Set[Perm]] = { 
-        val flagged = perms map {
-          case perm @ MayAccessData(pathSpec, ownerSpec, dataAccess, mayShare)
-            if dataAccess == testDataAccess && 
-             pathSpec.matches(testPath) &&
-             sharedIfRequired(sharingRequired, mayShare) =>
-             checkOwnershipRestriction(holderUID, testOwner, ownerSpec) map { b => (b, (issuer, perm)) }
-          case perm @ MayAccessData(_,_,_,_) => Future((false, (issuer, perm)))
-        }
-        Future.fold(flagged)(Set.empty[Perm]){
-          case (acc, (b, t)) => if(b) acc + t else acc
-        }
-      }
-      
-      
-      val localPermissions = extractMatchingPermissions(token.issuer, token.permissions.data)
-      
-      val grantedPermissions: Future[Set[Perm]] = {
-        val nested: Set[Future[Set[Perm]]] = token.grants map {
-          tokenManager lookup(_) flatMap { 
-            _.map{ grantToken =>
-              if(grantToken.isValid) {
-                extractMatchingPermissions(grantToken.issuer, grantToken.permissions.data)     
-              } else {
-                Future(Set.empty[Perm])
-              }
-            }.getOrElse(Future(Set.empty[Perm]))
-          }
-        }
-        Future.sequence(nested).map{ _.flatten }
-      }
-
-
-      localPermissions flatMap { lp => grantedPermissions map { lp ++ _ }}
-    } 
-
-    def hasValidatedPermission(holderUID: UID): Future[Boolean] = {
-      Future.reduce(testOwners map { testOwner =>
-        findMatchingPermission(holderUID, testOwner) flatMap { perms =>
-          if(perms.size == 0) { Future(false) } else {
-            Future.reduce(perms.map { 
-              case (None, perm)         => Future(true)
-              case (Some(issuer), perm) => mayAccessData(issuer, testPath, Set(testOwner), testDataAccess, true)
-            })(_ || _)
-          }
-        }
-      })(_ && _)
+    def forall(fs: Iterable[Future[Boolean]]): Future[Boolean] = {
+      if(fs.size == 0) Future(false)
+      else Future.reduce(fs){ case (a,b) => a && b }
     }
 
-    hasValidatedPermission(token.uid) map { _ && token.isValid } 
+    accessType match {
+      case WritePermission =>
+        exists(t.grants.map{ gid =>
+          tokens.findGrant(gid).flatMap( _.map { 
+            case g @ Grant(_, _, WritePermission(p, _)) =>
+              isValid(g).map { _ && p.equalOrChild(path) }
+            case _ => Future(false)
+          }.getOrElse(Future(false))
+        )})
+      case OwnerPermission =>
+        exists(t.grants.map{ gid =>
+          tokens.findGrant(gid).flatMap( _.map { 
+            case g @ Grant(_, _, OwnerPermission(p, _)) =>
+              isValid(g).map { _ && p.equalOrChild(path) }
+            case _ => Future(false)
+          }.getOrElse(Future(false))
+        )})
+      case ReadPermission =>
+        if(owners.isEmpty) Future(false)
+        else forall(owners.map { owner =>
+          exists(t.grants.map{ gid =>
+            tokens.findGrant(gid).flatMap( _.map {
+              case g @ Grant(_, _, ReadPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+              case _ => Future(false)
+            }.getOrElse(Future(false))
+          )})
+        })
+      case ReducePermission =>
+        if(owners.isEmpty) Future(false)
+        else forall( owners.map { owner =>
+          exists( t.grants.map{ gid =>
+            tokens.findGrant(gid).flatMap( _.map { 
+              case g @ Grant(_, _, ReducePermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+              case _ => Future(false)
+            }.getOrElse(Future(false))
+          )})
+        })
+      case ModifyPermission =>
+        if(owners.isEmpty) Future(false)
+        else forall(owners.map { owner =>
+          exists(t.grants.map { gid =>
+            tokens.findGrant(gid).flatMap( _.map {
+              case g @ Grant(_, _, ModifyPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+              case _ => Future(false)
+            }.getOrElse(Future(false))
+          )})
+        })
+      case TransformPermission =>
+        if(owners.isEmpty) Future(false)
+        else forall(owners.map { owner =>
+          exists(t.grants.map { gid =>
+            tokens.findGrant(gid).flatMap( _.map { 
+              case g @ Grant(_, _, TransformPermission(p, o, _)) =>
+                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+              case _ => Future(false)
+            }.getOrElse(Future(false))
+          )})
+        })
+    }
   }
 
-  def checkOwnershipRestriction(grantHolder: UID, testOwner: UID, restriction: OwnerRestriction): Future[Boolean] = restriction match {
-    case OwnerAndDescendants(owner) => isChildOf(owner, testOwner)
-    case HolderAndDescendants       => isChildOf(grantHolder, testOwner)
+  def isValid(grant: Grant): Future[Boolean] = {
+    (grant.issuer.map { 
+      tokens.findGrant(_).flatMap { _.map { parentGrant => 
+        isValid(parentGrant).map { _ && grant.permission.accessType == parentGrant.permission.accessType }
+      }.getOrElse(Future(false)) } 
+    }.getOrElse(Future(true))).map { _ && !grant.permission.isExpired(new DateTime()) }
   }
-  
-  def isChildOf(parent: UID, possibleChild: UID): Future[Boolean] = 
-    if(parent == possibleChild) 
-      Future(true)
-    else
-      tokenManager lookup(possibleChild) flatMap { 
-        _.flatMap {
-          _.issuer.map { isChildOf(parent, _) }
-        } getOrElse(Future(false))
-      } 
-
 }
+

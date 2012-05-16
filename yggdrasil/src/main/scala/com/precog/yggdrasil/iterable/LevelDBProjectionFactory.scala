@@ -14,26 +14,26 @@ import java.io.File
 import java.util.concurrent.TimeoutException
 import scala.collection.Iterator
 import scalaz.NonEmptyList
-import scalaz.ValidationNEL
+import scalaz.Validation
 import scalaz.syntax.validation._
 import scalaz.iteratee.Input //todo: Get rid of!
 
 trait LevelDBProjectionFactory extends ProjectionFactory with ProjectionDescriptorStorage {
   type Dataset = IterableDataset[Seq[CValue]]
 
-  def projection(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, Projection[Dataset]] = {
+  def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]] = {
     // todo: the fact that the descriptor was being saved before creation was previously obscured
     // by indirection. Is this right?
-    saveDescriptor(descriptor).unsafePerformIO.toValidationNel flatMap { (file: File) =>
+    saveDescriptor(descriptor).unsafePerformIO flatMap { (file: File) =>
       projection(file, descriptor)
     }
   }
 
-  protected def projection(baseDir: File, descriptor: ProjectionDescriptor): ValidationNEL[Throwable, Projection[Dataset]] = {
+  protected def projection(baseDir: File, descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]] = {
     val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
                    else baseDir.success[Throwable]
 
-    baseDirV.toValidationNel map { (bd: File) => new LevelDBIterableDatasetProjection(bd, descriptor) }
+    baseDirV map { (bd: File) => new LevelDBIterableDatasetProjection(bd, descriptor) }
   }
 
   class LevelDBIterableDatasetProjection private[LevelDBProjectionFactory] (val baseDir: File, val descriptor: ProjectionDescriptor) 

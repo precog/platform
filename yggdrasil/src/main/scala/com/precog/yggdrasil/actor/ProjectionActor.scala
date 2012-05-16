@@ -16,7 +16,7 @@ import scala.annotation.tailrec
 import scalaz.effect._
 import scalaz.iteratee.EnumeratorT
 
-case object Stop
+case class Stop(retriesRemaining: Int)
 
 case object IncrementRefCount
 case object DecrementRefCount
@@ -54,13 +54,13 @@ class ProjectionActor[Dataset](val projection: Projection[Dataset], scheduler: S
   }
 
   def receive = {
-    case Stop => //close the db
+    case Stop(retries) => //close the db
       if(refCount == 0) {
         logger.debug("Closing projection.")
         projection.close
       } else {
-        logger.debug("Deferring close ref count [%d]".format(refCount))
-        scheduler.scheduleOnce(1 second, self, Stop) 
+        //logger.debug("Deferring close ref count [%d - %s]".format(refCount, descriptor))
+        scheduler.scheduleOnce(10 seconds, self, Stop(retries-1)) 
       }
 
     case IncrementRefCount => refCount += 1

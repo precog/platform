@@ -16,4 +16,5 @@ hs_err_pid*log
 *~
 *.hprof
 *.swp
+*.out
 .DS_Store

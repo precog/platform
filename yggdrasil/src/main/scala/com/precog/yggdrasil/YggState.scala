@@ -39,9 +39,15 @@ case class YggState(
 
   import YggState._
 
+  private def dirUUID(): String = {
+    val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
+    (1.until(3).map { _*2 }.foldLeft(Vector.empty[String]) {
+      case (acc, i) => acc :+ uuid.substring(0,i)
+    }.mkString("/", "/", "/")) + uuid
+  }
+
   def newRandomDir(parent: File): File = {
-    val newDir = File.createTempFile("col", "", parent)
-    newDir.delete
+    val newDir = new File(parent, dirUUID)
     newDir.mkdirs
     newDir
   }
@@ -76,15 +82,38 @@ object YggState extends Logging {
   val checkpointName = "checkpoints.json"
 
   def restore(dataDir: File): IO[Validation[Error, YggState]] = {
-    loadDescriptors(dataDir) flatMap { desc => loadMetadata(desc) map { _.map { meta => (desc, meta) } } } flatMap { tv => tv match {
-      case Success((d,m)) => IO { Success(new YggState(dataDir, d, m)) }
-      case Failure(e) => IO { Failure(e) }
-    }}
+    for {
+      desc <- loadDescriptors(dataDir) 
+      metav <- loadMetadata(desc)
+    } yield {
+      metav map { meta => YggState(dataDir, desc, meta) }
+    }
+  }
+
+  def walkDirs(baseDir: File): IO[Seq[File]] = {
+   
+    def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
+
+    def walk(baseDir: File): Seq[File] = {
+      if(containsDescriptor(baseDir)) {
+        Vector(baseDir)
+      } else {
+        baseDir.listFiles.filter(_.isDirectory).flatMap{ walk(_) }
+      }
+    }
+
+    IO { 
+      val start = System.nanoTime
+      val result = walk(baseDir) 
+      val time = (System.nanoTime - start) / 1000000000.0
+      logger.debug("Walked data dir %s found %d columns in %.02f".format(baseDir.toString, result.size, time))
+      result
+    }
   }
 
   def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
-    def loadMap(baseDir: File) = 
-      IOUtils.walkSubdirs(baseDir) flatMap { 
+    def loadMap(baseDir: File) = {
+      walkDirs(baseDir) flatMap { 
         _.foldLeft( IO(Map.empty[ProjectionDescriptor, File]) ) { (acc, dir) =>
           logger.debug("loading: " + dir)
           read(dir) flatMap {
@@ -95,6 +124,7 @@ object YggState extends Logging {
           }
         }
       }
+    }
 
     def read(baseDir: File): IO[Validation[String, ProjectionDescriptor]] = IO {
       val df = new File(baseDir, "projection_descriptor.json")
@@ -117,12 +147,12 @@ object YggState extends Logging {
   def loadMetadata(descriptors: Map[ProjectionDescriptor, File]): IO[Validation[Error, Map[ProjectionDescriptor, ColumnMetadata]]] = {
    
     val metadataStorage = new FilesystemMetadataStorage((desc: ProjectionDescriptor) => IO { descriptors(desc) })
-    
+   
     val dms: List[IO[ValProjTuple]] = descriptors.keys.map { desc => 
-      loadSingleMetadata(desc, metadataStorage).map{ _.map { (desc, _) }}
+      loadSingleMetadata(desc, metadataStorage).map{ _.map { (desc, _) } }
     }(collection.breakOut)
     
-    dms.sequence[IO, ValProjTuple].map(flattenValidations).map{ _.map { Map(_: _*) } }
+    dms.sequence[IO, ValProjTuple].map{ flattenValidations }.map{ _.map { Map(_: _*) } }
   }
 
   def loadSingleMetadata(descriptor: ProjectionDescriptor, metadataStorage: MetadataStorage): IO[Validation[Error, ColumnMetadata]] = {
@@ -131,10 +161,9 @@ object YggState extends Logging {
   }
 
   def flattenValidations[A](l: Seq[Validation[Error,A]]): Validation[Error, Seq[A]] = {
-    l.foldLeft[Validation[Error, List[A]]]( Success(List()) ) { 
-      case (Success(ms), Success(m)) => Success(ms :+ m)
-      case (Failure(e1), Failure(e2)) => Failure(e1 |+| e2)
-      case (_          , Failure(e)) => Failure(e)
+    l.partition { _.isSuccess } match {
+      case (ss, es) if es.isEmpty => Success(ss.map { case Success(r) => r})
+      case (_, es)                => Failure(es.map{ case Failure(e) => e}.reduce{ _ |+| _})
     }
   }
 }

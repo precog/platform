@@ -1,5 +1,4 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package actor
 
 import akka.actor._
@@ -14,37 +13,44 @@ import com.precog.common.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 
+import java.net.InetAddress
+
+import blueeyes.json.JsonAST._
+
 trait ActorEcosystem {
-  def actorSystem: ActorSystem
-  def metadataActor: ActorRef
-  def projectionActors: ActorRef
-  def routingActor: ActorRef
-  def actorsStart(): Future[Unit]
-  def actorsStop(): Future[Unit]
+  val actorSystem: ActorSystem
+  val metadataActor: ActorRef
+  val projectionActors: ActorRef
+  val routingActor: ActorRef
+  def actorsStart: Future[Unit]
+  def actorsStop: Future[Unit]
+  def actorsStatus: Future[JArray]
 }
 
-trait ProductionActorConfig extends BaseConfig {
-  def shardId: String = "shard" + System.getProperty("precog.shard.suffix", "") 
+trait ActorEcosystemConfig extends BaseConfig {
+  def shardId: String = serviceUID.hostId + serviceUID.serviceId 
 
-  def kafkaHost: String = config[String]("kafka.batch.host")
-  def kafkaPort: Int = config[Int]("kafka.batch.port")
-  def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
+  implicit def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
-  def zookeeperHosts: String = config[String]("zookeeper.hosts")
-  def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
+
+  def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 5) minutes
+  def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
+  def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
-trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfigComponent {
-  val pre = "[Yggdrasil Shard]"
+// A case object used as a request for status information across actor types
+case object Status
 
-  type YggConfig <: ProductionActorConfig
-
+trait BaseActorEcosystem extends ActorEcosystem with YggConfigComponent with Logging {
+  type YggConfig <: ActorEcosystemConfig
+  
   def yggState: YggState
   def projectionFactory: ProjectionFactory
 
-  lazy val actorSystem = ActorSystem("production_actor_system")
-  private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  protected val pre: String
+  protected lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   lazy val metadataActor = {
     val localMetadata = new LocalMetadata(yggState.metadata, checkpoints.latestCheckpoint.messageClock)
@@ -54,61 +60,63 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfi
   lazy val projectionActors = {
     actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
   }
-  
-  lazy val routingActor = {
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
-    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), actorSystem.scheduler)), "router")
+
+  protected lazy val routingDispatch = new RoutingDispatch(new SingleColumnProjectionRoutingTable, projectionActors, metadataActor, Duration(60, "seconds"))(new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+
+  protected lazy val metadataSerializationActor = {
+    val metadataStorage = new FilesystemMetadataStorage(yggState.descriptorStorage.storageLocation _)
+    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
   }
   
-  def actorsStart() = Future[Unit] {
+  protected lazy val metadataSyncCancel = {
+    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
+  }
+
+  protected val checkpoints: YggCheckpoints 
+
+  def actorsStart = Future[Unit] {
+    logger.info("Starting actor ecosystem")
     this.metadataSyncCancel
     routingActor ! Start 
   }
 
-  def actorsStop(): Future[Unit] = {
-    import logger._
-
-    val defaultSystem = actorSystem
-    val defaultTimeout = 300 seconds
-    implicit val timeout: Timeout = defaultTimeout
-
-    def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
-      for {
-        _ <- Future(debug(pre + "Stopping " + name + " actor"))
-        b <- gracefulStop(actor, defaultTimeout)(defaultSystem) 
-      } yield {
-        debug(pre + "Stop call for " + name + " actor returned " + b)  
-      }   
-    } recover { 
-      case e => error("Error stopping " + name + " actor", e)  
+  protected def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
+    for {
+      _ <- Future(logger.debug(pre + "Stopping " + name + " actor"))
+      b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(actorSystem) 
+    } yield {
+      logger.debug(pre + "Stop call for " + name + " actor returned " + b)  
     }   
+  } recover { 
+    case e => logger.error("Error stopping " + name + " actor", e)  
+  }   
+
+  def actorsStop: Future[Unit] = {
+    import logger._
+    import yggConfig.stopTimeout
 
     def routingActorStop = for {
-      _ <- Future(debug(pre + "Sending controlled stop message to routing actor"))
+      _ <- Future(logger.debug(pre + "Sending controlled stop message to routing actor"))
       _ <- (routingActor ? ControlledStop) recover { case e => error("Controlled stop failed for routing actor.", e) }
       _ <- actorStop(routingActor, "routing")
     } yield () 
 
     def flushMetadata = {
-      debug(pre + "Flushing metadata")
+      logger.debug(pre + "Flushing metadata")
       (metadataActor ? FlushMetadata(metadataSerializationActor)) recover { case e => error("Error flushing metadata", e) }
     }
 
     for {
       _  <- Future(info(pre + "Stopping"))
       _  <- Future {
-              debug(pre + "Stopping metadata sync")
+              logger.debug(pre + "Stopping metadata sync")
               metadataSyncCancel.cancel
             }
       _  <- routingActorStop
       _  <- flushMetadata
-      _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionActors, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
+      _  <- actorsStopInternal
       _  <- Future {
-              debug(pre + "Stopping actor system")
+              logger.debug(pre + "Stopping actor system")
               actorSystem.shutdown
               info(pre + "Stopped")
             } recover { 
@@ -117,134 +125,7 @@ trait ProductionActorEcosystem extends ActorEcosystem with Logging with YggConfi
     } yield ()
   }
 
-  //
-  // Internal only actors
-  //
-  
-  private val metadataSyncPeriod = Duration(1, "minutes")
-  
-  
-  private lazy val ingestBatchConsumer = {
-    new KafkaBatchConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaTopic)
-  }
-
-  private lazy val ingestActor = {
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(checkpoints, ingestBatchConsumer)), "shard_ingest")
-  }
- 
-  private lazy val metadataStorage = {
-    new FilesystemMetadataStorage(yggState.descriptorStorage.storageLocation _)
-  }
-
-  private lazy val metadataSerializationActor = {
-    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
-  }
-
-  
-  private lazy val metadataSyncCancel = actorSystem.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
-  
-  private lazy val systemCoordination = {
-    ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.zookeeperBase, yggConfig.zookeeperPrefix) 
-  }
-  
-  private lazy val checkpoints = new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
+  protected def actorsStopInternal: Future[Unit]
 }
 
-trait StandaloneActorEcosystem extends ActorEcosystem with YggConfigComponent with Logging {
-  type YggConfig <: ProductionActorConfig
-  
-  val pre = "[Yggdrasil Shard]"
 
-  def yggState: YggState
-  def projectionFactory: ProjectionFactory
-
-  lazy val actorSystem = ActorSystem("standalone_actor_system")
-  private lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-  lazy val metadataActor = {
-    val localMetadata = new LocalMetadata(yggState.metadata, checkpoints.latestCheckpoint.messageClock)
-    actorSystem.actorOf(Props(new MetadataActor(localMetadata)), "metadata") 
-  }
-  
-  lazy val projectionActors = {
-    actorSystem.actorOf(Props(new ProjectionActors(projectionFactory, yggState.descriptorStorage, actorSystem.scheduler)), "projections")
-  }
-  
-  lazy val routingActor = {
-    val routingTable = new SingleColumnProjectionRoutingTable
-    val eventStore = new EventStore(routingTable, projectionActors, metadataActor, Duration(60, "seconds"), new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
-    actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, None, actorSystem.scheduler)), "router")
-  }
-  
-  def actorsStart() = Future[Unit] {
-    this.metadataSyncCancel
-    routingActor ! Start
-  }
-
-  def actorsStop(): Future[Unit] = {
-    import logger._
-
-    val defaultSystem = actorSystem
-    val defaultTimeout = 300 seconds
-    implicit val timeout: Timeout = defaultTimeout
-
-    def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
-      for {
-        _ <- Future(debug(pre + "Stopping " + name + " actor"))
-        b <- gracefulStop(actor, defaultTimeout)(defaultSystem) 
-      } yield {
-        debug(pre + "Stop call for " + name + " actor returned " + b)  
-      }   
-    } recover { 
-      case e => error("Error stopping " + name + " actor", e)  
-    }   
-
-    def routingActorStop = for {
-      _ <- Future(debug(pre + "Sending controlled stop message to routing actor"))
-      _ <- (routingActor ? ControlledStop) recover { case e => error("Controlled stop failed for routing actor.", e) }
-      _ <- actorStop(routingActor, "routing")
-    } yield () 
-
-    def flushMetadata = {
-      debug(pre + "Flushing metadata")
-      (metadataActor ? FlushMetadata(metadataSerializationActor)) recover { case e => error("Error flushing metadata", e) }
-    }
-
-    for {
-      _  <- Future(info(pre + "Stopping"))
-      _  <- Future {
-              debug(pre + "Stopping metadata sync")
-              metadataSyncCancel.cancel
-            }
-      _  <- routingActorStop
-      _  <- flushMetadata
-      _  <- actorStop(projectionActors, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
-      _  <- Future {
-              debug(pre + "Stopping actor system")
-              actorSystem.shutdown
-              info(pre + "Stopped")
-            } recover { 
-              case e => error("Error stopping actor system", e)
-            }
-    } yield ()
-  }
-  
-  private val metadataSyncPeriod = Duration(1, "minutes")
-  
-  private lazy val metadataStorage = {
-    new FilesystemMetadataStorage(yggState.descriptorStorage.storageLocation _)
-  }
-  
-  private lazy val metadataSerializationActor = {
-    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
-  }
-
-  
-  private lazy val metadataSyncCancel = actorSystem.scheduler.schedule(metadataSyncPeriod, metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
-  
-  private lazy val checkpoints = new YggCheckpoints {
-    def saveRecoveryPoint(checkpoints: YggCheckpoint) { }
-  }
-}

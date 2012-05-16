@@ -19,7 +19,7 @@ import scalaz.iteratee._
 trait ProjectionFactory {
   type Dataset
 
-  def projection(descriptor: ProjectionDescriptor): ValidationNEL[Throwable, Projection[Dataset]]
+  def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
 }
 
 trait Projection[Dataset] {

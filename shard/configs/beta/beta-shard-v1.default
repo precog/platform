@@ -1,0 +1,5 @@
+HEAP_OPTS="-Xms2G -Xmx6G"
+STACK_OPTS="-Xss4m"
+GC_OPTS="-XX:+UseConcMarkSweepGC -XX:+CMSIncrementalMode -XX:-CMSIncrementalPacing -XX:CMSIncrementalDutyCycle=100"
+GC_LOG_OPTS="-verbose:gc -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -Xloggc:/var/log/precog/beta-shard-v1.gc.log"
+JAVA_OPTS="$GC_OPTS $GC_LOG_OPTS $HEAP_OPTS $STACK_OPTS"

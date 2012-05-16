@@ -13,14 +13,17 @@ import com.weiglewilczek.slf4s._
 
 import _root_.kafka.message._
 
-class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
+import blueeyes.json.JsonAST._
+import blueeyes.json.xschema.Decomposer
+import blueeyes.json.xschema.DefaultSerialization._
 
+class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer) extends ShardIngestActor {
   private val bufferSize = 1024 * 1024
 
-  private var lastCheckpoint = checkpoints.latestCheckpoint 
+  private[actor] var lastCheckpoint = checkpoints.latestCheckpoint 
 
   def readMessages(): Seq[IngestMessage] = {
-    val messages = readMessageBatch(lastCheckpoint.offset)
+    val messages = consumer.ingestBatch(lastCheckpoint.offset, bufferSize)
 
     val (out, clock, offset) = messages.foldLeft( (Vector[IngestMessage](), lastCheckpoint.messageClock, lastCheckpoint.offset ) ) {
       case ((acc, clock, offset), msgAndOffset) => 
@@ -42,18 +45,17 @@ class KafkaShardIngestActor(checkpoints: YggCheckpoints, consumer: BatchConsumer
     lastCheckpoint = newCheckpoint
   }
 
-  def readMessageBatch(offset: Long): Seq[MessageAndOffset] = {
-    consumer.ingestBatch(offset, bufferSize)
-  }
-  
+  def status(): JValue = JObject.empty ++ JField("Ingest", JObject.empty ++
+        JField("lastCheckpoint", lastCheckpoint.serialize))
+
   override def postStop() {
     consumer.close
   }
 }
 
 trait ShardIngestActor extends Actor with Logging {
-
   def receive = {
+    case Status => sender ! status()
     case GetMessages(replyTo) => 
       logger.debug("Ingest Actor - Read Batch")
       try {
@@ -70,6 +72,7 @@ trait ShardIngestActor extends Actor with Logging {
 
   def readMessages(): Seq[IngestMessage]
 
+  def status(): JValue
 }
 
 case class GetMessages(sendTo: ActorRef)

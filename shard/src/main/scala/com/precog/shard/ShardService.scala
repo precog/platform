@@ -42,25 +42,26 @@ trait ShardService extends
           println(config)
           println(config.detach("security"))
 
-          val theTokenManager = tokenManagerFactory(config.detach("security"))
+          val tokenManager = tokenManagerFactory(config.detach("security"))
 
-          val accessControl = new TokenBasedAccessControl {
-            val executionContext = defaultFutureDispatch
-            val tokenManager = theTokenManager
-          }
+          val accessControl = new TokenManagerAccessControl(tokenManager)
           
           val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
 
           queryExecutor.startup.map { _ =>
             ShardState(
               queryExecutor,
-              theTokenManager,
+              tokenManager,
               accessControl
             )
           }
         } ->
         request { (state: ShardState) =>
-          jsonp[ByteChunk] {
+          jvalue {
+            path("/actors/status") {
+                get(new ActorStatusHandler(state.queryExecutor))
+            }
+          } ~ jsonp[ByteChunk] {
             token(state.tokenManager) {
               dataPath("vfs") {
                 query {
@@ -68,6 +69,8 @@ trait ShardService extends
                 } ~ 
                 get(new BrowseServiceHandler(state.queryExecutor, state.accessControl))
               }
+            } ~ path("actors/status") {
+              get(new ActorStatusHandler(state.queryExecutor))
             }
           }
         } ->

@@ -95,9 +95,9 @@ object ContinuousSpeedTest extends LevelDBProjectionFactory {
       }
     }
 
-    def column(n: String, comparator: DBComparator) = {
-      projection(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { errors =>
-        errors.list.foreach(_.printStackTrace); sys.error("Could not obtain column.")
+    def column(n: String, comparator: DBComparator): LevelDBProjection = {
+      LevelDBProjection.forDescriptor(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { 
+        errors => throw errors
       }
     }
 /*
