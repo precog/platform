@@ -63,6 +63,16 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "accept !true and !false" >> {
+      "!true" >> {
+        eval("!true") mustEqual Set(SBoolean(false))
+      }
+
+      "!false" >> {
+        eval("!false") mustEqual Set(SBoolean(true))
+      }
+    }
+
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
         val input = """
