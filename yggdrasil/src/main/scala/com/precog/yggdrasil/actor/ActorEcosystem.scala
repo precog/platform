@@ -34,7 +34,10 @@ trait ActorEcosystemConfig extends BaseConfig {
   implicit def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-  def metadataSyncPeriod: Duration = Duration(config[Int]("actors.metadata.sync_period", 5), "minutes")
+
+  def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 5) minutes
+  def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
+  def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
 // A case object used as a request for status information across actor types
@@ -48,7 +51,7 @@ trait BaseActorEcosystem extends ActorEcosystem with YggConfigComponent with Log
   protected val pre: String
   protected lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  protected lazy val eventStore = new EventStore(new SingleColumnProjectionRoutingTable, projectionActors, metadataActor, Duration(60, "seconds"))(new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
+  protected lazy val routingDispatch = new RoutingDispatch(new SingleColumnProjectionRoutingTable, projectionActors, metadataActor, Duration(60, "seconds"))(new Timeout(60000), ExecutionContext.defaultExecutionContext(actorSystem))
 
   lazy val metadataActor = {
     val localMetadata = new LocalMetadata(yggState.metadata, checkpoints.latestCheckpoint.messageClock)

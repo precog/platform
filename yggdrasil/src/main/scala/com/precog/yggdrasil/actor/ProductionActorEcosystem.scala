@@ -25,6 +25,7 @@ trait ProductionActorConfig extends ActorEcosystemConfig {
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
   def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
   def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+
 }
 
 trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponent with Logging {
@@ -34,7 +35,7 @@ trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponen
 
   lazy val actorSystem = ActorSystem("production_actor_system")
 
-  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(eventStore, 1000, Some(ingestActor), actorSystem.scheduler)), "router")
+  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(routingDispatch, yggConfig.batchStoreDelay, Some(ingestActor), actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
   
   private lazy val actorsWithStatus = List(
     projectionActors,
@@ -46,7 +47,9 @@ trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponen
 
   def actorsStatus(): Future[JArray] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
-    Future.sequence( actorsWithStatus.map { actor => (actor ? Status).mapTo[JValue] } ).map { JArray(_) }
+
+    for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) 
+    yield JArray(statusResponses)
   }
 
   protected def actorsStopInternal: Future[Unit] = {
