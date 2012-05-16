@@ -128,9 +128,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok
       }}
     }
-    "reject query when token expired" in {
+    "reject query when grant is expired" in {
       query(testQuery, Some(ExpiredTokenUID)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok
+        case HttpResponse(HttpStatus(UnprocessableEntity, _), _, Some(JArray(List(JString("No data accessable at the specified path.")))), _) => ok
       }}
     }
   }
@@ -150,7 +150,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(Unauthorized, "The specified token may not browse this location"), _, None, _) => ok
       }}
     }
-    "reject brows when no token provided" in {
+    "reject browse when no token provided" in {
       browse(None) must whenDelivered { beLike {
         case HttpResponse(HttpStatus(BadRequest, "A tokenId query parameter is required to access this URL"), _, None, _) => ok
       }}
@@ -160,9 +160,9 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(BadRequest, _), _, Some(JString("The specified token does not exist")), _) => ok
       }}
     }
-    "reject borwse when token expired" in {
-      browse(Some(ExpiredTokenUID)) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, _), _, Some(JString("The specified token has expired")), _) => ok
+    "reject browse when grant expired" in {
+      browse(Some(ExpiredTokenUID), path = "/expired") must whenDelivered { beLike {
+        case HttpResponse(HttpStatus(Unauthorized, "The specified token may not browse this location"), _, None, _) => ok
       }}
     }
   }
@@ -191,7 +191,9 @@ trait TestQueryExecutor extends QueryExecutor {
       JField("test2", JString("bar"))
     ))))
   }
-  
+ 
+  def status() = Future(Success(JArray(List(JString("status")))))
+
   def startup = Future(())
   def shutdown = Future { actorSystem.shutdown }
 }

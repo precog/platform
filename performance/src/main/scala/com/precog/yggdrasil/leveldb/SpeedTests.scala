@@ -50,9 +50,8 @@ object SpeedTests extends LevelDBProjectionFactory {
       }
     }
 
-    val column = projection(new File("/tmp/speed"), sys.error("todo") /*ProjectionComparator.BigDecimal*/) ||| {
-      errors => for (err <- errors.list) err.printStackTrace
-                sys.error("Errors prevented creation of a LevelDB projection.")
+    val column = LevelDBProjection.forDescriptor(new File("/tmp/speed"), sys.error("todo") /*ProjectionComparator.BigDecimal*/) ||| {
+      errors => throw errors
     }
 
     val biGen = Arbitrary.arbitrary[BigInt]

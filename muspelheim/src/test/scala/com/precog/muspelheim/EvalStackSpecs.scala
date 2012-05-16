@@ -63,6 +63,16 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "accept !true and !false" >> {
+      "!true" >> {
+        eval("!true") mustEqual Set(SBoolean(false))
+      }
+
+      "!false" >> {
+        eval("!false") mustEqual Set(SBoolean(true))
+      }
+    }
+
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
         val input = """
@@ -322,49 +332,39 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
-    "evaluate incremental rank" >> {
-      "returning a set of ranks without matching" >> {
-        val input = "std::stats::incrementalRank(//campaigns.cpm)"
-
-        val results = eval(input)
-
-        results must haveSize(100)  
-
-        results mustEqual ((1 to 100) map { k => SDecimal(k) }).toSet
-      }
-
-      "using a join on a value" >> {
-        val input = "std::stats::incrementalRank(//campaigns.cpm) + 2"
-
-        val results = eval(input)
-
-        results must haveSize(100)  
-
-        results mustEqual ((3 to 102) map { k => SDecimal(k) }).toSet
-      }
+    "evaluate rank" >> {
 
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
-          | campaigns where std::stats::incrementalRank(campaigns.cpm) = 35""".stripMargin
+          | campaigns where std::stats::rank(campaigns.cpm) = 37""".stripMargin
 
-        eval(input) must haveSize(1)
+        val results = evalE(input) 
+        
+        results must haveSize(2)
+
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("cpm" -> SDecimal(6))
+          }
+        }
       }
 
       "using where and with" in {
         val input = """
           | campaigns := //campaigns
-          | cpmRanked := campaigns with {rank: std::stats::incrementalRank(campaigns.cpm)}
-          |   cpmRanked where cpmRanked.rank <= 10""".stripMargin
+          | cpmRanked := campaigns with {rank: std::stats::rank(campaigns.cpm)}
+          |   count(cpmRanked where cpmRanked.rank <= 37)""".stripMargin
 
-        val results = eval(input) 
+        val results = eval(input)
         
-        results must haveSize(10)
+        results mustEqual Set(SDecimal(38))
       }      
       
       "on a set of strings" in {
         val input = """
-          | std::stats::incrementalRank(//campaigns.userId)""".stripMargin
+          | std::stats::rank(//campaigns.userId)""".stripMargin
 
         val results = eval(input) 
         
@@ -372,31 +372,38 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "evaluate duplicate rank" >> {
+    "evaluate denseRank" >> {
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
-          | campaigns where std::stats::duplicateRank(campaigns.cpm) = 4""".stripMargin
+          | campaigns where std::stats::denseRank(campaigns.cpm) = 4""".stripMargin
 
-        eval(input) must haveSize(2)
+        val results = evalE(input) 
+        
+        results must haveSize(2)
+
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("cpm" -> SDecimal(6))
+          }
+        }
       }
 
       "using where and with" in {
         val input = """
           | campaigns := //campaigns
-          | cpmRanked := campaigns with {rank: std::stats::duplicateRank(campaigns.cpm)}
+          | cpmRanked := campaigns with {rank: std::stats::denseRank(campaigns.cpm)}
           |   count(cpmRanked where cpmRanked.rank <= 5)""".stripMargin
 
         val results = eval(input) 
         
-        results must haveSize(1)
-
         results mustEqual Set(SDecimal(39))
       }      
       
       "on a set of strings" in {
         val input = """
-          | std::stats::duplicateRank(//campaigns.userId)""".stripMargin
+          | std::stats::denseRank(//campaigns.userId)""".stripMargin
 
         val results = eval(input) 
         

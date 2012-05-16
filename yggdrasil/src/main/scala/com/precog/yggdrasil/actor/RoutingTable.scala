@@ -31,26 +31,14 @@ import scala.collection.immutable.ListMap
 case class ProjectionData(descriptor: ProjectionDescriptor, identities: Identities, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 
 trait RoutingTable {
-  def route(msg: EventMessage): Array[ProjectionData]
+  def route(msg: EventMessage): Seq[ProjectionData]
 }
 
 class SingleColumnProjectionRoutingTable extends RoutingTable {
-  
-  final def route(msg: EventMessage): Array[ProjectionData] = {
-    val pvs = msg.event.data.flattenWithPath
-
-    val len = pvs.length
-
-    val arr = new Array[ProjectionData](len)
-
-    var cnt = 0
-    while(cnt < len) {
-      val pv = pvs(cnt)
-      arr(cnt) = toProjectionData(msg, pv._1, pv._2)
-      cnt += 1
+  final def route(msg: EventMessage): List[ProjectionData] = {
+    msg.event.data.flattenWithPath map { 
+      case (selector, value) => toProjectionData(msg, selector, value)
     }
-   
-    arr
   }
 
   @inline

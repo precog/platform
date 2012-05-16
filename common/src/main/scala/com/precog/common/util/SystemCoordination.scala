@@ -20,11 +20,10 @@
 package com.precog.common
 package util 
 
-import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import java.net.InetAddress
   
 import blueeyes.json.JsonAST._
-import blueeyes.json.JPath
 import blueeyes.json.JsonParser
 import blueeyes.json.Printer 
 
@@ -32,13 +31,15 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import scalaz._
-import Scalaz._
-
 import com.weiglewilczek.slf4s._
+
+import org.streum.configrity.Configuration
 
 import org.I0Itec.zkclient.ZkClient 
 import org.I0Itec.zkclient.DataUpdater
+
+import scalaz._
+import scalaz.syntax.apply._
 
 trait SystemCoordination {
 
@@ -54,6 +55,7 @@ trait SystemCoordination {
   def close(): Unit
 }
 
+
 sealed trait IdSequence {
   def isEmpty(): Boolean
   def next(): (Int, Int)
@@ -64,7 +66,9 @@ case object EmptyIdSequence extends IdSequence {
   def next() = sys.error("No ids available from empty id sequence block")
 }
 
-case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId: Int) extends IdSequence {    private val currentSequenceId = new AtomicInteger(firstSequenceId)
+
+case class IdSequenceBlock(producerId: Int, firstSequenceId: Int, lastSequenceId: Int) extends IdSequence {    
+  private val currentSequenceId = new AtomicInteger(firstSequenceId)
 
   def isEmpty() = currentSequenceId.get > lastSequenceId
 
@@ -93,6 +97,7 @@ trait IdSequenceBlockSerialization {
 }
 
 object IdSequenceBlock extends IdSequenceBlockSerialization
+
 
 case class EventRelayState(offset: Long, nextSequenceId: Int, idSequenceBlock: IdSequenceBlock) {
   override def toString() = "EventRelayState[ offset: %d prodId: %d seqId: %d in [%d,%d] ]".format(
@@ -157,71 +162,61 @@ object YggCheckpoint extends YggCheckpointSerialization {
   val empty = YggCheckpoint(0, VectorClock.empty)
 }
 
-case class VectorClock(map: Map[Int, Int]) {   
-  def get(id: Int): Option[Int] = map.get(id)  
-  def hasId(id: Int): Boolean = map.contains(id)
-  def update(id: Int, sequence: Int) = 
-    if(map.get(id) forall { sequence > _ }) {
-      VectorClock(map + (id -> sequence))
-    } else {
-      this 
-    }
-  def isLowerBoundOf(other: VectorClock): Boolean = map forall { 
-    case (prodId, maxSeqId) => other.get(prodId).map( _ >= maxSeqId).getOrElse(true)
+case class ServiceUID(systemId: String, hostId: String, serviceId: String)
+
+object ZookeeperSystemCoordination {
+  val defaultRetries = 20
+  val defaultDelay = 1000
+
+  val initialSequenceId = 0
+
+  val active = "active"
+  val delimeter = "/"
+
+  val producerIdBasePaths = List("ingest", "producer_id")
+  val relayAgentBasePaths = List("ingest", "relay_agent")
+  val shardCheckpointBasePaths = List("shard", "checkpoint")
+
+  def toNodeData(jval: JValue): Array[Byte] = Printer.compact(Printer.render(jval)).getBytes("UTF-8")
+  def fromNodeData(bytes: Array[Byte]): JValue = JsonParser.parse(new String(bytes))
+
+  def apply(zkHosts: String, uid: ServiceUID) = {
+    val zkc = new ZkClient(zkHosts)
+    new ZookeeperSystemCoordination(zkc, uid)
+  }
+
+  def extractServiceUID(config: Configuration): ServiceUID = {
+    val systemId = config[String]("systemId", "test")
+    val hostId = config[String]("hostId", InetAddress.getLocalHost.getHostName)
+    val serviceId = config[String]("serviceId", System.getProperty("precog.serviceId", ""))
+    ServiceUID(systemId, hostId, serviceId)
   }
 }
 
-trait VectorClockSerialization {
-  implicit val VectorClockDecomposer: Decomposer[VectorClock] = new Decomposer[VectorClock] {
-    override def decompose(clock: VectorClock): JValue = clock.map.serialize 
-  }
+class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) extends SystemCoordination with Logging {
+  import ZookeeperSystemCoordination._
 
-  implicit val VectorClockExtractor: Extractor[VectorClock] = new Extractor[VectorClock] with ValidatedExtraction[VectorClock] {
-    override def validated(obj: JValue): Validation[Error, VectorClock] = 
-      (obj.validated[Map[Int, Int]]).map(VectorClock(_))
-  }
-}
-
-object VectorClock extends VectorClockSerialization {
-  def empty = apply(Map.empty)
-}
-
-class ZookeeperSystemCoordination(private val zkc: ZkClient, 
-                      basePaths: Seq[String],
-                      prefix: String) extends SystemCoordination with Logging {
-
-  lazy val initialSequenceId = 0
-
-  lazy val active = "active"
-  lazy val delimeter = "/"
-
-  lazy val producerIdBasePaths = List("producer", "id")
-  lazy val relayAgentBasePaths = List("relay_agent")
-  lazy val shardCheckpointBasePaths = List("shard", "checkpoint")
-
-  lazy val basePath = delimeter + basePaths.mkString(delimeter)  
-
-  private def makeBase(elements: List[String]) = basePath + delimeter + elements.mkString(delimeter)
+  lazy val basePath = delimeter + "precog-" + uid.systemId 
 
   lazy val producerIdBase = makeBase(producerIdBasePaths)
-  lazy val producerIdPath = producerIdBase + delimeter + prefix  
+  lazy val producerIdPath = producerIdBase + delimeter + uid.hostId + uid.serviceId 
 
   lazy val relayAgentBase = makeBase(relayAgentBasePaths)
   
   lazy val shardCheckpointBase = makeBase(shardCheckpointBasePaths) 
 
-
-  def jvalueToBytes(jval: JValue): Array[Byte] = Printer.compact(Printer.render(jval)).getBytes
+  private def makeBase(elements: List[String]) = basePath + delimeter + elements.mkString(delimeter)
+  private def producerPath(producerId: Int): String = producerIdPath + "%010d".format(producerId)
+  private def producerActivePath(producerId: Int): String = producerPath(producerId) + delimeter + active
 
   def acquireProducerId(): Int = {
-    val data = jvalueToBytes(ProducerState(initialSequenceId).serialize)
-    createPersistentSequential(producerIdBase, prefix, data) 
-  }
+    zkc.createPersistent(producerIdBase, true /* create parents */)
 
-  private def createPersistentSequential(path: String, prefix: String, data: Array[Byte]): Int = {
-    zkc.createPersistent(path, true)
-    val actualPath = zkc.createPersistentSequential(path + delimeter + prefix, data)
-    actualPath.substring(actualPath.length - 10).toInt
+    // sequential nodes created by zookeeper will be suffixed with a new 10-character
+    // integer that represents a montonic increase of the underlying counter.
+    val data = toNodeData(ProducerState(initialSequenceId).serialize)
+    val createdPath = zkc.createPersistentSequential(producerIdPath,  data)
+    createdPath.substring(createdPath.length - 10).toInt
   }
 
   def registerProducerId(preferredProducerId: Option[Int] = None) = {
@@ -229,9 +224,6 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
     zkc.createEphemeral(producerActivePath(producerId))
     producerId
   }
-
-  private def producerPath(producerId: Int): String = producerIdBase + delimeter + prefix + "%010d".format(producerId)
-  private def producerActivePath(producerId: Int): String = producerPath(producerId) + delimeter + active
 
   def unregisterProducerId(producerId: Int) {
     zkc.delete(producerActivePath(producerId))
@@ -241,36 +233,45 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
     zkc.exists(producerActivePath(producerId))
   }
 
-  def acquireIdSequenceBlock(producerId: Int, blockSize: Int): IdSequenceBlock = {
+  /**
+   * An implementation of the DataUpdater interface that increments the sequence ID of a producer ID by 
+   * the specified block size, and makes the updated producer state available for subsequent reads
+   */
+  class BlockUpdater(blockSize: Int) extends DataUpdater[Array[Byte]] {
+    private var newState: ProducerState = _
 
-    val updater = new DataUpdater[Array[Byte]] {
+    def newProducerState(): Option[ProducerState] = Option(newState)
 
-      private var newState: ProducerState = null
+    def update(cur: Array[Byte]): Array[Byte] = {
+      fromNodeData(cur).validated[ProducerState] match { 
+        case Success(ps) =>
+          this.newState = ProducerState(ps.lastSequenceId + blockSize)
+          toNodeData(newState.serialize)
 
-      def newProducerState(): Option[ProducerState] = 
-        if(newState == null) None else Some(newState)
-
-      def update(cur: Array[Byte]): Array[Byte] = {
-        JsonParser.parse(new String(cur)).validated[ProducerState] map { ps =>
-          newState = ProducerState(ps.lastSequenceId + blockSize)
-          jvalueToBytes(newState.serialize)
-        } getOrElse(cur)
+        case Failure(_) => 
+          cur
       }
     }
-
-    zkc.updateDataSerialized(producerPath(producerId), updater) 
-
-    updater.newProducerState.map {
-      case ProducerState(next) => IdSequenceBlock(producerId, next - blockSize + 1, next) 
-    }.getOrElse(sys.error("Unable to get new producer sequence block"))
   }
 
-  val defaultRetries = 20
-  val defaultDelay = 1000
+  def acquireIdSequenceBlock(producerId: Int, blockSize: Int): IdSequenceBlock = {
+    val updater = new BlockUpdater(blockSize)
+    zkc.updateDataSerialized(producerPath(producerId), updater) 
+
+    updater.newProducerState match {
+      case Some(ProducerState(next)) => 
+        // updating the producer state advances the state counter by blockSize, meaning 
+        // that the start start of the block is derived by subtraction
+        IdSequenceBlock(producerId, next - blockSize + 1, next) 
+
+      case None => 
+        sys.error("Unable to get new producer sequence block")
+    }
+  }
 
   private def acquireActivePath(base: String, retries: Int = defaultRetries, delay: Int = defaultDelay): Validation[Error, Unit] = {
     val activePath = base + delimeter + active
-    if(retries < 0) {
+    if (retries < 0) {
       Failure(Invalid("Unable to acquire relay agent lock"))
     } else {
       if(!zkc.exists(activePath)) {
@@ -292,9 +293,8 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
     acquireActivePath(agentPath) flatMap { _ =>
       val bytes = zkc.readData(agentPath).asInstanceOf[Array[Byte]]
-      if(bytes != null && bytes.length != 0) {
-        val jvalue = JsonParser.parse(new String(bytes)) //TODO: Specify an encoding here and wherever this is written
-        val state = jvalue.validated[EventRelayState]
+      if (bytes != null && bytes.length != 0) {
+        val state = fromNodeData(bytes).validated[EventRelayState]
         logger.debug("%s: RESTORED".format(state))
         state
       } else {
@@ -302,7 +302,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
         val block = acquireIdSequenceBlock(producerId, blockSize)
         val initialState = EventRelayState(0, block.firstSequenceId, block)
         zkc.updateDataSerialized(relayAgentPath(agent), new DataUpdater[Array[Byte]] {
-          def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(initialState.serialize)
+          def update(cur: Array[Byte]): Array[Byte] = toNodeData(initialState.serialize)
         })
         logger.debug("%s: NEW".format(initialState))
         Success(initialState)
@@ -329,7 +329,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] = {
     zkc.updateDataSerialized(relayAgentPath(agent), new DataUpdater[Array[Byte]] {
-      def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(state.serialize)
+      def update(cur: Array[Byte]): Array[Byte] = toNodeData(state.serialize)
     })
     logger.debug("%s: SAVE".format(state))
     Success(state)
@@ -340,15 +340,14 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
     acquireActivePath(checkpointPath) flatMap { _ =>
       val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
-      if(bytes != null && bytes.length != 0) {
-        val jvalue = JsonParser.parse(new String(bytes))
-        val checkpoint = jvalue.validated[YggCheckpoint]
+      if (bytes != null && bytes.length != 0) {
+        val checkpoint = fromNodeData(bytes).validated[YggCheckpoint]
         logger.debug("%s: RESTORED".format(checkpoint))
         checkpoint 
       } else {
         val initialCheckpoint = YggCheckpoint.empty 
         zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
-          def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(initialCheckpoint.serialize)
+          def update(cur: Array[Byte]): Array[Byte] = toNodeData(initialCheckpoint.serialize)
         })
         logger.debug("%s: NEW".format(initialCheckpoint))
         Success(initialCheckpoint)
@@ -363,7 +362,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
 
   def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = {
     zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
-      def update(cur: Array[Byte]): Array[Byte] = jvalueToBytes(checkpoint.serialize)
+      def update(cur: Array[Byte]): Array[Byte] = toNodeData(checkpoint.serialize)
     })
     logger.debug("%s: SAVE".format(checkpoint))
   }
@@ -373,21 +372,4 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient,
   def relayAgentActive(agent: String) = zkc.exists(relayAgentActivePath(agent))
 
   def close() = zkc.close()
-}
-
-object ZookeeperSystemCoordination {
-
-  def apply(zkHosts: String, basePaths: Seq[String], prefix: String) = {
-    val zkc = new ZkClient(zkHosts)
-    new ZookeeperSystemCoordination(zkc, basePaths, prefix)
-  }
-
-  val prefix = "prodId-"
-  val paths = List("com", "precog", "ingest", "v1")
-
-  val testHosts = "localhost:2181"
-  def testZookeeperSystemCoordination(hosts: String = testHosts) = ZookeeperSystemCoordination(hosts, "test" :: paths, prefix)
-
-  val prodHosts = "localhost:2181"
-  def prodZookeeperSystemCoordination(hosts: String = prodHosts) = ZookeeperSystemCoordination(hosts, paths, prefix)
 }

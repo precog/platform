@@ -39,9 +39,6 @@ import com.weiglewilczek.slf4s.Logger
 import scalaz.Scalaz._
 import scalaz.{Validation, Success, Failure}
 
-import com.precog.common.Path
-import com.precog.common.security._
-
 class TokenRequiredService[A, B](tokenManager: TokenManager, val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
 extends DelegatingService[A, Future[B], A, Token => Future[B]] {
   val service = (request: HttpRequest[A]) => {
@@ -50,9 +47,8 @@ extends DelegatingService[A, Future[B], A, Token => Future[B]] {
 
       case Some(tokenId) =>
         delegate.service(request) map { (f: Token => Future[B]) =>
-          tokenManager.lookup(tokenId) flatMap {  
+          tokenManager.findToken(tokenId) flatMap {  
             case None                           => Future(err(BadRequest,   "The specified token does not exist"))
-            case Some(token) if (token.expired) => Future(err(Unauthorized, "The specified token has expired"))
             case Some(token)                    => f(token)
           }
         }

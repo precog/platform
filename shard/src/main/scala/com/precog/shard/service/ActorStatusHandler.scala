@@ -17,36 +17,41 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil
+package com.precog.shard
+package service
 
-import com.precog.util._
-import com.precog.common.Path
-
-import blueeyes.json._
+import blueeyes.core.http._
+import blueeyes.core.http.HttpStatusCodes._
+import blueeyes.core.service._
 import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
+import blueeyes.util.Clock
 
-import java.io.File
+import akka.dispatch.Future
+import akka.dispatch.MessageDispatcher
 
-import scalaz._
-import scalaz.Scalaz._
-import scalaz.effect._
-import scalaz.iteratee._
+import scalaz.Success
+import scalaz.Failure
+import scalaz.Validation._
 
-trait ProjectionFactory {
-  type Dataset
+import com.weiglewilczek.slf4s.Logging
 
-  def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
-}
+import com.precog.daze._
+import com.precog.common._
+import com.precog.common.security._
+import com.precog.yggdrasil.metadata.MetadataView
 
-trait Projection[Dataset] {
-  def descriptor: ProjectionDescriptor
+class ActorStatusHandler(queryExecutor: QueryExecutor)(implicit dispatcher: MessageDispatcher)
+extends CustomHttpService[Future[JValue], Future[HttpResponse[JValue]]] with Logging {
+  val service = (request: HttpRequest[Future[JValue]]) => { 
+    success(queryExecutor.status() map {
+      case Success(result) => HttpResponse[JValue](OK, content = Some(result))
+      case Failure(error) => HttpResponse[JValue](HttpStatus(BadRequest, error))
+    })
+  }
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Projection[Dataset]
-
-  def getAllPairs(expiresAt: Long) : Dataset
-
-  def close(): Unit
+  val metadata = Some(DescriptionMetadata(
+"""
+Shard server actor status.
+"""
+  ))
 }

@@ -67,22 +67,6 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
   }
 
   "Columns" should {
-    "Fail to create a new column without a provided comparator" in new columnSetup {
-      projection(dataDir,sys.error("todo")).isFailure must_== true
-    }
-
-    "Create a new column with a provided comparator" in new columnSetup {
-      val c = projection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
-      c.isSuccess must_== true
-      c.map(_.close)
-    }
-
-    "Open an existing column with a restored comparator" in new columnSetup {
-      val initial = projection(dataDir, sys.error("todo") /* Some(ProjectionComparator.Long) */ )
-      initial.isSuccess must_== true
-      initial.map(_.close).flatMap(_ => projection(dataDir, sys.error("todo"))).isSuccess must_== true
-    }
-
 //    "Properly persist and restore values" in new columnSetup {
 //      val size = 1000
 //      val seed = 42l

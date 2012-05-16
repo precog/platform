@@ -28,12 +28,13 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz.{Success, Failure}
 
 trait YggCheckpoints {
-
   protected var lastCheckpoint = YggCheckpoint(0L, VectorClock.empty)
   private var pendingCheckpoints = Vector[YggCheckpoint]()
 
   def messagesConsumed(checkpoint: YggCheckpoint) {
-    pendingCheckpoints = pendingCheckpoints :+ checkpoint 
+    if(!pendingCheckpoints.contains(checkpoint)) {
+      pendingCheckpoints = pendingCheckpoints :+ checkpoint 
+    }
   }
 
   def metadataPersisted(messageClock: VectorClock) {
@@ -60,11 +61,6 @@ trait YggCheckpoints {
   protected def saveRecoveryPoint(checkpoint: YggCheckpoint): Unit
 }
 
-class TestYggCheckpoints extends YggCheckpoints with Logging {
-  protected def saveRecoveryPoint(checkpoint: YggCheckpoint) {
-    logger.info("[PLACEHOLDER - TODO] saving shard recovery point to zookeeper. " + checkpoint)
-  } 
-}
 
 class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordination) extends YggCheckpoints with Logging {
   
@@ -74,12 +70,12 @@ class SystemCoordinationYggCheckpoints(shard: String, coordination: SystemCoordi
   }
   
   override def messagesConsumed(checkpoint: YggCheckpoint) {
-    logger.debug("Recording new consumption checkpoint: " + checkpoint)
+    logger.info("Recording new consumption checkpoint: " + checkpoint)
     super.messagesConsumed(checkpoint)
   }
 
   override def metadataPersisted(messageClock: VectorClock) {
-    logger.debug("Recording new metadata checkpoint: " + messageClock)
+    logger.info("Recording new metadata checkpoint: " + messageClock)
     super.metadataPersisted(messageClock)
   }
 
