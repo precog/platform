@@ -27,54 +27,49 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
+import _root_.kafka.consumer._
+
+import blueeyes.json.JsonAST._
+
 import com.precog.common.util._
 import com.precog.common.kafka._
-
 import com.weiglewilczek.slf4s.Logging
 
 import java.net.InetAddress
 
-import blueeyes.json.JsonAST._
-
 trait ProductionActorConfig extends ActorEcosystemConfig {
-  def kafkaHost: String = config[String]("kafka.batch.host")
-  def kafkaPort: Int = config[Int]("kafka.batch.port")
-  def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  val shardId: String = serviceUID.hostId + serviceUID.serviceId 
+  val serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 
-  def zookeeperHosts: String = config[String]("zookeeper.hosts")
-  def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  val kafkaHost: String = config[String]("kafka.batch.host")
+  val kafkaPort: Int = config[Int]("kafka.batch.port")
+  val kafkaTopic: String = config[String]("kafka.batch.topic") 
+  val kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
+  val kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
 
+  val zookeeperHosts: String = config[String]("zookeeper.hosts")
+  val zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
+  val zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  val systemCoordination = ZookeeperSystemCoordination(zookeeperHosts, serviceUID) 
 }
 
-trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponent with Logging {
+trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ProductionActorConfig
 
   protected lazy val pre = "[Production Yggdrasil Shard]"
 
   lazy val actorSystem = ActorSystem("production_actor_system")
 
-  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(routingDispatch, yggConfig.batchStoreDelay, Some(ingestActor), actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  
-  private lazy val actorsWithStatus = List(
-    projectionActors,
-    metadataActor,
-    routingActor,
-    ingestActor,
-    metadataSerializationActor
-  )
-
-  def actorsStatus(): Future[JArray] = {
-    implicit val to = Timeout(yggConfig.statusTimeout)
-
-    for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) 
-    yield JArray(statusResponses)
-  }
+  protected lazy val actorsWithStatus = ingestActor :: 
+                                        ingestSupervisor :: 
+                                        metadataActor :: 
+                                        metadataSerializationActor :: 
+                                        projectionsActor :: Nil
 
   protected def actorsStopInternal: Future[Unit] = {
     for {
       _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionActors, "projection")
+      _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
     } yield ()
@@ -84,14 +79,15 @@ trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponen
   // Internal only actors
   //
   
-  private lazy val ingestActor = {
-    val ingestBatchConsumer = new KafkaBatchConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaTopic)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(checkpoints, ingestBatchConsumer)), "shard_ingest")
+  lazy val ingestActor = {
+    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(metadataSerializationActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
   }
  
   protected lazy val checkpoints: YggCheckpoints = {
-    val systemCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
-    new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
+    SystemCoordinationYggCheckpoints.validated(yggConfig.shardId, yggConfig.systemCoordination) ||| {
+      sys.error("Unable to create initial system coordination checkpoints.") 
+    }
   }
 }
 

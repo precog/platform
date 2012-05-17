@@ -32,8 +32,7 @@ import akka.util.Timeout
 
 import scalaz.effect._
 
-trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
-  
+trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem with ProjectionsActorModule[Dataset] {
   def yggState: YggState
   def accessControl: AccessControl
 
@@ -47,21 +46,15 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem {
   
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
     implicit val ito = timeout 
-    (projectionActors ? AcquireProjection(descriptor)) flatMap {
-      case ProjectionAcquired(actorRef) =>
-        val release = new Release(IO(projectionActors ! ReleaseProjection(descriptor)))
 
-        (actorRef ? ProjectionGet).map(p => (p.asInstanceOf[Projection[Dataset]], release))
-      
-      case ProjectionError(err) =>
-        sys.error("Error acquiring projection actor: " + err)
+    for (ProjectionAcquired(projection) <- (projectionsActor ? AcquireProjection(descriptor))) yield {
+      (projection, new Release(IO(projectionsActor ! ReleaseProjection(descriptor))))
     }
   }
   
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
     implicit val ito = timeout
-    (routingActor ? DirectIngestData(msgs)) map { _ => () }
+    (ingestSupervisor ? DirectIngestData(msgs)).mapTo[Unit]
   }
-  
 }
 

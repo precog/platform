@@ -31,7 +31,6 @@ import scala.collection.immutable.ListMap
 import blueeyes.json.JPath
 
 class LocalMetadataSpec extends Specification {
-  
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
     val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
@@ -162,6 +161,63 @@ class LocalMetadataSpec extends Specification {
       case PathIndex(i, c) =>
         log("Index " + i)
         dumpMeta(c, indent + 1)
+    }
+  }
+
+  "helper methods" should {
+    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
+    val descriptor1 = ProjectionDescriptor(ListMap[ColumnDescriptor, Int]((colDesc1 -> 0)), Seq[(ColumnDescriptor, SortBy)]((colDesc1 -> ById))).toOption.get
+
+    def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
+
+    "add initial metadata for the first value inserted" in {
+      val projections = emptyProjections
+      val value = CInt(10)
+   
+      val valueStats = LocalMetadata.valueStats(value).get
+      val expectedMetadata = Map((colDesc1 -> Map[MetadataType, Metadata]((valueStats.metadataType, valueStats))))
+      
+      val result = LocalMetadata.applyMetadata(descriptor1, List(value), List(Set()), projections) 
+
+      result must_== expectedMetadata
+    }
+
+    "update existing metadata for values other than the first inserted" in {
+      val initialValue = CInt(10)
+   
+      val initialValueStats = LocalMetadata.valueStats(initialValue).get
+      val initialMetadata = Map[MetadataType, Metadata]((initialValueStats.metadataType -> initialValueStats))
+      val initialColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> initialMetadata))
+      
+      val projections = emptyProjections + (descriptor1 -> initialColumnMetadata)
+
+      val value = CInt(20)
+   
+      val valueStats = LocalMetadata.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
+      val expectedMetadata = Map((colDesc1 -> Map[MetadataType, Metadata]((valueStats.metadataType -> valueStats))))
+     
+      val result = LocalMetadata.applyMetadata(descriptor1, List(value), List(Set()), projections) 
+
+      result must_== expectedMetadata
+    }
+
+    "metadata is correctly combined" in {
+      val firstValue = CInt(10)
+      val firstValueStats = LocalMetadata.valueStats(firstValue).get
+      val firstMetadata = List[Map[MetadataType, Metadata]](Map(firstValueStats.metadataType -> firstValueStats))
+
+      val secondValue = CInt(20)
+   
+      val secondValueStats = LocalMetadata.valueStats(secondValue).get
+      val secondMetadata = Map[MetadataType, Metadata]((secondValueStats.metadataType -> secondValueStats))
+      val secondColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> secondMetadata))
+
+      val result = LocalMetadata.combineMetadata(descriptor1, secondColumnMetadata, firstMetadata) 
+
+      val expectedStats = firstValueStats.merge(secondValueStats).get
+      val expected = Map((colDesc1 -> Map[MetadataType, Metadata]((expectedStats.metadataType -> expectedStats))))
+
+      result must_== expected
     }
   }
 }

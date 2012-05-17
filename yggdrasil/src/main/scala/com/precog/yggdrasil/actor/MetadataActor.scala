@@ -39,83 +39,54 @@ import akka.dispatch.Future
 
 import scalaz.Scalaz._
 
-class MetadataActor(metadata: LocalMetadata) extends Actor {
-
-  def receive = {
-
-    case Status                               => sender ! metadata.status()
-
-    case UpdateMetadata(inserts)              => sender ! metadata.update(inserts)
-   
-    case FindChildren(path)                   => sender ! metadata.findChildren(path)
-    
-    case FindSelectors(path)                  => sender ! metadata.findSelectors(path)
-
-    case FindDescriptors(path, selector)      => sender ! metadata.findDescriptors(path, selector)
-
-    case FindPathMetadata(path, selector)     => sender ! metadata.findPathMetadata(path, selector)
-    
-    case FlushMetadata(serializationActor)    => sender ! (serializationActor ! metadata.dirtyState)
-
+object MetadataActor {
+  case class State(projections: Map[ProjectionDescriptor, ColumnMetadata], dirty: Set[ProjectionDescriptor], clock: VectorClock) {
+    def toSaveMessage = SaveMetadata(projections.filterKeys(dirty), clock)
   }
-
 }
 
-class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata], initialClock: VectorClock) {
-  
-  private var projections: Map[ProjectionDescriptor, (Boolean, ColumnMetadata)] = initialProjections.map { 
-    case (p, cm) => (p -> (false, cm))
-  }
+class MetadataActor(private var state: MetadataActor.State) extends Actor { metadataActor =>
+  import MetadataActor._
+  import ProjectionMetadata._
 
-  private var messageClock = initialClock 
+  def receive = {
+    case Status => sender ! status
 
-  def currentState() = SaveMetadata(projections.map {
-    case (p, (_, cm)) => (p -> cm)
-  }, messageClock)
-
-  def dirtyState() = {
-    val dirty = projections.collect {
-      case (p, (dirty, cm)) if dirty => (p -> cm)
-    }
-    projections = projections.map {
-      case (p, (_, cm)) => (p -> (false -> cm))
-    }
-    SaveMetadata(dirty, messageClock)
-  }
-  
-
-  def status(): JValue = JObject.empty ++ JField("Metadata", JObject.empty ++
-    JField("messageClock", messageClock.serialize))
-
-  def update(inserts: Seq[InsertComplete]): Unit = {
-    import MetadataUpdateHelper._ 
+    case IngestBatchMetadata(patch, checkpoint) => 
+      state = State(state.projections |+| patch, state.dirty ++ patch.keySet, state.clock max checkpoint.messageClock)
    
-    val (projUpdate, clockUpdate) = inserts.foldLeft(projections, messageClock){ 
-      case ((projs, clock), insert) =>
-        (projs + (insert.descriptor -> (true -> applyMetadata(insert.descriptor, insert.values, insert.metadata, projs))),
-         clock.update(insert.eventId.producerId, insert.eventId.sequenceId))
-    }
+    case FindChildren(path)                   => sender ! findChildren(path)
+    
+    case FindSelectors(path)                  => sender ! findSelectors(path)
 
-    projections = projUpdate
-    messageClock = clockUpdate
+    case FindDescriptors(path, selector)      => sender ! findDescriptors(path, selector)
+
+    case FindPathMetadata(path, selector)     => sender ! findPathMetadata(path, selector)
+    
+    case FlushMetadata(serializationActor)    => serializationActor ! state.toSaveMessage
   }
- 
+
+  def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString(state.toString)) :: Nil)) :: Nil)
+
   private def isChildPath(ref: Path, test: Path): Boolean = 
     test.elements.startsWith(ref.elements) && 
     test.elements.size > ref.elements.size
 
   def findChildren(path: Path): Set[Path] = 
-    projections.foldLeft(Set[Path]()) {
-      case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { 
-        case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
-      }
+    state.projections.foldLeft(Set[Path]()) {
+      case (acc, (descriptor, _)) => 
+        acc ++ descriptor.columns.collect { 
+          case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
+        }
     }
  
-  def findSelectors(path: Path): Seq[JPath] = {
-    projections.foldLeft(Vector[JPath]()) {
-      case (acc, (descriptor, _)) => acc ++ descriptor.columns.collect { case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector }
+  def findSelectors(path: Path): Seq[JPath] = 
+    state.projections.foldLeft(Vector[JPath]()) {
+      case (acc, (descriptor, _)) => 
+        acc ++ descriptor.columns.collect { 
+          case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
+        }
     }
-  }
 
   def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, ColumnMetadata] = {
     @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
@@ -124,18 +95,13 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
       col.path == path && isEqualOrChild(selector, col.selector)
     }
 
-    projections.collect {
-      case (descriptor, (_, cm)) if(descriptor.columns.exists(matches(path, selector))) => (descriptor -> cm)
+    state.projections.collect {
+      case (descriptor, cm) if (descriptor.columns.exists(matches(path, selector))) => (descriptor -> cm)
     }
   } 
 
   case class ResolvedSelector(selector: JPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
-    
-    // probably should enforce that only one column will match in someway
-    // but for now I am assuming it is true (which within this narrow context
-    // it should be
-    def columnType: CType =
-      descriptor.columns.filter( _.selector == selector )(0).valueType
+    def columnType: CType = descriptor.columns.find(_.selector == selector).map(_.valueType).get
   }
   
   @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
@@ -145,14 +111,13 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
   }
 
   @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
-    projections.flatMap {
-      case (desc, (_, meta)) => desc.columns.collect {
-        case col @ ColumnDescriptor(_,sel,_,auth) if matches(path,selector)(col) => ResolvedSelector(sel, auth, desc, meta)
+    state.projections.flatMap {
+      case (desc, meta) => desc.columns.collect {
+        case col @ ColumnDescriptor(_,sel, _,auth) if matches(path,selector)(col) => ResolvedSelector(sel, auth, desc, meta)
       }
     }(collection.breakOut)
 
   def findPathMetadata(path: Path, selector: JPath): PathRoot = {
-    
     @inline def isLeaf(ref: JPath, test: JPath) = {
       (test.nodes startsWith ref.nodes) && 
       test.nodes.length - 1 == ref.nodes.length
@@ -228,67 +193,66 @@ class LocalMetadata(initialProjections: Map[ProjectionDescriptor, ColumnMetadata
     PathRoot(buildTree(selector, matching(path, selector)))
   }
 
-
-
-  trait PathMatch
-
-  case class ExactPath(columnType: CType)
-  case class ChildPath(path: JPath)
-
+/*
   def toStorageMetadata(messageDispatcher: MessageDispatcher): StorageMetadata = new StorageMetadata {
-
     implicit val dispatcher = messageDispatcher 
 
     def update(inserts: Seq[InsertComplete]) = Future {
-      LocalMetadata.this.update(inserts)
+      metadataActor.update(inserts)
     }
 
     def findChildren(path: Path) = Future {
-      LocalMetadata.this.findChildren(path)
+      metadataActor.findChildren(path)
     }
 
     def findSelectors(path: Path) = Future {
-      LocalMetadata.this.findSelectors(path) 
+      metadataActor.findSelectors(path) 
     }
 
     def findProjections(path: Path, selector: JPath) = Future {
-      LocalMetadata.this.findDescriptors(path, selector)
+      metadataActor.findDescriptors(path, selector)
     } 
 
     def findPathMetadata(path: Path, selector: JPath) = Future {
-      LocalMetadata.this.findPathMetadata(path, selector)
+      metadataActor.findPathMetadata(path, selector)
     }
-
   }
-
+*/
 }
 
-object MetadataUpdateHelper {
+object ProjectionMetadata {
+  import metadata._
+  import ProjectionInsert.Row
 
-  def applyMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]], projections: Map[ProjectionDescriptor, (Boolean, ColumnMetadata)]): ColumnMetadata = {
-    val initialMetadata = projections.get(desc).map{ _._2 }.getOrElse(initMetadata(desc))
-    val userAndValueMetadata = addValueMetadata(values, metadata.map { Metadata.toTypedMap _ })
-
-    combineMetadata(desc, initialMetadata, userAndValueMetadata)
+  def columnMetadata(desc: ProjectionDescriptor, rows: Seq[Row]): ColumnMetadata = {
+    rows.foldLeft(ColumnMetadata.Empty) { 
+      case (acc, Row(_, values, metadata)) => acc |+| columnMetadata(desc, values, metadata) 
+    }
   }
 
-  def addValueMetadata(values: Seq[CValue], metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
-    values zip metadata map { t => valueStats(t._1).map( vs => t._2 + (vs.metadataType -> vs) ).getOrElse(t._2) }
+  def columnMetadata(desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): ColumnMetadata = {
+    def addValueMetadata(values: Seq[CValue], metadata: Seq[MetadataMap]): Seq[MetadataMap] = {
+      values zip metadata map { case (value, mmap) => valueStats(value).map(vs => mmap + (vs.metadataType -> vs)).getOrElse(mmap) }
+    }
+
+    val userAndValueMetadata: Seq[MetadataMap] = addValueMetadata(values, metadata.map { Metadata.toTypedMap _ })
+    (desc.columns zip userAndValueMetadata).toMap
   }
 
-  def combineMetadata(desc: ProjectionDescriptor, existingMetadata: ColumnMetadata, newMetadata: Seq[MetadataMap]): ColumnMetadata = {
-    val newColumnMetadata = desc.columns zip newMetadata
-    newColumnMetadata.foldLeft(existingMetadata) { 
+  def updateColumnMetadata(initialMetadata: ColumnMetadata, desc: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]): ColumnMetadata = {
+    columnMetadata(desc, values, metadata).foldLeft(initialMetadata) { 
       case (acc, (col, newColMetadata)) =>
         val updatedMetadata = acc.get(col) map { _ |+| newColMetadata } getOrElse { newColMetadata }
+
         acc + (col -> updatedMetadata)
     }
   }
 
-  def initMetadata(desc: ProjectionDescriptor): ColumnMetadata = 
+  def initMetadata(desc: ProjectionDescriptor): ColumnMetadata = {
     desc.columns.foldLeft( Map[ColumnDescriptor, MetadataMap]() ) {
       (acc, col) => acc + (col -> Map[MetadataType, Metadata]())
     }
+  }
 
   def valueStats(cval: CValue): Option[Metadata] = cval match { 
     case CString(s)  => Some(StringValueStats(1, s, s))
@@ -311,5 +275,5 @@ case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class UpdateMetadata(inserts: Seq[InsertComplete]) extends ShardMetadataAction
+case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], checkpoint: YggCheckpoint) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction

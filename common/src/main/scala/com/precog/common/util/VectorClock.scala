@@ -26,18 +26,22 @@ import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
 import scalaz.Validation
+import scalaz.Order
+import scalaz.Ordering._
 
 case class VectorClock(map: Map[Int, Int]) {   
   def get(id: Int): Option[Int] = map.get(id)  
   def hasId(id: Int): Boolean = map.contains(id)
-  def update(id: Int, sequence: Int) = 
-    if(map.get(id) forall { sequence > _ }) {
+
+  def update(id: Int, sequence: Int): VectorClock = 
+    if (map.get(id) forall { _ <= sequence }) {
       VectorClock(map + (id -> sequence))
     } else {
       this 
     }
-  def isLowerBoundOf(other: VectorClock): Boolean = map forall { 
-    case (prodId, maxSeqId) => other.get(prodId).map( _ >= maxSeqId).getOrElse(true)
+
+  def isDominatedBy(other: VectorClock): Boolean = map forall { 
+    case (prodId, maxSeqId) => other.get(prodId).forall(_ >= maxSeqId)
   }
 }
 
@@ -54,6 +58,15 @@ trait VectorClockSerialization {
 
 object VectorClock extends VectorClockSerialization {
   def empty = apply(Map.empty)
+
+  implicit object order extends Order[VectorClock] {
+    def order(c1: VectorClock, c2: VectorClock) = 
+      if (c2.isDominatedBy(c1)) {
+        if (c1.isDominatedBy(c2)) EQ else GT
+      } else {
+        LT
+      }
+  }
 }
 
 
