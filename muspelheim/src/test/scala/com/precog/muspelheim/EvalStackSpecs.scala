@@ -73,6 +73,26 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "accept a dereferenced array" >> {
+      "non-empty array" >> {
+        eval("[1,2,3].foo") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array" >> {
+        eval("[].foo") mustEqual Set()
+      }.pendingUntilFixed
+    }
+
+    "accept a dereferenced object" >> {
+      "non-empty array" >> {
+        eval("{a: 42}[1]") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array" >> {
+        eval("{}[0]") mustEqual Set()
+      }.pendingUntilFixed
+    }
+
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
         val input = """
