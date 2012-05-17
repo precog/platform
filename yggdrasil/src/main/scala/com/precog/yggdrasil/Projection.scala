@@ -27,6 +27,8 @@ trait Projection[Dataset[_]] {
 
   def chunkSize: Int
 
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
+
   def getAllPairs(expiresAt: Long) : Dataset[Seq[CValue]]
 //  def getAllColumnPairs(columnIndex: Int, expiresAt: Long) : Dataset[(Identities, CValue)]
 //

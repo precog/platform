@@ -20,7 +20,7 @@ sealed trait IngestMessage
 class IngestMessageSerialization {
   implicit val IngestMessageDecomposer: Decomposer[IngestMessage] = new Decomposer[IngestMessage] {
     override def decompose(ingestMessage: IngestMessage): JValue = ingestMessage match {
-      case sm @ SyncMessage(_, _, _)  => SyncMessage.SyncMessageDecomposer.apply(sm)
+      //case sm @ SyncMessage(_, _, _)  => SyncMessage.SyncMessageDecomposer.apply(sm)
       case em @ EventMessage(_, _) => EventMessage.EventMessageDecomposer.apply(em)
     }
   }
@@ -28,29 +28,29 @@ class IngestMessageSerialization {
 
 object IngestMessage extends IngestMessageSerialization
 
-case class SyncMessage(producerId: Int, syncId: Int, eventIds: List[Int]) extends IngestMessage
+//case class SyncMessage(producerId: Int, syncId: Int, eventIds: List[Int]) extends IngestMessage
 
-trait SyncMessageSerialization {
-  implicit val SyncMessageDecomposer: Decomposer[SyncMessage] = new Decomposer[SyncMessage] {
-    override def decompose(eventMessage: SyncMessage): JValue = JObject(
-      List(
-        JField("producerId", eventMessage.producerId.serialize),
-        JField("syncId", eventMessage.syncId.serialize),
-        JField("eventIds", eventMessage.eventIds.serialize)))
-  }
-
-  implicit val SyncMessageExtractor: Extractor[SyncMessage] = new Extractor[SyncMessage] with ValidatedExtraction[SyncMessage] {
-    override def validated(obj: JValue): Validation[Error, SyncMessage] =
-      ((obj \ "producerId").validated[Int] |@|
-        (obj \ "syncId").validated[Int] |@|
-        (obj \ "eventIds").validated[List[Int]]).apply(SyncMessage(_, _, _))
-  }  
-}
-
-object SyncMessage extends SyncMessageSerialization {
-  val start = SyncMessage(_: Int, 0, List.empty)
-  def finish = SyncMessage(_: Int, Int.MaxValue, _: List[Int])
-}
+// trait SyncMessageSerialization {
+//   implicit val SyncMessageDecomposer: Decomposer[SyncMessage] = new Decomposer[SyncMessage] {
+//     override def decompose(eventMessage: SyncMessage): JValue = JObject(
+//       List(
+//         JField("producerId", eventMessage.producerId.serialize),
+//         JField("syncId", eventMessage.syncId.serialize),
+//         JField("eventIds", eventMessage.eventIds.serialize)))
+//   }
+// 
+//   implicit val SyncMessageExtractor: Extractor[SyncMessage] = new Extractor[SyncMessage] with ValidatedExtraction[SyncMessage] {
+//     override def validated(obj: JValue): Validation[Error, SyncMessage] =
+//       ((obj \ "producerId").validated[Int] |@|
+//         (obj \ "syncId").validated[Int] |@|
+//         (obj \ "eventIds").validated[List[Int]]).apply(SyncMessage(_, _, _))
+//   }  
+// }
+// 
+// object SyncMessage extends SyncMessageSerialization {
+//   val start = SyncMessage(_: Int, 0, List.empty)
+//   def finish = SyncMessage(_: Int, Int.MaxValue, _: List[Int])
+// }
 
 case class EventId(producerId: ProducerId, sequenceId: SequenceId) {
   val uid = (producerId.toLong << 32) | (sequenceId.toLong & 0xFFFFFFFFL)
@@ -105,13 +105,13 @@ object IngestMessageSerialization {
 
   def write(buffer: ByteBuffer, msg: IngestMessage) {
     (msg match {
-      case SyncMessage(_, _, _)     => writeSync _
+      //case SyncMessage(_, _, _)     => writeSync _
       case EventMessage(_, _)    => writeEvent _
     })(msg)(buffer)
   }
   
-  def writeSync(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonSyncFlag)) andThen 
-                                                                (writeMessage(_: ByteBuffer, msg))
+//  def writeSync(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonSyncFlag)) andThen 
+//                                                                (writeMessage(_: ByteBuffer, msg))
 
   def writeEvent(msg: IngestMessage): ByteBuffer => ByteBuffer = (writeHeader(_: ByteBuffer, jsonEventFlag)) andThen 
                                                                  (writeMessage(_: ByteBuffer, msg))
@@ -134,30 +134,29 @@ object IngestMessageSerialization {
 
   def readMessage(buffer: ByteBuffer): Validation[String, IngestMessage] = {
     val magic = buffer.get()
-    if(magic != magicByte) {
+    if (magic != magicByte) {
       Failure("Invaild message bad magic byte. Found [" + magic + "]")
     } else {
       val msgType = buffer.get()
       val stop    = buffer.get()
       
       (stop, msgType) match {
-        case (stop, flag) if stop == stopByte && flag == jsonEventFlag => parseEvent(buffer)
-        case (stop, flag) if stop == stopByte && flag == jsonSyncFlag  => parseSync(buffer)
-        case _                                                         => Failure("Unrecognized message type")
+        case (`stopByte`, `jsonEventFlag`) => parseEvent(buffer)
+        //case (`stopByte`, `jsonSyncFlag`)  => parseSync(buffer)
       }
     }
   }
   
-  def parseSync = (parseJValue _) andThen (jvalueToSync _)
+  //def parseSync = (parseJValue _) andThen (jvalueToSync _)
   
   def parseEvent = (parseJValue _) andThen (jvalueToEvent _)
   
-  def jvalueToSync(jvalue: JValue): Validation[String, IngestMessage] = {
-    jvalue.validated[SyncMessage] match {
-      case Failure(e)  => Failure(e.message)
-      case Success(sm) => Success(sm)
-    }
-  }
+//  def jvalueToSync(jvalue: JValue): Validation[String, IngestMessage] = {
+//    jvalue.validated[SyncMessage] match {
+//      case Failure(e)  => Failure(e.message)
+//      case Success(sm) => Success(sm)
+//    }
+//  }
   
   def jvalueToEvent(jvalue: JValue): Validation[String, IngestMessage] = {
     jvalue.validated[EventMessage] match {

@@ -717,14 +717,14 @@ object ImportTools extends Command {
     val dir = new File("./data") 
     dir.mkdirs
 
-    object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
-      class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
+    object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem[IterableDataset] with LevelDBProjectionsActorModule {
+      class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-      }
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
       val yggState = YggState(dir, Map.empty, Map.empty)
       val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
     }
+
     Await.result(shard.actorsStart, Duration(60, "seconds"))
     config.input.foreach {
       case (db, input) =>
@@ -732,8 +732,10 @@ object ImportTools extends Command {
         val events = Source.fromFile(input).getLines
         insert(config, db, events, shard)
     }
+
     if(config.verbose) println("Waiting for shard shutdown")
     Await.result(shard.actorsStop, Duration(60, "seconds"))
+
     if(config.verbose) println("Shutdown")
   }
 

@@ -21,33 +21,33 @@ object VectorClockSpec extends Specification {
       val vc2 = VectorClock(Map(0 -> 1))
       val vc3 = VectorClock(Map(0 -> 2))
 
-      vc2.isLowerBoundOf(vc1) must beFalse
-      vc2.isLowerBoundOf(vc2) must beTrue
-      vc2.isLowerBoundOf(vc3) must beTrue
+      vc2.isDominatedBy(vc1) must beFalse
+      vc2.isDominatedBy(vc2) must beTrue
+      vc2.isDominatedBy(vc3) must beTrue
     }
     "evaluate lower bound for multiple single keys" in {
       val vc1 = VectorClock(Map(0 -> 0, 1->1))
       val vc2 = VectorClock(Map(0 -> 1, 1->2))
       val vc3 = VectorClock(Map(0 -> 2, 1->0))
 
-      vc2.isLowerBoundOf(vc1) must beFalse
-      vc2.isLowerBoundOf(vc2) must beTrue
-      vc2.isLowerBoundOf(vc3) must beFalse
+      vc2.isDominatedBy(vc1) must beFalse
+      vc2.isDominatedBy(vc2) must beTrue
+      vc2.isDominatedBy(vc3) must beFalse
     }
     "evaluate lower bound with missing keys" in {
       val vc1 = VectorClock(Map((0->1),(1->0)))
       val vc2 = VectorClock(Map((1->0),(2->1)))
       val vc3 = VectorClock(Map((1->1),(3->1)))
 
-      vc1.isLowerBoundOf(vc2) must beTrue
-      vc2.isLowerBoundOf(vc1) must beTrue
-      vc3.isLowerBoundOf(vc1) must beFalse
+      vc1.isDominatedBy(vc2) must beTrue
+      vc2.isDominatedBy(vc1) must beTrue
+      vc3.isDominatedBy(vc1) must beFalse
     }
     "evaluate lower bound with respect to empty" in {
       val vc = VectorClock(Map(0 -> 0, 1->1))
 
-      VectorClock.empty.isLowerBoundOf(vc) must beTrue
-      vc.isLowerBoundOf(VectorClock.empty) must beTrue
+      VectorClock.empty.isDominatedBy(vc) must beTrue
+      vc.isDominatedBy(VectorClock.empty) must beTrue
     }
   }
 }

@@ -23,7 +23,6 @@ import scalaz._
 import scalaz.syntax.apply._
 
 trait SystemCoordination {
-
   def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState]
   def unregisterRelayAgent(agent: String, state: EventRelayState): Unit
 
@@ -140,6 +139,9 @@ trait YggCheckpointSerialization {
 }
 
 object YggCheckpoint extends YggCheckpointSerialization {
+  import scala.math.Ordering
+  implicit val ordering: Ordering[YggCheckpoint] = Ordering.by((_: YggCheckpoint).offset)
+
   val empty = YggCheckpoint(0, VectorClock.empty)
 }
 
@@ -159,7 +161,7 @@ object ZookeeperSystemCoordination {
   val shardCheckpointBasePaths = List("shard", "checkpoint")
 
   def toNodeData(jval: JValue): Array[Byte] = Printer.compact(Printer.render(jval)).getBytes("UTF-8")
-  def fromNodeData(bytes: Array[Byte]): JValue = JsonParser.parse(new String(bytes))
+  def fromNodeData(bytes: Array[Byte]): JValue = JsonParser.parse(new String(bytes, "UTF-8"))
 
   def apply(zkHosts: String, uid: ServiceUID) = {
     val zkc = new ZkClient(zkHosts)
@@ -282,9 +284,13 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
         val producerId = acquireProducerId()
         val block = acquireIdSequenceBlock(producerId, blockSize)
         val initialState = EventRelayState(0, block.firstSequenceId, block)
-        zkc.updateDataSerialized(relayAgentPath(agent), new DataUpdater[Array[Byte]] {
-          def update(cur: Array[Byte]): Array[Byte] = toNodeData(initialState.serialize)
-        })
+        zkc.updateDataSerialized(
+          relayAgentPath(agent), 
+          new DataUpdater[Array[Byte]] {
+            def update(cur: Array[Byte]): Array[Byte] = toNodeData(initialState.serialize)
+          }
+        )
+
         logger.debug("%s: NEW".format(initialState))
         Success(initialState)
       }
@@ -309,9 +315,13 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
   }
 
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] = {
-    zkc.updateDataSerialized(relayAgentPath(agent), new DataUpdater[Array[Byte]] {
-      def update(cur: Array[Byte]): Array[Byte] = toNodeData(state.serialize)
-    })
+    zkc.updateDataSerialized(
+      relayAgentPath(agent), 
+      new DataUpdater[Array[Byte]] {
+        def update(cur: Array[Byte]): Array[Byte] = toNodeData(state.serialize)
+      }
+    )
+
     logger.debug("%s: SAVE".format(state))
     Success(state)
   }
@@ -342,9 +352,13 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
   private def shardCheckpointActivePath(shard: String): String = shardCheckpointPath(shard) + delimeter + active 
 
   def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = {
-    zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
-      def update(cur: Array[Byte]): Array[Byte] = toNodeData(checkpoint.serialize)
-    })
+    zkc.updateDataSerialized(
+      shardCheckpointPath(shard), 
+      new DataUpdater[Array[Byte]] {
+        def update(cur: Array[Byte]): Array[Byte] = toNodeData(checkpoint.serialize)
+      }
+    )
+
     logger.debug("%s: SAVE".format(checkpoint))
   }
   

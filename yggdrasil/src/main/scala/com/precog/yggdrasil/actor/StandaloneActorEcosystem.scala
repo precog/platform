@@ -17,28 +17,32 @@ import java.net.InetAddress
 
 import blueeyes.json.JsonAST._
 
-trait StandaloneActorEcosystem extends BaseActorEcosystem with YggConfigComponent with Logging {
+class NoopIngestActor extends Actor {
+  def receive = {
+    case Status => sender ! JString("Noop ingest actor has no state.")
+    case GetMessages(replyTo) => replyTo ! IngestData(Nil)
+  }
+}
+
+trait StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   protected lazy val pre = "[Standalone Yggdrasil Shard]"
 
   lazy val actorSystem = ActorSystem("standalone_actor_system")
 
-  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(routingDispatch, yggConfig.batchStoreDelay, None, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  
-  def actorsStatus(): Future[JArray] = Future {
-    JArray(List(JString("StandaloneActorEcosystem status not yet implemented.")))
-  }
+  lazy val ingestActor = actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
+
+  protected lazy val actorsWithStatus = ingestSupervisor :: 
+                                        metadataActor :: 
+                                        metadataSerializationActor :: 
+                                        projectionsActor :: Nil
 
   protected def actorsStopInternal: Future[Unit] = {
     for {
-      _  <- actorStop(projectionActors, "projection")
+      _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
       _  <- actorStop(metadataSerializationActor, "flush")
     } yield ()
   }
-  
-  //
-  // Internal only actors
-  //
   
   protected lazy val checkpoints: YggCheckpoints = new YggCheckpoints {
     def saveRecoveryPoint(checkpoints: YggCheckpoint) { }

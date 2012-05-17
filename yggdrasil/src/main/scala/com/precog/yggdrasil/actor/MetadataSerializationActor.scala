@@ -25,63 +25,43 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 
-case object SaveComplete
-
-class MetadataSerializationActor(checkpoints: YggCheckpoints, metadataStorage: MetadataStorage) extends Actor with Logging {
-
-  private var inProgress = false
-
-  import context._
-
+class MetadataSerializationActor(checkpoints: YggCheckpoints, storage: MetadataStorage) extends Actor with Logging {
   def receive = {
     case Status =>
-      sender ! status()
+      sender ! status
+
     case SaveMetadata(metadata, messageClock) => 
-      if(!inProgress) { 
-        Future {
-          inProgress = true
-          try {
-            logger.debug("Syncing metadata")
-            val start = System.nanoTime
-            val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
-            if(!errors.isEmpty) {
-              logger.error("Error saving metadata: (%d errors to follow)".format(errors.size))
-              errors.zipWithIndex.foreach {
-                case (t, i) => logger.error("Metadata save error #%d".format(i+1), t)
-              }
-            }
-            logger.debug("Registering metadata checkpoint: " + messageClock)
-            checkpoints.metadataPersisted(messageClock)
-            val time = (System.nanoTime - start)/1000000000.0
-            logger.info("Metadata checkpoint complete %d updates in %.02fs".format(metadata.size, time))
-          } finally {
-            self ! SaveComplete 
-          }
-        } 
+      logger.debug("Syncing metadata")
+      val start = System.nanoTime
+      val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
+
+      if (errors.isEmpty) {
+        logger.debug("Registering metadata checkpoint: " + messageClock)
+        checkpoints.persistUpTo(messageClock)
+        val time = (System.nanoTime - start)/1000000000.0
+        logger.info("Metadata checkpoint complete %d updates in %.02fs".format(metadata.size, time))
       } else {
-        logger.warn("Skipping metadata sync because previous is already in progress")
+        logger.error("Error saving metadata: (%d errors to follow)".format(errors.size))
+        errors.zipWithIndex.foreach {
+          case (t, i) => logger.error("Metadata save error #%d".format(i+1), t)
+        }
       }
-    case SaveComplete =>
-      inProgress = false
   }
 
   private def safelyUpdateMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], clock: VectorClock): IO[List[Throwable]] = {
-    import metadataStorage._
-    
-    val io: List[IO[Validation[Throwable, Unit]]] = metadata.map {
-      case (desc, meta) => updateMetadata(desc, MetadataRecord(meta, clock))
-    }(collection.breakOut)
+    val io: List[IO[Validation[Throwable, Unit]]] = 
+      metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, clock)) })(collection.breakOut)
 
-    io.sequence[IO, Validation[Throwable, Unit]].map{ _.collect { 
-      case Failure(t) => t 
-    }}
+    io.sequence[IO, Validation[Throwable, Unit]] map { _.collect { case Failure(t) => t } }
   }
 
-  def status(): JValue = JObject.empty ++ JField("Metadata Serialization", JObject.empty ++
-          JField("lastCheckpoint", checkpoints.latestCheckpoint) ++
-          JField("pendingCheckpointCount", checkpoints.pendingCheckpointCount) ++
-          JField("pendingCheckpoints", JArray(checkpoints.pendingCheckpointValue.map{ _.serialize }.toList)))
-
+  def status: JValue = JObject(
+    JField("Metadata Serialization", JObject(
+      JField("lastCheckpoint", checkpoints.latestCheckpoint) ::
+      JField("pendingCheckpointCount", checkpoints.pendingCheckpointCount) ::
+      JField("pendingCheckpoints", JArray(checkpoints.pendingCheckpointValue.map{ _.serialize }.toList)) :: Nil
+    )) :: Nil
+  )
 }
 
 trait MetadataStorage extends FileOps {
