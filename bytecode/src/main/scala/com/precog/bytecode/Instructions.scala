@@ -51,11 +51,12 @@ trait Instructions extends Library {
       case FilterCrossLeft(_, None) => (2, 1)
       case FilterCrossRight(_, None) => (2, 1)
       
-      case Bucket => (2, 1)
+      case Group(_) => (2, 1)
       case MergeBuckets(_) => (2, 1)
-      case ZipBuckets => (2, 1)
+      case KeyPart(_) => (1, 1)
+      case Extra => (1, 1)
       
-      case Split(n, k) => (n, k)
+      case Split => (1, 0)
       case Merge => (1, 1)
       
       case Dup => (1, 2)
@@ -73,6 +74,9 @@ trait Instructions extends Library {
       case PushNull => (0, 1)
       case PushObject => (0, 1)
       case PushArray => (0, 1)
+      
+      case PushGroup(_) => (0, 1)
+      case PushKey(_) => (0, 1)
     }
 
     def predicateStackDelta: (Int, Int) = self match {
@@ -106,11 +110,12 @@ trait Instructions extends Library {
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr
     
-    case object Bucket extends Instruction
+    case class Group(id: Int) extends Instruction
     case class MergeBuckets(and: Boolean) extends Instruction
-    case object ZipBuckets extends Instruction
+    case class KeyPart(id: Int) extends Instruction
+    case object Extra extends Instruction
     
-    case class Split(n: Short, k: Short) extends Instruction
+    case object Split extends Instruction
     case object Merge extends Instruction
     
     case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
@@ -135,6 +140,9 @@ trait Instructions extends Library {
     case object PushNull extends Instruction with RootInstr
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
+    
+    case class PushGroup(id: Int) extends Instruction with RootInstr
+    case class PushKey(id: Int) extends Instruction with RootInstr
     
     sealed trait SetReduction
     sealed trait UnaryOperation

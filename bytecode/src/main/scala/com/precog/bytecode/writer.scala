@@ -181,12 +181,13 @@ trait BytecodeWriter extends Writer with Version {
         case FilterCrossLeft(depth, None) => (0x17, depth, 0)
         case FilterCrossRight(depth, None) => (0x18, depth, 0)
         
-        case Bucket => (0x1A, 0.toShort, 0)
+        case Group(id) => (0x1A, 0.toShort, id)
         case MergeBuckets(and) => (0x1B, 0.toShort, if (and) 0x01 else 0x00)
-        case ZipBuckets => (0x1C, 0.toShort, 0)
+        case KeyPart(id) => (0x1C, 0.toShort, id)
+        case Extra => (0x1D, 0.toShort, 0)
         
-        case Split(n, k) => (0x1D, n, k.toInt)
-        case Merge => (0x1E, 0.toShort, 0)
+        case Split => (0x1E, 0.toShort, 0)
+        case Merge => (0x1F, 0.toShort, 0)
         
         case Dup => (0x20, 0.toShort, 0)
         case Drop => (0x21, 0.toShort, 0)
@@ -203,6 +204,9 @@ trait BytecodeWriter extends Writer with Version {
         case PushObject => (0x84, 0.toShort, 0)
         case PushArray => (0x85, 0.toShort, 0)
         case PushNull => (0x86, 0.toShort, 0)
+        
+        case PushGroup(id) => (0x90, 0.toShort, id)
+        case PushKey(id) => (0x91, 0.toShort, id)
       }
       
       buffer.put(opcode.toByte)
