@@ -51,6 +51,30 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("x :=") must throwA[ParseException]
     }
     
+    "accept a specific import expression" in {
+      parse("import std 42") must beLike {
+        case Import(_, SpecificImport(Vector("std")), NumLit(_, "42")) => ok
+      }
+      
+      parse("import std::math::alissa 42") must beLike {
+        case Import(_, SpecificImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
+      }
+    }
+    
+    "accept a wildcard import expression" in {
+      parse("import std::_ 42") must beLike {
+        case Import(_, WildcardImport(Vector("std")), NumLit(_, "42")) => ok
+      }
+      
+      parse("import std::math::alissa::_ 42") must beLike {
+        case Import(_, WildcardImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
+      }
+    }
+    
+    "reject a singular wildcard import expression" in {
+      parse("import _ 42") must throwA[ParseException]
+    }
+    
     "accept a 'new' expression" in {
       parse("new 1") must beLike {
         case New(_, NumLit(_, "1")) => ok
@@ -284,6 +308,10 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "reject an array dereference with no indexes" in {
       parse("1[]") must throwA[ParseException]
+    }
+    
+    "reject a dispatch on wildcard" in {
+      parse("_(42)") must throwA[ParseException]
     }
     
     "accept a dispatch with one actual" in {
@@ -948,20 +976,29 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         parse("withfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "withfoo"), Vector()) => ok
         }
-      }      
+      }   
+      
       "union" >> {
         parse("unionfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "unionfoo"), Vector()) => ok
         }
-      }      
+      }    
+      
       "intersect" >> {
         parse("intersectfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
         }
       }      
+      
       "null" >> {
         parse("nullfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "nullfoo"), Vector()) => ok
+        }
+      }
+      
+      "import" >> {
+        parse("importfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "importfoo"), Vector()) => ok
         }
       }
     }
@@ -1029,7 +1066,4 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   } else {
     "specification examples" >> skipped
   }
-
-
-
 }
