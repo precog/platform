@@ -357,6 +357,9 @@ trait Emitter extends AST
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right)
+        
+        case ast.Import(_, _, child) =>
+          emitExpr(child)
 
         case ast.New(loc, child) => 
           emitExpr(child) >> emitInstr(Map1(New))

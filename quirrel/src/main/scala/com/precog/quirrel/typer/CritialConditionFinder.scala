@@ -30,6 +30,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     def loop(root: Let, expr: Expr, currentWhere: Option[Expr]): Map[String, Set[ConditionTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
+      case Import(_, _, child) => loop(root, child, currentWhere)
+      
       case New(_, child) => loop(root, child, currentWhere)
       
       case Relate(_, from, to, in) => {

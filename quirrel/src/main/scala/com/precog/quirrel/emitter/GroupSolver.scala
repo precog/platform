@@ -37,6 +37,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     case expr @ Let(_, _, _, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
+    case Import(_, _, child) => inferBuckets(child)
+    
     case New(_, child) => inferBuckets(child)
     
     case Relate(_, from, to, in) =>

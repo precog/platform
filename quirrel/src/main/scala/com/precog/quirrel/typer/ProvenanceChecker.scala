@@ -64,6 +64,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         leftErrors ++ rightErrors
       }
       
+      case Import(_, _, child) => {
+        val back = loop(child, relations, constraints)
+        expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
+        back
+      }
+      
       case New(_, child) => {
         val back = loop(child, relations, constraints)
         expr.provenance = DynamicProvenance(currentId.incrementAndGet())
@@ -534,6 +541,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
     case body @ Let(_, _, _, left, right) =>
       computeResultProvenance(right, relations, varAssumptions)
+    
+    case Import(_, _, child) =>
+      computeResultProvenance(child, relations, varAssumptions)
     
     case Relate(_, from, to, in) => {
       val fromExisting = relations.getOrElse(from.provenance, Set())
