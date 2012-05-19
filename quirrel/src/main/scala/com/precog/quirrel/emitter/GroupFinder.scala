@@ -11,6 +11,8 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
     def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Map[String, Set[GroupTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
+      case Import(_, _, child) => loop(root, child, currentWhere)
+      
       case New(_, child) => loop(root, child, currentWhere)
       
       case Relate(_, from, to, in) => {

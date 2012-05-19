@@ -34,6 +34,11 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       }
     }
     
+    case Import(loc, spec, child) => {
+      val (child2, bindings, errors) = performShake(child)
+      (Import(loc, spec, child2), bindings, errors)
+    }
+    
     case New(loc, child) => {
       val (child2, bindings, errors) = performShake(child)
       (New(loc, child2), bindings, errors)

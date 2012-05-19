@@ -16,6 +16,8 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     case expr @ Let(_, _, _, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
+    case Import(_, _, child) => solveCriticalConditions(child)
+    
     case New(_, child) => solveCriticalConditions(child)
     
     case Relate(_, from, to, in) =>
