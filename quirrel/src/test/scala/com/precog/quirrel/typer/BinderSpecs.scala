@@ -645,7 +645,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }      
    
     "bind geometricMean" in {
-    val d @ Dispatch(_, _, _) = parse("geometricMean")
+      val d @ Dispatch(_, _, _) = parse("geometricMean")
       d.binding mustEqual BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
       d.isReduction mustEqual true
       d.errors must beEmpty
