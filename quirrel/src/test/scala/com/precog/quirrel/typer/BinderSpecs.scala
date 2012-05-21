@@ -2,7 +2,7 @@ package com.precog
 package quirrel
 package typer
 
-import bytecode.RandomLibrary
+import bytecode.StaticLibrary
 import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
@@ -11,7 +11,7 @@ import parser._
 import java.io.File
 import scala.io.Source
 
-object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder with RandomLibrary {
+object BinderSpecs extends Specification with ScalaCheck with Parser with StubPhases with Binder with StaticLibrary {
   import ast._
   
   "let binding" should {
