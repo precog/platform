@@ -749,6 +749,177 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
   
+  "complete hierarchical imports" should {
+    "allow use of a unary function unqualified" in {
+      val input = """
+        | import std::lib::baz
+        | baz""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "allow use of a unary function unqualified in a hierarchical import" in {
+      val input = """
+        | import std::lib
+        | import lib::baz
+        | baz""".stripMargin
+        
+      val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "allow the use of a unary function partially-qualified" in {
+      val input = """
+        | import std::lib
+        | lib::baz""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "reject the use of a sub-package when parent has been singularly imported" in {
+      val input = """
+        | import std
+        | import lib
+        | lib::baz""".stripMargin
+        
+      val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
+      
+      d.errors must not(beEmpty)
+    }
+    
+    "allow the use of a function that shadows a package" in {
+      val input = """
+        | import std::lib
+        | lib""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
+      d.errors must beEmpty
+    }
+    
+    "bind most specific import in case of shadowing" in {
+      val input = """
+        | import std::bin
+        | bin""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d.errors must beEmpty
+    }
+    
+    "not affect outer scope" in {
+      val input = """
+        | bin +
+        | import std::bin
+        | bin""".stripMargin
+        
+      val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
+      
+      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
+      d1.errors must beEmpty
+      
+      d2.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d2.errors must beEmpty
+    }
+  }
+  
+  "wildcard hierarchical imports" should {
+    "allow use of a unary function unqualified" in {
+      val input = """
+        | import std::lib::_
+        | baz""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "allow use of more than one unary function unqualified" in {
+      val input = """
+        | import std::lib::_
+        | baz + baz2""".stripMargin
+        
+      val Import(_, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse(input)
+      
+      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d1.errors must beEmpty
+      
+      d2.binding mustEqual StdlibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003))
+      d2.errors must beEmpty
+    }
+    
+    "allow use of a unary function unqualified in a hierarchical import" in {
+      val input = """
+        | import std::_
+        | import lib::_
+        | baz""".stripMargin
+        
+      val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "allow the use of a unary function partially-qualified" in {
+      val input = """
+        | import std::_
+        | lib::baz""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.errors must beEmpty
+    }
+    
+    "allow the use of a function that shadows a package" in {
+      val input = """
+        | import std::_
+        | lib""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
+      d.errors must beEmpty
+    }
+    
+    "bind most specific import in case of shadowing" in {
+      val input = """
+        | import std::_
+        | bin""".stripMargin
+        
+      val Import(_, _, d: Dispatch) = parse(input)
+      
+      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d.errors must beEmpty
+    }
+    
+    "not affect outer scope" in {
+      val input = """
+        | bin +
+        | import std::_
+        | bin""".stripMargin
+        
+      val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
+      
+      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
+      d1.errors must beEmpty
+      
+      d2.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d2.errors must beEmpty
+    }
+  }
+  
   val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {

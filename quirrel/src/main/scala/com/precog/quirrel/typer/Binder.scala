@@ -51,7 +51,7 @@ trait Binder extends parser.AST with Library {
               case (Right(Identifier(ns, name)), b) => {
                 if (ns.length >= prefix.length) {
                   if (ns zip prefix forall { case (a, b) => a == b })
-                    Some(Right(Identifier(ns drop prefix.length, name)) -> b)
+                    Some(Right(Identifier(ns drop (prefix.length - 1), name)) -> b)
                   else
                     None
                 } else if (ns.length == prefix.length - 1) {
@@ -77,7 +77,7 @@ trait Binder extends parser.AST with Library {
               case (Right(Identifier(ns, name)), b) => {
                 if (ns.length >= prefix.length + 1) {
                   if (ns zip prefix forall { case (a, b) => a == b })
-                    Some(Right(Identifier(ns drop (prefix.length + 1), name)) -> b)
+                    Some(Right(Identifier(ns drop prefix.length, name)) -> b)
                   else
                     None
                 } else if (ns.length == prefix.length) {
