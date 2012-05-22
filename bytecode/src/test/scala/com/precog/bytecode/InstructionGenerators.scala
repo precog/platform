@@ -153,42 +153,42 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genPushKey = arbitrary[Int] map PushKey
   
   private lazy val genUnaryOp = for {
-    op  <- oneOf(lib1.toSeq)
+    op <- oneOf(lib1.toSeq)
     res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1Op(op))
   } yield res
   
   private lazy val genBinaryOp = for {
-    op  <- oneOf(lib2.toSeq)
+    op <- oneOf(lib2.toSeq)
     res <- oneOf(
-    Add,
-    Sub,
-    Mul,
-    Div,
+      Add,
+      Sub,
+      Mul,
+      Div,
+      
+      Lt,
+      LtEq,
+      Gt,
+      GtEq,
+      
+      Eq,
+      NotEq,
+      
+      Or,
+      And,
+      
+      WrapObject,
+      
+      JoinObject,
+      JoinArray,
+      
+      ArraySwap,
+      
+      DerefObject,
+      DerefArray,
     
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    
-    Eq,
-    NotEq,
-    
-    Or,
-    And,
-    
-    WrapObject,
-    
-    JoinObject,
-    JoinArray,
-    
-    ArraySwap,
-    
-    DerefObject,
-    DerefArray,
-  
-    BuiltInFunction2Op(op))
+      BuiltInFunction2Op(op))
   } yield res
-
+  
   private lazy val genReduction = oneOf(
     Count,
     GeometricMean,

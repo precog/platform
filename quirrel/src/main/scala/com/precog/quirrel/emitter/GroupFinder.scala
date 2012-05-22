@@ -50,7 +50,6 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
       case NumLit(_, _) => Set()
       case BoolLit(_, _) => Set()
       case NullLit(_) => Set()
-      case NullLit(_) => Set()
       
       case ObjectDef(_, props) => {
         val sets = props map { case (_, expr) => loop(root, expr, currentWhere) }
