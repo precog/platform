@@ -171,7 +171,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   private def solveCondition(b: Let, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
     case And(_, left, right) => {
       val (leftSpec, leftErrors) = solveCondition(b, left)
-      val (rightSpec, rightErrors) = solveCondition(b, left)
+      val (rightSpec, rightErrors) = solveCondition(b, right)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield IntersectBucketSpec(ls, rs)
@@ -181,7 +181,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     
     case Or(_, left, right) => {
       val (leftSpec, leftErrors) = solveCondition(b, left)
-      val (rightSpec, rightErrors) = solveCondition(b, left)
+      val (rightSpec, rightErrors) = solveCondition(b, right)
       
       val andSpec = for (ls <- leftSpec; rs <- rightSpec)
         yield UnionBucketSpec(ls, rs)
