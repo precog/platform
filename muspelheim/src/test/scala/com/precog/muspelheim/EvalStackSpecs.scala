@@ -91,8 +91,44 @@ trait EvalStackSpecs extends Specification {
       "empty array" >> {
         eval("{}[0]") mustEqual Set()
       }.pendingUntilFixed
-    }
+    }    
+    
+    "accept a where'd empty array and empty object" >> {
+      "empty object (left)" >> {
+        eval("{} where true") mustEqual Set()
+      }.pendingUntilFixed
 
+      "empty object (right)" >> {
+        eval("true where {}") mustEqual Set()
+      }.pendingUntilFixed
+      
+      "empty array (left)" >> {
+        eval("[] where true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array (right)" >> {
+        eval("true where []") mustEqual Set()
+      }.pendingUntilFixed
+    }    
+    
+    "accept a with'd empty array and empty object" >> {
+      "empty object (left)" >> {
+        eval("{} with true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty object (right)" >> {
+        eval("true with {}") mustEqual Set()
+      }.pendingUntilFixed
+      
+      "empty array (left)" >> {
+        eval("[] with true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array (right)" >> {
+        eval("true with []") mustEqual Set()
+      }.pendingUntilFixed
+    }    
+    
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
         val input = """
