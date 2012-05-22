@@ -80,6 +80,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
         back
       }
       
@@ -388,7 +391,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               val errorSet = Set(errors.flatten: _*)
               if (errorSet.isEmpty) {
                 val provenances = exprs map { _.provenance }
-                val accProvenances = exprs map { _.accumulatedProvenance }
+                val accumulatedProvenances = exprs map { _.accumulatedProvenance }
                 
                 val optUnified = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
                   left flatMap { unifyProvenance(relations)(_, right) }
@@ -423,8 +426,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                         }
                       }
 
-                      val varAccAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
-                        e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
+                      val varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
+                        e.accumulatedAssumptions ++ Map(e.params zip accumulatedProvenances: _*) map {
                           case (id, accProv) => ((id, e), accProv)
                         }
                       }
@@ -441,14 +444,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                           expr.accumulatedProvenance = resultProv match {
                             case ValueProvenance => Some(Vector())
                             case NullProvenance => None
-                            case p => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccAssumptions) 
+                            case p => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions) 
                           }
                           (resultProv, Set())
                         }
                         
                         case _ /* if e.params.length != exprs.length */ => {   //partially-quantified case
                           val prov = DynamicProvenance(provenanceId(expr))
-                          expr.accumulatedProvenance = computeResultAccumulatedProvenance(e.left, exprs, relations, varAccAssumptions)
+                          expr.accumulatedProvenance = computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions)
                           (prov, Set())
                         }
                       }
@@ -785,6 +788,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
     case body @ Let(_, _, _, left, right) =>
       computeResultProvenance(right, relations, varAssumptions)
+
+    case Import(_, _, child) =>
+      computeResultProvenance(child, relations, varAssumptions)
     
     case Relate(_, from, to, in) => {
       val fromExisting = relations.getOrElse(from.provenance, Set())
@@ -947,10 +953,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => body.provenance   
   }
 
-  private def computeResultAccumulatedProvenance(body: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = body match {
-    case Let(_, _, params, left, right) => {
-      computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-    }
+  private def computeResultAccumulatedProvenance(body: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = body match {
+    case Let(_, _, params, left, right) => 
+      computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+
+    case Import(_, _, child) => 
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
 
     case New(_, child) => {
       val prov = DynamicProvenance(currentId.incrementAndGet())
@@ -961,13 +969,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       if (from.provenance == NullProvenance || to.provenance == NullProvenance) None
       else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) None
       else if (pathExists(relations, from.provenance, to.provenance)) None
-      else computeResultAccumulatedProvenance(in, exprs, relations, varAccAssumptions)
+      else computeResultAccumulatedProvenance(in, exprs, relations, varAccumulatedAssumptions)
     }
 
     case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Some(Vector())
 
     case t @ TicVar(_, id) => t.binding match {
-      case UserDef(lt) => varAccAssumptions get (id -> lt) getOrElse Some(Vector())
+      case UserDef(lt) => varAccumulatedAssumptions get (id -> lt) getOrElse Some(Vector())
       case _ => Some(Vector())
     }
 
@@ -1006,7 +1014,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       else accProv
     }
 
-    case Descent(_, child, _) => computeResultAccumulatedProvenance(child, exprs, relations, varAccAssumptions)
+    case Descent(_, child, _) => computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
 
     case Deref(_, left, right) => {
       val leftP = left.provenance.possibilities
@@ -1015,8 +1023,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
       
       val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccAssumptions)
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
       } yield {
         leftAcc ++ rightAcc
       }
@@ -1026,20 +1034,20 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
 
     case d @ Dispatch(_, _, actuals) => {
-      val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccAssumptions) }
+      val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccumulatedAssumptions) }
 
       if (d.isReduction) {
         Some(Vector())
       } else {
         d.binding match {
           case UserDef(e) if (e.params.length == actuals.length) => {
-            val varAccAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
+            val varAccumulatedAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
               e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
                 case (id, accProv) => ((id, e), accProv)
               }
             }
 
-            computeResultAccumulatedProvenance(e.left, exprs, relations, varAccAssumptions ++ varAccAssumptions2)
+            computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions ++ varAccumulatedAssumptions2)
           }
           case _ => d.accumulatedProvenance
         }
@@ -1053,8 +1061,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
       
       val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccAssumptions)
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
       } yield {
         leftAcc ++ rightAcc
       }
@@ -1070,8 +1078,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
       
       val accProv = for {
-        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccAssumptions)
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
       } yield {
         leftAcc ++ rightAcc
       }
@@ -1105,63 +1113,63 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
 
     case Add(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Sub(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Mul(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Div(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Lt(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case LtEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Gt(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case GtEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Eq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case NotEq(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case And(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Or(_, left, right) => {
-      determineResultBinaryAccProv(left, right, exprs, relations, varAccAssumptions)
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Comp(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccAssumptions)
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Neg(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccAssumptions)
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
     }
 
     case Paren(_, child) => {
-      computeResultAccumulatedProvenance(child, exprs, relations, varAccAssumptions)
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
     }
   }
 
@@ -1182,15 +1190,15 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     else accProv
   }
 
-  private def determineBinaryAccProv2(left: Expr, right: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = {
+  private def determineResultBinaryAccProv(left: Expr, right: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = {
     val leftP = left.provenance.possibilities
     val rightP = right.provenance.possibilities
 
     val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
     
     val accProv = for {
-      leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-      rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccAssumptions)
+      leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+      rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
     } yield {
       leftAcc ++ rightAcc
     }
@@ -1198,7 +1206,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     if (isMatch) accProv map { _.distinct }
     else accProv
   }
-  
+
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
@@ -1236,40 +1244,6 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (p, ValueProvenance) => Some(p)
     
     case _ => None
-  }
-
-  private def determineBinaryAccProv(left: Expr, right: Expr): Option[Vector[Provenance]] = {
-    val leftP = left.provenance.possibilities
-    val rightP = right.provenance.possibilities
-
-    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-    
-    val accProv = for {
-      leftAcc <- left.accumulatedProvenance
-      rightAcc <- right.accumulatedProvenance
-    } yield {
-      leftAcc ++ rightAcc
-    }
-    
-    if (isMatch) accProv map { _.distinct }
-    else accProv
-  }
-
-  private def determineResultBinaryAccProv(left: Expr, right: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = {
-    val leftP = left.provenance.possibilities
-    val rightP = right.provenance.possibilities
-
-    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
-    
-    val accProv = for {
-      leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccAssumptions)
-      rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccAssumptions)
-    } yield {
-      leftAcc ++ rightAcc
-    }
-    
-    if (isMatch) accProv map { _.distinct }
-    else accProv
   }
 
   private def unifyProvenanceUnionIntersect(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
