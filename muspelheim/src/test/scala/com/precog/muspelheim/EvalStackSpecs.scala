@@ -501,27 +501,7 @@ trait EvalStackSpecs extends Specification {
       results must haveSize(0)
     }
 
-    "evaluate incremental rank" >> {
-      "returning a set of ranks without matching" >> {
-        val input = "std::stats::incrementalRank(//campaigns.cpm)"
-
-        val results = eval(input)
-
-        results must haveSize(100)  
-
-        results mustEqual ((1 to 100) map { k => SDecimal(k) }).toSet
-      }
-
-      "using a join on a value" >> {
-        val input = "std::stats::incrementalRank(//campaigns.cpm) + 2"
-
-        val results = eval(input)
-
-        results must haveSize(100)  
-
-        results mustEqual ((3 to 102) map { k => SDecimal(k) }).toSet
-      }
-
+    "evaluate rank" >> {
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
