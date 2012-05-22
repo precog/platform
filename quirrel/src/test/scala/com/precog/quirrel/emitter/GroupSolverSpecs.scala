@@ -29,21 +29,21 @@ object GroupSolverSpecs extends Specification
     "identify and solve group set for trivial cf example" in {
       val input = "clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day onDay"
       
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _, 
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _, 
           origin @ Where(_, target, Eq(_, solution, _)), _)) = compile(input)
           
       val expected = Group(origin, target, UnfixedSolution("'day", solution))
         
-      tree.buckets must beSome(expected)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify composite bucket for trivial cf example with conjunction" in {
       val input = "clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay"
       
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _, 
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _, 
           origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), _)) = compile(input)
       
       val expected = Group(origin, target,
@@ -51,8 +51,8 @@ object GroupSolverSpecs extends Specification
           UnfixedSolution("'day", leftSol),
           UnfixedSolution("'day", rightSol)))
       
-      tree.buckets must beSome(expected)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify separate buckets for independent tic variables on same set" in {
@@ -67,8 +67,8 @@ object GroupSolverSpecs extends Specification
         |
         | foo""".stripMargin
         
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _,
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _,
           Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
             Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
           _)) = compile(input)
@@ -79,8 +79,8 @@ object GroupSolverSpecs extends Specification
         Group(originB, targetB,
           UnfixedSolution("'b", solB)))
       
-      tree.buckets must beSome(expected)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify separate buckets for independent tic variables on different sets" in {
@@ -97,9 +97,9 @@ object GroupSolverSpecs extends Specification
         |
         | foo""".stripMargin
         
-      val tree @ Let(_, _, _, _,
+      val Let(_, _, _, _,
         Let(_, _, _, _,
-          Let(_, _, _,
+          tree @ Let(_, _, _,
             Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
               Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
           _))) = compile(input)
@@ -110,8 +110,8 @@ object GroupSolverSpecs extends Specification
         Group(originB, targetB,
           UnfixedSolution("'b", solB)))
       
-      tree.buckets must beSome(expected)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "reject shared buckets for dependent tic variables on the same set" in {
