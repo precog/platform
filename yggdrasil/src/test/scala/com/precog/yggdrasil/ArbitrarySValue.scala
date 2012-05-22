@@ -202,6 +202,8 @@ object LimitList {
 trait ArbitrarySValue extends SValueGenerators {
   def genChunks(size: Int): Gen[LimitList[Vector[SEvent]]] = LimitList.genLimitList[Vector[SEvent]](size)
 
+  implicit val listLongOrder = scalaz.std.list.listOrder[Long]
+
   implicit val SEventIdentityOrder: Order[SEvent] = Order[List[Long]].contramap((_: SEvent)._1.toList)
   implicit val SEventOrdering = SEventIdentityOrder.toScalaOrdering
 
