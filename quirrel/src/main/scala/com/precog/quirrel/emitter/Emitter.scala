@@ -1,9 +1,10 @@
-package com.precog.quirrel.emitter
+package com.precog
+package quirrel
+package emitter
 
-import com.precog.quirrel.parser.AST
-import com.precog.quirrel.Solver
-import com.precog.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
-import com.precog.bytecode.{Instructions}
+import parser.AST
+import typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
+import bytecode.Instructions
 
 import scalaz.{StateT, Id, Identity, Bind, Monoid}
 import scalaz.Scalaz._
@@ -36,8 +37,9 @@ trait Emitter extends AST
     bytecode: Vector[Instruction] = Vector(),
     marks: Map[MarkType, Mark] = Map(),
     curLine: Option[(Int, String)] = None,
-    buckets: Map[ast.Where, Set[Expr]] = Map(),
-    toDrop: List[Set[MarkType]] = Nil)
+    ticVars: Map[(ast.Let, TicId), EmitterState] = Map(),
+    groups: Map[ast.Where, Int] = Map(),
+    currentId: Int = 0)
   
   private type EmitterState = StateT[Id, Emission, Unit]
 
@@ -64,6 +66,10 @@ trait Emitter extends AST
     }
 
     def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
+    
+    def nextId(f: Int => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
+      f(e.currentId)(e.copy(currentId = e.currentId + 1))
+    }
 
     def emitInstr(i: Instruction): EmitterState = insertInstrAt(i, -1)
 
@@ -103,94 +109,16 @@ trait Emitter extends AST
       }
     }
     
-    private def markTicVar(let: ast.Let, name: String, offset: Int): EmitterState = {
-      val mark = MarkTicVar(let, name)
-      
-      val markState = StateT.apply[Id, Emission, Unit] { e =>
-        ((), e.copy(marks = e.marks + (mark -> Mark(e.bytecode.length, offset))))
+    private def labelTicVar(let: ast.Let, name: TicId)(state: => EmitterState): EmitterState = {
+      StateT.apply[Id, Emission, Unit] { e =>
+        ((), e.copy(ticVars = e.ticVars + ((let, name) -> state)))
       }
-      
-      markState >> markForDrop(mark)
     }
     
-    private def markAllGroups(bucket: Bucket, offset: Int, seen: Set[ast.Where]): (EmitterState, Int, Set[ast.Where]) = bucket match {
-      case UnionBucket(left, right) => {
-        val (state1, offset1, seen1) = markAllGroups(left, offset, seen)
-        val (state2, offset2, seen2) = markAllGroups(right, offset1, seen1)
-        (state1 >> state2, offset2, seen2)
+    private def labelGroup(where: ast.Where, id: Int): EmitterState = {
+      StateT.apply[Id, Emission, Unit] { e =>
+        ((), e.copy(groups = e.groups + (where -> id)))
       }
-      
-      case IntersectBucket(left, right) => {
-        val (state1, offset1, seen1) = markAllGroups(left, offset, seen)
-        val (state2, offset2, seen2) = markAllGroups(right, offset1, seen1)
-        (state1 >> state2, offset2, seen2)
-      }
-      
-      case Group(origin, _, _, extras) if !seen(origin) => {
-        val mark = MarkGroup(origin)
-        
-        val state = StateT.apply[Id, Emission, Unit] { e =>
-          val e2 = e.copy(
-            marks = e.marks + (mark -> Mark(e.bytecode.length, offset)),
-            buckets = e.buckets + (origin -> extras))
-            
-          ((), e2)
-        }
-        
-        (state >> markForDrop(mark), offset + 1, seen + origin)
-      }
-      
-      case _ => (mzero[EmitterState], offset, seen)
-    }
-    
-    private def pushDropFrame: EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      ((), e.copy(toDrop = Set[MarkType]() :: e.toDrop))
-    }
-    
-    private def markForDrop(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val newDrop = e.toDrop match {
-        case hd :: tail => (hd + markType) :: tail
-        case Nil => Nil
-      }
-      
-      ((), e.copy(toDrop = newDrop))
-    }
-    
-    /**
-     * Do ''not'' use this state unless there is exactly one value at the head of
-     * the stack with the entire drop frame below it.
-     */
-    private def popDropFrame: EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val (optSet, newDrop) = e.toDrop match {
-        case hd :: tail => (Some(hd), tail)
-        case Nil => (None, Nil)
-      }
-      
-      val results = optSet map { _ map { _ => emitInstr(Swap(1)) >> emitInstr(Drop) } } getOrElse Set(mzero[EmitterState])
-      
-      val back = reduce(results) >> (StateT.apply[Id, Emission, Unit] { e =>
-        ((), e.copy(toDrop = newDrop))
-      })
-      
-      back(e)
-    }
-    
-    private def emitDrop(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      val Mark(insertIdx, offset) = e.marks(markType)
-
-      val stackSizes = operandStackSizes(e.bytecode)
-      val targetStackSize = stackSizes(insertIdx)
-      val finalStackSize  = stackSizes(e.bytecode.length)
-      
-      val distance = finalStackSize - targetStackSize + 1
-      
-      // Restore the value by pulling it forward:
-      val swaps = if (distance == 1)
-        Vector()
-      else
-        (1 until distance) map Swap
-      
-      ((), e.copy(bytecode = e.bytecode ++ swaps :+ Drop))
     }
     
     // Dup's previously marked bytecode:
@@ -275,30 +203,9 @@ trait Emitter extends AST
     def emitWhere(where: ast.Where): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       val ast.Where(loc, left, right) = where
       
-      val state = if (e.buckets contains where) {
-        val extras = e.buckets(where)
-        
-        // TODO unify the provenances to discover if we need to cross
-        
-        if (extras.isEmpty) {
-          emitDup(MarkGroup(where))
-        } else {
-          val extraStates = extras map { e => (emitExpr(e), e.provenance) }
-          
-          val Some((state, prov)) = extraStates.foldLeft(None: Option[(EmitterState, Provenance)]) {
-            case (Some((leftState, leftProv)), (rightState, rightProv)) => {
-              Some((emitCrossOrMatchState(leftState, leftProv, rightState, rightProv)(
-                ifCross = Map2Cross(And),
-                ifMatch = Map2Match(And)), unifyProvenanceAssumingRelated(leftProv, rightProv)))
-            }
-            
-            case (None, pair) => Some(pair)
-          }
-          
-          emitCrossOrMatchState(emitDup(MarkGroup(where)), where.provenance, state, prov)(
-            ifCross = FilterCross(0, None),
-            ifMatch = FilterMatch(0, None))
-        }
+      val state = if (e.groups contains where) {
+        val id = e.groups(where)
+        emitOrDup(MarkGroup(where))(emitInstr(PushGroup(id)))
       } else {
         emitFilter(left, right, 0, None)
       }
@@ -306,31 +213,35 @@ trait Emitter extends AST
       state(e)
     }
     
-    def origins(bucket: Bucket): Set[ast.Where] = bucket match {
-      case UnionBucket(left, right) => origins(left) ++ origins(right)
-      case IntersectBucket(left, right) => origins(left) ++ origins(right)
-      case Group(origin, _, _, _) => Set(origin)
-    }
-    
-    def emitBucket(bucket: Bucket): EmitterState = bucket match {
-      case UnionBucket(left, right) =>
-        emitBucket(left) >> emitBucket(right) >> emitInstr(ZipBuckets)      // can this ever happen?
+    def emitBucketSpec(let: ast.Let, spec: BucketSpec): EmitterState = spec match {
+      case buckets.UnionBucketSpec(left, right) =>
+        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(false))
       
-      case IntersectBucket(left, right) =>
-        emitBucket(left) >> emitBucket(right) >> emitInstr(ZipBuckets)
+      case buckets.IntersectBucketSpec(left, right) =>
+        emitBucketSpec(let, left) >> emitBucketSpec(let, right) >> emitInstr(MergeBuckets(true))
       
-      case Group(_, target, forest, _) => emitSolution(target, forest)
-    }
-    
-    // er...?
-    def emitSolution(target: Expr, solution: Solution): EmitterState = solution match {
-      case Disjunction(left, right) =>
-        emitSolution(target, left) >> emitSolution(target, right) >> emitInstr(MergeBuckets(false))
+      case buckets.Group(origin, target, forest) => {
+        nextId { id =>
+          emitBucketSpec(let, forest) >>
+            emitExpr(target) >>
+            labelGroup(origin, id) >>
+            emitInstr(Group(id))
+        }
+      }
       
-      case Conjunction(left, right) =>
-        emitSolution(target, left) >> emitSolution(target, right) >> emitInstr(MergeBuckets(true))
+      case buckets.UnfixedSolution(name, solution) => {
+        nextId { id =>
+          emitExpr(solution) >>
+            labelTicVar(let, name)(emitInstr(PushKey(id))) >>
+            emitInstr(KeyPart(id))
+        }
+      }
       
-      case Definition(expr) => emitExpr(target) >> emitExpr(expr) >> emitInstr(Bucket)
+      case buckets.FixedSolution(_, solution, expr) =>
+        emitMap(solution, expr, Eq) >> emitInstr(Extra)
+      
+      case buckets.Extra(expr) =>
+        emitExpr(expr) >> emitInstr(Extra)
     }
     
     def emitExpr(expr: Expr): StateT[Id, Emission, Unit] = {
@@ -348,11 +259,19 @@ trait Emitter extends AST
         case ast.Relate(loc, from: Expr, to: Expr, in: Expr) => 
           emitExpr(in)
         
-        case t @ ast.TicVar(loc, name) => 
+        case t @ ast.TicVar(loc, name) => { 
           t.binding match {
-            case UserDef(let) => emitDup(MarkTicVar(let, name))
+            case UserDef(let) => {
+              emitOrDup(MarkTicVar(let, name)) {
+                StateT.apply[Id, Emission, Unit] { e =>
+                  e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
+                }
+              }
+            }
+            
             case _ => notImpl(expr)
           }
+        }
         
         case ast.StrLit(loc, value) => 
           emitInstr(PushString(value))
@@ -530,59 +449,24 @@ trait Emitter extends AST
                   emitOrDup(MarkExpr(left))(emitExpr(left))
 
                 case n => emitOrDup(MarkDispatch(let, actuals)) {
-                  val (actualStates, actualMarks) = params zip actuals map {
-                    case (name, expr) => {
-                      val mark = MarkTicVar(let, name)
-                      (emitAndMark(mark)(emitExpr(expr)), mark)
-                    }
-                  } unzip
-                  
-                  val populateActualFrame = StateT.apply[Id, Emission, Unit] { e =>
-                    val toDrop2 = e.toDrop match {
-                      case hd :: tl => (hd ++ actualMarks) :: tl
-                      case Nil => Nil
-                    }
-                    
-                    ((), e.copy(toDrop = toDrop2))
+                  val actualStates = params zip actuals map {
+                    case (name, expr) =>
+                      labelTicVar(let, name)(emitExpr(expr))
                   }
                   
                   val body = if (actuals.length == n) {
-                    pushDropFrame >>
-                      populateActualFrame >>
-                      emitExpr(left) >>
-                      popDropFrame
+                    emitExpr(left)
                   } else {
-                    val (buckets, bucketStates) = d.buckets.toSeq map {
-                      case pair @ (name, bucket) => (pair, emitBucket(bucket))
-                    } unzip
-
-                    val n = buckets.length.toShort
-                    val k = (buckets.length + (buckets map { _._2 } map origins map { _.size } sum)).toShort
-                    val split = emitInstr(Split(n, k))
-                    
-                    /*
-                     * Split
-                     *   <group22>
-                     *   <group21>
-                     *   <var2>
-                     *   <group11>
-                     *   <var1>
-                     */
-                    
-                    val (groups, _) = buckets.foldLeft((mzero[EmitterState], 0)) {
-                      case ((state, offset), (name, bucket)) => {
-                        val (state2, offset2, _) = markAllGroups(bucket, offset + 1, Set())
-                        (markTicVar(let, name, offset) >> state2 >> state, offset2)
+                    val spec = {
+                      val init: BucketSpec = let.buckets.get         // assuming no errors
+                      (params zip actuals).foldLeft(init) {
+                        case (spec, (id, expr)) => spec.derive(id, expr)
                       }
                     }
                     
-                    reduce(bucketStates) >>
-                      split >>
-                      pushDropFrame >>
-                      populateActualFrame >>
-                      groups >>
+                    emitBucketSpec(let, spec) >> 
+                      emitInstr(Split) >>
                       emitExpr(left) >>
-                      popDropFrame >>
                       emitInstr(Merge)
                   }
                   
