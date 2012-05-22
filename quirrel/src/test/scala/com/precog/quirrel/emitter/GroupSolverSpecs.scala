@@ -42,6 +42,7 @@ object GroupSolverSpecs extends Specification
     with RandomLibrary {
       
   import ast._
+  import buckets._
       
   "group solver" should {
     "identify and solve group set for trivial cf example" in {
@@ -49,9 +50,11 @@ object GroupSolverSpecs extends Specification
       
       val tree @ Let(_, _, _, _,
         Let(_, _, _, 
-          origin @ Where(_, target, Eq(_, solution, _)), d: Dispatch)) = compile(input)
+          origin @ Where(_, target, Eq(_, solution, _)), _)) = compile(input)
+          
+      val expected = Group(origin, target, UnfixedSolution("'day", solution))
         
-      d.buckets must contain("'day" -> Group(origin, target, Definition(solution), Set()))
+      tree.buckets must beSome(expected)
       tree.errors must beEmpty
     }
     
@@ -60,12 +63,14 @@ object GroupSolverSpecs extends Specification
       
       val tree @ Let(_, _, _, _,
         Let(_, _, _, 
-          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), d: Dispatch)) = compile(input)
+          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), _)) = compile(input)
       
-      val bucket = Group(origin, target,
-        Conjunction(Definition(leftSol), Definition(rightSol)), Set())
+      val expected = Group(origin, target,
+        IntersectBucketSpec(
+          UnfixedSolution("'day", leftSol),
+          UnfixedSolution("'day", rightSol)))
       
-      d.buckets must contain("'day" -> bucket)
+      tree.buckets must beSome(expected)
       tree.errors must beEmpty
     }
     
@@ -85,12 +90,15 @@ object GroupSolverSpecs extends Specification
         Let(_, _, _,
           Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
             Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
-          d: Dispatch)) = compile(input)
+          _)) = compile(input)
       
-      val bucketA = Group(originA, targetA, Definition(solA), Set())
-      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      val expected = IntersectBucketSpec(
+        Group(originA, targetA,
+          UnfixedSolution("'a", solA)),
+        Group(originB, targetB,
+          UnfixedSolution("'b", solB)))
       
-      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
+      tree.buckets must beSome(expected)
       tree.errors must beEmpty
     }
     
@@ -113,12 +121,15 @@ object GroupSolverSpecs extends Specification
           Let(_, _, _,
             Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
               Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
-          d: Dispatch))) = compile(input)
+          _))) = compile(input)
       
-      val bucketA = Group(originA, targetA, Definition(solA), Set())
-      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      val expected = IntersectBucketSpec(
+        Group(originA, targetA,
+          UnfixedSolution("'a", solA)),
+        Group(originB, targetB,
+          UnfixedSolution("'b", solB)))
       
-      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
+      tree.buckets must beSome(expected)
       tree.errors must beEmpty
     }
     
