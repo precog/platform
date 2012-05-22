@@ -47,7 +47,7 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
     }
   }
 
-  "Columns" should {
+//  "Columns" should {
 //    "Properly persist and restore values" in new columnSetup {
 //      val size = 1000
 //      val seed = 42l
@@ -124,5 +124,5 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
 //        runTest.run.unsafePerformIO
 //      }
 //    }
-  }
+//  }
 }
