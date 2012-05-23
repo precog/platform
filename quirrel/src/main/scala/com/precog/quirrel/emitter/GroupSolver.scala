@@ -36,13 +36,25 @@ trait GroupSolver extends AST with GroupFinder with Solver {
   import buckets._
   
   override def inferBuckets(tree: Expr): Set[Error] = tree match {
-    case expr @ Let(_, _, _, left, right) => {
+    case expr @ Let(_, _, params, left, right) => {
       val leftErrors = inferBuckets(left)
       
       val (spec, errors) = solveForest(expr, expr.groups)(IntersectBucketSpec)
+      
+      val finalErrors = spec match {
+        case Some(forest) => {
+          val rem = Set(params: _*) -- listSolvedVars(forest)
+          rem map UnableToSolveTicVariable map { Error(expr, _) }
+        }
+        
+        case None => {
+          Set(params map UnableToSolveTicVariable map { Error(expr, _) }: _*)
+        }
+      }
+      
       expr.buckets = spec
       
-      leftErrors ++ errors ++ inferBuckets(right)
+      leftErrors ++ errors ++ finalErrors ++ inferBuckets(right)
     }
     
     case Import(_, _, child) => inferBuckets(child)
@@ -165,7 +177,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     
     val spec = andSpec orElse optCondSpec orElse optRedSpec
     
-    (spec, condErrors ++ redErrors)
+    (spec, if (optCondSpec.isDefined) condErrors else condErrors ++ redErrors)
   }
   
   private def solveCondition(b: Let, expr: Expr): (Option[BucketSpec], Set[Error]) = expr match {
@@ -230,7 +242,9 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     solveForest(b, red.children)(IntersectBucketSpec)
   
   private def mergeSpecs(specs: TraversableOnce[(Option[BucketSpec], Set[Error])])(f: (BucketSpec, BucketSpec) => BucketSpec): (Option[BucketSpec], Set[Error]) = {
-    specs.fold((None: Option[BucketSpec], Set[Error]())) {
+    val optionalErrors = f == IntersectBucketSpec
+    
+    val (back, errors) = specs.fold((None: Option[BucketSpec], Set[Error]())) {
       case ((leftAcc, leftErrors), (rightAcc, rightErrors)) => {
         val merged = for (left <- leftAcc; right <- rightAcc)
           yield f(left, right)
@@ -238,6 +252,11 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (merged orElse leftAcc orElse rightAcc, leftErrors ++ rightErrors)
       }
     }
+    
+    if (f == IntersectBucketSpec && back.isDefined)
+      (back, Set())
+    else
+      (back, errors)
   }
   
   private def listTicVars(b: Let, expr: Expr): Set[TicId] = expr match {
@@ -282,6 +301,15 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case Comp(_, child) => listTicVars(b, child)
     case Neg(_, child) => listTicVars(b, child)
     case Paren(_, child) => listTicVars(b, child)
+  }
+  
+  private def listSolvedVars(spec: BucketSpec): Set[TicId] = spec match {
+    case UnionBucketSpec(left, right) => listSolvedVars(left) ++ listSolvedVars(right)
+    case IntersectBucketSpec(left, right) => listSolvedVars(left) ++ listSolvedVars(right)
+    case Group(_, _, forest) => listSolvedVars(forest)
+    case UnfixedSolution(id, _) => Set(id)
+    case FixedSolution(id, _, _) => Set(id)
+    case Extra(_) => Set()
   }
   
 
