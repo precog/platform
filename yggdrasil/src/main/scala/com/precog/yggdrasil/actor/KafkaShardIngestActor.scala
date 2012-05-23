@@ -65,13 +65,13 @@ case class ProjectionInsertsExpected(projections: Int)
  *    external system with the state of the system into which data is being ingested. For Kafka,
  *    the most important component of this state is the offset.
  */
-class KafkaShardIngestActor(metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, 
+class KafkaShardIngestActor(initialCheckpoint: YggCheckpoint, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, 
                             fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 30 seconds, 
                             maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
   import KafkaBatchHandler._
 
-  private var lastCheckpoint = YggCheckpoint.empty
+  private var lastCheckpoint = initialCheckpoint
 
   private var totalConsecutiveFailures = 0
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
@@ -121,6 +121,7 @@ class KafkaShardIngestActor(metadataActor: ActorRef, consumer: SimpleConsumer, t
         readRemote(lastCheckpoint) match {
           case Success((messages, checkpoint)) => 
             // update the cache
+            lastCheckpoint = checkpoint
             ingestCache += (checkpoint -> messages)
 
             // create a handler for the batch, then reply to the sender with the message set
