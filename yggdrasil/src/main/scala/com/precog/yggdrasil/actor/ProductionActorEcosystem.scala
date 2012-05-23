@@ -60,15 +60,16 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   // Internal only actors
   //
   
-  lazy val ingestActor = {
-    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(metadataSerializationActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
-  }
  
   protected lazy val checkpoints: YggCheckpoints = {
     SystemCoordinationYggCheckpoints.validated(yggConfig.shardId, yggConfig.systemCoordination) ||| {
       sys.error("Unable to create initial system coordination checkpoints.") 
     }
+  }
+
+  lazy val ingestActor = {
+    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(checkpoints.latestCheckpoint, metadataSerializationActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
   }
 }
 
