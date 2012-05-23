@@ -141,8 +141,8 @@ trait Instructions extends Library {
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
     
-    case class PushGroup(id: Int) extends Instruction with RootInstr
-    case class PushKey(id: Int) extends Instruction with RootInstr
+    case class PushGroup(id: Int) extends Instruction
+    case class PushKey(id: Int) extends Instruction
     
     sealed trait SetReduction
     sealed trait UnaryOperation
