@@ -28,6 +28,7 @@ import akka.actor.Actor
 import akka.actor.Props
 import akka.actor.Scheduler
 import akka.actor.ActorRef
+import akka.actor.PoisonPill
 
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
@@ -144,6 +145,7 @@ trait ProjectionsActorModule[Dataset[_]] {
         insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
         replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+        self    ! PoisonPill
     }
 
     private def insertAll(batch: Seq[Row]): Unit = {

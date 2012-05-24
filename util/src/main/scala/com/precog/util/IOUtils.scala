@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.common.util
+package com.precog.util
 
 import java.io._
 import java.nio.charset._

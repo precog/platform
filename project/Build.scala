@@ -48,8 +48,8 @@ object PlatformBuild extends Build {
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
   
-  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings ++ commonSettings: _*)
+  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*) dependsOn (util)
 
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings ++ commonSettings: _*)
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings ++ commonSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)

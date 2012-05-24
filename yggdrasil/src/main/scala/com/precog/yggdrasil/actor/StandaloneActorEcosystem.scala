@@ -20,6 +20,10 @@
 package com.precog.yggdrasil
 package actor
 
+import com.precog.util._
+import com.precog.common.YggCheckpoint
+//import com.precog.common.kafka._
+
 import akka.actor._
 import akka.dispatch._
 import akka.util._
@@ -27,8 +31,6 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
-import com.precog.common.util._
-import com.precog.common.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -43,28 +45,26 @@ class NoopIngestActor extends Actor {
   }
 }
 
-trait StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
-  protected lazy val pre = "[Standalone Yggdrasil Shard]"
+/**
+ * FIXME: The standalone actor ecosystem does not support updates to the metadata system.
+ * This is why an empty checkpoint is passed in.
+ */
+abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset](YggCheckpoint.Empty) with YggConfigComponent with Logging {
+  protected val logPrefix = "[Standalone Yggdrasil Shard]"
 
-  lazy val actorSystem = ActorSystem("standalone_actor_system")
+  val actorSystem = ActorSystem("standalone_actor_system")
 
-  lazy val ingestActor = actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
+  val ingestActor = actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
 
-  protected lazy val actorsWithStatus = ingestSupervisor :: 
-                                        metadataActor :: 
-                                        metadataSerializationActor :: 
-                                        projectionsActor :: Nil
+  protected val actorsWithStatus = ingestSupervisor :: 
+                                   metadataActor :: 
+                                   projectionsActor :: Nil
 
   protected def actorsStopInternal: Future[Unit] = {
     for {
       _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
     } yield ()
-  }
-  
-  protected lazy val checkpoints: YggCheckpoints = new YggCheckpoints {
-    def saveRecoveryPoint(checkpoints: YggCheckpoint) { }
   }
 }
 // vim: set ts=4 sw=4 et:

@@ -28,8 +28,8 @@ import akka.util.Duration
 
 import org.joda.time._
 
+import com.precog.util._
 import com.precog.common._
-import com.precog.common.util._
 import com.precog.common.kafka._
 import com.precog.common.security._
 import com.precog.yggdrasil.leveldb._
@@ -736,7 +736,8 @@ object ImportTools extends Command {
     val dir = new File("./data") 
     dir.mkdirs
 
-    object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem[IterableDataset] with LevelDBProjectionsActorModule {
+    // This uses an empty checkpoint because there is no support for  
+    object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
       class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
@@ -764,6 +765,7 @@ object ImportTools extends Command {
     val verbose = config.verbose
     val batchSize = config.batchSize
     val token = config.token
+
     val (curBatch, nb) = if(batch.size >= batchSize || !itr.hasNext) {
       if(verbose) println("Saving batch - " + b)
       Await.result(shard.storeBatch(batch, new Timeout(60000)), Duration(60, "seconds"))
@@ -771,14 +773,13 @@ object ImportTools extends Command {
     } else {
       (batch, b)
     }
-    if(itr.hasNext) {
+
+    if (itr.hasNext) {
       val data = JsonParser.parse(itr.next) 
       val event = Event(Path(db), token, data, Map.empty)
       val em = EventMessage(EventId(0, sid.getAndIncrement), event)
       insert(config, db, itr, shard, curBatch :+ em, nb)
-    } else {
-      ()
-    }
+    } 
   }
 
   class Config(
