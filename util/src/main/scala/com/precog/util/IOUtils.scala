@@ -1,4 +1,4 @@
-package com.precog.common.util
+package com.precog.util
 
 import java.io._
 import java.nio.charset._

@@ -1,5 +1,4 @@
 package com.precog.common
-package util
 
 import org.specs2.execute._
 import org.specs2.mutable._

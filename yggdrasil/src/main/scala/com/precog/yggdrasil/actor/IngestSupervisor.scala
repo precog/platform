@@ -83,11 +83,11 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
   private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
                                                                  JField("processed", JInt(processed)) :: Nil)) :: Nil)
 
-  private def processMessages(messages: Seq[IngestMessage], coordinator: ActorRef): Unit = {
+  private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
     val inserts = routingTable.batchMessages(messages)
 
-    coordinator ! ProjectionInsertsExpected(inserts.size)
-    for (insert <- inserts) projectionsActor.tell(insert, coordinator)
+    batchCoordinator ! ProjectionInsertsExpected(inserts.size)
+    for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
   }
 
   private def scheduleIngestRequest(delay: Duration): Unit = {

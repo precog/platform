@@ -4,8 +4,8 @@ package actor
 import metadata._
 import leveldb._
 
+import com.precog.util._
 import com.precog.common._
-import com.precog.common.util._
 
 import blueeyes.json.Printer
 import blueeyes.json.JsonParser
@@ -25,47 +25,24 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 
-class MetadataSerializationActor(checkpoints: YggCheckpoints, storage: MetadataStorage) extends Actor with Logging {
+class MetadataSerializationActor(shardId: String, storage: MetadataStorage, systemCoordination: SystemCoordination) extends Actor with Logging {
   def receive = {
-    case Status =>
-      sender ! status
+    case SaveMetadata(metadata, checkpoint) => 
+      val io: List[IO[Validation[Throwable, Unit]]] = 
+        metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, checkpoint.messageClock)) })(collection.breakOut)
 
-    case SaveMetadata(metadata, messageClock) => 
-      logger.debug("Syncing metadata")
-      val start = System.nanoTime
-      val errors = safelyUpdateMetadata(metadata, messageClock).unsafePerformIO
-
+      // if some metadata fails to be written and we consequently don't write the checkpoint,
+      // then the restore process for each projection will need to skip all message ids prior
+      // to the checkpoint clock associated with that metadata
+      val errors = (io.sequence[IO, Validation[Throwable, Unit]] map { _.collect { case Failure(t) => t } } unsafePerformIO)
       if (errors.isEmpty) {
-        logger.debug("Registering metadata checkpoint: " + messageClock)
-        checkpoints.persistUpTo(messageClock)
-        val time = (System.nanoTime - start)/1000000000.0
-        logger.info("Metadata checkpoint complete %d updates in %.02fs".format(metadata.size, time))
-      } else {
-        logger.error("Error saving metadata: (%d errors to follow)".format(errors.size))
-        errors.zipWithIndex.foreach {
-          case (t, i) => logger.error("Metadata save error #%d".format(i+1), t)
-        }
+        systemCoordination.saveYggCheckpoint(shardId, checkpoint)
       }
   }
-
-  private def safelyUpdateMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], clock: VectorClock): IO[List[Throwable]] = {
-    val io: List[IO[Validation[Throwable, Unit]]] = 
-      metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, clock)) })(collection.breakOut)
-
-    io.sequence[IO, Validation[Throwable, Unit]] map { _.collect { case Failure(t) => t } }
-  }
-
-  def status: JValue = JObject(
-    JField("Metadata Serialization", JObject(
-      JField("lastCheckpoint", checkpoints.latestCheckpoint) ::
-      JField("pendingCheckpointCount", checkpoints.pendingCheckpointCount) ::
-      JField("pendingCheckpoints", JArray(checkpoints.pendingCheckpointValue.map{ _.serialize }.toList)) :: Nil
-    )) :: Nil
-  )
 }
 
-trait MetadataStorage extends FileOps {
 
+trait MetadataStorage extends FileOps {
   import MetadataStorage._
 
   protected def dirMapping: ProjectionDescriptor => IO[File]
@@ -181,7 +158,7 @@ trait FilesystemFileOps extends FileOps {
 
 sealed trait MetadataSerializationAction
 
-case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock) extends MetadataSerializationAction
+case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], checkpoint: YggCheckpoint) extends MetadataSerializationAction
 
 case class MetadataRecord(metadata: ColumnMetadata, clock: VectorClock)
 

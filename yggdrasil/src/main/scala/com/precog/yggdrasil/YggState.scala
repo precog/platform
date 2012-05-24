@@ -4,7 +4,7 @@ import actor._
 import metadata._
 
 import com.precog.common._
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 
 import blueeyes.json.Printer._
 import blueeyes.json.JsonAST._

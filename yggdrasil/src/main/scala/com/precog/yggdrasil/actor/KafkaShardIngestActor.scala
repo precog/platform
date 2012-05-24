@@ -2,9 +2,10 @@ package com.precog.yggdrasil
 package actor
 
 import metadata.ColumnMetadata
+import com.precog.util._
 import com.precog.common._
 import com.precog.common.kafka._
-import com.precog.common.util._
+import ColumnMetadata.monoid
 
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -27,7 +28,6 @@ import scala.collection.mutable
 import scala.collection.immutable.TreeMap
 import scalaz._
 import scalaz.syntax.monoid._
-import ColumnMetadata.monoid
 
 //////////////
 // MESSAGES //

@@ -1,4 +1,4 @@
-package com.precog.common.util
+package com.precog.util
 
 import org.specs2.mutable._
 

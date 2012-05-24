@@ -3,8 +3,8 @@ package actor
 
 import metadata._
 
+import com.precog.util._
 import com.precog.common._
-import com.precog.common.util._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -21,8 +21,8 @@ import akka.dispatch.Future
 import scalaz.Scalaz._
 
 object MetadataActor {
-  case class State(projections: Map[ProjectionDescriptor, ColumnMetadata], dirty: Set[ProjectionDescriptor], clock: VectorClock) {
-    def toSaveMessage = SaveMetadata(projections.filterKeys(dirty), clock)
+  case class State(projections: Map[ProjectionDescriptor, ColumnMetadata], dirty: Set[ProjectionDescriptor], checkpoint: YggCheckpoint) {
+    def toSaveMessage = SaveMetadata(projections.filterKeys(dirty), checkpoint)
   }
 }
 
@@ -34,7 +34,7 @@ class MetadataActor(private var state: MetadataActor.State) extends Actor { meta
     case Status => sender ! status
 
     case IngestBatchMetadata(patch, checkpoint) => 
-      state = State(state.projections |+| patch, state.dirty ++ patch.keySet, state.clock max checkpoint.messageClock)
+      state = State(state.projections |+| patch, state.dirty ++ patch.keySet, checkpoint)
    
     case FindChildren(path)                   => sender ! findChildren(path)
     

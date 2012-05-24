@@ -8,14 +8,17 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
-import com.precog.common.util._
-import com.precog.common.kafka._
+import com.precog.util._
+import com.precog.common._
+//import com.precog.common.kafka._
 
 import com.weiglewilczek.slf4s.Logging
 
 import java.net.InetAddress
 
 import blueeyes.json.JsonAST._
+
+import MetadataActor._
 
 trait ActorEcosystem {
   val actorSystem: ActorSystem
@@ -40,12 +43,36 @@ trait ActorEcosystemConfig extends BaseConfig {
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
-trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActorModule[Dataset] with YggConfigComponent with Logging {
+abstract class BaseActorEcosystem[Dataset[_]](restoreCheckpoint: YggCheckpoint) extends ActorEcosystem with ProjectionsActorModule[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ActorEcosystemConfig
-  
-  def yggState: YggState
 
-  protected lazy implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  protected implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  
+  val yggState: YggState
+
+  protected val logPrefix: String
+
+  protected val actorsWithStatus: List[ActorRef]
+
+  val ingestSupervisor = {
+    actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
+                                                   yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
+  }
+
+  //
+  // Public actors
+  //
+  
+  val metadataActor = 
+    actorSystem.actorOf(Props(new MetadataActor(State(yggState.metadata, Set(), restoreCheckpoint))), "metadata") 
+  
+  val projectionsActor = 
+    actorSystem.actorOf(Props(newProjectionsActor(yggState.descriptorLocator, yggState.descriptorIO)), "projections")
+
+  def actorsStart = Future[Unit] {
+    // TODO: reconsider?
+    logger.info("Starting actor ecosystem")
+  }
 
   def status: Future[JArray] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
@@ -54,75 +81,30 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
     yield JArray(statusResponses)
   }
 
-  protected val pre: String
-
-  protected val actorsWithStatus: List[ActorRef]
-
-  protected val checkpoints: YggCheckpoints 
-
-  lazy val ingestSupervisor = {
-    actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
-                                                   yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  }
-
-  lazy val metadataActor = {
-    import MetadataActor._
-    actorSystem.actorOf(Props(new MetadataActor(State(yggState.metadata, Set(), sys.error("todo")))), "metadata") 
-  }
-  
-  lazy val projectionsActor = {
-    actorSystem.actorOf(Props(newProjectionsActor(yggState.descriptorLocator, yggState.descriptorIO)), "projections")
-  }
-
-  protected lazy val metadataSerializationActor = {
-    val metadataStorage = new FilesystemMetadataStorage(yggState.descriptorLocator)
-    actorSystem.actorOf(Props(new MetadataSerializationActor(checkpoints, metadataStorage)), "metadata_serializer")
-  }
-  
-  protected lazy val metadataSyncCancel = {
-    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
-  }
-
-  def actorsStart = Future[Unit] {
-    logger.info("Starting actor ecosystem")
-    this.metadataSyncCancel
-  }
-
   protected def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
     for {
-      _ <- Future(logger.debug(pre + "Stopping " + name + " actor"))
+      _ <- Future(logger.debug(logPrefix + " Stopping " + name + " actor"))
       b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(actorSystem) 
     } yield {
-      logger.debug(pre + "Stop call for " + name + " actor returned " + b)  
+      logger.debug(logPrefix + " Stop call for " + name + " actor returned " + b)  
     }   
   } recover { 
     case e => logger.error("Error stopping " + name + " actor", e)  
   }   
 
   def actorsStop: Future[Unit] = {
-    import logger._
     import yggConfig.stopTimeout
 
-    def flushMetadata = {
-      logger.debug(pre + "Flushing metadata")
-      (metadataActor ? FlushMetadata(metadataSerializationActor)) recover { case e => error("Error flushing metadata", e) }
-    }
-
     for {
-      _  <- Future(info(pre + "Stopping"))
-      _  <- Future {
-              logger.debug(pre + "Stopping metadata sync")
-              metadataSyncCancel.cancel
-            }
+      _  <- Future(logger.info(logPrefix + " Stopping"))
       _  <- actorStop(ingestSupervisor, "router")
-      _  <- flushMetadata
       _  <- actorsStopInternal
       _  <- Future {
-              logger.debug(pre + "Stopping actor system")
+              logger.debug(logPrefix + " Stopping actor system")
               actorSystem.shutdown
-              info(pre + "Stopped")
+              logger.info(logPrefix + " Stopped")
             } recover { 
-              case e => error("Error stopping actor system", e)
+              case e => logger.error(logPrefix + " Error stopping actor system", e)
             }
     } yield ()
   }
