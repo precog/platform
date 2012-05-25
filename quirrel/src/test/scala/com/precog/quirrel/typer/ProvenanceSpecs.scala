@@ -524,7 +524,22 @@ object ProvenanceSpecs extends Specification
         tree.errors must beEmpty
       }
     }
-    
+     
+    "identify a case when a tic variable is not solvable in all cases" in {
+      {
+        val tree = compile("""
+        | a('b) :=
+        |   k := //clicks.time where //clicks.time = 'b
+        |   j := //views.time where //views.time > 'b
+        |   k ~ j
+        |   {kay: k, jay: j}
+        | a""".stripMargin)
+
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
     "identify dispatch to an unquantified value function as dynamic" in {
       {
         val tree = compile("histogram('a) := 'a + count(//foo where //foo = 'a) histogram")

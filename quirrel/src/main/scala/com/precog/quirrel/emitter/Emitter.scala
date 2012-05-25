@@ -474,61 +474,6 @@ trait Emitter extends AST
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
-            case BuiltIn(BuiltIns.Count.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Count))
-            
-            case BuiltIn(BuiltIns.GeometricMean.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(GeometricMean))
-            
-            case BuiltIn(BuiltIns.Max.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Max))
-            
-            case BuiltIn(BuiltIns.Mean.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Mean))
-            
-            case BuiltIn(BuiltIns.Median.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Median))
-            
-            case BuiltIn(BuiltIns.Min.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Min))
-            
-            case BuiltIn(BuiltIns.Mode.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Mode))
-            
-            case BuiltIn(BuiltIns.StdDev.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(StdDev))
-
-            case BuiltIn(BuiltIns.Sum.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
-
-            case BuiltIn(BuiltIns.SumSq.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(SumSq))
-
-            case BuiltIn(BuiltIns.Variance.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Variance))
-
             case BuiltIn(BuiltIns.Distinct.name, arity, _) =>
               assert(arity == 1)
 
@@ -537,10 +482,13 @@ trait Emitter extends AST
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
 
-            case StdlibBuiltIn1(op) =>
+            case RedLibBuiltIn(f) =>
+              emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
+
+            case StdLibBuiltIn1(op) =>
               emitUnary(actuals(0), BuiltInFunction1Op(op))
 
-            case StdlibBuiltIn2(op) =>
+            case StdLibBuiltIn2(op) =>
               emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op))
 
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>

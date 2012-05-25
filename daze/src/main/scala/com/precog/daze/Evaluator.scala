@@ -62,9 +62,8 @@ trait Evaluator extends DAG
     with OperationsAPI
     with MemoizationEnvironment
     with ImplLibrary
-    with Infixlib
-    with Statslib
-    with BigDecimalOperations
+    with InfixLib
+    with StatsLib
     with YggConfigComponent { self =>
   
   import Function._
@@ -104,7 +103,6 @@ trait Evaluator extends DAG
   import yggConfig._
 
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
-  //import Function._
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
@@ -244,7 +242,7 @@ trait Evaluator extends DAG
       
       case o @ Operate(_, op, parent) => {
         // TODO unary typing
-        val Match(spec, set, graph2) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         lazy val enum = realizeMatch(spec, set)
 
         op match {
@@ -270,9 +268,9 @@ trait Evaluator extends DAG
                 }
               }
             }
-            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+            val enum4 = enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext)
 
-            Right(Match(mal.Actual, enum4, graph))  
+            Right(Match(mal.Op1(spec, op), enum4, graph))  
           }
 
           case BuiltInFunction1Op(DenseRank) => {  // (2,7,7,7,9,12,12,15) -> (1,2,2,2,3,4,4,5)
@@ -294,163 +292,26 @@ trait Evaluator extends DAG
                 }
               }
             }
-            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+            val enum4 = enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext)
 
-            Right(Match(mal.Actual, enum4, graph))  
+            Right(Match(mal.Op1(spec, op), enum4, graph))  
           }
 
-          case _ => Right(Match(mal.Op1(spec, op), set, graph2))
+          case _ => Right(Match(mal.Op1(spec, op), set, graph))
         }
       }
       
       case r @ dag.Reduce(_, red, parent) => {
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        val enum = realizeMatch(spec, set)
-        
-        val reduced: Option[SValue] = red match {
-          case Count => Some(SDecimal(BigDecimal(enum.count)))
-          
-          case Max => 
-            val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
-              case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
-              case (acc, _) => acc
-            }
 
-            if (max.isDefined) max map { v => SDecimal(v) }
-            else None
-          
-          case Min => 
-            val min = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
-              case (Some(v1), SDecimal(v2)) if v1 > v2 => Some(v2)
-              case (acc, _) => acc
-            }
-          
-            if (min.isDefined) min map { v => SDecimal(v) }
-            else None
-          
-          case Sum => 
-            val sum = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(sum), SDecimal(v)) => Some(sum + v)
-              case (acc, _) => acc
-            }
-
-            if (sum.isDefined) sum map { v => SDecimal(v) }
-            else None
-
-          case Mean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
-              case ((count, total), SDecimal(v)) => (count + 1, total + v)
-              case (total, _) => total
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(total / count))
-          
-          case GeometricMean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
-              case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
-          
-          case SumSq => 
-            val sumsq = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v * v)
-              case (Some(sumsq), SDecimal(v)) => Some(sumsq + (v * v))
-              case (acc, _) => acc
-            }
-
-            if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
-            else None
-
-          case Variance => 
-            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-              case (acc, _) => acc
-            }
-
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
-
-          case StdDev => 
-            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
-
-          case Median => 
-            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
-
-            val count = enum2.reduce(BigDecimal(0)) {
-              case (count, SDecimal(v)) => count + 1
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else {
-              val (c, median) = if (count.toInt % 2 == 0) {
-                val index = (count.toInt / 2, (count.toInt / 2) + 1)
-              
-                enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
-                  case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
-                  case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
-                    (count + 1, 
-                      if (prev.isDefined) prev map { x => (x + v) / 2 } 
-                      else None)  
-                  }
-                  case (acc, _) => acc
-                } 
-              } else {
-                val index = (count.toInt / 2) + 1
-              
-                enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
-                  case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
-                  case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
-                  case (acc, _) => acc
-                }
-              }
-              if (median.isDefined) median map { v => SDecimal(v) }
-              else None
-            }
-
-          case Mode =>
-            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
-
-            val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
-              case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
-              case ((Some(currentRun), count, modes, maxCount), sv) => {
-                if (currentRun == sv) {
-                  if (count >= maxCount)
-                    (Some(sv), count + 1, List(sv), maxCount + 1)
-                  else if (count + 1 == maxCount)
-                    (Some(sv), count + 1, modes :+ sv, maxCount)
-                  else
-                    (Some(sv), count + 1, modes, maxCount)
-                } else {
-                  if (maxCount == 1)
-                    (Some(sv), 1, modes :+ sv, maxCount)
-                  else
-                    (Some(sv), 1, modes, maxCount)
-                }
-              }
-
-              case(acc, _) => acc
-            }
-            
-            Some(SArray(Vector(modes: _*))) 
+        val reduction = red match {
+          case BuiltInReduction(red) => {
+            val enum = realizeMatch(spec, set)
+            red.reduced(enum, r, ctx)
+          }
         }
-        
-        reduced.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+
+        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
       }
       
       case s @ dag.Split(line, specs, child) => {

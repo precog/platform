@@ -36,12 +36,12 @@ import com.precog.util.IdGen
 import org.joda.time._
 import org.joda.time.format._
 
-class TimelibSpec extends Specification
+class TimeLibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
   with DiskIterableMemoizationComponent 
-  with Timelib 
+  with TimeLib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]

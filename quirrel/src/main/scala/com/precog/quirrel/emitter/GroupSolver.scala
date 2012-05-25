@@ -259,7 +259,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
         else
           (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
         
-        (addend map (errors +) getOrElse errors, result)
+        (addend map (errors +) getOrElse Set[Error](), result)
       }
     } else if (groups exists { case Reduction(_, _) => true case _ => false }) {
       val (errors, successes) = groups collect {

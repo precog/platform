@@ -140,6 +140,20 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         d.errors mustEqual Set(UndefinedTicVariable("'baz"))
       }
     }
+
+    "allow a case when a tic variable is not solvable in all cases" in {
+      {
+        val tree = parse("""
+        | a('b) :=
+        |   k := //clicks.time where //clicks.time = 'b
+        |   j := //views.time where //views.time > 'b
+        |   k ~ j
+        |   {kay: k, jay: j}
+        | a""".stripMargin)
+
+        tree.errors must beEmpty
+      }
+    }
     
     "reject multiple definitions of tic-variables" in {
       {
@@ -371,10 +385,12 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
     
     "forward binding through dispatch" in {
-      val e @ Let(_, _, _, _, Dispatch(_, _, Vector(d: Dispatch))) = parse("a := 42 count(a)")
-      d.binding mustEqual UserDef(e)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
+      forall(libReduct) { f => 
+        val e @ Let(_, _, _, _, Dispatch(_, _, Vector(d: Dispatch))) = parse("a := 42 count(a)")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
     }
     
     "forward binding through where" in {
@@ -656,88 +672,11 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
   
   "pre-binding of BuiltIns" should {
-    "bind count" in {
-      val d @ Dispatch(_, _, _) = parse("count")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "count"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }      
-   
-    "bind geometricMean" in {
-      val d @ Dispatch(_, _, _) = parse("geometricMean")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
     "bind load" in {
       val d @ Dispatch(_, _, _) = parse("load")
       d.binding mustEqual BuiltIn(Identifier(Vector(), "load"), 1, false)
       d.isReduction mustEqual false
       d.errors must beEmpty
-    }
-    
-    "bind max" in {
-      val d @ Dispatch(_, _, _) = parse("max")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "max"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind mean" in {
-      val d @ Dispatch(_, _, _) = parse("mean")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "mean"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind median" in {
-      val d @ Dispatch(_, _, _) = parse("median")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "median"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind min" in {
-      val d @ Dispatch(_, _, _) = parse("min")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "min"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind mode" in {
-      val d @ Dispatch(_, _, _) = parse("mode")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "mode"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind stdDev" in {
-      val d @ Dispatch(_, _, _) = parse("stdDev")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }
-    
-    "bind sum" in {
-      val d @ Dispatch(_, _, _) = parse("sum")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "sum"), 1, true)
-      d.isReduction mustEqual true
-      d.errors must beEmpty
-    }    
-
-    "bind sumSq" in {
-      val d @ Dispatch(_, _, _) = parse("sumSq")
-        d.binding mustEqual BuiltIn(Identifier(Vector(), "sumSq"), 1, true)
-        d.isReduction mustEqual true
-        d.errors must beEmpty
-    }
-    
-    "bind variance" in {
-      val d @ Dispatch(_, _, _) = parse("variance")
-        d.binding mustEqual BuiltIn(Identifier(Vector(), "variance"), 1, true)
-        d.isReduction mustEqual true
-        d.errors must beEmpty
     }
     
     "bind distinct" in {
@@ -748,11 +687,20 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
 
-  "pre-binding of builtin functions" should {
+  "pre-binding of built-in functions" should {
+    "bind reductions" in {
+      forall(libReduct) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual RedLibBuiltIn(f)
+        d.isReduction mustEqual true
+        d.errors must beEmpty
+      }
+    }
+
     "bind unary functions" in {
       forall(lib1) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual StdlibBuiltIn1(f)
+        d.binding mustEqual StdLibBuiltIn1(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -761,7 +709,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind binary functions" in {
       forall(lib2) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual StdlibBuiltIn2(f)
+        d.binding mustEqual StdLibBuiltIn2(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -776,7 +724,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -788,7 +736,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -799,7 +747,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -821,7 +769,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
       d.errors must beEmpty
     }
     
@@ -832,7 +780,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
       d.errors must beEmpty
     }
     
@@ -844,10 +792,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
+      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d2.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
       d2.errors must beEmpty
     }
   }
@@ -860,7 +808,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -871,10 +819,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdlibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003))
+      d2.binding mustEqual StdLibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003))
       d2.errors must beEmpty
     }
     
@@ -886,7 +834,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -897,7 +845,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -908,7 +856,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004))
       d.errors must beEmpty
     }
     
@@ -919,7 +867,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
       d.errors must beEmpty
     }
     
@@ -931,10 +879,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdlibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
+      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector(), "bin", 0x0000))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdlibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
+      d2.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001))
       d2.errors must beEmpty
     }
   }

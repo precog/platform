@@ -33,12 +33,12 @@ import Iteratee._
 import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
-class MathlibSpec extends Specification
+class MathLibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
   with DiskIterableMemoizationComponent 
-  with Mathlib 
+  with MathLib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]

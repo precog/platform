@@ -25,9 +25,9 @@ import bytecode.BuiltInFunc1
 import bytecode.BuiltInFunc2
 import yggdrasil._
 
-object Infixlib extends Infixlib
+object InfixLib extends InfixLib
 
-trait Infixlib extends ImplLibrary with GenOpcode {
+trait InfixLib extends ImplLibrary with GenOpcode {
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 

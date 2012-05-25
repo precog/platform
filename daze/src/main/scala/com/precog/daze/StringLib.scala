@@ -28,9 +28,9 @@ import java.lang.String
 
 import yggdrasil._
 
-object Stringlib extends Stringlib
+object StringLib extends StringLib
 
-trait Stringlib extends GenOpcode with ImplLibrary {
+trait StringLib extends GenOpcode with ImplLibrary {
   val StringNamespace = Vector("std", "string")
 
   override def _lib1 = super._lib1 ++ Set(length, trim, toUpperCase, toLowerCase, isEmpty, intern)

@@ -297,6 +297,15 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinObject)))
     }
 
+    "emit wrapped object as right side of Let" in {
+      testEmit("clicks := //clicks {foo: clicks}")(
+        Vector(
+          PushString("foo"),
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Map2Cross(WrapObject)))
+    }    
+    
     "emit matched join of wrapped object for object with two fields having same provenance" in {
       testEmit("clicks := //clicks {foo: clicks, bar: clicks}")(
         Vector(
@@ -477,89 +486,38 @@ object EmitterSpecs extends Specification
           Map2Match(Add)))
     }
 
-    "emit count reduction" in {
-      testEmit("count(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Count)))
-    }
-
-    "emit geometricMean reduction" in {
-      testEmit("geometricMean(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(GeometricMean)))
-    }
-
-    "emit mean reduction" in {
-      testEmit("mean(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Mean)))
-    }
-
-    "emit median reduction" in {
-      testEmit("median(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Median)))
-    }
-
-    "emit mode reduction" in {
-      testEmit("mode(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Mode)))
-    }
-
-    "emit max reduction" in {
-      testEmit("max(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Max)))
-    }
-
-    "emit min reduction" in {
-      testEmit("min(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Min)))
-    }
-
-    "emit stdDev reduction" in {
-      testEmit("stdDev(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(StdDev)))
-    }
-
-    "emit sum reduction" in {
-      testEmit("sum(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Sum)))
-    } 
-
-    "emit sumSq reduction" in {
-      testEmit("sumSq(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(SumSq)))
-    }
-
-    "emit variance reduction" in {
-      testEmit("variance(1)")(
-        Vector(
-          PushNum("1"),
-          Reduce(Variance)))
-    }
-
     "emit distinct set-reduction" in {
       testEmit("distinct(1)")(
         Vector(
           PushNum("1"),
           SetReduce(Distinct)))
     } 
+
+    "emit count reduction" in {
+      testEmit("count(1)")(
+        Vector(
+          PushNum("1"),
+          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
+    }
+
+    "emit arbitrary reduction" in {
+      val f = libReduct.head
+      testEmit("""%s::%s(4224)""".format(f.namespace.mkString("::"), f.name))(
+        Vector(
+          PushNum("4224"),
+          Reduce(BuiltInReduction(f))))
+    }    
+
+    "emit unary non-reduction with object deref" in {
+      val f = lib1.head
+      testEmit("""%s::%s(//foobar.baz)""".format(f.namespace.mkString("::"), f.name))(
+        Vector(
+          PushString("/foobar"),
+          LoadLocal(Het),
+          PushString("baz"),
+          Map2Cross(DerefObject),
+          Map1(BuiltInFunction1Op(f))))
+    }    
     
     "emit unary non-reduction" in {
       val f = lib1.head
@@ -1172,12 +1130,12 @@ object EmitterSpecs extends Specification
           Swap(1),
           Swap(2),
           Swap(3),
-          Reduce(Count),
+          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
           Swap(1),
           Swap(2),
           Swap(3),
           Swap(4),
-          Reduce(Count),
+          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
           Map2Cross(Div),
           Swap(1),
           Drop,
@@ -1193,7 +1151,7 @@ object EmitterSpecs extends Specification
         | clicks := //clicks
         | f('c) := count(clicks where clicks = 'c)
         | f.a + f.b""".stripMargin
-        
+
       testEmit(input)(
         Vector(
           PushString("/clicks"),
@@ -1210,7 +1168,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           Swap(1),
           Swap(2),
-          Reduce(Count),
+          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
           Swap(1),
           Drop,
           Swap(1),
@@ -1223,6 +1181,140 @@ object EmitterSpecs extends Specification
           PushString("b"),
           Map2Cross(DerefObject),
           Map2Match(Add)))
+    }
+
+    "emit code for an unquantified characteristic function" in {
+      val input = """
+        | campaigns := //campaigns
+        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+        | sums('n) :=
+        |   m := max(nums where nums < 'n)
+        |   (nums where nums = 'n) + m 
+        | sums""".stripMargin
+
+      testEmit(input)(Vector(
+        PushString("/campaigns"), 
+        LoadLocal(Het), 
+        Dup, 
+        PushString("cpm"), 
+        Map2Cross(DerefObject), 
+        Swap(1), 
+        PushString("cpm"), 
+        Map2Cross(DerefObject), 
+        PushNum("10"), 
+        Map2Cross(Lt), 
+        FilterMatch(0,None), 
+        SetReduce(Distinct), 
+        Dup, 
+        Dup, 
+        Dup, 
+        Swap(1), 
+        Bucket, 
+        Split(1,2), 
+        Dup, 
+        Swap(4), 
+        Swap(3), 
+        Swap(2), 
+        Swap(1), 
+        Swap(1), 
+        Dup, 
+        Swap(2), 
+        Swap(1), 
+        Swap(2), 
+        Swap(1), 
+        Swap(1), 
+        Swap(2), 
+        Swap(1), 
+        Swap(2), 
+        Swap(3), 
+        Swap(1), 
+        Swap(2), 
+        Swap(3), 
+        Swap(4), 
+        Swap(1), 
+        Swap(2), 
+        Swap(3), 
+        Swap(4), 
+        Swap(5), 
+        Map2Cross(Lt), 
+        FilterMatch(0,None), 
+        Reduce(BuiltInReduction(BIR(Vector(), "max", 0x2001))), 
+        Map2Cross(Add), 
+        Swap(1), 
+        Drop, 
+        Swap(1), 
+        Drop, 
+        Merge))
+    }
+
+    "emit code in case when an error is supressed" in {
+      val input = """
+        | clicks := //clicks
+        | views := //views
+        | a('b) :=
+        |   k := clicks.time where clicks.time = 'b
+        |   j := views.time where views.time > 'b
+        |   k ~ j
+        |   {kay: k, jay: j}
+        | a""".stripMargin
+
+      testEmit(input)(
+        Vector(
+          PushString("/clicks"),
+          LoadLocal(Het),
+          Dup,
+          PushString("time"),
+          Map2Cross(DerefObject),
+          Swap(1),
+          PushString("time"),
+          Map2Cross(DerefObject),
+          Bucket,
+          Split(1,2),
+          Swap(1), 
+          Dup, 
+          Swap(2),
+          Swap(1),
+          Swap(2),
+          Swap(1),
+          Dup,
+          Swap(2),
+          Swap(1), 
+          PushString("jay"),
+          PushString("/views"),
+          LoadLocal(Het),
+          Dup,
+          Swap(4),
+          Swap(3),
+          Swap(2), 
+          Swap(1), 
+          PushString("time"),
+          Map2Cross(DerefObject),
+          Swap(1), 
+          Swap(2), 
+          Swap(3), 
+          Swap(4), 
+          PushString("time"), 
+          Map2Cross(DerefObject), 
+          Swap(1), 
+          Swap(2), 
+          Swap(3), 
+          Swap(4), 
+          Swap(5), 
+          Map2Cross(Gt), 
+          FilterMatch(0,None), 
+          Map2Cross(WrapObject), 
+          PushString("kay"), 
+          Swap(1), 
+          Swap(2), 
+          Swap(3),
+          Swap(4), 
+          Map2Cross(WrapObject), 
+          Map2Cross(JoinObject), 
+          Swap(1), 
+          Drop, 
+          Swap(1), 
+          Drop, 
+          Merge))
     }
     
     "emit code for examples" in {
@@ -1243,7 +1335,7 @@ object EmitterSpecs extends Specification
           |   }
           |   
           | big1z
-          """)(
+          """.stripMargin)(
           Vector(
             PushString("/interactions"),
             LoadLocal(Het),
@@ -1305,7 +1397,7 @@ object EmitterSpecs extends Specification
             Swap(6),
             PushString("duration"),
             Map2Cross(DerefObject),
-            Reduce(Mean),
+            Reduce(BuiltInReduction(BIR(Vector(), "mean", 0x2013))),
             Swap(1),
             Swap(2),
             Swap(3),
@@ -1315,7 +1407,7 @@ object EmitterSpecs extends Specification
             Swap(7),
             PushString("duration"),
             Map2Cross(DerefObject),
-            Reduce(StdDev),
+            Reduce(BuiltInReduction(BIR(Vector(), "stdDev", 0x2007))),
             PushNum("3"),
             Map2Cross(Mul),
             Map2Cross(Add),
@@ -1342,7 +1434,7 @@ object EmitterSpecs extends Specification
           |   greaterConversions('time) :=
           |     impressionTimes := impressions.time where impressions.time = 'time
           |     conversionTimes :=
-          |       conversions.time where conversions.time = min(conversions where conversions.time > 'time)
+          |       conversions.time where conversions.time = min(conversions.time where conversions.time > 'time)
           |     
           |     conversionTimes ~ impressionTimes
           |       { impression: impressions, nextConversion: conversions }
@@ -1350,7 +1442,7 @@ object EmitterSpecs extends Specification
           |   greaterConversions
           | 
           | firstConversionAfterEachImpression
-          """)(
+          """.stripMargin)(
           Vector(
             PushString("/conversions"),
             LoadLocal(Het),
@@ -1521,6 +1613,8 @@ object EmitterSpecs extends Specification
             Swap(8),
             Swap(9),
             Swap(10),
+            PushString("time"),
+            Map2Cross(DerefObject),
             Swap(1),
             Swap(2),
             Swap(3),
@@ -1548,7 +1642,7 @@ object EmitterSpecs extends Specification
             Swap(12),
             Map2Cross(Gt),
             FilterMatch(0, None),
-            Reduce(Min),
+            Reduce(BuiltInReduction(BIR(Vector(), "min", 0x2004))),
             Map2Cross(Eq),
             FilterMatch(0, None),
             Dup,
@@ -1578,7 +1672,8 @@ object EmitterSpecs extends Specification
           |   { cnt: count(clicks where clicks = 'value), value: 'value }
           |   
           | histogram
-          """.stripMargin)(Vector(
+          """.stripMargin)(
+          Vector(
             PushString("/clicks"),
             LoadLocal(Het),
             Dup,
@@ -1598,7 +1693,7 @@ object EmitterSpecs extends Specification
             Swap(1),
             Swap(2),
             Swap(3),
-            Reduce(Count),
+            Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
             Map2Cross(WrapObject),
             PushString("value"),
             Swap(1),

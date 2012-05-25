@@ -374,18 +374,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
             }
-
-          }
-          case BuiltIn(_, arity, false) => {
-            checkMappedFunction(arity)
           }
 
-          case StdlibBuiltIn1(_) => {
-            checkMappedFunction(1)
+          case BuiltIn(_, arity, _) => checkMappedFunction(arity)
+
+          case RedLibBuiltIn(_) => { //assumes all reductions are arity 1
+            if (exprs.length == 1) {
+              expr.accumulatedProvenance = Some(Vector())
+              (ValueProvenance, Set())  
+            } else {
+              expr.accumulatedProvenance = None
+              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
+            }
           }
-          case StdlibBuiltIn2(_) => {
-            checkMappedFunction(2)
-          }
+
+          case StdLibBuiltIn1(_) => checkMappedFunction(1)
+
+          case StdLibBuiltIn2(_) => checkMappedFunction(2)
           
           case UserDef(e) => {  
             if (exprs.length > e.params.length) {

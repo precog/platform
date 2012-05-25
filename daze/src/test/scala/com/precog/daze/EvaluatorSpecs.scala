@@ -68,7 +68,7 @@ class EvaluatorSpecs extends Specification
     with StubOperationsAPI 
     with TestConfigComponent 
     with DiskIterableMemoizationComponent 
-    with Stdlib
+    with StdLib
     with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]
@@ -438,7 +438,7 @@ class EvaluatorSpecs extends Specification
     "reduce a filtered dataset" >> {
       val line = Line(0, "")
 
-      val input = dag.Reduce(line, Count,
+      val input = dag.Reduce(line, BuiltInReduction(Count),
         Filter(line, None, None,
           dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
           Join(line, Map2Cross(Gt),
@@ -464,7 +464,7 @@ class EvaluatorSpecs extends Specification
 
         val input = Join(line, Map2Cross(Add), 
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-          dag.Reduce(line, Count, 
+          dag.Reduce(line, BuiltInReduction(Count), 
             Root(line, PushNum("42"))))
 
         val result = testEval(input)
@@ -482,7 +482,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Map2Cross(Add), 
-          dag.Reduce(line, Count, 
+          dag.Reduce(line, BuiltInReduction(Count), 
             Root(line, PushNum("42"))),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
 
@@ -1488,7 +1488,7 @@ class EvaluatorSpecs extends Specification
         Vector(SingleBucketSpec(nums, nums)),
         Join(line, Map2Cross(Add),
           SplitGroup(line, 1, nums.provenance)(input),
-          dag.Reduce(line, Max,
+          dag.Reduce(line,BuiltInReduction(Max) ,
             Filter(line, None, None,
               nums,
               Join(line, Map2Cross(Lt),
@@ -1533,7 +1533,7 @@ class EvaluatorSpecs extends Specification
             SplitParam(line, 0)(input)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
-            dag.Reduce(line, Count,
+            dag.Reduce(line, BuiltInReduction(Count),
               SplitGroup(line, 1, clicks.provenance)(input)))))
       
       val result = testEval(input)
@@ -1646,7 +1646,7 @@ class EvaluatorSpecs extends Specification
             SplitParam(line, 0)(histogram)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
-            dag.Reduce(line, Count,
+            dag.Reduce(line, BuiltInReduction(Count),
               SplitGroup(line, 1, clicks.provenance)(histogram)))))
        
       val input = Filter(line, None, None,
@@ -1738,470 +1738,6 @@ class EvaluatorSpecs extends Specification
         }
         
         result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
-      }
-    }
-    
-    "reduce homogeneous sets" >> {
-      "count" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Count,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(5)
-      }
-      
-      "geometricMean" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, GeometricMean,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toDouble
-        }
-        
-        result2 must contain(13.822064739747386)
-      }
-      
-      "mean" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mean,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(29)
-      }
-      
-      "median with odd number of elements" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Median,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(13)
-      }
-      
-      "median with even number of elements" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Median,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers5")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(2)
-      }      
-
-      "median with singleton" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Median,
-          Root(line, PushNum("42")))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(42)
-      }
-      
-      "mode" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mode,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(d)) => d
-        }
-        
-        result2 must contain(Vector(SDecimal(1)))
-      }      
-
-      "mode with a singleton" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mode,
-          Root(line, PushNum("42")))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(d)) => d
-        }
-        
-        result2 must contain(Vector(SDecimal(42)))
-      }
-
-      "mode where each value appears exactly once" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mode,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(d)) => d
-        }
-        
-        result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
-      }
-      
-      "max" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Max,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(77)
-      }
-      
-      "min" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Min,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(1)
-      }
-      
-      "standard deviation" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, StdDev,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toDouble
-        }
-        
-        result2 must contain(27.575351312358652)
-      }
-      
-      "sum" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Sum,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
-        }
-        
-        result2 must contain(145)
-      }
-
-      "sumSq" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, SumSq,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toDouble
-        }
-        
-        result2 must contain(8007)
-      }
-
-      "variance" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Variance,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toDouble
-        }
-        
-        result2 must contain(760.4)
-      }
-
-    }
-
-    "reduce heterogeneous sets" >> {
-      "count" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Count,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(10)
-      }    
-      
-      "geometricMean" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, GeometricMean,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(13.822064739747386)
-      }
-      
-      "mean" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mean,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(29)
-      }
-      
-      "median" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Median,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(13)
-      }
-      
-      "mode in the case there is only one" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mode,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(d)) => d
-        }
-        
-        result2 must contain(Vector(SDecimal(1)))
-      }
-      
-      "mode in the case there is more than one" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Mode,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/random")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(d)) => d
-        }
-        
-        result2 must contain(Vector(SDecimal(4), SString("a")))
-      }
-      
-      "max" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Max,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(77)
-      }
-      
-      "min" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Min,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(1)
-      }
-      
-      "standard deviation" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, StdDev,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toDouble
-        }
-        
-        result2 must contain(27.575351312358652)
-      }
-      
-      "sum" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Sum,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(145)
-      }      
-
-      "sumSq" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, SumSq,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(8007)
-      } 
-
-      "variance" >> {
-        val line = Line(0, "")
-        
-        val input = dag.Reduce(line, Variance,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d
-        }
-        
-        result2 must contain(760.4)
       }
     }
   }
