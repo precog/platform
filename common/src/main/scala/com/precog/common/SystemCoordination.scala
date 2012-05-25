@@ -17,20 +17,27 @@ import java.util.concurrent.atomic.AtomicInteger
 import scalaz._
 import scalaz.syntax.apply._
 
+trait CheckpointCoordination {
+  def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]]
+  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit
+}
 
-trait SystemCoordination {
+object CheckpointCoordination {
+  object Noop extends CheckpointCoordination {
+    def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]] = None
+    def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit = ()
+  }
+}
+
+trait SystemCoordination extends CheckpointCoordination {
   def registerRelayAgent(agent: String, blockSize: Int): Validation[Error, EventRelayState]
   def unregisterRelayAgent(agent: String, state: EventRelayState): Unit
 
   def renewEventRelayState(agent: String, offset: Long, producerId: Int, blockSize: Int): Validation[Error, EventRelayState]
   def saveEventRelayState(agent: String, state: EventRelayState): Validation[Error, EventRelayState] 
 
-  def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint]
-  def saveYggCheckpoint(shard: String, checkpoint: YggCheckpoint): Unit
-
   def close(): Unit
 }
-
 
 sealed trait IdSequence {
   def isEmpty(): Boolean

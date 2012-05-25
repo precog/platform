@@ -130,7 +130,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val checkpoints = sc.loadYggCheckpoint("shard")
 
       checkpoints must beLike {
-        case Success(YggCheckpoint(offset, clock)) => 
+        case Some(Success(YggCheckpoint(offset, clock))) => 
           offset must_== 0
           clock.map must_== Map.empty[Int, Int]
       }
@@ -154,7 +154,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
       val result = sc2.loadYggCheckpoint("shard")
       
       result must beLike {
-        case Success(out) => 
+        case Some(Success(out)) => 
           in must_== out 
       }
     }

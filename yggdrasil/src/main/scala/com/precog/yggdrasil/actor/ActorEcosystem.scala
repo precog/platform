@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
 package actor
 
+import metadata._
+
 import akka.actor._
 import akka.dispatch._
 import akka.util._
@@ -17,8 +19,6 @@ import com.weiglewilczek.slf4s.Logging
 import java.net.InetAddress
 
 import blueeyes.json.JsonAST._
-
-import MetadataActor._
 
 trait ActorEcosystem {
   val actorSystem: ActorSystem
@@ -43,16 +43,20 @@ trait ActorEcosystemConfig extends BaseConfig {
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
-abstract class BaseActorEcosystem[Dataset[_]](restoreCheckpoint: YggCheckpoint) extends ActorEcosystem with ProjectionsActorModule[Dataset] with YggConfigComponent with Logging {
+trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActorModule[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ActorEcosystemConfig
 
   protected implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   
-  val yggState: YggState
-
   protected val logPrefix: String
 
   protected val actorsWithStatus: List[ActorRef]
+
+  protected val shardId: String
+  
+  protected val checkpointCoordination: CheckpointCoordination
+
+  protected val metadataStorage: MetadataStorage
 
   val ingestSupervisor = {
     actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
@@ -64,10 +68,10 @@ abstract class BaseActorEcosystem[Dataset[_]](restoreCheckpoint: YggCheckpoint) 
   //
   
   val metadataActor = 
-    actorSystem.actorOf(Props(new MetadataActor(State(yggState.metadata, Set(), Some(restoreCheckpoint)))), "metadata") 
+    actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination)), "metadata")
   
   val projectionsActor = 
-    actorSystem.actorOf(Props(newProjectionsActor(yggState.descriptorLocator, yggState.descriptorIO)), "projections")
+    actorSystem.actorOf(Props(newProjectionsActor(metadataActor)), "projections")
 
   def actorsStart = Future[Unit] {
     // TODO: reconsider?

@@ -2,24 +2,15 @@ package com.precog.yggdrasil
 package metadata
 
 import actor._
+import com.precog.common._
+import com.precog.common.util._
+import com.precog.util._
 
-import org.specs2._
-import org.specs2.mutable.Specification
-import org.specs2.specification.AfterExample
-import org.specs2.specification.BeforeExample
-import org.scalacheck._
-
+import blueeyes.concurrent.test._
 import blueeyes.json.JPath
 import blueeyes.json.JPathField
 import blueeyes.json.JPathIndex
 import blueeyes.json.JsonAST._
-
-import org.scalacheck.Gen._
-
-import com.precog.common._
-import com.precog.common.util._
-
-import scala.collection.immutable.ListMap
 
 import akka.actor._
 import akka.pattern.ask
@@ -28,12 +19,23 @@ import akka.util.duration._
 import akka.dispatch._
 import akka.testkit._
 
-class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample {
+import scala.collection.immutable.ListMap
+
+import org.specs2._
+import org.specs2.mutable.Specification
+import org.specs2.specification.AfterExample
+import org.specs2.specification.BeforeExample
+import org.scalacheck._
+import org.scalacheck.Gen._
+
+
+class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample with FutureMatchers {
 
   implicit var actorSystem: ActorSystem = null 
   def before() {
     actorSystem = ActorSystem("test")
   }
+
   def after() {
     actorSystem.shutdown
   }
@@ -176,7 +178,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
       
-      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
 
       val fut = actor ? FindChildren(Path(""))
 
@@ -194,7 +196,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
 
       val testPath: Path = event.path.parent.getOrElse(event.path)
 
-      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
 
       val fut = actor ? FindChildren(testPath)
 
@@ -210,7 +212,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
 
       val fut = actor ? FindSelectors(event.path)
 
@@ -226,23 +228,18 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
 
-      val fut = actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)
-
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]]
-
-      val expected = extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
-    
-      result must_== expected
-
+      (actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)).mapTo[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]] must whenDelivered {
+        be_==(extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample))
+      }
     }
    
     "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
-      val actor = TestActorRef(new MetadataActor(new LocalMetadata(metadata, VectorClock.empty)))
+      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
 
       val fut = actor ? FindPathMetadata(event.path, event.data.flattenWithPath.head._1)
 

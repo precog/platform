@@ -34,7 +34,7 @@ class RoutingTableSpec extends Specification {
 
       val actions = rt.route(msg)
 
-      val expected = Seq(ProjectionData(toProjDesc(colDesc :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)))
+      val expected = Seq(ProjectionData(toProjDesc(colDesc :: Nil), List[CValue](CString("Test")), List(Set.empty)))
 
       actions must containAllOf(expected).only
     }
@@ -59,8 +59,8 @@ class RoutingTableSpec extends Specification {
       val actions = rt.route(msg)
 
       val expected = Seq(
-        ProjectionData(toProjDesc(colDesc1 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CString("Test")), List(Set.empty)),
-        ProjectionData(toProjDesc(colDesc2 :: Nil), VectorCase(msg.eventId.uid),List[CValue](CInt(123)), List(Set.empty))
+        ProjectionData(toProjDesc(colDesc1 :: Nil), List[CValue](CString("Test")), List(Set.empty)),
+        ProjectionData(toProjDesc(colDesc2 :: Nil), List[CValue](CInt(123)), List(Set.empty))
       )
 
       actions must containAllOf(expected).only

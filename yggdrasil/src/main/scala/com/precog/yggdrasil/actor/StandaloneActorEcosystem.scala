@@ -3,6 +3,7 @@ package actor
 
 import com.precog.util._
 import com.precog.common.YggCheckpoint
+import com.precog.common.CheckpointCoordination
 //import com.precog.common.kafka._
 
 import akka.actor._
@@ -30,12 +31,16 @@ class NoopIngestActor extends Actor {
  * FIXME: The standalone actor ecosystem does not support updates to the metadata system.
  * This is why an empty checkpoint is passed in.
  */
-abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset](YggCheckpoint.Empty) with YggConfigComponent with Logging {
+abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   protected val logPrefix = "[Standalone Yggdrasil Shard]"
 
   val actorSystem = ActorSystem("standalone_actor_system")
 
   val ingestActor = actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
+  
+  val checkpointCoordination = CheckpointCoordination.Noop
+
+  val shardId = "standalone"
 
   protected val actorsWithStatus = ingestSupervisor :: 
                                    metadataActor :: 
