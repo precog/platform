@@ -166,21 +166,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     BuiltInFunction2Op(op))
   } yield res
 
-  private lazy val genReduction = oneOf(
-    Count,
-    GeometricMean,
-    
-    Mean,
-    Median,
-    Mode,
-    
-    Max,
-    Min,
-    
-    StdDev,
-    Sum,
-    SumSq,
-    Variance)
+  private lazy val genReduction = for {
+    red <- oneOf(libReduct.toSeq)
+    res <- BuiltInReduction(red)
+  } yield res
 
   private lazy val genSetReduction = Distinct
     

@@ -10,9 +10,9 @@ import yggdrasil._
 import org.joda.time._
 import org.joda.time.format._
 
-object Timelib extends Timelib
+object TimeLib extends TimeLib
 
-trait Timelib extends GenOpcode with ImplLibrary {
+trait TimeLib extends GenOpcode with ImplLibrary {
   val TimeNamespace = Vector("std", "time")
 
   override def _lib1 = super._lib1 ++ Set(

@@ -7,15 +7,14 @@ import bytecode.BuiltInFunc2
 
 import yggdrasil._
 
-trait Statslib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations {
+trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations {
   import ops.extend
-  
+  //private implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
+
   val StatsNamespace = Vector("std", "stats")
 
   override def _lib1 = super._lib1 ++ Set(DenseRank, Rank)
   override def _lib2 = super._lib2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression)
-
-  //private implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
 
   object LinearCorrelation extends BIF2(StatsNamespace, "corr") {
     val operandType = (Some(SDecimal), Some(SDecimal))
@@ -130,7 +129,6 @@ trait Statslib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
 
   trait RankFunction {
     val operandType = Some(SDecimal)
-
     val operation: PartialFunction[SValue, SValue] = { 
       case s @ SDecimal(r) => s
     }

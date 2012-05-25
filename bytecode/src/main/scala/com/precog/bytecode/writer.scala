@@ -115,20 +115,7 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     def reductionNum(red: Reduction) = red match {
-      case Count => 0x00
-      
-      case Mean => 0x01
-      case Median => 0x02
-      case Mode => 0x03
-      
-      case Max => 0x04
-      case Min => 0x05
-      
-      case StdDev => 0x06
-      case Sum => 0x07
-      case Variance => 0x08
-      case GeometricMean => 0x09
-      case SumSq => 0x10
+      case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
     def typeNum(tpe: Type) = tpe match {

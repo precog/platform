@@ -19,14 +19,13 @@ class AlmostEqual(d: Double) {
   def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
 }
 
-
-class StatslibSpec extends Specification
+class StatsLibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
   with DiskIterableMemoizationComponent 
-  with Statslib 
-  with Infixlib
+  with StatsLib 
+  with InfixLib
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]

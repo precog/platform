@@ -14,12 +14,12 @@ import Iteratee._
 import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
-class StringlibSpec extends Specification
+class StringLibSpec extends Specification
   with Evaluator
   with StubOperationsAPI 
   with TestConfigComponent 
   with DiskIterableMemoizationComponent 
-  with Stringlib 
+  with StringLib 
   with MemoryDatasetConsumer { self =>
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]
