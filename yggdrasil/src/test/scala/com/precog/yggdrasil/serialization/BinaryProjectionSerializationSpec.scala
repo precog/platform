@@ -39,7 +39,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io._
 import com.precog.common.VectorCase
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 
 /*
 object BinaryProjectionSerializationSpec extends Specification with ScalaCheck with ArbitrarySValue with Logging {

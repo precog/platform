@@ -59,16 +59,16 @@ trait ProductionActorConfig extends ActorEcosystemConfig {
  * At present, there's a bit of a problem around metadata serialization as the standalone actor
  * will not include manually ingested data in serialized metadata; this needs to be addressed.
  */
-abstract class ProductionActorEcosystem[Dataset[_]](restoreCheckpoint: YggCheckpoint) 
-extends BaseActorEcosystem[Dataset](restoreCheckpoint) with YggConfigComponent with Logging {
+trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ProductionActorConfig
 
   protected val logPrefix = "[Production Yggdrasil Shard]"
 
   val actorSystem = ActorSystem("production_actor_system")
 
-  private val systemCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
-  private val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
+  val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
+
+  val systemCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
 
   protected val actorsWithStatus = ingestActor :: 
                                    ingestSupervisor :: 
@@ -76,17 +76,15 @@ extends BaseActorEcosystem[Dataset](restoreCheckpoint) with YggConfigComponent w
                                    projectionsActor :: Nil
   val ingestActor = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(restoreCheckpoint, metadataActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, systemCoordination, metadataActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
   }
 
   //
   // Internal only actors
   //
   
-  private val metadataSerializationActor = {
-    val metadataStorage = new FilesystemMetadataStorage(yggState.descriptorLocator)
-    actorSystem.actorOf(Props(new MetadataSerializationActor(shardId, metadataStorage, systemCoordination)), "metadata_serializer")
-  }
+  private val metadataSerializationActor = 
+    actorSystem.actorOf(Props(new MetadataStorageActor(shardId, metadataStorage, systemCoordination)), "metadata_serializer")
   
   private val metadataSyncCancel = 
     actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))

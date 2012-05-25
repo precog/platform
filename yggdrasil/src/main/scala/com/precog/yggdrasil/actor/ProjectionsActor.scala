@@ -29,6 +29,7 @@ import akka.actor.Props
 import akka.actor.Scheduler
 import akka.actor.ActorRef
 import akka.actor.PoisonPill
+import akka.pattern.ask
 
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
@@ -78,8 +79,7 @@ trait ProjectionsActorModule[Dataset[_]] {
   /**
    * The responsibilities of
    */
-  abstract class ProjectionsActor(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO) 
-  extends Actor with Logging { self =>
+  abstract class ProjectionsActor(metadataActor: ActorRef) extends Actor with Logging { self =>
 
     def receive = {
       case Status =>
@@ -88,13 +88,16 @@ trait ProjectionsActorModule[Dataset[_]] {
       // Increment the outstanding reference count for the specified descriptor
       // and return the reference if available.
       case AcquireProjection(descriptor) =>
-        projection(descriptor) match {
-          case Success(p) =>
-            reserved(p.descriptor)
-            sender ! ProjectionAcquired(p)
+        val mySender = sender
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
+          projection(dir, descriptor) match {
+            case Success(p) =>
+              reserved(p.descriptor)
+              mySender ! ProjectionAcquired(p)
 
-          case Failure(error) =>
-            sender ! ProjectionError(descriptor, error)
+            case Failure(error) =>
+              mySender ! ProjectionError(descriptor, error)
+          }
         }
       
       // Decrement the outstanding reference count for the specified descriptor
@@ -102,23 +105,26 @@ trait ProjectionsActorModule[Dataset[_]] {
         released(descriptor)
       
       case ProjectionInsert(descriptor, inserts) =>
-        projection(descriptor) match {
-          case Success(p) =>
-            reserved(p.descriptor)
-            // Spawn a new short-lived insert actor for the projection and send a batch insert
-            // request to it so that any IO involved doesn't block queries from obtaining projection
-            // references. This could alternately be a single actor, but this design conforms more closely
-            // to 'error kernel' or 'let it crash' style.
-            context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, sender)
+        val mySender = sender
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
+          projection(dir, descriptor) match {
+            case Success(p) =>
+              reserved(p.descriptor)
+              // Spawn a new short-lived insert actor for the projection and send a batch insert
+              // request to it so that any IO involved doesn't block queries from obtaining projection
+              // references. This could alternately be a single actor, but this design conforms more closely
+              // to 'error kernel' or 'let it crash' style.
+              context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, mySender)
 
-          case Failure(error) => 
-            sender ! ProjectionError(descriptor, error)
+            case Failure(error) => 
+              mySender ! ProjectionError(descriptor, error)
+          }
         }
     }
 
     protected def status: JValue
 
-    protected def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
+    protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
 
     protected def reserved(descriptor: ProjectionDescriptor): Unit 
 

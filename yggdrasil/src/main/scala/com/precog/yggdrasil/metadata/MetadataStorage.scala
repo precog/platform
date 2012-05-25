@@ -23,6 +23,8 @@ package metadata
 import com.precog.util._
 import com.precog.common._
 
+import com.weiglewilczek.slf4s.Logging
+
 import blueeyes.json.Printer
 import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
@@ -35,63 +37,133 @@ import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.syntax.apply._
 
-object MetadataStorage {
-  val prevFilename = "projection_metadata.prev"
-  val curFilename = "projection_metadata.cur"
-  val nextFilename = "projection_metadata.next"
+trait MetadataStorage {
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File]
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
+  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] 
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] 
 }
 
-trait MetadataStorage {
-  import MetadataStorage._
+class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStorage with Logging {
+  private final val descriptorName = "projection_descriptor.json"
+  private final val prevFilename = "projection_metadata.prev"
+  private final val curFilename = "projection_metadata.cur"
+  private final val nextFilename = "projection_metadata.next"
 
-  val fileOps: FileOps
+  private var metadataLocations: Map[ProjectionDescriptor, File] = loadDescriptors(baseDir)
 
-  protected def dirMapping: ProjectionDescriptor => IO[File]
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
+
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
+    metadataLocations.keySet.filter(f)
+  }
 
   def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = {
-    def extract(json: String): Validation[Error, MetadataRecord] = 
-      JsonParser.parse(json).validated[PartialMetadataRecord].map { _.toMetadataRecord(desc) }
+    metadataLocations.get(desc) match {
+      case Some(dir) =>
+        val file = new File(dir, curFilename)
+        fileOps.read(file) map { opt =>
+          opt.map { json => JsonParser.parse(json).validated[MetadataRecord] } getOrElse { Success(defaultMetadata(desc)) }
+        }
 
-    dirMapping(desc) flatMap { dir =>
-      val file = new File(dir, curFilename)
-      fileOps.read(file) map { opt =>
-        opt.map { extract } getOrElse { Success(defaultMetadata(desc)) }
-      }
+      case None =>
+        IO(Success(defaultMetadata(desc)))
     }
   }
  
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
+    val dir = metadataLocations.getOrElse(desc, newRandomDir(baseDir))
+    metadataLocations += (desc -> dir)
+
+    stageNext(dir, metadata) flatMap { 
+      case Success(_) => 
+        stagePrev(dir) flatMap {
+          case Success(_)     => rotateCurrent(dir)
+          case f @ Failure(_) => IO(f)
+        }
+      case f @ Failure(_) => IO(f)
+    }
+  }
+
+  private def newRandomDir(parent: File): File = {
+    def dirUUID: String = {
+      val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
+      val randomPath = (1 until 3).map { _*2 }.foldLeft(Vector.empty[String]) {
+        case (acc, i) => acc :+ uuid.substring(0, i)
+      }
+      
+      randomPath.mkString("/", "/", "/") + uuid
+    }
+
+    val newDir = new File(parent, dirUUID)
+    newDir.mkdirs
+    newDir
+  }
+
+  private def walkDirs(baseDir: File): Seq[File] = {
+    def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
+
+    def walk(baseDir: File): Seq[File] = {
+      if(containsDescriptor(baseDir)) {
+        Vector(baseDir)
+      } else {
+        baseDir.listFiles.filter(_.isDirectory).flatMap{ walk(_) }
+      }
+    }
+
+    walk(baseDir) 
+  }
+
+  private def loadDescriptors(baseDir: File): Map[ProjectionDescriptor, File] = {
+    def loadMap(baseDir: File) = {
+      walkDirs(baseDir).foldLeft(Map.empty[ProjectionDescriptor, File]) { (acc, dir) =>
+        logger.debug("loading: " + dir)
+        read(dir) match {
+          case Success(pd) => acc + (pd -> dir)
+          case Failure(error) => 
+            logger.warn("Failed to restore %s: %s".format(dir, error))
+            acc
+        }
+      }
+    }
+
+    def read(baseDir: File): Validation[String, ProjectionDescriptor] = {
+      val df = new File(baseDir, descriptorName)
+      if (!df.exists) Failure("Unable to find serialized projection descriptor in " + baseDir)
+      else {
+        val reader = new FileReader(df)
+        try {
+          { (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
+        } finally {
+          reader.close
+        }
+      }
+    }
+
+    loadMap(baseDir)
+  }
+
   private def defaultMetadata(desc: ProjectionDescriptor): MetadataRecord = {
     val metadata: ColumnMetadata = desc.columns.map { col =>
       (col -> Map.empty[MetadataType, Metadata])
     }(collection.breakOut)
+
     MetadataRecord(metadata, VectorClock.empty)
   }
-  
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = 
-    dirMapping(desc) flatMap { dir => 
-      stageNext(dir, metadata) flatMap { 
-        case Success(_) => 
-          stagePrev(dir) flatMap {
-            case Success(_)     => rotateCurrent(dir)
-            case f @ Failure(_) => IO(f)
-          }
-        case f @ Failure(_) => IO(f)
-      }
-    }
 
-  def stageNext(dir: File, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
+  private def stageNext(dir: File, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
     val json = Printer.pretty(Printer.render(metadata.serialize))
     val next = new File(dir, nextFilename)
     fileOps.write(next, json)
   }
   
-  def stagePrev(dir: File): IO[Validation[Throwable, Unit]] = {
+  private def stagePrev(dir: File): IO[Validation[Throwable, Unit]] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
     if (fileOps.exists(src)) fileOps.copy(src, dest) else IO{ Success(()) }
   }
   
-  def rotateCurrent(dir: File): IO[Validation[Throwable, Unit]] = IO {
+  private def rotateCurrent(dir: File): IO[Validation[Throwable, Unit]] = IO {
     Validation.fromTryCatch {
       val src = new File(dir, nextFilename)
       val dest = new File(dir, curFilename)
@@ -99,12 +171,6 @@ trait MetadataStorage {
     }
   }
 }
-
-
-class FilesystemMetadataStorage(protected val dirMapping: ProjectionDescriptor => IO[File]) extends MetadataStorage {
-  object fileOps extends FilesystemFileOps
-}
-
 
 case class MetadataRecord(metadata: ColumnMetadata, clock: VectorClock)
 
@@ -122,26 +188,3 @@ trait MetadataRecordSerialization {
 }
 
 object MetadataRecord extends MetadataRecordSerialization
-
-
-case class PartialMetadataRecord(metadata: List[MetadataMap], clock: VectorClock) {
-  def toMetadataRecord(desc: ProjectionDescriptor): MetadataRecord = {
-    val map: Map[ColumnDescriptor, MetadataMap] = (desc.columns zip metadata)(collection.breakOut)
-    MetadataRecord(map, clock)   
-  } 
-}
-
-trait PartialMetadataRecordSerialization {
-  private def extractMetadata(v: Validation[Error, List[Set[Metadata]]]): Validation[Error, List[MetadataMap]] = {
-    v.map { _.map( sm => Metadata.toTypedMap(sm) ).toList }
-  }
-
-  implicit val MetadataRecordExtractor: Extractor[PartialMetadataRecord] = new Extractor[PartialMetadataRecord] with ValidatedExtraction[PartialMetadataRecord] {
-    override def validated(obj: JValue): Validation[Error, PartialMetadataRecord] =
-      (extractMetadata((obj \ "metadata").validated[List[Set[Metadata]]]) |@|
-       (obj \ "checkpoint").validated[VectorClock]).apply(PartialMetadataRecord(_, _))
-  }
-}
-
-object PartialMetadataRecord extends PartialMetadataRecordSerialization
-// vim: set ts=4 sw=4 et:

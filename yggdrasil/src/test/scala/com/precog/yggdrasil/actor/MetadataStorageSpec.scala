@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
@@ -64,26 +64,26 @@ class MetadataStorageSpec extends Specification {
 
   "metadata storage" should {
     "safely update metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
+      val ms = new TestFileMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
       val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
       result must beLike {
         case Success(()) => ok
       }
-      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
-      ms.confirmCopy(1, new File(base, curFilename), new File(base, prevFilename)) aka "copy cur to prev" must beTrue 
-      ms.confirmRename(2, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
+      ms.fileOps.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
+      ms.fileOps.confirmCopy(1, new File(base, curFilename), new File(base, prevFilename)) aka "copy cur to prev" must beTrue 
+      ms.fileOps.confirmRename(2, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
     }
     "safely update metadata no current" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List())
+      val ms = new TestFileMetadataStorage(inputMetadata, base, List())
       val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
       result must beLike {
         case Success(()) => ok
       }
-      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
-      ms.confirmRename(1, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
+      ms.fileOps.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
+      ms.fileOps.confirmRename(1, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
     }
     "correctly read metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
+      val ms = new TestFileMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
       val result = ms.currentMetadata(desc).unsafePerformIO
       result must beLike {
        case Success(m) => Printer.pretty(Printer.render(m.serialize)) must_== inputMetadata
@@ -92,11 +92,16 @@ class MetadataStorageSpec extends Specification {
   }
 }
 
-class TestMetadataStorage(val input: String, dirName: File, val existing: List[File]) extends MetadataStorage with TestFileOps {
+class TestFileMetadataStorage(val input: String, dirName: File, val existing: List[File]) extends FileMetadataStorage { self =>
+  object fileOps extends TestFileOps {
+    def input = self.input
+    def existing = self.existing
+  }
+
   val dirMapping = (_: ProjectionDescriptor) => IO { dirName }
 }
 
-trait TestFileOps {
+trait TestFileOps extends FileOps {
  
   def input: String
   def existing: List[File]

@@ -219,19 +219,21 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
     Success(state)
   }
 
-  def loadYggCheckpoint(shard: String): Validation[Error, YggCheckpoint] = {
+  def loadYggCheckpoint(shard: String): Option[Validation[Error, YggCheckpoint]] = {
     val checkpointPath = shardCheckpointPath(shard)
 
-    acquireActivePath(checkpointPath) flatMap { _ =>
-      val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
-      if (bytes != null && bytes.length != 0) {
-        val checkpoint = fromNodeData(bytes).validated[YggCheckpoint]
-        logger.debug("%s: RESTORED".format(checkpoint))
-        checkpoint 
-      } else {
-        Failure(Invalid("No checkpoint information found in Zookeeper!"))
+    Some(
+      acquireActivePath(checkpointPath) flatMap { _ =>
+        val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
+        if (bytes != null && bytes.length != 0) {
+          val checkpoint = fromNodeData(bytes).validated[YggCheckpoint]
+          logger.debug("%s: RESTORED".format(checkpoint))
+          checkpoint
+        } else {
+          Failure(Invalid("No checkpoint information found in Zookeeper!"))
+        } 
       }
-    }
+    )
   }
 
   def shardCheckpointExists(shard: String): Boolean = zkc.exists(shardCheckpointPath(shard))

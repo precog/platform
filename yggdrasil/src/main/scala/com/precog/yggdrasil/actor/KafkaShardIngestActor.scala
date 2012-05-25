@@ -65,17 +65,30 @@ case class ProjectionInsertsExpected(projections: Int)
  *    external system with the state of the system into which data is being ingested. For Kafka,
  *    the most important component of this state is the offset.
  */
-class KafkaShardIngestActor(initialCheckpoint: YggCheckpoint, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, 
+class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordination, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, 
                             fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 30 seconds, 
                             maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
   import KafkaBatchHandler._
 
-  private var lastCheckpoint = initialCheckpoint
+  private var lastCheckpoint: YggCheckpoint = _
 
   private var totalConsecutiveFailures = 0
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
   private var pendingCompletes = Vector.empty[Complete]
+
+  override def preStart(): Unit = {
+    systemCoordination.loadYggCheckpoint(shardId) match {
+      case Some(Success(checkpoint)) =>
+        lastCheckpoint = checkpoint
+
+      case Some(Failure(errors)) =>
+        sys.error("Unable to load Kafka checkpoint: " + errors)
+
+      case None => 
+        sys.error("Unable to load Kafka checkpoint; invalid system coordination configuration for Kafka-based ingest (" + systemCoordination.getClass.getName + ")")
+    }
+  }
 
   def receive = {
     case Status => sender ! status
@@ -92,7 +105,7 @@ class KafkaShardIngestActor(initialCheckpoint: YggCheckpoint, metadataActor: Act
 
         pendingCompletes = pendingCompletes flatMap {
           case Complete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
-            metadataActor ! IngestBatchMetadata(metadata, Some(pendingCheckpoint))
+            metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
             None
 
           case stillPending => 

@@ -21,23 +21,26 @@ package com.precog.yggdrasil
 package actor 
 
 import metadata._
-
 import com.precog.common._
-import com.precog.common.util._
-import com.precog.yggdrasil._
+import com.precog.util._
 
 import blueeyes.json.JPath
+import blueeyes.concurrent.test._
+import blueeyes.json.xschema.Extractor._
 
 import org.specs2.mutable._
 
 import akka.pattern.ask
-import akka.actor._
+import akka.actor.{Actor, ActorSystem, Props}
 import akka.dispatch._
 import akka.util._
 
 import scala.collection.immutable.ListMap
+import scalaz.{Success, Validation}
+import scalaz.effect._
+import scalaz.syntax.std.optionV._
 
-object ShardMetadataActorSpec extends Specification {
+object MetadataActorSpec extends Specification with FutureMatchers {
 
   val system = ActorSystem("shard_metadata_test")
   implicit val timeout = Timeout(30000) 
@@ -47,16 +50,20 @@ object ShardMetadataActorSpec extends Specification {
       val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor1")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor1") 
       
-      val fut1 = testActor ? FlushMetadata(captureActor)
+      val result = for {
+        _ <- testActor ? FlushMetadata(captureActor)
+        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])]
+      } yield r
 
-      val fut2 = fut1 flatMap { _ => captureActor ? GetCaptureResult }
-
-      val (save, other) = Await.result(fut2, Duration(30, "seconds")).asInstanceOf[(Vector[SaveMetadata],Vector[Any])]
-
-      other.size must_== 0
-      save must_== Vector(SaveMetadata(Map(), VectorClock.empty.update(0,0)))
-
+      result must whenDelivered {
+        beLike {
+          case (save, other) =>
+            other.size must_== 0
+            save must_== Vector(SaveMetadata(Map(), VectorClock.empty.update(0,0), Some(0l)))
+        }
+      }
     }
+
     "correctly propagates updated message clock on flush request" in {
       val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor2")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor2") 
@@ -70,27 +77,29 @@ object ShardMetadataActorSpec extends Specification {
       val values = Vector[CValue](CString("Test123"))
       val metadata = Vector(Set[Metadata]())
 
-      val insertComplete1 = InsertComplete(EventId(0,1), descriptor, values, metadata)
-      val insertComplete2 = InsertComplete(EventId(0,2), descriptor, values, metadata)
+      val row1 = ProjectionInsert.Row(EventId(0,1), values, metadata)
+      val row2 = ProjectionInsert.Row(EventId(0,2), values, metadata)
 
-      val inserts = List[InsertComplete](insertComplete1, insertComplete2)
-      
-      val fut0 = testActor ? UpdateMetadata(inserts)
-   
-      val fut1 = fut0 flatMap { _ => testActor ? FlushMetadata(captureActor) }
+      testActor ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
 
-      val fut2 = fut1 flatMap { _ => captureActor ? GetCaptureResult }
+      val result = for {
+        _ <- testActor ? FlushMetadata(captureActor) 
+        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])]
+      } yield r
 
-      val (save, other) = Await.result(fut2, Duration(30, "seconds")).asInstanceOf[(Vector[SaveMetadata],Vector[Any])]
+      result must whenDelivered {
+        beLike {
+          case (save, other) =>
+            val stringStats = StringValueStats(2, "Test123", "Test123")
 
-      val stringStats = StringValueStats(2, "Test123", "Test123")
+            val resultingMetadata = Map(
+              (descriptor -> Map[ColumnDescriptor, MetadataMap]((colDesc -> Map((stringStats.metadataType -> stringStats)))))
+            )
 
-      val resultingMetadata = Map(
-        (descriptor -> Map[ColumnDescriptor, MetadataMap]((colDesc -> Map((stringStats.metadataType -> stringStats)))))
-      )
-
-      other.size must_== 0
-      save must_== Vector(SaveMetadata(resultingMetadata, VectorClock.empty.update(0,2)))
+            other.size must_== 0
+            save must_== Vector(SaveMetadata(resultingMetadata, VectorClock.empty.update(0,2), Some(0L)))
+        }
+      }
     }
   }
 
@@ -99,19 +108,32 @@ object ShardMetadataActorSpec extends Specification {
   }
 }
 
-class TestMetadataActor extends MetadataActor(new LocalMetadata(Map(), VectorClock.empty.update(0,0)))
+class TestMetadataActor extends MetadataActor("TestMetadataActor", new TestMetadataStorage(Map()), CheckpointCoordination.Noop)
+
+class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
+  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
+    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
+  }
+
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = IO {
+    Success(())
+  }
+}
 
 case object GetCaptureResult
 
 class CaptureActor extends Actor {
-
   var saveMetadataCalls = Vector[SaveMetadata]()
   var otherCalls = Vector[Any]()
 
   def receive = {
-    case sm @ SaveMetadata(_, _) => 
+    case sm : SaveMetadata => 
       saveMetadataCalls = saveMetadataCalls :+ sm
-    case GetCaptureResult => sender ! (saveMetadataCalls, otherCalls)
+      sender ! ()
+
+    case GetCaptureResult => 
+      sender ! ((saveMetadataCalls, otherCalls))
+
     case other                   => 
       otherCalls = otherCalls :+ other
   }

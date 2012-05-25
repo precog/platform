@@ -27,15 +27,16 @@ import blueeyes.json.xschema.Extractor._
 
 import scalaz.Validation
 import scalaz.Order
+import scalaz.Semigroup
 import scalaz.Ordering._
 
 case class VectorClock(map: Map[Int, Int]) {   
-  def get(id: Int): Option[Int] = map.get(id)  
-  def hasId(id: Int): Boolean = map.contains(id)
+  def get(producerId: Int): Option[Int] = map.get(producerId)  
+  def hasId(producerId: Int): Boolean = map.contains(producerId)
 
-  def update(id: Int, sequence: Int): VectorClock = 
-    if (map.get(id) forall { _ <= sequence }) {
-      VectorClock(map + (id -> sequence))
+  def update(producerId: Int, sequenceId: Int): VectorClock = 
+    if (map.get(producerId) forall { _ <= sequenceId }) {
+      VectorClock(map + (producerId -> sequenceId))
     } else {
       this 
     }
@@ -66,6 +67,15 @@ object VectorClock extends VectorClockSerialization {
       } else {
         LT
       }
+  }
+
+  // Computes the maximal merge of two clocks
+  implicit object semigroup extends Semigroup[VectorClock] {
+    def append(c1: VectorClock, c2: => VectorClock) = {
+      c2.map.foldLeft(c1) { 
+        case (acc, (producerId, sequenceId)) => acc.update(producerId, sequenceId)
+      }
+    }
   }
 }
 

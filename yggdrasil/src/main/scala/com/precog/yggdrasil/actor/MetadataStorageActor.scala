@@ -46,22 +46,30 @@ import com.weiglewilczek.slf4s.Logging
 
 import java.io.File
 
-case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], checkpoint: Option[YggCheckpoint]) 
+case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long])
 
-class MetadataSerializationActor(shardId: String, storage: MetadataStorage, systemCoordination: SystemCoordination) extends Actor with Logging {
+case class MetadataSaveComplete(messageClock: VectorClock, kafkaOffset: Option[Long])
+case class MetadataSaveFailed(errors: List[Throwable])
+
+class MetadataStorageActor(shardId: String, storage: MetadataStorage, systemCoordination: SystemCoordination) extends Actor with Logging {
   def receive = {
     // TODO: Does it make any sense to save metadata *without* a checkpoint?
-    case SaveMetadata(metadata, Some(checkpoint)) => 
+    case SaveMetadata(metadata, messageClock, kafkaOffset) => 
       val io: List[IO[Validation[Throwable, Unit]]] = 
-        metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, checkpoint.messageClock)) })(collection.breakOut)
+        metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) })(collection.breakOut)
 
       // if some metadata fails to be written and we consequently don't write the checkpoint,
       // then the restore process for each projection will need to skip all message ids prior
       // to the checkpoint clock associated with that metadata
-      val errors = (io.sequence[IO, Validation[Throwable, Unit]] map { _.collect { case Failure(t) => t } } unsafePerformIO)
-      if (errors.isEmpty) {
-        systemCoordination.saveYggCheckpoint(shardId, checkpoint)
-      }
+      io.sequence[IO, Validation[Throwable, Unit]] map { results => 
+        val errors = results.collect { case Failure(t) => t } 
+        if (errors.isEmpty) {
+          for (offset <- kafkaOffset) systemCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
+          sender ! MetadataSaveComplete(messageClock, kafkaOffset)
+        } else {
+          sender ! MetadataSaveFailed(errors)
+        }
+      } unsafePerformIO
   }
 }
 
