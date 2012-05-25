@@ -1,14 +1,15 @@
 package com.precog.common
 
-import org.specs2.execute._
-import org.specs2.mutable._
-import org.specs2.specification._
+import com.precog.util._
 
 import org.I0Itec.zkclient.ZkClient
 
 import scala.collection.mutable.ListBuffer
-
 import scalaz.{Success, Failure}
+
+import org.specs2.execute._
+import org.specs2.mutable._
+import org.specs2.specification._
 
 class ZookeeperSystemCoordinationSpec extends Specification {
 

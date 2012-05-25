@@ -64,7 +64,7 @@ abstract class BaseActorEcosystem[Dataset[_]](restoreCheckpoint: YggCheckpoint) 
   //
   
   val metadataActor = 
-    actorSystem.actorOf(Props(new MetadataActor(State(yggState.metadata, Set(), restoreCheckpoint))), "metadata") 
+    actorSystem.actorOf(Props(new MetadataActor(State(yggState.metadata, Set(), Some(restoreCheckpoint)))), "metadata") 
   
   val projectionsActor = 
     actorSystem.actorOf(Props(newProjectionsActor(yggState.descriptorLocator, yggState.descriptorIO)), "projections")
