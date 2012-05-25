@@ -92,7 +92,7 @@ class KafkaShardIngestActor(initialCheckpoint: YggCheckpoint, metadataActor: Act
 
         pendingCompletes = pendingCompletes flatMap {
           case Complete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
-            metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint)    
+            metadataActor ! IngestBatchMetadata(metadata, Some(pendingCheckpoint))
             None
 
           case stillPending => 

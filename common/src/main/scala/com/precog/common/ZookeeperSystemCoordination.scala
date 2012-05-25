@@ -229,12 +229,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID) ex
         logger.debug("%s: RESTORED".format(checkpoint))
         checkpoint 
       } else {
-        val initialCheckpoint = YggCheckpoint.Empty 
-        zkc.updateDataSerialized(shardCheckpointPath(shard), new DataUpdater[Array[Byte]] {
-          def update(cur: Array[Byte]): Array[Byte] = toNodeData(initialCheckpoint.serialize)
-        })
-        logger.debug("%s: NEW".format(initialCheckpoint))
-        Success(initialCheckpoint)
+        Failure(Invalid("No checkpoint information found in Zookeeper!"))
       }
     }
   }

@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 package actor
 
+import metadata.FilesystemMetadataStorage
 import com.precog.util._
 import com.precog.common._
 import com.precog.common.kafka._

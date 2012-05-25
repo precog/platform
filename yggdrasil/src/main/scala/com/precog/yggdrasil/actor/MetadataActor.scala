@@ -40,7 +40,7 @@ import akka.dispatch.Future
 import scalaz.Scalaz._
 
 object MetadataActor {
-  case class State(projections: Map[ProjectionDescriptor, ColumnMetadata], dirty: Set[ProjectionDescriptor], checkpoint: YggCheckpoint) {
+  case class State(projections: Map[ProjectionDescriptor, ColumnMetadata], dirty: Set[ProjectionDescriptor], checkpoint: Option[YggCheckpoint]) {
     def toSaveMessage = SaveMetadata(projections.filterKeys(dirty), checkpoint)
   }
 }
@@ -49,11 +49,15 @@ class MetadataActor(private var state: MetadataActor.State) extends Actor { meta
   import MetadataActor._
   import ProjectionMetadata._
 
+  override def preStart(): Unit = {
+    // TODO: Initialize state here instead of externally
+  }
+
   def receive = {
     case Status => sender ! status
 
     case IngestBatchMetadata(patch, checkpoint) => 
-      state = State(state.projections |+| patch, state.dirty ++ patch.keySet, checkpoint)
+      state = State(state.projections |+| patch, state.dirty ++ patch.keySet, checkpoint.orElse(state.checkpoint))
    
     case FindChildren(path)                   => sender ! findChildren(path)
     
@@ -275,5 +279,5 @@ case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
 
-case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], checkpoint: YggCheckpoint) extends ShardMetadataAction
+case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], checkpoint: Option[YggCheckpoint]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
