@@ -43,22 +43,19 @@ object MetadataActor {
    
     // TODO: This feels like too much mixing between inter-related classes
     def fullDataFor(projs: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, ColumnMetadata] = {
-      projs.toList.map {
-        descriptor => {
-          val columnMetadata = projections.get(descriptor).getOrElse {
-            metadataStorage.currentMetadata(descriptor).unsafePerformIO match {
-              case Success(record) => 
-                projections += (descriptor -> record.metadata)
-                record.metadata
-
-              case Failure(errors) => sys.error("Failed to load metadata for " + descriptor)
-            }
-          }
-
-          (descriptor -> columnMetadata)
-        }
-      }.toMap
+      projs.toList.map { descriptor => (descriptor -> columnMetadataFor(descriptor)) } toMap
     }
+
+    private def columnMetadataFor(descriptor: ProjectionDescriptor) = 
+      projections.get(descriptor).getOrElse {
+        metadataStorage.currentMetadata(descriptor).unsafePerformIO match {
+          case Success(record) => 
+            projections += (descriptor -> record.metadata)
+            record.metadata
+          
+          case Failure(errors) => sys.error("Failed to load metadata for " + descriptor)
+        }
+      }
 
     private def isChildPath(ref: Path, test: Path): Boolean = 
       test.elements.startsWith(ref.elements) && 
@@ -102,11 +99,13 @@ object MetadataActor {
     }
 
     @inline def matching(path: Path, selector: JPath): Seq[ResolvedSelector] = 
-      projections.flatMap {
-        case (desc, meta) => desc.columns.collect {
-          case col @ ColumnDescriptor(_,sel, _,auth) if matches(path,selector)(col) => ResolvedSelector(sel, auth, desc, meta)
+      metadataStorage.flatMapDescriptors {
+        descriptor => descriptor.columns.collect {
+          case col @ ColumnDescriptor(_,sel, _,auth) if matches(path,selector)(col) => {
+            ResolvedSelector(sel, auth, descriptor, columnMetadataFor(descriptor))
+          }
         }
-      }(collection.breakOut)
+      }
 
     def findPathMetadata(path: Path, selector: JPath): PathRoot = {
       @inline def isLeaf(ref: JPath, test: JPath) = {
@@ -208,6 +207,7 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, systemCoo
     case Status => sender ! state.status
 
     case IngestBatchMetadata(patch, batchClock, batchOffset) => 
+      println("Updating metadata")
       state.projections = state.projections |+| patch
       state.dirty = state.dirty ++ patch.keySet
       state.messageClock = state.messageClock |+| batchClock
