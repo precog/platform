@@ -87,21 +87,23 @@ class MetadataActorStateSpec extends Specification {
     ))
   ))
 
-  val lm = new MetadataActor.State(new TestMetadataStorage(data), VectorClock.empty, None) 
+  val state = new MetadataActor.State(new TestMetadataStorage(data), VectorClock.empty, None) 
 
   "local metadata state" should {
     "query by path with root selector" in {
-      val result = lm.findPathMetadata(Path("/abc/"), JPath(""))
+      val result = state.findPathMetadata(Path("/abc/"), JPath(""))
     
       result must_== rootAbc
     }
+
     "query other path with root selector" in {
-      val result = lm.findPathMetadata(Path("/def/"), JPath(""))
+      val result = state.findPathMetadata(Path("/def/"), JPath(""))
       
       result must_== rootDef
     }
+
     "query by path with branch selector" in {
-      val result = lm.findPathMetadata(Path("/abc/"), JPath(".foo"))
+      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
@@ -116,8 +118,9 @@ class MetadataActorStateSpec extends Specification {
 
       result must_== expected 
     }
+
     "query other path with branch selector" in {
-      val result = lm.findPathMetadata(Path("/def/"), JPath(".foo"))
+      val result = state.findPathMetadata(Path("/def/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
@@ -133,8 +136,9 @@ class MetadataActorStateSpec extends Specification {
 
       result must_== expected 
     }
+
     "query by path with array selector" in {
-      val result = lm.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
+      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
      
       val expected = PathRoot(Set(
         PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
@@ -142,8 +146,9 @@ class MetadataActorStateSpec extends Specification {
 
       result must_== expected
     }
+
     "query other path with leaf selector" in {
-      val result = lm.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
+      val result = state.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))

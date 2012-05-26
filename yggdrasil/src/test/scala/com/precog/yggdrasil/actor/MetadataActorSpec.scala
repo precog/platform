@@ -63,7 +63,7 @@ object MetadataActorSpec extends Specification with FutureMatchers {
         beLike {
           case (save, other) =>
             other.size must_== 0
-            save must_== Vector(SaveMetadata(Map(), VectorClock.empty.update(0,0), Some(0l)))
+            save must_== Vector(SaveMetadata(Map(), VectorClock.empty, None))
         }
       }
     }
