@@ -9,6 +9,8 @@ import blueeyes.json.JPath
 import blueeyes.concurrent.test._
 import blueeyes.json.xschema.Extractor._
 
+import java.io.File
+
 import org.specs2.mutable._
 
 import akka.pattern.ask
@@ -17,6 +19,8 @@ import akka.dispatch._
 import akka.util._
 
 import scala.collection.immutable.ListMap
+import scala.collection.GenTraversableOnce
+
 import scalaz.{Success, Validation}
 import scalaz.effect._
 import scalaz.syntax.std.optionV._
@@ -99,6 +103,14 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = IO {
     Success(())
   }
+
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = None
+  
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
+    data.keySet.filter(f)
+
+  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
+    data.keySet.toSeq.flatMap(f)
 }
 
 case object GetCaptureResult

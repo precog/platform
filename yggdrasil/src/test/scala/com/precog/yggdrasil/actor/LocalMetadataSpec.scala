@@ -68,9 +68,9 @@ class MetadataActorStateSpec extends Specification {
     ))
   ))
 
-  val lm = new MetadataActorBase("MetadataActorStateSpec", new TestMetadataStorage(data), CheckpointCoordination.Noop) 
+  val lm = new MetadataActor.State(new TestMetadataStorage(data), VectorClock.empty, None) 
 
-  "local metadata" should {
+  "local metadata state" should {
     "query by path with root selector" in {
       val result = lm.findPathMetadata(Path("/abc/"), JPath(""))
     

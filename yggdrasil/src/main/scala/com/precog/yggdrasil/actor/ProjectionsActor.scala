@@ -11,6 +11,7 @@ import akka.actor.Scheduler
 import akka.actor.ActorRef
 import akka.actor.PoisonPill
 import akka.pattern.ask
+import akka.util.Timeout
 
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
@@ -55,12 +56,13 @@ trait ProjectionsActorModule[Dataset[_]] {
   // ACTORS //
   ////////////
 
-  def newProjectionsActor(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO): ProjectionsActor
+  def newProjectionsActor(metadataActor: ActorRef, metadataTimeout: Timeout): ProjectionsActor
 
   /**
    * The responsibilities of
    */
-  abstract class ProjectionsActor(metadataActor: ActorRef) extends Actor with Logging { self =>
+  abstract class ProjectionsActor(metadataActor: ActorRef, metadataTimeout: Timeout) extends Actor with Logging { self =>
+    implicit val metadataTO = metadataTimeout
 
     def receive = {
       case Status =>
@@ -71,11 +73,11 @@ trait ProjectionsActorModule[Dataset[_]] {
       case AcquireProjection(descriptor) =>
         val mySender = sender
         for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
-          projection(dir, descriptor) match {
+          projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
-              mySender ! ProjectionAcquired(p)
-
+            mySender ! ProjectionAcquired(p)
+            
             case Failure(error) =>
               mySender ! ProjectionError(descriptor, error)
           }
@@ -88,14 +90,14 @@ trait ProjectionsActorModule[Dataset[_]] {
       case ProjectionInsert(descriptor, inserts) =>
         val mySender = sender
         for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
-          projection(dir, descriptor) match {
+          projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
-              // Spawn a new short-lived insert actor for the projection and send a batch insert
-              // request to it so that any IO involved doesn't block queries from obtaining projection
-              // references. This could alternately be a single actor, but this design conforms more closely
-              // to 'error kernel' or 'let it crash' style.
-              context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, mySender)
+            // Spawn a new short-lived insert actor for the projection and send a batch insert
+            // request to it so that any IO involved doesn't block queries from obtaining projection
+            // references. This could alternately be a single actor, but this design conforms more closely
+            // to 'error kernel' or 'let it crash' style.
+            context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, mySender)
 
             case Failure(error) => 
               mySender ! ProjectionError(descriptor, error)

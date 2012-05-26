@@ -36,6 +36,7 @@ trait ActorEcosystem {
 
 trait ActorEcosystemConfig extends BaseConfig {
   def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
+  def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   implicit def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 5) minutes
@@ -71,7 +72,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
     actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination)), "metadata")
   
   val projectionsActor = 
-    actorSystem.actorOf(Props(newProjectionsActor(metadataActor)), "projections")
+    actorSystem.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")
 
   def actorsStart = Future[Unit] {
     // TODO: reconsider?

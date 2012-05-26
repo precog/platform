@@ -15,6 +15,7 @@ import com.precog.common.kafka._
 import com.precog.common.security._
 import com.precog.yggdrasil.leveldb._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.metadata._
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
@@ -717,12 +718,14 @@ object ImportTools extends Command {
     val dir = new File("./data") 
     dir.mkdirs
 
-    // This uses an empty checkpoint because there is no support for  
+    // This uses an empty checkpoint because there is no support for insertion/metadata
     object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
       class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
       val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-      val yggState = YggState(dir, Map.empty, Map.empty)
+
+      val metadataStorage = new FileMetadataStorage(dir, new FilesystemFileOps {})
+
       val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
     }
 

@@ -26,10 +26,12 @@ import scalaz.syntax.semigroup._
 import scalaz.std.map._
 
 object MetadataActor {
-  private[MetadataActor] class State(
-      private[MetadataActor] var projections: Map[ProjectionDescriptor, ColumnMetadata], 
+  // TODO: Where/how is the best place/way to isolate this?
+  private[actor] class State(
+      metadataStorage: MetadataStorage,
       private[MetadataActor] var messageClock: VectorClock, 
-      private[MetadataActor] var kafkaOffset: Option[Long]) { metadataActor =>
+      private[MetadataActor] var kafkaOffset: Option[Long],
+      private[MetadataActor] var projections: Map[ProjectionDescriptor, ColumnMetadata] = Map()) { metadataActor =>
 
     import ProjectionMetadata._
 
@@ -37,40 +39,58 @@ object MetadataActor {
 
     def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
-    def saveMessage = SaveMetadata(projections.filterKeys(dirty), messageClock, kafkaOffset)
+    def saveMessage = SaveMetadata(fullDataFor(dirty), messageClock, kafkaOffset)
+   
+    // TODO: This feels like too much mixing between inter-related classes
+    def fullDataFor(projs: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, ColumnMetadata] = {
+      projs.toList.map {
+        descriptor => {
+          val columnMetadata = projections.get(descriptor).getOrElse {
+            metadataStorage.currentMetadata(descriptor).unsafePerformIO match {
+              case Success(record) => 
+                projections += (descriptor -> record.metadata)
+                record.metadata
+
+              case Failure(errors) => sys.error("Failed to load metadata for " + descriptor)
+            }
+          }
+
+          (descriptor -> columnMetadata)
+        }
+      }.toMap
+    }
 
     private def isChildPath(ref: Path, test: Path): Boolean = 
       test.elements.startsWith(ref.elements) && 
       test.elements.size > ref.elements.size
-
+  
     def findChildren(path: Path): Set[Path] = 
-      projections.foldLeft(Set[Path]()) {
-        case (acc, (descriptor, _)) => 
-          acc ++ descriptor.columns.collect { 
-            case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
-          }
+      metadataStorage.flatMapDescriptors { descriptor => 
+        descriptor.columns.collect { 
+          case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
       }
-   
+    }.toSet
+  
     def findSelectors(path: Path): Seq[JPath] = 
-      projections.foldLeft(Vector[JPath]()) {
-        case (acc, (descriptor, _)) => 
-          acc ++ descriptor.columns.collect { 
-            case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
-          }
+      metadataStorage.flatMapDescriptors { descriptor =>
+        descriptor.columns.collect { 
+          case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
+        }
       }
-
+  
     def findDescriptors(path: Path, selector: JPath): Map[ProjectionDescriptor, ColumnMetadata] = {
       @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
-
+  
       @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
         col.path == path && isEqualOrChild(selector, col.selector)
       }
-
-      projections.collect {
-        case (descriptor, cm) if (descriptor.columns.exists(matches(path, selector))) => (descriptor -> cm)
-      }
+  
+      fullDataFor(metadataStorage.findDescriptors {
+        descriptor => descriptor.columns.exists(matches(path, selector))
+      })
     } 
-
+  
+  
     case class ResolvedSelector(selector: JPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
       def columnType: CType = descriptor.columns.find(_.selector == selector).map(_.valueType).get
     }
@@ -163,32 +183,6 @@ object MetadataActor {
 
       PathRoot(buildTree(selector, matching(path, selector)))
     }
-
-  /*
-    def toStorageMetadata(messageDispatcher: MessageDispatcher): StorageMetadata = new StorageMetadata {
-      implicit val dispatcher = messageDispatcher 
-
-      def update(inserts: Seq[InsertComplete]) = Future {
-        metadataActor.update(inserts)
-      }
-
-      def findChildren(path: Path) = Future {
-        metadataActor.findChildren(path)
-      }
-
-      def findSelectors(path: Path) = Future {
-        metadataActor.findSelectors(path) 
-      }
-
-      def findProjections(path: Path, selector: JPath) = Future {
-        metadataActor.findDescriptors(path, selector)
-      } 
-
-      def findPathMetadata(path: Path, selector: JPath) = Future {
-        metadataActor.findPathMetadata(path, selector)
-      }
-    }
-  */
   }
 }
 
@@ -206,14 +200,8 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, systemCoo
       case None =>
         (VectorClock.empty, None)
     } 
-
-    metadataStorage.loadAll.unsafePerformIO match {
-      case Success(projections) =>
-        state = new MetadataActor.State(projections, messageClock, kafkaOffset)
-
-      case Failure(errors) =>
-        sys.error("Failed to load metadata initial state: " + errors)
-    }
+    
+    state = new MetadataActor.State(metadataStorage, messageClock, kafkaOffset)
   }
 
   def receive = {
