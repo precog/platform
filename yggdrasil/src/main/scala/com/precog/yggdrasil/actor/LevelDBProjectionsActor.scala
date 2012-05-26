@@ -23,6 +23,12 @@ package actor
 import leveldb._
 import com.precog.common._
 
+import akka.actor.ActorRef
+import akka.dispatch.Await
+import akka.pattern.ask
+import akka.util.duration._
+import akka.util.Timeout
+
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.cache.Cache
 import blueeyes.persistence.cache.CacheSettings
@@ -39,13 +45,14 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
+import scalaz.syntax.std.optionV._
 
 /**
  * Projections actors for LevelDB-backed projections
  */
 trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDataset] {
-  def newProjectionsActor(descriptorLocator: ProjectionDescriptorLocator, descriptorIO: ProjectionDescriptorIO): ProjectionsActor = {
-    new ProjectionsActor(descriptorLocator, descriptorIO) {
+  def newProjectionsActor(metadataActor: ActorRef, timeout: Timeout): ProjectionsActor = {
+    new ProjectionsActor(metadataActor, timeout) {
       private val projectionCacheSettings = CacheSettings(
         expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
         evict = (descriptor: ProjectionDescriptor, projection: LevelDBProjection) => projection.close.unsafePerformIO
@@ -62,17 +69,16 @@ trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDatas
       protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JInt(projections.size)) :: 
                                                                     JField("outstandingReferences", JInt(outstandingReferences.size)) :: Nil)) :: Nil)
 
-      protected def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[IterableDataset]] = {
-        def initDescriptor(descriptor: ProjectionDescriptor): IO[File] = {
-          descriptorLocator(descriptor).flatMap( f => descriptorIO(descriptor).map(_ => f) )
-        }
+      protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[IterableDataset]] = base match {
+        case Some(root) =>
+          projections.get(descriptor) map { success[Throwable, Projection[IterableDataset]] } getOrElse {
+            for (projection <- LevelDBProjection.forDescriptor(root, descriptor)) yield {
+              // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
+              projections.putIfAbsent(descriptor, projection) getOrElse projection 
+            }
+          }
 
-        projections.get(descriptor) map { success[Throwable, Projection[IterableDataset]] } getOrElse {
-          for (projection <- LevelDBProjection.forDescriptor(initDescriptor(descriptor).unsafePerformIO, descriptor)) yield {
-            // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
-            projections.putIfAbsent(descriptor, projection) getOrElse projection 
-          } 
-        }
+        case None => Failure(new java.io.FileNotFoundException("Could not locate base for " + descriptor))
       }
 
       protected def reserved(descriptor: ProjectionDescriptor): Unit = {

@@ -33,7 +33,6 @@ import akka.util.Timeout
 import scalaz.effect._
 
 trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem with ProjectionsActorModule[Dataset] {
-  def yggState: YggState
   def accessControl: AccessControl
 
   private lazy implicit val dispatcher = actorSystem.dispatcher
