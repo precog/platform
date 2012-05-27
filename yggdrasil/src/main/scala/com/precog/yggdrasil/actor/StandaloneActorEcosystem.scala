@@ -36,15 +36,16 @@ abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[D
 
   val actorSystem = ActorSystem("standalone_actor_system")
 
-  val ingestActor = actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
+  val ingestActor =
+    actorSystem.actorOf(Props(classOf[NoopIngestActor]), "noop_ingest")
   
   val checkpointCoordination = CheckpointCoordination.Noop
 
   val shardId = "standalone"
 
-  protected val actorsWithStatus = ingestSupervisor :: 
-                                   metadataActor :: 
-                                   projectionsActor :: Nil
+  protected lazy val actorsWithStatus = ingestSupervisor :: 
+                                        metadataActor :: 
+                                        projectionsActor :: Nil
 
   protected def actorsStopInternal: Future[Unit] = {
     for {

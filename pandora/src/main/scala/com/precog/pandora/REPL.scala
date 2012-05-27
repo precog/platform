@@ -18,6 +18,7 @@ import com.precog.common.kafka._
 import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.metadata._
 import yggdrasil.serialization._
 
 import daze._
@@ -27,6 +28,8 @@ import quirrel.LineErrors
 import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
+
+import com.precog.util.FilesystemFileOps
 
 import java.io.{File, PrintStream}
 
@@ -244,10 +247,8 @@ object Console extends App {
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
-    replState <- YggState.restore(replConfig.dataDir) 
   } yield {
-    replState map { shardState => 
-      new REPL 
+      scalaz.Success(new REPL 
           with IterableDatasetOpsComponent
           with LevelDBQueryComponent
           with DiskIterableMemoizationComponent 
@@ -261,11 +262,11 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
+        trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
           type YggConfig = REPLConfig
           //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
           lazy val yggConfig = replConfig
-          lazy val yggState = shardState
+          val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
           lazy val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
@@ -279,8 +280,8 @@ object Console extends App {
           Await.result(storage.actorsStop, controlTimeout) 
           actorSystem.shutdown
         }
-      }
-    }
+      })
+
   }
 
   val run = repl.flatMap[Unit] {

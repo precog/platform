@@ -2,7 +2,7 @@ package com.precog.ingest
 
 import util.FutureUtils
 
-import com.precog.common.Event
+import com.precog.common.{Event, EventMessage, IngestMessage}
 
 import blueeyes.json.JsonAST._
 
@@ -54,9 +54,9 @@ trait IngestMessageReceiver extends Iterator[IngestMessage] {
 class EventRouter(routeTable: RouteTable, messaging: Messaging) {
   def route(msg: EventMessage)(implicit dispatcher: MessageDispatcher): Future[Boolean] = {
     val routes = routeTable.routeTo(msg.event).list
-    val futures = routes map { messaging.send(_, msg) }
+    val futures: List[Future[Unit]] = routes map { messaging.send(_, msg) }
 
-    Future.find(futures.list) { _ == () } map { _.isDefined }
+    Future.find(futures) { _ == () } map { _.isDefined }
   }
 
   def close(implicit dispatcher: MessageDispatcher): Future[Any] = {

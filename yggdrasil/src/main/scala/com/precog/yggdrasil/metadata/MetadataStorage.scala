@@ -18,6 +18,7 @@ import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
+import scalaz.syntax.std.optionV._
 import scalaz.std.map._
 
 import scala.collection.GenTraversableOnce
@@ -203,3 +204,21 @@ trait MetadataRecordSerialization {
 }
 
 object MetadataRecord extends MetadataRecordSerialization
+
+class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
+  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
+    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
+  }
+
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = IO {
+    Success(())
+  }
+
+  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = None
+  
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
+    data.keySet.filter(f)
+
+  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
+    data.keySet.toSeq.flatMap(f)
+}

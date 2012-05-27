@@ -2,7 +2,7 @@ package com.precog
 package ingest
 
 import common._
-import common.util._
+import util._
 
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher

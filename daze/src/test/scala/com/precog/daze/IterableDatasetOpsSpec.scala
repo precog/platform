@@ -5,7 +5,7 @@ import memoization._
 import yggdrasil._
 import yggdrasil.serialization._
 import com.precog.common._
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 import com.precog.util.IdGen
 
 import blueeyes.util.Clock

@@ -31,6 +31,7 @@ trait StubYggShardComponent extends YggShardComponent {
 
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
+  implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
 
   val dataPath = Path("/test")
   def sampleSize: Int
@@ -39,21 +40,24 @@ trait StubYggShardComponent extends YggShardComponent {
   trait Storage extends YggShard[Dataset] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
-
+    
+    // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
       val chunkSize = 2000
 
       def + (row: (Identities, Seq[CValue])) = copy(data = data + row)
 
       def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
+
+      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")      
     }
 
     lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
 
     val projections: Map[ProjectionDescriptor, Projection[Dataset]] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
       case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
-        case (acc, ProjectionData(descriptor, identities, values, _)) =>
-          acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
+        case (acc, ProjectionData(descriptor, values, _)) =>
+          acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((VectorCase(EventId(0,i).uid), values))))
       }
     }
 
@@ -62,10 +66,7 @@ trait StubYggShardComponent extends YggShardComponent {
     def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
 
-    def metadata = {
-      val localMetadata = new LocalMetadata(projectionMetadata, VectorClock.empty)
-      localMetadata.toStorageMetadata(actorSystem.dispatcher)
-    }
+    def metadata = new TestMetadataActorish(projectionMetadata, new TestMetadataStorage(projectionMetadata))
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 

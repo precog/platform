@@ -1,10 +1,13 @@
 package com.precog.shard.util
 
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.common.security._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.metadata._
+
+import com.precog.util.FilesystemFileOps
 
 import java.io.File
 
@@ -27,12 +30,12 @@ object ShardTestInit extends App {
   val dir = new File("./data") 
   dir.mkdirs
 
-  object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
+  object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
     class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
 
     }
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-    val yggState = YggState(dir, Map.empty, Map.empty)
+    val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 

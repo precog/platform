@@ -21,7 +21,7 @@ import java.net.InetAddress
 import blueeyes.json.JsonAST._
 
 trait ActorEcosystem {
-  val actorSystem: ActorSystem
+  def actorSystem: ActorSystem
 
   val ingestActor: ActorRef
   val ingestSupervisor: ActorRef
@@ -47,11 +47,12 @@ trait ActorEcosystemConfig extends BaseConfig {
 trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActorModule[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ActorEcosystemConfig
 
-  protected implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  protected implicit lazy val executionContext =
+    ExecutionContext.defaultExecutionContext(actorSystem)
   
   protected val logPrefix: String
 
-  protected val actorsWithStatus: List[ActorRef]
+  protected def actorsWithStatus: List[ActorRef]
 
   protected val shardId: String
   
@@ -59,19 +60,18 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
   protected val metadataStorage: MetadataStorage
 
-  val ingestSupervisor = {
+  lazy val ingestSupervisor =
     actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
                                                    yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  }
 
   //
   // Public actors
   //
   
-  val metadataActor = 
+  lazy val metadataActor =
     actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination)), "metadata")
   
-  val projectionsActor = 
+  lazy val projectionsActor =
     actorSystem.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")
 
   def actorsStart = Future[Unit] {

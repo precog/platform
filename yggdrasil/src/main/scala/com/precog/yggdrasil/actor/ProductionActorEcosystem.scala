@@ -21,17 +21,17 @@ import com.weiglewilczek.slf4s.Logging
 import java.net.InetAddress
 
 trait ProductionActorConfig extends ActorEcosystemConfig {
-  val kafkaHost: String = config[String]("kafka.batch.host")
-  val kafkaPort: Int = config[Int]("kafka.batch.port")
-  val kafkaTopic: String = config[String]("kafka.batch.topic") 
-  val kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
-  val kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
+  def kafkaHost: String = config[String]("kafka.batch.host")
+  def kafkaPort: Int = config[Int]("kafka.batch.port")
+  def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  def kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
+  def kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
 
-  val zookeeperHosts: String = config[String]("zookeeper.hosts")
-  val zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
-  val zookeeperPrefix: String = config[String]("zookeeper.prefix")   
+  def zookeeperHosts: String = config[String]("zookeeper.hosts")
+  def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
+  def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 
-  val serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
+  def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 }
 
 /**
@@ -48,7 +48,7 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
 
   val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
-  val systemCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
+  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
 
   protected val actorsWithStatus = ingestActor :: 
                                    ingestSupervisor :: 
@@ -56,7 +56,7 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
                                    projectionsActor :: Nil
   val ingestActor = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, systemCoordination, metadataActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
   }
 
   //
@@ -64,7 +64,7 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   //
   
   private val metadataSerializationActor = 
-    actorSystem.actorOf(Props(new MetadataStorageActor(shardId, metadataStorage, systemCoordination)), "metadata_serializer")
+    actorSystem.actorOf(Props(new MetadataStorageActor(shardId, metadataStorage, checkpointCoordination)), "metadata_serializer")
   
   private val metadataSyncCancel = 
     actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))

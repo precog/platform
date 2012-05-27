@@ -5,7 +5,7 @@ import memoization._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.common.VectorCase
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 import com.precog.util.IdGen
 
 import akka.dispatch.Await

@@ -95,24 +95,6 @@ object MetadataActorSpec extends Specification with FutureMatchers {
 
 class TestMetadataActor extends MetadataActor("TestMetadataActor", new TestMetadataStorage(Map()), CheckpointCoordination.Noop)
 
-class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
-  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
-    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
-  }
-
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = IO {
-    Success(())
-  }
-
-  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = None
-  
-  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
-    data.keySet.filter(f)
-
-  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
-    data.keySet.toSeq.flatMap(f)
-}
-
 case object GetCaptureResult
 
 class CaptureActor extends Actor {

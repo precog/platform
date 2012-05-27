@@ -32,7 +32,7 @@ case class SaveMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], mes
 case class MetadataSaveComplete(messageClock: VectorClock, kafkaOffset: Option[Long])
 case class MetadataSaveFailed(errors: List[Throwable])
 
-class MetadataStorageActor(shardId: String, storage: MetadataStorage, systemCoordination: SystemCoordination) extends Actor with Logging {
+class MetadataStorageActor(shardId: String, storage: MetadataStorage, checkpointCoordination: SystemCoordination) extends Actor with Logging {
   def receive = {
     // TODO: Does it make any sense to save metadata *without* a checkpoint?
     case SaveMetadata(metadata, messageClock, kafkaOffset) => 
@@ -45,7 +45,7 @@ class MetadataStorageActor(shardId: String, storage: MetadataStorage, systemCoor
       io.sequence[IO, Validation[Throwable, Unit]] map { results => 
         val errors = results.collect { case Failure(t) => t } 
         if (errors.isEmpty) {
-          for (offset <- kafkaOffset) systemCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
+          for (offset <- kafkaOffset) checkpointCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
           sender ! MetadataSaveComplete(messageClock, kafkaOffset)
         } else {
           sender ! MetadataSaveFailed(errors)
