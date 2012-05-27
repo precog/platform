@@ -50,6 +50,8 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import com.weiglewilczek.slf4s.Logging
+
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
@@ -58,15 +60,17 @@ trait ParseEvalStackSpecs extends Specification
     with IterableDatasetOpsComponent
     with LevelDBQueryComponent
     with DiskIterableMemoizationComponent 
-    with MemoryDatasetConsumer {
+    with MemoryDatasetConsumer 
+    with Logging {
 
   override type Dataset[A] = IterableDataset[A]
   override type Memoable[α] = Iterable[α]
 
-  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
-  lazy val actorSystem = ActorSystem("platform_specs_actor_system")
-  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val actorSystem = ActorSystem("platform_specs_actor_system")
+
+  implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
 
@@ -80,6 +84,7 @@ trait ParseEvalStackSpecs extends Specification
     ProductionActorConfig
 
   object yggConfig extends YggConfig {
+    logger.trace("Init yggConfig")
     lazy val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
