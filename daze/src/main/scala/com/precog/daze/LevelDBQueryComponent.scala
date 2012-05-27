@@ -20,16 +20,16 @@ import java.io.File
 
 import scalaz._
 import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.std.set._
-import Iteratee._
+
+import com.weiglewilczek.slf4s.Logging
 
 trait LevelDBQueryConfig {
   def clock: Clock
   def projectionRetrievalTimeout: akka.util.Timeout
 }
 
-trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent with YggShardComponent with DatasetOpsComponent {
+trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryComponent with YggShardComponent with DatasetOpsComponent with Logging {
   type YggConfig <: LevelDBQueryConfig
   type Dataset[E] <: IterableDataset[E]
   import ops._
@@ -116,7 +116,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
     def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
       // pull each projection from the database, then for all the selectors that are provided
-      // by tat projection, merge the values
+      // by that projection, merge the values
       def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {
         def appendToObject(sv: SValue, instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
           instructions.foldLeft(sv) {
