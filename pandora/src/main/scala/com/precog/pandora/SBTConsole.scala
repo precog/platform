@@ -43,7 +43,10 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.metadata._
 import yggdrasil.serialization._
+
+import com.precog.util.FilesystemFileOps
 
 object SBTConsole {
   
@@ -109,13 +112,11 @@ object SBTConsole {
       }
     }
 
-    val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
-    
-    trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
+    trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
       type YggConfig = console.YggConfig
       //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
       val yggConfig = console.yggConfig
-      val yggState = shardState
+      val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
       val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
     

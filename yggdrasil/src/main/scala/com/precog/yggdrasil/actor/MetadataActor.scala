@@ -37,8 +37,7 @@ import blueeyes.json.xschema.DefaultSerialization._
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.dispatch.MessageDispatcher
-import akka.dispatch.Future
+import akka.dispatch.{ExecutionContext, Future, MessageDispatcher}
 
 import scalaz.{Failure, Success, Validation}
 import scalaz.syntax.semigroup._
@@ -204,11 +203,11 @@ object MetadataActor {
   }
 }
 
-class MetadataActor(shardId: String, metadataStorage: MetadataStorage, systemCoordination: CheckpointCoordination) extends Actor { metadataActor =>
+class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor { metadataActor =>
   private var state: MetadataActor.State = _
 
   override def preStart(): Unit = {
-    val (messageClock, kafkaOffset) = systemCoordination.loadYggCheckpoint(shardId) match {
+    val (messageClock, kafkaOffset) = checkpointCoordination.loadYggCheckpoint(shardId) match {
       case Some(Success(checkpoint)) =>
         (checkpoint.messageClock, Some(checkpoint.offset))
 
@@ -305,3 +304,14 @@ case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataA
 
 case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction
+
+// Sort of a replacement for LocalMetadata that really uses the underlying machinery
+class TestMetadataActorish(initial: Map[ProjectionDescriptor,ColumnMetadata], storage: MetadataStorage)(implicit val dispatcher: MessageDispatcher, context: ExecutionContext) extends StorageMetadata {
+  private val state = new MetadataActor.State(storage, VectorClock.empty, None, initial)
+
+  def findChildren(path: Path): Future[Set[Path]] = Future(state.findChildren(path))
+  def findSelectors(path: Path): Future[Seq[JPath]] = Future(state.findSelectors(path))
+  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]] = Future(state.findDescriptors(path, selector))
+  def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = Future(state.findPathMetadata(path, selector))
+
+}

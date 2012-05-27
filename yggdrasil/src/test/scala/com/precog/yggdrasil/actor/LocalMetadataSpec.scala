@@ -27,6 +27,7 @@ import com.precog.common.util._
 import com.precog.yggdrasil.metadata._
 import com.precog.util.VectorClock
 
+import akka.dispatch.{ExecutionContext, Future, MessageDispatcher}
 
 import org.specs2.mutable.Specification
 

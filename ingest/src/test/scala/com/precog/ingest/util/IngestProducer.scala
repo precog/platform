@@ -28,7 +28,7 @@ import java.util.Properties
 import java.io.{File, FileReader}
 
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util.IOUtils
 import com.precog.common.security._
 import com.precog.common.util.RealisticIngestMessage
 import com.precog.common.util.AdSamples

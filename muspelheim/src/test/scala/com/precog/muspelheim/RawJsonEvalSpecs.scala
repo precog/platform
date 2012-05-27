@@ -105,8 +105,6 @@ trait ParseEvalStackSpecs extends Specification
     }
   }
 
-  lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
-
   object ops extends Ops 
   object query extends QueryAPI 
 
