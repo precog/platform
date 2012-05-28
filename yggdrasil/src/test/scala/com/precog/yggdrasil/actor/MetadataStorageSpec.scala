@@ -9,7 +9,7 @@ import blueeyes.json._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import org.specs2.mutable.Specification
-import org.specs2.specification.Scope
+import org.specs2.specification.{Fragments, Scope, Step}
 
 import java.io.File
 
@@ -30,7 +30,13 @@ class MetadataStorageSpec extends Specification {
 }"""
   val output = inputMetadata
   
-  val base = new File("/test/col")
+  val base = IOUtils.createTmpDir("MetadataStorageSpec")
+
+  def cleanupBaseDir = Step {
+    IOUtils.recursiveDelete(base)
+  }
+
+  override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
 
   val colDesc = ColumnDescriptor(Path("/"), JPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
 

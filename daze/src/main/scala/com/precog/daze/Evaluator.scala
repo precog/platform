@@ -188,9 +188,7 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = {
-      logger.debug("Looping on " + graph)
-      graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
       case g if assume contains g => Right(assume(g))
       
       case s @ SplitParam(_, index) =>
@@ -208,26 +206,19 @@ trait Evaluator extends DAG
       }
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
-        logger.debug("Run " + graph)
-        val result = parent.value match {
+        parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
           case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1), graph))
           
           case None => {
             val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-            logger.debug("No parent: spec/set = " + (spec, set))
-            val realized = realizeMatch(spec, set)
-            logger.debug("No parent: realized = " + realized)
-            val loaded = realized collect { 
+            val loaded = realizeMatch(spec, set) collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration, ctx.release)
-            }
+            } 
 
             Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))
           }
         }
-        logger.debug("Load result: " + result)
-
-        result
       }
 
       case dag.SetReduce(_, Distinct, parent) => {
@@ -624,10 +615,8 @@ trait Evaluator extends DAG
         }
       }
     }
-    }
     
     val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
-    logger.debug("Final spec/set = " + (spec, set))
     realizeMatch(spec, set)
   }
   
