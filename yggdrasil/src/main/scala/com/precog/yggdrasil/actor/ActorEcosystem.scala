@@ -68,8 +68,10 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   // Public actors
   //
   
-  lazy val metadataActor =
+  lazy val metadataActor = {
+    logger.debug("Starting MetadataActor with storage = " + metadataStorage)
     actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination)), "metadata")
+  }
   
   lazy val projectionsActor =
     actorSystem.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")

@@ -43,23 +43,34 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
      *
      */
     override def fullProjection(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset[SValue] = {
-      Await.result(
+      logger.debug("Full projection on %s for %s from %s".format(path, userUID, storage))
+      val dataset = Await.result(
         fullProjectionFuture(userUID, path, expiresAt, release),
         (expiresAt - yggConfig.clock.now().getMillis) millis
       )
+      //logger.debug("Retrieved " + dataset)
+      dataset
     }
 
     private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset[SValue]] = {
+      logger.debug("Full projection future on %s for %s from %s".format(path, userUID, storage))
+      Thread.dumpStack()
       for {
         pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
         dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
-      } yield dataset
+      } yield {
+        //logger.debug("fullProjectionFuture = " + dataset)
+        dataset
+      }
     }
 
     /**
      *
      */
-    override def mask(userUID: String, path: Path): DatasetMask[Dataset] = LevelDBDatasetMask(userUID, path, None, None) 
+    override def mask(userUID: String, path: Path): DatasetMask[Dataset] = {
+      logger.debug("Mask %s for %s".format(path, userUID))
+      LevelDBDatasetMask(userUID, path, None, None) 
+    }
 
     private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
       def derefObject(field: String): DatasetMask[Dataset] = copy(selector = selector orElse Some(JPath.Identity) map { _ \ field })
@@ -68,7 +79,9 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
       def typed(tpe: SType): DatasetMask[Dataset] = copy(tpe = Some(tpe))
 
-      def realize(expiresAt: Long, release: Release): Dataset[SValue] = Await.result(
+      def realize(expiresAt: Long, release: Release): Dataset[SValue] = {
+        logger.debug("Realizing %s:%s:%s for %s".format(path, selector, tpe, userUID))
+        Await.result(
         (selector, tpe) match {
           case (Some(s), None | Some(SObject) | Some(SArray)) => 
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
@@ -96,8 +109,10 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
         (expiresAt - yggConfig.clock.now().getMillis) millis
       )
     }
+    }
 
     def sources(selector: JPath, root: PathRoot): Sources = {
+      logger.debug("Find sources for " + selector + " in " + root)
       def search(metadata: PathMetadata, selector: JPath, acc: Set[(JPath, SType, ProjectionDescriptor)]): Sources = {
         metadata match {
           case PathField(name, children) =>
@@ -115,6 +130,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     }
 
     def assemble(path: Path, prefix: JPath, sources: Sources, expiresAt: Long, release: Release)(implicit asyncContext: ExecutionContext): Future[Dataset[SValue]] = {
+      logger.debug("Assembling " + path + " from " + sources)
       // pull each projection from the database, then for all the selectors that are provided
       // by that projection, merge the values
       def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {

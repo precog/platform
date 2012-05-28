@@ -41,7 +41,19 @@ object FileMetadataStorage {
 class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStorage with Logging {
   import FileMetadataStorage._
 
+  logger.debug("Init FileMetadataStorage using " + baseDir)
+
+  if (!baseDir.isDirectory) {
+    throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
+  }
+
+  if (!baseDir.canRead) {
+    throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
+  }
+
   private var metadataLocations: Map[ProjectionDescriptor, File] = loadDescriptors(baseDir)
+
+  logger.debug("Loaded " + metadataLocations.size + " projections")
 
   def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
 
@@ -50,7 +62,7 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
   }
 
   def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = {
-    metadataLocations.keySet.toList.flatMap(f)
+    metadataLocations.keys.flatMap(f).toSeq
   }
 
   def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = {
@@ -112,6 +124,7 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     if (baseDir.isDirectory) {
       walk(baseDir)
     } else {
+      logger.warn("Base dir is not a directory!!!")
       Seq()
     }
   }

@@ -33,7 +33,7 @@ import scalaz.syntax.std.optionV._
  */
 trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDataset] {
   def newProjectionsActor(metadataActor: ActorRef, timeout: Timeout): ProjectionsActor = {
-    new ProjectionsActor(metadataActor, timeout) {
+    new ProjectionsActor(metadataActor, timeout) with Logging {
       private val projectionCacheSettings = CacheSettings(
         expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
         evict = (descriptor: ProjectionDescriptor, projection: LevelDBProjection) => projection.close.unsafePerformIO
@@ -52,6 +52,7 @@ trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDatas
 
       protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[IterableDataset]] = base match {
         case Some(root) =>
+          logger.debug("Obtaining LevelDB projection for " + descriptor + " from " + root)
           projections.get(descriptor) map { success[Throwable, Projection[IterableDataset]] } getOrElse {
             for (projection <- LevelDBProjection.forDescriptor(root, descriptor)) yield {
               // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map

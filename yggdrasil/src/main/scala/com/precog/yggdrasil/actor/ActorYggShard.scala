@@ -7,13 +7,15 @@ import com.precog.common._
 import com.precog.common.security._
 
 import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
+import akka.dispatch.{Future,Promise}
 import akka.pattern.ask
 import akka.util.Timeout
 
 import scalaz.effect._
 
-trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem with ProjectionsActorModule[Dataset] {
+import com.weiglewilczek.slf4s.Logging
+
+trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem with ProjectionsActorModule[Dataset] with Logging {
   def accessControl: AccessControl
 
   private lazy implicit val dispatcher = actorSystem.dispatcher
@@ -25,10 +27,14 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem wi
   }
   
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
+    logger.debug("Obtain projection for " + descriptor)
     implicit val ito = timeout 
 
-    for (ProjectionAcquired(projection) <- (projectionsActor ? AcquireProjection(descriptor))) yield {
+    (for (ProjectionAcquired(projection) <- (projectionsActor ? AcquireProjection(descriptor))) yield {
+      logger.debug("  projection obtained")
       (projection, new Release(IO(projectionsActor ! ReleaseProjection(descriptor))))
+    }) onFailure {
+      case e => logger.error("Error acquiring projection: " + descriptor, e)
     }
   }
   
