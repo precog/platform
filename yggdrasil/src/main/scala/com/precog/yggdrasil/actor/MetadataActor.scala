@@ -49,7 +49,7 @@ object MetadataActor {
       metadataStorage: MetadataStorage,
       private[MetadataActor] var messageClock: VectorClock, 
       private[MetadataActor] var kafkaOffset: Option[Long],
-      private[MetadataActor] var projections: Map[ProjectionDescriptor, ColumnMetadata] = Map()) { metadataActor =>
+      private[MetadataActor] var projections: Map[ProjectionDescriptor, ColumnMetadata] = Map()) extends Logging { metadataActor =>
 
     import ProjectionMetadata._
 
@@ -79,12 +79,14 @@ object MetadataActor {
       test.elements.startsWith(ref.elements) && 
       test.elements.size > ref.elements.size
   
-    def findChildren(path: Path): Set[Path] = 
+    def findChildren(path: Path): Set[Path] =
       metadataStorage.flatMapDescriptors { descriptor => 
         descriptor.columns.collect { 
-          case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => Path(cpath.elements(path.elements.length))
-      }
-    }.toSet
+          case ColumnDescriptor(cpath, cselector, _, _) if isChildPath(path, cpath) => {
+            Path(cpath.elements(path.elements.length))
+          }
+        }
+      }.toSet
   
     def findSelectors(path: Path): Seq[JPath] = 
       metadataStorage.flatMapDescriptors { descriptor =>
@@ -126,6 +128,8 @@ object MetadataActor {
       }
 
     def findPathMetadata(path: Path, selector: JPath): PathRoot = {
+      logger.debug("Locating path metadata for " + path + " and " + selector)
+
       @inline def isLeaf(ref: JPath, test: JPath) = {
         (test.nodes startsWith ref.nodes) && 
         test.nodes.length - 1 == ref.nodes.length
@@ -203,7 +207,7 @@ object MetadataActor {
   }
 }
 
-class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor { metadataActor =>
+class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor with Logging { metadataActor =>
   private var state: MetadataActor.State = _
 
   override def preStart(): Unit = {
@@ -212,6 +216,7 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
         (checkpoint.messageClock, Some(checkpoint.offset))
 
       case Some(Failure(errors)) =>
+        // TODO: This could be normal state on the first startup of a shard
         sys.error("Unable to load Kafka checkpoint: " + errors)
 
       case None =>
@@ -231,17 +236,17 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
       state.messageClock = state.messageClock |+| batchClock
       state.kafkaOffset = batchOffset orElse state.kafkaOffset
    
-    case FindChildren(path)                   => sender ! state.findChildren(path)
+    case msg @ FindChildren(path)                   => logger.info(msg.toString); sender ! state.findChildren(path)
     
-    case FindSelectors(path)                  => sender ! state.findSelectors(path)
+    case msg @ FindSelectors(path)                  => logger.info(msg.toString); sender ! state.findSelectors(path)
 
-    case FindDescriptors(path, selector)      => sender ! state.findDescriptors(path, selector)
+    case msg @ FindDescriptors(path, selector)      => logger.info(msg.toString); sender ! state.findDescriptors(path, selector)
 
-    case FindPathMetadata(path, selector)     => sender ! state.findPathMetadata(path, selector)
+    case msg @ FindPathMetadata(path, selector)     => logger.info(msg.toString); sender ! state.findPathMetadata(path, selector)
 
-    case FindDescriptorRoot(descriptor)       => sender ! metadataStorage.findDescriptorRoot(descriptor)
+    case msg @ FindDescriptorRoot(descriptor)       => logger.info(msg.toString); sender ! metadataStorage.findDescriptorRoot(descriptor)
     
-    case FlushMetadata(serializationActor)    => serializationActor.tell(state.saveMessage, sender)
+    case msg @ FlushMetadata(serializationActor)    => logger.info(msg.toString); serializationActor.tell(state.saveMessage, sender)
   }
 }
 

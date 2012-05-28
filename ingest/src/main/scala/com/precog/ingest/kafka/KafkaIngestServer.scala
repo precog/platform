@@ -60,7 +60,7 @@ trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
     val centralZookeeperHosts = getConfig(config, "central.zk.connect")
 
     val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-    val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID)
+    val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
     val agent = serviceUID.hostId + serviceUID.serviceId  
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)

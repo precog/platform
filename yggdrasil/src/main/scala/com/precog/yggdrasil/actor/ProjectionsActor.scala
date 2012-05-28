@@ -90,8 +90,9 @@ trait ProjectionsActorModule[Dataset[_]] {
       // Increment the outstanding reference count for the specified descriptor
       // and return the reference if available.
       case AcquireProjection(descriptor) =>
+        logger.debug("Acquiring projection for " + descriptor)
         val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
           projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
@@ -100,15 +101,17 @@ trait ProjectionsActorModule[Dataset[_]] {
             case Failure(error) =>
               mySender ! ProjectionError(descriptor, error)
           }
-        }
+        } 
       
       // Decrement the outstanding reference count for the specified descriptor
       case ReleaseProjection(descriptor) =>
+        logger.debug("Releasing projection for " + descriptor)
         released(descriptor)
       
       case ProjectionInsert(descriptor, inserts) =>
+        logger.debug("Inserting into projection for " + descriptor)
         val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor))) {
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
           projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
@@ -145,7 +148,11 @@ trait ProjectionsActorModule[Dataset[_]] {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(projection: Projection[Dataset]) extends Actor {
+  class ProjectionInsertActor(projection: Projection[Dataset]) extends Actor with Logging {
+    override def preStart(): Unit = {
+      logger.debug("Preparing for insert on " + projection)
+    }
+    
     import ProjectionInsert.Row
 
     def receive = {

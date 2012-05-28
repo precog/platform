@@ -182,7 +182,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
     }
   }
 
-  def newSystemCoordination(client: ZkClient) = new ZookeeperSystemCoordination(client, ServiceUID("test", "hostId", "")) 
+  def newSystemCoordination(client: ZkClient) = new ZookeeperSystemCoordination(client, ServiceUID("test", "hostId", ""), true) 
     
   type ClientFactory = () => ZkClient
 

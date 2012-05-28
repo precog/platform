@@ -34,6 +34,8 @@ import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 import akka.util.duration._
 
+import com.weiglewilczek.slf4s.Logging
+
 trait StorageMetadata {
 
   implicit val dispatcher: MessageDispatcher
@@ -166,20 +168,21 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
     if(as.size == 0) { Future(true) } else { Future.reduce(as.map(f))(_ && _) }
 }
 
-class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
+class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata with Logging {
+  logger.debug("ActorStorageMetadata init. Sends to " + actor + " via " + dispatcher)
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
-  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] }
+  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] } onFailure { case e => logger.error("Error finding children for " + path, e) }
 
-  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
+  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] } onFailure { case e => logger.error("Error finding selectors for " + path, e) }
 
   def findProjections(path: Path, selector: JPath) = 
-    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
+    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] } onFailure { case e => logger.error("Error finding projections for " + (path, selector), e) }
   
   def findPathMetadata(path: Path, selector: JPath) = 
-    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] }
+    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] } onFailure { case e => logger.error("Error finding pathmetadata for " + (path, selector), e) }
 
-  def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
+  def close(): Future[Unit] = actor ? PoisonPill map { _ => () } onFailure { case e => logger.error("Error closing ActorStorageMetadata", e) }
 
 }

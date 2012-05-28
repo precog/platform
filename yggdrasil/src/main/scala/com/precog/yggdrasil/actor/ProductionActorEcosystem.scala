@@ -50,6 +50,8 @@ trait ProductionActorConfig extends ActorEcosystemConfig {
   def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
   def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 
+  def ingestEnabled: Boolean = config[Boolean]("ingest_enabled", true)
+
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 }
 
@@ -67,15 +69,15 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
 
   val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
-  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
+  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 
-  protected val actorsWithStatus = ingestActor :: 
+  protected def actorsWithStatus = ingestActor :: 
                                    ingestSupervisor :: 
                                    metadataActor :: 
                                    projectionsActor :: Nil
   val ingestActor = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic)), "shard_ingest")
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
   }
 
   //

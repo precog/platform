@@ -96,7 +96,7 @@ trait YggdrasilQueryExecutorComponent {
     val yConfig = wrapConfig(config)
     
     new YggdrasilQueryExecutor {
-      trait Storage extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
+      //trait Storage extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
 
       lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -104,12 +104,15 @@ trait YggdrasilQueryExecutorComponent {
       
       object ops extends Ops 
       object query extends QueryAPI 
-      val storage = new Storage {
+
+      // Early initializers FTW (and to avoid cake badness with metadataStorage)
+      class Storage extends {
         type YggConfig = YggdrasilQueryExecutorConfig
-        lazy val yggConfig = yConfig
+        val yggConfig = yConfig
         val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
-        lazy val accessControl = extAccessControl
-      }
+        val accessControl = extAccessControl
+      } with ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
+      val storage = new Storage
     }
   }
 }
@@ -134,6 +137,8 @@ trait YggdrasilQueryExecutor
   case class StackException(error: StackError) extends Exception(error.toString)
 
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray] = {
+    logger.debug("Executing for %s: %s".format(userUID, query))
+
     import EvaluationError._
     implicit val M = Validation.validationMonad[EvaluationError]
     
@@ -190,8 +195,10 @@ trait YggdrasilQueryExecutor
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
     withContext { ctx =>
-      val result = consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      logger.debug("Evaluating DAG for " + userUID)
+      val result = consumeEval(userUID, dag, ctx) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
       ctx.release.release.unsafePerformIO
+      logger.debug("DAG evaluated to " + result)
       result
     }
   }

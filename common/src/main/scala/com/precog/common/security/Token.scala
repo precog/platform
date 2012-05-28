@@ -223,6 +223,7 @@ trait WritePermissionSerialization {
 
 object WritePermission extends AccessType with WritePermissionSerialization {
   val name = "write_grant" 
+  override def toString = "WritePermission"
 }
 
 case class OwnerPermission(path: Path, expiration: Option[DateTime]) extends OwnerIgnorantPermission {
@@ -298,6 +299,7 @@ trait ReadPermissionSerialization {
 
 object ReadPermission extends AccessType with ReadPermissionSerialization {
   val name = "read_grant"
+  override def toString = "ReadPermission"
 }
 
 case class ReducePermission(path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwarePermission {

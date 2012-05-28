@@ -42,6 +42,8 @@ import scalaz.syntax.traverse._
 import scalaz.std.list._
 import scalaz.std.partialFunction._
 
+import com.weiglewilczek.slf4s.Logging
+
 trait IdSource {
   def nextId(): Long
 }
@@ -63,7 +65,10 @@ trait Evaluator extends DAG
     with MemoizationEnvironment
     with ImplLibrary
     with InfixLib
-    with YggConfigComponent { self =>
+    with StatsLib
+    with BigDecimalOperations
+    with YggConfigComponent 
+    with Logging { self =>
   
   import Function._
   
@@ -104,6 +109,8 @@ trait Evaluator extends DAG
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
+    logger.debug("Eval for %s = %s".format(userUID, graph))
+
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
       (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration, ctx.release), graph) }).fold(identity, identity)
     
@@ -200,7 +207,9 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = {
+      logger.debug("Looping on " + graph)
+      graph match {
       case g if assume contains g => Right(assume(g))
       
       case s @ SplitParam(_, index) =>
@@ -218,19 +227,26 @@ trait Evaluator extends DAG
       }
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
-        parent.value match {
+        logger.debug("Run " + graph)
+        val result = parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
           case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1), graph))
           
           case None => {
             val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-            val loaded = realizeMatch(spec, set) collect { 
+            logger.debug("No parent: spec/set = " + (spec, set))
+            val realized = realizeMatch(spec, set)
+            logger.debug("No parent: realized = " + realized)
+            val loaded = realized collect { 
               case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration, ctx.release)
-            } 
+            }
 
             Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))
           }
         }
+        logger.debug("Load result: " + result)
+
+        result
       }
 
       case dag.SetReduce(_, Distinct, parent) => {
@@ -627,8 +643,10 @@ trait Evaluator extends DAG
         }
       }
     }
+    }
     
     val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
+    logger.debug("Final spec/set = " + (spec, set))
     realizeMatch(spec, set)
   }
   

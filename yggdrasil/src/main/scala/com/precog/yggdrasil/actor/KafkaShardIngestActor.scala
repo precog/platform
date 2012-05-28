@@ -65,7 +65,7 @@ case class ProjectionInsertsExpected(projections: Int)
  *    external system with the state of the system into which data is being ingested. For Kafka,
  *    the most important component of this state is the offset.
  */
-class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordination, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, 
+class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordination, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, ingestEnabled: Boolean,
                             fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 30 seconds, 
                             maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
@@ -86,7 +86,11 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
         sys.error("Unable to load Kafka checkpoint: " + errors)
 
       case None => 
-        sys.error("Unable to load Kafka checkpoint; invalid system coordination configuration for Kafka-based ingest (" + systemCoordination.getClass.getName + ")")
+        if (ingestEnabled) {
+          sys.error("Unable to load Kafka checkpoint; invalid system coordination configuration for Kafka-based ingest (" + systemCoordination.getClass.getName + ")")
+        } else {
+          logger.warn("Ingest disabled")
+        }
     }
   }
 
@@ -130,24 +134,28 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       }
 
     case GetMessages => 
-      if (ingestCache.size < maxCacheSize) {
-        readRemote(lastCheckpoint) match {
-          case Success((messages, checkpoint)) => 
-            // update the cache
-            lastCheckpoint = checkpoint
-            ingestCache += (checkpoint -> messages)
-
-            // create a handler for the batch, then reply to the sender with the message set
-            // using that handler reference as the sender to which the ingest system will reply
-            val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, sender, checkpoint, ingestTimeout))) 
-            sender.tell(IngestData(messages), batchHandler)
-
-          case Failure(error)    => 
-            logger.error("An error occurred retrieving data from Kafka.", error)
-            sender ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
+      if (ingestEnabled) {
+        if (ingestCache.size < maxCacheSize) {
+          readRemote(lastCheckpoint) match {
+            case Success((messages, checkpoint)) => 
+              // update the cache
+              lastCheckpoint = checkpoint
+              ingestCache += (checkpoint -> messages)
+  
+              // create a handler for the batch, then reply to the sender with the message set
+              // using that handler reference as the sender to which the ingest system will reply
+              val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, sender, checkpoint, ingestTimeout))) 
+              sender.tell(IngestData(messages), batchHandler)
+  
+            case Failure(error)    => 
+              logger.error("An error occurred retrieving data from Kafka.", error)
+              sender ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
+          }
+        } else {
+          IngestData(Nil)
         }
       } else {
-        IngestData(Nil)
+        logger.warn("Ingest disabled, skipping Getmessages request")
       }
   }
 
