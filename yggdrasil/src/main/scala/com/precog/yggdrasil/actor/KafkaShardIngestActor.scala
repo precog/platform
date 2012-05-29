@@ -11,6 +11,8 @@ import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.actor.PoisonPill
+import akka.dispatch.Await
+import akka.pattern.ask
 import akka.util.duration._
 import akka.util.Timeout
 
@@ -59,20 +61,11 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
   private var pendingCompletes = Vector.empty[Complete]
 
   override def preStart(): Unit = {
-    systemCoordination.loadYggCheckpoint(shardId) match {
-      case Some(Success(checkpoint)) =>
-        lastCheckpoint = checkpoint
-
-      case Some(Failure(errors)) =>
-        sys.error("Unable to load Kafka checkpoint: " + errors)
-
-      case None => 
-        if (ingestEnabled) {
-          sys.error("Unable to load Kafka checkpoint; invalid system coordination configuration for Kafka-based ingest (" + systemCoordination.getClass.getName + ")")
-        } else {
-          logger.warn("Ingest disabled")
-        }
-    }
+    implicit val timeout = Timeout(45000l)
+    // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
+    logger.debug("Requesting checkpoint from metadata")
+    lastCheckpoint = Await.result(metadataActor ? GetCurrentCheckpoint, 45 seconds).asInstanceOf[YggCheckpoint]
+    logger.debug("Checkpoint load complete")
   }
 
   def receive = {
@@ -84,12 +77,14 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       // the minimum value in the ingest cache is complete, so
       // all pending checkpoints from batches earlier than the
       // specified checkpoint can be flushed
-      if (ingestCache.head == checkpoint) {
+      logger.debug("Complete insert. Head = %s, completed = %s".format(ingestCache.head, checkpoint))
+      if (ingestCache.head._1 == checkpoint) {
         // reset failures count here since this state means that we've made forward progress
         totalConsecutiveFailures = 0
 
         pendingCompletes = pendingCompletes flatMap {
           case Complete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
+            logger.debug(pendingCheckpoint + " to be updated")
             metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
             None
 
@@ -101,6 +96,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       ingestCache -= checkpoint
 
     case Incomplete(requestor, checkpoint) => 
+      logger.warn("Incomplete ingest at " + checkpoint)
       totalConsecutiveFailures += 1
       if (totalConsecutiveFailures < maxConsecutiveFailures) {
         for (messages <- ingestCache.get(checkpoint)) {
@@ -114,26 +110,32 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
         self ! PoisonPill
       }
 
-    case GetMessages => 
+    case GetMessages(requestor) => 
+      logger.debug("GetMessages request from " + requestor)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
           readRemote(lastCheckpoint) match {
             case Success((messages, checkpoint)) => 
-              // update the cache
-              lastCheckpoint = checkpoint
-              ingestCache += (checkpoint -> messages)
+              if (messages.size > 0) {
+                // update the cache
+                lastCheckpoint = checkpoint
+                ingestCache += (checkpoint -> messages)
   
-              // create a handler for the batch, then reply to the sender with the message set
-              // using that handler reference as the sender to which the ingest system will reply
-              val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, sender, checkpoint, ingestTimeout))) 
-              sender.tell(IngestData(messages), batchHandler)
+                // create a handler for the batch, then reply to the sender with the message set
+                // using that handler reference as the sender to which the ingest system will reply
+                val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, sender, checkpoint, ingestTimeout))) 
+                requestor.tell(IngestData(messages), batchHandler)
+              } else {
+                requestor ! IngestData(Nil)
+              }
   
             case Failure(error)    => 
               logger.error("An error occurred retrieving data from Kafka.", error)
-              sender ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
+              requestor ! IngestErrors(List("An error occurred retrieving data from Kafka: " + error.getMessage))
           }
         } else {
-          IngestData(Nil)
+          logger.debug("ingestCache.size too big (%d)".format(ingestCache.size))
+          requestor ! IngestData(Nil)
         }
       } else {
         logger.warn("Ingest disabled, skipping Getmessages request")
@@ -167,7 +169,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
  * A batch handler actor is responsible for tracking confirmation of persistence for
  * all the messages in a specific batch. It sends 
  */
-class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCheckpoint, ingestTimeout: Timeout) extends Actor {
+class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCheckpoint, ingestTimeout: Timeout) extends Actor with Logging {
   import KafkaBatchHandler._
 
   private var remaining = -1 
@@ -180,9 +182,11 @@ class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: 
   def receive = {
     case ProjectionInsertsExpected(count) => 
       remaining += (count + 1)
+      logger.debug("Should expect %d more inserts (total %d)".format(count, remaining))
       if (remaining == 0) self ! PoisonPill
 
     case InsertMetadata(descriptor, columnMetadata) =>
+      logger.debug("Insert meta complete for " + descriptor)
       projectionMetadata += (descriptor -> (projectionMetadata.getOrElse(descriptor, ColumnMetadata.Empty) |+| columnMetadata))
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
@@ -191,9 +195,11 @@ class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: 
   override def postStop() = {
     // if the ingest isn't complete by the timeout, ask the requestor to retry
     if (remaining != 0) {
+      logger.info("Incomplete with %d remaining".format(remaining))
       ingestActor ! Incomplete(requestor, checkpoint)
     } else {
       // update the metadatabase
+      logger.info("Sending complete on batch")
       ingestActor ! Complete(checkpoint, projectionMetadata)
     }
   }

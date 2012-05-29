@@ -13,7 +13,7 @@ import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import java.io.{File, FileReader}
+import java.io.{File, FileReader, FileWriter}
 import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.syntax.apply._
@@ -24,7 +24,7 @@ import scalaz.std.map._
 import scala.collection.GenTraversableOnce
 
 trait MetadataStorage {
-  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File]
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File]
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
   def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T]
   def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] 
@@ -55,7 +55,24 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
 
   logger.debug("Loaded " + metadataLocations.size + " projections")
 
-  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = metadataLocations.get(desc)
+  // TODO: This should probably return a Validation
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = metadataLocations.get(desc) match {
+      case Some(root)       => Some(root)
+      case None if createOk =>
+        logger.info("Creating new projection for " + desc)
+        val newRoot = newRandomDir(baseDir)
+        // Write out the descriptor
+        writeDescriptor(desc, newRoot) match {
+          case Success(()) =>
+            metadataLocations += (desc -> newRoot)
+            Some(newRoot)
+
+          case Failure(errors) =>
+            logger.error("Failed to set up new projection for " + desc + ":" + errors)
+            None
+        }
+      case None             => None
+  }
 
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
     metadataLocations.keySet.filter(f)
@@ -82,17 +99,19 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
   }
  
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
-    val dir = metadataLocations.getOrElse(desc, newRandomDir(baseDir))
-    metadataLocations += (desc -> dir)
+    logger.debug("Updating metadata for " + desc)
+    metadataLocations.get(desc) map { dir =>
+      metadataLocations += (desc -> dir)
 
-    stageNext(dir, metadata) flatMap { 
-      case Success(_) => 
-        stagePrev(dir) flatMap {
-          case Success(_)     => rotateCurrent(dir)
-          case f @ Failure(_) => IO(f)
-        }
-      case f @ Failure(_) => IO(f)
-    }
+      stageNext(dir, metadata) flatMap { 
+        case Success(_) => 
+          stagePrev(dir) flatMap {
+            case Success(_)     => rotateCurrent(dir)
+            case f @ Failure(_) => IO(f)
+          }
+        case f @ Failure(_) => IO(f)
+      }
+    } getOrElse IO(Failure(new IllegalStateException("Metadata update on missing projection for " + desc)))
   }
 
   private def newRandomDir(parent: File): File = {
@@ -168,6 +187,21 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     MetadataRecord(metadata, VectorClock.empty)
   }
 
+  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): Validation[Throwable, Unit] = {
+    val df = new File(baseDir, descriptorName)
+
+    if (df.exists) Failure(new java.io.IOException("Serialized projection descriptor already exists for " + desc + " in " + baseDir))
+    else Validation.fromTryCatch {
+      val writer = new FileWriter(df)
+
+      try {
+        writer.write(Printer.pretty(Printer.render(desc.serialize)))
+      } finally {
+        writer.close()
+      }
+    }
+  }
+
   private def stageNext(dir: File, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
     val json = Printer.pretty(Printer.render(metadata.serialize))
     val next = new File(dir, nextFilename)
@@ -227,7 +261,7 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
     Success(())
   }
 
-  def findDescriptorRoot(desc: ProjectionDescriptor): Option[File] = None
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = None
   
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
     data.keySet.filter(f)

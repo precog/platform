@@ -22,7 +22,7 @@ import scalaz.syntax.apply._
 
 
 object ZookeeperSystemCoordination {
-  val defaultRetries = 20
+  val defaultRetries = 45
   val defaultDelay = 1000
 
   val initialSequenceId = 0
@@ -136,10 +136,11 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
           zkc.createPersistent(base, true)
         }
         zkc.createEphemeral(activePath)
+        logger.info("Acquired lock")
         Success(())
       } else {
         Thread.sleep(delay)
-        logger.debug("Active path [%s] already registered, retrying in case of stale registration.".format(base))
+        logger.debug("Active path [%s] already registered, retrying in case of stale registration.(%d remain)".format(base, retries))
         acquireActivePath(base, retries - 1, delay)
       }
     }
@@ -209,7 +210,7 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
           val bytes = zkc.readData(checkpointPath).asInstanceOf[Array[Byte]]
           if (bytes != null && bytes.length != 0) {
             val checkpoint = fromNodeData(bytes).validated[YggCheckpoint]
-            logger.debug("%s: RESTORED".format(checkpoint))
+            logger.debug("yggCheckpoint %s: RESTORED".format(checkpoint))
             checkpoint
           } else {
             Failure(Invalid("No checkpoint information found in Zookeeper!"))

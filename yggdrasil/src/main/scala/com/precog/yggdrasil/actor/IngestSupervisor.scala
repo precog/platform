@@ -55,19 +55,24 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
   private var errors = 0
 
   override def preStart() = {
+    logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
     scheduleIngestRequest(Duration.Zero)
+    logger.info("Initial ingest request scheduled")
   }
 
   def receive = {
     case Status =>
+      logger.debug("Ingest supervisor status")
       sender ! status
 
     case IngestErrors(messages) => 
+      logger.error("Error on ingest: " + messages)
       errors += 1
       messages.foreach(logger.error(_))
       scheduleIngestRequest(idleDelay)
 
     case IngestData(messages)   => 
+      logger.debug("Ingesting messages: " + messages)
       processed += 1
       if (messages.isEmpty) {
         scheduleIngestRequest(idleDelay)
@@ -92,7 +97,7 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
 
   private def scheduleIngestRequest(delay: Duration): Unit = {
     initiated += 1
-    scheduler.scheduleOnce(delay, ingestActor, GetMessages)
+    scheduler.scheduleOnce(delay, ingestActor, GetMessages(self))
   }
 }
 

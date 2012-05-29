@@ -39,7 +39,7 @@ trait ActorEcosystemConfig extends BaseConfig {
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
   implicit def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
-  def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 5) minutes
+  def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }

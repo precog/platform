@@ -57,9 +57,13 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
                                    metadataActor :: 
                                    projectionsActor :: Nil
   val ingestActor = {
+    logger.info("Starting ingest actor")
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
     actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
   }
+
+  logger.info("Starting ingest supervisor")
+  logger.debug("Ingest supervisor = " + ingestSupervisor)
 
   //
   // Internal only actors
