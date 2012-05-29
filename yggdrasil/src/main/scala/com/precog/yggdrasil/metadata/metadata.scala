@@ -161,8 +161,10 @@ class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDisp
   def findProjections(path: Path, selector: JPath) = 
     actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] } onFailure { case e => logger.error("Error finding projections for " + (path, selector), e) }
   
-  def findPathMetadata(path: Path, selector: JPath) = 
+  def findPathMetadata(path: Path, selector: JPath) = {
+    logger.debug("Querying actor for path metadata")
     actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] } onFailure { case e => logger.error("Error finding pathmetadata for " + (path, selector), e) }
+  }
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } onFailure { case e => logger.error("Error closing ActorStorageMetadata", e) }
 
