@@ -68,7 +68,7 @@ case class ProjectionInsertsExpected(projections: Int)
  *    the most important component of this state is the offset.
  */
 class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordination, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, ingestEnabled: Boolean,
-                            fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 30 seconds, 
+                            fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 120 seconds, 
                             maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
   import KafkaBatchHandler._
@@ -96,7 +96,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       // the minimum value in the ingest cache is complete, so
       // all pending checkpoints from batches earlier than the
       // specified checkpoint can be flushed
-      logger.debug("Complete insert. Head = %s, completed = %s".format(ingestCache.head, checkpoint))
+      //logger.debug("Complete insert. Head = %s, completed = %s".format(ingestCache.head, checkpoint))
       if (ingestCache.head._1 == checkpoint) {
         // reset failures count here since this state means that we've made forward progress
         totalConsecutiveFailures = 0
@@ -130,7 +130,6 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       }
 
     case GetMessages(requestor) => 
-      logger.debug("GetMessages request from " + requestor)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
           readRemote(lastCheckpoint) match {

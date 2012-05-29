@@ -85,17 +85,18 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
       sender ! status
 
     case IngestErrors(messages) => 
-      logger.error("Error on ingest: " + messages)
+      //logger.error("Error on ingest: " + messages)
       errors += 1
       messages.foreach(logger.error(_))
       scheduleIngestRequest(idleDelay)
 
     case IngestData(messages)   => 
-      logger.debug("Ingesting messages: " + messages)
+      //logger.debug("Ingesting messages: " + messages)
       processed += 1
       if (messages.isEmpty) {
         scheduleIngestRequest(idleDelay)
       } else {
+        logger.debug("Ingesting " + messages.size + " messages")
         processMessages(messages, sender)
         scheduleIngestRequest(Duration.Zero)
       }
@@ -110,6 +111,7 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
   private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
     val inserts = routingTable.batchMessages(messages)
 
+    logger.debug("Sending " + inserts.size + " insert")
     batchCoordinator ! ProjectionInsertsExpected(inserts.size)
     for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
   }

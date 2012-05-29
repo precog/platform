@@ -214,20 +214,25 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
 
   override def preStart(): Unit = {
     logger.info("Loading yggCheckpoint")
-    val (messageClock, kafkaOffset) = checkpointCoordination.loadYggCheckpoint(shardId) match {
-      case Some(Success(checkpoint)) =>
-        (checkpoint.messageClock, Some(checkpoint.offset))
+    try {
+      val (messageClock, kafkaOffset) = checkpointCoordination.loadYggCheckpoint(shardId) match {
+        case Some(Success(checkpoint)) =>
+          (checkpoint.messageClock, Some(checkpoint.offset))
 
-      case Some(Failure(errors)) =>
-        // TODO: This could be normal state on the first startup of a shard
-        sys.error("Unable to load Kafka checkpoint: " + errors)
+        case Some(Failure(errors)) =>
+          // TODO: This could be normal state on the first startup of a shard
+          sys.error("Unable to load Kafka checkpoint: " + errors)
 
-      case None =>
-        (VectorClock.empty, None)
-    } 
-    logger.info("MetadataActor yggCheckpoint load complete")
+        case None =>
+          logger.warn("No checkpoint loaded")
+          (VectorClock.empty, None)
+      } 
+      logger.info("MetadataActor yggCheckpoint load complete")
     
-    state = new MetadataActor.State(metadataStorage, messageClock, kafkaOffset)
+      state = new MetadataActor.State(metadataStorage, messageClock, kafkaOffset)
+    } catch {
+      case e => logger.error("Failure on yggCheckpoint load:" + e); throw e
+    }
   }
 
   def receive = {
