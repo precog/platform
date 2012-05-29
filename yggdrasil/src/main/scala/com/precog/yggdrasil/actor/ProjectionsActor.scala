@@ -92,7 +92,7 @@ trait ProjectionsActorModule[Dataset[_]] {
       case AcquireProjection(descriptor) =>
         logger.debug("Acquiring projection for " + descriptor)
         val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, false)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
           projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
@@ -109,20 +109,22 @@ trait ProjectionsActorModule[Dataset[_]] {
         released(descriptor)
       
       case ProjectionInsert(descriptor, inserts) =>
-        logger.debug("Inserting into projection for " + descriptor)
-        val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
+        val coordinator = sender
+        logger.debug(coordinator + " is inserting into projection for " + descriptor)
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, true)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
           projection(dir.asInstanceOf[Option[File]], descriptor) match {
             case Success(p) =>
+              logger.debug("Reserving " + descriptor + " in " + dir)
               reserved(p.descriptor)
-            // Spawn a new short-lived insert actor for the projection and send a batch insert
-            // request to it so that any IO involved doesn't block queries from obtaining projection
-            // references. This could alternately be a single actor, but this design conforms more closely
-            // to 'error kernel' or 'let it crash' style.
-            context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, mySender)
+              // Spawn a new short-lived insert actor for the projection and send a batch insert
+              // request to it so that any IO involved doesn't block queries from obtaining projection
+              // references. This could alternately be a single actor, but this design conforms more closely
+              // to 'error kernel' or 'let it crash' style.
+              context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, coordinator)
 
             case Failure(error) => 
-              mySender ! ProjectionError(descriptor, error)
+              logger.error("Could not load projection: " + error)
+              coordinator ! ProjectionError(descriptor, error)
           }
         }
     }
@@ -157,8 +159,10 @@ trait ProjectionsActorModule[Dataset[_]] {
 
     def receive = {
       case BatchInsert(rows, replyTo) =>
+        logger.debug("Inserting " + rows)
         insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
+        logger.debug("Notifying coordinator")
         replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
         self    ! PoisonPill
     }

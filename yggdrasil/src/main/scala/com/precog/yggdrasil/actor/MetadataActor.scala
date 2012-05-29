@@ -58,6 +58,8 @@ object MetadataActor {
     def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
     def saveMessage = SaveMetadata(fullDataFor(dirty), messageClock, kafkaOffset)
+
+    def undirty(clean: Set[ProjectionDescriptor]) { dirty --= clean }
    
     // TODO: This feels like too much mixing between inter-related classes
     def fullDataFor(projs: Set[ProjectionDescriptor]): Map[ProjectionDescriptor, ColumnMetadata] = {
@@ -211,6 +213,7 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
   private var state: MetadataActor.State = _
 
   override def preStart(): Unit = {
+    logger.info("Loading yggCheckpoint")
     val (messageClock, kafkaOffset) = checkpointCoordination.loadYggCheckpoint(shardId) match {
       case Some(Success(checkpoint)) =>
         (checkpoint.messageClock, Some(checkpoint.offset))
@@ -222,6 +225,7 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
       case None =>
         (VectorClock.empty, None)
     } 
+    logger.info("MetadataActor yggCheckpoint load complete")
     
     state = new MetadataActor.State(metadataStorage, messageClock, kafkaOffset)
   }
@@ -236,17 +240,23 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
       state.messageClock = state.messageClock |+| batchClock
       state.kafkaOffset = batchOffset orElse state.kafkaOffset
    
-    case msg @ FindChildren(path)                   => logger.info(msg.toString); sender ! state.findChildren(path)
+    case msg @ FindChildren(path)                       => logger.info(msg.toString); sender ! state.findChildren(path)
     
-    case msg @ FindSelectors(path)                  => logger.info(msg.toString); sender ! state.findSelectors(path)
+    case msg @ FindSelectors(path)                      => logger.info(msg.toString); sender ! state.findSelectors(path)
 
-    case msg @ FindDescriptors(path, selector)      => logger.info(msg.toString); sender ! state.findDescriptors(path, selector)
+    case msg @ FindDescriptors(path, selector)          => logger.info(msg.toString); sender ! state.findDescriptors(path, selector)
 
-    case msg @ FindPathMetadata(path, selector)     => logger.info(msg.toString); sender ! state.findPathMetadata(path, selector)
+    case msg @ FindPathMetadata(path, selector)         => logger.info(msg.toString); sender ! state.findPathMetadata(path, selector)
 
-    case msg @ FindDescriptorRoot(descriptor)       => logger.info(msg.toString); sender ! metadataStorage.findDescriptorRoot(descriptor)
+    case msg @ FindDescriptorRoot(descriptor, createOk) => logger.info(msg.toString); sender ! metadataStorage.findDescriptorRoot(descriptor, createOk)
     
-    case msg @ FlushMetadata(serializationActor)    => logger.info(msg.toString); serializationActor.tell(state.saveMessage, sender)
+    case msg @ FlushMetadata(serializationActor)        => logger.info(msg.toString); serializationActor ! state.saveMessage
+
+    case msg @ MetadataSaved(clean)                     => logger.info(msg.toString); state.undirty(clean)
+    
+    case MetadataSaveFailed(errors)                     => logger.error("Error saving metadata: " + errors)
+
+    case msg @ GetCurrentCheckpoint                     => logger.info(msg.toString); sender ! YggCheckpoint(state.kafkaOffset.getOrElse(0l), state.messageClock) // TODO: Make this safe
   }
 }
 
@@ -305,7 +315,9 @@ case class FindChildren(path: Path) extends ShardMetadataAction
 case class FindSelectors(path: Path) extends ShardMetadataAction
 case class FindDescriptors(path: Path, selector: JPath) extends ShardMetadataAction
 case class FindPathMetadata(path: Path, selector: JPath) extends ShardMetadataAction
-case class FindDescriptorRoot(desc: ProjectionDescriptor) extends ShardMetadataAction
+case class FindDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean) extends ShardMetadataAction
+case class MetadataSaved(saved: Set[ProjectionDescriptor]) extends ShardMetadataAction
+case object GetCurrentCheckpoint
 
 case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
 case class FlushMetadata(serializationActor: ActorRef) extends ShardMetadataAction

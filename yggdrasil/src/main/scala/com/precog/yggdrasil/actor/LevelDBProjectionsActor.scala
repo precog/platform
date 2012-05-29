@@ -79,7 +79,9 @@ trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDatas
             }
           }
 
-        case None => Failure(new java.io.FileNotFoundException("Could not locate base for " + descriptor))
+        case None => 
+          logger.error("No base for projection")
+          Failure(new java.io.FileNotFoundException("Could not locate base for " + descriptor))
       }
 
       protected def reserved(descriptor: ProjectionDescriptor): Unit = {
