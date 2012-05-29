@@ -25,7 +25,8 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 import blueeyes.json.xschema.DefaultSerialization._
 
-import java.io.FileReader
+import java.io._
+import scala.io.Source
 
 import com.precog.common._
 import com.precog.common.security._
@@ -34,9 +35,11 @@ object TokenTrans {
   def main(args: Array[String]) {
     val input = args(0)
 
-    val reader = new FileReader(input)
+    val source = Source.fromFile(input)
+    val tokenOutput = new FileWriter(input + ".newtokens")
+    val grantOutput = new FileWriter(input + ".newgrants")
     try {
-      val JArray(oldTokens) = JsonParser.parse(reader)
+      val oldTokens = source.getLines.map(JsonParser.parse(_)).toList
 
       val output = process(oldTokens)
 
@@ -44,14 +47,15 @@ object TokenTrans {
       val grants = output.values.flatten
 
       for (token <- tokens) {
-        println(compact(render(token.serialize(Token.UnsafeTokenDecomposer))))
+        tokenOutput.write(compact(render(token.serialize(Token.UnsafeTokenDecomposer))) + "\n")
       }
-      println("############")
       for (grant <- grants) {
-        println(compact(render(grant.serialize(Grant.UnsafeGrantDecomposer))))
+        grantOutput.write(compact(render(grant.serialize(Grant.UnsafeGrantDecomposer))) + "\n")
       }
     } finally {
-      reader.close()
+      source.close()
+      tokenOutput.close()
+      grantOutput.close()
     }
   }
 
@@ -70,12 +74,15 @@ object TokenTrans {
         }
         
         val writeGrants = Set( 
-          Grant(newGrantID, Some("write_parent"), WritePermission(Path(path), None)),
-          Grant(newGrantID, Some("owner_parent"), OwnerPermission(Path(path), None))
+          //Grant(newGrantID, Some("write_parent"), WritePermission(Path(path), None)),
+          //Grant(newGrantID, Some("owner_parent"), OwnerPermission(Path(path), None))
+          Grant(newGrantID, None, WritePermission(Path(path), None)),
+          Grant(newGrantID, None, OwnerPermission(Path(path), None))
         )
 
         val readGrants = Set(
-          Grant(newGrantID, Some("read_parent"), ReadPermission(Path(path), uid, None))
+          //Grant(newGrantID, Some("read_parent"), ReadPermission(Path(path), uid, None))
+          Grant(newGrantID, None, ReadPermission(Path(path), uid, None))
         )
 
         val grants = if (writePermission == JNothing) readGrants else readGrants ++ writeGrants
