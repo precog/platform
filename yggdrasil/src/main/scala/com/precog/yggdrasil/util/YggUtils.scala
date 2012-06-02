@@ -613,6 +613,8 @@ object IngestTools extends Command {
       intOpt("s", "limit", "<sync-limit-messages>", "if sync is greater than the specified limit an error will occur", {s: Int => config.limit = s})
       intOpt("l", "lag", "<time-lag-minutes>", "if update lag is greater than the specified value an error will occur", {l: Int => config.lag = l})
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
+      opt("c", "shardpath", "The shard's ZK path", { s: String => config.shardZkPath = s })
+      opt("r", "relaypath", "The relay's ZK path", { s: String => config.relayZkPath = s })
     }
     if (parser.parse(args)) {
       val conn = new ZkConnection(config.zkConn)
@@ -631,8 +633,8 @@ object IngestTools extends Command {
   val relayAgentPath = "/test/com/precog/ingest/v1/relay_agent/qclus-demo01"
 
   def process(conn: ZkConnection, client: ZkClient, config: Config) {
-    val relayRaw = getJsonAt(relayAgentPath, client).getOrElse(sys.error("Error reading relay agent state"))
-    val shardRaw = getJsonAt(shardCheckpointPath, client).getOrElse(sys.error("Error reading shard state"))
+    val relayRaw = getJsonAt(config.relayZkPath, client).getOrElse(sys.error("Error reading relay agent state"))
+    val shardRaw = getJsonAt(config.shardZkPath, client).getOrElse(sys.error("Error reading shard state"))
 
     val relayState = relayRaw.deserialize[EventRelayState]  
     val shardState = shardRaw.deserialize[YggCheckpoint]
@@ -688,7 +690,9 @@ object IngestTools extends Command {
   
   class Config(var limit: Int = 0,
                var lag: Int = 60,
-               var zkConn: String = "localhost:2181")
+               var zkConn: String = "localhost:2181",
+               var shardZkPath: String = "/",
+               var relayZkPath: String = "/")
 }
 
 object ImportTools extends Command {
