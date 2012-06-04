@@ -54,7 +54,6 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
 
     private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset[SValue]] = {
       logger.debug("Full projection future on %s for %s from %s".format(path, userUID, storage))
-      Thread.dumpStack()
       for {
         pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
         dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
