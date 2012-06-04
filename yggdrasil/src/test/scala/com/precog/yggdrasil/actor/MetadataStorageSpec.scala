@@ -76,6 +76,7 @@ class MetadataStorageSpec extends Specification {
   "metadata storage" should {
     "safely update metadata" in new metadataStore {
       // First write to add initial data
+      ms.findDescriptorRoot(desc, true)
       ms.updateMetadata(desc, testRecord).unsafePerformIO
       
       // Second write to force an update
@@ -84,7 +85,7 @@ class MetadataStorageSpec extends Specification {
         case Success(()) => ok
       }
 
-      ms.findDescriptorRoot(desc) map { descBase =>
+      ms.findDescriptorRoot(desc, true) map { descBase =>
         // Our first write would have added offsets 0-1
         fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
         fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue 
@@ -95,13 +96,14 @@ class MetadataStorageSpec extends Specification {
     }
 
     "safely update metadata not current" in new metadataStore {
+      ms.findDescriptorRoot(desc, true)
       val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
 
       result must beLike {
         case Success(()) => ok
       }
 
-      ms.findDescriptorRoot(desc) map { descBase =>
+      ms.findDescriptorRoot(desc, true) map { descBase =>
         fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
         fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
       } getOrElse {
@@ -111,6 +113,7 @@ class MetadataStorageSpec extends Specification {
 
     "correctly read metadata" in new metadataStore {
       // Add metadata in first
+      ms.findDescriptorRoot(desc, true)
       ms.updateMetadata(desc, testRecord).unsafePerformIO
 
       val result = ms.currentMetadata(desc).unsafePerformIO
