@@ -36,6 +36,7 @@ class MetadataStorageActor(shardId: String, storage: MetadataStorage, checkpoint
   def receive = {
     // TODO: Does it make any sense to save metadata *without* a checkpoint?
     case SaveMetadata(metadata, messageClock, kafkaOffset) => 
+      logger.debug("About to save metadata %s at %s : %s".format(metadata.toString, messageClock.toString, kafkaOffset.toString)) 
       val replyTo = sender
       val io: List[IO[Validation[Throwable, Unit]]] = 
         metadata.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) })(collection.breakOut)

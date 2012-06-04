@@ -220,7 +220,6 @@ class MetadataActor(shardId: String, metadataStorage: MetadataStorage, checkpoin
     case Status => sender ! state.status
 
     case IngestBatchMetadata(patch, batchClock, batchOffset) => 
-      println("Updating metadata")
       state.projections = state.projections |+| patch
       state.dirty = state.dirty ++ patch.keySet
       state.messageClock = state.messageClock |+| batchClock
