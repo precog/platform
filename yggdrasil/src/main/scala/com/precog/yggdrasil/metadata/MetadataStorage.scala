@@ -111,7 +111,9 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
           }
         case f @ Failure(_) => IO(f)
       }
-    } getOrElse IO(Failure(new IllegalStateException("Metadata update on missing projection for " + desc)))
+    } getOrElse {
+      IO(Failure(new IllegalStateException("Metadata update on missing projection for " + desc)))
+    }
   }
 
   private def newRandomDir(parent: File): File = {
