@@ -101,7 +101,19 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
 
   def readValue(in: DataInputStream, structure: Seq[(JPath, CType)]): SValue = {
     structure.foldLeft(Option.empty[SValue]) {
-      case (None     , (JPath.Identity, ctype)) => Some(readColumn(in, ctype).toSValue)
+      case (None     , (JPath.Identity, ctype)) => {
+        val back = readColumn(in, ctype)
+        if (back eq null) {
+          ctype match {
+            case CEmptyObject => Some(SObject.Empty)
+            case CEmptyArray => Some(SArray.Empty)
+            case _ => Some(SNull)
+          }
+        } else {
+          Some(back.toSValue)
+        }
+      }
+    
       case (None     , (jpath, ctype))          => 
         jpath.nodes match {
           case JPathIndex(_) :: xs => SArray(Vector()).set(jpath, readColumn(in, ctype))

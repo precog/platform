@@ -91,7 +91,8 @@ sealed trait SValue {
     case _ => None
   }
   
-  def set(selector: JPath, cv: CValue): Option[SValue] = set(selector, cv.toSValue)
+  def set(selector: JPath, cv: CValue): Option[SValue] =
+    if (cv eq null) None else set(selector, cv.toSValue)
   
   def structure: Seq[(JPath, CType)] = {
     import SValue._
