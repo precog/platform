@@ -37,6 +37,8 @@ import akka.actor.{Actor, ActorSystem, Props}
 import akka.dispatch._
 import akka.util._
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.collection.immutable.ListMap
 import scala.collection.GenTraversableOnce
 
@@ -54,9 +56,10 @@ object MetadataActorSpec extends Specification with FutureMatchers {
       val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor1")
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor1") 
       
-      val result = for {
-        _ <- testActor ? FlushMetadata(captureActor)
-        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])]
+      testActor ! FlushMetadata(captureActor)
+      Thread.sleep(100)
+      val result = for { 
+        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
       } yield r
 
       result must whenDelivered {
@@ -86,9 +89,10 @@ object MetadataActorSpec extends Specification with FutureMatchers {
 
       testActor ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
 
-      val result = for {
-        _ <- testActor ? FlushMetadata(captureActor) 
-        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])]
+      testActor ! FlushMetadata(captureActor) 
+      Thread.sleep(100)
+      val result = for { 
+        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
       } yield r
 
       result must whenDelivered {
@@ -116,19 +120,22 @@ class TestMetadataActor extends MetadataActor("TestMetadataActor", new TestMetad
 
 case object GetCaptureResult
 
-class CaptureActor extends Actor {
+class CaptureActor extends Actor with Logging {
   var saveMetadataCalls = Vector[SaveMetadata]()
   var otherCalls = Vector[Any]()
 
   def receive = {
-    case sm : SaveMetadata => 
+    case sm @ SaveMetadata(metadata, messageClock, kafkaOffset) => 
+      logger.debug("Capture actor received save request for %s at %s : %s".format(metadata.toString, messageClock.toString, kafkaOffset.toString) + " from sender " + sender) 
       saveMetadataCalls = saveMetadataCalls :+ sm
       sender ! ()
 
     case GetCaptureResult => 
+      logger.debug("Capture acture got request for results.")
       sender ! ((saveMetadataCalls, otherCalls))
 
     case other                   => 
+      logger.warn("Got unexpected message " + other + " in capture actor")
       otherCalls = otherCalls :+ other
   }
 }
