@@ -57,7 +57,7 @@ object MetadataActorSpec extends Specification with FutureMatchers {
       val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor1") 
       
       testActor ! FlushMetadata(captureActor)
-      Thread.sleep(100)
+      Thread.sleep(1000)
       val result = for { 
         r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
       } yield r
@@ -90,7 +90,7 @@ object MetadataActorSpec extends Specification with FutureMatchers {
       testActor ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
 
       testActor ! FlushMetadata(captureActor) 
-      Thread.sleep(100)
+      Thread.sleep(1000)
       val result = for { 
         r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
       } yield r
