@@ -16,3 +16,5 @@ scalaz
 *~
 quirrel/examples
 hs_err_pid*log
+tools/lib/*
+
