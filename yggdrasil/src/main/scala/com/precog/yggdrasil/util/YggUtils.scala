@@ -47,8 +47,8 @@ import collection.JavaConversions._
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
-import blueeyes.json.Printer
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
@@ -327,7 +327,7 @@ object ChownTools extends Command {
     descs.foreach {
       case (f, proj) =>
         val pd = new File(f, projectionDescriptor)
-        val output = Printer.pretty(Printer.render(proj.serialize))
+        val output = pretty(render(proj.serialize))
         if(dryrun) {
           println("Replacing %s with\n%s".format(pd, output)) 
         } else {
@@ -477,7 +477,7 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       val event = codec.toEvent(msg.message)
       println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-      println(Printer.pretty(Printer.render(event.data)))
+      println(pretty(render(event.data)))
     }
   }
 
@@ -488,7 +488,7 @@ object KafkaTools extends Command {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
-          println(Printer.pretty(Printer.render(data)))
+          println(pretty(render(data)))
         case _ =>
       }
     }
@@ -792,7 +792,7 @@ object ImportTools extends Command {
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
-    var token: String = TestTokenManager.rootUID,
+    var token: TokenID = "root",
     var verbose: Boolean = false 
   )
 }
@@ -824,7 +824,7 @@ object CSVTools extends Command {
 
   def process(config: Config) {
     CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps, config.verbose).foreach {
-      case jval => println(Printer.compact(Printer.render(jval)))
+      case jval => println(compact(render(jval)))
     }
   }
 
@@ -835,6 +835,7 @@ object CSVTools extends Command {
     var verbose: Boolean = false)
 }
 
+
 object TokenTools extends Command with AkkaDefaults {
   val name = "tokens"
   val description = "Token management utils"
@@ -844,7 +845,8 @@ object TokenTools extends Command with AkkaDefaults {
     val parser = new OptionParser("yggutils csv") {
       opt("l","list","List tokens", { config.list = true })
 //      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
-      opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
+      opt("n","new","New customer account at path", { s: String => config.path = Some(s) })
+      opt("a","name","Human-readable name for new token", { s: String => config.newTokenName = s })
       opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
       opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
       opt("t","tokens","Tokens collection name", {s: String => config.collection = s }) 
@@ -863,7 +865,7 @@ object TokenTools extends Command with AkkaDefaults {
     val tm = tokenManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
 //                  config.listChildren.map(listChildren(_, tm)) ++
-                  config.newAccount.map(create(_, config.root, tm)) ++
+                  config.path.map(p => create(config.newTokenName, Path(p), config.root, tm)) ++
                   config.delete.map(delete(_, tm))
 
     Future.sequence(actions) onComplete {
@@ -908,10 +910,24 @@ object TokenTools extends Command with AkkaDefaults {
 //    }
 //  }
 
-  def create(p: String, root: String, tokenManager: TokenManager) = sys.error("todo") 
-//    val perms = TestTokenManager.standardAccountPerms(p)
-//    tokenManager.issueNew(Some(root), perms, Set.empty, false)
-//  }
+  def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
+    for {
+      token <- tokenManager.newToken(tokenName, Set())
+      val ownerGrant: Future[Grant] = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant: Future[Grant]  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant: Future[Grant] = tokenManager.newGrant(None, WritePermission(path, None))
+      grants <- Future.sequence(List[Future[Grant]](ownerGrant, readGrant, writeGrant))
+      result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
+    } yield {
+      result match {
+        case Some(token) =>
+          println("Successfully created token: \n" + pretty(render(token.serialize)))
+
+        case None =>
+          sys.error("Something went silently wrong in token or grant creation or update, please investigate.")
+      }
+    }
+  }
 
   def delete(t: String, tokenManager: TokenManager) = sys.error("todo")
 //    for (Some(token) <- tokenManager.findToken(t); t <- tokenManager.deleteToken(token)) yield {
@@ -922,8 +938,9 @@ object TokenTools extends Command with AkkaDefaults {
   
   class Config {
     var delete: Option[String] = None
-    var newAccount: Option[String] = None
-    var root: String = TestTokenManager.rootUID
+    var path: Option[String] = None
+    var newTokenName: String = ""
+    var root: TokenID = "root"
     var list: Boolean = false
     var listChildren: Option[String] = None
     var database: String = "auth_v1"
@@ -931,25 +948,22 @@ object TokenTools extends Command with AkkaDefaults {
     var deleted: Option[String] = None
     var servers: String = "localhost" 
 
-    def deletedCollection(): String = {
+    def deletedCollection: String = {
       deleted.getOrElse( collection + "_deleted" )
     }
 
-    def mongoSettings(): MongoTokenManagerSettings = MongoTokenManagerSettings(
-      tokens = collection, deletedTokens = deletedCollection
+    def mongoSettings: MongoTokenManagerSettings = MongoTokenManagerSettings(
+      tokens = collection, 
+      deletedTokens = deletedCollection
     )
 
-    def mongoConfig(): Configuration = {
-      Configuration.parse("servers = %s".format(mongoServers()))
+    def mongoConfig: Configuration = {
+      Configuration.parse("servers = %s".format(mongoServers))
     }
 
-    def mongoServers(): String = {
+    def mongoServers: String = {
       val s = servers.trim
-      if(s.startsWith("[") && s.endsWith("]")) {
-        s
-      } else {
-        "[" + s + "]"
-      }
+      if (s.startsWith("[") && s.endsWith("]")) s else "[" + s + "]"
     }
   }
 }
