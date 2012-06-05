@@ -48,7 +48,11 @@ extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[J
             try { 
               for {
                 event <- futureContent
-                _ <- eventStore.save(Event.fromJValue(p, event, t.tid), insertTimeout)
+                _ <- { 
+                  val eventInstance = Event.fromJValue(p, event, t.tid)
+                  logger.trace("Saving event: " + eventInstance)
+                  eventStore.save(eventInstance, insertTimeout)
+                }
               } yield {
                 // could return the eventId to the user?
                 HttpResponse[JValue](OK)
