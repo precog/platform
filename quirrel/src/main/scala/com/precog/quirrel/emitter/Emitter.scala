@@ -5,7 +5,7 @@ import com.precog.quirrel.Solver
 import com.precog.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.precog.bytecode.{Instructions}
 
-import scalaz.{StateT, Id, Identity, Bind, Monoid}
+import scalaz.{StateT, Id, Bind, Monoid}
 import scalaz.Scalaz._
 
 trait Emitter extends AST

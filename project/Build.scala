@@ -25,7 +25,18 @@ object PlatformBuild extends Build {
   )
   
   val commonSettings = Seq(
-    scalacOptions ++= Seq())
+    organization := "com.precog",
+    scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
+    scalaVersion := "2.9.2",
+    libraryDependencies ++= Seq(
+      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"        % "1.0.7",
+      "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
+      "org.scala-tools.testing"     %  "scalacheck_2.9.1"   % "1.9" % "test",
+      "org.specs2"                  %  "specs2_2.9.1"       % "1.8" % "test"
+    )
+  )
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
   

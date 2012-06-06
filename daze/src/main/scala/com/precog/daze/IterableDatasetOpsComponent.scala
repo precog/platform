@@ -13,7 +13,7 @@ import akka.util.duration._
 import blueeyes.util.Clock
 
 import scala.annotation.tailrec
-import scalaz.{NonEmptyList => NEL, Identity => _, _}
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.Ordering._
 import scalaz.effect._
 import scalaz.syntax.semigroup._

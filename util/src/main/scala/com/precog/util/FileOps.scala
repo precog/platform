@@ -8,21 +8,25 @@ import scalaz.effect._
 trait FileOps {
   def exists(src: File): Boolean
 
-  def rename(src: File, dest: File): Unit
-  def copy(src: File, dest: File): IO[Validation[Throwable, Unit]]
+  def rename(src: File, dest: File): IO[Boolean]
+  def copy(src: File, dest: File): IO[Unit]
 
-  def read(src: File): IO[Option[String]]
-  def write(dest: File, content: String): IO[Validation[Throwable, Unit]]
+  def read(src: File): IO[String]
+  def write(dest: File, content: String): IO[Unit]
+
+  def mkdir(dir: File): IO[Boolean]
 }
 
 trait FilesystemFileOps extends FileOps {
-  def exists(src: File) = src.exists
+  def exists(src: File) = src.exists()
 
-  def rename(src: File, dest: File) { src.renameTo(dest) }
+  def rename(src: File, dest: File) = IO { src.renameTo(dest) }
   def copy(src: File, dest: File) = IOUtils.copyFile(src, dest) 
 
   def read(src: File) = IOUtils.readFileToString(src) 
   def write(dest: File, content: String) = IOUtils.writeToFile(content, dest)
+
+  def mkdir(dir: File): IO[Boolean] = IO { dir.mkdirs() }
 }
 
 

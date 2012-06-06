@@ -25,6 +25,8 @@ import blueeyes.json.Printer
 import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
+import scalaz.effect.IO
+
 object ShardTestInit extends App {
 
   val dir = new File("./data") 
@@ -59,22 +61,25 @@ object ShardTestInit extends App {
     val filename = parts(1)
     val path = parts(0)
 
-    val data = IOUtils.rawReadFileToString(new File(filename))
-    val json = JsonParser.parse(data)
+    IOUtils.readFileToString(new File(filename)).map { data =>
+      val json = JsonParser.parse(data)
 
-    val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty
+      val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty
 
-    json match {
-      case JArray(elements) => 
-        val fut = shard.storeBatch(elements.map{ value =>
-          println(Printer.compact(Printer.render(value)))
-          EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, value, emptyMetadata))
-        }, timeout)
-        Await.result(fut, Duration(30, "seconds")) 
-      case single           =>
-        val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, single, emptyMetadata)), timeout)
-        Await.result(fut, Duration(30, "seconds")) 
-    } 
+      json match {
+        case JArray(elements) => 
+          val fut = shard.storeBatch(elements.map{ value =>
+            println(Printer.compact(Printer.render(value)))
+            EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, value, emptyMetadata))
+          }, timeout)
+          Await.result(fut, Duration(30, "seconds")) 
+        case single           =>
+          val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, single, emptyMetadata)), timeout)
+          Await.result(fut, Duration(30, "seconds")) 
+      }
+    } except {
+      err => println(err); IO(())
+    } unsafePerformIO
   }
 
   if(args.length == 0) usage else run(args)

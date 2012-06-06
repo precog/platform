@@ -7,18 +7,11 @@ name := "pandora"
 
 version := "0.0.1-SNAPSHOT"
 
-organization := "com.precog"
-
-scalaVersion := "2.9.1"
-
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
-
 javaOptions ++= Seq("-Xmx1G")
 
 libraryDependencies ++= Seq(
-  "org.sonatype.jline"      % "jline"       % "2.5",
-  "org.specs2" %% "specs2"  % "1.8"         % "test",
-  "org.scala-tools.testing" %% "scalacheck" % "1.9")
+  "org.sonatype.jline"      % "jline"       % "2.5"
+)
 
 mainClass := Some("com.precog.pandora.Console")
 

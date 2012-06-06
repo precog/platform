@@ -17,7 +17,7 @@ import akka.dispatch.{Await, Future}
 import akka.util.duration._
 import blueeyes.json.{JPathField, JPathIndex}
 
-import scalaz.{Identity => _, NonEmptyList => NEL, _}
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.syntax.traverse._
 import scalaz.std.list._

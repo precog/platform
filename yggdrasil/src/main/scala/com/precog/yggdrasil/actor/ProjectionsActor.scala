@@ -29,7 +29,7 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 
 //////////////
 // MESSAGES //
@@ -140,7 +140,7 @@ trait ProjectionsActorModule[Dataset[_]] {
 
     def receive = {
       case BatchInsert(rows, replyTo) =>
-        logger.debug("Inserting " + rows)
+        logger.debug("Inserting " + rows.size)
         insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
         logger.debug("Notifying coordinator")
