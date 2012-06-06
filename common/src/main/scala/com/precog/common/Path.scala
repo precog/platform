@@ -48,6 +48,8 @@ class Path private (val elements: String*) {
 
   def equalOrChild(that: Path) = !(that - this).isEmpty
 
+  def isChildOf(that: Path) = that.elements.startsWith(elements) && that.length > length
+
   def rollups(depth: Int): List[Path] = this :: ancestors.take(depth) 
 
   override def equals(that: Any) = that match {

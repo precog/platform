@@ -27,6 +27,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import blueeyes.json.Printer
 import blueeyes.json.JsonParser
+import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
@@ -46,8 +47,25 @@ trait MetadataStorage {
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File]
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
   def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T]
-  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] 
+
+  def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
+
+  def findChildren(path: Path): Set[Path] =
+    flatMapDescriptors { descriptor => 
+      descriptor.columns.collect { 
+        case ColumnDescriptor(cpath, cselector, _, _) if cpath.parent.exists(_ == path) => {
+          Path(cpath.elements.last)
+        }
+      }
+    }.toSet
+
+  def findSelectors(path: Path): Seq[JPath] = 
+    flatMapDescriptors { descriptor =>
+      descriptor.columns.collect { 
+        case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
+      }
+    }
 }
 
 object FileMetadataStorage {
@@ -101,7 +119,7 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     metadataLocations.keys.flatMap(f).toSeq
   }
 
-  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = {
+  def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
     import MetadataRecord._
     implicit val extractor = metadataRecordExtractor(desc)
 
@@ -283,18 +301,3 @@ trait MetadataRecordSerialization {
 
 object MetadataRecord extends MetadataRecordSerialization
 
-class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
-  def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
-    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
-  }
-
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO(())
-
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = None
-  
-  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
-    data.keySet.filter(f)
-
-  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
-    data.keySet.toSeq.flatMap(f)
-}

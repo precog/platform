@@ -152,8 +152,14 @@ trait ColumnDescriptorSerialization {
   }
 }
 
-object ColumnDescriptor extends ColumnDescriptorSerialization 
-with ((Path, JPath, CType, Authorities) => ColumnDescriptor)
+object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath, CType, Authorities) => ColumnDescriptor) {
+  implicit object briefShow extends Show[ColumnDescriptor] {
+    def show(d: ColumnDescriptor) = shows(d).toList
+    override def shows(d: ColumnDescriptor) = {
+      "%s::%s (%s)".format(d.path.path, d.selector.toString, d.valueType.toString)
+    }
+  }
+}
 
 
 
@@ -319,6 +325,13 @@ object ProjectionDescriptor extends ProjectionDescriptorSerialization {
   def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
     IOUtils.readFileToString(path).map {
       JsonParser.parse(_).validated[ProjectionDescriptor]
+    }
+  }
+
+  implicit object briefShow extends Show[ProjectionDescriptor] {
+    def show(d: ProjectionDescriptor) = shows(d).toList
+    override def shows(d: ProjectionDescriptor) = {
+      d.columns.map(c => c.show).mkString("Projection: [", ", ", "]")
     }
   }
 }

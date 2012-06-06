@@ -88,18 +88,15 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   // Internal only actors
   //
   
-  private val metadataSerializationActor = 
-    actorSystem.actorOf(Props(new MetadataStorageActor(shardId, metadataStorage, checkpointCoordination)), "metadata_serializer")
-  
   private val metadataSyncCancel = 
-    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata(metadataSerializationActor))
+    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
 
   protected def actorsStopInternal: Future[Unit] = {
     import yggConfig.stopTimeout
 
     def flushMetadata = {
       logger.debug(logPrefix + "Flushing metadata")
-      (metadataActor ? FlushMetadata(metadataSerializationActor)) recover { case e => logger.error("Error flushing metadata", e) }
+      (metadataActor ? FlushMetadata) recover { case e => logger.error("Error flushing metadata.", e) }
     }
 
     metadataSyncCancel.cancel
@@ -108,7 +105,6 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
       _  <- actorStop(ingestActor, "ingest")
       _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
     } yield ()
   }
 }
