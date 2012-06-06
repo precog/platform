@@ -49,7 +49,7 @@ import scalaz.iteratee.Input._
 import scalaz.syntax.plus._
 import scalaz.syntax.monad._
 import scalaz.syntax.applicativePlus._
-import scalaz.syntax.biFunctor
+import scalaz.syntax.bifunctor
 import scalaz.Scalaz._
 import IterateeT._
 

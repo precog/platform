@@ -44,7 +44,7 @@ import scala.collection.GenTraversableOnce
 
 import scalaz.{Success, Validation}
 import scalaz.effect._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 
 object MetadataActorSpec extends Specification with FutureMatchers {
 

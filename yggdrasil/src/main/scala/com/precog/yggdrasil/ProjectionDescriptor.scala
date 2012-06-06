@@ -20,9 +20,11 @@
 package com.precog.yggdrasil
 
 import com.precog.common._
+import com.precog.util.IOUtils
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
+import blueeyes.json.Printer.{pretty,render}
 import blueeyes.json.JPath.{JPathDecomposer, JPathExtractor}
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
@@ -33,10 +35,15 @@ import akka.actor.Actor._
 import akka.routing._
 import akka.dispatch.Future
 
+import java.io.File
+
 import scala.collection.immutable.ListMap
 
 import scalaz._
+import scalaz.effect.IO
 import scalaz.Scalaz._
+import scalaz.syntax.bifunctor._
+import scalaz.ValidationT._
 
 import annotation.tailrec
 
@@ -303,6 +310,16 @@ object ProjectionDescriptor extends ProjectionDescriptorSerialization {
     }
 
     .map(new ProjectionDescriptor(_, indexedColumns, sorting))
+  }
+
+  def toFile(descriptor: ProjectionDescriptor, path: File): IO[Unit] = {
+    IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), path)
+  }
+
+  def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
+    IOUtils.readFileToString(path).map {
+      JsonParser.parse(_).validated[ProjectionDescriptor]
+    }
   }
 }
 

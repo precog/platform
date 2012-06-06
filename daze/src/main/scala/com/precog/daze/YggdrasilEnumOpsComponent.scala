@@ -51,7 +51,7 @@ trait YggEnumOpsConfig extends SortConfig {
 trait YggdrasilEnumOpsComponent extends YggConfigComponent { //with DatasetEnumOpsComponent {
   type YggConfig <: YggEnumOpsConfig
 
-  type Dataset[E] = DatasetEnum[Throwable, E, IO]
+  type Dataset[E] = DatasetEnum[E, IO]
 
   /*
   trait Ops extends DatasetEnumOps {

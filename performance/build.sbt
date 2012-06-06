@@ -26,12 +26,6 @@ name := "performance"
 
 version := "0.0.1-SNAPSHOT"
 
-organization := "com.precog"
-
-scalaVersion := "2.9.1"
-
-scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none")
-
 mainTest := "com.precog.performance.PerformanceSuite"
 
 test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map { (s, cp, os, testName) =>
@@ -55,8 +49,6 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map 
 }
 
 libraryDependencies ++= Seq(
-  "org.scala-tools.testing"     %% "scalacheck"         % "1.9"            % "test",
-  "org.specs2"                  %% "specs2"             % "1.8"            % "test",
   "org.fusesource.leveldbjni"   %  "leveldbjni"         % "1.2-SNAPSHOT"   changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT"   changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT"   changing() 

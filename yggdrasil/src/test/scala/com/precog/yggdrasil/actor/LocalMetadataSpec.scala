@@ -35,7 +35,7 @@ import scala.collection.immutable.ListMap
 import scalaz.{Success, Validation}
 import scalaz.effect._
 import scalaz.syntax.monoid._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 
 import blueeyes.json.JPath
 

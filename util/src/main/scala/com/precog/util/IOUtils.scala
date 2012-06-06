@@ -24,6 +24,8 @@ import java.nio.charset._
 import java.nio.channels._
 import java.util.Properties
 
+import org.apache.commons.io.FileUtils
+
 import scalaz._
 import scalaz.effect.IO
 
@@ -32,24 +34,12 @@ object IOUtils {
   
   def isNormalDirectory(f: File) = f.isDirectory && !dotDirs.contains(f.getName) 
 
-  def walkSubdirs(root: File): IO[Seq[File]] =
-    IO { if(!root.isDirectory) List.empty else root.listFiles.filter( isNormalDirectory ) }
-
-  def rawReadFileToString(f: File): String = {
-    val stream = new FileInputStream(f)
-    try {
-      val fc = stream.getChannel
-      val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size)
-      /* Instead of using default, pass in a decoder. */
-      return Charset.defaultCharset().decode(bb).toString
-    } finally {
-      stream.close
-    }
+  def walkSubdirs(root: File): IO[Seq[File]] = IO {
+    if(!root.isDirectory) List.empty else root.listFiles.filter( isNormalDirectory )
   }
 
-  def readFileToString(f: File): IO[Option[String]] = {
-
-    IO { if(f.exists && f.canRead) Some(rawReadFileToString(f)) else None }
+  def readFileToString(f: File): IO[String] = IO {
+    FileUtils.readFileToString(f, "UTF-8")
   }
 
   def readPropertiesFile(s: String): IO[Properties] = readPropertiesFile { new File(s) } 
@@ -60,27 +50,23 @@ object IOUtils {
     props
   }
 
-  def writeToFile(s: String, f: File): IO[Validation[Throwable, Unit]] = IO {
-    Validation.fromTryCatch {
-      val writer = new PrintWriter(new PrintWriter(f))
-      try {
-        writer.println(s)
-      } finally { 
-        writer.close
-      }
+  def writeToFile(s: String, f: File): IO[Unit] = IO {
+    val writer = new PrintWriter(new PrintWriter(f))
+    try {
+      writer.println(s)
+    } finally { 
+      writer.close
     }
   }
 
-  def safeWriteToFile(s: String, f: File): IO[Validation[Throwable, Unit]] = IO {
-    Validation.fromTryCatch {
-      val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
-      writeToFile(s, tmpFile).unsafePerformIO
-      tmpFile.renameTo(f) // TODO: This is only atomic on POSIX systems
-      Success(())
-    }
+  def safeWriteToFile(s: String, f: File): IO[Unit] = IO {
+    val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
+    writeToFile(s, tmpFile).unsafePerformIO
+    tmpFile.renameTo(f) // TODO: This is only atomic on POSIX systems
+    Success(())
   }
 
-  def recursiveDelete(dir: File) {
+  def recursiveDelete(dir: File): IO[Unit] = IO {
     dir.listFiles.foreach {
       case d if d.isDirectory => recursiveDelete(d)
       case f => f.delete()
@@ -88,15 +74,15 @@ object IOUtils {
     dir.delete()
   }
 
-  def createTmpDir(prefix: String): File = {
+  def createTmpDir(prefix: String): IO[File] = IO {
     val tmp = File.createTempFile(prefix, "tmp")
     tmp.delete
     tmp.mkdirs
-    tmp 
+    tmp
   }
 
-  def copyFile(src: File, dest: File): IO[Validation[Throwable, Unit]] = IO {
-    Validation.fromTryCatch { Success(nioCopyFile(src, dest)) }
+  def copyFile(src: File, dest: File): IO[Unit] = IO {
+    Success(nioCopyFile(src, dest))
   }
 
   private def nioCopyFile(sourceFile: File, destFile: File) {

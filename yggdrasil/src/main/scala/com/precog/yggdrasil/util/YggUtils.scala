@@ -66,7 +66,8 @@ import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
 
 import scalaz.{Success, Failure}
-import scalaz.syntax.std.booleanV._
+import scalaz.effect.IO
+import scalaz.syntax.std.boolean._
 
 import org.streum.configrity._
 
@@ -75,6 +76,20 @@ import scala.io.Source
 
 import au.com.bytecode.opencsv._
 import java.io._
+
+trait YggUtilsCommon {
+  def load(dataDir: String) = {
+    val dir = new File(dataDir)
+    for{
+      d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")
+      descriptor <- ProjectionDescriptor.fromFile(d).unsafePerformIO.toOption
+    } yield {
+      (d, descriptor)
+    }
+  }
+  
+
+}
 
 object YggUtils {
  
@@ -125,7 +140,7 @@ trait Command {
   def run(args: Array[String])
 }
 
-object DatabaseTools extends Command {
+object DatabaseTools extends Command with YggUtilsCommon {
   val name = "db" 
   val description = "describe db paths and selectors" 
   
@@ -190,14 +205,7 @@ object DatabaseTools extends Command {
                                                          config.path.map(_.toString).getOrElse("*"),
                                                          config.selector.map(_.toString).getOrElse(".*")))
     
-    show(extract(load(config.dataDir)), config.verbose)
-  }
-
-  def load(dataDir: String) = {
-    val dir = new File(dataDir)
-    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
-      readDescriptor(d)
-    }
+    show(extract(load(config.dataDir).map(_._2)), config.verbose)
   }
 
   def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]] = {
@@ -229,18 +237,13 @@ object DatabaseTools extends Command {
     }
   }
 
-  def readDescriptor(dir: File): ProjectionDescriptor = {
-    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, "projection_descriptor.json"))
-    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
-  }
-
   class Config(var path: Option[Path] = None, 
                var selector: Option[JPath] = None,
                var dataDir: String = ".",
                var verbose: Boolean = false)
 }
 
-object ChownTools extends Command {
+object ChownTools extends Command with YggUtilsCommon {
   val name = "dbchown" 
   val description = "change ownership" 
  
@@ -274,17 +277,6 @@ object ChownTools extends Command {
     save(updated, config.dryrun)
   }
 
-  def load(dataDir: String) = {
-    val dir = new File(dataDir)
-    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
-      (d, readDescriptor(d))
-    }
-  }
-
-  def readDescriptor(dir: File): ProjectionDescriptor = {
-    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, projectionDescriptor))
-    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
-  }
 
   def filter(path: Option[Path], selector: Option[JPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
     descs.filter {
@@ -331,10 +323,9 @@ object ChownTools extends Command {
         if(dryrun) {
           println("Replacing %s with\n%s".format(pd, output)) 
         } else {
-          IOUtils.safeWriteToFile(output, pd).unsafePerformIO match {
-            case Success(_) =>
-            case Failure(e) => println("Error update: %s - %s".format(pd, e))
-          }
+          IOUtils.safeWriteToFile(output, pd) except {
+            case e => println("Error update: %s - %s".format(pd, e)); IO(())
+          } unsafePerformIO
         }
     }
   }

@@ -37,7 +37,7 @@ import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 import scalaz.std.map._
 
 import scala.collection.GenTraversableOnce
@@ -47,7 +47,7 @@ trait MetadataStorage {
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
   def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T]
   def currentMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] 
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
 }
 
 object FileMetadataStorage {
@@ -108,8 +108,12 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     metadataLocations.get(desc) match {
       case Some(dir) =>
         val file = new File(dir, curFilename)
-        fileOps.read(file) map { opt =>
-          opt.map { json => JsonParser.parse(json).validated[MetadataRecord] } getOrElse { Success(defaultMetadata(desc)) }
+        if (fileOps.exists(file)) {
+          fileOps.read(file) map {
+            json => JsonParser.parse(json).validated[MetadataRecord] 
+          }
+        } else {
+          IO(Success[Error,MetadataRecord](defaultMetadata(desc)))
         }
 
       case None =>
@@ -117,21 +121,27 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     }
   }
  
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = {
     logger.debug("Updating metadata for " + desc)
     metadataLocations.get(desc) map { dir =>
       metadataLocations += (desc -> dir)
 
-      stageNext(dir, metadata) flatMap { 
-        case Success(_) => 
-          stagePrev(dir) flatMap {
-            case Success(_)     => rotateCurrent(dir)
-            case f @ Failure(_) => IO(f)
-          }
-        case f @ Failure(_) => IO(f)
-      }
+      for {
+        _ <- stageNext(dir, metadata)
+        _ <- stagePrev(dir)
+        _ <- rotateCurrent(dir)
+      } yield { () }
+
+//      stageNext(dir, metadata) ap { 
+//        case Success(_) => 
+//          stagePrev(dir) flatMap {
+//            case Success(_)     => rotateCurrent(dir)
+//            case f @ Failure(_) => IO(f)
+//          }
+//        case f @ Failure(_) => IO(f)
+//      }
     } getOrElse {
-      IO(Failure(new IllegalStateException("Metadata update on missing projection for " + desc)))
+      IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
     }
   }
 
@@ -223,19 +233,19 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
     }
   }
 
-  private def stageNext(dir: File, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = {
+  private def stageNext(dir: File, metadata: MetadataRecord): IO[Unit] = {
     val json = Printer.pretty(Printer.render(metadata.serialize))
     val next = new File(dir, nextFilename)
     fileOps.write(next, json)
   }
   
-  private def stagePrev(dir: File): IO[Validation[Throwable, Unit]] = {
+  private def stagePrev(dir: File): IO[Unit] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    if (fileOps.exists(src)) fileOps.copy(src, dest) else IO{ Success(()) }
+    if (fileOps.exists(src)) fileOps.copy(src, dest) else IO(())
   }
   
-  private def rotateCurrent(dir: File): IO[Validation[Throwable, Unit]] = IO {
+  private def rotateCurrent(dir: File): IO[Unit] = IO {
     Validation.fromTryCatch {
       val src = new File(dir, nextFilename)
       val dest = new File(dir, curFilename)
@@ -278,9 +288,7 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
     data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
   }
 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Validation[Throwable, Unit]] = IO {
-    Success(())
-  }
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO(())
 
   def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = None
   
