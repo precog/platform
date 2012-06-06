@@ -103,20 +103,24 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
   }
   
   def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = {
-    def filter1(children: Set[PathMetadata]): Future[Set[PathMetadata]] = {
+    // TODO: This algorithm can be implemented in a single pass without all this nonsense.
+    def restrictAccess(children: Set[PathMetadata]): Future[Set[PathMetadata]] = {
       val mapped = children.foldLeft(Set.empty[Future[Option[PathMetadata]]]) {
-        case (acc, PathField(name, children)) => acc + filter1(children).map{ c => Option(PathField(name, c)) }
-        case (acc, PathIndex(index, children)) => acc + filter1(children).map{ c => Option(PathIndex(index, c)) }
+        case (acc, PathField(name, children)) => 
+          acc + restrictAccess(children).map(c => Some(PathField(name, c)))
+
+        case (acc, PathIndex(index, children)) => 
+          acc + restrictAccess(children).map(c => Some(PathIndex(index, c)))
+
         case (acc, p @ PathValue(_, authorities, _)) =>
-          acc + accessControl.mayAccessData(uid, path, authorities.uids, DataQuery).map {
-            case true => Option(p)
-            case false => None 
-          }
+          acc + accessControl.mayAccessData(uid, path, authorities.uids, DataQuery) map { _ option p }
       }
+
       Future.fold(mapped)(Set.empty[PathMetadata]) {
-        case (acc, pm) => pm.map { acc + _ }.getOrElse(acc)
+        case (acc, pm) => acc ++ pm
       }
     }
+
     def filter2(children: Set[PathMetadata]): Set[PathMetadata] = {
        children.foldLeft(Set.empty[PathMetadata]){
          case (acc, PathField(name, children)) =>
@@ -128,10 +132,11 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
          case (acc, p @ PathValue(_, _, _)) => acc + p
        }
     }
+
     accessControl.mayAccessPath(uid, path, PathRead).flatMap {
       case true =>
         metadata.findPathMetadata(path, selector).flatMap{ pr => 
-          filter1(pr.children).map{ filter2 }.map{ PathRoot }
+          restrictAccess(pr.children).map{ filter2 }.map{ PathRoot }
         }
       case false =>
         Future(PathRoot(Set.empty))

@@ -27,6 +27,22 @@ import scalaz.{Success, Validation}
 import scalaz.effect._
 import scalaz.syntax.std.option._
 
+class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
+  def getMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
+    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
+  }
+
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO(())
+
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = None
+  
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
+    data.keySet.filter(f)
+
+  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
+    data.keySet.toSeq.flatMap(f)
+}
+
 object MetadataActorSpec extends Specification with FutureMatchers {
 
   val system = ActorSystem("shard_metadata_test")
@@ -90,6 +106,8 @@ object MetadataActorSpec extends Specification with FutureMatchers {
         }
       }
     }
+
+    "return updated metadata after batch ingest" in todo
   }
 
   step {

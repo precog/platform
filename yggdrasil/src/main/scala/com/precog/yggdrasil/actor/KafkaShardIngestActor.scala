@@ -197,7 +197,8 @@ class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: 
       logger.info("Incomplete with %d remaining".format(remaining))
       ingestActor ! Incomplete(requestor, checkpoint)
     } else {
-      // update the metadatabase
+      // update the metadatabase, by way of notifying the ingest actor
+      // so that any pending completions that arrived out of order can be cleared.
       logger.info("Sending complete on batch")
       ingestActor ! Complete(checkpoint, projectionMetadata)
     }

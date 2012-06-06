@@ -143,7 +143,11 @@ trait ProjectionsActorModule[Dataset[_]] {
         logger.debug("Inserting " + rows.size)
         insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
-        logger.debug("Notifying coordinator")
+
+        // Notify the coordinator of the completeion of the insert of this projection batch,
+        // along with a patch for the associated metadata. This patch will be combined with the
+        // other patches for the *ingest* batch (the block of messages retrieved from kafka)
+        // and the result will be sent on to the metadata actor when the batch is complete.
         replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
         self    ! PoisonPill
     }
