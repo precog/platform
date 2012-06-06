@@ -293,7 +293,7 @@ object ProjectionDescriptor extends ProjectionDescriptorSerialization {
     .map(new ProjectionDescriptor(_, indexedColumns, sorting))
   }
 
-  def toFile(descriptor: ProjectionDescriptor, path: File): IO[Unit] = {
+  def toFile(descriptor: ProjectionDescriptor, path: File): IO[Boolean] = {
     IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), path)
   }
 
