@@ -28,7 +28,7 @@ import akka.dispatch.{Future, Await}
 import akka.util.duration._
 
 import com.precog.common.Path
-import com.precog.common.security._
+import com.precog.common.security.TestTokenManager
 
 import blueeyes.core.http.HttpResponse
 import blueeyes.core.http.HttpStatusCodes.OK

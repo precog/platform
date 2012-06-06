@@ -30,6 +30,8 @@ import scalaz._
 import scalaz.effect.IO
 
 object IOUtils {
+  final val UTF8 = "UTF-8"
+
   val dotDirs = "." :: ".." :: Nil
   
   def isNormalDirectory(f: File) = f.isDirectory && !dotDirs.contains(f.getName) 
@@ -39,7 +41,7 @@ object IOUtils {
   }
 
   def readFileToString(f: File): IO[String] = IO {
-    FileUtils.readFileToString(f, "UTF-8")
+    FileUtils.readFileToString(f, UTF8)
   }
 
   def readPropertiesFile(s: String): IO[Properties] = readPropertiesFile { new File(s) } 
@@ -51,27 +53,22 @@ object IOUtils {
   }
 
   def writeToFile(s: String, f: File): IO[Unit] = IO {
-    val writer = new PrintWriter(new PrintWriter(f))
-    try {
-      writer.println(s)
-    } finally { 
-      writer.close
+    FileUtils.writeStringToFile(f, s, UTF8)
+  }
+  
+  /** Performs a safe write to the file. Returns true
+   * if the file was completely written, false otherwise
+   */
+  def safeWriteToFile(s: String, f: File): IO[Boolean] = {
+    val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
+
+    writeToFile(s, tmpFile) flatMap {
+      _ => IO(tmpFile.renameTo(f)) // TODO: This is only atomic on POSIX systems
     }
   }
 
-  def safeWriteToFile(s: String, f: File): IO[Unit] = IO {
-    val tmpFile = File.createTempFile(f.getName, ".tmp", f.getParentFile)
-    writeToFile(s, tmpFile).unsafePerformIO
-    tmpFile.renameTo(f) // TODO: This is only atomic on POSIX systems
-    Success(())
-  }
-
   def recursiveDelete(dir: File): IO[Unit] = IO {
-    dir.listFiles.foreach {
-      case d if d.isDirectory => recursiveDelete(d)
-      case f => f.delete()
-    }   
-    dir.delete()
+    FileUtils.deleteDirectory(dir)
   }
 
   def createTmpDir(prefix: String): IO[File] = IO {
@@ -82,25 +79,9 @@ object IOUtils {
   }
 
   def copyFile(src: File, dest: File): IO[Unit] = IO {
-    Success(nioCopyFile(src, dest))
+    FileUtils.copyFile(src, dest)
   }
 
-  private def nioCopyFile(sourceFile: File, destFile: File) {
-    if(!destFile.exists) {
-     destFile.createNewFile
-    }
-   
-    var source: FileChannel = null
-    var destination: FileChannel = null
-    try {
-      source = new FileInputStream(sourceFile).getChannel
-      destination = new FileOutputStream(destFile).getChannel
-      destination.transferFrom(source, 0, source.size)
-    } finally {
-      if(source != null) source.close
-      if(destination != null) destination.close
-    }
-  }
 }
 
 // vim: set ts=4 sw=4 et:
