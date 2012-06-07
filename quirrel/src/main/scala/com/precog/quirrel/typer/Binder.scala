@@ -181,6 +181,9 @@ trait Binder extends parser.AST with Library {
       
       case Intersect(_, left, right) =>
         loop(left, env) ++ loop(right, env)
+            
+      case Difference(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
       
       case Add(_, left, right) =>
         loop(left, env) ++ loop(right, env)

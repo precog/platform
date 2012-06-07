@@ -632,6 +632,8 @@ trait DAG extends Instructions {
         case IUnion | IIntersect =>
           Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take left.provenance.length: _*)
 
+        case SetDifference => left.provenance
+
         case _: Map2CrossRight => right.provenance ++ left.provenance
         case _: Map2Cross | _: Map2CrossLeft => left.provenance ++ right.provenance
         

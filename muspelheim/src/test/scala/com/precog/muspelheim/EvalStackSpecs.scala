@@ -197,6 +197,33 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "basic set difference queries" >> {
+      {
+        val input = "//clicks difference //campaigns"
+        val results = evalE(input)
+
+        results must haveSize(100)
+      }
+      {
+        val input = "//clicks difference //clicks"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }
+      {
+        val input = "//clicks difference //clicks.timeString"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }      
+      {
+        val input = "//clicks.time difference //clicks.timeString"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }
+    }
+
     "basic intersect and union queries" >> {
       {
         val input = "4 intersect 4"

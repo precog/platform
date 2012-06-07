@@ -966,6 +966,49 @@ class EvaluatorSpecs extends Specification
       result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
     }
     
+    "compute the set difference of two sets" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, SetDifference,
+        dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+          Root(line, PushString("time"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(6)
+      
+      forall(result) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must not haveKey("time")
+        }
+        case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+      }
+    }    
+    "compute the set difference of the set difference" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, SetDifference,
+        dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+        Join(line, SetDifference,
+          dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+            Root(line, PushString("time")))))
+
+      val result = testEval(input)
+      
+      result must haveSize(101)
+      
+      forall(result) {
+        case (VectorCase(_), SObject(obj)) => {
+          obj must haveKey("time")
+        }
+        case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+      }
+    }      
+    
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
       

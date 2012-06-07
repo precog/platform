@@ -108,6 +108,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     
     case Intersect(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
+        
+    case Difference(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Add(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)

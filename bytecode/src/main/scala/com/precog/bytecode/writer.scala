@@ -157,6 +157,8 @@ trait BytecodeWriter extends Writer with Version {
         
         case IUnion => (0x12, 0.toShort, 0)
         case IIntersect => (0x13, 0.toShort, 0)
+
+        case SetDifference => (0x15, 0.toShort, 0)
         
         case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
         case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))

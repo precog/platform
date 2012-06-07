@@ -419,6 +419,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         parse("1 intersect 2") must beLike {
           case Intersect(_, NumLit(_, "1"), NumLit(_, "2")) => ok
         }
+      }      
+      "difference" >> {
+        parse("1 difference 2") must beLike {
+          case Difference(_, NumLit(_, "1"), NumLit(_, "2")) => ok
+        }
       }
     }
     
@@ -442,6 +447,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       "intersect" >> {
         parse(""""foo" intersect null""") must beLike {
           case Intersect(_, StrLit(_, "foo"), NullLit(_)) => ok
+        }
+      }     
+      "intersect" >> {
+        parse(""""foo" difference null""") must beLike {
+          case Difference(_, StrLit(_, "foo"), NullLit(_)) => ok
         }
       }
     }
@@ -961,6 +971,10 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       
       parse("1 intersect \"a\"") must beLike {
         case Intersect(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }      
+
+      parse("1 difference \"a\"") must beLike {
+        case Difference(_, NumLit(_, "1"), StrLit(_, "a")) => ok
       }
     }
   }
@@ -1006,6 +1020,12 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       "intersect" >> {
         parse("intersectfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
+        }
+      }         
+
+      "difference" >> {
+        parse("differencefoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "differencefoo"), Vector()) => ok
         }
       }      
       

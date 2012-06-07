@@ -207,6 +207,14 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
         shakeTree(tree) must beLike {
           case Intersect(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
         }
+      }      
+      "difference" >> {
+        val tree = Difference(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
+        bindRoot(tree, tree)
+        
+        shakeTree(tree) must beLike {
+          case Difference(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2")) => ok
+        }
       }
       
       "addition" >> {

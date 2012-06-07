@@ -573,6 +573,9 @@ trait Emitter extends AST
         case ast.Intersect(loc, left, right) =>
           emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect) 
 
+        case ast.Difference(loc, left, right) =>
+          emitExpr(left) >> emitExpr(right) >> emitInstr(SetDifference) 
+
         case ast.Add(loc, left, right) => 
           emitMap(left, right, Add)
         

@@ -345,12 +345,18 @@ trait Evaluator extends DAG
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
-      case Join(_, instr @ (IUnion | IIntersect), left, right) => {
+      case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) => {
         val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        val cgf = new CogroupF[SValue, SValue, Option[SValue]] {
+          def left(a: SValue) = Some(a)
+          def both(a: SValue, b: SValue) = None
+          def right(a: SValue) = None
+        }
         
         val back = instr match { 
           case IUnion if left.provenance.length == right.provenance.length =>
@@ -364,6 +370,14 @@ trait Evaluator extends DAG
             leftEnum.intersect(rightEnum, ctx.memoizationContext)
           
           case IIntersect /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
+
+          case SetDifference if left.provenance.length == right.provenance.length =>
+            leftEnum.cogroup(rightEnum)(cgf).collect { 
+              case Some(sv) => sv
+            }
+          
+          case SetDifference /* if left.provenance.length != right.provenance.length */ =>
             ops.empty[SValue](0)
         }
         

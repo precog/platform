@@ -606,6 +606,30 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back //assumes error generated in 'back'
         }
       }
+
+      case Difference(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenanceDifference(relations)(left.provenance, right.provenance)
+
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        if (left.cardinality.isDefined && right.cardinality.isDefined) {
+          if (left.cardinality == Some(0) && right.cardinality == Some(0)) {
+            expr.accumulatedProvenance = None
+            back + Error(expr, DifferenceProvenanceValue)
+          } else if (left.cardinality == right.cardinality) {  
+            expr.accumulatedProvenance = left.accumulatedProvenance
+            back
+          } else {
+            expr.accumulatedProvenance = None
+            back + Error(expr, DifferenceProvenanceDifferentLength)
+          }
+        } else {
+          expr.accumulatedProvenance = None
+          back //assumes error generated in 'back'
+        }
+      }
       
       case expr @ Add(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
@@ -894,7 +918,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
     }    
    
-    case Union(_, _, _) | Intersect(_, _, _) => body.provenance
+    case Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _) => body.provenance
 
     case Add(_, left, right) => {
       val leftProv = computeResultProvenance(left, relations, varAssumptions)
@@ -1029,7 +1053,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       } exists(p => p != ValueProvenance && p != NullProvenance)  
       
       val accProv: Option[Vector[Provenance]] = {
-        exprs.map(_.accumulatedProvenance).reduceOption { 
+        exprs2.map(_.accumulatedProvenance).reduceOption { 
           (left, right) => (left <**> right) { _ ++ _ } 
         } getOrElse Some(Vector())
       }
@@ -1128,6 +1152,19 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       if (left.cardinality.isDefined && right.cardinality.isDefined) {
         if (left.cardinality == right.cardinality) {  
           left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+
+    case Difference(_, left, right) => {
+      if (left.cardinality.isDefined && right.cardinality.isDefined) {
+        if (left.cardinality == right.cardinality) {  
+          if (left.cardinality == Some(0)) None
+          else computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
         } else {
           None
         }
@@ -1275,6 +1312,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case (p, NullProvenance) => Some(NullProvenance)
 
     case (p1, p2) => Some(DynamicProvenance(currentId.incrementAndGet()))
+  }
+
+  private def unifyProvenanceDifference(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+    case (NullProvenance, p) => Some(NullProvenance)
+    case (p, NullProvenance) => Some(NullProvenance)
+
+    case (p1, p2) => Some(p1)
   }
 
   private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
