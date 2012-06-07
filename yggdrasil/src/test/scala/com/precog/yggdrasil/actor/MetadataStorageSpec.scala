@@ -42,14 +42,14 @@ import Scalaz._
 class MetadataStorageSpec extends Specification {
   import FileMetadataStorage._
 
-  val inputMetadata = 
-"""{
-  "metadata":[],
-  "checkpoint":[[1,1]]
-}"""
+  val inputMetadata = """{
+    "metadata":[],
+    "checkpoint":[[1,1]]
+  }"""
+
   val output = inputMetadata
   
-  val base = IOUtils.createTmpDir("MetadataStorageSpec")
+  val base = IOUtils.createTmpDir("MetadataStorageSpec").unsafePerformIO
 
   def cleanupBaseDir = Step {
     IOUtils.recursiveDelete(base)
@@ -70,7 +70,7 @@ class MetadataStorageSpec extends Specification {
 
   trait metadataStore extends Scope {
     val fileOps = new TestFileOps
-    val ms = new FileMetadataStorage(base, fileOps)
+    val ms = FileMetadataStorage.load(base, fileOps).unsafePerformIO
   }
 
   "metadata storage" should {
@@ -80,47 +80,51 @@ class MetadataStorageSpec extends Specification {
       ms.updateMetadata(desc, testRecord).unsafePerformIO
       
       // Second write to force an update
-      val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
-      result must beLike {
-        case Success(()) => ok
+      val io = for {
+        _    <- ms.updateMetadata(desc, testRecord)
+        root <- ms.findDescriptorRoot(desc, true) 
+      } yield {
+        root map { descBase =>
+          // Our first write would have added offsets 0-1
+          fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
+          fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue 
+          fileOps.confirmRename(4, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
+        } getOrElse {
+          failure("Could not locate the descriptor base")
+        }
       }
 
-      ms.findDescriptorRoot(desc, true) map { descBase =>
-        // Our first write would have added offsets 0-1
-        fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
-        fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue 
-        fileOps.confirmRename(4, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
-      } getOrElse {
-        failure("Could not locate the descriptor base")
-      }
+      io.unsafePerformIO
     }
 
     "safely update metadata not current" in new metadataStore {
       ms.findDescriptorRoot(desc, true)
-      val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
 
-      result must beLike {
-        case Success(()) => ok
+      val io = for {
+        _    <- ms.updateMetadata(desc, testRecord)
+        root <- ms.findDescriptorRoot(desc, true) 
+      } yield {
+        root map { descBase =>
+          fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
+          fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
+        } getOrElse {
+          failure("Could not locate the descriptor base")
+        }
       }
 
-      ms.findDescriptorRoot(desc, true) map { descBase =>
-        fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
-        fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
-      } getOrElse {
-        failure("Could not locate the descriptor base")
-      }
+      io.unsafePerformIO
     }
 
     "correctly read metadata" in new metadataStore {
-      // Add metadata in first
-      ms.findDescriptorRoot(desc, true)
-      ms.updateMetadata(desc, testRecord).unsafePerformIO
-
-      val result = ms.currentMetadata(desc).unsafePerformIO
-
-      result must beLike {
-       case Success(m) => Printer.pretty(Printer.render(m.serialize)) must_== inputMetadata
+      val io = for {
+        _ <- ms.findDescriptorRoot(desc, true)
+        _ <- ms.updateMetadata(desc, testRecord)
+        result <- ms.getMetadata(desc)
+      } yield {
+        JsonParser.parse(result.serialize) must_== JsonParser.parse(inputMetadata)
       }
+
+      io.unsafePerformIO
     }
   }
 }
@@ -133,28 +137,29 @@ class TestFileOps extends FileOps {
 
   def exists(src: File): Boolean = backingStore.keySet.contains(src)
 
-  def rename(src: File, dest: File): Unit = {
+  def rename(src: File, dest: File): IO[Boolean] = {
     messages += "rename %s to %s".format(src, dest)
     backingStore += (dest -> backingStore(src))
     backingStore -= src
+    IO(true)
   }
   
-  def copy(src: File, dest: File): IO[Validation[Throwable, Unit]] = IO {
+  def copy(src: File, dest: File): IO[Unit] = IO {
     messages += "copy %s to %s".format(src, dest)
     backingStore += (dest -> backingStore(src))
-    Success(())
   }
 
-  def read(src: File): IO[Option[String]] = IO {
+  def read(src: File): IO[String] = IO {
     messages += "read from %s".format(src)
-    Some(backingStore(src)) 
+    backingStore(src)
   }
   
-  def write(dest: File, content: String): IO[Validation[Throwable, Unit]] = IO {
+  def write(dest: File, content: String): IO[Unit] = IO {
     messages += "write to %s with %s".format(dest, content) 
     backingStore += (dest -> content)
-    Success(()) 
   }
+
+  def mkdir(dir: File) = IO(true)
 
   def checkMessage(i: Int, exp: String) =
     messages.get(i).map { act =>

@@ -110,11 +110,11 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptors(path, selector) => 
       logger.info(msg.toString)
-      sender ! findDescriptors(path, selector)
+      sender ! findDescriptors(path, selector).unsafePerformIO
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.info(msg.toString)
-      sender ! findPathMetadata(path, selector)
+      sender ! findPathMetadata(path, selector).unsafePerformIO
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.info(msg.toString)

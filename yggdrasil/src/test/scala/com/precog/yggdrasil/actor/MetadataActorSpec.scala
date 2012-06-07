@@ -30,8 +30,6 @@ import blueeyes.json.xschema.Extractor._
 
 import java.io.File
 
-import org.specs2.mutable._
-
 import akka.pattern.ask
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.dispatch._
@@ -40,11 +38,16 @@ import akka.util._
 import com.weiglewilczek.slf4s.Logging
 
 import scala.collection.immutable.ListMap
-import scala.collection.GenTraversableOnce
 
-import scalaz.{Success, Validation}
+import scalaz.Success
 import scalaz.effect._
+import scalaz.std.map._
+import scalaz.syntax.semigroup._
 import scalaz.syntax.std.option._
+
+import org.specs2.mock.Mockito
+import org.specs2.mutable._
+import akka.testkit.TestActorRef
 
 class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
   var updates: Map[ProjectionDescriptor, Seq[MetadataRecord]] = Map()
@@ -61,51 +64,33 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
   }
 }
 
-case object GetCaptureResult
-
-class CaptureActor extends Actor with Logging {
-  var saveMetadataCalls = Vector[SaveMetadata]()
-  var otherCalls = Vector[Any]()
-
-  def receive = {
-    case sm @ SaveMetadata(metadata, messageClock, kafkaOffset) => 
-      logger.debug("Capture actor received save request for %s at %s : %s".format(metadata.toString, messageClock.toString, kafkaOffset.toString) + " from sender " + sender) 
-      saveMetadataCalls = saveMetadataCalls :+ sm
-      sender ! ()
-
-    case GetCaptureResult => 
-      logger.debug("Capture acture got request for results.")
-      sender ! ((saveMetadataCalls, otherCalls))
-
-    case other                   => 
-      logger.warn("Got unexpected message " + other + " in capture actor")
-      otherCalls = otherCalls :+ other
-  }
-}
-
 object MetadataActorSpec extends Specification with FutureMatchers with Mockito {
-  val system = ActorSystem("shard_metadata_test")
+  implicit val system = ActorSystem("shard_metadata_test")
   implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
     "correctly propagates initial message clock on flush request" in {
-      val storage = new TestMetadataStorage
+      val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      val actorRef = TestActorRef(new MetadataActor("Test", storage, coord))
+      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
+
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord))
       
-      val complete = testActor ? FlushMetadata
-      complete must whenDelivered {
+      (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
           case _ =>
-            there was one(coord).saveYggCheckpoint("Test", YggCheckpoint(0, VectorClock.empty))
+            there was one(coord).loadYggCheckpoint("test")
+            there was one(coord).saveYggCheckpoint("test", YggCheckpoint(0, VectorClock.empty))
         }
       }
     }
 
     "correctly propagates updated message clock on flush request" in {
-      val storage = new TestMetadataStorage
+      val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      val testActor = TestActorRef(new MetadataActor("test", storage, coord))
+      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
+
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord))
 
       val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
 
@@ -119,25 +104,15 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
       val row1 = ProjectionInsert.Row(EventId(0,1), values, metadata)
       val row2 = ProjectionInsert.Row(EventId(0,2), values, metadata)
 
-      testActor ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
-
-      testActor ! FlushMetadata
-      Thread.sleep(1000)
-      val result = for { 
-        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
-      } yield r
-
-      result must whenDelivered {
+      actorRef ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
+      (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
-          case (save, other) =>
+          case _ => 
             val stringStats = StringValueStats(2, "Test123", "Test123")
+            val resultingMetadata: ColumnMetadata = Map(colDesc -> Map(stringStats.metadataType -> stringStats))
 
-            val resultingMetadata = Map(
-              (descriptor -> Map[ColumnDescriptor, MetadataMap]((colDesc -> Map((stringStats.metadataType -> stringStats)))))
-            )
-
-            other.size must_== 0
-            save must_== Vector(SaveMetadata(resultingMetadata, VectorClock.empty.update(0,2), Some(0L)))
+            there was one(coord).loadYggCheckpoint("test")
+            storage.updates(descriptor).last.metadata must_== resultingMetadata
         }
       }
     }
@@ -150,7 +125,9 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
   }
 }
 
-class MetadataActorStateSpec extends Specification {
+object MetadataActorStateSpec extends Specification {
+  implicit val system = ActorSystem("shard_metadata_test")
+
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
     val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
@@ -199,23 +176,23 @@ class MetadataActorStateSpec extends Specification {
     ))
   ))
 
-  val state = new MetadataActor.State(new TestMetadataStorage(data), VectorClock.empty, None) 
+  val actor = TestActorRef(new MetadataActor("test", new TestMetadataStorage(data), CheckpointCoordination.Noop)).underlyingActor
 
   "local metadata state" should {
     "query by path with root selector" in {
-      val result = state.findPathMetadata(Path("/abc/"), JPath(""))
+      val result = actor.findPathMetadata(Path("/abc/"), JPath(""))
     
       result must_== rootAbc
     }
 
     "query other path with root selector" in {
-      val result = state.findPathMetadata(Path("/def/"), JPath(""))
+      val result = actor.findPathMetadata(Path("/def/"), JPath(""))
       
       result must_== rootDef
     }
 
     "query by path with branch selector" in {
-      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo"))
+      val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
@@ -232,7 +209,7 @@ class MetadataActorStateSpec extends Specification {
     }
 
     "query other path with branch selector" in {
-      val result = state.findPathMetadata(Path("/def/"), JPath(".foo"))
+      val result = actor.findPathMetadata(Path("/def/"), JPath(".foo"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
@@ -250,7 +227,7 @@ class MetadataActorStateSpec extends Specification {
     }
 
     "query by path with array selector" in {
-      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
+      val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
      
       val expected = PathRoot(Set(
         PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
@@ -260,7 +237,7 @@ class MetadataActorStateSpec extends Specification {
     }
 
     "query other path with leaf selector" in {
-      val result = state.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
+      val result = actor.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))

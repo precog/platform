@@ -53,7 +53,8 @@ object PlatformBuild extends Build {
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
       "org.scala-tools.testing"     %  "scalacheck_2.9.1"   % "1.9" % "test",
-      "org.specs2"                  %  "specs2_2.9.1"       % "1.8" % "test"
+      "org.specs2"                  %  "specs2_2.9.1"       % "1.8" % "test",
+      "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test"
     )
   )
 
