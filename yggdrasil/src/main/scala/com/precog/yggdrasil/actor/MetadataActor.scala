@@ -87,6 +87,10 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     logger.info("MetadataActor yggCheckpoint load complete")
   }
 
+  override def postStop(): Unit = {
+    flush(None).unsafePerformIO
+  }
+
   def receive = {
     case Status => sender ! status
 
@@ -96,19 +100,19 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       messageClock = messageClock |+| batchClock
       kafkaOffset = batchOffset orElse kafkaOffset
    
-    case msg @ FindChildren(path)                       => 
+    case msg @ FindChildren(path) => 
       logger.info(msg.toString)
       sender ! storage.findChildren(path)
     
-    case msg @ FindSelectors(path)                      => 
+    case msg @ FindSelectors(path) => 
       logger.info(msg.toString)
       sender ! storage.findSelectors(path)
 
-    case msg @ FindDescriptors(path, selector)          => 
+    case msg @ FindDescriptors(path, selector) => 
       logger.info(msg.toString)
       sender ! findDescriptors(path, selector)
 
-    case msg @ FindPathMetadata(path, selector)         => 
+    case msg @ FindPathMetadata(path, selector) => 
       logger.info(msg.toString)
       sender ! findPathMetadata(path, selector)
 
@@ -116,33 +120,35 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       logger.info(msg.toString)
       sender ! storage.findDescriptorRoot(descriptor, createOk)
     
-    case msg @ FlushMetadata        => 
-      flushRequests += 1
-      logger.info("Flushing metadata (request %d)...".format(flushRequests))
+    case msg @ FlushMetadata => 
+      flush(Some(sender)).unsafePerformIO
 
-      val io: IO[List[Unit]] = fullDataFor(dirty) flatMap { 
-        _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, Unit]
-      }
-
-      // if some metadata fails to be written and we consequently don't write the checkpoint,
-      // then the restore process for each projection will need to skip all message ids prior
-      // to the checkpoint clock associated with that metadata
-      val replyTo = sender
-      io.catchLeft map { 
-        case Left(error) =>
-          logger.error("Error saving metadata for flush request %d; checkpoint at offset %s, clock %s ignored.".format(flushRequests, kafkaOffset.toString, messageClock.toString), error)
-          // todo: Should we reply to the sender here? Failing to do so will block shutdown.
-            
-        case Right(_) =>
-          for (offset <- kafkaOffset) checkpointCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
-          logger.info("Flush " + flushRequests + " complete for projections: \n" + dirty.map(_.show).mkString("\t", "\t\n", "\n"))
-          dirty = Set()
-          replyTo ! () 
-      } unsafePerformIO
-
-    case msg @ GetCurrentCheckpoint                     => 
+    case msg @ GetCurrentCheckpoint => 
       logger.info(msg.toString)
       sender ! YggCheckpoint(kafkaOffset.getOrElse(0l), messageClock) // TODO: Make this safe
+  }
+
+  private def flush(replyTo: Option[ActorRef]): IO[Unit] = {
+    flushRequests += 1
+    logger.debug("Flushing metadata (request %d)...".format(flushRequests))
+
+    val io: IO[List[Unit]] = fullDataFor(dirty) flatMap { 
+      _.toList.map({ case (desc, meta) => storage.updateMetadata(desc, MetadataRecord(meta, messageClock)) }).sequence[IO, Unit]
+    }
+
+    // if some metadata fails to be written and we consequently don't write the checkpoint,
+    // then the restore process for each projection will need to skip all message ids prior
+    // to the checkpoint clock associated with that metadata
+    io.catchLeft map { 
+      case Left(error) =>
+        logger.error("Error saving metadata for flush request %d; checkpoint at offset %s, clock %s ignored.".format(flushRequests, kafkaOffset.toString, messageClock.toString), error)
+          
+      case Right(_) =>
+        for (offset <- kafkaOffset) checkpointCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
+        logger.debug("Flush " + flushRequests + " complete for projections: \n" + dirty.map(_.show).mkString("\t", "\t\n", "\n"))
+        dirty = Set()
+        replyTo foreach { _ ! () }
+    }
   }
 
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
