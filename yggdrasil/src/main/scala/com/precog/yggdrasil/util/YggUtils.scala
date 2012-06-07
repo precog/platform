@@ -733,28 +733,32 @@ object ImportTools extends Command {
     dir.mkdirs
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-      class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
+    val io = for (ms <- FileMetadataStorage.load(dir, new FilesystemFileOps {})) yield {
+      object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
+        class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
 
-      val metadataStorage = new FileMetadataStorage(dir, new FilesystemFileOps {})
+        val metadataStorage = ms
 
-      val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+        val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+      }
+
+      Await.result(shard.actorsStart, Duration(60, "seconds"))
+      config.input.foreach {
+        case (db, input) =>
+          if(config.verbose) println("Inserting batch: %s:%s".format(db, input))
+          val events = Source.fromFile(input).getLines
+          insert(config, db, events, shard)
+      }
+
+      if(config.verbose) println("Waiting for shard shutdown")
+      Await.result(shard.actorsStop, Duration(60, "seconds"))
+
+      if(config.verbose) println("Shutdown")
     }
 
-    Await.result(shard.actorsStart, Duration(60, "seconds"))
-    config.input.foreach {
-      case (db, input) =>
-        if(config.verbose) println("Inserting batch: %s:%s".format(db, input))
-        val events = Source.fromFile(input).getLines
-        insert(config, db, events, shard)
-    }
-
-    if(config.verbose) println("Waiting for shard shutdown")
-    Await.result(shard.actorsStop, Duration(60, "seconds"))
-
-    if(config.verbose) println("Shutdown")
+    io.unsafePerformIO
   }
 
   val sid = new AtomicInteger(0)

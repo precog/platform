@@ -35,6 +35,7 @@ import akka.util.Timeout
 import akka.util.duration._
 
 import com.weiglewilczek.slf4s.Logging
+import scalaz.syntax.std.boolean._
 
 trait StorageMetadata {
 
@@ -132,7 +133,7 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
           acc + restrictAccess(children).map(c => Some(PathIndex(index, c)))
 
         case (acc, p @ PathValue(_, authorities, _)) =>
-          acc + accessControl.mayAccessData(uid, path, authorities.uids, DataQuery) map { _ option p }
+          acc + (accessControl.mayAccessData(uid, path, authorities.uids, DataQuery) map { _ option p })
       }
 
       Future.fold(mapped)(Set.empty[PathMetadata]) {
