@@ -21,6 +21,7 @@ trait Instructions extends Library {
       
       case IUnion => (2, 1)
       case IIntersect => (2, 1)
+      case SetDifference => (2, 1)
       
       case FilterMatch(depth, Some(_)) => (2 + depth, 1)
       case FilterCross(depth, Some(_)) => (2 + depth, 1)
@@ -85,6 +86,7 @@ trait Instructions extends Library {
     
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr
+    case object SetDifference extends Instruction with JoinInstr
     
     case object Bucket extends Instruction
     case class MergeBuckets(and: Boolean) extends Instruction

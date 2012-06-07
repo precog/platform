@@ -131,6 +131,8 @@ trait BytecodeReader extends Reader {
         
         case 0x12 => Some(IUnion)
         case 0x13 => Some(IIntersect)
+
+        case 0x15 => Some(SetDifference)
         
         case 0x14 => Some(FilterMatch(depth, predicate))
         case 0x16 => Some(FilterCross(depth, predicate))

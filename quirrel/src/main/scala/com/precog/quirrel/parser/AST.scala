@@ -170,18 +170,27 @@ trait AST extends Phases {
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case With(loc, left, right) => {
         indent + "type: with\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case Union(loc, left, right) => {
         indent + "type: union\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case Intersect(loc, left, right) => {
         indent + "type: intersect\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+      }     
+      
+      case Difference(loc, left, right) => {
+        indent + "type: without\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
@@ -435,22 +444,20 @@ trait AST extends Phases {
         naming && sizing && contents
       }
 
-      case (Where(_, left1, right1), Where(_, left2, right2)) => {
-        (left1 equalsIgnoreLoc left2) &&
-          (right1 equalsIgnoreLoc right2)
-      }
-      case (With(_, left1, right1), Where(_, left2, right2)) => {
-        (left1 equalsIgnoreLoc left2) &&
-          (right1 equalsIgnoreLoc right2)
-      }
-      case (Union(_, left1, right1), Union(_, left2, right2)) => {
-        (left1 equalsIgnoreLoc left2) &&
-          (right1 equalsIgnoreLoc right2)
-      }
-      case (Intersect(_, left1, right1), Intersect(_, left2, right2)) => {
-        (left1 equalsIgnoreLoc left2) &&
-          (right1 equalsIgnoreLoc right2)
-      }
+      case (Where(_, left1, right1), Where(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (With(_, left1, right1), Where(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Union(_, left1, right1), Union(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Intersect(_, left1, right1), Intersect(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+         
+      case (Difference(_, left1, right1), Difference(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
 
       case (Add(_, left1, right1), Add(_, left2, right2)) =>
         (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
@@ -548,6 +555,9 @@ trait AST extends Phases {
 
       case Intersect(_, left, right) =>
         left.hashCodeIgnoreLoc + "intersect".hashCode + right.hashCodeIgnoreLoc
+
+      case Difference(_, left, right) =>
+        left.hashCodeIgnoreLoc + "without".hashCode + right.hashCodeIgnoreLoc
 
       case Add(_, left, right) =>
         left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
@@ -739,6 +749,10 @@ trait AST extends Phases {
 
     final case class Intersect(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'intersect
+    }
+
+    final case class Difference(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+      val label = 'difference
     }
 
     final case class Add(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {

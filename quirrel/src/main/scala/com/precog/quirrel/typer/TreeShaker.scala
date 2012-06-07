@@ -145,6 +145,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       val (right2, rightBindings, rightErrors) = performShake(right)
       
       (Union(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
+    }    
+
+    case Difference(loc, left, right) => {
+      val (left2, leftBindings, leftErrors) = performShake(left)
+      val (right2, rightBindings, rightErrors) = performShake(right)
+      
+      (Difference(loc, left2, right2), leftBindings ++ rightBindings, leftErrors ++ rightErrors)
     }
     
     case Add(loc, left, right) => {

@@ -80,6 +80,9 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
       
       case Intersect(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+            
+      case Difference(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case Add(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))

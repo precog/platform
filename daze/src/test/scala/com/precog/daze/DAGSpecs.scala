@@ -328,6 +328,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IIntersect))
         result mustEqual Right(Join(line, IIntersect, Root(line, PushTrue), Root(line, PushFalse)))
+      }      
+
+      "set difference" >> {
+        val line = Line(0, "")
+        val result = decorate(Vector(line, PushTrue, PushFalse, SetDifference))
+        result mustEqual Right(Join(line, SetDifference, Root(line, PushTrue), Root(line, PushFalse)))
       }
     }
     
@@ -539,6 +545,11 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       
       "iintersect" >> {     // similar to map1, only one underflow case!
         val instr = IIntersect
+        decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
+      }      
+
+      "set difference" >> {     // similar to map1, only one underflow case!
+        val instr = SetDifference
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       

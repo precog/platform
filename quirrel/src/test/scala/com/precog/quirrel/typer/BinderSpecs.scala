@@ -422,7 +422,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       }
     }
     
-    "forward binding through where" in {
+    "forward binding through intersect" in {
       {
         val e @ Let(_, _, _, _, Intersect(_, d: Dispatch, _)) = parse("a := 42 a intersect 1")
         d.binding mustEqual UserDef(e)
@@ -432,6 +432,22 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       
       {
         val e @ Let(_, _, _, _, Intersect(_, _, d: Dispatch)) = parse("a := 42 1 intersect a")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through difference" in {
+      {
+        val e @ Let(_, _, _, _, Difference(_, d: Dispatch, _)) = parse("a := 42 a difference 1")
+        d.binding mustEqual UserDef(e)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Let(_, _, _, _, Difference(_, _, d: Dispatch)) = parse("a := 42 1 difference a")
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty

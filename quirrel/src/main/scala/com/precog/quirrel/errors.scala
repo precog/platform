@@ -63,6 +63,14 @@ case object IntersectProvenanceDifferentLength extends ErrorType {
   override def toString = "cannot perform intersect on two sets each with different numbers of identities"
 }
 
+case object DifferenceProvenanceDifferentLength extends ErrorType {
+  override def toString = "cannot perform set difference on two sets each with different numbers of identities"
+}
+
+case object DifferenceProvenanceValue extends ErrorType {
+  override def toString = "cannot perform set difference on values"
+}
+
 case object AlreadyRelatedSets extends ErrorType {
   override def toString = "cannot relate sets that are already related"
 }

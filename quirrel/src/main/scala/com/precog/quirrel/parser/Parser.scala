@@ -84,6 +84,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ """with\b""".r ~ expr      ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
     | expr ~ """union\b""".r ~ expr     ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
     | expr ~ """intersect\b""".r ~ expr ^# { (loc, e1, _, e2) => Intersect(loc, e1, e2) }
+    | expr ~ """difference\b""".r ~ expr      ^# { (loc, e1, _, e2) => Difference(loc, e1, e2) }
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
     | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
@@ -172,7 +173,7 @@ trait Parser extends RegexParsers with Filters with AST {
 
   private lazy val nullLiteral = """null\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|neg|null|import".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
@@ -182,7 +183,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'comp, 'neg,
       'mul, 'div,
       'add, 'sub,
-      'union, 'intersect,
+      'union, 'intersect, 'difference,
       'lt, 'lteq, 'gt, 'gteq,
       'eq, 'noteq,
       'and, 'or,
@@ -210,6 +211,7 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('where <)
     & ('union <)
     & ('intersect <)
+    & ('difference <)
     & ('relate <>)
     & (arrayDefDeref _)
   )
@@ -332,6 +334,7 @@ trait Parser extends RegexParsers with Filters with AST {
       | "with"
       | "union"
       | "intersect"
+      | "difference"
       | "+"
       | "-"
       | "*"

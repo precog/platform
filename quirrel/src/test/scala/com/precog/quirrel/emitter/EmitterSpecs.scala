@@ -117,6 +117,16 @@ object EmitterSpecs extends Specification
           PushString("bar"),
           LoadLocal(Het),
           IIntersect))
+    }    
+
+    "emit instruction for two set differenced loads" in {
+      testEmit("""load("foo") difference load("bar")""")(
+        Vector(
+          PushString("foo"),
+          LoadLocal(Het),
+          PushString("bar"),
+          LoadLocal(Het),
+          SetDifference))
     }
 
     "emit cross-addition of two added loads with value provenance" in {

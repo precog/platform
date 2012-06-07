@@ -87,6 +87,9 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     
     case Intersect(_, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
+        
+    case Difference(_, left, right) =>
+      solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
     case Add(_, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)

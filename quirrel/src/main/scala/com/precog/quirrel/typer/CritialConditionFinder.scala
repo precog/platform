@@ -80,6 +80,9 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       
       case Intersect(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+            
+      case Difference(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case Add(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
@@ -196,6 +199,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case Union(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
 
     case Intersect(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
+
+    case Difference(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
     case Add(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     
