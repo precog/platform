@@ -75,13 +75,7 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   protected def actorsStopInternal: Future[Unit] = {
     import yggConfig.stopTimeout
 
-    def flushMetadata = {
-      logger.debug(logPrefix + "Flushing metadata")
-      (metadataActor ? FlushMetadata) recover { case e => logger.error("Error flushing metadata.", e) }
-    }
-
     metadataSyncCancel.cancel
-
     for {
       _  <- actorStop(ingestActor, "ingest")
       _  <- actorStop(projectionsActor, "projection")

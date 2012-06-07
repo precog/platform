@@ -28,49 +28,65 @@ import scalaz.effect._
 import scalaz.syntax.std.option._
 
 class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) extends MetadataStorage {
-  def getMetadata(desc: ProjectionDescriptor): IO[Validation[Error, MetadataRecord]] = IO {
-    data.get(desc).map(MetadataRecord(_, VectorClock.empty)).toSuccess(Invalid("Metadata doesn't exist for " + desc))
+  var updates: Map[ProjectionDescriptor, Seq[MetadataRecord]] = Map()
+
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = IO(None)
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = data.keySet.filter(f)
+
+  def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = IO {
+    updates(desc).last
   }
 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO(())
-
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = None
-  
-  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = 
-    data.keySet.filter(f)
-
-  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = 
-    data.keySet.toSeq.flatMap(f)
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = IO {
+    updates += (desc -> (updates.getOrElse(desc, Vector.empty[MetadataRecord]) :+ metadata))
+  }
 }
 
-object MetadataActorSpec extends Specification with FutureMatchers {
+case object GetCaptureResult
 
+class CaptureActor extends Actor with Logging {
+  var saveMetadataCalls = Vector[SaveMetadata]()
+  var otherCalls = Vector[Any]()
+
+  def receive = {
+    case sm @ SaveMetadata(metadata, messageClock, kafkaOffset) => 
+      logger.debug("Capture actor received save request for %s at %s : %s".format(metadata.toString, messageClock.toString, kafkaOffset.toString) + " from sender " + sender) 
+      saveMetadataCalls = saveMetadataCalls :+ sm
+      sender ! ()
+
+    case GetCaptureResult => 
+      logger.debug("Capture acture got request for results.")
+      sender ! ((saveMetadataCalls, otherCalls))
+
+    case other                   => 
+      logger.warn("Got unexpected message " + other + " in capture actor")
+      otherCalls = otherCalls :+ other
+  }
+}
+
+object MetadataActorSpec extends Specification with FutureMatchers with Mockito {
   val system = ActorSystem("shard_metadata_test")
   implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
     "correctly propagates initial message clock on flush request" in {
-      val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor1")
-      val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor1") 
+      val storage = new TestMetadataStorage
+      val coord = mock[CheckpointCoordination]
+      val actorRef = TestActorRef(new MetadataActor("Test", storage, coord))
       
-      testActor ! FlushMetadata(captureActor)
-      Thread.sleep(1000)
-      val result = for { 
-        r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
-      } yield r
-
-      result must whenDelivered {
+      val complete = testActor ? FlushMetadata
+      complete must whenDelivered {
         beLike {
-          case (save, other) =>
-            other.size must_== 0
-            save must_== Vector(SaveMetadata(Map(), VectorClock.empty, None))
+          case _ =>
+            there was one(coord).saveYggCheckpoint("Test", YggCheckpoint(0, VectorClock.empty))
         }
       }
     }
 
     "correctly propagates updated message clock on flush request" in {
-      val testActor = system.actorOf(Props(new TestMetadataActor), "test-metadata-actor2")
-      val captureActor = system.actorOf(Props(new CaptureActor), "test-capture-actor2") 
+      val storage = new TestMetadataStorage
+      val coord = mock[CheckpointCoordination]
+      val testActor = TestActorRef(new MetadataActor("test", storage, coord))
 
       val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
 
@@ -86,7 +102,7 @@ object MetadataActorSpec extends Specification with FutureMatchers {
 
       testActor ! IngestBatchMetadata(Map(descriptor -> ProjectionMetadata.columnMetadata(descriptor, Seq(row1, row2))), VectorClock.empty.update(0, 1).update(0, 2), Some(0l))
 
-      testActor ! FlushMetadata(captureActor) 
+      testActor ! FlushMetadata
       Thread.sleep(1000)
       val result = for { 
         r <- (captureActor ? GetCaptureResult).mapTo[(Vector[SaveMetadata], Vector[Any])] 
@@ -115,26 +131,198 @@ object MetadataActorSpec extends Specification with FutureMatchers {
   }
 }
 
-class TestMetadataActor extends MetadataActor("TestMetadataActor", new TestMetadataStorage(Map()), CheckpointCoordination.Noop)
+class MetadataActorStateSpec extends Specification {
+  def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
+    val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
+    val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+    val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
+    Map((desc -> metadata))
+  }
 
-case object GetCaptureResult
+  val token1 = "TOKEN"
 
-class CaptureActor extends Actor with Logging {
-  var saveMetadataCalls = Vector[SaveMetadata]()
-  var otherCalls = Vector[Any]()
+  val data: Map[ProjectionDescriptor, ColumnMetadata] = {
+    projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo.bar"), CBoolean, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo.bar"), CBoolean, token1) ++
+    projectionDescriptor(Path("/def/"), JPath(".foo.bar.baz.buz"), CBoolean, token1)
+  }
 
-  def receive = {
-    case sm @ SaveMetadata(metadata, messageClock, kafkaOffset) => 
-      logger.debug("Capture actor received save request for %s at %s : %s".format(metadata.toString, messageClock.toString, kafkaOffset.toString) + " from sender " + sender) 
-      saveMetadataCalls = saveMetadataCalls :+ sm
-      sender ! ()
+  val rootAbc = PathRoot(Set(
+    PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1)),
+    PathField("foo", Set(
+      PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
+      PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+      PathField("bar", Set(
+        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
+      )),
+      PathIndex(0, Set(
+        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+      ))
+    ))
+  ))
 
-    case GetCaptureResult => 
-      logger.debug("Capture acture got request for results.")
-      sender ! ((saveMetadataCalls, otherCalls))
+  val rootDef = PathRoot(Set(
+    PathField("foo", Set(
+      PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
+      PathField("bar", Set(
+        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar"), CBoolean, token1)),
+        PathField("baz", Set(
+          PathField("buz", Set(
+            PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
+          ))
+        ))
+      ))
+    ))
+  ))
 
-    case other                   => 
-      logger.warn("Got unexpected message " + other + " in capture actor")
-      otherCalls = otherCalls :+ other
+  val state = new MetadataActor.State(new TestMetadataStorage(data), VectorClock.empty, None) 
+
+  "local metadata state" should {
+    "query by path with root selector" in {
+      val result = state.findPathMetadata(Path("/abc/"), JPath(""))
+    
+      result must_== rootAbc
+    }
+
+    "query other path with root selector" in {
+      val result = state.findPathMetadata(Path("/def/"), JPath(""))
+      
+      result must_== rootDef
+    }
+
+    "query by path with branch selector" in {
+      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo"))
+     
+      val expected = PathRoot(Set(
+        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
+        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+        PathField("bar", Set(
+          PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
+        )),
+        PathIndex(0, Set(
+          PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+        ))
+      ))
+
+      result must_== expected 
+    }
+
+    "query other path with branch selector" in {
+      val result = state.findPathMetadata(Path("/def/"), JPath(".foo"))
+     
+      val expected = PathRoot(Set(
+        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
+        PathField("bar", Set(
+          PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar"), CBoolean, token1)),
+          PathField("baz", Set(
+            PathField("buz", Set(
+              PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
+            ))
+          ))
+        ))
+      ))
+
+      result must_== expected 
+    }
+
+    "query by path with array selector" in {
+      val result = state.findPathMetadata(Path("/abc/"), JPath(".foo[0]"))
+     
+      val expected = PathRoot(Set(
+        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+      ))
+
+      result must_== expected
+    }
+
+    "query other path with leaf selector" in {
+      val result = state.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz"))
+     
+      val expected = PathRoot(Set(
+        PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))
+      ))
+
+      result must_== expected 
+    }
+  }
+
+  def dump(root: PathRoot, indent: Int = 0) {
+    dumpMeta(root.children, indent)
+  }
+
+  def dumpMeta(meta: Set[PathMetadata], indent: Int = 0) { 
+    val prefix = "  " * indent
+    def log(m: String) = println(prefix + m)
+    meta foreach {
+      case PathValue(t, a, m) =>
+        log("Value: " + t + " " + m.size)
+      case PathField(n, c) =>
+        log("Name " + n)
+        dumpMeta(c, indent + 1)
+      case PathIndex(i, c) =>
+        log("Index " + i)
+        dumpMeta(c, indent + 1)
+    }
+  }
+
+  "helper methods" should {
+    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
+    val descriptor1 = ProjectionDescriptor(ListMap[ColumnDescriptor, Int]((colDesc1 -> 0)), Seq[(ColumnDescriptor, SortBy)]((colDesc1 -> ById))).toOption.get
+
+    def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
+
+    "add initial metadata for the first value inserted" in {
+      val value = CInt(10)
+   
+      val valueStats = ProjectionMetadata.valueStats(value).get
+      val expectedMetadata = Map((colDesc1 -> Map[MetadataType, Metadata]((valueStats.metadataType, valueStats))))
+      
+      val result = ProjectionMetadata.columnMetadata(descriptor1, List(value), List(Set())) 
+
+      result must_== expectedMetadata
+    }
+
+    "update existing metadata for values other than the first inserted" in {
+      val initialValue = CInt(10)
+   
+      val initialValueStats = ProjectionMetadata.valueStats(initialValue).get
+      val initialMetadata = Map[MetadataType, Metadata]((initialValueStats.metadataType -> initialValueStats))
+      val initialColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> initialMetadata))
+      
+      val value = CInt(20)
+   
+      val valueStats = ProjectionMetadata.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
+
+      val expectedMetadata = Map(colDesc1 -> Map[MetadataType, Metadata](valueStats.metadataType -> valueStats))
+     
+      val result = ProjectionMetadata.columnMetadata(descriptor1, List(value), List(Set())) |+| initialColumnMetadata
+        
+      result must_== expectedMetadata
+    }
+
+    "metadata is correctly combined" in {
+      val firstValue = CInt(10)
+      val firstValueStats = ProjectionMetadata.valueStats(firstValue).get
+      val firstMetadata = Map[MetadataType, Metadata](firstValueStats.metadataType -> firstValueStats)
+      val firstColumnMetadata = Map(colDesc1 -> firstMetadata)
+
+      val secondValue = CInt(20)
+   
+      val secondValueStats = ProjectionMetadata.valueStats(secondValue).get
+      val secondMetadata = Map[MetadataType, Metadata]((secondValueStats.metadataType -> secondValueStats))
+      val secondColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> secondMetadata))
+
+      val result = secondColumnMetadata |+| firstColumnMetadata
+
+      val expectedStats = firstValueStats.merge(secondValueStats).get
+      val expected = Map((colDesc1 -> Map[MetadataType, Metadata]((expectedStats.metadataType -> expectedStats))))
+
+      result must_== expected
+    }
   }
 }
