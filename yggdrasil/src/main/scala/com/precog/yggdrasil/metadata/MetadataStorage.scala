@@ -25,160 +25,68 @@ import scalaz.std.map._
 import scala.collection.GenTraversableOnce
 
 trait MetadataStorage {
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File]
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]]
   def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor]
-  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T]
 
   def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] 
   def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit]
 
   def findChildren(path: Path): Set[Path] =
-    flatMapDescriptors { descriptor => 
+    findDescriptors(_ => true) flatMap { descriptor => 
       descriptor.columns.collect { 
         case ColumnDescriptor(cpath, cselector, _, _) if cpath.parent.exists(_ == path) => {
           Path(cpath.elements.last)
         }
       }
-    }.toSet
+    }
 
-  def findSelectors(path: Path): Seq[JPath] = 
-    flatMapDescriptors { descriptor =>
+  def findSelectors(path: Path): Set[JPath] = 
+    findDescriptors(_ => true) flatMap { descriptor =>
       descriptor.columns.collect { 
         case ColumnDescriptor(cpath, cselector, _, _) if path == cpath => cselector 
       }
     }
 }
 
-object FileMetadataStorage {
+object FileMetadataStorage extends Logging {
   final val descriptorName = "projection_descriptor.json"
   final val prevFilename = "projection_metadata.prev"
   final val curFilename = "projection_metadata.cur"
   final val nextFilename = "projection_metadata.next"
-}
 
-class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStorage with Logging {
-  import FileMetadataStorage._
-
-  logger.debug("Init FileMetadataStorage using " + baseDir)
-
-  if (!baseDir.isDirectory) {
-    throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
+  def load(baseDir: File, fileOps: FileOps): IO[FileMetadataStorage] = {
+    for {
+      _  <- IO {
+              if (!baseDir.isDirectory) throw new IllegalArgumentException("FileMetadataStorage cannot use non-directory %s for its base".format(baseDir))
+              if (!baseDir.canRead) throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
+            }
+      locations <- loadDescriptors(baseDir)
+    } yield {
+      new FileMetadataStorage(baseDir, fileOps, locations)
+    }
   }
 
-  if (!baseDir.canRead) {
-    throw new IllegalArgumentException("FileMetadataStorage cannot read base directory " + baseDir)
-  }
+  private def loadDescriptors(baseDir: File): IO[Map[ProjectionDescriptor, File]] = {
+    def walkDirs(baseDir: File): Seq[File] = {
+      def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
 
-  private var metadataLocations: Map[ProjectionDescriptor, File] = loadDescriptors(baseDir)
-
-  logger.debug("Loaded " + metadataLocations.size + " projections")
-
-  // TODO: This should probably return a Validation
-  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): Option[File] = metadataLocations.get(desc) match {
-      case Some(root)       => Some(root)
-      case None if createOk =>
-        logger.info("Creating new projection for " + desc)
-        val newRoot = newRandomDir(baseDir)
-        // Write out the descriptor
-        writeDescriptor(desc, newRoot) match {
-          case Success(()) =>
-            metadataLocations += (desc -> newRoot)
-            Some(newRoot)
-
-          case Failure(errors) =>
-            logger.error("Failed to set up new projection for " + desc + ":" + errors)
-            None
-        }
-      case None             => None
-  }
-
-  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
-    metadataLocations.keySet.filter(f)
-  }
-
-  def flatMapDescriptors[T](f: ProjectionDescriptor => GenTraversableOnce[T]): Seq[T] = {
-    metadataLocations.keys.flatMap(f).toSeq
-  }
-
-  def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
-    import MetadataRecord._
-    implicit val extractor = metadataRecordExtractor(desc)
-
-    metadataLocations.get(desc) match {
-      case Some(dir) =>
-        val file = new File(dir, curFilename)
-        if (fileOps.exists(file)) {
-          fileOps.read(file) map {
-            json => JsonParser.parse(json).validated[MetadataRecord] 
-          }
+      def walk(baseDir: File): Seq[File] = {
+        if(containsDescriptor(baseDir)) {
+          Vector(baseDir)
         } else {
-          IO(Success[Error,MetadataRecord](defaultMetadata(desc)))
+          baseDir.listFiles.filter(_.isDirectory).flatMap{ walk(_) }
         }
-
-      case None =>
-        IO(Success(defaultMetadata(desc)))
-    }
-  }
- 
-  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = {
-    logger.debug("Updating metadata for " + desc)
-    metadataLocations.get(desc) map { dir =>
-      metadataLocations += (desc -> dir)
-
-      for {
-        _ <- stageNext(dir, metadata)
-        _ <- stagePrev(dir)
-        _ <- rotateCurrent(dir)
-      } yield { () }
-
-//      stageNext(dir, metadata) ap { 
-//        case Success(_) => 
-//          stagePrev(dir) flatMap {
-//            case Success(_)     => rotateCurrent(dir)
-//            case f @ Failure(_) => IO(f)
-//          }
-//        case f @ Failure(_) => IO(f)
-//      }
-    } getOrElse {
-      IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
-    }
-  }
-
-  private def newRandomDir(parent: File): File = {
-    def dirUUID: String = {
-      val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
-      val randomPath = (1 until 3).map { _*2 }.foldLeft(Vector.empty[String]) {
-        case (acc, i) => acc :+ uuid.substring(0, i)
       }
-      
-      randomPath.mkString("/", "/", "/") + uuid
-    }
 
-    val newDir = new File(parent, dirUUID)
-    newDir.mkdirs
-    newDir
-  }
-
-  private def walkDirs(baseDir: File): Seq[File] = {
-    def containsDescriptor(dir: File) = new File(dir, descriptorName).isFile 
-
-    def walk(baseDir: File): Seq[File] = {
-      if(containsDescriptor(baseDir)) {
-        Vector(baseDir)
+      if (baseDir.isDirectory) {
+        walk(baseDir)
       } else {
-        baseDir.listFiles.filter(_.isDirectory).flatMap{ walk(_) }
+        logger.warn("Base dir is not a directory!!!")
+        Seq()
       }
     }
 
-    if (baseDir.isDirectory) {
-      walk(baseDir)
-    } else {
-      logger.warn("Base dir is not a directory!!!")
-      Seq()
-    }
-  }
 
-  private def loadDescriptors(baseDir: File): Map[ProjectionDescriptor, File] = {
     def loadMap(baseDir: File) = {
       walkDirs(baseDir).foldLeft(Map.empty[ProjectionDescriptor, File]) { (acc, dir) =>
         logger.debug("loading: " + dir)
@@ -206,24 +114,101 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
       }
     }
 
-    loadMap(baseDir)
+    IO(loadMap(baseDir))
   }
 
   private def defaultMetadata(desc: ProjectionDescriptor): MetadataRecord = {
-    val metadata: ColumnMetadata = desc.columns.map { col =>
-      (col -> Map.empty[MetadataType, Metadata])
-    }(collection.breakOut)
-
+    val metadata: ColumnMetadata = desc.columns.map { col => (col -> Map.empty[MetadataType, Metadata]) }(collection.breakOut)
     MetadataRecord(metadata, VectorClock.empty)
   }
+}
 
-  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): Validation[Throwable, Unit] = {
+class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataLocations: Map[ProjectionDescriptor, File]) extends MetadataStorage with Logging {
+  import FileMetadataStorage._
+  def findDescriptors(f: ProjectionDescriptor => Boolean): Set[ProjectionDescriptor] = {
+    metadataLocations.keySet.filter(f)
+  }
+
+  def ensureDescriptorRoot(desc: ProjectionDescriptor): IO[Unit] = {
+    if (metadataLocations.contains(desc)) {
+      IO(())
+    } else {
+      for {
+        newRoot <- newRandomDir(baseDir)
+        _       <- writeDescriptor(desc, newRoot) 
+      } yield {
+        logger.info("Created new projection for " + desc)
+        metadataLocations += (desc -> newRoot) 
+      }
+    }
+  }
+
+  def findDescriptorRoot(desc: ProjectionDescriptor, createOk: Boolean): IO[Option[File]] = {
+    if (createOk) {
+      for (_ <- ensureDescriptorRoot(desc)) yield metadataLocations.get(desc)
+    } else {
+      IO(metadataLocations.get(desc))
+    }
+  }
+
+  def getMetadata(desc: ProjectionDescriptor): IO[MetadataRecord] = {
+    import MetadataRecord._
+    implicit val extractor = metadataRecordExtractor(desc)
+
+    metadataLocations.get(desc) match {
+      case Some(dir) =>
+        val file = new File(dir, curFilename)
+        if (fileOps.exists(file)) {
+          fileOps.read(file) map {
+            json => JsonParser.parse(json).deserialize[MetadataRecord] 
+          }
+        } else {
+          IO(defaultMetadata(desc))
+        }
+
+      case None =>
+        IO(defaultMetadata(desc))
+    }
+  }
+ 
+  def updateMetadata(desc: ProjectionDescriptor, metadata: MetadataRecord): IO[Unit] = {
+    logger.debug("Updating metadata for " + desc)
+    metadataLocations.get(desc) map { dir =>
+      metadataLocations += (desc -> dir)
+
+      for {
+        _ <- stageNext(dir, metadata)
+        _ <- stagePrev(dir)
+        _ <- rotateCurrent(dir)
+      } yield ()
+    } getOrElse {
+      IO.throwIO(new IllegalStateException("Metadata update on missing projection for " + desc))
+    }
+  }
+
+  private def newRandomDir(parent: File): IO[File] = {
+    def dirUUID: String = {
+      val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")
+      val randomPath = (1 until 3).map { _*2 }.foldLeft(Vector.empty[String]) {
+        case (acc, i) => acc :+ uuid.substring(0, i)
+      }
+      
+      randomPath.mkString("/", "/", "/") + uuid
+    }
+
+    val newDir = new File(parent, dirUUID)
+    IO {
+      newDir.mkdirs
+      newDir
+    }
+  }
+
+  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = IO {
     val df = new File(baseDir, descriptorName)
-
-    if (df.exists) Failure(new java.io.IOException("Serialized projection descriptor already exists for " + desc + " in " + baseDir))
-    else Validation.fromTryCatch {
+    if (df.exists) {
+      throw new java.io.IOException("Serialized projection descriptor already exists for " + desc + " in " + baseDir)
+    } else {
       val writer = new FileWriter(df)
-
       try {
         writer.write(Printer.pretty(Printer.render(desc.serialize)))
       } finally {
@@ -245,11 +230,9 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps) extends MetadataStora
   }
   
   private def rotateCurrent(dir: File): IO[Unit] = IO {
-    Validation.fromTryCatch {
-      val src = new File(dir, nextFilename)
-      val dest = new File(dir, curFilename)
-      fileOps.rename(src, dest)
-    }
+    val src  = new File(dir, nextFilename)
+    val dest = new File(dir, curFilename)
+    fileOps.rename(src, dest)
   }
 }
 
