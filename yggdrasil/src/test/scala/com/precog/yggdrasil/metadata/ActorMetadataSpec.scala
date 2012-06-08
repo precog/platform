@@ -49,7 +49,6 @@ import org.scalacheck.Gen._
 
 
 class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample with FutureMatchers {
-
   implicit var actorSystem: ActorSystem = null 
   def before() {
     actorSystem = ActorSystem("test")
@@ -96,13 +95,8 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   def isEqualOrChild(ref: JPath, test: JPath): Boolean = test.nodes.startsWith(ref.nodes) 
   
   def extractPathsFor(ref: Path)(events: List[Event]): Set[Path] = {
-
-    def isDescendant(ref: Path, test: Path): Boolean = 
-      test.elements.startsWith(ref.elements) &&
-      test.elements.length > ref.elements.length
-    
     events.collect {
-      case Event(test, _, _, _) if isDescendant(ref, test) => Path(test.elements(ref.length))
+      case Event(test, _, _, _) if test.isChildOf(ref) => Path(test.elements(ref.length))
     }.toSet
   }
 
@@ -131,8 +125,6 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   }
 
   def extractPathMetadata(path: Path, selector: JPath, in: Set[(JPath, CType, String)]): Set[PathMetadata] = {
-
-
     def classifyChild(ref: JPath, test: JPath, cType: CType, token: String): ChildType = {
       if((test.nodes startsWith ref.nodes) && (test.nodes.length > ref.nodes.length)) {
         if(test.nodes.length - 1 == ref.nodes.length) {
@@ -197,15 +189,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val event = sample(0)
       
       val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
+      val expected = extractPathsFor(Path.Root)(sample)
 
-      val fut = actor ? FindChildren(Path(""))
-
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]]
-      
-      val expected = extractPathsFor(Path(""))(sample)
-      
-      result must_== expected
-
+      (actor ? FindChildren(Path.Root)) must whenDelivered {
+        be_==(expected)
+      }
     }
     
     "return all children for the an arbitrary path" ! check { (sample: List[Event]) =>
@@ -215,15 +203,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val testPath: Path = event.path.parent.getOrElse(event.path)
 
       val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
-
-      val fut = actor ? FindChildren(testPath)
-
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Set[Path]]
-      
       val expected = extractPathsFor(testPath)(sample)
-      
-      result must_== expected
 
+      (actor ? FindChildren(testPath)) must whenDelivered {
+        be_==(expected)
+      }
     }
 
     "return all selectors for a given path" ! check { (sample: List[Event]) =>
@@ -231,15 +215,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val event = sample(0)
 
       val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
-
-      val fut = actor ? FindSelectors(event.path)
-
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[Seq[JPath]].toSet
-      
       val expected = extractSelectorsFor(event.path)(sample)
-      
-      result must_== expected
 
+      (actor ? FindSelectors(event.path)) must whenDelivered {
+        be_==(expected)
+      }
     }
 
     "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
@@ -247,9 +227,10 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val event = sample(0)
 
       val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
+      val expected = extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
 
-      (actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)).mapTo[Map[ProjectionDescriptor, Seq[Map[MetadataType, Metadata]]]] must whenDelivered {
-        be_==(extractMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample))
+      (actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)) must whenDelivered {
+        be_==(expected)
       }
     }
    
@@ -258,16 +239,11 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       val event = sample(0)
 
       val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop))
-
-      val fut = actor ? FindPathMetadata(event.path, event.data.flattenWithPath.head._1)
-
-      val result = Await.result(fut, Duration(30,"seconds")).asInstanceOf[PathRoot]
-    
       val expected = extractPathMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
-      
-      result must_== expected
 
+      (actor ? FindPathMetadata(event.path, event.data.flattenWithPath.head._1)) must whenDelivered {
+        be_==(expected)
+      }
     }.pendingUntilFixed
-
   }
 }
