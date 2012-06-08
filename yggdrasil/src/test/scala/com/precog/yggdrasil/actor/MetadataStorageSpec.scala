@@ -24,9 +24,9 @@ class MetadataStorageSpec extends Specification {
   import FileMetadataStorage._
 
   val inputMetadata = """{
-    "metadata":[],
-    "checkpoint":[[1,1]]
-  }"""
+  "metadata":[],
+  "checkpoint":[[1,1]]
+}"""
 
   val output = inputMetadata
   
@@ -57,12 +57,10 @@ class MetadataStorageSpec extends Specification {
   "metadata storage" should {
     "safely update metadata" in new metadataStore {
       // First write to add initial data
-      ms.findDescriptorRoot(desc, true)
-      ms.updateMetadata(desc, testRecord).unsafePerformIO
-      
-      // Second write to force an update
       val io = for {
+        _    <- ms.ensureDescriptorRoot(desc)
         _    <- ms.updateMetadata(desc, testRecord)
+        _    <- ms.updateMetadata(desc, testRecord) // Second write to force an update
         root <- ms.findDescriptorRoot(desc, true) 
       } yield {
         root map { descBase =>
@@ -79,9 +77,9 @@ class MetadataStorageSpec extends Specification {
     }
 
     "safely update metadata not current" in new metadataStore {
-      ms.findDescriptorRoot(desc, true)
 
       val io = for {
+        _    <- ms.ensureDescriptorRoot(desc)
         _    <- ms.updateMetadata(desc, testRecord)
         root <- ms.findDescriptorRoot(desc, true) 
       } yield {
@@ -102,7 +100,7 @@ class MetadataStorageSpec extends Specification {
         _ <- ms.updateMetadata(desc, testRecord)
         result <- ms.getMetadata(desc)
       } yield {
-        JsonParser.parse(result.serialize) must_== JsonParser.parse(inputMetadata)
+        result.serialize must_== JsonParser.parse(inputMetadata)
       }
 
       io.unsafePerformIO
