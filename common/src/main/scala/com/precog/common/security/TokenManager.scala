@@ -117,8 +117,8 @@ trait MongoTokenManagerComponent extends Logging {
 }
 
 class MongoTokenManager(
-    private[security] val mongo: Mongo,
-    private[security] val database: Database,
+    mongo: Mongo,
+    database: Database,
     settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager {
 
   private implicit val impTimeout = settings.timeout
