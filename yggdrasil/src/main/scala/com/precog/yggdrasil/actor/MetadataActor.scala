@@ -135,10 +135,8 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   def status: JValue = JObject(JField("Metadata", JObject(JField("state", JString("Ice cream!")) :: Nil)) :: Nil) // TODO: no, really...
 
   def findDescriptors(path: Path, selector: JPath): IO[Map[ProjectionDescriptor, ColumnMetadata]] = {
-    @inline def isEqualOrChild(ref: JPath, test: JPath) = test.nodes startsWith ref.nodes
-
-    @inline def matches(path: Path, selector: JPath) = (col: ColumnDescriptor) => {
-      col.path == path && isEqualOrChild(selector, col.selector)
+    @inline def matches(path: Path, selector: JPath) = {
+      (col: ColumnDescriptor) => col.path == path && (col.selector.nodes startsWith selector.nodes)
     }
 
     fullDataFor(storage.findDescriptors(_.columns.exists(matches(path, selector))))

@@ -34,8 +34,8 @@ trait MetadataStorage {
   def findChildren(path: Path): Set[Path] =
     findDescriptors(_ => true) flatMap { descriptor => 
       descriptor.columns.collect { 
-        case ColumnDescriptor(cpath, cselector, _, _) if cpath.parent.exists(_ == path) => {
-          Path(cpath.elements.last)
+        case ColumnDescriptor(cpath, cselector, _, _) if cpath isChildOf path => {
+          Path(cpath.elements(path.length))
         }
       }
     }
