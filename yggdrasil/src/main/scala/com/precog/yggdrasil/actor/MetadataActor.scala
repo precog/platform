@@ -239,8 +239,8 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     val matching: Set[IO[ResolvedSelector]] = storage.findDescriptors(_ => true) flatMap { descriptor => 
       descriptor.columns.collect {
-        case col @ ColumnDescriptor(_, sel, _, auth) if col.path == path && (selector.nodes startsWith col.selector.nodes) =>
-          columnMetadataFor(descriptor) map { cm => ResolvedSelector(sel, auth, descriptor, cm) }
+        case ColumnDescriptor(cpath, csel, _, auth) if cpath == path && (csel.nodes startsWith selector.nodes) =>
+          columnMetadataFor(descriptor) map { cm => ResolvedSelector(csel, auth, descriptor, cm) }
       }
     }
 
