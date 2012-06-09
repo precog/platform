@@ -68,9 +68,9 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoiz
   type YggConfig = DiskMemoizationConfig 
   object yggConfig extends DiskMemoizationConfig {
     val memoizationBufferSize = 10
-    val memoizationWorkDir = IOUtils.createTmpDir("memotest")
+    val memoizationWorkDir = IOUtils.createTmpDir("memotest").unsafePerformIO
     val sortBufferSize = 10
-    val sortWorkDir = IOUtils.createTmpDir("sorttest")
+    val sortWorkDir = IOUtils.createTmpDir("sorttest").unsafePerformIO
   }
 
   val storage = new Storage { }

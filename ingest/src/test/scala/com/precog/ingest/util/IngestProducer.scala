@@ -172,7 +172,7 @@ Usage:
   val client = new HttpClientXLightWeb
 
   def run(url: String, token: String, datafile: String) {
-    val data = IOUtils.rawReadFileToString(new File(datafile))
+    val data = IOUtils.readFileToString(new File(datafile)).unsafePerformIO
     val json = JsonParser.parse(data)
     json match {
       case JArray(elements) => elements.foreach { send(url, token, _ ) } 

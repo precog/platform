@@ -21,6 +21,7 @@ package com.precog.muspelheim
 
 import akka.actor._
 import akka.dispatch._
+import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
@@ -104,7 +105,12 @@ trait RawJsonShardComponent extends YggShardComponent {
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
     }
 
-    def metadata = new TestMetadataActorish(projectionMetadata, new TestMetadataStorage(projectionMetadata))
+    lazy val metadataActor = {
+      implicit val system = actorSystem
+      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop))
+    }
+
+    def metadata = new ActorStorageMetadata(metadataActor)
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
