@@ -2,7 +2,9 @@ name := "daze"
 
 version := "0.0.1-SNAPSHOT"
 
-libraryDependencies ++= Seq("com.eed3si9n" % "treehugger_2.9.1" % "0.1.2")
+libraryDependencies ++= Seq(
+  "com.eed3si9n" %  "treehugger_2.9.1" % "0.1.2"
+)
   
 logBuffered := false       // gives us incremental output from Specs2
 

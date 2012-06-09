@@ -15,13 +15,6 @@ import blueeyes.json.JsonParser
 import scala.io.Source
 
 import scalaz._
-import scalaz.std.AllInstances._
-import scalaz.effect._
-import scalaz.iteratee._
-import scalaz.syntax.monad._
-import Function._
-import IterateeT._
-import Validation._
 
 object StubOperationsAPI {
   import akka.dispatch.ExecutionContext
@@ -83,7 +76,7 @@ trait StubOperationsAPI
     
     private def readJSON(path: Path): Iterator[SEvent] = {
       val src = Source.fromInputStream(getClass getResourceAsStream path.elements.mkString("/", "/", ".json"))
-      val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map tupled(wrapSEvent)
+      val stream = Stream from 0 map scaleId(path) zip (src.getLines map parseJSON toStream) map { case (id, value) => wrapSEvent(id, value) }
       //Iteratee.enumPStream[X, Vector[SEvent], IO](stream.grouped(chunkSize).map(Vector(_: _*)).toStream)
       stream.iterator
     }
