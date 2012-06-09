@@ -60,10 +60,10 @@ object PlatformBuild extends Build {
   lazy val ingest   = Project(id = "ingest", base = file("ingest")).settings(ingestSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test", quirrel, daze, yggdrasil)
 
   val shardSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->test;test->test", quirrel, daze, yggdrasil, pandora)
+  lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
   
   val authSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val auth    = Project(id = "auth", base = file("auth")).settings(authSettings ++ commonSettings: _*).dependsOn(common)
+  lazy val auth    = Project(id = "auth", base = file("auth")).settings(authSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test")
   
   lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 

@@ -90,7 +90,7 @@ trait YggdrasilQueryExecutorComponent {
       class Storage extends {
         type YggConfig = YggdrasilQueryExecutorConfig
         val yggConfig = yConfig
-        val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
+        val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
         val accessControl = extAccessControl
       } with ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
       val storage = new Storage

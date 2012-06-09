@@ -124,11 +124,11 @@ with DiskIterableMemoizationComponent {
 
   object yggConfig extends IterableDatasetOpsConfig with DiskMemoizationConfig {
     def sortBufferSize: Int = 1000
-    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     def clock = Clock.System
     implicit object memoSerialization extends IncrementalSerialization[(Identities, Long)] with TestRunlengthFormatting with ZippedStreamSerialization
     def memoizationBufferSize: Int = 1000
-    def memoizationWorkDir: File = IOUtils.createTmpDir("idsoSpecMemo")
+    def memoizationWorkDir: File = IOUtils.createTmpDir("idsoSpecMemo").unsafePerformIO
   }
 
   def rec(i: Long) = (VectorCase(i), i: Long)

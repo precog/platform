@@ -68,18 +68,18 @@ object SBTConsole {
     lazy val controlTimeout = Duration(30, "seconds")
 
     object yggConfig extends YggConfig {
-      lazy val config = Configuration parse {
+      val config = Configuration parse {
         Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
       }
 
-      lazy val sortWorkDir = scratchDir
-      lazy val memoizationBufferSize = sortBufferSize
-      lazy val memoizationWorkDir = scratchDir
+      val sortWorkDir = scratchDir
+      val memoizationBufferSize = sortBufferSize
+      val memoizationWorkDir = scratchDir
 
-      lazy val flatMapTimeout = controlTimeout
-      lazy val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
-      lazy val maxEvalDuration = controlTimeout
-      lazy val clock = blueeyes.util.Clock.System
+      val flatMapTimeout = controlTimeout
+      val projectionRetrievalTimeout = akka.util.Timeout(controlTimeout)
+      val maxEvalDuration = controlTimeout
+      val clock = blueeyes.util.Clock.System
 
       object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
       object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
@@ -87,7 +87,7 @@ object SBTConsole {
       object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
       //TODO: Get a producer ID
-      lazy val idSource = new IdSource {
+      val idSource = new IdSource {
         private val source = new java.util.concurrent.atomic.AtomicLong
         def nextId() = source.getAndIncrement
       }
@@ -95,15 +95,15 @@ object SBTConsole {
 
     trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
       type YggConfig = console.YggConfig
-      //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
-      val yggConfig = console.yggConfig
-      val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
-      val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
     
     object ops extends Ops 
     object query extends QueryAPI 
-    object storage extends Storage
+    object storage extends Storage {
+      val yggConfig = console.yggConfig
+      val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+      val accessControl = new UnlimitedAccessControl()(asyncContext)
+    }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
       case Success(results) => results.map(_._2)

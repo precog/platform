@@ -25,7 +25,7 @@ trait TestConfigComponent {
 
   trait YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig with IterableDatasetOpsConfig {
     val sortBufferSize = 1000
-    val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System
     val memoizationBufferSize = 1000
     val memoizationWorkDir: File = null //no filesystem storage in test!
