@@ -82,30 +82,30 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
       kafkaOffset = batchOffset orElse kafkaOffset
    
     case msg @ FindChildren(path) => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! storage.findChildren(path)
     
     case msg @ FindSelectors(path) => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! storage.findSelectors(path)
 
     case msg @ FindDescriptors(path, selector) => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! findDescriptors(path, selector).unsafePerformIO
 
     case msg @ FindPathMetadata(path, selector) => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! findPathMetadata(path, selector).unsafePerformIO
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! storage.findDescriptorRoot(descriptor, createOk)
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO
 
     case msg @ GetCurrentCheckpoint => 
-      logger.info(msg.toString)
+      logger.trace(msg.toString)
       sender ! YggCheckpoint(kafkaOffset.getOrElse(0l), messageClock) // TODO: Make this safe
   }
 
