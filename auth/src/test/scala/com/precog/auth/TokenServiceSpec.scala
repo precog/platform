@@ -82,7 +82,6 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 }
 
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {
-
   import TestTokenManager._
 
   def get(tokenId: String) = 

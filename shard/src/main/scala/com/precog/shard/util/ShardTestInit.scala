@@ -52,11 +52,10 @@ object ShardTestInit extends App {
   dir.mkdirs
 
   object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-    class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
+    class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-    }
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-    val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 

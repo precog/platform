@@ -266,6 +266,7 @@ object Console extends App {
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
+    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, new FilesystemFileOps {})
   } yield {
       scalaz.Success(new REPL 
           with IterableDatasetOpsComponent
@@ -283,15 +284,15 @@ object Console extends App {
 
         trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
           type YggConfig = REPLConfig
-          //protected implicit val projectionManifest = implicitly[Manifest[Projection[IterableDataset]]]
-          lazy val yggConfig = replConfig
-          val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {})
-          lazy val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
         object ops extends Ops 
         object query extends QueryAPI 
-        object storage extends Storage
+        object storage extends Storage {
+          val yggConfig = replConfig
+          val metadataStorage = fileMetadataStorage
+          val accessControl = new UnlimitedAccessControl()(asyncContext)
+        }
 
         def startup = IO { Await.result(storage.actorsStart, controlTimeout) }
 
