@@ -106,6 +106,8 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
+  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager()
+
   lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
           
 
