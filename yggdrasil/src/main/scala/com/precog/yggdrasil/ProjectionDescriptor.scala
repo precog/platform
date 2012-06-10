@@ -312,7 +312,7 @@ object ProjectionDescriptor extends ProjectionDescriptorSerialization {
   implicit object briefShow extends Show[ProjectionDescriptor] {
     def show(d: ProjectionDescriptor) = shows(d).toList
     override def shows(d: ProjectionDescriptor) = {
-      d.columns.map(c => c.show).mkString("Projection: [", ", ", "]")
+      d.columns.map(c => c.shows).mkString("Projection: [", ", ", "]")
     }
   }
 }

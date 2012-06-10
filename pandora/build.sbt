@@ -17,6 +17,8 @@ mainClass := Some("com.precog.pandora.Console")
 
 mainTest := "com.precog.pandora.PlatformSpecs"
 
+parallelEvaluation in test := false
+
 dataDir := {
   val file = File.createTempFile("pandora", ".db")
   file.delete()

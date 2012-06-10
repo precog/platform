@@ -32,6 +32,7 @@ import scalaz.syntax.plus._
 import scalaz.syntax.monad._
 import scalaz.syntax.applicativePlus._
 import scalaz.syntax.bifunctor
+import scalaz.syntax.show._
 import scalaz.Scalaz._
 import IterateeT._
 
@@ -79,7 +80,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
 
-  val logger = Logger("col:" + baseDir)
+  val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files")
 
   private val createOptions = (new Options)
@@ -236,7 +237,10 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     }
   }
 
-  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt, false, None)
+  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = {
+    logger.debug("getAllPairs called for projection " + descriptor.shows)
+    traverseIndex(expiresAt, false, None)
+  }
 
 //  def traverseIndexEnumerator[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
 //    import MO._

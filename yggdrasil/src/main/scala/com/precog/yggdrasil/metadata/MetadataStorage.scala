@@ -20,6 +20,7 @@ import scalaz.effect._
 import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.std.option._
+import scalaz.syntax.show._
 import scalaz.std.map._
 
 import scala.collection.GenTraversableOnce
@@ -91,7 +92,9 @@ object FileMetadataStorage extends Logging {
       walkDirs(baseDir).foldLeft(Map.empty[ProjectionDescriptor, File]) { (acc, dir) =>
         logger.debug("loading: " + dir)
         read(dir) match {
-          case Success(pd) => acc + (pd -> dir)
+          case Success(pd) => 
+            logger.debug("Loaded projection descriptor " + pd.shows + " from " + dir.toString)
+            acc + (pd -> dir)
           case Failure(error) => 
             logger.warn("Failed to restore %s: %s".format(dir, error))
             acc

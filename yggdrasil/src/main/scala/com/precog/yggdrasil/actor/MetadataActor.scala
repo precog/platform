@@ -126,7 +126,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
           
       case Right(_) =>
         for (offset <- kafkaOffset) checkpointCoordination.saveYggCheckpoint(shardId, YggCheckpoint(offset, messageClock))
-        logger.debug("Flush " + flushRequests + " complete for projections: \n" + dirty.map(_.show).mkString("\t", "\t\n", "\n"))
+        logger.debug("Flush " + flushRequests + " complete for projections: \n" + dirty.map(_.shows).mkString("\t", "\t\n", "\n"))
         dirty = Set()
         replyTo foreach { _ ! () }
     }

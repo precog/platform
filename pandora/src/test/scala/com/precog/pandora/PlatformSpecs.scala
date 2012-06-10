@@ -41,14 +41,14 @@ import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
 class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
-  trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-    type YggConfig = platformSpecs.YggConfig
-    lazy val yggConfig = platformSpecs.yggConfig
-    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
-    lazy val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
-  }
+  trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
   
-  object storage extends Storage
+  object storage extends Storage {
+    type YggConfig = platformSpecs.YggConfig
+    val yggConfig = platformSpecs.yggConfig
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+  }
 
   override def startup() {
     // start storage shard 
