@@ -44,7 +44,7 @@ class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
   trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
     type YggConfig = platformSpecs.YggConfig
     lazy val yggConfig = platformSpecs.yggConfig
-    val metadataStorage = new FileMetadataStorage(yggConfig.dataDir, new FilesystemFileOps {}, Map())
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
     lazy val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
   
