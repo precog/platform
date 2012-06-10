@@ -118,7 +118,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.trace(msg.toString)
-      sender ! storage.findDescriptorRoot(descriptor, createOk)
+      sender ! storage.findDescriptorRoot(descriptor, createOk).unsafePerformIO
     
     case msg @ FlushMetadata => 
       flush(Some(sender)).unsafePerformIO

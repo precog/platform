@@ -92,8 +92,8 @@ trait ProjectionsActorModule[Dataset[_]] {
       case AcquireProjection(descriptor) =>
         logger.debug("Acquiring projection for " + descriptor)
         val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, false)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          projection(dir.asInstanceOf[Option[File]], descriptor) match {
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, false)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
+          projection(dir, descriptor) match {
             case Success(p) =>
               reserved(p.descriptor)
             mySender ! ProjectionAcquired(p)
@@ -111,8 +111,8 @@ trait ProjectionsActorModule[Dataset[_]] {
       case ProjectionInsert(descriptor, inserts) =>
         val coordinator = sender
         logger.debug(coordinator + " is inserting into projection for " + descriptor)
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, true)).onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          projection(dir.asInstanceOf[Option[File]], descriptor) match {
+        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, true)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
+          projection(dir, descriptor) match {
             case Success(p) =>
               logger.debug("Reserving " + descriptor + " in " + dir)
               reserved(p.descriptor)
