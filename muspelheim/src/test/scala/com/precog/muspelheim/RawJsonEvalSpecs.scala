@@ -122,12 +122,15 @@ trait ParseEvalStackSpecs extends Specification
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
       def evalE(str: String, debug: Boolean = false) = {
+        logger.debug("Beginning evaluation of query: " + str)
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx) match {
-            case Success(result) => result
+            case Success(result) => 
+              logger.debug("Evaluation complete for query: " + str)
+              result
             case Failure(error) => throw error
           }
         }
