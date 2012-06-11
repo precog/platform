@@ -4,10 +4,6 @@ package daze
 import bytecode.Library
 
 import yggdrasil._
-import yggdrasil.serialization._
-
-import scalaz.Order
-import scalaz.Ordering
 
 trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
