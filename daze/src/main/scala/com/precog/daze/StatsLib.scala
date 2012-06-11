@@ -26,14 +26,15 @@ import bytecode.BuiltInFunc2
 
 import yggdrasil._
 
-trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations {
-  import ops.extend
-  //private implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
+import com.precog.util.IdGen
 
+trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations with Evaluator {
   val StatsNamespace = Vector("std", "stats")
 
   override def _lib1 = super._lib1 ++ Set(DenseRank, Rank)
   override def _lib2 = super._lib2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression)
+
+  import yggConfig._
 
   object LinearCorrelation extends BIF2(StatsNamespace, "corr") {
     val operandType = (Some(SDecimal), Some(SDecimal))
@@ -153,7 +154,54 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
     }
   }
 
-  object DenseRank extends BIF1(StatsNamespace, "denseRank") with RankFunction
-  object Rank extends BIF1(StatsNamespace, "rank") with RankFunction
+  object DenseRank extends BIF1(StatsNamespace, "denseRank") with RankFunction {
+    override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
+      var count = 0
+      var previous: Option[SValue] = Option.empty[SValue]
 
+      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
+      val enum3: Dataset[SValue] = enum2 collect {
+        case s @ SDecimal(v) => {
+          if (Some(s) == previous) {
+            previous = Some(s)
+
+            SDecimal(count)
+          } else {
+            previous = Some(s)
+            count += 1
+
+            SDecimal(count)
+          }
+        }
+      }
+      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+    }
+  }
+
+  object Rank extends BIF1(StatsNamespace, "rank") with RankFunction {
+    override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
+      var countTotal = 0
+      var countEach = 1
+      var previous: Option[SValue] = Option.empty[SValue]
+
+      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
+      val enum3: Dataset[SValue] = enum2 collect {
+        case s @ SDecimal(v) => {
+          if (Some(s) == previous) {
+            previous = Some(s)
+            countEach += 1
+
+            SDecimal(countTotal)
+          } else {
+            previous = Some(s)
+            countTotal += countEach 
+            countEach = 1
+          
+            SDecimal(countTotal)
+          }
+        }
+      }
+      Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
+    }
+  }
 }

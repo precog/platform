@@ -63,7 +63,6 @@ trait Evaluator extends DAG
     with MemoizationEnvironment
     with ImplLibrary
     with InfixLib
-    with StatsLib
     with YggConfigComponent { self =>
   
   import Function._
@@ -246,58 +245,14 @@ trait Evaluator extends DAG
         lazy val enum = realizeMatch(spec, set)
 
         op match {
-          case BuiltInFunction1Op(Rank) => { // (3,7,7,7,9,12,12,15) -> (1,2,2,2,5,6,6,8)
-            var countTotal = 0
-            var countEach = 1
-            var previous: Option[SValue] = Option.empty[SValue]
-
-            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
-            val enum3: Dataset[SValue] = enum2 collect {
-              case s @ SDecimal(v) => {
-                if (Some(s) == previous) {
-                  previous = Some(s)
-                  countEach += 1
-
-                  SDecimal(countTotal)
-                } else {
-                  previous = Some(s)
-                  countTotal += countEach 
-                  countEach = 1
-                
-                  SDecimal(countTotal)
-                }
-              }
-            }
-            val enum4 = enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext)
-
-            Right(Match(mal.Op1(spec, op), enum4, graph))  
+          case BuiltInFunction1Op(f) => {
+            val enum2 = f.evalEnum(enum, o, ctx) getOrElse set
+            Right(Match(mal.Op1(spec, op), enum2, graph))
           }
 
-          case BuiltInFunction1Op(DenseRank) => {  // (2,7,7,7,9,12,12,15) -> (1,2,2,2,3,4,4,5)
-            var count = 0
-            var previous: Option[SValue] = Option.empty[SValue]
-
-            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
-            val enum3: Dataset[SValue] = enum2 collect {
-              case s @ SDecimal(v) => {
-                if (Some(s) == previous) {
-                  previous = Some(s)
-
-                  SDecimal(count)
-                } else {
-                  previous = Some(s)
-                  count += 1
-
-                  SDecimal(count)
-                }
-              }
-            }
-            val enum4 = enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext)
-
-            Right(Match(mal.Op1(spec, op), enum4, graph))  
+          case _ => { 
+            Right(Match(mal.Op1(spec, op), set, graph))
           }
-
-          case _ => Right(Match(mal.Op1(spec, op), set, graph))
         }
       }
       
