@@ -20,10 +20,8 @@
 package com.precog.yggdrasil
 package leveldb
 
-import com.precog.yggdrasil.serialization.bijections.id2ab
-
-import com.precog.common._
-import com.precog.util._
+import com.precog.common._ 
+import com.precog.util._ 
 import com.precog.util.Bijection._
 
 import org.iq80.leveldb._
@@ -35,6 +33,7 @@ import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.Map.Entry
 import java.util.concurrent.TimeoutException
+import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
 import scala.collection.JavaConverters._
@@ -108,6 +107,9 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     .blockSize(1024 * 1024) // Based on rudimentary benchmarking. Gains in the high single digit percents
 
   private lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
+  //private lazy val valIndexFile: DB = {
+  //   factory.open(new File(baseDir, "valIndex"), createOptions.comparator(comparator))
+  //}
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
@@ -152,7 +154,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   import org.fusesource.leveldbjni.KeyValueChunk
   import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
 
-  class ChunkReader(iterator: JniDBIterator, expiresAt: Long, closeFunc: () => Unit) extends Thread {
+  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Thread {
     val bufferQueue = new ArrayBlockingQueue[Pair[ByteBuffer,ByteBuffer]](readAheadSize) // Need a key and value buffer for each readahead
 
     // pre-fill the buffer queue
@@ -173,7 +175,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
         var buffers : Pair[ByteBuffer,ByteBuffer] = null
         while (running.get && buffers == null) {
           if (System.currentTimeMillis > expiresAt) {
-            closeFunc()
+            iterator.close()
             running.set(false)
             chunkQueue.put(emptyInput)
             return
@@ -186,7 +188,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
           while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
             if (System.currentTimeMillis > expiresAt) {
-              closeFunc()
+              iterator.close()
               running.set(false)
               chunkQueue.put(emptyInput)
               return
@@ -197,7 +199,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
       chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
 
-      closeFunc()
+      iterator.close()
     }
   }
 
@@ -207,26 +209,12 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     def remove() = throw new UnsupportedOperationException("Iterators cannot remove")
   }
 
-  def traverseIndex(expiresAt: Long, useSnapshot: Boolean, startId: Option[Identities]): IterableDataset[Seq[CValue]] =
-    IterableDataset[Seq[CValue]](1, traverseIndexRaw(expiresAt, useSnapshot, startId).map {
-      case (k,v) => unproject(k, v)
-    })
+  def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = IterableDataset[Seq[CValue]](1, new Iterable[(Identities,Seq[CValue])]{
+    def iterator = new Iterator[(Identities,Seq[CValue])] {
+      val iter = idIndexFile.iterator.asInstanceOf[JniDBIterator]
+      iter.seekToFirst
 
-  def traverseIndexRaw(expiresAt: Long, useSnapshot: Boolean, startId: Option[Identities]): Iterable[(Array[Byte],Array[Byte])] = new Iterable[(Array[Byte],Array[Byte])] {
-    def iterator = new Iterator[(Array[Byte],Array[Byte])] {
-      val readOpts = new ReadOptions
-
-      val snapshot = if (useSnapshot) Some(idIndexFile.getSnapshot()) else None
-      snapshot.foreach(readOpts.snapshot(_))
-
-      val iter = idIndexFile.iterator(readOpts).asInstanceOf[JniDBIterator]
-
-      startId match {
-        case Some(id) => iter.seek(id.as[Array[Byte]])
-        case None     => iter.seekToFirst
-      }
-
-      val reader = new ChunkReader(iter, expiresAt, () => { iter.close(); snapshot.foreach(_.close()) })
+      val reader = new ChunkReader(iter, expiresAt)
       reader.start()
 
       private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
@@ -249,17 +237,14 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
         }
       }
 
-      def next: (Array[Byte],Array[Byte]) = {
+      def next: (Identities,Seq[CValue]) = {
         val kvPair = chunkIterator.next()
-        (kvPair.getKey, kvPair.getValue)
+        unproject(kvPair.getKey, kvPair.getValue)
       }
     }
-  }
+  })
 
-  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = {
-    logger.debug("getAllPairs called for projection " + descriptor.shows)
-    traverseIndex(expiresAt, false, None)
-  }
+  @inline final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
 
 //  def traverseIndexEnumerator[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
 //    import MO._
