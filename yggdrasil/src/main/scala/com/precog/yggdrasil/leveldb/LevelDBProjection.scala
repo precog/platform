@@ -101,6 +101,8 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files")
 
+  override def toString = "LevelDBProjection(" + descriptor.columns + ")"
+
   private val createOptions = (new Options)
     .createIfMissing(true)
     .maxOpenFiles(maxOpenFiles)

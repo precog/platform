@@ -109,7 +109,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
   protected def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
     for {
-      _ <- Future(logger.debug(logPrefix + " Stopping " + name + " actor"))
+      _ <- Future(logger.debug(logPrefix + " Stopping " + name + " actor within " + yggConfig.stopTimeout.duration))
       b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(actorSystem) 
     } yield {
       logger.debug(logPrefix + " Stop call for " + name + " actor returned " + b)  

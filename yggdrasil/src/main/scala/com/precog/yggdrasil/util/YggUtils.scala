@@ -77,6 +77,8 @@ import scala.io.Source
 import au.com.bytecode.opencsv._
 import java.io._
 
+import com.weiglewilczek.slf4s.Logging
+
 trait YggUtilsCommon {
   def load(dataDir: String) = {
     val dir = new File(dataDir)
@@ -705,7 +707,7 @@ object IngestTools extends Command {
                var relayZkPath: String = "/")
 }
 
-object ImportTools extends Command {
+object ImportTools extends Command with Logging {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
   
@@ -713,7 +715,6 @@ object ImportTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
-      opt("v", "verbose", "verbose logging", { config.verbose = true })
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
@@ -722,7 +723,11 @@ object ImportTools extends Command {
       })
     }
     if (parser.parse(args)) {
-      process(config)
+      try {
+        process(config)
+      } catch {
+        case e => logger.error("Failure during import", e); sys.exit(1)
+      }
     } else { 
       parser
     }
@@ -744,45 +749,37 @@ object ImportTools extends Command {
         val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
       }
 
+      logger.info("Starting shard input")
       Await.result(shard.actorsStart, Duration(60, "seconds"))
+      logger.info("Shard input started")
       config.input.foreach {
         case (db, input) =>
-          if(config.verbose) println("Inserting batch: %s:%s".format(db, input))
-          val events = Source.fromFile(input).getLines
-          insert(config, db, events, shard)
+          logger.debug("Inserting batch: %s:%s".format(db, input))
+          val events = Source.fromFile(input).getLines.map {
+            line => EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, JsonParser.parse(line), Map.empty))
+          }.toList
+        
+          logger.debug(events.size + " total inserts")
+
+          events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
+              logger.info("Saving batch " + id + " of size " + batch.size)
+              Await.result(shard.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
+              logger.info("Batch saved")
+            }
+          }
       }
 
-      if(config.verbose) println("Waiting for shard shutdown")
-      Await.result(shard.actorsStop, Duration(60, "seconds"))
+      logger.info("Waiting for shard shutdown")
+      Await.result(shard.actorsStop, Duration(310, "seconds"))
 
-      if(config.verbose) println("Shutdown")
+      logger.info("Shutdown")
+      sys.exit(0)
     }
 
     io.unsafePerformIO
   }
 
   val sid = new AtomicInteger(0)
-
-  def insert(config: Config, db: String, itr: Iterator[String], shard: YggShard[IterableDataset], batch: Vector[EventMessage] = Vector.empty, b: Int = 0): Unit = {
-    val verbose = config.verbose
-    val batchSize = config.batchSize
-    val token = config.token
-
-    val (curBatch, nb) = if(batch.size >= batchSize || !itr.hasNext) {
-      if(verbose) println("Saving batch - " + b)
-      Await.result(shard.storeBatch(batch, new Timeout(60000)), Duration(60, "seconds"))
-      (Vector.empty[EventMessage], b+1)
-    } else {
-      (batch, b)
-    }
-
-    if (itr.hasNext) {
-      val data = JsonParser.parse(itr.next) 
-      val event = Event(Path(db), token, data, Map.empty)
-      val em = EventMessage(EventId(0, sid.getAndIncrement), event)
-      insert(config, db, itr, shard, curBatch :+ em, nb)
-    } 
-  }
 
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
@@ -831,7 +828,7 @@ object CSVTools extends Command {
 }
 
 
-object TokenTools extends Command with AkkaDefaults {
+object TokenTools extends Command with AkkaDefaults with Logging {
   val name = "tokens"
   val description = "Token management utils"
     
@@ -863,11 +860,11 @@ object TokenTools extends Command with AkkaDefaults {
                   config.path.map(p => create(config.newTokenName, Path(p), config.root, tm)) ++
                   config.delete.map(delete(_, tm))
 
-    Future.sequence(actions) onComplete {
+    Await.result(Future.sequence(actions) onComplete {
       _ => tm.close() onComplete {
         _ => defaultActorSystem.shutdown
       }
-    } 
+    }, Duration(30, "seconds"))
   }
 
   def tokenManager(config: Config): TokenManager = {
@@ -881,8 +878,8 @@ object TokenTools extends Command with AkkaDefaults {
     }
   }
 
-  def printToken(t: Token): Unit = sys.error("todo")
-//  {
+  def printToken(t: Token): Unit = {
+    println(t)
 //    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
 //    println("  Permissions (Path)")
 //    t.permissions.path.foreach { p =>
@@ -904,6 +901,7 @@ object TokenTools extends Command with AkkaDefaults {
 //      children.foreach(printToken)
 //    }
 //  }
+  }
 
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
     for {
