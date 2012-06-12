@@ -88,11 +88,11 @@ object ShardTestInit extends App {
         case JArray(elements) => 
           val fut = shard.storeBatch(elements.map{ value =>
             println(Printer.compact(Printer.render(value)))
-            EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, value, emptyMetadata))
+            EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", value, emptyMetadata))
           }, timeout)
           Await.result(fut, Duration(30, "seconds")) 
         case single           =>
-          val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, single, emptyMetadata)), timeout)
+          val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", single, emptyMetadata)), timeout)
           Await.result(fut, Duration(30, "seconds")) 
       }
     } except {
