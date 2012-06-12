@@ -38,7 +38,7 @@ import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.syntax.apply._
 import scalaz.syntax.semigroup._
-import scalaz.syntax.std.option._
+import scalaz.syntax.std.optionV._
 import scalaz.syntax.show._
 import scalaz.std.map._
 
