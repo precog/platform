@@ -65,7 +65,6 @@ trait Evaluator extends DAG
     with MemoizationEnvironment
     with ImplLibrary
     with InfixLib
-    with StatsLib
     with BigDecimalOperations
     with YggConfigComponent 
     with Logging { self =>
