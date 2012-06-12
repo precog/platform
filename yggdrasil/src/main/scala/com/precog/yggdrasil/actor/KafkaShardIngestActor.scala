@@ -100,7 +100,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       totalConsecutiveFailures += 1
       if (totalConsecutiveFailures < maxConsecutiveFailures) {
         for (messages <- ingestCache.get(checkpoint)) {
-          val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, requestor, checkpoint, ingestTimeout))) 
+          val batchHandler = context.actorOf(Props(new BatchHandler(self, requestor, checkpoint, ingestTimeout))) 
           requestor.tell(IngestData(messages), batchHandler)
         }
       } else {
@@ -122,7 +122,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
   
                 // create a handler for the batch, then reply to the sender with the message set
                 // using that handler reference as the sender to which the ingest system will reply
-                val batchHandler = context.actorOf(Props(new KafkaBatchHandler(self, sender, checkpoint, ingestTimeout))) 
+                val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
                 requestor.tell(IngestData(messages), batchHandler)
               } else {
                 requestor ! IngestData(Nil)
@@ -168,7 +168,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
  * A batch handler actor is responsible for tracking confirmation of persistence for
  * all the messages in a specific batch. It sends 
  */
-class KafkaBatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCheckpoint, ingestTimeout: Timeout) extends Actor with Logging {
+class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCheckpoint, ingestTimeout: Timeout) extends Actor with Logging {
   import KafkaBatchHandler._
 
   private var remaining = -1 
@@ -210,3 +210,14 @@ object KafkaBatchHandler {
   case class Incomplete(requestor: ActorRef, checkpoint: YggCheckpoint)
 }
 
+// Kinda hacky, just get an actor that we can use to wait for batch completion outside of the actor system
+case object PollBatch
+
+class PollBatchActor extends Actor {
+  private var result: Option[Any] = None
+  def receive = {
+    case PollBatch => sender ! result
+
+    case other     => result = Some(other)
+  }
+}

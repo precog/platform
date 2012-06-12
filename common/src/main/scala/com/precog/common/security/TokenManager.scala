@@ -119,7 +119,7 @@ trait MongoTokenManagerComponent extends Logging {
 class MongoTokenManager(
     mongo: Mongo,
     database: Database,
-    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager {
+    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager with Logging {
 
   private implicit val impTimeout = settings.timeout
 
@@ -132,7 +132,10 @@ class MongoTokenManager(
 
   def newGrant(issuer: Option[GrantID], perm: Permission) = {
     val ng = Grant(newGrantID, issuer, perm)
-    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { _ => ng }
+    logger.debug("Adding grant: " + ng)
+    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { 
+      _ => logger.debug("Add complete for " + ng); ng 
+    }
   }
 
   private def findOneMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {

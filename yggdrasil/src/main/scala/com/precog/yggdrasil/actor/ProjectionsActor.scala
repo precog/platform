@@ -110,6 +110,10 @@ trait ProjectionsActorModule[Dataset[_]] {
         }
     }
 
+    override def postStop(): Unit = {
+      logger.info("Stopped ProjectionsActor")
+    }
+
     protected def status: JValue
 
     protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
@@ -140,7 +144,7 @@ trait ProjectionsActorModule[Dataset[_]] {
 
     def receive = {
       case BatchInsert(rows, replyTo) =>
-        logger.debug("Inserting " + rows.size)
+        logger.debug("Inserting " + rows.size + " rows into " + projection)
         insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
 

@@ -60,6 +60,10 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
     logger.info("Initial ingest request scheduled")
   }
 
+  override def postStop() = {
+    logger.info("IngestSupervisor shutting down")
+  }
+
   def receive = {
     case Status =>
       logger.debug("Ingest supervisor status")
@@ -92,7 +96,7 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
   private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
     val inserts = routingTable.batchMessages(messages)
 
-    logger.debug("Sending " + inserts.size + " insert")
+    logger.debug("Sending " + inserts.size + " messages for insert")
     batchCoordinator ! ProjectionInsertsExpected(inserts.size)
     for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
   }
