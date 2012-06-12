@@ -213,6 +213,8 @@ class ZookeeperSystemCoordination(private val zkc: ZkClient, uid: ServiceUID, yg
             logger.debug("yggCheckpoint %s: RESTORED".format(checkpoint))
             checkpoint
           } else {
+            // this case MUST return a failure - if a checkpoint is missing for a shard,
+            // it must be created manually via YggUtils
             Failure(Invalid("No checkpoint information found in Zookeeper!"))
           } 
         }

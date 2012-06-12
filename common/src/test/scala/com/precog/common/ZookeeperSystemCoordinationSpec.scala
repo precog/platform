@@ -24,6 +24,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok 
       }
     }
+
     "renew relay agent" in zookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
@@ -35,6 +36,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Success(EventRelayState(0, 10001, IdSequenceBlock(0, 10001, 20000))) => ok 
       }
     } 
+
     "save and restore relay agent state" in zookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
@@ -60,6 +62,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok 
       }
     } 
+
     "restore relay agent state" in zookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
@@ -79,6 +82,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Success(EventRelayState(123, 456, IdSequenceBlock(0, 1, 10000))) => ok 
       }
     } 
+
     "relay agent registration retries in case of stale registration" in zookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
@@ -100,6 +104,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Success(EventRelayState(0, 1, IdSequenceBlock(0, 1, 10000))) => ok 
       }
     } 
+
     "relay agent registration fails after reasonable attempt to detect stale registration" in zookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
@@ -117,33 +122,35 @@ class ZookeeperSystemCoordinationSpec extends Specification {
         case Failure(_) => ok 
       }
     } 
+
     "distinguish between normal and abnormal relay agent shutdown" in {
       todo
     }
+
     "handle sequenceid overflow by assigning new producer id" in {
       todo
     }
-    "load empty checkpoints" in zookeeperClient() { factory: ClientFactory =>
+
+    "not load a missing checkpoint (checkpoints for new shards should be inserted manually via YggUtils)" in zookeeperClient() { factory: ClientFactory =>
       val client = factory()
       val sc = newSystemCoordination(client)
       
       val checkpoints = sc.loadYggCheckpoint("shard")
 
       checkpoints must beLike {
-        case Some(Success(YggCheckpoint(offset, clock))) => 
-          offset must_== 0
-          clock.map must_== Map.empty[Int, Int]
+        case Some(Failure(blueeyes.json.xschema.Extractor.Invalid(_))) => ok
       }
     }
+
     "persist checkpoints between sessions" in zookeeperClient() { factory: ClientFactory =>
       val client1 = factory()
       val sc1 = newSystemCoordination(client1)
       
+      // TODO: This has a side effect via createPersistent if the path doesn't exist. Refactor.
       sc1.loadYggCheckpoint("shard")
-      
+
       val clock = VectorClock.empty.update(1,10).update(2,20)
       val in = YggCheckpoint(123, clock)
-
       sc1.saveYggCheckpoint("shard", in)
       
       sc1.close
@@ -158,6 +165,7 @@ class ZookeeperSystemCoordinationSpec extends Specification {
           in must_== out 
       }
     }
+
     "distinguish between normal and abnormal shard/checkpoints shutdown" in {
       todo
     }

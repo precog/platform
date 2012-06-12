@@ -148,6 +148,11 @@ object YggCheckpoint extends YggCheckpointSerialization {
   implicit val ordering: Ordering[YggCheckpoint] = Ordering.by((_: YggCheckpoint).offset)
 
   val Empty = YggCheckpoint(0, VectorClock.empty)
+
+  sealed trait LoadError 
+  case class CheckpointParseError(message: String) extends LoadError
+  case class ShardCheckpointMissing(shardId: String) extends LoadError
+
 }
 
 case class ServiceUID(systemId: String, hostId: String, serviceId: String)
