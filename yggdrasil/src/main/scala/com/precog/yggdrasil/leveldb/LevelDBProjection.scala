@@ -30,7 +30,7 @@ import scalaz.iteratee.Input._
 import scalaz.syntax.plus._
 import scalaz.syntax.monad._
 import scalaz.syntax.applicativePlus._
-import scalaz.syntax.bifunctor
+import scalaz.syntax.biFunctor
 import scalaz.syntax.show._
 import scalaz.Scalaz._
 import IterateeT._

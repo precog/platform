@@ -5,7 +5,7 @@ import yggdrasil._
 import yggdrasil.serialization._
 import memoization._
 
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz.{NonEmptyList => NEL, Identity => _, _}
 import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Memoable[_], Grouping[_, _]] {

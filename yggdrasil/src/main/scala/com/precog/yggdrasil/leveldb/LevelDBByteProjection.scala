@@ -7,7 +7,7 @@ import com.precog.util.Bijection._
 import java.nio.ByteBuffer
 import scalaz.Order
 import scalaz.Ordering
-import scalaz.syntax.bifunctor._
+import scalaz.syntax.biFunctor._
 import scalaz.std.AllInstances._
 
 import scala.collection.mutable.ArrayBuffer

@@ -58,9 +58,9 @@ trait Emitter extends AST
       val before = e.bytecode.take(idx)
       val after  = e.bytecode.drop(idx)
 
-      (e.copy(
+      ((), e.copy(
         bytecode = before ++ is ++ after,
-        marks = e.marks.transform((k, v) => v.insert(idx, is.length))), ())
+        marks = e.marks.transform((k, v) => v.insert(idx, is.length))))
     }
 
     def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
@@ -76,7 +76,7 @@ trait Emitter extends AST
 
     def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       e.curLine match {
-        case Some((`lineNum`, `line`)) => (e, ())
+        case Some((`lineNum`, `line`)) => ((), e)
 
         case _ => emitInstr(Line(lineNum, line))(e.copy(curLine = Some((lineNum, line))))
       }
@@ -96,10 +96,10 @@ trait Emitter extends AST
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
     private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
-        case (e, _) =>
+        case (_, e) =>
           val mark = Mark(e.bytecode.length, 0)
         
-          (e.copy(marks = e.marks + (markType -> mark)), ())
+          ((), e.copy(marks = e.marks + (markType -> mark)))
       }
     }
     
@@ -107,7 +107,7 @@ trait Emitter extends AST
       val mark = MarkTicVar(let, name)
       
       val markState = StateT.apply[Id, Emission, Unit] { e =>
-        (e.copy(marks = e.marks + (mark -> Mark(e.bytecode.length, offset))), ())
+        ((), e.copy(marks = e.marks + (mark -> Mark(e.bytecode.length, offset))))
       }
       
       markState >> markForDrop(mark)
@@ -134,7 +134,7 @@ trait Emitter extends AST
             marks = e.marks + (mark -> Mark(e.bytecode.length, offset)),
             buckets = e.buckets + (origin -> extras))
             
-          (e2, ())
+          ((), e2)
         }
         
         (state >> markForDrop(mark), offset + 1, seen + origin)
@@ -144,7 +144,7 @@ trait Emitter extends AST
     }
     
     private def pushDropFrame: EmitterState = StateT.apply[Id, Emission, Unit] { e =>
-      (e.copy(toDrop = Set[MarkType]() :: e.toDrop), ())
+      ((), e.copy(toDrop = Set[MarkType]() :: e.toDrop))
     }
     
     private def markForDrop(markType: MarkType): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -153,7 +153,7 @@ trait Emitter extends AST
         case Nil => Nil
       }
       
-      (e.copy(toDrop = newDrop), ())
+      ((), e.copy(toDrop = newDrop))
     }
     
     /**
@@ -169,7 +169,7 @@ trait Emitter extends AST
       val results = optSet map { _ map { _ => emitInstr(Swap(1)) >> emitInstr(Drop) } } getOrElse Set(mzero[EmitterState])
       
       val back = reduce(results) >> (StateT.apply[Id, Emission, Unit] { e =>
-        (e.copy(toDrop = newDrop), ())
+        ((), e.copy(toDrop = newDrop))
       })
       
       back(e)
@@ -190,7 +190,7 @@ trait Emitter extends AST
       else
         (1 until distance) map Swap
       
-      (e.copy(bytecode = e.bytecode ++ swaps :+ Drop), ())
+      ((), e.copy(bytecode = e.bytecode ++ swaps :+ Drop))
     }
     
     // Dup's previously marked bytecode:
@@ -419,7 +419,7 @@ trait Emitter extends AST
               val currentIndex = indices.indexOf(n)
               val targetIndex  = n
 
-              ( if (currentIndex == targetIndex) (indices, state)
+              ((), if (currentIndex == targetIndex) (indices, state)
                 else {
                   var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
 
@@ -432,8 +432,8 @@ trait Emitter extends AST
                   }
 
                   (newIndices, newState)
-                },
-              ())
+                }
+              )
           }
 
           val fixAll = (0 until indices.length).map(fixN)
@@ -491,7 +491,7 @@ trait Emitter extends AST
                       case Nil => Nil
                     }
                     
-                    (e.copy(toDrop = toDrop2), ())
+                    ((), e.copy(toDrop = toDrop2))
                   }
                   
                   val body = if (actuals.length == n) {

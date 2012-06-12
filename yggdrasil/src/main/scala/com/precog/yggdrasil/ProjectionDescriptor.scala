@@ -23,7 +23,7 @@ import scala.collection.immutable.ListMap
 import scalaz._
 import scalaz.effect.IO
 import scalaz.Scalaz._
-import scalaz.syntax.bifunctor._
+import scalaz.syntax.biFunctor._
 import scalaz.ValidationT._
 
 import annotation.tailrec

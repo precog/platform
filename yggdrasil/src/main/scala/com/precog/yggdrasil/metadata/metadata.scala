@@ -16,7 +16,7 @@ import akka.util.Timeout
 import akka.util.duration._
 
 import com.weiglewilczek.slf4s.Logging
-import scalaz.syntax.std.boolean._
+import scalaz.syntax.std.booleanV._
 
 trait StorageMetadata {
 
