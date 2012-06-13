@@ -191,8 +191,8 @@ trait Parser extends RegexParsers with Filters with AST {
       'new,
       'where,
       'relate,
-      'import,
-      'let)
+      'let,
+      'import)
       
   private val associativity = (
       ('mul <)
