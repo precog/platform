@@ -367,7 +367,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "forward binding through dispatch" in {
       forall(libReduct) { f => 
-        val e @ Let(_, _, _, _, Dispatch(_, _, Vector(d: Dispatch))) = parse("a := 42 count(a)")
+        val e @ Let(_, _, _, _, Dispatch(_, _, Vector(d: Dispatch))) = parse("a := 42 %s(a)".format(f.fqn))
         d.binding mustEqual UserDef(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
@@ -686,6 +686,8 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
 
   "pre-binding of built-in functions" should {
     "bind reductions" in {
+      libReduct must not(beEmpty)
+
       forall(libReduct) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
         d.binding mustEqual RedLibBuiltIn(f)
