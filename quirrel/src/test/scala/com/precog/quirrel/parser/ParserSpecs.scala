@@ -88,14 +88,15 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("import std::math::alissa::_ 42") must beLike {
         case Import(_, WildcardImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
       }
+    }
 
+    "accept a wildcard import followed by a let" in {
       parse("""
-import std::time::_
-
-foo := //foo
-
-foo
-""") must beLike {
+        | import std::time::_
+        | 
+        | foo := //foo
+        |
+        | foo""".stripMargin) must beLike {
         case Import(_, WildcardImport(Vector("std", "time")), _) => ok
       }
     }
