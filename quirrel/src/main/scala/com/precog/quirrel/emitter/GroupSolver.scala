@@ -141,6 +141,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
       val recLeft = solveCondition(name, left)
       val recRight = solveCondition(name, right)
       
+      //TODO BUG! left and right do not commute 
       // desugared due to SI-5589
       val sol = recLeft.right flatMap {
         case (leftSol, leftExtras) => {
