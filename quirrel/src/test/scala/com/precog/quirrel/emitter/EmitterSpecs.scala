@@ -1078,23 +1078,12 @@ object EmitterSpecs extends Specification
     "emit split and merge for rr cf example" in {
       testEmit("""
         | clicks := //clicks
-        | clicks' := new clicks
         | 
-        | totalPairs('delta, 'tz, 'cutoff, 'sessionId, 'time) :=
-        |   xs := clicks where clicks.datetime = 'time & clicks.externalSessionId = 'sessionId & clicks.datetime > 'cutoff
+        | totalPairs('sessionId, 'time) :=
+        |   clicks where clicks.externalSessionId = 'time & clicks.datetime = 'sessionId
         |   
-        |   clickTimesISO := std::time::millisToISO(clicks'.datetime, 'tz)
-        |   timeISO := std::time::millisToISO('time, 'tz)
-        |   
-        |   ys := clicks' where clicks'.datetime > 'time &
-        |     std::time::daysBetween(clickTimesISO, timeISO) < 'delta &
-        |     clicks'.externalSessionId = 'sessionId
-        |   
-        |   xs ~ ys
-        |     { sessionId: 'sessionId, time: 'time, num: xs * ys }
-        |   
-        | totalPairs(1, "UTC", 42, "fubar")""".stripMargin)(Vector())
-    }
+        | totalPairs("fubar")""".stripMargin)(Vector())
+    }.pendingUntilFixed
 
     "emit split and merge for ctr example" in {
       testEmit("""
