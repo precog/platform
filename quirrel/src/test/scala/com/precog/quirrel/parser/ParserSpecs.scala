@@ -115,11 +115,23 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("new 1") must beLike {
         case New(_, NumLit(_, "1")) => ok
       }
-    }
+    }    
+
+    "accept a 'new' expression followed by a let" in {
+      parse("new foo := //foo foo") must beLike {
+        case New(_, _) => ok
+      }
+    }.pendingUntilFixed
     
     "accept a relate expression" in {
       parse("1 ~ 2 3") must beLike {
         case Relate(_, NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3")) => ok
+      }
+    }    
+
+    "accept a relate expression followed by a let" in {
+      parse("1 ~ 2 foo := //foo foo") must beLike {
+        case Relate(_, NumLit(_, "1"), NumLit(_, "2"), Let(_, Identifier(Vector(), "foo"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
