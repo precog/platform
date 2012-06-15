@@ -1008,8 +1008,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case Import(_, _, child) => 
       computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
 
-    case New(_, child) => {
-      val prov = DynamicProvenance(currentId.incrementAndGet())
+    case n @ New(_, child) => {
+      val prov = n.provenance
       Some(Vector(prov))
     }
 

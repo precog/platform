@@ -511,45 +511,49 @@ object EmitterSpecs extends Specification
     }
 
     "emit arbitrary reduction" in {
-      val f = libReduct.head
-      testEmit("""%s::%s(4224)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushNum("4224"),
-          Reduce(BuiltInReduction(f))))
+      forall(libReduct) { f =>
+        testEmit("""%s(4224)""".format(f.fqn))(
+          Vector(
+            PushNum("4224"),
+            Reduce(BuiltInReduction(f))))
+      }
     }    
 
     "emit unary non-reduction with object deref" in {
-      val f = lib1.head
-      testEmit("""%s::%s(//foobar.baz)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("/foobar"),
-          LoadLocal(Het),
-          PushString("baz"),
-          Map2Cross(DerefObject),
-          Map1(BuiltInFunction1Op(f))))
+      forall(lib1) { f =>
+        testEmit("""%s(//foobar.baz)""".format(f.fqn))(
+          Vector(
+            PushString("/foobar"),
+            LoadLocal(Het),
+            PushString("baz"),
+            Map2Cross(DerefObject),
+            Map1(BuiltInFunction1Op(f))))
+      }
     }    
     
     "emit unary non-reduction" in {
-      val f = lib1.head
-      testEmit("""%s::%s("2012-02-29T00:44:52.599+08:00")""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1Op(f))))
+      forall(lib1) { f =>
+        testEmit("""%s("2012-02-29T00:44:52.599+08:00")""".format(f.fqn))(
+          Vector(
+            PushString("2012-02-29T00:44:52.599+08:00"),
+            Map1(BuiltInFunction1Op(f))))
+      }
     }    
 
     "emit binary non-reduction" in {
-      val f = lib2.head
-      testEmit("""%s::%s(//foo.time, //foo.timeZone)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("/foo"), 
-          LoadLocal(Het), 
-          PushString("time"), 
-          Map2Cross(DerefObject), 
-          PushString("/foo"), 
-          LoadLocal(Het), 
-          PushString("timeZone"), 
-          Map2Cross(DerefObject), 
-          Map2Match(BuiltInFunction2Op(f))))
+      forall(lib2) { f =>
+        testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
+          Vector(
+            PushString("/foo"), 
+            LoadLocal(Het), 
+            PushString("time"), 
+            Map2Cross(DerefObject), 
+            PushString("/foo"), 
+            LoadLocal(Het), 
+            PushString("timeZone"), 
+            Map2Cross(DerefObject), 
+            Map2Match(BuiltInFunction2Op(f))))
+      }
     }
 
     "emit body of fully applied characteristic function" in {
