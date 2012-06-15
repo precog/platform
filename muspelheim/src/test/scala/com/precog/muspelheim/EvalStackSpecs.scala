@@ -142,6 +142,21 @@ trait EvalStackSpecs extends Specification {
       }.pendingUntilFixed
     }
 
+    "union two wheres of the same dynamic provenance" >> {
+      val input = """
+      | clicks := //clicks
+      | clicks' := new clicks
+      |
+      | xs := clicks where clicks.time > 0
+      | ys := clicks' where clicks'.pageId != "blah"
+      |
+      | xs union ys""".stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(200)
+    }
+
     "use the where operator on a unioned set" >> {
       "campaigns.gender" >> {
         val input = """

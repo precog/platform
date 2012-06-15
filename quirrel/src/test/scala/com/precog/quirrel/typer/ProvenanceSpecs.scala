@@ -733,7 +733,21 @@ object ProvenanceSpecs extends Specification
           val tree = compile("foo := [//bar] foo")
           tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
           tree.errors must beEmpty
-        }  
+        }        
+        {
+          val tree = compile("""
+            | clicks := new //clicks
+            | clicks where true""".stripMargin)
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }         
+        {
+          val tree = compile("""
+            | clicks := new //clicks
+            | clicks where clicks""".stripMargin)
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        } 
       }
 
       "New" >> {
