@@ -429,7 +429,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
           val bool2 = yint.toDouble ~= 67.54013997529848
           Vector(bool1, bool2)
@@ -455,7 +457,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.867859767424704
           val bool2 = yint.toDouble ~= -46.97865418113425
           Vector(bool1, bool2)
@@ -527,7 +531,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
           val bool2 = yint.toDouble ~= 67.54013997529848
           Vector(bool1, bool2)
@@ -553,7 +559,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.867859767424704
           val bool2 = yint.toDouble ~= -46.97865418113425
           Vector(bool1, bool2)
@@ -625,7 +633,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
 
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 1
           val bool2 = yint.toDouble ~= 0
           Vector(bool1, bool2)
@@ -651,7 +661,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 56.59154084773969
           val bool2 = yint.toDouble ~= -166.69026355890486
           Vector(bool1, bool2)
@@ -723,7 +735,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
        
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0.6862906545903664
           val bool2 = yint.toDouble ~= 67.54013997529848
           Vector(bool1, bool2)
@@ -749,7 +763,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 38.867859767424704
           val bool2 = yint.toDouble ~= -46.97865418113425
           Vector(bool1, bool2)
@@ -825,7 +841,9 @@ class StatsLibSpec extends Specification
       result must haveSize(1)
        
       val result2 = result collect {
-        case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+        case (VectorCase(), SObject(fields)) => {
+          val SDecimal(slope) = fields("slope")
+          val SDecimal(yint) = fields("intercept")
           val bool1 = slope.toDouble ~= 0
           val bool2 = yint.toDouble ~= 5
           Vector(bool1, bool2)
@@ -850,7 +868,9 @@ class StatsLibSpec extends Specification
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          case (VectorCase(), SObject(fields)) => {
+            val SDecimal(slope) = fields("slope")
+            val SDecimal(yint) = fields("intercept")
             val bool1 = slope.toDouble ~= 0
             val bool2 = yint.toDouble ~= 5
             Vector(bool1, bool2)
@@ -891,7 +911,9 @@ class StatsLibSpec extends Specification
         result must haveSize(1) 
         
         val result2 = result collect {
-          case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => {
+          case (VectorCase(), SObject(fields)) => {
+            val SDecimal(slope) = fields("slope")
+            val SDecimal(yint) = fields("intercept")
             val bool1 = slope.toDouble ~= 38.867859767424704
             val bool2 = yint.toDouble ~= -46.97865418113425
             Vector(bool1, bool2)

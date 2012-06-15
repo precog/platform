@@ -110,7 +110,7 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
         val slope = cov / vari
         val yint = (sum2 / count) - (slope * (sum1 / count))
         
-        Some(SArray(Vector(SDecimal(slope), SDecimal(yint))))
+        Some(SObject(Map("slope" -> SDecimal(slope), "intercept" -> SDecimal(yint))))
       }
     }
   }
@@ -142,7 +142,7 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
         val slope = cov / vari
         val yint = (sum2 / count) - (slope * (sum1 / count))
         
-        Some(SArray(Vector(SDecimal(slope), SDecimal(yint))))
+        Some(SObject(Map("slope" -> SDecimal(slope), "intercept" -> SDecimal(yint))))
       }
     }
   }
