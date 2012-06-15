@@ -37,8 +37,11 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.metadata._
 import yggdrasil.serialization._
 import muspelheim._
+
+import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
   
@@ -57,14 +60,14 @@ import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
 class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
-  trait Storage extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
-    type YggConfig = platformSpecs.YggConfig
-    lazy val yggConfig = platformSpecs.yggConfig
-    lazy val yggState = shardState 
-    lazy val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
-  }
+  trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
   
-  object storage extends Storage
+  object storage extends Storage {
+    type YggConfig = platformSpecs.YggConfig
+    val yggConfig = platformSpecs.yggConfig
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+  }
 
   override def startup() {
     // start storage shard 

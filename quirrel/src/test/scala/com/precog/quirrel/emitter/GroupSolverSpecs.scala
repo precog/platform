@@ -121,6 +121,20 @@ object GroupSolverSpecs extends Specification
       d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
       tree.errors must beEmpty
     }
+
+    "reject bucketing for indirect failed solution through reduction" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | f('a) :=
+        |   foo' := foo where foo.a = 'a
+        |   bar' := bar where bar.a > 'a
+        |   count(foo') + count(bar')
+        | f""".stripMargin
+
+      val tree @ Let(_, _, _, _, Let(_, _, _, _, let: Let)) = compile(input)
+      tree.errors must not(beEmpty)
+    }
     
     "reject shared buckets for dependent tic variables on the same set" in {
       {

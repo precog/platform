@@ -21,13 +21,14 @@ package com.precog.yggdrasil
 package actor
 
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.yggdrasil.metadata._
 
 import blueeyes.json._
 import blueeyes.json.xschema.DefaultSerialization._
 
 import org.specs2.mutable.Specification
+import org.specs2.specification.{Fragments, Scope, Step}
 
 import java.io.File
 
@@ -39,17 +40,22 @@ import scalaz.effect._
 import Scalaz._
 
 class MetadataStorageSpec extends Specification {
+  import FileMetadataStorage._
 
-  import MetadataStorage._
-
-  val inputMetadata = 
-"""{
+  val inputMetadata = """{
   "metadata":[],
   "checkpoint":[[1,1]]
 }"""
+
   val output = inputMetadata
   
-  val base = new File("/test/col")
+  val base = IOUtils.createTmpDir("MetadataStorageSpec").unsafePerformIO
+
+  def cleanupBaseDir = Step {
+    IOUtils.recursiveDelete(base)
+  }
+
+  override def map(fs: => Fragments) = super.map(fs) ^ cleanupBaseDir
 
   val colDesc = ColumnDescriptor(Path("/"), JPath(".foo"), CBoolean, Authorities(Set("TOKEN")))
 
@@ -60,73 +66,102 @@ class MetadataStorageSpec extends Specification {
     VectorClock.empty.update(1,1)
   )
 
+  trait metadataStore extends Scope {
+    val fileOps = TestFileOps
+    val ms = FileMetadataStorage.load(base, fileOps).unsafePerformIO
+  }
+
   "metadata storage" should {
-    "safely update metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
-      val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
-      result must beLike {
-        case Success(()) => ok
+    "safely update metadata" in new metadataStore {
+      // First write to add initial data
+      val io = for {
+        _    <- ms.ensureDescriptorRoot(desc)
+        _    <- ms.updateMetadata(desc, testRecord)
+        _    <- ms.updateMetadata(desc, testRecord) // Second write to force an update
+        root <- ms.findDescriptorRoot(desc, true) 
+      } yield {
+        root map { descBase =>
+          // Our first write would have added offsets 0-1
+          fileOps.confirmWrite(2, new File(descBase, nextFilename), output) aka "write next" must beTrue
+          fileOps.confirmCopy(3, new File(descBase, curFilename), new File(descBase, prevFilename)) aka "copy cur to prev" must beTrue 
+          fileOps.confirmRename(4, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
+        } getOrElse {
+          failure("Could not locate the descriptor base")
+        }
       }
-      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
-      ms.confirmCopy(1, new File(base, curFilename), new File(base, prevFilename)) aka "copy cur to prev" must beTrue 
-      ms.confirmRename(2, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
+
+      io.unsafePerformIO
     }
-    "safely update metadata no current" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List())
-      val result = ms.updateMetadata(desc, testRecord).unsafePerformIO
-      result must beLike {
-        case Success(()) => ok
+
+    "safely update metadata not current" in new metadataStore {
+
+      val io = for {
+        _    <- ms.ensureDescriptorRoot(desc)
+        _    <- ms.updateMetadata(desc, testRecord)
+        root <- ms.findDescriptorRoot(desc, true) 
+      } yield {
+        root map { descBase =>
+          fileOps.confirmWrite(0, new File(descBase, nextFilename), output) aka "write next" must beTrue
+          fileOps.confirmRename(1, new File(descBase, nextFilename), new File(descBase, curFilename)) aka "move next to cur" must beTrue
+        } getOrElse {
+          failure("Could not locate the descriptor base")
+        }
       }
-      ms.confirmWrite(0, new File(base, nextFilename), output) aka "write next" must beTrue
-      ms.confirmRename(1, new File(base, nextFilename), new File(base, curFilename)) aka "move next to cur" must beTrue
+
+      io.unsafePerformIO
     }
-    "correctly read metadata" in {
-      val ms = new TestMetadataStorage(inputMetadata, base, List(new File(base, curFilename)))
-      val result = ms.currentMetadata(desc).unsafePerformIO
-      result must beLike {
-       case Success(m) => Printer.pretty(Printer.render(m.serialize)) must_== inputMetadata
+
+    "correctly read metadata" in new metadataStore {
+      val io = for {
+        _ <- ms.findDescriptorRoot(desc, true)
+        _ <- ms.updateMetadata(desc, testRecord)
+        result <- ms.getMetadata(desc)
+      } yield {
+        result.serialize must_== JsonParser.parse(inputMetadata)
       }
+
+      io.unsafePerformIO
     }
   }
 }
 
-class TestMetadataStorage(val input: String, dirName: File, val existing: List[File]) extends MetadataStorage with TestFileOps {
-  val dirMapping = (_: ProjectionDescriptor) => IO { dirName }
-}
-
-trait TestFileOps {
- 
-  def input: String
-  def existing: List[File]
+object TestFileOps extends FileOps {
  
   val messages = MutableList[String]()  
 
-  def exists(src: File): Boolean = existing.contains(src)
+  var backingStore: Map[File,String] = Map()
 
-  def rename(src: File, dest: File): Unit = {
+  def exists(src: File) = IO(backingStore.keySet.contains(src))
+
+  def rename(src: File, dest: File): IO[Boolean] = {
     messages += "rename %s to %s".format(src, dest)
+    backingStore += (dest -> backingStore(src))
+    backingStore -= src
+    IO(true)
   }
   
-  def copy(src: File, dest: File): IO[Validation[Throwable, Unit]] = IO {
+  def copy(src: File, dest: File): IO[Unit] = IO {
     messages += "copy %s to %s".format(src, dest)
-    Success(())
+    backingStore += (dest -> backingStore(src))
   }
 
-  def read(src: File): IO[Option[String]] = IO {
+  def read(src: File): IO[String] = IO {
     messages += "read from %s".format(src)
-    Some(input) 
+    backingStore(src)
   }
   
-  def write(dest: File, content: String): IO[Validation[Throwable, Unit]] = IO {
+  def write(dest: File, content: String): IO[Unit] = IO {
     messages += "write to %s with %s".format(dest, content) 
-    Success(()) 
+    backingStore += (dest -> content)
   }
+
+  def mkdir(dir: File) = IO(true)
 
   def checkMessage(i: Int, exp: String) =
     messages.get(i).map { act =>
       val result = act == exp
       if(!result) {
-        println("Expected [" + exp.replace(" ", ".") + "] vs Actual[" + act.replace(" ", ".") + "]")
+        println("Expected[" + exp.replace(" ", ".") + "] vs Actual[" + act.replace(" ", ".") + "]")
       }
       act == exp 
     } getOrElse { false }

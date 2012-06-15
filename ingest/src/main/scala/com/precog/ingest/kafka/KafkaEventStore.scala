@@ -24,7 +24,7 @@ package kafka
 import akka.util.Timeout
 
 import common._
-import common.util._
+import util._
 import ingest.util._
 
 import java.util.Properties
@@ -52,7 +52,7 @@ class KafkaEventStore(router: EventRouter, producerId: Int, firstEventId: Int = 
 
   def start(): Future[Unit] = Future { () }
 
-  def stop(): Future[Unit] = router.close
+  def stop(): Future[Unit] = router.close.mapTo[Unit]
 }
 
 class LocalKafkaEventStore(config: Configuration)(implicit dispatcher: MessageDispatcher) extends EventStore with Logging {

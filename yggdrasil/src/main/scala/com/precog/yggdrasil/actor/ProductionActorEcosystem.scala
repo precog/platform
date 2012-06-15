@@ -20,6 +20,10 @@
 package com.precog.yggdrasil
 package actor
 
+import com.precog.util._
+import com.precog.common._
+import com.precog.common.kafka._
+
 import akka.actor._
 import akka.dispatch._
 import akka.util._
@@ -27,71 +31,75 @@ import akka.util.duration._
 import akka.pattern.ask
 import akka.pattern.gracefulStop
 
-import com.precog.common.util._
-import com.precog.common.kafka._
+import _root_.kafka.consumer._
+
+import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s.Logging
 
 import java.net.InetAddress
 
-import blueeyes.json.JsonAST._
-
 trait ProductionActorConfig extends ActorEcosystemConfig {
   def kafkaHost: String = config[String]("kafka.batch.host")
   def kafkaPort: Int = config[Int]("kafka.batch.port")
   def kafkaTopic: String = config[String]("kafka.batch.topic") 
+  def kafkaSocketTimeout: Duration = config[Long]("kafka.socket_timeout", 5000) millis
+  def kafkaBufferSize: Int = config[Int]("kafka.buffer_size", 64 * 1024)
 
   def zookeeperHosts: String = config[String]("zookeeper.hosts")
   def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
   def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 
+  def ingestEnabled: Boolean = config[Boolean]("ingest_enabled", true)
+
+  def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
 }
 
-trait ProductionActorEcosystem extends BaseActorEcosystem with YggConfigComponent with Logging {
+/**
+ * The production actor ecosystem includes a real ingest actor which will read from the kafka queue.
+ * At present, there's a bit of a problem around metadata serialization as the standalone actor
+ * will not include manually ingested data in serialized metadata; this needs to be addressed.
+ */
+trait ProductionActorEcosystem[Dataset] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ProductionActorConfig
 
-  protected lazy val pre = "[Production Yggdrasil Shard]"
+  protected val logPrefix = "[Production Yggdrasil Shard]"
 
-  lazy val actorSystem = ActorSystem("production_actor_system")
+  val actorSystem = ActorSystem("production_actor_system")
 
-  lazy val routingActor = actorSystem.actorOf(Props(new BatchStoreActor(routingDispatch, yggConfig.batchStoreDelay, Some(ingestActor), actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  
-  private lazy val actorsWithStatus = List(
-    projectionActors,
-    metadataActor,
-    routingActor,
-    ingestActor,
-    metadataSerializationActor
-  )
+  val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
-  def actorsStatus(): Future[JArray] = {
-    implicit val to = Timeout(yggConfig.statusTimeout)
+  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 
-    for (statusResponses <- Future.sequence { actorsWithStatus map { actor => (actor ? Status).mapTo[JValue] } }) 
-    yield JArray(statusResponses)
+  protected def actorsWithStatus = ingestActor :: 
+                                   ingestSupervisor :: 
+                                   metadataActor :: 
+                                   projectionsActor :: Nil
+  val ingestActor = {
+    logger.info("Starting ingest actor")
+    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
   }
 
-  protected def actorsStopInternal: Future[Unit] = {
-    for {
-      _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionActors, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-      _  <- actorStop(metadataSerializationActor, "flush")
-    } yield ()
-  }
+  logger.info("Starting ingest supervisor")
+  logger.debug("Ingest supervisor = " + ingestSupervisor)
 
   //
   // Internal only actors
   //
   
-  private lazy val ingestActor = {
-    val ingestBatchConsumer = new KafkaBatchConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaTopic)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(checkpoints, ingestBatchConsumer)), "shard_ingest")
-  }
- 
-  protected lazy val checkpoints: YggCheckpoints = {
-    val systemCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID) 
-    new SystemCoordinationYggCheckpoints(yggConfig.shardId, systemCoordination)
+  private val metadataSyncCancel = 
+    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
+
+  protected def actorsStopInternal: Future[Unit] = {
+    import yggConfig.stopTimeout
+
+    metadataSyncCancel.cancel
+    for {
+      _  <- actorStop(ingestActor, "ingest")
+      _  <- actorStop(projectionsActor, "projection")
+      _  <- actorStop(metadataActor, "metadata")
+    } yield ()
   }
 }
 

@@ -26,7 +26,7 @@ import com.precog.util._
 import com.precog.util.Bijection._
 
 import org.iq80.leveldb._
-import org.fusesource.leveldbjni.JniDBFactory._
+import org.fusesource.leveldbjni.JniDBFactory
 import org.fusesource.leveldbjni.DataWidth
 
 import java.io._
@@ -45,6 +45,7 @@ import scalaz.syntax.plus._
 import scalaz.syntax.monad._
 import scalaz.syntax.applicativePlus._
 import scalaz.syntax.biFunctor
+import scalaz.syntax.show._
 import scalaz.Scalaz._
 import IterateeT._
 
@@ -55,19 +56,21 @@ trait LevelDBProjection extends LevelDBByteProjection {
   val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
 
-  val logger = Logger("col:" + baseDir)
+  val logger = Logger("col:" + descriptor.shows)
   logger.debug("Opening column index files")
+
+  override def toString = "LevelDBProjection(" + descriptor.columns + ")"
 
   private val createOptions = (new Options)
     .createIfMissing(true)
     .maxOpenFiles(maxOpenFiles)
     .blockSize(1024 * 1024) // Based on rudimentary benchmarking. Gains in the high single digit percents
 
-  protected lazy val idIndexFile: DB = factory.open(new File(baseDir, "idIndex"), createOptions)
+  protected lazy val idIndexFile: DB = JniDBFactory.factory.open(new File(baseDir, "idIndex"), createOptions)
 
   private final val syncOptions = (new WriteOptions).sync(true)
 
-  def close = {
+  def close() = {
     logger.info("Closing column index files")
     idIndexFile.close()
   }
@@ -84,7 +87,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
     positions.tail.reverse
   }
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): this.type = {
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     val (idBytes, valueBytes) = project(id, v)
 
     if (shouldSync) {
@@ -92,8 +95,6 @@ trait LevelDBProjection extends LevelDBByteProjection {
     } else {
       idIndexFile.put(idBytes, valueBytes)
     }
-
-    this
   }
 
   ///////////////////

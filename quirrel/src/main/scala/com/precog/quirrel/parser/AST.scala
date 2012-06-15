@@ -94,6 +94,17 @@ trait AST extends Phases {
           indent + "required-params: " + e.requiredParams
       }
       
+      case Import(loc, spec, child) => {
+        val specStr = spec match {
+          case WildcardImport(prefix) => prefix mkString ("", "::", "::_")
+          case SpecificImport(prefix) => prefix mkString "::"
+        }
+        
+        indent + "type: import\n" +
+          indent + "spec: " + specStr +
+          indent + "child: \n" + prettyPrint(child, level + 2)
+      }
+      
       case New(loc, child) => {
         indent + "type: new\n" +
           indent + "child:\n" + prettyPrint(child, level + 2)
@@ -178,18 +189,27 @@ trait AST extends Phases {
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case With(loc, left, right) => {
         indent + "type: with\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case Union(loc, left, right) => {
         indent + "type: union\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
+
       case Intersect(loc, left, right) => {
         indent + "type: intersect\n" +
+          indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
+          indent + "right:\n" + prettyPrint(right, level + 2)
+      }     
+      
+      case Difference(loc, left, right) => {
+        indent + "type: without\n" +
           indent + "left:\n" + prettyPrint(left, level + 2) + "\n" +
           indent + "right:\n" + prettyPrint(right, level + 2)
       }
@@ -321,274 +341,290 @@ trait AST extends Phases {
   }
 
   sealed trait Expr extends Node with Product { self =>
-      val nodeId = System.identityHashCode(this)
-      
-      private val _root = atom[Expr]
-      def root = _root()
-      private[AST] def root_=(e: Expr) = _root() = e
-      
-      private val _provenance = attribute[Provenance](checkProvenance)
-      def provenance = _provenance()
-      private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
-      
-      private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
-      def constrainingExpr = _constrainingExpr()
-      private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
-      
-      private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
-        if (this eq root) {
-          atom[Set[Error]] {
-            _errors ++= runPhasesInSequence(root)
-          }
-        } else {
-          val back = root._errors
-          6 * 7     // do not remove!  SI-5455
-          back
+    val nodeId = System.identityHashCode(this)
+    
+    private val _root = atom[Expr]
+    def root = _root()
+    private[AST] def root_=(e: Expr) = _root() = e
+    
+    private val _provenance = attribute[Provenance](checkProvenance)
+    def provenance = _provenance()
+    private[quirrel] def provenance_=(p: Provenance) = _provenance() = p
+    
+    private val _constrainingExpr = attribute[Option[Expr]](checkProvenance)
+    def constrainingExpr = _constrainingExpr()
+    private[quirrel] def constrainingExpr_=(expr: Option[Expr]) = _constrainingExpr() = expr
+
+    private val _accumulatedProvenance = attribute[Option[Vector[Provenance]]](checkProvenance)
+    def accumulatedProvenance = _accumulatedProvenance()
+    def accumulatedProvenance_=(acc: Option[Vector[Provenance]]) = _accumulatedProvenance() = acc
+    
+    lazy val cardinality: Option[Int] = {
+      if (accumulatedProvenance.isDefined) accumulatedProvenance map { _.length }
+      else None
+    }
+    
+    private[quirrel] final lazy val _errors: Atom[Set[Error]] = {
+      if (this eq root) {
+        atom[Set[Error]] {
+          _errors ++= runPhasesInSequence(root)
         }
-      }
-      
-      final def errors = _errors()
-      
-      def loc: LineStream
-
-      override def children: List[Expr]
-
-      private lazy val subForest: Stream[Tree[Expr]] = {
-        def subForest0(l: List[Expr]): Stream[Tree[Expr]] = l match {
-          case Nil => Stream.empty
-
-          case head :: tail => Stream.cons(head.tree, subForest0(tail))
-        }
-
-        subForest0(children)
-      }
-
-      def tree: Tree[Expr] = Tree.node(this, subForest)
-      
-      def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
-        case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
-          (id1 == id2) &&
-            (params1 == params2) &&
-            (left1 equalsIgnoreLoc left2) &&
-            (right1 equalsIgnoreLoc right2)
-
-        case (New(_, child1), New(_, child2)) =>
-          child1 equalsIgnoreLoc child2
-
-        case (Relate(_, from1, to1, in1), Relate(_, from2, to2, in2)) =>
-          (from1 equalsIgnoreLoc from2) &&
-            (to1 equalsIgnoreLoc to2) &&
-            (in1 equalsIgnoreLoc in2)
-
-        case (TicVar(_, id1), TicVar(_, id2)) =>
-          id1 == id2
-
-
-        case (StrLit(_, value1), StrLit(_, value2)) =>
-          value1 == value2
-
-        case (NumLit(_, value1), NumLit(_, value2)) =>
-          value1 == value2
-
-        case (BoolLit(_, value1), BoolLit(_, value2)) =>
-          value1 == value2
-
-        case (NullLit(_), NullLit(_)) =>
-          true
-
-        case (ObjectDef(_, props1), ObjectDef(_, props2)) => {      // TODO ordering
-          val sizing = props1.length == props2.length
-          val contents = props1 zip props2 forall {
-            case ((key1, value1), (key2, value2)) =>
-              (key1 == key2) && (value1 equalsIgnoreLoc value2)
-          }
-
-          sizing && contents
-        }
-
-        case (ArrayDef(_, values1), ArrayDef(_, values2)) => {
-          val sizing = values1.length == values2.length
-          val contents = values1 zip values2 forall {
-            case (e1, e2) => e1 equalsIgnoreLoc e2
-          }
-
-          sizing && contents
-        }
-
-        case (Descent(_, child1, property1), Descent(_, child2, property2)) =>
-          (child1 equalsIgnoreLoc child2) && (property1 == property2)
-
-        case (Deref(_, left1, right1), Deref(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-
-        case (Dispatch(_, name1, actuals1), Dispatch(_, name2, actuals2)) => {
-          val naming = name1 == name2
-          val sizing = actuals1.length == actuals2.length
-          val contents = actuals1 zip actuals2 forall {
-            case (e1, e2) => e1 equalsIgnoreLoc e2
-          }
-
-          naming && sizing && contents
-        }
-
-        case (Where(_, left1, right1), Where(_, left2, right2)) => {
-          (left1 equalsIgnoreLoc left2) &&
-            (right1 equalsIgnoreLoc right2)
-        }
-        case (With(_, left1, right1), Where(_, left2, right2)) => {
-          (left1 equalsIgnoreLoc left2) &&
-            (right1 equalsIgnoreLoc right2)
-        }
-        case (Union(_, left1, right1), Union(_, left2, right2)) => {
-          (left1 equalsIgnoreLoc left2) &&
-            (right1 equalsIgnoreLoc right2)
-        }
-        case (Intersect(_, left1, right1), Intersect(_, left2, right2)) => {
-          (left1 equalsIgnoreLoc left2) &&
-            (right1 equalsIgnoreLoc right2)
-        }
-
-        case (Add(_, left1, right1), Add(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Sub(_, left1, right1), Sub(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Mul(_, left1, right1), Mul(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Div(_, left1, right1), Div(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Lt(_, left1, right1), Lt(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (LtEq(_, left1, right1), LtEq(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Gt(_, left1, right1), Gt(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (GtEq(_, left1, right1), GtEq(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Eq(_, left1, right1), Eq(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (NotEq(_, left1, right1), NotEq(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (And(_, left1, right1), And(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Or(_, left1, right1), Or(_, left2, right2)) =>
-          (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
-        
-        case (Comp(_, child1), Comp(_, child2)) => child1 equalsIgnoreLoc child2
-
-        case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
-
-        case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
-        
-        case _ => false
-      }
-
-      def hashCodeIgnoreLoc: Int = this match {
-        case Let(_, id, params, left, right) =>
-          id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc 
-
-        case New(_, child) => child.hashCodeIgnoreLoc * 23
-
-        case Relate(_, from, to, in) =>
-          from.hashCodeIgnoreLoc + to.hashCodeIgnoreLoc + in.hashCodeIgnoreLoc
-
-        case TicVar(_, id) => id.hashCode
-
-        case StrLit(_, value) => value.hashCode
-
-        case NumLit(_, value) => value.hashCode
-
-        case BoolLit(_, value) => value.hashCode
-
-        case NullLit(_) => "null".hashCode
-
-        case ObjectDef(_, props) => {
-          props map {
-            case (key, value) => key.hashCode + value.hashCodeIgnoreLoc
-          } sum
-        }
-
-        case ArrayDef(_, values) =>
-          values map { _.hashCodeIgnoreLoc } sum
-
-        case Descent(_, child, property) =>
-          child.hashCodeIgnoreLoc + property.hashCode
-
-        case Deref(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Dispatch(_, name, actuals) =>
-          name.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
-
-        case Where(_, left, right) =>
-          left.hashCodeIgnoreLoc + "where".hashCode + right.hashCodeIgnoreLoc
-
-        case With(_, left, right) =>
-          left.hashCodeIgnoreLoc + "with".hashCode + right.hashCodeIgnoreLoc
-
-        case Union(_, left, right) =>
-          left.hashCodeIgnoreLoc + "union".hashCode + right.hashCodeIgnoreLoc
-
-        case Intersect(_, left, right) =>
-          left.hashCodeIgnoreLoc + "intersect".hashCode + right.hashCodeIgnoreLoc
-
-        case Add(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Sub(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Mul(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Div(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Lt(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case LtEq(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Gt(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case GtEq(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Eq(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case NotEq(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case And(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Or(_, left, right) =>
-          left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
-
-        case Comp(_, child) => child.hashCodeIgnoreLoc * 13
-
-        case Neg(_, child) => child.hashCodeIgnoreLoc * 7
-
-        case Paren(_, child) => child.hashCodeIgnoreLoc * 29
-      }
-      
-      protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
-        _errors ++= phase(root)
+      } else {
+        val back = root._errors
+        6 * 7     // do not remove!  SI-5455
+        back
       }
     }
+    
+    final def errors = _errors()
+    
+    def loc: LineStream
+
+    override def children: List[Expr]
+
+    private lazy val subForest: Stream[Tree[Expr]] = {
+      def subForest0(l: List[Expr]): Stream[Tree[Expr]] = l match {
+        case Nil => Stream.empty
+
+        case head :: tail => Stream.cons(head.tree, subForest0(tail))
+      }
+
+      subForest0(children)
+    }
+
+    def tree: Tree[Expr] = Tree.node(this, subForest)
+    
+    def equalsIgnoreLoc(that: Expr): Boolean = (this, that) match {
+      case (Let(_, id1, params1, left1, right1), Let(_, id2, params2, left2, right2)) =>
+        (id1 == id2) &&
+          (params1 == params2) &&
+          (left1 equalsIgnoreLoc left2) &&
+          (right1 equalsIgnoreLoc right2)
+          
+      case (Import(_, spec1, child1), Import(_, spec2, child2)) =>
+        (child1 equalsIgnoreLoc child2) && (spec1 == spec2)
+
+      case (New(_, child1), New(_, child2)) =>
+        child1 equalsIgnoreLoc child2
+
+      case (Relate(_, from1, to1, in1), Relate(_, from2, to2, in2)) =>
+        (from1 equalsIgnoreLoc from2) &&
+          (to1 equalsIgnoreLoc to2) &&
+          (in1 equalsIgnoreLoc in2)
+
+      case (TicVar(_, id1), TicVar(_, id2)) =>
+        id1 == id2
+
+
+      case (StrLit(_, value1), StrLit(_, value2)) =>
+        value1 == value2
+
+      case (NumLit(_, value1), NumLit(_, value2)) =>
+        value1 == value2
+
+      case (BoolLit(_, value1), BoolLit(_, value2)) =>
+        value1 == value2
+
+      case (NullLit(_), NullLit(_)) =>
+        true
+
+      case (ObjectDef(_, props1), ObjectDef(_, props2)) => {      // TODO ordering
+        val sizing = props1.length == props2.length
+        val contents = props1 zip props2 forall {
+          case ((key1, value1), (key2, value2)) =>
+            (key1 == key2) && (value1 equalsIgnoreLoc value2)
+        }
+
+        sizing && contents
+      }
+
+      case (ArrayDef(_, values1), ArrayDef(_, values2)) => {
+        val sizing = values1.length == values2.length
+        val contents = values1 zip values2 forall {
+          case (e1, e2) => e1 equalsIgnoreLoc e2
+        }
+
+        sizing && contents
+      }
+
+      case (Descent(_, child1, property1), Descent(_, child2, property2)) =>
+        (child1 equalsIgnoreLoc child2) && (property1 == property2)
+
+      case (Deref(_, left1, right1), Deref(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+
+      case (Dispatch(_, name1, actuals1), Dispatch(_, name2, actuals2)) => {
+        val naming = name1 == name2
+        val sizing = actuals1.length == actuals2.length
+        val contents = actuals1 zip actuals2 forall {
+          case (e1, e2) => e1 equalsIgnoreLoc e2
+        }
+
+        naming && sizing && contents
+      }
+
+      case (Where(_, left1, right1), Where(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (With(_, left1, right1), Where(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Union(_, left1, right1), Union(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Intersect(_, left1, right1), Intersect(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+         
+      case (Difference(_, left1, right1), Difference(_, left2, right2)) => 
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+
+      case (Add(_, left1, right1), Add(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Sub(_, left1, right1), Sub(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Mul(_, left1, right1), Mul(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Div(_, left1, right1), Div(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Lt(_, left1, right1), Lt(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (LtEq(_, left1, right1), LtEq(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Gt(_, left1, right1), Gt(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (GtEq(_, left1, right1), GtEq(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Eq(_, left1, right1), Eq(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (NotEq(_, left1, right1), NotEq(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (And(_, left1, right1), And(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Or(_, left1, right1), Or(_, left2, right2)) =>
+        (left1 equalsIgnoreLoc left2) && (right1 equalsIgnoreLoc right2)
+      
+      case (Comp(_, child1), Comp(_, child2)) => child1 equalsIgnoreLoc child2
+
+      case (Neg(_, child1), Neg(_, child2)) => child1 equalsIgnoreLoc child2
+
+      case (Paren(_, child1), Paren(_, child2)) => child1 equalsIgnoreLoc child2
+      
+      case _ => false
+    }
+
+    def hashCodeIgnoreLoc: Int = this match {
+      case Let(_, id, params, left, right) =>
+        id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+      
+      case Import(_, spec, child) =>
+        spec.hashCode + child.hashCodeIgnoreLoc
+
+      case New(_, child) => child.hashCodeIgnoreLoc * 23
+
+      case Relate(_, from, to, in) =>
+        from.hashCodeIgnoreLoc + to.hashCodeIgnoreLoc + in.hashCodeIgnoreLoc
+
+      case TicVar(_, id) => id.hashCode
+
+      case StrLit(_, value) => value.hashCode
+
+      case NumLit(_, value) => value.hashCode
+
+      case BoolLit(_, value) => value.hashCode
+
+      case NullLit(_) => "null".hashCode
+
+      case ObjectDef(_, props) => {
+        props map {
+          case (key, value) => key.hashCode + value.hashCodeIgnoreLoc
+        } sum
+      }
+
+      case ArrayDef(_, values) =>
+        values map { _.hashCodeIgnoreLoc } sum
+
+      case Descent(_, child, property) =>
+        child.hashCodeIgnoreLoc + property.hashCode
+
+      case Deref(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Dispatch(_, name, actuals) =>
+        name.hashCode + (actuals map { _.hashCodeIgnoreLoc } sum)
+
+      case Where(_, left, right) =>
+        left.hashCodeIgnoreLoc + "where".hashCode + right.hashCodeIgnoreLoc
+
+      case With(_, left, right) =>
+        left.hashCodeIgnoreLoc + "with".hashCode + right.hashCodeIgnoreLoc
+
+      case Union(_, left, right) =>
+        left.hashCodeIgnoreLoc + "union".hashCode + right.hashCodeIgnoreLoc
+
+      case Intersect(_, left, right) =>
+        left.hashCodeIgnoreLoc + "intersect".hashCode + right.hashCodeIgnoreLoc
+
+      case Difference(_, left, right) =>
+        left.hashCodeIgnoreLoc + "without".hashCode + right.hashCodeIgnoreLoc
+
+      case Add(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Sub(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Mul(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Div(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Lt(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case LtEq(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Gt(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case GtEq(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Eq(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case NotEq(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case And(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Or(_, left, right) =>
+        left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Comp(_, child) => child.hashCodeIgnoreLoc * 13
+
+      case Neg(_, child) => child.hashCodeIgnoreLoc * 7
+
+      case Paren(_, child) => child.hashCodeIgnoreLoc * 29
+    }
+    
+    protected def attribute[A](phase: Phase): Atom[A] = atom[A] {
+      _errors ++= phase(root)
+    }
+  }
  
   object ast {    
     sealed trait ExprLeafNode extends Expr with LeafNode
@@ -618,6 +654,10 @@ trait AST extends Phases {
       def assumptions = _assumptions()
       private[quirrel] def assumptions_=(map: Map[String, Provenance]) = _assumptions() = map
       
+      private val _accumulatedAssumptions = attribute[Map[String, Option[Vector[Provenance]]]](checkProvenance)
+      def accumulatedAssumptions = _accumulatedAssumptions()
+      private[quirrel] def accumulatedAssumptions_=(map: Map[String, Option[Vector[Provenance]]]) = _accumulatedAssumptions() = map
+      
       private val _unconstrainedParams = attribute[Set[String]](checkProvenance)
       def unconstrainedParams = _unconstrainedParams()
       private[quirrel] def unconstrainedParams_=(up: Set[String]) = _unconstrainedParams() = up
@@ -625,6 +665,11 @@ trait AST extends Phases {
       private val _requiredParams = attribute[Int](checkProvenance)
       def requiredParams = _requiredParams()
       private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
+    }
+    
+    final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
+      val label = 'import
+      val isPrefix = true
     }
     
     final case class New(loc: LineStream, child: Expr) extends ExprUnaryNode {
@@ -725,6 +770,10 @@ trait AST extends Phases {
       val label = 'intersect
     }
 
+    final case class Difference(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
+      val label = 'difference
+    }
+
     final case class Add(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'add
     }
@@ -787,5 +836,10 @@ trait AST extends Phases {
       val label = 'paren
       val children = child :: Nil
     }
+   
+    
+    sealed trait ImportSpec
+    final case class SpecificImport(prefix: Vector[String]) extends ImportSpec
+    final case class WildcardImport(prefix: Vector[String]) extends ImportSpec
   }
 }

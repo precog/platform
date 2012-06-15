@@ -35,6 +35,8 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
     case expr @ Let(_, _, _, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
+    case Import(_, _, child) => solveCriticalConditions(child)
+    
     case New(_, child) => solveCriticalConditions(child)
     
     case Relate(_, from, to, in) =>
@@ -103,6 +105,9 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
     case Intersect(_, left, right) =>
+      solveCriticalConditions(left) ++ solveCriticalConditions(right)
+        
+    case Difference(_, left, right) =>
       solveCriticalConditions(left) ++ solveCriticalConditions(right)
     
     case Add(_, left, right) =>
@@ -206,7 +211,7 @@ trait CriticalConditionSolver extends AST with CriticalConditionFinder with Solv
       else
         (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
       
-      (addend map (errors +) getOrElse errors, result)
+      (addend map (errors +) getOrElse Set[Error](), result)
     } else if (conditions exists { case Reduction(_, _) => true case _ => false }) {
       val (errors, successes) = conditions collect {
         case Reduction(_, children) => solveConditionForest(d, name, children)

@@ -36,7 +36,7 @@ import akka.dispatch.{Await, Future}
 import akka.util.duration._
 import blueeyes.json.{JPathField, JPathIndex}
 
-import scalaz.{Identity => _, NonEmptyList => NEL, _}
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.syntax.traverse._
 import scalaz.std.list._
@@ -58,10 +58,10 @@ trait Evaluator extends DAG
     with OperationsAPI
     with MemoizationEnvironment
     with ImplLibrary
-    with Infixlib
-    with Statslib
+    with InfixLib
     with BigDecimalOperations
-    with YggConfigComponent { self =>
+    with YggConfigComponent 
+    with Logging { self =>
   
   import Function._
   
@@ -100,9 +100,10 @@ trait Evaluator extends DAG
   import yggConfig._
 
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
-  //import Function._
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
+    logger.debug("Eval for %s = %s".format(userUID, graph))
+
     def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
       (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration, ctx.release), graph) }).fold(identity, identity)
     
@@ -211,7 +212,10 @@ trait Evaluator extends DAG
       case Root(_, instr) =>
         Right(Match(mal.Actual, ops.point(graph.value.get), graph))    // TODO don't be stupid
       
-      case dag.New(_, parent) => loop(parent, assume, splits, ctx)
+      case dag.New(_, parent) =>{
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
+        Right(Match(mal.Actual, realizeMatch(spec, set) identify Some(() => ctx.nextId), graph))
+      }
       
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
@@ -237,213 +241,32 @@ trait Evaluator extends DAG
       
       case o @ Operate(_, op, parent) => {
         // TODO unary typing
-        val Match(spec, set, graph2) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
+        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         lazy val enum = realizeMatch(spec, set)
 
         op match {
-          case BuiltInFunction1Op(Rank) => { // (3,7,7,7,9,12,12,15) -> (1,2,2,2,5,6,6,8)
-            var countTotal = 0
-            var countEach = 1
-            var previous: Option[SValue] = Option.empty[SValue]
-
-            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
-            val enum3: Dataset[SValue] = enum2 collect {
-              case s @ SDecimal(v) => {
-                if (Some(s) == previous) {
-                  previous = Some(s)
-                  countEach += 1
-
-                  SDecimal(countTotal)
-                } else {
-                  previous = Some(s)
-                  countTotal += countEach 
-                  countEach = 1
-                
-                  SDecimal(countTotal)
-                }
-              }
-            }
-            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-
-            Right(Match(mal.Actual, enum4, graph))  
+          case BuiltInFunction1Op(f) => {
+            val enum2 = f.evalEnum(enum, o, ctx) getOrElse set
+            Right(Match(mal.Op1(spec, op), enum2, graph))
           }
 
-          case BuiltInFunction1Op(DenseRank) => {  // (2,7,7,7,9,12,12,15) -> (1,2,2,2,3,4,4,5)
-            var count = 0
-            var previous: Option[SValue] = Option.empty[SValue]
-
-            val enum2 = enum.sortByValue(o.memoId, ctx.memoizationContext)
-            val enum3: Dataset[SValue] = enum2 collect {
-              case s @ SDecimal(v) => {
-                if (Some(s) == previous) {
-                  previous = Some(s)
-
-                  SDecimal(count)
-                } else {
-                  previous = Some(s)
-                  count += 1
-
-                  SDecimal(count)
-                }
-              }
-            }
-            val enum4 = realizeMatch(mal.Op1(spec, op), enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
-
-            Right(Match(mal.Actual, enum4, graph))  
+          case _ => { 
+            Right(Match(mal.Op1(spec, op), set, graph))
           }
-
-          case _ => Right(Match(mal.Op1(spec, op), set, graph2))
         }
       }
       
       case r @ dag.Reduce(_, red, parent) => {
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        val enum = realizeMatch(spec, set)
-        
-        val reduced: Option[SValue] = red match {
-          case Count => Some(SDecimal(BigDecimal(enum.count)))
-          
-          case Max => 
-            val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
-              case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
-              case (acc, _) => acc
-            }
 
-            if (max.isDefined) max map { v => SDecimal(v) }
-            else None
-          
-          case Min => 
-            val min = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
-              case (Some(v1), SDecimal(v2)) if v1 > v2 => Some(v2)
-              case (acc, _) => acc
-            }
-          
-            if (min.isDefined) min map { v => SDecimal(v) }
-            else None
-          
-          case Sum => 
-            val sum = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v)
-              case (Some(sum), SDecimal(v)) => Some(sum + v)
-              case (acc, _) => acc
-            }
-
-            if (sum.isDefined) sum map { v => SDecimal(v) }
-            else None
-
-          case Mean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
-              case ((count, total), SDecimal(v)) => (count + 1, total + v)
-              case (total, _) => total
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(total / count))
-          
-          case GeometricMean => 
-            val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
-              case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
-          
-          case SumSq => 
-            val sumsq = enum.reduce(Option.empty[BigDecimal]) {
-              case (None, SDecimal(v)) => Some(v * v)
-              case (Some(sumsq), SDecimal(v)) => Some(sumsq + (v * v))
-              case (acc, _) => acc
-            }
-
-            if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
-            else None
-
-          case Variance => 
-            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-              case (acc, _) => acc
-            }
-
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
-
-          case StdDev => 
-            val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-              case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
-
-          case Median => 
-            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
-
-            val count = enum2.reduce(BigDecimal(0)) {
-              case (count, SDecimal(v)) => count + 1
-              case (acc, _) => acc
-            }
-            
-            if (count == BigDecimal(0)) None
-            else {
-              val (c, median) = if (count.toInt % 2 == 0) {
-                val index = (count.toInt / 2, (count.toInt / 2) + 1)
-              
-                enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
-                  case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
-                  case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
-                    (count + 1, 
-                      if (prev.isDefined) prev map { x => (x + v) / 2 } 
-                      else None)  
-                  }
-                  case (acc, _) => acc
-                } 
-              } else {
-                val index = (count.toInt / 2) + 1
-              
-                enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
-                  case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
-                  case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
-                  case (acc, _) => acc
-                }
-              }
-              if (median.isDefined) median map { v => SDecimal(v) }
-              else None
-            }
-
-          case Mode =>
-            val enum2 = enum.sortByValue(r.memoId, ctx.memoizationContext)
-
-            val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
-              case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
-              case ((Some(currentRun), count, modes, maxCount), sv) => {
-                if (currentRun == sv) {
-                  if (count >= maxCount)
-                    (Some(sv), count + 1, List(sv), maxCount + 1)
-                  else if (count + 1 == maxCount)
-                    (Some(sv), count + 1, modes :+ sv, maxCount)
-                  else
-                    (Some(sv), count + 1, modes, maxCount)
-                } else {
-                  if (maxCount == 1)
-                    (Some(sv), 1, modes :+ sv, maxCount)
-                  else
-                    (Some(sv), 1, modes, maxCount)
-                }
-              }
-
-              case(acc, _) => acc
-            }
-            
-            Some(SArray(Vector(modes: _*))) 
+        val reduction = red match {
+          case BuiltInReduction(red) => {
+            val enum = realizeMatch(spec, set)
+            red.reduced(enum, r, ctx)
+          }
         }
-        
-        reduced.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
+
+        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
       }
       
       case s @ dag.Split(line, specs, child) => {
@@ -477,26 +300,40 @@ trait Evaluator extends DAG
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
-      case Join(_, instr @ (IUnion | IIntersect), left, right) => {
+      case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) => {
         val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
         val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
         
         val leftEnum = realizeMatch(leftSpec, leftSet)
         val rightEnum = realizeMatch(rightSpec, rightSet)
+
+        val cgf = new CogroupF[SValue, SValue, Option[SValue]] {
+          def left(a: SValue) = Some(a)
+          def both(a: SValue, b: SValue) = None
+          def right(a: SValue) = None
+        }
         
-        val back = instr match {
+        val back = instr match { 
           case IUnion if left.provenance.length == right.provenance.length =>
             leftEnum.union(rightEnum, ctx.memoizationContext)
           
           // apparently Dataset tracks number of identities...
-          case IUnion if left.provenance.length != right.provenance.length =>
-            leftEnum.paddedMerge(rightEnum, () => ctx.nextId())
-          
+          case IUnion /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
+
           case IIntersect if left.provenance.length == right.provenance.length =>
             leftEnum.intersect(rightEnum, ctx.memoizationContext)
           
-          case IIntersect if left.provenance.length != right.provenance.length =>
-            ops.empty[SValue](math.max(left.provenance.length, right.provenance.length))
+          case IIntersect /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
+
+          case SetDifference if left.provenance.length == right.provenance.length =>
+            leftEnum.cogroup(rightEnum)(cgf).collect { 
+              case Some(sv) => sv
+            }
+          
+          case SetDifference /* if left.provenance.length != right.provenance.length */ =>
+            ops.empty[SValue](0)
         }
         
         Right(Match(mal.Actual, back, graph))

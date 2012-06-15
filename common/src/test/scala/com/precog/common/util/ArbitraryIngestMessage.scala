@@ -43,10 +43,11 @@ trait ArbitraryIngestMessage extends ArbitraryJValue {
   def genRandomEventMessage: Gen[EventMessage] = for(producerId <- choose(0,1000000); eventId <- choose(0, 1000000); event <- genRandomEvent) 
                                            yield EventMessage(producerId, eventId, event)
   
-  def genRandomSyncMessage: Gen[SyncMessage] = for(producerId <- choose(0, 1000000); syncId <- choose(0, 10000); ids <- Gen.resize(100, Gen.containerOf[List, Int](choose(0,1000000))))
-                                         yield SyncMessage(producerId, syncId, ids)
+//  def genRandomSyncMessage: Gen[SyncMessage] = for(producerId <- choose(0, 1000000); syncId <- choose(0, 10000); ids <- Gen.resize(100, Gen.containerOf[List, Int](choose(0,1000000))))
+//                                         yield SyncMessage(producerId, syncId, ids)
   
-  def genRandomIngestMessage: Gen[IngestMessage] = frequency((1, genRandomSyncMessage), (10, genRandomEventMessage))
+  //def genRandomIngestMessage: Gen[IngestMessage] = frequency((1, genRandomSyncMessage), (10, genRandomEventMessage))
+  def genRandomIngestMessage: Gen[IngestMessage] = genRandomEventMessage
 
 }
 

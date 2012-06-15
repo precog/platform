@@ -37,6 +37,8 @@ import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.serialization._
 
+import com.precog.util.FilesystemFileOps
+
 import akka.actor.ActorSystem
 import akka.dispatch._
 import akka.util.duration._
@@ -92,32 +94,26 @@ trait YggdrasilQueryExecutorComponent {
     
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
     val yConfig = wrapConfig(config)
-    val validatedQueryExecutor: IO[Validation[Extractor.Error, QueryExecutor]] = 
-      for( state <- YggState.restore(yConfig.dataDir) ) yield {
+    
+    new YggdrasilQueryExecutor {
+      //trait Storage extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
 
-        state map { yState => 
-          new YggdrasilQueryExecutor {
-            trait Storage extends ActorYggShard[IterableDataset] with ProductionActorEcosystem
-            lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
-            implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-            val yggConfig = yConfig
+      lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
+      implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      val yggConfig = yConfig
+      
+      object ops extends Ops 
+      object query extends QueryAPI 
 
-            object ops extends Ops 
-            object query extends QueryAPI 
-            val storage = new Storage {
-              type YggConfig = YggdrasilQueryExecutorConfig
-              lazy val yggConfig = yConfig
-              lazy val yggState = yState
-              lazy val accessControl = extAccessControl
-            }
-          }
-        }
-      }
-
-    validatedQueryExecutor map { 
-      case Success(qs) => qs
-      case Failure(er) => sys.error("Error initializing query service: " + er)
-    } unsafePerformIO
+      // Early initializers FTW (and to avoid cake badness with metadataStorage)
+      class Storage extends {
+        type YggConfig = YggdrasilQueryExecutorConfig
+        val yggConfig = yConfig
+        val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+        val accessControl = extAccessControl
+      } with ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
+      val storage = new Storage
+    }
   }
 }
 
@@ -141,6 +137,8 @@ trait YggdrasilQueryExecutor
   case class StackException(error: StackError) extends Exception(error.toString)
 
   def execute(userUID: String, query: String): Validation[EvaluationError, JArray] = {
+    logger.debug("Executing for %s: %s".format(userUID, query))
+
     import EvaluationError._
     implicit val M = Validation.validationMonad[EvaluationError]
     
@@ -191,13 +189,16 @@ trait YggdrasilQueryExecutor
   }
 
   def status(): Future[Validation[String, JValue]] = {
-    storage.actorsStatus.map { success(_) } 
+    //storage.actorsStatus.map { success(_) } 
+    Future(Failure("Status not supported yet"))
   }
 
   private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
     withContext { ctx =>
-      val result = consumeEval(userUID, dag, ctx) map { events => JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      logger.debug("Evaluating DAG for " + userUID)
+      val result = consumeEval(userUID, dag, ctx) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
       ctx.release.release.unsafePerformIO
+      logger.debug("DAG evaluated to " + result)
       result
     }
   }

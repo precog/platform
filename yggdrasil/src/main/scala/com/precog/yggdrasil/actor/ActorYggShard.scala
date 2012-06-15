@@ -25,14 +25,18 @@ import metadata._
 import com.precog.common._
 import com.precog.common.security._
 
+import akka.actor.Props
 import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
+import akka.dispatch.{Await,Future,Promise}
 import akka.pattern.ask
 import akka.util.Timeout
+import akka.util.duration._
+
 import scalaz.effect._
 
-trait ActorYggShard[Dataset] extends YggShard[Dataset] with ActorEcosystem {
-  def yggState: YggState
+import com.weiglewilczek.slf4s.Logging
+
+trait ActorYggShard[Dataset] extends YggShard[Dataset] with ActorEcosystem with ProjectionsActorModule[Dataset] with Logging {
   def accessControl: AccessControl
 
   private lazy implicit val dispatcher = actorSystem.dispatcher
@@ -44,21 +48,31 @@ trait ActorYggShard[Dataset] extends YggShard[Dataset] with ActorEcosystem {
   }
   
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
+    logger.debug("Obtain projection for " + descriptor)
     implicit val ito = timeout 
-    (projectionActors ? AcquireProjection(descriptor)) flatMap {
-      case ProjectionAcquired(actorRef) =>
-        val release = new Release(IO(projectionActors ! ReleaseProjection(descriptor)))
 
-        (actorRef ? ProjectionGet).map(p => (p.asInstanceOf[Projection[Dataset]], release))
-      
-      case ProjectionError(err) =>
-        sys.error("Error acquiring projection actor: " + err)
+    (for (ProjectionAcquired(projection) <- (projectionsActor ? AcquireProjection(descriptor))) yield {
+      logger.debug("  projection obtained")
+      (projection, new Release(IO(projectionsActor ! ReleaseProjection(descriptor))))
+    }) onFailure {
+      case e => logger.error("Error acquiring projection: " + descriptor, e)
     }
   }
   
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
     implicit val ito = timeout
-    (routingActor ? DirectIngestData(msgs)) map { _ => () }
+    val pollActor = actorSystem.actorOf(Props[PollBatchActor])
+    val batchHandler = actorSystem.actorOf(Props(new BatchHandler(pollActor, null, YggCheckpoint.Empty, Timeout(120000))))
+    ingestSupervisor.tell(DirectIngestData(msgs), batchHandler)
+
+    // Poll until we get a result
+    while (true) {
+      Await.result(pollActor ? PollBatch, 1 second) match {
+        case None => // NOOP, keep waiting
+        case _    => return Future(()) // Done
+      }
+    }
+    return Future(()) // Done
   }
 }
 

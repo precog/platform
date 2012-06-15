@@ -127,23 +127,12 @@ object MongoTokenManagerSpec extends Specification {
     val cnt = new java.util.concurrent.atomic.AtomicLong
   }
 
-  trait tokenManager extends After with MongoTokenManagerComponent {
-    lazy val defaultActorSystem = ActorSystem("token_manager_test")
+  class tokenManager extends After {
+    val defaultActorSystem = ActorSystem("token_manager_test")
+    implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
-    val config = Configuration.parse("""
-    security {
-      mongo {
-        mock = true
-        servers = "[localhost]"
-        database = "test-%d"
-        collection = "tokens"
-        deleted = "deleted_tokens"
-      }
-      cached = true
-    }
-    """.format(Counter.cnt.getAndIncrement))
-
-    lazy val tokenManager = tokenManagerFactory(config.detach("security"))
+    val mongo = new MockMongo
+    val tokenManager = new MongoTokenManager(mongo, mongo.database("test_v1"), MongoTokenManagerSettings.defaults)
 
     val to = Duration(30, "seconds")
   
@@ -158,5 +147,4 @@ object MongoTokenManagerSpec extends Specification {
       defaultActorSystem.shutdown 
     }
   }
-
 }

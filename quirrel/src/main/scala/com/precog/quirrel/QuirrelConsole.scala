@@ -30,8 +30,11 @@ import typer._
 
 object QuirrelConsole {
   trait EmptyLibrary extends Library {
+    type BIR = BuiltInRed
     type BIF1 = BuiltInFunc1
     type BIF2 = BuiltInFunc2
+
+    def libReduct = Set()
     def lib1 = Set()
     def lib2 = Set()
   }

@@ -33,5 +33,5 @@ trait ParseEvalStack extends Compiler
     with CriticalConditionSolver
     with Emitter
     with Evaluator
-    with Stdlib
+    with StdLib
     with OperationsAPI

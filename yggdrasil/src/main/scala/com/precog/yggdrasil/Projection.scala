@@ -19,34 +19,20 @@
  */
 package com.precog.yggdrasil
 
-import com.precog.util._
-import com.precog.common.Path
-
-import blueeyes.json._
-import blueeyes.json.JsonAST._
-import blueeyes.json.xschema._
-import blueeyes.json.xschema.Extractor._
-import blueeyes.json.xschema.DefaultSerialization._
-
-import java.io.File
-
-import scalaz._
-import scalaz.Scalaz._
 import scalaz.effect._
-import scalaz.iteratee._
 
-trait ProjectionFactory {
-  type Dataset
+trait ProjectionFactory[Dataset] {
+  type ProjectionImpl <: Projection[Dataset]
 
-  def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
+  def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl]
+
+  def close(p: ProjectionImpl): IO[Unit]
 }
 
 trait Projection[Dataset] {
   def descriptor: ProjectionDescriptor
 
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): Projection[Dataset]
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
 
-  def getAllPairs(expiresAt: Long) : Dataset
-
-  def close(): Unit
+  def allRecords(expiresAt: Long) : Dataset
 }

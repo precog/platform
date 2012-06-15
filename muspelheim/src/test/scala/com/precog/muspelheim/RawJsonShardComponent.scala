@@ -21,6 +21,7 @@ package com.precog.muspelheim
 
 import akka.actor._
 import akka.dispatch._
+import akka.testkit.TestActorRef
 import akka.util.Timeout
 import akka.util.duration._
 
@@ -30,7 +31,7 @@ import blueeyes.json.JsonParser
 
 import com.precog.common._
 import com.precog.common.security._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
 import com.precog.yggdrasil.metadata._
@@ -40,6 +41,7 @@ import SValue._
 
 import java.io._
 import org.reflections._
+import scalaz.effect.IO
 import scalaz.std.AllInstances._
 
 import scala.collection.immutable.SortedMap
@@ -50,6 +52,7 @@ trait RawJsonShardComponent extends YggShardComponent {
 
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
+  implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
 
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): Dataset[Seq[CValue]]
 
@@ -60,11 +63,9 @@ trait RawJsonShardComponent extends YggShardComponent {
     case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
       val chunkSize = 2000
 
-      def insert(ids: Identities, values: Seq[CValue], shouldSync: Boolean = false) = copy(data = data + row)
+      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
 
-      def getAllPairs(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
-
-      def close() = ()
+      def allRecords(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
     }
 
     private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -78,9 +79,10 @@ trait RawJsonShardComponent extends YggShardComponent {
 
         projections = json.elements.foldLeft(projections) { 
           case (acc, jobj) => 
-            routingTable.route(EventMessage(EventId(0, identity.getAndIncrement), Event(path, "", jobj, Map()))).foldLeft(acc) {
-              case (acc, ProjectionData(descriptor, identities, values, _)) =>
-                acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((identities, values))))
+            val evID = EventId(0, identity.getAndIncrement)
+            routingTable.route(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
+              case (acc, ProjectionData(descriptor, values, _)) =>
+                acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((VectorCase(evID.uid), values))))
           }
         }
       }
@@ -101,10 +103,12 @@ trait RawJsonShardComponent extends YggShardComponent {
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
     }
 
-    def metadata = {
-      val localMetadata = new LocalMetadata(projectionMetadata, VectorClock.empty)
-      localMetadata.toStorageMetadata(actorSystem.dispatcher)
+    lazy val metadataActor = {
+      implicit val system = actorSystem
+      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop))
     }
+
+    def metadata = new ActorStorageMetadata(metadataActor)
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 

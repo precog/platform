@@ -70,15 +70,68 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("x :=") must throwA[ParseException]
     }
     
+    "accept a specific import expression" in {
+      parse("import std 42") must beLike {
+        case Import(_, SpecificImport(Vector("std")), NumLit(_, "42")) => ok
+      }
+      
+      parse("import std::math::alissa 42") must beLike {
+        case Import(_, SpecificImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
+      }
+    }
+    
+    "accept a wildcard import expression" in {
+      parse("import std::_ 42") must beLike {
+        case Import(_, WildcardImport(Vector("std")), NumLit(_, "42")) => ok
+      }
+      
+      parse("import std::math::alissa::_ 42") must beLike {
+        case Import(_, WildcardImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
+      }
+    }
+
+    "accept a wildcard import followed by a let" in {
+      parse("""
+        | import std::time::_
+        | foo := //foo
+        | foo""".stripMargin) must beLike {
+        case Import(_, WildcardImport(Vector("std", "time")), _) => ok
+      }
+    }
+
+    "accept a wildcard import followed by a distinct" in {
+      parse("""
+        | import std::time::_
+        | distinct(//foo)""".stripMargin) must beLike {
+        case Import(_, WildcardImport(Vector("std", "time")), _) => ok
+      }
+    }
+    
+    "reject a singular wildcard import expression" in {
+      parse("import _ 42") must throwA[ParseException]
+    }
+    
     "accept a 'new' expression" in {
       parse("new 1") must beLike {
         case New(_, NumLit(_, "1")) => ok
       }
-    }
+    }    
+
+    "accept a 'new' expression followed by a let" in {
+      parse("new foo := //foo foo") must beLike {
+        case New(_, _) => ok
+      }
+    }.pendingUntilFixed
     
     "accept a relate expression" in {
       parse("1 ~ 2 3") must beLike {
         case Relate(_, NumLit(_, "1"), NumLit(_, "2"), NumLit(_, "3")) => ok
+      }
+    }    
+
+    "accept a relate expression followed by a let" in {
+      parse("1 ~ 2 foo := //foo foo") must beLike {
+        case Relate(_, NumLit(_, "1"), NumLit(_, "2"), Let(_, Identifier(Vector(), "foo"), Vector(), Dispatch(_, Identifier(Vector(), "load"), Vector(StrLit(_, "/foo"))), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
@@ -305,6 +358,10 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("1[]") must throwA[ParseException]
     }
     
+    "reject a dispatch on wildcard" in {
+      parse("_(42)") must throwA[ParseException]
+    }
+    
     "accept a dispatch with one actual" in {
       parse("x(1)") must beLike { case Dispatch(_, Identifier(Vector(), "x"), Vector(NumLit(_, "1"))) => ok }
     }
@@ -391,6 +448,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         parse("1 intersect 2") must beLike {
           case Intersect(_, NumLit(_, "1"), NumLit(_, "2")) => ok
         }
+      }      
+      "difference" >> {
+        parse("1 difference 2") must beLike {
+          case Difference(_, NumLit(_, "1"), NumLit(_, "2")) => ok
+        }
       }
     }
     
@@ -414,6 +476,11 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       "intersect" >> {
         parse(""""foo" intersect null""") must beLike {
           case Intersect(_, StrLit(_, "foo"), NullLit(_)) => ok
+        }
+      }     
+      "intersect" >> {
+        parse(""""foo" difference null""") must beLike {
+          case Difference(_, StrLit(_, "foo"), NullLit(_)) => ok
         }
       }
     }
@@ -933,6 +1000,10 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       
       parse("1 intersect \"a\"") must beLike {
         case Intersect(_, NumLit(_, "1"), StrLit(_, "a")) => ok
+      }      
+
+      parse("1 difference \"a\"") must beLike {
+        case Difference(_, NumLit(_, "1"), StrLit(_, "a")) => ok
       }
     }
   }
@@ -967,20 +1038,35 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
         parse("withfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "withfoo"), Vector()) => ok
         }
-      }      
+      }   
+      
       "union" >> {
         parse("unionfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "unionfoo"), Vector()) => ok
         }
-      }      
+      }    
+      
       "intersect" >> {
         parse("intersectfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "intersectfoo"), Vector()) => ok
         }
+      }         
+
+      "difference" >> {
+        parse("differencefoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "differencefoo"), Vector()) => ok
+        }
       }      
+      
       "null" >> {
         parse("nullfoo") must beLike {
           case Dispatch(_, Identifier(Vector(), "nullfoo"), Vector()) => ok
+        }
+      }
+      
+      "import" >> {
+        parse("importfoo") must beLike {
+          case Dispatch(_, Identifier(Vector(), "importfoo"), Vector()) => ok
         }
       }
     }
@@ -1048,7 +1134,4 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
   } else {
     "specification examples" >> skipped
   }
-
-
-
 }

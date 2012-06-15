@@ -21,7 +21,7 @@ package com.precog.yggdrasil
 package leveldb
 
 import iterable.LevelDBProjectionFactory
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 import com.precog.util.Interval
 
 import java.io.File
@@ -40,32 +40,28 @@ import org.specs2.mutable.{BeforeAfter,Specification}
 import org.specs2.specification.Scope
 
 
-class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging with LevelDBProjectionFactory {
-  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
-    IO { IOUtils.createTmpDir("columnSpec") }
-  }
-
-  def saveDescriptor(descriptor: ProjectionDescriptor): IO[Validation[Throwable, File]] = {
-    storageLocation(descriptor) map { Success(_) }
-  }
-
-  trait columnSetup extends Scope with BeforeAfter {
-    val dataDir = File.createTempFile("ColumnSpec", ".db")
-    logger.info("Using %s for dbtest".format(dataDir))
-    def before = dataDir.delete() // Ugly, but it works
-    def after = {
-      // Here we need to remove the entire directory and contents
-      def delDir (dir : File) {
-        dir.listFiles.foreach {
-          case d if d.isDirectory => delDir(d)
-          case f => f.delete()
-        }
-        dir.delete()
-      }
-      delDir(dataDir)
-    }
-  }
-
+//class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging with LevelDBProjectionFactory {
+//  def storageLocation(descriptor: ProjectionDescriptor): IO[File] = {
+//    IOUtils.createTmpDir("columnSpec") 
+//  }
+//
+//  trait columnSetup extends Scope with BeforeAfter {
+//    val dataDir = File.createTempFile("ColumnSpec", ".db")
+//    logger.info("Using %s for dbtest".format(dataDir))
+//    def before = dataDir.delete() // Ugly, but it works
+//    def after = {
+//      // Here we need to remove the entire directory and contents
+//      def delDir (dir : File) {
+//        dir.listFiles.foreach {
+//          case d if d.isDirectory => delDir(d)
+//          case f => f.delete()
+//        }
+//        dir.delete()
+//      }
+//      delDir(dataDir)
+//    }
+//  }
+//
 //  "Columns" should {
 //    "Properly persist and restore values" in new columnSetup {
 //      val size = 1000
@@ -144,4 +140,4 @@ class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with 
 //      }
 //    }
 //  }
-}
+//}

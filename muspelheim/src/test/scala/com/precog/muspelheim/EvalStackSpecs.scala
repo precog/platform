@@ -73,6 +73,62 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "accept a dereferenced array" >> {
+      "non-empty array" >> {
+        eval("[1,2,3].foo") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array" >> {
+        eval("[].foo") mustEqual Set()
+      }.pendingUntilFixed
+    }
+
+    "accept a dereferenced object" >> {
+      "non-empty array" >> {
+        eval("{a: 42}[1]") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array" >> {
+        eval("{}[0]") mustEqual Set()
+      }.pendingUntilFixed
+    }    
+    
+    "accept a where'd empty array and empty object" >> {
+      "empty object (left)" >> {
+        eval("{} where true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty object (right)" >> {
+        eval("true where {}") mustEqual Set()
+      }.pendingUntilFixed
+      
+      "empty array (left)" >> {
+        eval("[] where true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array (right)" >> {
+        eval("true where []") mustEqual Set()
+      }.pendingUntilFixed
+    }    
+    
+    "accept a with'd empty array and empty object" >> {
+      "empty object (left)" >> {
+        eval("{} with true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty object (right)" >> {
+        eval("true with {}") mustEqual Set()
+      }.pendingUntilFixed
+      
+      "empty array (left)" >> {
+        eval("[] with true") mustEqual Set()
+      }.pendingUntilFixed
+
+      "empty array (right)" >> {
+        eval("true with []") mustEqual Set()
+      }.pendingUntilFixed
+    }    
+    
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {
         val input = """
@@ -141,11 +197,106 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "use the where operator on an intersected set" >> {
+    "basic set difference queries" >> {
+      {
+        val input = "//clicks difference //campaigns"
+        val results = evalE(input)
+
+        results must haveSize(100)
+      }
+      {
+        val input = "//clicks difference //clicks"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }
+      {
+        val input = "//clicks difference //clicks.timeString"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }      
+      {
+        val input = "//clicks.time difference //clicks.timeString"
+        val results = evalE(input)
+
+        results must haveSize(0)
+      }
+    }
+
+    "basic intersect and union queries" >> {
+      {
+        val input = "4 intersect 4"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+        }
+      }
+      {
+        val input = "4 union 5"
+        val results = evalE(input)
+
+        results must haveSize(2)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { Set(4,5) must contain(d) }
+        }
+      }
+      {
+        val input = "//clicks intersect //views"
+        val results = evalE(input)
+
+        results must beEmpty
+      }
+      {
+        val input = "{foo: 3} union 9"
+        val results = evalE(input)
+
+        results must haveSize(2)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+          case (VectorCase(_), SObject(obj)) => { obj must contain("foo" -> 3) }
+        }
+      }
+      {
+        val input = "obj := {foo: 5} obj.foo intersect 5"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 5 }
+        }
+      }
+      {
+        val input = "arr := [1,2,3] arr[0] intersect 1"
+        val results = evalE(input)
+
+        results must haveSize(1)
+        
+        forall(results) {
+          case (VectorCase(_), SDecimal(d)) => { d mustEqual 1 }
+        }
+      }
+      {
+        val input = "{foo: //clicks.pageId, bar: //clicks.userId} union //views"
+        val results = evalE(input)
+
+        results must haveSize(200)
+      }
+    }
+
+    "intersect a union" >> {
       "campaigns.gender" >> {
         val input = """
-          | a := //campaigns.campaign union //campaigns.cpm
-          |   a intersect //campaigns.campaign """.stripMargin
+          | campaign := //campaigns.campaign
+          | cpm := //campaigns.cpm
+          | a := campaign union cpm
+          |   a intersect campaign """.stripMargin
           
         val results = evalE(input)
         
@@ -157,10 +308,23 @@ trait EvalStackSpecs extends Specification {
         }
       }
 
+      "union the same set when two different variables are assigned to it" >> {
+          val input = """
+            | a := //clicks
+            | b := //clicks
+            | a union b""".stripMargin
+
+          val results = evalE(input)
+
+          results must haveSize(100)
+      }      
+
       "clicks.platform" >> {
         val input = """
-          | a := //campaigns.campaign union //campaigns.cpm
-          |   a intersect //campaigns.cpm """.stripMargin
+          | campaign := //campaigns.campaign
+          | cpm := //campaigns.cpm
+          | a := campaign union cpm
+          |   a intersect cpm """.stripMargin
           
         val results = evalE(input)
         
@@ -172,6 +336,18 @@ trait EvalStackSpecs extends Specification {
           }
         }
       }
+    }
+
+    "union with an object" >> {
+      val input = """
+        campaigns := //campaigns
+        clicks := //clicks
+        obj := {foo: campaigns.cpm, bar: campaigns.campaign}
+        obj union clicks""".stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(200)
     }
 
     "use the where operator on a key with string values" in {
@@ -332,8 +508,27 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()
     }
 
-    "evaluate rank" >> {
+    "deref an array with a where" in {
+      val input = """
+        | a := [3,4,5]
+        | a where a[0] = 1""".stripMargin
 
+      val results = eval(input)
+
+      results must haveSize(0)
+    }
+
+    "deref an object with a where" in {
+      val input = """
+        | a := {foo: 5}
+        | a where a.foo = 1""".stripMargin
+
+      val results = eval(input)
+
+      results must haveSize(0)
+    }
+
+    "evaluate rank" >> {
       "using where" >> {
         val input = """
           | campaigns := //campaigns 

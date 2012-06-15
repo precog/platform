@@ -20,10 +20,13 @@
 package com.precog.shard.util
 
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.common.security._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.metadata._
+
+import com.precog.util.FilesystemFileOps
 
 import java.io.File
 
@@ -41,17 +44,18 @@ import blueeyes.json.Printer
 import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
+import scalaz.effect.IO
+
 object ShardTestInit extends App {
 
   val dir = new File("./data") 
   dir.mkdirs
 
-  object shard extends ActorYggShard[IterableDataset] with StandaloneActorEcosystem {
-    class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig {
+  object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
+    class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-    }
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-    val yggState = YggState(dir, Map.empty, Map.empty)
+    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 
@@ -75,22 +79,25 @@ object ShardTestInit extends App {
     val filename = parts(1)
     val path = parts(0)
 
-    val data = IOUtils.rawReadFileToString(new File(filename))
-    val json = JsonParser.parse(data)
+    IOUtils.readFileToString(new File(filename)).map { data =>
+      val json = JsonParser.parse(data)
 
-    val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty
+      val emptyMetadata: Map[JPath, Set[UserMetadata]] = Map.empty
 
-    json match {
-      case JArray(elements) => 
-        val fut = shard.storeBatch(elements.map{ value =>
-          println(Printer.compact(Printer.render(value)))
-          EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, value, emptyMetadata))
-        }, timeout)
-        Await.result(fut, Duration(30, "seconds")) 
-      case single           =>
-        val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), TestTokenManager.rootUID, single, emptyMetadata)), timeout)
-        Await.result(fut, Duration(30, "seconds")) 
-    } 
+      json match {
+        case JArray(elements) => 
+          val fut = shard.storeBatch(elements.map{ value =>
+            println(Printer.compact(Printer.render(value)))
+            EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", value, emptyMetadata))
+          }, timeout)
+          Await.result(fut, Duration(30, "seconds")) 
+        case single           =>
+          val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", single, emptyMetadata)), timeout)
+          Await.result(fut, Duration(30, "seconds")) 
+      }
+    } except {
+      err => println(err); IO(())
+    } unsafePerformIO
   }
 
   if(args.length == 0) usage else run(args)

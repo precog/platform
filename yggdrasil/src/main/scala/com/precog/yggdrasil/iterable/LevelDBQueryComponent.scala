@@ -88,7 +88,7 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
             dataset    <- joinNext(x :: xs)
           } yield {
             release += prelease.release
-            ops.extend(projection.getAllPairs(expiresAt)).cogroup(dataset) {
+            ops.extend(projection.allRecords(expiresAt)).cogroup(dataset) {
               new CogroupF[Seq[CValue], SValue, SValue] {
                 def left(l: Seq[CValue]) = appendToObject(init, instr, l)
                 def both(l: Seq[CValue], r: SValue) = appendToObject(r, instr, l)
@@ -103,7 +103,7 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
             (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
           } yield {
             release += prelease.release
-            ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
+            ops.extend(projection.allRecords(expiresAt)) map { appendToObject(init, instr, _) }
           }
       }
 

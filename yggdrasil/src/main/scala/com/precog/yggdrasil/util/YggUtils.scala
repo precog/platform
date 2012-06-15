@@ -20,11 +20,12 @@
 package com.precog.yggdrasil
 package util
 
-import leveldb._
 import actor._
-import iterable.IterableDataset
+import iterable._
+import leveldb._
+import metadata.FileMetadataStorage
 import com.precog.common._
-import com.precog.common.util._
+import com.precog.util._
 import com.precog.common.kafka._
 import com.precog.common.security._
 
@@ -48,8 +49,8 @@ import collection.JavaConversions._
 
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
-import blueeyes.json.Printer
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
@@ -67,6 +68,7 @@ import org.I0Itec.zkclient._
 import org.apache.zookeeper.data.Stat
 
 import scalaz.{Success, Failure}
+import scalaz.effect.IO
 import scalaz.syntax.std.booleanV._
 
 import org.streum.configrity._
@@ -76,6 +78,22 @@ import scala.io.Source
 
 import au.com.bytecode.opencsv._
 import java.io._
+
+import com.weiglewilczek.slf4s.Logging
+
+trait YggUtilsCommon {
+  def load(dataDir: String) = {
+    val dir = new File(dataDir)
+    for{
+      d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")
+      descriptor <- ProjectionDescriptor.fromFile(d).unsafePerformIO.toOption
+    } yield {
+      (d, descriptor)
+    }
+  }
+  
+
+}
 
 object YggUtils {
  
@@ -126,7 +144,7 @@ trait Command {
   def run(args: Array[String])
 }
 
-object DatabaseTools extends Command {
+object DatabaseTools extends Command with YggUtilsCommon {
   val name = "db" 
   val description = "describe db paths and selectors" 
   
@@ -191,14 +209,7 @@ object DatabaseTools extends Command {
                                                          config.path.map(_.toString).getOrElse("*"),
                                                          config.selector.map(_.toString).getOrElse(".*")))
     
-    show(extract(load(config.dataDir)), config.verbose)
-  }
-
-  def load(dataDir: String) = {
-    val dir = new File(dataDir)
-    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
-      readDescriptor(d)
-    }
+    show(extract(load(config.dataDir).map(_._2)), config.verbose)
   }
 
   def extract(descs: Array[ProjectionDescriptor]): SortedMap[Path, SortedSet[(JPath, CType, Seq[UID])]] = {
@@ -230,18 +241,13 @@ object DatabaseTools extends Command {
     }
   }
 
-  def readDescriptor(dir: File): ProjectionDescriptor = {
-    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, "projection_descriptor.json"))
-    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
-  }
-
   class Config(var path: Option[Path] = None, 
                var selector: Option[JPath] = None,
                var dataDir: String = ".",
                var verbose: Boolean = false)
 }
 
-object ChownTools extends Command {
+object ChownTools extends Command with YggUtilsCommon {
   val name = "dbchown" 
   val description = "change ownership" 
  
@@ -275,17 +281,6 @@ object ChownTools extends Command {
     save(updated, config.dryrun)
   }
 
-  def load(dataDir: String) = {
-    val dir = new File(dataDir)
-    for(d <- dir.listFiles if d.isDirectory && !(d.getName == "." || d.getName == "..")) yield {
-      (d, readDescriptor(d))
-    }
-  }
-
-  def readDescriptor(dir: File): ProjectionDescriptor = {
-    val rawDescriptor = IOUtils.rawReadFileToString(new File(dir, projectionDescriptor))
-    JsonParser.parse(rawDescriptor).validated[ProjectionDescriptor].toOption.get
-  }
 
   def filter(path: Option[Path], selector: Option[JPath], descs: Array[(File, ProjectionDescriptor)]): Array[(File, ProjectionDescriptor)] = {
     descs.filter {
@@ -321,14 +316,13 @@ object ChownTools extends Command {
     descs.foreach {
       case (f, proj) =>
         val pd = new File(f, projectionDescriptor)
-        val output = Printer.pretty(Printer.render(proj.serialize))
+        val output = pretty(render(proj.serialize))
         if(dryrun) {
           println("Replacing %s with\n%s".format(pd, output)) 
         } else {
-          IOUtils.safeWriteToFile(output, pd).unsafePerformIO match {
-            case Success(_) =>
-            case Failure(e) => println("Error update: %s - %s".format(pd, e))
-          }
+          IOUtils.safeWriteToFile(output, pd) except {
+            case e => println("Error update: %s - %s".format(pd, e)); IO(())
+          } unsafePerformIO
         }
     }
   }
@@ -471,7 +465,7 @@ object KafkaTools extends Command {
     def dump(i: Int, msg: MessageAndOffset) {
       val event = codec.toEvent(msg.message)
       println("Event-%06d Path: %s Token: %s".format(i+1, event.path, event.tokenId))
-      println(Printer.pretty(Printer.render(event.data)))
+      println(pretty(render(event.data)))
     }
   }
 
@@ -482,7 +476,7 @@ object KafkaTools extends Command {
       codec.toEvent(msg.message) match {
         case EventMessage(EventId(pid, sid), Event(path, tokenId, data, _)) =>
           println("Event-%06d Id: (%d/%d) Path: %s Token: %s".format(i+1, pid, sid, path, tokenId))
-          println(Printer.pretty(Printer.render(data)))
+          println(pretty(render(data)))
         case _ =>
       }
     }
@@ -626,6 +620,8 @@ object IngestTools extends Command {
       intOpt("s", "limit", "<sync-limit-messages>", "if sync is greater than the specified limit an error will occur", {s: Int => config.limit = s})
       intOpt("l", "lag", "<time-lag-minutes>", "if update lag is greater than the specified value an error will occur", {l: Int => config.lag = l})
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
+      opt("c", "shardpath", "The shard's ZK path", { s: String => config.shardZkPath = s })
+      opt("r", "relaypath", "The relay's ZK path", { s: String => config.relayZkPath = s })
     }
     if (parser.parse(args)) {
       val conn = new ZkConnection(config.zkConn)
@@ -644,8 +640,8 @@ object IngestTools extends Command {
   val relayAgentPath = "/test/com/precog/ingest/v1/relay_agent/qclus-demo01"
 
   def process(conn: ZkConnection, client: ZkClient, config: Config) {
-    val relayRaw = getJsonAt(relayAgentPath, client).getOrElse(sys.error("Error reading relay agent state"))
-    val shardRaw = getJsonAt(shardCheckpointPath, client).getOrElse(sys.error("Error reading shard state"))
+    val relayRaw = getJsonAt(config.relayZkPath, client).getOrElse(sys.error("Error reading relay agent state"))
+    val shardRaw = getJsonAt(config.shardZkPath, client).getOrElse(sys.error("Error reading shard state"))
 
     val relayState = relayRaw.deserialize[EventRelayState]  
     val shardState = shardRaw.deserialize[YggCheckpoint]
@@ -701,10 +697,12 @@ object IngestTools extends Command {
   
   class Config(var limit: Int = 0,
                var lag: Int = 60,
-               var zkConn: String = "localhost:2181")
+               var zkConn: String = "localhost:2181",
+               var shardZkPath: String = "/",
+               var relayZkPath: String = "/")
 }
 
-object ImportTools extends Command {
+object ImportTools extends Command with Logging {
   val name = "import"
   val description = "Bulk import of json/csv data directly to data columns"
   
@@ -712,7 +710,6 @@ object ImportTools extends Command {
   def run(args: Array[String]) {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
-      opt("v", "verbose", "verbose logging", { config.verbose = true })
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
@@ -721,7 +718,11 @@ object ImportTools extends Command {
       })
     }
     if (parser.parse(args)) {
-      process(config)
+      try {
+        process(config)
+      } catch {
+        case e => logger.error("Failure during import", e); sys.exit(1)
+      }
     } else { 
       parser
     }
@@ -731,57 +732,59 @@ object ImportTools extends Command {
     val dir = new File("./data") 
     dir.mkdirs
 
-    object shard extends ActorYggShard[IterableDataset[SValue]] with StandaloneActorEcosystem {
-      class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig
-      
-      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-      val yggState = YggState(dir, Map.empty, Map.empty)
-      val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
-      object projectionFactory extends iterable.LevelDBProjectionFactory {
-        def storageLocation(descriptor: ProjectionDescriptor) = yggState.descriptorStorage.storageLocation(descriptor)
-        def saveDescriptor(descriptor: ProjectionDescriptor) = yggState.descriptorStorage.saveDescriptor(descriptor)
+    // This uses an empty checkpoint because there is no support for insertion/metadata
+    val io = for (ms <- FileMetadataStorage.load(dir, FilesystemFileOps)) yield {
+      type Dataset = Seq[CValue]
+      object shard extends StandaloneActorEcosystem[IterableDataset[Dataset]] with ActorYggShard[IterableDataset[Dataset]] with ProjectionsActorModule[IterableDataset[Dataset]] with LevelDBProjectionFactory {
+        class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
+
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+
+        val metadataStorage = ms
+
+        val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+
+        val fileOps = FilesystemFileOps
+
+        def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
       }
 
+      logger.info("Starting shard input")
+      Await.result(shard.actorsStart, Duration(60, "seconds"))
+      logger.info("Shard input started")
+      config.input.foreach {
+        case (db, input) =>
+          logger.debug("Inserting batch: %s:%s".format(db, input))
+          val events = Source.fromFile(input).getLines.map {
+            line => EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, JsonParser.parse(line), Map.empty))
+          }.toList
+        
+          logger.debug(events.size + " total inserts")
+
+          events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
+              logger.info("Saving batch " + id + " of size " + batch.size)
+              Await.result(shard.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
+              logger.info("Batch saved")
+            }
+          }
+      }
+
+      logger.info("Waiting for shard shutdown")
+      Await.result(shard.actorsStop, Duration(310, "seconds"))
+
+      logger.info("Shutdown")
+      sys.exit(0)
     }
-    Await.result(shard.actorsStart, Duration(60, "seconds"))
-    config.input.foreach {
-      case (db, input) =>
-        if(config.verbose) println("Inserting batch: %s:%s".format(db, input))
-        val events = Source.fromFile(input).getLines
-        insert(config, db, events, shard)
-    }
-    if(config.verbose) println("Waiting for shard shutdown")
-    Await.result(shard.actorsStop, Duration(60, "seconds"))
-    if(config.verbose) println("Shutdown")
+
+    io.unsafePerformIO
   }
 
   val sid = new AtomicInteger(0)
 
-  def insert(config: Config, db: String, itr: Iterator[String], shard: YggShard[IterableDataset[SValue]], batch: Vector[EventMessage] = Vector.empty, b: Int = 0): Unit = {
-    val verbose = config.verbose
-    val batchSize = config.batchSize
-    val token = config.token
-    val (curBatch, nb) = if(batch.size >= batchSize || !itr.hasNext) {
-      if(verbose) println("Saving batch - " + b)
-      Await.result(shard.storeBatch(batch, new Timeout(60000)), Duration(60, "seconds"))
-      (Vector.empty[EventMessage], b+1)
-    } else {
-      (batch, b)
-    }
-    if(itr.hasNext) {
-      val data = JsonParser.parse(itr.next) 
-      val event = Event(Path(db), token, data, Map.empty)
-      val em = EventMessage(EventId(0, sid.getAndIncrement), event)
-      insert(config, db, itr, shard, curBatch :+ em, nb)
-    } else {
-      ()
-    }
-  }
-
   class Config(
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
-    var token: String = TestTokenManager.rootUID,
+    var token: TokenID = "root",
     var verbose: Boolean = false 
   )
 }
@@ -813,7 +816,7 @@ object CSVTools extends Command {
 
   def process(config: Config) {
     CSVToJSONConverter.convert(config.input, config.delimeter, config.teaseTimestamps, config.verbose).foreach {
-      case jval => println(Printer.compact(Printer.render(jval)))
+      case jval => println(compact(render(jval)))
     }
   }
 
@@ -824,7 +827,8 @@ object CSVTools extends Command {
     var verbose: Boolean = false)
 }
 
-object TokenTools extends Command with AkkaDefaults {
+
+object TokenTools extends Command with AkkaDefaults with Logging {
   val name = "tokens"
   val description = "Token management utils"
     
@@ -833,7 +837,8 @@ object TokenTools extends Command with AkkaDefaults {
     val parser = new OptionParser("yggutils csv") {
       opt("l","list","List tokens", { config.list = true })
 //      opt("c","children","List children of token", { s: String => config.listChildren = Some(s) })
-      opt("n","new","New customer account at path", { s: String => config.newAccount = Some(s) })
+      opt("n","new","New customer account at path", { s: String => config.path = Some(s) })
+      opt("a","name","Human-readable name for new token", { s: String => config.newTokenName = s })
       opt("x","delete","Delete token", { s: String => config.delete = Some(s) })
       opt("d","database","Token database name (ie: beta_auth_v1)", {s: String => config.database = s })
       opt("t","tokens","Tokens collection name", {s: String => config.collection = s }) 
@@ -852,14 +857,14 @@ object TokenTools extends Command with AkkaDefaults {
     val tm = tokenManager(config)
     val actions = (config.list).option(list(tm)).toSeq ++
 //                  config.listChildren.map(listChildren(_, tm)) ++
-                  config.newAccount.map(create(_, config.root, tm)) ++
+                  config.path.map(p => create(config.newTokenName, Path(p), config.root, tm)) ++
                   config.delete.map(delete(_, tm))
 
-    Future.sequence(actions) onComplete {
+    Await.result(Future.sequence(actions) onComplete {
       _ => tm.close() onComplete {
         _ => defaultActorSystem.shutdown
       }
-    } 
+    }, Duration(30, "seconds"))
   }
 
   def tokenManager(config: Config): TokenManager = {
@@ -873,8 +878,8 @@ object TokenTools extends Command with AkkaDefaults {
     }
   }
 
-  def printToken(t: Token): Unit = sys.error("todo")
-//  {
+  def printToken(t: Token): Unit = {
+    println(t)
 //    println("Token: %s Issuer: %s".format(t.uid, t.issuer.getOrElse("NA")))
 //    println("  Permissions (Path)")
 //    t.permissions.path.foreach { p =>
@@ -896,11 +901,26 @@ object TokenTools extends Command with AkkaDefaults {
 //      children.foreach(printToken)
 //    }
 //  }
+  }
 
-  def create(p: String, root: String, tokenManager: TokenManager) = sys.error("todo") 
-//    val perms = TestTokenManager.standardAccountPerms(p)
-//    tokenManager.issueNew(Some(root), perms, Set.empty, false)
-//  }
+  def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
+    for {
+      token <- tokenManager.newToken(tokenName, Set())
+      val ownerGrant: Future[Grant] = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant: Future[Grant]  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant: Future[Grant] = tokenManager.newGrant(None, WritePermission(path, None))
+      grants <- Future.sequence(List[Future[Grant]](ownerGrant, readGrant, writeGrant))
+      result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
+    } yield {
+      result match {
+        case Some(token) =>
+          println("Successfully created token: \n" + pretty(render(token.serialize)))
+
+        case None =>
+          sys.error("Something went silently wrong in token or grant creation or update, please investigate.")
+      }
+    }
+  }
 
   def delete(t: String, tokenManager: TokenManager) = sys.error("todo")
 //    for (Some(token) <- tokenManager.findToken(t); t <- tokenManager.deleteToken(token)) yield {
@@ -911,8 +931,9 @@ object TokenTools extends Command with AkkaDefaults {
   
   class Config {
     var delete: Option[String] = None
-    var newAccount: Option[String] = None
-    var root: String = TestTokenManager.rootUID
+    var path: Option[String] = None
+    var newTokenName: String = ""
+    var root: TokenID = "root"
     var list: Boolean = false
     var listChildren: Option[String] = None
     var database: String = "auth_v1"
@@ -920,25 +941,22 @@ object TokenTools extends Command with AkkaDefaults {
     var deleted: Option[String] = None
     var servers: String = "localhost" 
 
-    def deletedCollection(): String = {
+    def deletedCollection: String = {
       deleted.getOrElse( collection + "_deleted" )
     }
 
-    def mongoSettings(): MongoTokenManagerSettings = MongoTokenManagerSettings(
-      tokens = collection, deletedTokens = deletedCollection
+    def mongoSettings: MongoTokenManagerSettings = MongoTokenManagerSettings(
+      tokens = collection, 
+      deletedTokens = deletedCollection
     )
 
-    def mongoConfig(): Configuration = {
-      Configuration.parse("servers = %s".format(mongoServers()))
+    def mongoConfig: Configuration = {
+      Configuration.parse("servers = %s".format(mongoServers))
     }
 
-    def mongoServers(): String = {
+    def mongoServers: String = {
       val s = servers.trim
-      if(s.startsWith("[") && s.endsWith("]")) {
-        s
-      } else {
-        "[" + s + "]"
-      }
+      if (s.startsWith("[") && s.endsWith("]")) s else "[" + s + "]"
     }
   }
 }

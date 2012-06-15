@@ -22,6 +22,10 @@ package typer
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
+import com.precog.util.IdGen
+import scalaz.std.option._  
+import scalaz.syntax.apply._
+
 trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFinder {
   import Function._
   import Utils._
@@ -37,10 +41,33 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val leftErrors = loop(left, relations, constraints)
 
         if (!params.isEmpty && left.provenance != NullProvenance) {
-          val assumptions = expr.criticalConditions map {
+          val assumptions: Map[String, Provenance] = expr.criticalConditions map {
             case (id, exprs) => {
               val provenances = flattenForest(exprs) map { _.provenance }
               val unified = provenances reduce unifyProvenanceAssumingRelated
+
+              (id -> unified)
+            }
+          }
+
+          val accumulatedAssumptions: Map[String, Option[Vector[Provenance]]] = expr.criticalConditions map {
+            case (id, exprs) => {
+              val allExprs: Set[Set[Provenance]] = flattenForest(exprs) map { e => e.provenance.possibilities }
+
+              val isMatch = allExprs.reduceOption { 
+                (left, right) => left intersect right 
+              } exists(p => p != ValueProvenance && p != NullProvenance)  
+
+              val accumulatedProvenances = flattenForest(exprs) map { _.accumulatedProvenance }
+              val accProv = accumulatedProvenances.reduceOption {
+                (left, right) => (left <**> right) { _ ++ _ } 
+              } getOrElse Some(Vector())
+
+              val unified = {
+                if (isMatch) accProv map { _.distinct }
+                else accProv
+              }
+
               (id -> unified)
             }
           }
@@ -49,10 +76,12 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val required = unconstrained.lastOption map { params indexOf _ } map (1 +) getOrElse 0
           
           expr.assumptions = assumptions
+          expr.accumulatedAssumptions = accumulatedAssumptions
           expr.unconstrainedParams = Set(unconstrained: _*)
           expr.requiredParams = required
         } else {
           expr.assumptions = Map()
+          expr.accumulatedAssumptions = Map()
           expr.unconstrainedParams = Set()
           expr.requiredParams = 0
         }
@@ -60,27 +89,45 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val rightErrors = loop(right, relations, constraints)
         expr.provenance = right.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = right.accumulatedProvenance 
         
         leftErrors ++ rightErrors
+      }
+      
+      case Import(_, _, child) => {
+        val back = loop(child, relations, constraints)
+        expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
+        back
       }
       
       case New(_, child) => {
         val back = loop(child, relations, constraints)
         expr.provenance = DynamicProvenance(currentId.incrementAndGet())
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = Some(Vector(expr.provenance))
+
         back
       }
       
-      case Relate(_, from, to, in) => {
+      case expr @ Relate(_, from, to, in) => { 
         val back = loop(from, relations, constraints) ++ loop(to, relations, constraints)
         
         val recursive = if (from.provenance == NullProvenance || to.provenance == NullProvenance) {
+          expr.accumulatedProvenance = None
           expr.provenance = NullProvenance
           Set()
         } else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) {
+          expr.accumulatedProvenance = None
           expr.provenance = NullProvenance
           Set(Error(expr, AlreadyRelatedSets))
         } else if (pathExists(relations, from.provenance, to.provenance)) {
+          expr.accumulatedProvenance = None
           expr.provenance = NullProvenance
           Set(Error(expr, AlreadyRelatedSets))
         } else {
@@ -103,14 +150,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           val back = loop(in, relations3, constraints3)
           val possibilities = in.provenance.possibilities
           
-          if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance))
-            expr.provenance = DynamicProvenance(currentId.incrementAndGet())
-          else
+          if (possibilities.contains(from.provenance) || possibilities.contains(to.provenance)) {
+            expr.accumulatedProvenance = in.accumulatedProvenance
+            expr.provenance = DynamicProvenance(currentId.incrementAndGet()) 
+          } else {
+            expr.accumulatedProvenance = in.accumulatedProvenance
             expr.provenance = in.provenance
+          }
           
           back
         }
-        
+
         expr.constrainingExpr = constraints get expr.provenance
         
         back ++ recursive
@@ -119,11 +169,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       case TicVar(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => {
         expr.provenance = ValueProvenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = Some(Vector())
+
         Set()
-      }
+      }      
       
-      case ObjectDef(_, props) => {
-        val exprs = props map { case (_, e) => e }
+      case ObjectDef(_, props) => { 
+        val exprs: Vector[Expr] = props map { case (_, e) => e }
         val errorSets = exprs map { loop(_, relations, constraints) }
         val provenances = exprs map { _.provenance }
         val back = errorSets.fold(Set()) { _ ++ _ }
@@ -132,6 +185,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           left flatMap { unifyProvenance(relations)(_, right) }
         }
         
+        val allExprs: Vector[Set[Provenance]] = exprs map { e => e.provenance.possibilities } 
+
+        val isMatch = allExprs.reduceOption { 
+          (left, right) => left intersect right 
+        } exists(p => p != ValueProvenance && p != NullProvenance)  
+        
+        val accProv: Option[Vector[Provenance]] = {
+          exprs.map(_.accumulatedProvenance).reduceOption { 
+            (left, right) => (left <**> right) { _ ++ _ } 
+          } getOrElse Some(Vector())
+        }
+
+        expr.accumulatedProvenance = {
+          if (isMatch) accProv map { _.distinct }
+          else accProv
+        }
+
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
@@ -141,7 +211,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back
       }
       
-      case ArrayDef(_, exprs) => {
+      case ArrayDef(_, exprs) => {  
         val errorSets = exprs map { loop(_, relations, constraints) }
         val provenances = exprs map { _.provenance }
         val back = errorSets.fold(Set()) { _ ++ _ }
@@ -149,7 +219,24 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val result = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
           left flatMap { unifyProvenance(relations)(_, right) }
         }
+
+        val allExprs = exprs map { e => e.provenance.possibilities }
+
+        val isMatch = allExprs.reduceOption { 
+          (left, right) => left intersect right 
+        } exists(p => p != ValueProvenance && p != NullProvenance)  
         
+        val accProv: Option[Vector[Provenance]] = {
+          exprs.map(_.accumulatedProvenance).reduceOption { 
+            (left, right) => (left <**> right) { _ ++ _ } 
+          } getOrElse Some(Vector())
+        }
+
+        expr.accumulatedProvenance = {
+          if (isMatch) accProv map { _.distinct }
+          else accProv
+        }
+
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
@@ -163,22 +250,42 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
         back
       }
       
       case Deref(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance) 
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
+        val leftP = left.provenance.possibilities
+        val rightP = right.provenance.possibilities
+
+        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+        
+        val accProv = for {
+          leftAcc <- left.accumulatedProvenance
+          rightAcc <- right.accumulatedProvenance
+        } yield {
+          leftAcc ++ rightAcc
+        }
+
+        expr.accumulatedProvenance = {
+          if (isMatch) accProv map { _.distinct }
+          else accProv
+        }
+
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }
       
-      case d @ Dispatch(_, _, exprs) => {
+      case expr @ Dispatch(_, _, exprs) => {  
         val errorSets = exprs map { loop(_, relations, constraints) }
         val back = errorSets.fold(Set()) { _ ++ _ }
         
@@ -189,59 +296,109 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         def checkMappedFunction(arity: Int) = {
           if (exprs.length == arity) {
             arity match {
-              case 1 => 
+              case 1 => {
+                expr.accumulatedProvenance = exprs(0).accumulatedProvenance
                 (exprs(0).provenance, Set.empty[Error])
+              }
 
-              case 2 => 
+              case 2 => { 
                 val result = unifyProvenance(relations)(exprs(0).provenance, exprs(1).provenance)
                 val back = result getOrElse NullProvenance
                 
-                val errors = if (!result.isDefined)
-                  Set(Error(expr, OperationOnUnrelatedSets))
-                else
-                  Set()
+                lazy val leftP = exprs(0).provenance.possibilities
+                lazy val rightP = exprs(1).provenance.possibilities 
+
+                lazy val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+
+                lazy val accProv = for {
+                  firstAcc <- exprs(0).accumulatedProvenance
+                  secondAcc <- exprs(1).accumulatedProvenance
+                } yield {
+                  firstAcc ++ secondAcc
+                }
+
+                expr.accumulatedProvenance = {
+                  if (isMatch)  accProv map { _.distinct }
+                  else          accProv
+                }
+
+                val errors = {
+                  if (!result.isDefined)
+                    Set(Error(expr, OperationOnUnrelatedSets))
+                  else
+                    Set()
+                }
 
                 (back, errors)
+              }
 
               case _ => 
                 sys.error("Not implemented yet!")
             }
           } else {
+            expr.accumulatedProvenance = None
             (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
           }
         }
         
-        val (prov, errors) = d.binding match {
+        val (prov, errors) = expr.binding match {
           case BuiltIn(BuiltIns.Load.name, arity, _) => {
-            if (exprs.length == arity)
-              (pathParam map StaticProvenance getOrElse DynamicProvenance(provenanceId(expr)), Set())
-            else
+            if (exprs.length == arity) {
+              lazy val prov = DynamicProvenance(provenanceId(expr))
+
+              expr.accumulatedProvenance = Some(Vector(pathParam map StaticProvenance getOrElse prov))
+              (pathParam map StaticProvenance getOrElse prov, Set())
+            } else {
+              expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+            }
           }
 
           case BuiltIn(BuiltIns.Distinct.name, arity, _) => {
-            if (exprs.length == arity)
-              (DynamicProvenance(currentId.incrementAndGet()), Set())
-            else
+            if (exprs.length == arity) {
+              val prov = DynamicProvenance(currentId.incrementAndGet())
+              expr.accumulatedProvenance = Some(Vector(prov))
+
+              (prov, Set())
+            } else {
+              expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+            }
           }
 
           case BuiltIn(_, arity, true) => {
-            if (exprs.length == arity)
-              (ValueProvenance, Set())     
-            else
+            if (exprs.length == arity) {
+              expr.accumulatedProvenance = Some(Vector())
+              (ValueProvenance, Set())  
+            } else {
+              expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+            }
           }
-          case BuiltIn(_, arity, false) => checkMappedFunction(arity)
 
-          case StdlibBuiltIn1(_) => checkMappedFunction(1)
-          case StdlibBuiltIn2(_) => checkMappedFunction(2)
+          case BuiltIn(_, arity, _) => checkMappedFunction(arity)
+
+          case RedLibBuiltIn(_) => { //assumes all reductions are arity 1
+            if (exprs.length == 1) {
+              expr.accumulatedProvenance = Some(Vector())
+              (ValueProvenance, Set())  
+            } else {
+              expr.accumulatedProvenance = None
+              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
+            }
+          }
+
+          case StdLibBuiltIn1(_) => checkMappedFunction(1)
+
+          case StdLibBuiltIn2(_) => checkMappedFunction(2)
           
-          case UserDef(e) => {
+          case UserDef(e) => {  
             if (exprs.length > e.params.length) {
+              expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(e.params.length, exprs.length))))
             } else if (exprs.length < e.requiredParams) {
               val required = e.params drop exprs.length filter e.unconstrainedParams
+              expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, UnspecifiedRequiredParams(required))))
             } else {
               val errors = for ((id, pe) <- e.params zip exprs; assumed <- e.assumptions get id) yield {
@@ -258,6 +415,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
               val errorSet = Set(errors.flatten: _*)
               if (errorSet.isEmpty) {
                 val provenances = exprs map { _.provenance }
+                val accumulatedProvenances = exprs map { _.accumulatedProvenance }
                 
                 val optUnified = provenances.foldLeft(Some(ValueProvenance): Option[Provenance]) { (left, right) =>
                   left flatMap { unifyProvenance(relations)(_, right) }
@@ -279,41 +437,72 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                       case _ => false
                     }
                     
-                    if (resultIsSet && paramsAreSet)
+                    if (resultIsSet && paramsAreSet) {
+                      expr.accumulatedProvenance = None
                       (NullProvenance, Set(Error(expr, SetFunctionAppliedToSet)))
-                    else if (resultPoss.contains(NullProvenance) || paramPoss.contains(NullProvenance))
+                    } else if (resultPoss.contains(NullProvenance) || paramPoss.contains(NullProvenance)) {
+                      expr.accumulatedProvenance = None
                       (NullProvenance, Set())
-                    else {
-                      val varAssumptions = e.assumptions ++ Map(e.params zip provenances: _*) map {
-                        case (id, prov) => ((id, e), prov)
+                    } else {
+                      val varAssumptions: Map[(String, Let), Provenance] = {
+                        e.assumptions ++ Map(e.params zip provenances: _*) map {  
+                          case (id, prov) => ((id, e), prov)
+                        }
+                      }
+
+                      val varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
+                        e.accumulatedAssumptions ++ Map(e.params zip accumulatedProvenances: _*) map {
+                          case (id, accProv) => ((id, e), accProv)
+                        }
                       }
                       
-                      val resultProv = computeResultProvenance(e.left, relations, varAssumptions)
-                      
+                      lazy val resultProv = computeResultProvenance(e.left, relations, varAssumptions) 
+
                       resultProv match {
-                        case NullProvenance =>
+                        case NullProvenance => { //is this case reachable? 
+                          expr.accumulatedProvenance = None
                           (NullProvenance, Set(Error(expr, FunctionArgsInapplicable)))
+                        }
                         
-                        case _ if e.params.length == exprs.length => (resultProv, Set())
+                        case _ if (e.params.length == exprs.length) => {  //fully-quantified case
+                          expr.accumulatedProvenance = resultProv match {
+                            case ValueProvenance => Some(Vector())
+                            case NullProvenance => None
+                            case p => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions) 
+                          }
+                          (resultProv, Set())
+                        }
                         
-                        case _ /* if e.params.length != exprs.length */ => (DynamicProvenance(provenanceId(expr)), Set())
+                        case _ /* if e.params.length != exprs.length */ => {   //partially-quantified case
+                          val prov = DynamicProvenance(provenanceId(expr))
+                          expr.accumulatedProvenance = computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions)
+                          (prov, Set())
+                        }
                       }
                     }
                   }
                   
-                  case None => (NullProvenance, Set(Error(expr, OperationOnUnrelatedSets)))
+                  case None => {
+                    expr.accumulatedProvenance = None
+                    (NullProvenance, Set(Error(expr, OperationOnUnrelatedSets)))
+                  }
                 }
               } else {
+                expr.accumulatedProvenance = None
                 (NullProvenance, errorSet)
               }
             }
           }
           
-          case NullBinding => (NullProvenance, Set())
+          case NullBinding => {
+            expr.accumulatedProvenance = None
+            (NullProvenance, Set())
+          }
         }
         
         expr.provenance = prov
         expr.constrainingExpr = constraints get expr.provenance
+
         back ++ errors
       }
       
@@ -323,50 +512,174 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
+        val leftP = left.provenance.possibilities
+        val rightP = right.provenance.possibilities
+
+        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)
+
+        val accProv = for {
+          leftAcc <- left.accumulatedProvenance
+          rightAcc <- right.accumulatedProvenance
+        } yield {
+          leftAcc ++ rightAcc
+        }
+
+        expr.accumulatedProvenance = {
+          if (isMatch) accProv map { _.distinct }
+          else accProv
+        }
+
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
         else
           back
       }      
+
       case With(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
+        val leftP = left.provenance.possibilities
+        val rightP = right.provenance.possibilities
+
+        val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+
+        val accProv = for {
+          leftAcc <- left.accumulatedProvenance
+          rightAcc <- right.accumulatedProvenance
+        } yield {
+          leftAcc ++ rightAcc
+        }
+
+        expr.accumulatedProvenance = {
+          if (isMatch) accProv map { _.distinct }
+          else accProv
+        }
+
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
         else
           back
-      }      
+      } 
+
       case Union(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyUnionProvenance(relations)(left.provenance, right.provenance)
+        val result = unifyProvenanceUnionIntersect(relations)(left.provenance, right.provenance)
+
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, UnionValues)
-        else
-          back
-      }      
+
+
+        if (left.cardinality.isDefined && right.cardinality.isDefined) {
+          if (left.cardinality == right.cardinality) {  
+            expr.accumulatedProvenance = left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
+            back
+          } else {
+            expr.accumulatedProvenance = None
+            back + Error(expr, UnionProvenanceDifferentLength)
+          }
+        } else {
+          expr.accumulatedProvenance = None
+          back //assumes error generated in 'back'
+        }
+      }   
+
       case Intersect(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyUnionProvenance(relations)(left.provenance, right.provenance)
+        val result = unifyProvenanceUnionIntersect(relations)(left.provenance, right.provenance)
+
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
-       
-       if (!result.isDefined)
-          back + Error(expr, IntersectValues)
-        else
-          back
+
+        if (left.cardinality.isDefined && right.cardinality.isDefined) {
+          if (left.cardinality == right.cardinality) {  
+            expr.accumulatedProvenance = left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
+            back
+          } else {
+            expr.accumulatedProvenance = None
+            back + Error(expr, IntersectProvenanceDifferentLength)
+          }
+        } else {
+          expr.accumulatedProvenance = None
+          back //assumes error generated in 'back'
+        }
+      }
+
+      case Difference(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenanceDifference(relations)(left.provenance, right.provenance)
+
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        if (left.cardinality.isDefined && right.cardinality.isDefined) {
+          if (left.cardinality == Some(0) && right.cardinality == Some(0)) {
+            expr.accumulatedProvenance = None
+            back + Error(expr, DifferenceProvenanceValue)
+          } else if (left.cardinality == right.cardinality) {  
+            expr.accumulatedProvenance = left.accumulatedProvenance
+            back
+          } else {
+            expr.accumulatedProvenance = None
+            back + Error(expr, DifferenceProvenanceDifferentLength)
+          }
+        } else {
+          expr.accumulatedProvenance = None
+          back //assumes error generated in 'back'
+        }
       }
       
-      case Add(_, left, right) => {
+      case expr @ Add(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ Sub(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ Mul(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ Div(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -374,11 +687,41 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back
       }
       
-      case Sub(_, left, right) => {
+      case expr @ Lt(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
+                
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ LtEq(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ Gt(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+               
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -386,11 +729,55 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back
       }
       
-      case Mul(_, left, right) => {
+      case expr @ GtEq(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
+        
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ Eq(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ NotEq(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
+
+        if (!result.isDefined)
+          back + Error(expr, OperationOnUnrelatedSets)
+        else
+          back
+      }
+      
+      case expr @ And(_, left, right) => {
+        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
+        val result = unifyProvenance(relations)(left.provenance, right.provenance)
+        expr.provenance = result getOrElse NullProvenance
+        expr.constrainingExpr = constraints get expr.provenance
+        
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -398,107 +785,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
           back
       }
       
-      case Div(_, left, right) => {
+      case expr @ Or(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance)
         expr.provenance = result getOrElse NullProvenance
         expr.constrainingExpr = constraints get expr.provenance
         
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case Lt(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case LtEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case Gt(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case GtEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case Eq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case NotEq(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case And(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
-        
-        if (!result.isDefined)
-          back + Error(expr, OperationOnUnrelatedSets)
-        else
-          back
-      }
-      
-      case Or(_, left, right) => {
-        val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
-        val result = unifyProvenance(relations)(left.provenance, right.provenance)
-        expr.provenance = result getOrElse NullProvenance
-        expr.constrainingExpr = constraints get expr.provenance
+        expr.accumulatedProvenance = determineBinaryAccProv(left, right)
         
         if (!result.isDefined)
           back + Error(expr, OperationOnUnrelatedSets)
@@ -510,6 +803,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
         back
       }
       
@@ -517,6 +813,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
         back
       }
       
@@ -524,16 +823,22 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         val back = loop(child, relations, constraints)
         expr.provenance = child.provenance
         expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
         back
       }
     }
     
     loop(expr, Map(), Map())
   }
-  
+
   private def computeResultProvenance(body: Expr, relations: Map[Provenance, Set[Provenance]], varAssumptions: Map[(String, Let), Provenance]): Provenance = body match {
     case body @ Let(_, _, _, left, right) =>
       computeResultProvenance(right, relations, varAssumptions)
+
+    case Import(_, _, child) =>
+      computeResultProvenance(child, relations, varAssumptions)
     
     case Relate(_, from, to, in) => {
       val fromExisting = relations.getOrElse(from.provenance, Set())
@@ -588,7 +893,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         d.provenance
       } else {
         d.binding match {
-          case UserDef(e) if e.params.length == actuals.length => {
+          case UserDef(e) if (e.params.length == actuals.length) => { 
             val varAssumptions2 = e.assumptions ++ Map(e.params zip provenances: _*) map {
               case (id, prov) => ((id, e), prov)
             }
@@ -596,7 +901,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             computeResultProvenance(e.left, relations, varAssumptions ++ varAssumptions2)
           }
           
-          case _ => d.provenance
+          case _ => d.provenance  
         }
       }
     }
@@ -613,8 +918,8 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
       unifyProvenance(relations)(leftProv, rightProv) getOrElse NullProvenance
     }    
    
-    case Union(_, _, _) | Intersect(_, _, _) => body.provenance
-    
+    case Union(_, _, _) | Intersect(_, _, _) | Difference(_, _, _) => body.provenance
+
     case Add(_, left, right) => {
       val leftProv = computeResultProvenance(left, relations, varAssumptions)
       val rightProv = computeResultProvenance(right, relations, varAssumptions)
@@ -693,9 +998,276 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     
     case Paren(_, child) => computeResultProvenance(child, relations, varAssumptions)
     
-    case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => body.provenance
+    case New(_, _) | StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => body.provenance   
   }
-  
+
+  private def computeResultAccumulatedProvenance(body: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = body match {
+    case Let(_, _, params, left, right) => 
+      computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+
+    case Import(_, _, child) => 
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
+
+    case New(_, child) => {
+      val prov = DynamicProvenance(currentId.incrementAndGet())
+      Some(Vector(prov))
+    }
+
+    case Relate(_, from, to, in) => {
+      if (from.provenance == NullProvenance || to.provenance == NullProvenance) None
+      else if (from.provenance == ValueProvenance || to.provenance == ValueProvenance) None
+      else if (pathExists(relations, from.provenance, to.provenance)) None
+      else computeResultAccumulatedProvenance(in, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Some(Vector())
+
+    case t @ TicVar(_, id) => t.binding match {
+      case UserDef(lt) => varAccumulatedAssumptions get (id -> lt) getOrElse Some(Vector())
+      case _ => Some(Vector())
+    }
+
+    case ObjectDef(_, props) => {
+      val exprs: Vector[Expr] = props map { case (_, e) => e }
+      val allExprs: Vector[Set[Provenance]] = exprs map { e => e.provenance.possibilities }
+
+      val isMatch = allExprs.reduceOption { 
+        (left, right) => left intersect right 
+      } exists(p => p != ValueProvenance && p != NullProvenance)  
+      
+      val accProv: Option[Vector[Provenance]] = {
+        exprs.map(_.accumulatedProvenance).reduceOption { 
+          (left, right) => (left <**> right) { _ ++ _ } 
+        } getOrElse Some(Vector())
+      }
+
+      if (isMatch) accProv map { _.distinct }
+      else accProv
+    }
+
+    case ArrayDef(_, exprs2) => {
+      val allExprs = exprs2 map { e => e.provenance.possibilities }
+
+      val isMatch = allExprs.reduceOption { 
+        (left, right) => left intersect right 
+      } exists(p => p != ValueProvenance && p != NullProvenance)  
+      
+      val accProv: Option[Vector[Provenance]] = {
+        exprs2.map(_.accumulatedProvenance).reduceOption { 
+          (left, right) => (left <**> right) { _ ++ _ } 
+        } getOrElse Some(Vector())
+      }
+
+      if (isMatch) accProv map { _.distinct }
+      else accProv
+    }
+
+    case Descent(_, child, _) => computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
+
+    case Deref(_, left, right) => {
+      val leftP = left.provenance.possibilities
+      val rightP = right.provenance.possibilities
+
+      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+      
+      val accProv = for {
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
+      } yield {
+        leftAcc ++ rightAcc
+      }
+
+      if (isMatch) accProv map { _.distinct }
+      else accProv
+    }
+
+    case d @ Dispatch(_, _, actuals) => {
+      val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccumulatedAssumptions) }
+
+      if (d.isReduction) {
+        Some(Vector())
+      } else {
+        d.binding match {
+          case UserDef(e) if (e.params.length == actuals.length) => {
+            val varAccumulatedAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
+              e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
+                case (id, accProv) => ((id, e), accProv)
+              }
+            }
+
+            computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions ++ varAccumulatedAssumptions2)
+          }
+          case _ => d.accumulatedProvenance
+        }
+      }
+    }
+
+    case Where(_, left, right) => {
+      val leftP = left.provenance.possibilities
+      val rightP = right.provenance.possibilities
+
+      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+      
+      val accProv = for {
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
+      } yield {
+        leftAcc ++ rightAcc
+      }
+
+      if (isMatch) accProv map { _.distinct }
+      else accProv
+    }
+
+    case With(_, left, right) => {
+      val leftP = left.provenance.possibilities
+      val rightP = right.provenance.possibilities
+
+      val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+      
+      val accProv = for {
+        leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
+      } yield {
+        leftAcc ++ rightAcc
+      }
+
+      if (isMatch) accProv map { _.distinct }
+      else accProv
+    }
+
+    case Union(_, left, right) => {
+      if (left.cardinality.isDefined && right.cardinality.isDefined) {
+        if (left.cardinality == right.cardinality) {  
+          left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+
+    case Intersect(_, left, right) => {
+      if (left.cardinality.isDefined && right.cardinality.isDefined) {
+        if (left.cardinality == right.cardinality) {  
+          left.cardinality map { card => Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take card: _*) }
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+
+    case Difference(_, left, right) => {
+      if (left.cardinality.isDefined && right.cardinality.isDefined) {
+        if (left.cardinality == right.cardinality) {  
+          if (left.cardinality == Some(0)) None
+          else computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+        } else {
+          None
+        }
+      } else {
+        None
+      }
+    }
+
+    case Add(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Sub(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Mul(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Div(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Lt(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case LtEq(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Gt(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case GtEq(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Eq(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case NotEq(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case And(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Or(_, left, right) => {
+      determineResultBinaryAccProv(left, right, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Comp(_, child) => {
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Neg(_, child) => {
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
+    }
+
+    case Paren(_, child) => {
+      computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
+    }
+  }
+
+  private def determineBinaryAccProv(left: Expr, right: Expr): Option[Vector[Provenance]] = {
+    val leftP = left.provenance.possibilities
+    val rightP = right.provenance.possibilities
+
+    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+    
+    val accProv = for {
+      leftAcc <- left.accumulatedProvenance
+      rightAcc <- right.accumulatedProvenance
+    } yield {
+      leftAcc ++ rightAcc
+    }
+    
+    if (isMatch) accProv map { _.distinct }
+    else accProv
+  }
+
+  private def determineResultBinaryAccProv(left: Expr, right: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = {
+    val leftP = left.provenance.possibilities
+    val rightP = right.provenance.possibilities
+
+    val isMatch = leftP.intersect(rightP).exists(p => p != ValueProvenance && p != NullProvenance)  
+    
+    val accProv = for {
+      leftAcc <- computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+      rightAcc <- computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
+    } yield {
+      leftAcc ++ rightAcc
+    }
+    
+    if (isMatch) accProv map { _.distinct }
+    else accProv
+  }
+
   private def unifyProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (p1, p2) if pathExists(relations, p1, p2) || pathExists(relations, p2, p1) => 
       Some(p1 & p2)
@@ -735,17 +1307,20 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case _ => None
   }
 
-  private def unifyUnionProvenance(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
-    case (ValueProvenance, p) => None
-    case (p, ValueProvenance) => None
-
+  private def unifyProvenanceUnionIntersect(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
     case (NullProvenance, p) => Some(NullProvenance)
     case (p, NullProvenance) => Some(NullProvenance)
 
     case (p1, p2) => Some(DynamicProvenance(currentId.incrementAndGet()))
   }
 
-  
+  private def unifyProvenanceDifference(relations: Map[Provenance, Set[Provenance]])(p1: Provenance, p2: Provenance): Option[Provenance] = (p1, p2) match {
+    case (NullProvenance, p) => Some(NullProvenance)
+    case (p, NullProvenance) => Some(NullProvenance)
+
+    case (p1, p2) => Some(p1)
+  }
+
   private def pathExists(graph: Map[Provenance, Set[Provenance]], from: Provenance, to: Provenance): Boolean = {
     // not actually DFS, but that's alright since we can't have cycles
     def dfs(seen: Set[Provenance])(from: Provenance): Boolean = {

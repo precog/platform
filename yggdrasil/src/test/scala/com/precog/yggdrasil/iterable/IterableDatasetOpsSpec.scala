@@ -23,7 +23,7 @@ package iterable
 import memoization._
 import serialization._
 import com.precog.common._
-import com.precog.common.util.IOUtils
+import com.precog.util.IOUtils
 import com.precog.util.IdGen
 
 import blueeyes.util.Clock
@@ -65,11 +65,11 @@ with DiskMemoizationComponent {
 
   object yggConfig extends IterableDatasetOpsConfig with DiskMemoizationConfig {
     def sortBufferSize: Int = 1000
-    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec")
+    def sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     def clock = Clock.System
     implicit object memoSerialization extends IncrementalSerialization[(Identities, Long)] with TestRunlengthFormatting with ZippedStreamSerialization
     def memoizationBufferSize: Int = 1000
-    def memoizationWorkDir: File = IOUtils.createTmpDir("idsoSpecMemo")
+    def memoizationWorkDir: File = IOUtils.createTmpDir("idsoSpecMemo").unsafePerformIO
   }
 
   def rec(i: Long) = (VectorCase(i), i: Long)

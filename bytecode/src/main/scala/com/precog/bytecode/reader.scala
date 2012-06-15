@@ -33,6 +33,7 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
+  private lazy val stdlibReductOps: Map[Int, BuiltInReduction] = libReduct.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   
@@ -121,21 +122,8 @@ trait BytecodeReader extends Reader {
       }
       
       lazy val reduction = (code & 0xFF) match {
-        case 0x00 => Some(Count)
-        
-        case 0x01 => Some(Mean)
-        case 0x02 => Some(Median)
-        case 0x03 => Some(Mode)
-        
-        case 0x04 => Some(Max)
-        case 0x05 => Some(Min)
-        
-        case 0x06 => Some(StdDev)
-        case 0x07 => Some(Sum)
-        case 0x08 => Some(Variance)
-        case 0x09 => Some(GeometricMean)
-        case 0x10 => Some(SumSq)
-        
+        case 0xC0 => stdlibReductOps.get(((code >> 8) & 0xFFFFFF).toInt)
+
         case _ => None
       }
 
@@ -162,6 +150,8 @@ trait BytecodeReader extends Reader {
         
         case 0x12 => Some(IUnion)
         case 0x13 => Some(IIntersect)
+
+        case 0x15 => Some(SetDifference)
         
         case 0x14 => Some(FilterMatch(depth, predicate))
         case 0x16 => Some(FilterCross(depth, predicate))

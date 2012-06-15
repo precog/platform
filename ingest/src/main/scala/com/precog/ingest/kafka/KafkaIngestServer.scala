@@ -30,7 +30,6 @@ import akka.dispatch.MessageDispatcher
 import com.precog.common._
 import com.precog.common.security._
 import com.precog.ingest.service._
-import com.precog.common.util.ZookeeperSystemCoordination
 import com.precog.common.security._
 
 import java.util.Properties
@@ -50,18 +49,18 @@ object KafkaIngestServer extends
   val clock = Clock.System
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
-
 }
+
+
 
 trait KafkaEventStoreComponent extends AkkaDefaults with Logging {
 
   def eventStoreFactory(config: Configuration): EventStore = {
 
     val centralZookeeperHosts = getConfig(config, "central.zk.connect")
+
     val serviceUID = ZookeeperSystemCoordination.extractServiceUID(config)
-
-    val coordination = ZookeeperSystemCoordination(centralZookeeperHosts,serviceUID)
-
+    val coordination = ZookeeperSystemCoordination(centralZookeeperHosts, serviceUID, true)
     val agent = serviceUID.hostId + serviceUID.serviceId  
 
     val eventIdSeq = new SystemEventIdSequence(agent, coordination)

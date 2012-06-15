@@ -20,6 +20,7 @@
 package com.precog
 
 import scalaz.Order
+import scalaz.Monoid
 import java.util.Comparator
 
 package object util {
@@ -45,6 +46,11 @@ package object util {
   @inline
   final def isValidLong(i: BigInt): Boolean = {
     MIN_LONG <= i && i <= MAX_LONG
+  }
+
+  implicit def vectorMonoid[A]: Monoid[Vector[A]] = new Monoid[Vector[A]] {
+    def zero: Vector[A] = Vector.empty[A]
+    def append(v1: Vector[A], v2: => Vector[A]) = v1 ++ v2
   }
 }
 

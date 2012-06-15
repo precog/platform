@@ -73,10 +73,10 @@ case class Grant(gid: GrantID, issuer: Option[GrantID], permission: Permission)
 trait GrantSerialization {
   val UnsafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
     override def decompose(g: Grant): JValue = JObject(List(
-      JField("gid", g.gid),
-      JField("issuer", g.issuer.serialize),
-      JField("permission", g.permission.serialize(Permission.UnsafePermissionDecomposer))
-    ))
+      Some(JField("gid", g.gid)),
+      g.issuer.map { issuer => JField("issuer", issuer.serialize) },
+      Some(JField("permission", g.permission.serialize(Permission.UnsafePermissionDecomposer)))
+    ).flatten)
   }
 
   implicit val SafeGrantDecomposer: Decomposer[Grant] = new Decomposer[Grant] {
@@ -223,6 +223,7 @@ trait WritePermissionSerialization {
 
 object WritePermission extends AccessType with WritePermissionSerialization {
   val name = "write_grant" 
+  override def toString = "WritePermission"
 }
 
 case class OwnerPermission(path: Path, expiration: Option[DateTime]) extends OwnerIgnorantPermission {
@@ -298,6 +299,7 @@ trait ReadPermissionSerialization {
 
 object ReadPermission extends AccessType with ReadPermissionSerialization {
   val name = "read_grant"
+  override def toString = "ReadPermission"
 }
 
 case class ReducePermission(path: Path, owner: TokenID, expiration: Option[DateTime]) extends OwnerAwarePermission {

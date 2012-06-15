@@ -40,6 +40,7 @@ trait Instructions extends Library {
       
       case IUnion => (2, 1)
       case IIntersect => (2, 1)
+      case SetDifference => (2, 1)
       
       case FilterMatch(depth, Some(_)) => (2 + depth, 1)
       case FilterCross(depth, Some(_)) => (2 + depth, 1)
@@ -97,7 +98,6 @@ trait Instructions extends Library {
     case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: Reduction) extends Instruction
-    
     case class SetReduce(red: SetReduction) extends Instruction
     
     case object VUnion extends Instruction with JoinInstr
@@ -105,6 +105,7 @@ trait Instructions extends Library {
     
     case object IUnion extends Instruction with JoinInstr
     case object IIntersect extends Instruction with JoinInstr
+    case object SetDifference extends Instruction with JoinInstr
     
     case object Bucket extends Instruction
     case class MergeBuckets(and: Boolean) extends Instruction
@@ -136,6 +137,7 @@ trait Instructions extends Library {
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
     
+    sealed trait Reduction
     sealed trait SetReduction
     sealed trait UnaryOperation
     sealed trait BinaryOperation
@@ -163,10 +165,12 @@ trait Instructions extends Library {
     
     sealed trait PredicateOp
 
-    case class BuiltInFunction1Op(op: BIF1) extends UnaryOperation
-    case class BuiltInFunction2Op(op: BIF2) extends BinaryOperation
+    case class BuiltInReduction(red: BIR) extends Reduction
 
     case object Distinct extends SetReduction
+
+    case class BuiltInFunction1Op(op: BIF1) extends UnaryOperation
+    case class BuiltInFunction2Op(op: BIF2) extends BinaryOperation
 
     case object Add extends BinaryOperation with PredicateInstr with PredicateOp
     case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
@@ -200,23 +204,6 @@ trait Instructions extends Library {
     case object DerefArray extends BinaryOperation with PredicateInstr
     
     case object Range extends PredicateInstr
-    
-    sealed trait Reduction
-    
-    case object Count extends Reduction
-    case object GeometricMean extends Reduction
-    
-    case object Mean extends Reduction
-    case object Median extends Reduction
-    case object Mode extends Reduction
-    
-    case object Max extends Reduction
-    case object Min extends Reduction
-
-    case object StdDev extends Reduction
-    case object Sum extends Reduction
-    case object SumSq extends Reduction
-    case object Variance extends Reduction
 
     sealed trait Type
     

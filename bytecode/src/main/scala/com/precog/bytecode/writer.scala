@@ -134,20 +134,7 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     def reductionNum(red: Reduction) = red match {
-      case Count => 0x00
-      
-      case Mean => 0x01
-      case Median => 0x02
-      case Mode => 0x03
-      
-      case Max => 0x04
-      case Min => 0x05
-      
-      case StdDev => 0x06
-      case Sum => 0x07
-      case Variance => 0x08
-      case GeometricMean => 0x09
-      case SumSq => 0x10
+      case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
     def typeNum(tpe: Type) = tpe match {
@@ -170,6 +157,8 @@ trait BytecodeWriter extends Writer with Version {
         
         case IUnion => (0x12, 0.toShort, 0)
         case IIntersect => (0x13, 0.toShort, 0)
+
+        case SetDifference => (0x15, 0.toShort, 0)
         
         case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
         case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))

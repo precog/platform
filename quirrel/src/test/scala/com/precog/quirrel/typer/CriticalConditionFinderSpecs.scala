@@ -125,7 +125,25 @@ object CriticalConditionFinderSpecs extends Specification
         case Condition(Eq(_, NumLit(_, "4"), TicVar(_, "'a"))) => ok
       }
     }
-    
+         
+    "detect critical conditions in a case when a tic variable is not solvable in all cases" in {
+      {
+        val tree @ Let(_,_, _, _, _) = compile("""
+        | a('b) :=
+        |   k := //clicks.time where //clicks.time = 'b
+        |   j := //views.time where //views.time > 'b
+        |   k ~ j
+        |   {kay: k, jay: j}
+        | a""".stripMargin)
+
+      tree.criticalConditions must haveSize(1)
+      tree.criticalConditions must haveKey("'b")
+      
+      val conditions = tree.criticalConditions("'b")
+      conditions must haveSize(2)
+      }
+    }
+
     "detect critical condition hidden by dispatch" in {
       val tree @ Let(_, _, _, _, _) = compile("a('b) := h := 'b = 5 42 where h a")
       

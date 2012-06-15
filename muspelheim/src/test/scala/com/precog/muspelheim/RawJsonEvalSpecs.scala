@@ -50,6 +50,8 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
+import com.weiglewilczek.slf4s.Logging
+
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
@@ -58,15 +60,17 @@ trait ParseEvalStackSpecs extends Specification
     with IterableDatasetOpsComponent
     with LevelDBQueryComponent
     with DiskIterableMemoizationComponent 
-    with MemoryDatasetConsumer {
+    with MemoryDatasetConsumer 
+    with Logging {
 
   override type Dataset[A] = IterableDataset[A]
   override type Memoable[α] = Iterable[α]
 
-  lazy val controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
+  def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
-  lazy val actorSystem = ActorSystem("platform_specs_actor_system")
-  implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  val actorSystem = ActorSystem("platform_specs_actor_system")
+
+  implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
 
@@ -80,6 +84,7 @@ trait ParseEvalStackSpecs extends Specification
     ProductionActorConfig
 
   object yggConfig extends YggConfig {
+    logger.trace("Init yggConfig")
     lazy val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
@@ -105,8 +110,6 @@ trait ParseEvalStackSpecs extends Specification
     }
   }
 
-  lazy val Success(shardState) = YggState.restore(yggConfig.dataDir).unsafePerformIO
-
   object ops extends Ops 
   object query extends QueryAPI 
 
@@ -119,12 +122,15 @@ trait ParseEvalStackSpecs extends Specification
       def eval(str: String, debug: Boolean = false): Set[SValue] = evalE(str, debug) map { _._2 }
       
       def evalE(str: String, debug: Boolean = false) = {
+        logger.debug("Beginning evaluation of query: " + str)
         val tree = compile(str)
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
           consumeEval("dummyUID", dag, ctx) match {
-            case Success(result) => result
+            case Success(result) => 
+              logger.debug("Evaluation complete for query: " + str)
+              result
             case Failure(error) => throw error
           }
         }
