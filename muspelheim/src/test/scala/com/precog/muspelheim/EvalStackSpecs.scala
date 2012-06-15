@@ -157,6 +157,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("gender" -> SString("female"))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -174,6 +175,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("platform" -> SString("android"))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -214,6 +216,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -224,6 +227,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { Set(4,5) must contain(d) }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -241,6 +245,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
           case (VectorCase(_), SObject(obj)) => { obj must contain("foo" -> 3) }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -251,6 +256,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 5 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -261,6 +267,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 1 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -286,6 +293,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (VectorCase(_), SString(campaign)) =>
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -315,6 +323,7 @@ trait EvalStackSpecs extends Specification {
           case (VectorCase(_), SDecimal(num)) => {
             Set(100,39,91,77,96,99,48,67,10,17,90,58,20,38,1,43,49,23,72,42,94,16,9,21,52,5,40,62,4,33,28,54,70,82,76,22,6,12,65,31,80,45,51,89,69) must contain(num)
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -342,6 +351,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("platform" -> SString("android"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -356,6 +366,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("cpm" -> SDecimal(1))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -370,6 +381,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -408,6 +420,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(1)
           obj must haveKey("aa")
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -429,6 +442,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }    
 
@@ -467,6 +481,7 @@ trait EvalStackSpecs extends Specification {
       forall(results) {
         case (VectorCase(_), SString(gender)) =>
           gender must beOneOf("male", "female")
+        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -524,6 +539,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -563,6 +579,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -611,7 +628,10 @@ trait EvalStackSpecs extends Specification {
           | std::time::yearsBetween(time, "2012-02-09T19:31:13.616+10:00")""".stripMargin
 
         val results = evalE(input) 
-        val results2 = results map { case (VectorCase(_), SDecimal(d)) => d.toInt } 
+        val results2 = results map {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case r => failure("Result has wrong shape: "+r)
+        }
 
         results2 must contain(0).only
       }
@@ -623,7 +643,10 @@ trait EvalStackSpecs extends Specification {
             | std::stats::corr(cpm, 10)""".stripMargin
 
           val results = evalE(input) 
-          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+          val results2 = results map {
+            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case r => failure("Result has wrong shape: "+r)
+          }
 
           results2 must haveSize(0)
         }
@@ -636,7 +659,10 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input) 
           results must haveSize(1)
 
-          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+          val results2 = results map {
+            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case r => failure("Result has wrong shape: "+r)
+          }
           results2 must contain(0)
         }
 
@@ -648,7 +674,10 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input) 
           results must haveSize(1)
 
-          val results2 = results map { case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => Vector(slope, yint) } 
+          val results2 = results map {
+            case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => Vector(slope, yint)
+            case r => failure("Result has wrong shape: "+r)
+          }
           results2 must contain(Vector(0, 10))
         }
       }
@@ -673,6 +702,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("gender" -> SString("male"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -703,6 +733,7 @@ trait EvalStackSpecs extends Specification {
           obj must contain("ageRange" -> SArray(Vector(SDecimal(25), SDecimal(36))))
           obj must contain("gender" -> SString("female"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
