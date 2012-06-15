@@ -89,13 +89,11 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
       sender ! status
 
     case IngestErrors(messages) => 
-      //logger.error("Error on ingest: " + messages)
       errors += 1
       messages.foreach(logger.error(_))
       scheduleIngestRequest(idleDelay)
 
     case IngestData(messages)   => 
-      //logger.debug("Ingesting messages: " + messages)
       processed += 1
       if (messages.isEmpty) {
         scheduleIngestRequest(idleDelay)

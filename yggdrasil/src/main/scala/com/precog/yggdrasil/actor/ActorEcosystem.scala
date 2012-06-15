@@ -42,8 +42,8 @@ import blueeyes.json.JsonAST._
 trait ActorEcosystem {
   def actorSystem: ActorSystem
 
-  val ingestActor: ActorRef
-  val ingestSupervisor: ActorRef
+  val ingestActor: Option[ActorRef]
+  val ingestSupervisor: Option[ActorRef]
   val metadataActor: ActorRef
   val projectionsActor: ActorRef
 
@@ -79,9 +79,10 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
   protected val metadataStorage: MetadataStorage
 
-  lazy val ingestSupervisor =
-    actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
+  lazy val ingestSupervisor = ingestActor map { actor =>
+    actorSystem.actorOf(Props(new IngestSupervisor(actor, projectionsActor, new SingleColumnProjectionRoutingTable,
                                                    yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
+  }
 
   //
   // Public actors
@@ -123,7 +124,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
     for {
       _  <- Future(logger.info(logPrefix + " Stopping"))
-      _  <- actorStop(ingestSupervisor, "router")
+      _  <- ingestSupervisor.map(actorStop(_, "router")).getOrElse(Future(()))
       _  <- actorsStopInternal
       _  <- Future {
               logger.debug(logPrefix + " Stopping actor system")

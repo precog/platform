@@ -222,12 +222,12 @@ trait Evaluator extends DAG
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         Right(Match(mal.Actual, realizeMatch(spec, set) identify Some(() => ctx.nextId), graph))
       }
-      
+
       case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
         parent.value match {
           case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
           case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1), graph))
-          
+
           case None => {
             val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
             val loaded = realizeMatch(spec, set) collect { 
