@@ -50,20 +50,22 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
 
   val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
-  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
+  lazy val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 
-  protected def actorsWithStatus = ingestActor :: 
-                                   ingestSupervisor :: 
-                                   metadataActor :: 
-                                   projectionsActor :: Nil
-  val ingestActor = {
+  protected def actorsWithStatus = ingestActor.toList ++
+                                   ingestSupervisor.toList ++
+                                   (metadataActor :: projectionsActor :: Nil)
+  lazy val ingestActor = {
     logger.info("Starting ingest actor")
-    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
+    implicit val timeout = Timeout(45000l)
+    // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
+    logger.debug("Requesting checkpoint from metadata")
+    Await.result((metadataActor ? GetCurrentCheckpoint).mapTo[Option[YggCheckpoint]], 45 seconds) map { checkpoint =>
+      logger.debug("Checkpoint load complete")
+      val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+      actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
+    }
   }
-
-  logger.info("Starting ingest supervisor")
-  logger.debug("Ingest supervisor = " + ingestSupervisor)
 
   //
   // Internal only actors
@@ -77,7 +79,7 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
 
     metadataSyncCancel.cancel
     for {
-      _  <- actorStop(ingestActor, "ingest")
+      _  <- ingestActor.map(actorStop(_, "ingest")).getOrElse(Future(()))
       _  <- actorStop(projectionsActor, "projection")
       _  <- actorStop(metadataActor, "metadata")
     } yield ()

@@ -48,25 +48,17 @@ case class ProjectionInsertsExpected(projections: Int)
  *    external system with the state of the system into which data is being ingested. For Kafka,
  *    the most important component of this state is the offset.
  */
-class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordination, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, ingestEnabled: Boolean,
+class KafkaShardIngestActor(shardId: String, initialCheckpoint: YggCheckpoint, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, ingestEnabled: Boolean,
                             fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 120 seconds, 
                             maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
   import KafkaBatchHandler._
 
-  private var lastCheckpoint: YggCheckpoint = _
+  private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
   private var totalConsecutiveFailures = 0
   private var ingestCache = TreeMap.empty[YggCheckpoint, Vector[EventMessage]] 
   private var pendingCompletes = Vector.empty[Complete]
-
-  override def preStart(): Unit = {
-    implicit val timeout = Timeout(45000l)
-    // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
-    logger.debug("Requesting checkpoint from metadata")
-    lastCheckpoint = Await.result(metadataActor ? GetCurrentCheckpoint, 45 seconds).asInstanceOf[YggCheckpoint]
-    logger.debug("Checkpoint load complete")
-  }
 
   def receive = {
     case Status => sender ! status
@@ -111,11 +103,14 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
       }
 
     case GetMessages(requestor) => 
+      logger.debug("Responding to GetMessages starting from checkpoint: " + lastCheckpoint)
       if (ingestEnabled) {
         if (ingestCache.size < maxCacheSize) {
           readRemote(lastCheckpoint) match {
             case Success((messages, checkpoint)) => 
               if (messages.size > 0) {
+                logger.debug("Sending " + messages.size + " events to batch ingest handler.")
+
                 // update the cache
                 lastCheckpoint = checkpoint
                 ingestCache += (checkpoint -> messages)
@@ -125,6 +120,7 @@ class KafkaShardIngestActor(shardId: String, systemCoordination: SystemCoordinat
                 val batchHandler = context.actorOf(Props(new BatchHandler(self, sender, checkpoint, ingestTimeout))) 
                 requestor.tell(IngestData(messages), batchHandler)
               } else {
+                logger.debug("No new data found after checkpoint: " + checkpoint)
                 requestor ! IngestData(Nil)
               }
   

@@ -106,7 +106,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ GetCurrentCheckpoint => 
       logger.trace(msg.toString)
-      sender ! YggCheckpoint(kafkaOffset.getOrElse(0l), messageClock) // TODO: Make this safe
+      sender ! kafkaOffset.map(YggCheckpoint(_, messageClock)) 
   }
 
   private def flush(replyTo: Option[ActorRef]): IO[Unit] = {
