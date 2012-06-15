@@ -695,6 +695,7 @@ trait EvalStackSpecs extends Specification {
         | fun([25,36], "female")""".stripMargin
 
       val results = evalE(input) 
+      results must haveSize(14)
       
       forall(results) {
         case (VectorCase(_), SObject(obj)) => {
