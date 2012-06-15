@@ -21,6 +21,7 @@ import sbt._
 import Keys._
 import sbtassembly.Plugin.AssemblyKeys._
 import sbt.NameFilter._
+import com.typesafe.sbteclipse.plugin.EclipsePlugin.{ EclipseKeys, EclipseCreateSrc }
 
 object PlatformBuild extends Build {
   val nexusSettings : Seq[Project.Setting[_]] = Seq(
@@ -48,6 +49,12 @@ object PlatformBuild extends Build {
     version := "2.0.0-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     scalaVersion := "2.9.1",
+
+    EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
+    EclipseKeys.withSource := true,
+    (unmanagedSourceDirectories in Compile) <<= (scalaSource in Compile)(Seq(_)),
+    (unmanagedSourceDirectories in Test) <<= (scalaSource in Test)(Seq(_)),
+
     libraryDependencies ++= Seq(
       "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
