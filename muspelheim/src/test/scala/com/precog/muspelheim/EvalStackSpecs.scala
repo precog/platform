@@ -690,10 +690,10 @@ trait EvalStackSpecs extends Specification {
           results must haveSize(1)
 
           val results2 = results map {
-            case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => Vector(slope, yint)
+            case (VectorCase(), SObject(fields)) => fields
             case r => failure("Result has wrong shape: "+r)
           }
-          results2 must contain(Vector(0, 10))
+          results2 must contain(Map("slope" -> SDecimal(0), "intercept" -> SDecimal(10)))
         }
       }
     }
