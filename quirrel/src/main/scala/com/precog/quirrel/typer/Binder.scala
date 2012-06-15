@@ -10,22 +10,10 @@ trait Binder extends parser.AST with Library {
   protected override lazy val LoadId = Identifier(Vector(), "load")
 
   object BuiltIns {
-    val Count          = BuiltIn(Identifier(Vector(), "count"), 1, true)
-    val GeometricMean  = BuiltIn(Identifier(Vector(), "geometricMean"), 1, true)
     val Load           = BuiltIn(LoadId, 1, false)
-    val Max            = BuiltIn(Identifier(Vector(), "max"), 1, true)
-    val Mean           = BuiltIn(Identifier(Vector(), "mean"), 1, true)
-    val Median         = BuiltIn(Identifier(Vector(), "median"), 1, true)
-    val Min            = BuiltIn(Identifier(Vector(), "min"), 1, true)
-    val Mode           = BuiltIn(Identifier(Vector(), "mode"), 1, true)
-    val StdDev         = BuiltIn(Identifier(Vector(), "stdDev"), 1, true)
-    val Sum            = BuiltIn(Identifier(Vector(), "sum"), 1, true)
-    val SumSq          = BuiltIn(Identifier(Vector(), "sumSq"), 1, true)
-    val Variance       = BuiltIn(Identifier(Vector(), "variance"), 1, true)
-
     val Distinct       = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
 
-    val all = Set(Count, GeometricMean, Load, Max, Mean, Median, Min, Mode, StdDev, Sum, SumSq, Variance, Distinct)
+    val all = Set(Load, Distinct)
   }
 
   override def bindNames(tree: Expr) = {
@@ -42,6 +30,60 @@ trait Binder extends parser.AST with Library {
           val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> UserDef(b)) }
           loop(left, env2) ++ loop(right, env + (Right(id) -> UserDef(b)))
         }
+      }
+      
+      case Import(_, spec, child) => { //todo see scalaz's Boolean.option
+        val addend = spec match {
+          case SpecificImport(prefix) => {
+            env flatMap {
+              case (Right(Identifier(ns, name)), b) => {
+                if (ns.length >= prefix.length) {
+                  if (ns zip prefix forall { case (a, b) => a == b })
+                    Some(Right(Identifier(ns drop (prefix.length - 1), name)) -> b)
+                  else
+                    None
+                } else if (ns.length == prefix.length - 1) {
+                  if (ns zip prefix forall { case (a, b) => a == b }) {
+                    if (name == prefix.last)
+                      Some(Right(Identifier(Vector(), name)) -> b) 
+                    else
+                      None
+                  } else {
+                    None
+                  }
+                } else {
+                  None
+                }
+              }
+              
+              case _ => None
+            }
+          }
+          
+          case WildcardImport(prefix) => {
+            env flatMap {
+              case (Right(Identifier(ns, name)), b) => {
+                if (ns.length >= prefix.length + 1) {
+                  if (ns zip prefix forall { case (a, b) => a == b })
+                    Some(Right(Identifier(ns drop prefix.length, name)) -> b)
+                  else
+                    None
+                } else if (ns.length == prefix.length) {
+                  if (ns zip prefix forall { case (a, b) => a == b })
+                    Some(Right(Identifier(Vector(), name)) -> b)
+                  else
+                    None
+                } else {
+                  None
+                }
+              }
+              
+              case _ => None
+            }
+          }
+        }
+        
+        loop(child, env ++ addend)
       }
       
       case New(_, child) => loop(child, env)
@@ -94,6 +136,7 @@ trait Binder extends parser.AST with Library {
           d.binding = env(Right(name))
           
           d.isReduction = env(Right(name)) match {
+            case RedLibBuiltIn(_) => true
             case BuiltIn(BuiltIns.Load.name, _, _) => false
             case BuiltIn(_, _, true) => true
             case BuiltIn(_, _, false) => false
@@ -118,6 +161,9 @@ trait Binder extends parser.AST with Library {
         loop(left, env) ++ loop(right, env)
       
       case Intersect(_, left, right) =>
+        loop(left, env) ++ loop(right, env)
+            
+      case Difference(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       
       case Add(_, left, right) =>
@@ -163,7 +209,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (lib1.map(StdlibBuiltIn1) ++ lib2.map(StdlibBuiltIn2) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(StdLibBuiltIn1) ++ lib2.map(StdLibBuiltIn2) ++ libReduct.map(RedLibBuiltIn) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
@@ -175,14 +221,19 @@ trait Binder extends parser.AST with Library {
   // TODO arity and types
   case class BuiltIn(name: Identifier, arity: Int, reduction: Boolean) extends FunctionBinding {
     override val toString = "<native: %s(%d)>".format(name, arity)
+  }  
+  
+  case class RedLibBuiltIn(f: BIR) extends FunctionBinding {
+    val name = Identifier(f.namespace, f.name)
+    override val toString = "<native: %s(%d)>".format(f.name, 1)   //assumes all reductions are arity 1
   }
 
-  case class StdlibBuiltIn1(f: BIF1) extends FunctionBinding {
+  case class StdLibBuiltIn1(f: BIF1) extends FunctionBinding {
     val name = Identifier(f.namespace, f.name)
     override val toString = "<native: %s(%d)>".format(f.name, 1)
   }
   
-  case class StdlibBuiltIn2(f: BIF2) extends FunctionBinding {
+  case class StdLibBuiltIn2(f: BIF2) extends FunctionBinding {
     val name = Identifier(f.namespace, f.name)
     override val toString = "<native: %s(%d)>".format(f.name, 2)
   }

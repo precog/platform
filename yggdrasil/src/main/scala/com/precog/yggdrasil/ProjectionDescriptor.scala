@@ -1,9 +1,11 @@
 package com.precog.yggdrasil
 
 import com.precog.common._
+import com.precog.util.IOUtils
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
+import blueeyes.json.Printer.{pretty,render}
 import blueeyes.json.JPath.{JPathDecomposer, JPathExtractor}
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.Extractor._
@@ -14,11 +16,16 @@ import akka.actor.Actor._
 import akka.routing._
 import akka.dispatch.Future
 
+import java.io.File
+
 import scala.collection.immutable.ListMap
 
 import scalaz._
+import scalaz.effect.IO
 import scalaz.Scalaz._
 import scalaz.Validation._
+import scalaz.syntax.biFunctor._
+import scalaz.ValidationT._
 
 import annotation.tailrec
 
@@ -127,10 +134,14 @@ trait ColumnDescriptorSerialization {
   }
 }
 
-object ColumnDescriptor extends ColumnDescriptorSerialization 
-with ((Path, JPath, CType, Authorities) => ColumnDescriptor)
-
-
+object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath, CType, Authorities) => ColumnDescriptor) {
+  implicit object briefShow extends Show[ColumnDescriptor] {
+    def show(d: ColumnDescriptor) = shows(d).toList
+    override def shows(d: ColumnDescriptor) = {
+      "%s::%s (%s)".format(d.path.path, d.selector.toString, d.valueType.toString)
+    }
+  }
+}
 
 /** 
  * The descriptor for a projection 
@@ -170,7 +181,24 @@ trait ProjectionDescriptorSerialization {
         case x => Failure(Invalid("Error deserializing projection descriptor: columns formatted incorrectly."))
       }
     }
-  } 
+  }
+
+  def toFile(descriptor: ProjectionDescriptor, path: File): IO[Boolean] = {
+    IOUtils.safeWriteToFile(pretty(render(descriptor.serialize)), path)
+  }
+
+  def fromFile(path: File): IO[Validation[Error,ProjectionDescriptor]] = {
+    IOUtils.readFileToString(path).map {
+      JsonParser.parse(_).validated[ProjectionDescriptor]
+    }
+  }
+
+  implicit object briefShow extends Show[ProjectionDescriptor] {
+    def show(d: ProjectionDescriptor) = shows(d).toList
+    override def shows(d: ProjectionDescriptor) = {
+      d.columns.map(c => c.shows).mkString("Projection: [", ", ", "]")
+    }
+  }
 }
 
 object ProjectionDescriptor extends ProjectionDescriptorSerialization 

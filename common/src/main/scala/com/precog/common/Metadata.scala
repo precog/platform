@@ -39,25 +39,13 @@ object MetadataType {
   }
 }
 
+
 sealed trait Metadata {
   def metadataType: MetadataType
 
   def merge(that: Metadata): Option[Metadata]
 }
 
-sealed trait UserMetadata extends Metadata
-
-trait UserMetadataSerialization {
-  implicit val UserMetadataDecomposer: Decomposer[UserMetadata] = new Decomposer[UserMetadata] {
-    override def decompose(metadata: UserMetadata): JValue = JNothing
-  }
-
-  implicit val UserMetadataExtractor: Extractor[UserMetadata] = new Extractor[UserMetadata] with ValidatedExtraction[UserMetadata] {
-    override def validated(obj: JValue): Validation[Error, UserMetadata] = Failure(Invalid("No known forms of user metadata")) 
-  }
-}
-
-object UserMetadata extends UserMetadataSerialization 
 
 trait MetadataSerialization {
   implicit val MetadataDecomposer: Decomposer[Metadata] = new Decomposer[Metadata] {
@@ -107,6 +95,23 @@ object Metadata extends MetadataSerialization {
   }
 }
 
+
+// at present, no concrete subtypes of UserMetadata exist
+sealed trait UserMetadata extends Metadata
+
+trait UserMetadataSerialization {
+  implicit val UserMetadataDecomposer: Decomposer[UserMetadata] = new Decomposer[UserMetadata] {
+    override def decompose(metadata: UserMetadata): JValue = JNothing
+  }
+
+  implicit val UserMetadataExtractor: Extractor[UserMetadata] = new Extractor[UserMetadata] with ValidatedExtraction[UserMetadata] {
+    override def validated(obj: JValue): Validation[Error, UserMetadata] = Failure(Invalid("No known forms of user metadata")) 
+  }
+}
+
+object UserMetadata extends UserMetadataSerialization 
+
+
 sealed trait MetadataStats extends Metadata {
   def count: Long
 }
@@ -140,15 +145,14 @@ trait BooleanValueStatsSerialization {
 
 object BooleanValueStats extends MetadataType with BooleanValueStatsSerialization
 
-case class LongValueStats(count: Long, min: Long, max: Long) extends MetadataStats {
 
+case class LongValueStats(count: Long, min: Long, max: Long) extends MetadataStats {
   def metadataType = LongValueStats
 
   def merge(that: Metadata) = that match {
     case LongValueStats(count, min, max) => Some(LongValueStats(this.count + count, this.min.min(min), this.max.max(max)))
     case _                               => None
   }
-
 }
 
 trait LongValueStatsSerialization {
@@ -172,7 +176,6 @@ object LongValueStats extends MetadataType with LongValueStatsSerialization
 
 
 case class DoubleValueStats(count: Long, min: Double, max: Double) extends MetadataStats {
-
   def metadataType = DoubleValueStats
   
   def merge(that: Metadata) = that match {
@@ -202,14 +205,12 @@ object DoubleValueStats extends MetadataType with DoubleValueStatsSerialization
 
 
 case class BigDecimalValueStats(count: Long, min: BigDecimal, max: BigDecimal) extends MetadataStats {
-
   def metadataType = BigDecimalValueStats 
   
   def merge(that: Metadata) = that match {
     case BigDecimalValueStats(count, min, max) => Some(BigDecimalValueStats(this.count + count, this.min min min, this.max max max))
     case _                                 => None
   }
-
 }
 
 trait BigDecimalValueStatsSerialization {
@@ -242,7 +243,6 @@ case class StringValueStats(count: Long, min: String, max: String) extends Metad
                                                                     Order[String].max(this.max, max)))
     case _                                 => None
   }
-
 }
 
 trait StringValueStatsSerialization {

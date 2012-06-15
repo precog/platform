@@ -54,9 +54,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     }
     
     "parse out reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(Count)))
-      result mustEqual Right(dag.Reduce(Line(0, ""), Count, Root(Line(0, ""), PushFalse)))
-    }    
+      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
+      result mustEqual Right(dag.Reduce(Line(0, ""), BuiltInReduction(BIR(Vector(), "count", 0x2000)), Root(Line(0, ""), PushFalse)))
+    }
 
     "parse out set-reduce" in {
       val result = decorate(Vector(Line(0, ""), PushNull, instructions.SetReduce(Distinct)))
@@ -328,6 +328,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IIntersect))
         result mustEqual Right(Join(line, IIntersect, Root(line, PushTrue), Root(line, PushFalse)))
+      }      
+
+      "set difference" >> {
+        val line = Line(0, "")
+        val result = decorate(Vector(line, PushTrue, PushFalse, SetDifference))
+        result mustEqual Right(Join(line, SetDifference, Root(line, PushTrue), Root(line, PushFalse)))
       }
     }
     
@@ -513,9 +519,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "reduce" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.Reduce(Count)
+        val instr = instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
-      }      
+      }  
 
       "set-reduce" >> {     // similar to map1, only one underflow case!
         val instr = instructions.SetReduce(Distinct)
@@ -539,6 +545,11 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       
       "iintersect" >> {     // similar to map1, only one underflow case!
         val instr = IIntersect
+        decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
+      }      
+
+      "set difference" >> {     // similar to map1, only one underflow case!
+        val instr = SetDifference
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       

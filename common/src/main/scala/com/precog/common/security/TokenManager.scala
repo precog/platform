@@ -33,55 +33,15 @@ trait TokenManagerComponent {
   def tokenManager: TokenManager
 }
 
-trait MongoTokenManagerComponent extends Logging {
-
-  def defaultActorSystem: ActorSystem
-  implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
-
-  def tokenManagerFactory(config: Configuration): TokenManager = {
-    val test = config[Boolean]("test", false)   
-    if(test) {
-      println("Test token manager instantiated")
-      TestTokenManager.testTokenManager
-    } else {
-      val mock = config[Boolean]("mongo.mock", false)
-      
-      val mongo = if(mock) new MockMongo else RealMongo(config.detach("mongo"))
-      
-      val database = config[String]("mongo.database", "auth_v1")
-      val tokens = config[String]("mongo.tokens", "tokens")
-      val grants = config[String]("mongo.grants", "grants")
-      val deletedTokens = config[String]("mongo.deleted_tokens", tokens + "_deleted")
-      val deletedGrants = config[String]("mongo.deleted_grants", grants + "_deleted")
-      val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
-
-      val settings = MongoTokenManagerSettings(
-        tokens, grants, deletedTokens, deletedGrants, timeoutMillis
-      )
-
-      val mongoTokenManager = 
-        new MongoTokenManager(mongo, mongo.database(database), settings)(execContext)
-
-      val cached = config[Boolean]("cached", false)
-
-      if(cached) {
-        new CachingTokenManager(mongoTokenManager)
-      } else {
-        mongoTokenManager
-      }
-    }
-  }
-}
-
-
 trait TokenManager {
-
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
 
   // 256 bit token ID
   //private[security] def newTokenID(): String = (newUUID() + "-" + newUUID()).toUpperCase
+
   // 128 bit token ID
   private[security] def newTokenID(): String = newUUID().toUpperCase
+
   // 384 bit grant ID
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
@@ -112,76 +72,6 @@ trait TokenManager {
   def close(): Future[Unit]
 } 
 
-class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.empty, 
-                           grants: mutable.Map[GrantID, Grant] = mutable.Map.empty)(implicit val execContext: ExecutionContext) extends TokenManager {
-
-  private val deletedTokens = mutable.Map.empty[TokenID, Token]
-  private val deletedGrants = mutable.Map.empty[GrantID, Grant]
-
-  def newToken(name: String, grants: Set[GrantID]) = Future {
-    val newToken = Token(newTokenID, name, grants)
-    tokens.put(newToken.tid, newToken)
-    newToken
-  }
-
-  def newGrant(issuer: Option[GrantID], perm: Permission) = Future {
-    val newGrant = Grant(newGrantID, issuer, perm)
-    grants.put(newGrant.gid, newGrant)
-    newGrant
-  }
-
-  def listTokens() = Future[Seq[Token]] { tokens.values.toList }
-  def listGrants() = Future[Seq[Grant]] { grants.values.toList }
-
-  def findToken(tid: TokenID) = Future { tokens.get(tid) }
-
-  def findGrant(gid: GrantID) = Future { grants.get(gid) }
-  def findGrantChildren(gid: GrantID) = Future[Set[Grant]] {
-    grants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
-  }
-
-  def addGrants(tid: TokenID, add: Set[GrantID]) = Future {
-    tokens.get(tid).map { t =>
-      val updated = t.addGrants(add)
-      tokens.put(tid, updated)
-      updated
-    }
-  }
-
-  def listDeletedTokens() = Future[Seq[Token]] { deletedTokens.values.toList }
-  def listDeletedGrants() = Future[Seq[Grant]] { deletedGrants.values.toList }
-
-  def findDeletedToken(tid: TokenID) = Future { deletedTokens.get(tid) }
-
-  def findDeletedGrant(gid: GrantID) = Future { deletedGrants.get(gid) }
-  def findDeletedGrantChildren(gid: GrantID) = Future[Set[Grant]] {
-    deletedGrants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
-  }
-
- def removeGrants(tid: TokenID, remove: Set[GrantID]) = Future {
-    tokens.get(tid).map { t =>
-      val updated = t.removeGrants(remove)
-      tokens.put(tid, updated)
-      updated
-    }
-  }
-
-  def deleteToken(tid: TokenID) = Future {
-    tokens.get(tid).flatMap { t =>
-      deletedTokens.put(tid, t)
-      tokens.remove(tid)
-    }
-  }
-  def deleteGrant(gid: GrantID) = Future { grants.remove(gid) match {
-    case Some(x) =>
-      deletedGrants.put(gid, x)
-      Set(x)
-    case _       =>
-      Set.empty
-  }}
-
-  def close() = Future(())
-}
 
 case class MongoTokenManagerSettings(
   tokens: String = "tokens",
@@ -194,15 +84,47 @@ object MongoTokenManagerSettings {
   val defaults = MongoTokenManagerSettings()
 }
 
+trait MongoTokenManagerComponent extends Logging {
+  def defaultActorSystem: ActorSystem
+
+  implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
+
+  def tokenManagerFactory(config: Configuration): TokenManager = {
+    val mongo = RealMongo(config.detach("mongo"))
+    
+    val database = config[String]("mongo.database", "auth_v1")
+    val tokens = config[String]("mongo.tokens", "tokens")
+    val grants = config[String]("mongo.grants", "grants")
+    val deletedTokens = config[String]("mongo.deleted_tokens", tokens + "_deleted")
+    val deletedGrants = config[String]("mongo.deleted_grants", grants + "_deleted")
+    val timeoutMillis = config[Int]("mongo.query.timeout", 10000)
+
+    val settings = MongoTokenManagerSettings(
+      tokens, grants, deletedTokens, deletedGrants, timeoutMillis
+    )
+
+    val mongoTokenManager = 
+      new MongoTokenManager(mongo, mongo.database(database), settings)(execContext)
+
+    val cached = config[Boolean]("cached", false)
+
+    if(cached) {
+      new CachingTokenManager(mongoTokenManager)
+    } else {
+      mongoTokenManager
+    }
+  }
+}
+
 class MongoTokenManager(
-    private[security] val mongo: Mongo,
-    private[security] val database: Database,
-    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager {
+    mongo: Mongo,
+    database: Database,
+    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager with Logging {
 
   private implicit val impTimeout = settings.timeout
 
   def newToken(name: String, grants: Set[GrantID]) = {
-    val newToken = Token(newTokenID, name, grants)
+    val newToken = Token(newTokenID(), name, grants)
     database(insert(newToken.serialize(Token.UnsafeTokenDecomposer).asInstanceOf[JObject]).into(settings.tokens)) map {
       _ => newToken
     }
@@ -210,7 +132,10 @@ class MongoTokenManager(
 
   def newGrant(issuer: Option[GrantID], perm: Permission) = {
     val ng = Grant(newGrantID, issuer, perm)
-    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { _ => ng }
+    logger.debug("Adding grant: " + ng)
+    database(insert(ng.serialize(Grant.UnsafeGrantDecomposer).asInstanceOf[JObject]).into(settings.grants)) map { 
+      _ => logger.debug("Add complete for " + ng); ng 
+    }
   }
 
   private def findOneMatching[A](keyName: String, keyValue: String, collection: String)(implicit extractor: Extractor[A]): Future[Option[A]] = {
@@ -270,7 +195,6 @@ class MongoTokenManager(
       case None    => Future(None)
     }
   }
-
 
   def deleteToken(tid: TokenID): Future[Option[Token]] =
     findToken(tid).flatMap { 
@@ -361,63 +285,5 @@ object CachingTokenManager {
   )
 }
 
-object TestTokenManager extends AkkaDefaults {
 
-  val rootUID = "root"
-
-  val testUID = "unittest"
-  val usageUID = "usage"
-
-  val cust1UID = "user1"
-  val cust2UID = "user2"
-
-  val expiredUID = "expired"
-
-  def standardAccountPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]) = {
-    List[(String, (Path, Option[DateTime]) => Permission)](
-      ("write", WritePermission(_, _)),
-      ("owner", OwnerPermission(_, _)),
-      ("read", ReadPermission(_, owner, _)),
-      ("reduce", ReducePermission(_, owner, _)),
-      ("modify", ModifyPermission(_, owner, _)),
-      ("transform", TransformPermission(_, owner, _))
-    ).map {
-      case (suffix, f) => Grant(prefix + "_" + suffix, issuerPrefix.map { _ + "_" + suffix }, f(Path(path), expiration))
-    }
-  }
-
-  def publishPathPerms(prefix: String, issuerPrefix: Option[String], path: String, owner: TokenID, expiration: Option[DateTime]) = {
-    List[(String, (Path, Option[DateTime]) => Permission)](
-      ("read", ReadPermission(_, owner, _)),
-      ("reduce", ReducePermission(_, owner, _))
-    ).map {
-      case (suffix, f) => Grant(prefix + "_" + suffix, issuerPrefix.map { _ + "_" + suffix }, f(Path(path), expiration))
-    }
-  }
-
-  val grantList = List(
-    standardAccountPerms("root", None, "/", "root", None),
-    standardAccountPerms("unittest", Some("root"), "/unittest/", "unittest", None),
-    standardAccountPerms("usage", Some("root"), "/__usage_tracking__", "usage_tracking", None),
-    standardAccountPerms("user1", Some("root"), "/user1", "user1", None),
-    standardAccountPerms("user2", Some("root"), "/user2", "user2", None),
-    standardAccountPerms("expired", Some("root"), "/expired", "expired", Some(new DateTime().minusYears(1000))),
-    publishPathPerms("public", Some("root"), "/public", "public", None),
-    publishPathPerms("opublic", Some("root"), "/opublic", "opublic", None)
-  )
-
-  val grants: mutable.Map[GrantID, Grant] = grantList.flatten.map { g => (g.gid -> g) }(collection.breakOut)
-
-  val tokens: mutable.Map[TokenID, Token] = List[Token](
-    Token("root", "root", grantList(0).map { _.gid }(collection.breakOut)),
-    Token("unittest", "unittest", grantList(1).map { _.gid }(collection.breakOut)),
-    Token("usage", "usage", grantList(2).map { _.gid }(collection.breakOut)),
-    Token("user1", "user1", (grantList(3) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("user2", "user2", (grantList(4) ++ grantList(6)).map{ _.gid}(collection.breakOut)),
-    Token("expired", "expired", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
-  ).map { t => (t.tid -> t) }(collection.breakOut)
-
-  def testTokenManager(): TokenManager = new InMemoryTokenManager(tokens, grants)
-
-}
 

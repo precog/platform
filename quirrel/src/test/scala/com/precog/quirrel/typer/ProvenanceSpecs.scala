@@ -505,7 +505,22 @@ object ProvenanceSpecs extends Specification
         tree.errors must beEmpty
       }
     }
-    
+     
+    "identify a case when a tic variable is not solvable in all cases" in {
+      {
+        val tree = compile("""
+        | a('b) :=
+        |   k := //clicks.time where //clicks.time = 'b
+        |   j := //views.time where //views.time > 'b
+        |   k ~ j
+        |   {kay: k, jay: j}
+        | a""".stripMargin)
+
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
     "identify dispatch to an unquantified value function as dynamic" in {
       {
         val tree = compile("histogram('a) := 'a + count(//foo where //foo = 'a) histogram")
@@ -647,46 +662,1693 @@ object ProvenanceSpecs extends Specification
       }
     } 
 
-    "identify union according to its children" in {
-      {
-        val tree = compile("1 union 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(UnionValues)
+    "determine accumulatedProvenance in all cases" >> {   
+      "Let" >> {
+        {
+          val tree = compile("a := 1 a")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }          
+        {
+          val tree = compile("a := 1 foo(2)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")), UndefinedFunction(Identifier(Vector(), "foo")))
+        }          
+        {
+          val tree = compile("a := 1 42")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "a")))
+        }        
+        {
+          val tree = compile("a := [1,2,3] a")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        } 
+        {
+          val tree = compile("a := {foo: null} a")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("a := //foo a")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }          
+        {
+          val tree = compile("foo('a) := 'a + 5 foo(13)")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("foo('a) := 'a + 5 foo(//baz)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }          
+        {
+          val tree = compile("foo('a) := 'a + 5 bar::bak(//baz)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector("bar"), "bak")), UnusedLetBinding(Identifier(Vector(), "foo")))
+        }         
+        {
+          val tree = compile("foo('a) := 'a + 5 true")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors mustEqual Set(UnusedLetBinding(Identifier(Vector(), "foo")))
+        }          
+        {
+          val tree = compile("foo('a, 'b) := 'a + 'b + 5 foo(1, 2)")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }         
+        {
+          val tree = compile("foo('a, 'b) := 'a + 'b + 5 foo(1, //baz)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }   
+        {
+          val tree = compile("foo('a, 'b) := 'a + 'b + 5 foo(//bar, //baz)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }         
+        {
+          val tree = compile("foo := [//bar] foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }  
       }
-      
-      {
-        val tree = compile("//foo union 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(UnionValues)
-      }
-      
-      {
-        val tree = compile("1 union //foo")        
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(UnionValues)
 
+      "New" >> {
+        {
+          val tree = compile("new 123")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("new [1,2,3]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        } 
+        {
+          val tree = compile("new //foobar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        } 
+        {
+          val tree = compile("new foo(42)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok } 
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }
+      }
+
+      "Relate" >> {
+        {
+          val tree = compile("//foo ~ //bar 5")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo ~ //bar //bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo ~ //bar //foo + //bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"), StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo ~ //bar //foo + //baz")
+          tree.accumulatedProvenance must beLike { case  Some(Vector(StaticProvenance("/foo"), StaticProvenance("/baz"))) => ok } 
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("//foo ~ //bar ~ //baz 5")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo ~ bar(9) 5")
+          tree.accumulatedProvenance must beLike { case None => ok }  
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("//foo ~ 10 //foo")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(AlreadyRelatedSets)
+        }
+        {
+          val tree = compile("//foo ~ //foo.bar 5")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(AlreadyRelatedSets)
+        }
+      }
+
+      "TicVar and Literals" >> {
+        {
+          val tree = compile(""" "foo" """)
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("2222")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("true")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("null")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("'a")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors mustEqual Set(UndefinedTicVariable("'a"))
+        }
+        {
+          val tree = compile("foo('a) := 'a foo(10)")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "ObjectDef" >> {
+        {
+          val tree = compile("{foo: 5}")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: //bar.baz}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo1: //bar.baz, foo2: //bar.biz}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("{foo1: //bar.baz, foo2: //ack}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"), StaticProvenance("/ack"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("{foo1: //bar.baz, foo2: 99}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{}")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "ArrayDef" >> {
+        {
+          val tree = compile("[5]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[//bar.baz]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[//bar.baz, //bar.biz]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("[//bar.baz, //ack]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"), StaticProvenance("/ack"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("[//bar.baz, 99]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[foo(5), 1]")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }
+      }
+
+      "Descent" >> {
+        {
+          val tree = compile("//foo.bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""{foo: "bar"}.foo""")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: //bar}.foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: 1, bar: //baz}.foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: //fob, bar: //baz}.bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/fob"), StaticProvenance("/baz"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("{foo: bar(5), baz: 1}.baz")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }        
+        {
+          val tree = compile("true.foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[1,2,3].foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[].foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Deref" >> {
+        {
+          val tree = compile("true[0]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo[2]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }       
+        {
+          val tree = compile("//foo.bar[2]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("foo := [2,3,4] foo[1]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{a: 1}[0]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{}[0]")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("foo := [//bar] foo[0]")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+
+      "Dispatch" >> {
+        {
+          val tree = compile("//foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""load("/foo")""")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }  
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("load(//foo)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }  
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("load(//foo, bar)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2), UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("distinct(//foo.a)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("distinct(//foo.a, //foo.b)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val tree = compile("sum(//foo.a)")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//foo.a, //bar.b)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(5)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(//faz)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(//faz, //baz)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(5, 6)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//faz.a, //faz.b)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val f = lib2.head
+          val tree = compile("%s(//faz.a, //baz.a)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"), StaticProvenance("/baz"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//faz.a, 55)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//faz)".format(f.fqn))
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(2, 1))
+        }
+        {
+          val tree = compile("""bar("baz")""")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("f('a, 'b) := 'a + 'b f(7)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UnspecifiedRequiredParams(Seq("'b")))  //note: error UnableToDetermineDefiningSets("'b") is generated in solveCriticalConditions, which is only stubbed here
+        }
+        {
+          val tree = compile("f('a) := 'a + 2 f(4, 5)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val tree = compile("f('a) := 'a + 2 f(//baz)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := 'a + //baz f(2)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a, 'b) := 'a + 'b f(new 2, //barbaz)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }          
+        {
+          val tree = compile("//baz ~ //bar f('a, 'b) := 'a + 'b f(//baz.x, //bar.x)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"), StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("f('a) := 'a + bar(43) f(9)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }        
+        {
+          val tree = compile("f('a) := 'a + 3 f(bar(baz))")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "baz")), UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("f := [new 3, new 4] f")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("f('a, 'b) := //foo + 'a where //foo.b = 'b f(2)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := 'a f(//bar)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f(//bam)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(SetFunctionAppliedToSet)
+        }
+        {
+          val tree = compile("//foo ~ //bar f('a, 'b) := //foo + 'a where //foo.b = 'b f(//bar)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(SetFunctionAppliedToSet)
+        }        
+        {
+          val tree = compile("f('a, 'b) := //foo + 'a + 'b where //foo.b = 'b f(10)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""
+            foo := //foo
+            bar := //bar
+            f('b) := 
+              foo' := foo where foo.b = 'b
+              bar' := bar where bar.b = 'b
+              foo' ~ bar'
+              foo.x - bar.y
+            f""")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"), StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""
+            clicks := //clicks
+            views  := //views
+            clickthroughRate('page) :=
+              {page: 'page, ctr: count(clicks where clicks.pageId = 'page) / count(views where views.pageId = 'page)}
+            clickthroughRate""")
+
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Where" >> {
+        {
+          val tree = compile("//foo where //foo.bar = 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("10 where //foo.bar < 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//baz where //foo.bar <= 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"), StaticProvenance("/foo"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("//foo.baz where //foo.bar >= 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo where null")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("bar(2) where false")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("//foo where true")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{} where 5 = 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("true where []")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "With" >> {
+        {
+          val tree = compile("(1 + 2) with {}")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("1 with baz")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "baz")))
+        }
+        {
+          val tree = compile("1 with 2")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo with {a: 2}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo with {a: //foo.bar, b: 5}")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("10 with {}")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[] with {a: 4}")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("{a: 4} with //foobar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foobar"))) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Intersect" >> {
+        {
+          val tree = compile("3 intersect 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo intersect //bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo intersect 5")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//foo intersect bar(2)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("(//foo.bar + 5) intersect 9")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+      "Union" >> {
+        {
+          val tree = compile("3 union 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo union //bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo union 5")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//foo union bar(2)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("(//foo.bar + 5) union 9")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "Difference" >> {
+        {
+          val tree = compile("3 difference 4")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }
+        {
+          val tree = compile("//foo difference //bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("//foo difference //foo.a")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//foo difference 5")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//foo difference bar(2)")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }
+        {
+          val tree = compile("(//foo.bar + 5) difference 9")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "Add" >> {
+        {
+          val tree = compile("3 + 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//clicks.foo + //clicks.bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//clicks.foo + 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("//clicks.foo + //views.foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance(_), StaticProvenance(_))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+      }
+
+      "Lt" >> {
+        {
+          val tree = compile("3 < 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "And" >> {
+        {
+          val tree = compile("3 & 4")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Comp" >> {
+        {
+          val tree = compile("!true")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Neg" >> {
+        {
+          val tree = compile("neg 3")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Paren" >> {
+        {
+          val tree = compile("(3)")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+    }
+        
+    "identify union according to its children" >> {
+      "Let" >> {
+        {
+          val tree = compile("foo := //clicks foo union 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }       
+        {
+          val tree = compile("foo := //clicks foo union //views")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "New" >> {
+        {
+          val tree = compile("1 union new 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(new 2) union //clicks")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Relate" >> {
+        {
+          val tree = compile("//clicks ~ //views foo := //clicks + //views foo union 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//clicks ~ //views //foo union 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "Literals" >> {
+        {
+          val tree = compile("""(1 union "foo") union (true union null) """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "ObjectDef" >> {
+        {
+          val tree = compile("{foo: //foobar.a, bar: //foobar.b} union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("{foo: 5} union 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("false union {foo: foo(3)}")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }        
+      }
+
+      "ArrayDef" >> {
+        {
+          val tree = compile("[4,5,6] union 7")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("false union [foo(5), {bar: 10}]")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }        
+      }
+
+      "Descent" >> {
+        {
+          val tree = compile("//foo.a union 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }  
+        {
+          val tree = compile("6 union {foo: 5}.foo")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Deref" >> {
+        {
+          val tree = compile("//clicks[1] union 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("foo := [3,4,5] foo[1] union 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Dispatch" >> {
+        {
+          val tree = compile("//foo union //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("""foo::bar("baz") union 6""")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo"), "bar")))
+        }      
+        {
+          val tree = compile("//foo union 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        
+        {
+          val tree = compile("1 union //foo")        
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("distinct(//clicks.bar) union //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//clicks.bar) union false")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//clicks.bar, 100) union false")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(10) union {a: 33}".format(f.fqn))
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//bar.foo, //bar.ack) union //bar".format(f.fqn))
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f := true union false f")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := (//foobar.a union //barfoo.a) where //foobar.a = 'a f(10)")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f(10) union 12")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile(""" 
+            clicks := //clicks
+            views := //ciews
+            clicks ~ views
+            sum := clicks.time + views.time
+            sum union //campaigns
+            """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "Where" >> {
+        {
+          val tree = compile("(//foo where //foo.a = 10) union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""
+            //foo ~ //bar ~ //baz 
+            ({a: //baz - //foo} where true) union //foo + //bar""")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//ack where //achoo.foo >= 3) union 12") 
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength)
+        }
+      }
+
+      "With" >> {
+        {
+          val tree = compile("(//foo with {a: 1}) union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(null with {}) union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "Union/Intersect" >> {
+        {
+          val tree = compile("(//foo union {a: 1}) union //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(null intersect {}) union 10")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//foo.a + //foo.b union //baz) union 12")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "Add/Sub/Mul/Div" >> {
+        {
+          val tree = compile("1 - 2 union 3 + 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("1 * //foo union //bazbarfoobam / 8")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Lt/LtEq/Gt/GtEq/Eq/NotEq" >> {
+        {
+          val tree = compile("""(1 < 2) union ("there's a knot in this string") != "NOPE!" """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//foo.a <= 3) union (//iamasquirrel = 3)")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(4 > 999999) union (//didsomeonesayoink.moooo >= 122)")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+      }
+
+      "And/Or" >> {
+        {
+          val tree = compile("""(1 & true) union (4 | null) """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Comp" >> {
+        {
+          val tree = compile("4 union !true")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "Neg" >> {
+        {
+          val tree = compile("neg 3 union 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
       }
       
-      {
-        val tree = compile("new 1 union 2")
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
-        tree.errors must contain(UnionValues)
-      }
-      
-      {
-        val tree = compile("1 union new 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(UnionValues)
-      }
-      
-      {
-        val tree = compile("//foo union //bar")
-        tree.provenance must beLike { case DynamicProvenance(_) => ok }
-        tree.errors must beEmpty
+      "Paren" >> {
+        {
+          val tree = compile("(//foo) union //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("({}) union ([])")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
       }
     }  
 
-    "accept user-defined union and intersect" in {
+    "identify intersect according to its children" >> {
+      "Let" >> {
+        {
+          val tree = compile("foo := //clicks foo intersect 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }       
+        {
+          val tree = compile("foo := //clicks foo intersect //views")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "New" >> {
+        {
+          val tree = compile("1 intersect new 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(new 2) intersect //clicks")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Relate" >> {
+        {
+          val tree = compile("//clicks ~ //views foo := //clicks + //views foo intersect 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//clicks ~ //views //foo intersect 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "Literals" >> {
+        {
+          val tree = compile("""(1 intersect "foo") intersect (true intersect null) """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "ObjectDef" >> {
+        {
+          val tree = compile("{foo: //foobar.a, bar: //foobar.b} intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("{foo: 5} intersect 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("false intersect {foo: foo(3)}")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }        
+      }
+
+      "ArrayDef" >> {
+        {
+          val tree = compile("[4,5,6] intersect 7")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }        
+        {
+          val tree = compile("false intersect [foo(5), {bar: 10}]")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }        
+      }
+
+      "Descent" >> {
+        {
+          val tree = compile("//foo.a intersect 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }  
+        {
+          val tree = compile("6 intersect {foo: 5}.foo")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Deref" >> {
+        {
+          val tree = compile("//clicks[1] intersect 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("foo := [3,4,5] foo[1] intersect 6")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Dispatch" >> {
+        {
+          val tree = compile("//foo intersect //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("""foo::bar("baz") intersect 6""")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo"), "bar")))
+        }      
+        {
+          val tree = compile("//foo intersect 2")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        
+        {
+          val tree = compile("1 intersect //foo")        
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("distinct(//clicks.bar) intersect //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//clicks.bar) intersect false")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//clicks.bar, 100) intersect false")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(10) intersect {a: 33}".format(f.fqn))
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//bar.foo, //bar.ack) intersect //bar".format(f.fqn))
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f := true intersect false f")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := (//foobar.a intersect //barfoo.a) where //foobar.a = 'a f(10)")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f(10) intersect 12")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile(""" 
+            clicks := //clicks
+            views := //ciews
+            clicks ~ views
+            sum := clicks.time + views.time
+            sum intersect //campaigns
+            """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "Where" >> {
+        {
+          val tree = compile("(//foo where //foo.a = 10) intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""
+            //foo ~ //bar ~ //baz 
+            ({a: //baz - //foo} where true) intersect //foo + //bar""")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//ack where //achoo.foo >= 3) intersect 12") 
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "With" >> {
+        {
+          val tree = compile("(//foo with {a: 1}) intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(null with {}) intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "intersect" >> {
+        {
+          val tree = compile("(//foo intersect {a: 1}) intersect //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(null intersect {}) intersect 10")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//foo.a + //foo.b intersect //baz) intersect 12")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "Add/Sub/Mul/Div" >> {
+        {
+          val tree = compile("1 - 2 intersect 3 + 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("1 * //foo intersect //bazbarfoobam / 8")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Lt/LtEq/Gt/GtEq/Eq/NotEq" >> {
+        {
+          val tree = compile("""(1 < 2) intersect ("there's a knot in this string") != "NOPE!" """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//foo.a <= 3) intersect (//iamasquirrel = 3)")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(4 > 999999) intersect (//didsomeonesayoink.moooo >= 122)")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(IntersectProvenanceDifferentLength)
+        }
+      }
+
+      "And/Or" >> {
+        {
+          val tree = compile("""(1 & true) intersect (4 | null) """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Comp" >> {
+        {
+          val tree = compile("4 intersect !true")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "Neg" >> {
+        {
+          val tree = compile("neg 3 intersect 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }      
+      }
+      
+      "Paren" >> {
+        {
+          val tree = compile("(//foo) intersect //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("({}) intersect ([])")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+    }  
+
+    "identify set difference according to its children" >> {
+      "Let" >> {
+        {
+          val tree = compile("foo := //clicks foo difference 2")
+          tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }       
+        {
+          val tree = compile("foo := //clicks foo difference //views")
+          tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "New" >> {
+        {
+          val tree = compile("1 difference new 2")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(new 2) difference //clicks")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Relate" >> {
+        {
+          val tree = compile("//clicks ~ //views foo := //clicks + //views foo difference 4")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("//clicks ~ //views //foo difference 4")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "Literals" >> {
+        {
+          val tree = compile("""(//foo difference //bar) difference (//bax difference //bao) """)
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "ObjectDef" >> {
+        {
+          val tree = compile("{foo: //foobar.a, bar: //foobar.b} difference //baz")
+          tree.provenance must beLike { case StaticProvenance("/foobar") => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("{foo: 5} difference 6")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }        
+        {
+          val tree = compile("//foo difference {x: bar(3)}")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }        
+      }
+
+      "ArrayDef" >> {
+        {
+          val tree = compile("[4,5,6] difference 7")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }        
+        {
+          val tree = compile("false difference [foo(5), {bar: 10}]")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "foo")))
+        }        
+      }
+
+      "Descent" >> {
+        {
+          val tree = compile("//foo.a difference 6")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }  
+        {
+          val tree = compile("//foo.a difference //bar.b")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Deref" >> {
+        {
+          val tree = compile("//clicks[1] difference 6")
+          tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("foo := [//bar] (foo[0] difference //bax)")
+          tree.provenance must beLike { case StaticProvenance("/bar") => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Dispatch" >> {
+        {
+          val tree = compile("//foo difference //bar")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }      
+        {
+          val tree = compile("""foo::bar("baz") difference 6""")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector("foo"), "bar")))
+        }      
+        {
+          val tree = compile("//foo difference 2")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        
+        {
+          val tree = compile("1 difference //foo")        
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("distinct(//clicks.bar) difference //bar")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("sum(//clicks.bar) difference false")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }
+        {
+          val tree = compile("sum(//clicks.bar, 100) difference false")
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(IncorrectArity(1, 2))
+        }
+        {
+          val f = lib1.head
+          val tree = compile("%s(10) difference {a: //foo}".format(f.fqn))
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val f = lib2.head
+          val tree = compile("%s(//bar.foo, //bar.ack) difference //baz".format(f.fqn))
+          tree.provenance must beLike { case StaticProvenance("/bar") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f := //foo difference //bar f")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := (//foobar.a difference //barfoo.a) where //foobar.a = 'a f(10)")
+          tree.provenance must beLike { case StaticProvenance("/foobar") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f(10) difference 12")
+          tree.provenance must beLike { case StaticProvenance("/foobar") => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("f('a) := //foobar where //foobar.a = 'a f difference //baz")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile(""" 
+            clicks := //clicks
+            views := //ciews
+            clicks ~ views
+            sum := clicks.time + views.time
+            sum difference //campaigns
+            """)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "Where" >> {
+        {
+          val tree = compile("(//foo where //foo.a = 10) difference //baz")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""
+            //foo ~ //bar ~ //baz 
+            ({a: //baz - //foo} where true) difference //foo + //bar""")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//ack where //achoo.foo >= 3) difference 12") 
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "With" >> {
+        {
+          val tree = compile("(//foo with {a: 1}) difference //baz")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(null with {}) difference //baz")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "intersect" >> {
+        {
+          val tree = compile("(//foo intersect //bar) difference {a: 5}")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("(//a intersect //b) difference //c")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(//foo.a + //foo.b intersect //baz) difference //baz.c")
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Add/Sub/Mul/Div" >> {
+        {
+          val tree = compile("1 - 2 difference 3 + 4")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }
+        {
+          val tree = compile("1 * //foo difference //bazbarfoobam / 8")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+      }
+
+      "Lt/LtEq/Gt/GtEq/Eq/NotEq" >> {
+        {
+          val tree = compile("""(1 < 2) difference ("there's a knot in this string") != "NOPE!" """)
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }
+        {
+          val tree = compile("(//foo.a <= 3) difference (//iamasquirrel = 3)")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("(4 > 999999) difference (//didsomeonesayoink.moooo >= 122)")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+        }
+      }
+
+      "And/Or" >> {
+        {
+          val tree = compile("""(//foo & //bar) difference (//x | //y) """)
+          tree.provenance must beLike { case NullProvenance => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+      }
+
+      "Comp" >> {
+        {
+          val tree = compile("//foo.a difference !//fob.b")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }      
+      }
+
+      "Neg" >> {
+        {
+          val tree = compile("neg //foo difference //bar")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }      
+      }
+      
+      "Paren" >> {
+        {
+          val tree = compile("(//foo) difference //bar")
+          tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("({}) difference ([])")
+          tree.provenance must beLike { case ValueProvenance => ok }
+          tree.errors mustEqual Set(DifferenceProvenanceValue)
+        }
+      }
+    }  
+
+    "accept user-defined union, intersect, and difference" in {
       {
         val tree = compile("foo := //baz union //bar foo")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -697,38 +2359,75 @@ object ProvenanceSpecs extends Specification
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
         tree.errors must beEmpty
       }
+      {
+        val tree = compile("foo := //baz difference //bar foo")
+        tree.provenance must beLike { case StaticProvenance("/baz") => ok }
+        tree.errors must beEmpty
+      }
+    }
+
+    "accept user-defined function within a user-defined function" in {
+      {
+        val tree = compile("""
+          foo('a) := 
+            bar('b) :=
+              //clicks where //clicks.a = 'b
+            bar('a)
+          foo(2)""")
+        tree.provenance must beLike { case StaticProvenance("/clicks") => ok }
+        tree.errors must beEmpty
+      }      
+      {
+        val tree = compile("""
+          foo('a) := 
+            bar('b) :=
+              //clicks where //clicks.a = 'b + 'a
+            bar
+          foo(2)""")
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
+    "check provenance of partially-quantified function" in {
+      val tree = compile("""
+        foo('a) :=
+          //clicks where //clicks.a = 'a
+        foo""")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
     }
 
     "identify intersect according to its children" in {
       {
         val tree = compile("1 intersect 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(IntersectValues)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
       }
       
       {
         val tree = compile("//foo intersect 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(IntersectValues)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must contain(IntersectProvenanceDifferentLength)
       }
       
       {
         val tree = compile("1 intersect //foo")        
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(IntersectValues)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must contain(IntersectProvenanceDifferentLength)
 
       }
       
       {
-        val tree = compile("new 1 intersect 2")
+        val tree = compile("new (1 intersect 2)")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
-        tree.errors must contain(IntersectValues)
+        tree.errors must beEmpty
       }
       
       {
         val tree = compile("1 intersect new 2")
-        tree.provenance mustEqual NullProvenance
-        tree.errors must contain(IntersectValues)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must contain(IntersectProvenanceDifferentLength)
       }
       
       {
@@ -1807,12 +3506,31 @@ object ProvenanceSpecs extends Specification
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }    
-    "accept intersect on differing dynamic provenances" in {
-      val tree = compile("(new 1) intersect (new 1)")
+
+    "accept difference on different loads" in {
+      val tree = compile("//foo difference //bar")
+      tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+      tree.errors must beEmpty
+    }
+    
+    "accept difference on static and dynamic provenances" in {
+      val tree = compile("//foo difference new 1")
+      tree.provenance must beLike { case StaticProvenance("/foo") => ok }
+      tree.errors must beEmpty
+    }
+
+    "accept difference on static and dynamic provenances" in {
+      val tree = compile("(new 1) difference //foo")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty
     }
     
+    "accept difference on differing dynamic provenances" in {
+      val tree = compile("(new 1) difference (new 1)")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty
+    }    
+
     "reject addition on different loads" in {
       val tree = compile("//foo + //bar")
       tree.provenance mustEqual NullProvenance
@@ -2194,6 +3912,24 @@ object ProvenanceSpecs extends Specification
     
     "accept intersect on differing dynamic provenances when related" in {
       val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 intersect s2")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }    
+    
+    "accept difference on different loads when related" in {
+      val tree = compile("//foo ~ //bar //foo difference //bar")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept difference on static and dynamic provenances when related" in {
+      val tree = compile("s := new 1 //foo ~ s //foo difference s")
+      tree.provenance must beLike { case DynamicProvenance(_) => ok }
+      tree.errors must beEmpty      
+    }
+    
+    "accept difference on differing dynamic provenances when related" in {
+      val tree = compile("s1 := new 1 s2 := new 1 s1 ~ s2 s1 difference s2")
       tree.provenance must beLike { case DynamicProvenance(_) => ok }
       tree.errors must beEmpty      
     }
@@ -2674,13 +4410,13 @@ object ProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) union 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionValues) 
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength) 
       }
       
       {
         val tree = compile("42 union (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionValues)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, UnionProvenanceDifferentLength)
       }
     }
     
@@ -2688,13 +4424,27 @@ object ProvenanceSpecs extends Specification
       {
         val tree = compile("(//a + //b) intersect 42")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectValues)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
       }
       
       {
         val tree = compile("42 intersect (//a + //b)")
         tree.provenance mustEqual NullProvenance
-        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectValues)
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, IntersectProvenanceDifferentLength)
+      }
+    }    
+
+    "propagate through difference" in {
+      {
+        val tree = compile("(//a + //b) difference 42")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
+      }
+      
+      {
+        val tree = compile("42 difference (//a + //b)")
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets, DifferenceProvenanceDifferentLength)
       }
     }
     
@@ -2940,7 +4690,7 @@ object ProvenanceSpecs extends Specification
       }
     }
   }
-  
+   
   val exampleDir = new File("quirrel/examples")
   
   if (exampleDir.exists) {

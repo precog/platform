@@ -73,6 +73,8 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
     lazy val allowedUID = TestTokenUID
   }
 
+  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager()
+
   lazy val shardService = service.contentType[JValue](application/(MimeTypes.json))
                                  .path("/vfs/")
 

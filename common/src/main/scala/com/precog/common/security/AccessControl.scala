@@ -10,6 +10,8 @@ import blueeyes.bkka.AkkaDefaults
 import blueeyes.json.JPath
 import org.joda.time.DateTime
 
+import com.weiglewilczek.slf4s.Logging
+
 import scala.collection.mutable
 
 import blueeyes.persistence.mongo._
@@ -34,7 +36,7 @@ class UnlimitedAccessControl(implicit executionContext: ExecutionContext) extend
   def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Future(true)
 }
 
-class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: ExecutionContext) extends AccessControl {
+class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: ExecutionContext) extends AccessControl with Logging {
 
   def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = 
     pathAccess match {
@@ -47,6 +49,7 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
  
   def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
     tokens.findToken(uid).flatMap{ _.map { t => 
+      logger.debug("Checking %s access to %s from token %s with owners: %s".format(accessType, path, uid, owners))
        hasValidPermissions(t, path, owners, accessType)
     }.getOrElse(Future(false)) }
   }
@@ -81,14 +84,19 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
           }.getOrElse(Future(false))
         )})
       case ReadPermission =>
-        if(owners.isEmpty) Future(false)
+        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); Future(false) }
         else forall(owners.map { owner =>
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map {
               case g @ Grant(_, _, ReadPermission(p, o, _)) =>
-                isValid(g).map { _ && p.equalOrChild(path) && owner == o }
+                isValid(g).map { valid =>
+                  val equalOrChild = p.equalOrChild(path)
+                  val goodOwnership = owner == o 
+                  logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
+                  valid && equalOrChild && goodOwnership
+                }
               case _ => Future(false)
-            }.getOrElse(Future(false))
+            }.getOrElse { logger.debug("Could not locate grant " + gid); Future(false) }
           )})
         })
       case ReducePermission =>
@@ -128,11 +136,11 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
   }
 
   def isValid(grant: Grant): Future[Boolean] = {
-    (grant.issuer.map { 
+    (grant.issuer.map {
       tokens.findGrant(_).flatMap { _.map { parentGrant => 
         isValid(parentGrant).map { _ && grant.permission.accessType == parentGrant.permission.accessType }
-      }.getOrElse(Future(false)) } 
-    }.getOrElse(Future(true))).map { _ && !grant.permission.isExpired(new DateTime()) }
+      }.getOrElse { logger.warn("Could not locate issuer for grant: " + grant); Future(false) } } 
+    }.getOrElse { logger.debug("No issuer, parent grant == true"); Future(true) }).map { _ && !grant.permission.isExpired(new DateTime()) }
   }
 }
 

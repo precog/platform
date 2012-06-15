@@ -5,6 +5,8 @@ package kafka
 import common._
 import common.kafka._
 
+import com.precog.common.kafka.KafkaEventCodec
+
 import akka.dispatch.Future
 import akka.dispatch.MessageDispatcher
 

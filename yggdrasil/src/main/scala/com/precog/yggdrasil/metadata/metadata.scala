@@ -15,6 +15,9 @@ import akka.dispatch.MessageDispatcher
 import akka.util.Timeout
 import akka.util.duration._
 
+import com.weiglewilczek.slf4s.Logging
+import scalaz.syntax.std.booleanV._
+
 trait StorageMetadata {
 
   implicit val dispatcher: MessageDispatcher
@@ -101,20 +104,24 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
   }
   
   def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = {
-    def filter1(children: Set[PathMetadata]): Future[Set[PathMetadata]] = {
+    // TODO: This algorithm can be implemented in a single pass without all this nonsense.
+    def restrictAccess(children: Set[PathMetadata]): Future[Set[PathMetadata]] = {
       val mapped = children.foldLeft(Set.empty[Future[Option[PathMetadata]]]) {
-        case (acc, PathField(name, children)) => acc + filter1(children).map{ c => Option(PathField(name, c)) }
-        case (acc, PathIndex(index, children)) => acc + filter1(children).map{ c => Option(PathIndex(index, c)) }
+        case (acc, PathField(name, children)) => 
+          acc + restrictAccess(children).map(c => Some(PathField(name, c)))
+
+        case (acc, PathIndex(index, children)) => 
+          acc + restrictAccess(children).map(c => Some(PathIndex(index, c)))
+
         case (acc, p @ PathValue(_, authorities, _)) =>
-          acc + accessControl.mayAccessData(uid, path, authorities.uids, DataQuery).map {
-            case true => Option(p)
-            case false => None 
-          }
+          acc + (accessControl.mayAccessData(uid, path, authorities.uids, DataQuery) map { _ option p })
       }
+
       Future.fold(mapped)(Set.empty[PathMetadata]) {
-        case (acc, pm) => pm.map { acc + _ }.getOrElse(acc)
+        case (acc, pm) => acc ++ pm
       }
     }
+
     def filter2(children: Set[PathMetadata]): Set[PathMetadata] = {
        children.foldLeft(Set.empty[PathMetadata]){
          case (acc, PathField(name, children)) =>
@@ -126,10 +133,11 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
          case (acc, p @ PathValue(_, _, _)) => acc + p
        }
     }
+
     accessControl.mayAccessPath(uid, path, PathRead).flatMap {
       case true =>
         metadata.findPathMetadata(path, selector).flatMap{ pr => 
-          filter1(pr.children).map{ filter2 }.map{ PathRoot }
+          restrictAccess(pr.children).map{ filter2 }.map{ PathRoot }
         }
       case false =>
         Future(PathRoot(Set.empty))
@@ -147,20 +155,23 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
     if(as.size == 0) { Future(true) } else { Future.reduce(as.map(f))(_ && _) }
 }
 
-class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata {
+class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata with Logging {
+  logger.debug("ActorStorageMetadata init. Sends to " + actor + " via " + dispatcher)
 
   implicit val serviceTimeout: Timeout = 10 seconds
  
-  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] }
+  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] } onFailure { case e => logger.error("Error finding children for " + path, e) }
 
-  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] }
+  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] } onFailure { case e => logger.error("Error finding selectors for " + path, e) }
 
   def findProjections(path: Path, selector: JPath) = 
-    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] }
+    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] } onFailure { case e => logger.error("Error finding projections for " + (path, selector), e) }
   
-  def findPathMetadata(path: Path, selector: JPath) = 
-    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] }
+  def findPathMetadata(path: Path, selector: JPath) = {
+    logger.debug("Querying actor for path metadata")
+    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] } onFailure { case e => logger.error("Error finding pathmetadata for " + (path, selector), e) }
+  }
 
-  def close(): Future[Unit] = actor ? PoisonPill map { _ => () } 
+  def close(): Future[Unit] = actor ? PoisonPill map { _ => () } onFailure { case e => logger.error("Error closing ActorStorageMetadata", e) }
 
 }

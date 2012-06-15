@@ -40,6 +40,8 @@ trait DAGPrinter extends DAG {
       
       case Join(_, IUnion, left, right) => "(%s iunion %s)".format(loop(left, split), loop(right, split))
       case Join(_, IIntersect, left, right) => "(%s iintersect %s)".format(loop(left, split), loop(right, split))
+
+      case Join(_, SetDifference, left, right) => "(%s setDifference %s)".format(loop(left, split), loop(right, split))
       
       case Join(_, Map2Match(WrapObject), Root(_, PushString(property)), value) =>
         "{ %s: %s }".format(property, loop(value, split))

@@ -11,6 +11,8 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
     def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Map[String, Set[GroupTree]] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
+      case Import(_, _, child) => loop(root, child, currentWhere)
+      
       case New(_, child) => loop(root, child, currentWhere)
       
       case Relate(_, from, to, in) => {
@@ -57,7 +59,7 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
         val back = merge(merged, fromDef)
         
         d.binding match {
-          case b: BuiltIn if d.isReduction =>
+          case b: RedLibBuiltIn if d.isReduction =>
             back map { case (key, value) => key -> Set(Reduction(b, value): GroupTree) }
           
           case _ => back
@@ -77,6 +79,9 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case Intersect(_, left, right) =>
+        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+            
+      case Difference(_, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
       case Add(_, left, right) =>
@@ -133,6 +138,6 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
   
   object group {
     case class Condition(op: Where) extends GroupTree
-    case class Reduction(b: BuiltIn, children: Set[GroupTree]) extends GroupTree
+    case class Reduction(b: RedLibBuiltIn, children: Set[GroupTree]) extends GroupTree
   }
 }

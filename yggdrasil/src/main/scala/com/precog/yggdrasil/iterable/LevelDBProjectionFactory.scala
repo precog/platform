@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package iterable
 
 import leveldb._
+import com.precog.util.FileOps
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
@@ -15,66 +16,72 @@ import java.util.concurrent.TimeoutException
 import scala.collection.Iterator
 import scalaz.NonEmptyList
 import scalaz.Validation
+import scalaz.effect._
 import scalaz.syntax.validation._
 import scalaz.iteratee.Input //todo: Get rid of!
 
-trait LevelDBProjectionFactory extends ProjectionFactory with ProjectionDescriptorStorage {
-  type Dataset = IterableDataset[Seq[CValue]]
+trait LevelDBProjectionFactory extends ProjectionFactory[IterableDataset[Seq[CValue]]] {
+  def fileOps: FileOps
 
-  def projection(descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]] = {
-    // todo: the fact that the descriptor was being saved before creation was previously obscured
-    // by indirection. Is this right?
-    saveDescriptor(descriptor).unsafePerformIO flatMap { (file: File) =>
-      projection(file, descriptor)
-    }
+  def baseDir(descriptor: ProjectionDescriptor): File
+
+  def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
+    val base = baseDir(descriptor)
+    val baseDirV: IO[File] = 
+      fileOps.exists(base) flatMap { 
+        case true  => IO(base)
+        case false => fileOps.mkdir(base) map {
+                        case true  => base
+                        case false => throw new RuntimeException("Could not create database basedir " + base)
+                      }
+      }
+
+    baseDirV map { (bd: File) => new ProjectionImpl(bd, descriptor) }
   }
 
-  protected def projection(baseDir: File, descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]] = {
-    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new RuntimeException("Could not create database basedir " + baseDir): Throwable).fail[File] 
-                   else baseDir.success[Throwable]
+  def close(projection: ProjectionImpl) = IO(projection.close())
 
-    baseDirV map { (bd: File) => new LevelDBIterableDatasetProjection(bd, descriptor) }
-  }
-
-  class LevelDBIterableDatasetProjection private[LevelDBProjectionFactory] (val baseDir: File, val descriptor: ProjectionDescriptor) 
+  class ProjectionImpl private[LevelDBProjectionFactory] (val baseDir: File, val descriptor: ProjectionDescriptor) 
   extends LevelDBProjection with Projection[IterableDataset[Seq[CValue]]] {
     def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = IterableDataset[Seq[CValue]](1, new Iterable[(Identities,Seq[CValue])]{
-      def iterator = new Iterator[(Identities,Seq[CValue])] {
+      def iterator = {
         val iter = idIndexFile.iterator.asInstanceOf[JniDBIterator]
         iter.seekToFirst
 
         val reader = new ChunkReader(iter, expiresAt)
         reader.start()
 
-        private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
+        new Iterator[(Identities,Seq[CValue])] {
+          private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
 
-        private final def nextIterator = 
-          currentChunk.fold(
-            empty = throw new TimeoutException("Iteration expired"),
-            el    = chunk => chunk.getIterator(),
-            eof   = emptyJavaIterator
-          )
+          private final def nextIterator = 
+            currentChunk.fold(
+              empty = throw new TimeoutException("Iteration expired"),
+              el    = chunk => chunk.getIterator(),
+              eof   = emptyJavaIterator
+            )
 
-        private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator
+          private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator
 
-        def hasNext: Boolean = if(currentChunk.isEof) false else {
-          if (chunkIterator.hasNext) true else {
-            currentChunk.foreach(chunk => reader.returnBuffers(chunk))
-            currentChunk = reader.chunkQueue.take()
-            chunkIterator = nextIterator
-            chunkIterator.hasNext
+          def hasNext: Boolean = if(currentChunk.isEof) false else {
+            if (chunkIterator.hasNext) true else {
+              currentChunk.foreach(chunk => reader.returnBuffers(chunk))
+              currentChunk = reader.chunkQueue.take()
+              chunkIterator = nextIterator
+              chunkIterator.hasNext
+            }
           }
-        }
 
-        def next: (Identities,Seq[CValue]) = {
-          val kvPair = chunkIterator.next()
-          unproject(kvPair.getKey, kvPair.getValue)
+          def next: (Identities,Seq[CValue]) = {
+            val kvPair = chunkIterator.next()
+            unproject(kvPair.getKey, kvPair.getValue)
+          }
         }
       }
     })
 
     @inline 
-    final def getAllPairs(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
+    final def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
   }
 }
 

@@ -4,8 +4,8 @@ package iterable
 import memoization._
 import serialization._
 import com.precog.common._
-import com.precog.common.util.IOUtils
 import com.precog.util.IdGen
+import com.precog.util.IOUtils
 
 import blueeyes.util.Clock
 import akka.actor.ActorSystem

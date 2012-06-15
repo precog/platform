@@ -18,6 +18,8 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     case expr @ Let(_, _, _, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
+    case Import(_, _, child) => inferBuckets(child)
+    
     case New(_, child) => inferBuckets(child)
     
     case Relate(_, from, to, in) =>
@@ -87,6 +89,9 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
     
     case Intersect(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
+        
+    case Difference(_, left, right) =>
+      inferBuckets(left) ++ inferBuckets(right)
     
     case Add(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
@@ -136,6 +141,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
       val recLeft = solveCondition(name, left)
       val recRight = solveCondition(name, right)
       
+      //TODO BUG! left and right do not commute 
       // desugared due to SI-5589
       val sol = recLeft.right flatMap {
         case (leftSol, leftExtras) => {
@@ -238,7 +244,7 @@ trait GroupSolver extends AST with GroupFinder with Solver with Solutions {
         else
           (Some(Error(d, UnableToDetermineDefiningSet(name))), None)
         
-        (addend map (errors +) getOrElse errors, result)
+        (addend map (errors +) getOrElse Set[Error](), result)
       }
     } else if (groups exists { case Reduction(_, _) => true case _ => false }) {
       val (errors, successes) = groups collect {

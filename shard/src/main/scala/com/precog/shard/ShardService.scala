@@ -16,12 +16,15 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
+import com.weiglewilczek.slf4s.Logging
+
 case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl)
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
     ShardServiceCombinators with 
-    AkkaDefaults {
+    AkkaDefaults with 
+    Logging {
   import BijectionsChunkJson._
   import BijectionsChunkString._
   import BijectionsChunkFutureJson._
@@ -39,14 +42,20 @@ trait ShardService extends
           import context._
 
           
-          println(config)
-          println(config.detach("security"))
+          logger.info("Using config: " + config)
+          logger.info("Security config = " + config.detach("security"))
 
           val tokenManager = tokenManagerFactory(config.detach("security"))
 
+          logger.trace("tokenManager loaded")
+
           val accessControl = new TokenManagerAccessControl(tokenManager)
+
+          logger.trace("accessControl loaded")
           
           val queryExecutor = queryExecutorFactory(config.detach("queryExecutor"), accessControl)
+
+          logger.trace("queryExecutor loaded")
 
           queryExecutor.startup.map { _ =>
             ShardState(

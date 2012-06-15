@@ -5,7 +5,7 @@ import com.precog.quirrel.Solver
 import com.precog.quirrel.typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import com.precog.bytecode.{Instructions}
 
-import scalaz.{StateT, Id, Identity, Bind, Monoid}
+import scalaz.{StateT, Id, Bind, Monoid}
 import scalaz.Scalaz._
 
 trait Emitter extends AST
@@ -338,6 +338,9 @@ trait Emitter extends AST
       (expr match {
         case ast.Let(loc, id, params, left, right) =>
           emitExpr(right)
+        
+        case ast.Import(_, _, child) =>
+          emitExpr(child)
 
         case ast.New(loc, child) => 
           emitExpr(child) >> emitInstr(Map1(New))
@@ -416,21 +419,21 @@ trait Emitter extends AST
               val currentIndex = indices.indexOf(n)
               val targetIndex  = n
 
-              ((), 
-              if (currentIndex == targetIndex) (indices, state)
-              else {
-                var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
+              ((), if (currentIndex == targetIndex) (indices, state)
+                else {
+                  var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
 
-                val startValue = indices(startIndex)
-                val newIndices = indices.updated(startIndex, indices(endIndex)).updated(endIndex, startValue)
+                  val startValue = indices(startIndex)
+                  val newIndices = indices.updated(startIndex, indices(endIndex)).updated(endIndex, startValue)
 
-                val newState = (startIndex until endIndex).foldLeft(state) {
-                  case (state, idx) =>
-                    state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
+                  val newState = (startIndex until endIndex).foldLeft(state) {
+                    case (state, idx) =>
+                      state >> (emitInstr(PushNum(idx.toString)) >> emitInstr(Map2Cross(ArraySwap)))
+                  }
+
+                  (newIndices, newState)
                 }
-
-                (newIndices, newState)
-              })
+              )
           }
 
           val fixAll = (0 until indices.length).map(fixN)
@@ -452,61 +455,6 @@ trait Emitter extends AST
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
-            case BuiltIn(BuiltIns.Count.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Count))
-            
-            case BuiltIn(BuiltIns.GeometricMean.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(GeometricMean))
-            
-            case BuiltIn(BuiltIns.Max.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Max))
-            
-            case BuiltIn(BuiltIns.Mean.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Mean))
-            
-            case BuiltIn(BuiltIns.Median.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Median))
-            
-            case BuiltIn(BuiltIns.Min.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Min))
-            
-            case BuiltIn(BuiltIns.Mode.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Mode))
-            
-            case BuiltIn(BuiltIns.StdDev.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(StdDev))
-
-            case BuiltIn(BuiltIns.Sum.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Sum))
-
-            case BuiltIn(BuiltIns.SumSq.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(SumSq))
-
-            case BuiltIn(BuiltIns.Variance.name, arity, _) =>
-              assert(arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Reduce(Variance))
-
             case BuiltIn(BuiltIns.Distinct.name, arity, _) =>
               assert(arity == 1)
 
@@ -515,10 +463,13 @@ trait Emitter extends AST
             case BuiltIn(n, arity, _) =>
               notImpl(expr)
 
-            case StdlibBuiltIn1(op) =>
+            case RedLibBuiltIn(f) =>
+              emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
+
+            case StdLibBuiltIn1(op) =>
               emitUnary(actuals(0), BuiltInFunction1Op(op))
 
-            case StdlibBuiltIn2(op) =>
+            case StdLibBuiltIn2(op) =>
               emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op))
 
             case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
@@ -602,6 +553,9 @@ trait Emitter extends AST
 
         case ast.Intersect(loc, left, right) =>
           emitExpr(left) >> emitExpr(right) >> emitInstr(IIntersect) 
+
+        case ast.Difference(loc, left, right) =>
+          emitExpr(left) >> emitExpr(right) >> emitInstr(SetDifference) 
 
         case ast.Add(loc, left, right) => 
           emitMap(left, right, Add)

@@ -55,12 +55,20 @@ case object OperationOnUnrelatedSets extends ErrorType {
   override def toString = "cannot perform operation on unrelated sets"
 }
 
-case object UnionValues extends ErrorType {
-  override def toString = "cannot perform union with a value"
+case object UnionProvenanceDifferentLength extends ErrorType {
+  override def toString = "cannot perform union on two sets with different numbers of identities"
 }
 
-case object IntersectValues extends ErrorType {
-  override def toString = "cannot perform intersect with a value"
+case object IntersectProvenanceDifferentLength extends ErrorType {
+  override def toString = "cannot perform intersect on two sets each with different numbers of identities"
+}
+
+case object DifferenceProvenanceDifferentLength extends ErrorType {
+  override def toString = "cannot perform set difference on two sets each with different numbers of identities"
+}
+
+case object DifferenceProvenanceValue extends ErrorType {
+  override def toString = "cannot perform set difference on values"
 }
 
 case object AlreadyRelatedSets extends ErrorType {

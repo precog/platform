@@ -55,7 +55,11 @@ trait Parser extends RegexParsers with Filters with AST {
       id ~ "(" ~ formals ~ ")" ~ ":=" ~ expr ~ expr ^# { (loc, id, _, fs, _, _, e1, e2) => 
         Let(loc, Identifier(Vector(), id), fs, e1, e2)
       }
-    | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) => Let(loc, Identifier(Vector(), id), Vector(), e1, e2) }
+    | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) =>
+        Let(loc, Identifier(Vector(), id), Vector(), e1, e2)
+      }
+    
+    | """import\b""".r ~ importSpec ~ expr ^# { (loc, _, s, e) => Import(loc, s, e) }
     
     | """new\b""".r ~ expr ^# { (loc, _, e) => New(loc, e) }
     | relations ~ expr     ^# { (loc, es, e) => buildDeepRelate(loc, es, e) }
@@ -80,6 +84,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | expr ~ """with\b""".r ~ expr      ^# { (loc, e1, _, e2) => With(loc, e1, e2) }
     | expr ~ """union\b""".r ~ expr     ^# { (loc, e1, _, e2) => Union(loc, e1, e2) }
     | expr ~ """intersect\b""".r ~ expr ^# { (loc, e1, _, e2) => Intersect(loc, e1, e2) }
+    | expr ~ """difference\b""".r ~ expr      ^# { (loc, e1, _, e2) => Difference(loc, e1, e2) }
     
     | expr ~ "+" ~ expr ^# { (loc, e1, _, e2) => Add(loc, e1, e2) }
     | expr ~ "-" ~ expr ^# { (loc, e1, _, e2) => Sub(loc, e1, e2) }
@@ -102,7 +107,12 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
   ) filter (precedence & associativity)
-
+  
+  private lazy val importSpec: Parser[ImportSpec] = (
+      namespace ~ "::" ~ "_" ^^ { (p, _, _) => WildcardImport(p) }
+    | namespace              ^^ SpecificImport
+  )
+  
   private lazy val namespacedId: Parser[Identifier] = (
       namespace ~ "::" ~ id ^^ { (ns, _, id) => Identifier(ns, id) }
     | id                    ^^ { str => Identifier(Vector(), str) }
@@ -141,7 +151,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private lazy val property = propertyName ~ ":" ~ expr ^^ { (n, _, e) => (n, e) }
   
-  private lazy val id = """[a-zA-Z_]['a-zA-Z_0-9]*""".r \ keywords
+  private lazy val id = """[a-zA-Z]['a-zA-Z_0-9]*|_['a-zA-Z_0-9]+""".r \ keywords
   
   private lazy val ticId = """'[a-zA-Z_0-9]['a-zA-Z_0-9]*""".r
   
@@ -150,11 +160,11 @@ trait Parser extends RegexParsers with Filters with AST {
     | """`([^`\\]|\\.)+`""".r ^^ canonicalizePropertyName
   )
   
-  private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath
+  private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath 
   
-  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  
+  private lazy val strLiteral = """"([^\n\r\\"]|\\.)*"""".r ^^ canonicalizeStr  //"
   
-  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r
+  private lazy val numLiteral = """[0-9]+(\.[0-9]+)?([eE][0-9]+)?""".r 
   
   private lazy val boolLiteral: Parser[Boolean] = (
       "true"  ^^^ true
@@ -163,7 +173,7 @@ trait Parser extends RegexParsers with Filters with AST {
 
   private lazy val nullLiteral = """null\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|neg|null".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
@@ -173,7 +183,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'comp, 'neg,
       'mul, 'div,
       'add, 'sub,
-      'union, 'intersect,
+      'union, 'intersect, 'difference,
       'lt, 'lteq, 'gt, 'gteq,
       'eq, 'noteq,
       'and, 'or,
@@ -181,7 +191,8 @@ trait Parser extends RegexParsers with Filters with AST {
       'new,
       'where,
       'relate,
-      'let)
+      'let,
+      'import)
       
   private val associativity = (
       ('mul <)
@@ -200,6 +211,7 @@ trait Parser extends RegexParsers with Filters with AST {
     & ('where <)
     & ('union <)
     & ('intersect <)
+    & ('difference <)
     & ('relate <>)
     & (arrayDefDeref _)
   )
@@ -322,6 +334,7 @@ trait Parser extends RegexParsers with Filters with AST {
       | "with"
       | "union"
       | "intersect"
+      | "difference"
       | "+"
       | "-"
       | "*"

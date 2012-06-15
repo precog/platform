@@ -25,19 +25,31 @@ object PlatformBuild extends Build {
   )
   
   val commonSettings = Seq(
-    scalacOptions ++= Seq())
+    organization := "com.precog",
+    scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
+    scalaVersion := "2.9.1",
+    libraryDependencies ++= Seq(
+      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"        % "1.0.7",
+      "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
+      "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
+      "org.scala-tools.testing"     %  "scalacheck_2.9.1"   % "1.9" % "test",
+      "org.specs2"                  %  "specs2_2.9.1"       % "1.8" % "test",
+      "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test"
+    )
+  )
 
   lazy val platform = Project(id = "platform", base = file(".")) aggregate(quirrel, yggdrasil, bytecode, daze, ingest, shard, auth, pandora, util, common)
   
-  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*)
   lazy val util     = Project(id = "util", base = file("util")).settings(nexusSettings ++ commonSettings: _*)
+  lazy val common   = Project(id = "common", base = file("common")).settings(nexusSettings ++ commonSettings: _*) dependsOn (util)
 
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings ++ commonSettings: _*)
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings ++ commonSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
   
   lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings ++ commonSettings: _*) dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
   
-  lazy val muspelheim   = Project(id = "muspelheim", base = file("muspelheim")).settings(nexusSettings ++ commonSettings: _*) dependsOn (quirrel, daze)
+  lazy val muspelheim   = Project(id = "muspelheim", base = file("muspelheim")).settings(nexusSettings ++ commonSettings: _*) dependsOn (quirrel, daze, yggdrasil % "compile->compile;test->test")
 
   val pandoraSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
   lazy val pandora  = Project(id = "pandora", base = file("pandora")).settings(pandoraSettings ++ commonSettings: _*) dependsOn (quirrel, daze, yggdrasil, ingest, muspelheim % "compile->compile;test->test")
@@ -51,7 +63,7 @@ object PlatformBuild extends Build {
   lazy val shard    = Project(id = "shard", base = file("shard")).settings(shardSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, pandora)
   
   val authSettings = sbtassembly.Plugin.assemblySettings ++ nexusSettings
-  lazy val auth    = Project(id = "auth", base = file("auth")).settings(authSettings ++ commonSettings: _*).dependsOn(common)
+  lazy val auth    = Project(id = "auth", base = file("auth")).settings(authSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test")
   
   lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
