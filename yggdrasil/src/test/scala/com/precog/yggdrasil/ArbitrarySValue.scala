@@ -117,10 +117,9 @@ trait CValueGenerators {
     }
   }
 
-  def genEventColumns(genSchema: Gen[JSchema]): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
+  def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
     for {
       idCount <- choose(1, 3) 
-      jschema <- genSchema
       data <- containerOf[Stream, (Identities, Seq[(JPath, JValue)])](
                 for {
                   ids <- listOfN(idCount, posNum[Long])
