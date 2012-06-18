@@ -228,19 +228,19 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
             }
           }
 
-          private def bufferAdvanceLeft(): Unit = {
+          @inline private def bufferAdvanceLeft(): Unit = {
             leftBuffer.add(leftIdx)
             rightBuffer.add(-1)
             leftIdx += 1
           }
 
-          private def bufferAdvanceRight(): Unit = {
+          @inline private def bufferAdvanceRight(): Unit = {
             leftBuffer.add(-1)
             rightBuffer.add(rightIdx)
             rightIdx += 1
           }
 
-          private def bufferBoth(): Unit = {
+          @inline private def bufferBoth(): Unit = {
             leftBuffer.add(leftIdx)
             rightBuffer.add(rightIdx)
           }
@@ -296,6 +296,8 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
 
               val idCount = self.idCount + other.idCount
               val size = leftBuffer.size
+
+              // merge identity columns
               val identities = {
                 val (li, lr) = remappedLeft.identities.splitAt(prefixLength)
                 val (ri, rr) = remappedRight.identities.splitAt(prefixLength)
