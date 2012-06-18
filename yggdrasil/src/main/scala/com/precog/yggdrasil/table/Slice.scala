@@ -261,13 +261,15 @@ trait Slice { source =>
       val columns = other.columns.foldLeft(source.columns) {
         case (acc, (cmeta, col)) => 
           val ctype = cmeta.ctype
-          val c1 = ctype.cast0(acc(cmeta))
+          val c1 = ctype.cast0(acc.getOrElse(cmeta, Column.empty(ctype)))
           val c2 = ctype.cast0(col)
           acc + (
             cmeta -> {
               new Column[ctype.CA] { 
                 val returns: CType { type CA = ctype.CA } = ctype
-                def isDefinedAt(row: Int) = (row >= 0 && row < source.size) || (row - source.size >= 0 && row - source.size < other.size)
+                def isDefinedAt(row: Int) = (row >= 0 && row < source.size && c1.isDefinedAt(row)) || 
+                                            (row - source.size >= 0 && row - source.size < other.size && c2.isDefinedAt(row - source.size))
+
                 def apply(row: Int) = if (row < source.size) c1(row) else c2(row - source.size)
               }
             }
