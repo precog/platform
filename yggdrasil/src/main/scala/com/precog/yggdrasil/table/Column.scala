@@ -166,6 +166,12 @@ class CEmptyArrayColumn(size: Int) extends NullColumn(new BitSet(size)) {
 }
 
 object Column {
+  def empty[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }): Column[A] = new Column[A] {
+    val returns = ctype
+    def isDefinedAt(row: Int) = false
+    def apply(row: Int) = sys.error("Empty column dereferenced at row " + row)
+  }
+
   @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A]): Column[A] = forArray(ctype, a, a.length)
 
   @inline def forArray[@specialized(Boolean, Long, Double) A](ctype: CType { type CA = A }, a: Array[A], limit: Int): Column[A] = {

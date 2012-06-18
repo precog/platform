@@ -25,6 +25,7 @@ import com.precog.common.VectorCase
 
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
+import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
 import scalaz._
@@ -39,10 +40,22 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 class TableOpsSpec extends DatasetOpsSpec { spec =>
+  type Dataset = Table
+
   override val defaultPrettyParams = Pretty.Params(2)
 
   val sliceSize = 10
   val testPath = Path("/tableOpsSpec")
+
+  def debugPrint(dataset: Table): Unit = {
+    println("\n\n")
+    for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
+  }
+
+  def cogroup(ds1: Dataset, ds2: Dataset): Dataset = {
+    ds1.cogroup(ds2, ds1.idCount min ds2.idCount)(CogroupMerge.second)
+  }
+  
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)
@@ -175,7 +188,12 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
       "survive scalacheck" in { 
         check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
       }
+
+      "cogroup across slice boundaries" in testCogroupSliceBoundaries
+      "survive pathology 2" in testCogroupPathology2
     }
+
+
   }
 }
 
