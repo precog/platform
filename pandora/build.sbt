@@ -5,8 +5,6 @@ import java.io.File
 
 name := "pandora"
 
-version := "0.0.1-SNAPSHOT"
-
 javaOptions ++= Seq("-Xmx1G")
 
 libraryDependencies ++= Seq(

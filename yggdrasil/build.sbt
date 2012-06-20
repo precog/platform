@@ -2,8 +2,6 @@ import AssemblyKeys._
 
 name := "yggdrasil"
 
-version := "0.0.1-SNAPSHOT"
-
 fork := true
 
 // For now, skip column specs because SBT will die a horrible, horrible death
