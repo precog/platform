@@ -67,6 +67,88 @@ class TimeLibSpec extends Specification
     "return failing validations for bad input" in todo
   }
 
+  "parse a time string into an ISO801 string, given its format" should {
+    "time zone not specified" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2020-06-03T03:12:33.000Z")
+    }
+
+    "time zone specified" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM -08:00")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2020-06-03T03:12:33.000-08:00")
+    }
+
+    "malformed string" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM -08:00 asteroid")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+      
+      result must beEmpty
+    }
+
+    "results used in another time function from homogeneous set" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(Date),
+        Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/timeString")), Het),
+          Root(line, PushString("MMM dd yyyy k:mm:ss.SSS"))))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(_), SString(d)) => d.toString
+      }
+
+      result must haveSize(4)
+
+      result must contain("2010-06-03", "2010-06-04", "2011-08-12", "2010-10-09")
+    }
+
+    "from heterogeneous set" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/timeString")), Het),
+          Root(line, PushString("MMM dd yyyy k:mm:ss.SSS")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(_), SString(d)) => d.toString
+      }
+
+      result must haveSize(4)
+
+      result must contain("2010-06-03T04:12:33.323Z", "2010-06-04T13:31:49.002Z", "2011-08-12T22:42:33.310Z", "2010-10-09T09:27:31.953Z")
+    }
+  }
+      
+
   "changing time zones (homogenous case)" should {
     "change to the correct time zone" in {
       val line = Line(0, "")
