@@ -58,20 +58,40 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     MillisBetween,
 
     MillisToISO,
-    ChangeTimeZone
+    ChangeTimeZone,
+    ParseDateTime
   )
 
   private def isValidISO(str: String): Boolean = {
     try { new DateTime(str); true
     } catch {
-      case e:IllegalArgumentException => { false }
+      case e: IllegalArgumentException => { false }
     }
   }
 
   private def isValidTimeZone(str: String): Boolean = {
     try { DateTimeZone.forID(str); true
     } catch {
-      case e:IllegalArgumentException => { false }
+      case e: IllegalArgumentException => { false }
+    }
+  }  
+  
+  private def isValidFormat(time: String, fmt: String): Boolean = {  //todo should preserve java's error instead of returning nothing?
+    try { DateTimeFormat.forPattern(fmt).withOffsetParsed().parseDateTime(time); true
+    } catch {
+      case e: IllegalArgumentException => { false }
+    }
+  }
+
+  object ParseDateTime extends BIF2(TimeNamespace, "parse") {
+    DateTimeZone.setDefault(DateTimeZone.UTC)
+
+    val operandType = (Some(SString), Some(SString))
+    val operation: PartialFunction[(SValue, SValue), SValue] = {
+      case (SString(time), SString(fmt)) if (isValidFormat(time, fmt)) =>
+        val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
+        val ISO = format.parseDateTime(time)
+        SString(ISO.toString())
     }
   }
 
