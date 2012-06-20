@@ -19,8 +19,6 @@
  */
 name := "quirrel"
 
-version := "0.1.0"
-
 libraryDependencies ++= Seq(
   "com.codecommit" % "gll-combinators_2.9.1" % "2.0"
 )

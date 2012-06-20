@@ -24,8 +24,6 @@ import java.io.File
 
 name := "performance"
 
-version := "0.0.1-SNAPSHOT"
-
 mainTest := "com.precog.performance.PerformanceSuite"
 
 test <<= (streams, fullClasspath in Test, outputStrategy in Test, mainTest) map { (s, cp, os, testName) =>
