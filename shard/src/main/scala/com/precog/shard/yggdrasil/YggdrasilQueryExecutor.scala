@@ -131,8 +131,15 @@ trait YggdrasilQueryExecutor
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard[IterableDataset]
 
-  def startup() = storage.actorsStart
-  def shutdown() = storage.actorsStop
+  def startup() = storage.actorsStart.onComplete {
+    case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
+    case Right(_) => logger.info("Actor ecosystem started.")
+  }
+
+  def shutdown() = storage.actorsStop.onComplete {
+    case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
+    case Right(_) => logger.info("Actor ecossytem shutdown complete.")
+  }
 
   case class StackException(error: StackError) extends Exception(error.toString)
 

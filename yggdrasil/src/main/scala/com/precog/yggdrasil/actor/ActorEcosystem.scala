@@ -96,11 +96,6 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   lazy val projectionsActor =
     actorSystem.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")
 
-  def actorsStart = Future[Unit] {
-    // TODO: reconsider?
-    logger.info("Starting actor ecosystem")
-  }
-
   def status: Future[JArray] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
 
@@ -108,16 +103,14 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
     yield JArray(statusResponses)
   }
 
-  protected def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
-    for {
-      _ <- Future(logger.debug(logPrefix + " Stopping " + name + " actor within " + yggConfig.stopTimeout.duration))
-      b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(actorSystem) 
-    } yield {
-      logger.debug(logPrefix + " Stop call for " + name + " actor returned " + b)  
-    }   
-  } recover { 
-    case e => logger.error("Error stopping " + name + " actor", e)  
-  }   
+  def actorsStart: Future[Unit] = {
+    implicit val to = Timeout(yggConfig.statusTimeout)
+    logger.info("Starting actor ecosystem")
+    ingestSupervisor match {
+      case Some(actor) => (actor ? Status).map(s => logger.info("Ingest supervisor status: " + s)).mapTo[Unit]
+      case None => logger.warn("Ingest supervisor not found! Ingest system is offline."); Future(())
+    }
+  }
 
   def actorsStop: Future[Unit] = {
     import yggConfig.stopTimeout
@@ -135,6 +128,17 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
             }
     } yield ()
   }
+
+  protected def actorStop(actor: ActorRef, name: String): Future[Unit] = { 
+    for {
+      _ <- Future(logger.debug(logPrefix + " Stopping " + name + " actor within " + yggConfig.stopTimeout.duration))
+      b <- gracefulStop(actor, yggConfig.stopTimeout.duration)(actorSystem) 
+    } yield {
+      logger.debug(logPrefix + " Stop call for " + name + " actor returned " + b)  
+    }   
+  } recover { 
+    case e => logger.error("Error stopping " + name + " actor", e)  
+  }   
 
   protected def actorsStopInternal: Future[Unit]
 }
