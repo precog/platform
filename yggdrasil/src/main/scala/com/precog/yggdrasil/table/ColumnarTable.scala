@@ -14,17 +14,17 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.Ordering._
 
-class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable[Slice]) { self  =>
-  def map(colId: VColumnId, nextRef: () => Long)(f: F1P[_, _]): Table = {
+class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable[Slice]) { self  =>
+  def map(colId: VColumnId, nextRef: () => Long)(f: F1P[_, _]): ColumnarTable = {
     val oldRef = VColumnRef(colId, f.accepts)
     val newId  = DynColumnId(nextRef())
     val newRef = VColumnRef(newId, f.returns)
-    new Table(idCount, foci - oldRef + newRef, slices map { slice => slice.map(colId, newId)(f.toF1) })
+    new ColumnarTable(idCount, foci - oldRef + newRef, slices map { slice => slice.map(colId, newId)(f.toF1) })
   }
 
-  def normalize: Table = new Table(idCount, foci, slices.filterNot(_.isEmpty))
+  def normalize: ColumnarTable = new ColumnarTable(idCount, foci, slices.filterNot(_.isEmpty))
 
-  def cogroup(other: Table, prefixLength: Int)(merge: CogroupMerge): Table = {
+  def cogroup(other: ColumnarTable, prefixLength: Int)(merge: CogroupMerge): ColumnarTable = {
     sealed trait CogroupState
     case object StepLeftCheckRight extends CogroupState
     case object StepLeftDoneRight extends CogroupState
@@ -33,7 +33,7 @@ class Table(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable
     case object Cartesian extends CogroupState
     case object Done extends CogroupState
 
-    new Table(
+    new ColumnarTable(
       idCount,
       foci ++ other.foci,
       new Iterable[Slice] {
