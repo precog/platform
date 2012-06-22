@@ -113,7 +113,9 @@ trait TableModule extends Schema {
     }
   }
   
-  trait Table { self =>
+  type Table <: TableAPI
+  
+  trait TableAPI { this: Table =>
     import transforms._
     
     /**
