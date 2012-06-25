@@ -35,7 +35,7 @@ trait AST extends Phases {
   
   type Solution
   
-  type Bucket
+  type BucketSpec
 
   type Binding
   type FormalBinding
@@ -643,9 +643,13 @@ trait AST extends Phases {
 
       override def children = List(child)
     }
-
+    
     final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprBinaryNode {
       val label = 'let
+      
+      private val _buckets = attribute[Option[BucketSpec]](inferBuckets)
+      def buckets = _buckets()
+      private[quirrel] def buckets_=(spec: Option[BucketSpec]) = _buckets() = spec
       
       lazy val criticalConditions = findCriticalConditions(this)
       lazy val groups = findGroups(this)
@@ -742,14 +746,6 @@ trait AST extends Phases {
       private val _binding = attribute[Binding](bindNames)
       def binding = _binding()
       private[quirrel] def binding_=(b: Binding) = _binding() = b
-      
-      private val _equalitySolutions = attribute[Map[String, Solution]](solveCriticalConditions)
-      def equalitySolutions = _equalitySolutions()
-      private[quirrel] def equalitySolutions_=(map: Map[String, Solution]) = _equalitySolutions() = map
-      
-      private val _buckets = attribute[Map[String, Bucket]](inferBuckets)
-      def buckets = _buckets()
-      private[quirrel] def buckets_=(map: Map[String, Bucket]) = _buckets() = map
       
       def children = actuals.toList
     }

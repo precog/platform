@@ -158,12 +158,13 @@ trait BytecodeReader extends Reader {
         case 0x17 => Some(FilterCrossLeft(depth, predicate))
         case 0x18 => Some(FilterCrossRight(depth, predicate))
         
-        case 0x1A => Some(Bucket)
+        case 0x1A => Some(Group(parameter))
         case 0x1B => Some(MergeBuckets((code & 0x01) == 1))
-        case 0x1C => Some(ZipBuckets)
+        case 0x1C => Some(KeyPart(parameter))
+        case 0x1D => Some(Extra)
         
-        case 0x1D => Some(Split(depth, parameter.toShort))
-        case 0x1E => Some(Merge)
+        case 0x1E => Some(Split)
+        case 0x1F => Some(Merge)
         
         // manipulative instructions
         
@@ -184,6 +185,9 @@ trait BytecodeReader extends Reader {
         case 0x84 => Some(PushObject)
         case 0x85 => Some(PushArray)
         case 0x86 => Some(PushNull)
+        
+        case 0x90 => Some(PushGroup(parameter))
+        case 0x91 => Some(PushKey(parameter))
         
         case _ => None
       }
