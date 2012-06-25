@@ -117,6 +117,22 @@ trait TableModule extends Schema {
     }
   }
   
+  trait TableOps {
+    def loadStatic(path: String): Table
+    def loadDynamic(source: Table): Table
+    
+    def empty: Table
+    
+    def const(v: String): Table
+    def const(v: Long): Table
+    def const(v: Double): Table
+    def const(v: BigDecimal): Table
+    def const(v: Boolean): Table
+    def constNull: Table
+  }
+  
+  def ops: TableOps
+  
   type Table <: TableLike
   
   trait TableLike { this: Table =>
