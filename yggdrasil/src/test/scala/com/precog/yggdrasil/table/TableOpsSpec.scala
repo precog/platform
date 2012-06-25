@@ -4,6 +4,7 @@ package table
 import com.precog.common.Path
 import com.precog.common.VectorCase
 
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
@@ -34,92 +35,110 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
   }
 
   def cogroup(ds1: Dataset, ds2: Dataset): Dataset = {
-    ds1.cogroup(ds2, ds1.idCount min ds2.idCount)(CogroupMerge.second)
+    sys.error("todo")
+    //ds1.cogroup(ds2, ds1.idCount min ds2.idCount)(CogroupMerge.second)
   }
   
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)
-    var i = 0
-    val (ids, columns) = prefix.foldLeft((List.fill(sampleData.idCount)(ArrayColumn(CLong, sliceSize)), Map.empty[VColumnRef[_], Column[_]])) {
-      case ((idsAcc, colAcc), (ids, jv)) =>
-        for (j <- 0 until ids.length) idsAcc(j)(i) = ids(j)
 
-        val newAcc = jv.flattenWithPath.foldLeft(colAcc) {
-          case (acc, (jpath, JNothing)) => acc
-          case (acc, (jpath, v)) =>
-            val ctype = CType.forJValue(v) getOrElse {
-              sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv)
-            }
+    @tailrec def buildColArrays(from: Stream[Record[JValue]], into: Map[ColumnRef, Array[_]], sliceIndex: Int): (Map[ColumnRef, Object], Int) = {
+      from match {
+        case (ids, jv) #:: xs =>
+          val withIds: Map[ColumnRef, Array[_]] = (0 until ids.length).foldLeft(into) {
+            case (acc, j) => 
+              val cref = ColumnRef(JPath(JPathField("keys") :: JPathIndex(j) :: Nil: _*), CLong)
+              val arr: Array[Long] = acc.getOrElse(cref, new Array[Long](sliceSize)).asInstanceOf[Array[Long]]
+              arr(j) = ids(j)
+              acc + (cref -> arr)
+          }
 
-            val ref = VColumnRef[ctype.CA](NamedColumnId(testPath, jpath), ctype)
+          val withIdsAndValues = jv.flattenWithPath.foldLeft(withIds) {
+            case (acc, (jpath, JNothing)) => acc
+            case (acc, (jpath, v)) =>
+              val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
+              val ref = ColumnRef(jpath, ctype)
 
-            val col: Column[_] = v match {
-              case JString(s) => 
-                val col: ArrayColumn[String] = acc.getOrElse(ref, ArrayColumn(CStringArbitrary, sliceSize)).asInstanceOf[ArrayColumn[String]]
-                col(i) = s
-                col
-              
-              case JInt(ji) => CType.sizedIntCValue(ji) match {
-                case CInt(v) => 
-                  val col: ArrayColumn[Int] = acc.getOrElse(ref, ArrayColumn(CInt, sliceSize)).asInstanceOf[ArrayColumn[Int]]
-                  col(i) = v
+              val col: Array[_] = v match {
+                case JBool(b) => 
+                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
+                  col(sliceIndex) = b
                   col
 
-                case CLong(v) =>
-                  val col: ArrayColumn[Long] = acc.getOrElse(ref, ArrayColumn(CLong, sliceSize)).asInstanceOf[ArrayColumn[Long]]
-                  col(i) = v
+                case JInt(ji) => CType.sizedIntCValue(ji) match {
+                  case CInt(v) => 
+                    val col: Array[Int] = acc.getOrElse(ref, new Array[Long](sliceSize)).asInstanceOf[Array[Int]]
+                    col(sliceIndex) = v
+                    col
+
+                  case CLong(v) =>
+                    val col: Array[Long] = acc.getOrElse(ref, new Array[Long](sliceSize)).asInstanceOf[Array[Long]]
+                    col(sliceIndex) = v
+                    col
+
+                  case CNum(v) =>
+                    val col: Array[BigDecimal] = acc.getOrElse(ref, new Array[BigDecimal](sliceSize)).asInstanceOf[Array[BigDecimal]]
+                    col(sliceIndex) = v
+                    col
+                }
+
+                case JDouble(d) => 
+                  val col: Array[Double] = acc.getOrElse(ref, new Array[Double](sliceSize)).asInstanceOf[Array[Double]]
+                  col(sliceIndex) = d
                   col
 
-                case CNum(v) =>
-                  val col: ArrayColumn[BigDecimal] = acc.getOrElse(ref, ArrayColumn(CDecimalArbitrary, sliceSize)).asInstanceOf[ArrayColumn[BigDecimal]]
-                  col(i) = v
+                case JString(s) => 
+                  val col: Array[String] = acc.getOrElse(ref, new Array[String](sliceSize)).asInstanceOf[Array[String]]
+                  col(sliceIndex) = s
+                  col
+                
+                case JArray(Nil)  => 
+                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
+                  col(sliceIndex) = true
+                  col
+
+                case JObject(Nil) => 
+                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
+                  col(sliceIndex) = true
+                  col
+
+                case JNull        => 
+                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
+                  col(sliceIndex) = true
                   col
               }
 
-              case JDouble(d) => 
-                val col: ArrayColumn[Double] = acc.getOrElse(ref, ArrayColumn(CDouble, sliceSize)).asInstanceOf[ArrayColumn[Double]]
-                col(i) = d
-                col
+              acc + (ref -> col)
+          }
 
-              case JBool(b) => 
-                val col: ArrayColumn[Boolean] = acc.getOrElse(ref, ArrayColumn(CBoolean, sliceSize)).asInstanceOf[ArrayColumn[Boolean]]
-                col(i) = b
-                col
+          buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
 
-              case JArray(Nil)  => 
-                val col = acc.getOrElse(ref, new CEmptyArrayColumn(sliceSize)).asInstanceOf[NullColumn]
-                col.defined(i) = true
-                col
-
-              case JObject(Nil) => 
-                val col = acc.getOrElse(ref, new CEmptyObjectColumn(sliceSize)).asInstanceOf[NullColumn]
-                col.defined(i) = true
-                col
-
-              case JNull        => 
-                val col = acc.getOrElse(ref, new CNullColumn(sliceSize)).asInstanceOf[NullColumn]
-                col.defined(i) = true
-                col
-            }
-
-            acc + (ref -> col)
-        }
-
-        i += 1
-
-        (idsAcc, newAcc)
+        case _ => (into, sliceIndex)
+      }
     }
 
-    val result = Slice(ids, columns mapValues { case c: ArrayColumn[_] => c.prefix(i); case x => x }, i)
+    val slice = new Slice {
+      val (cols, size) = buildColArrays(prefix, Map.empty[ColumnRef, Array[_]], 0) 
+      val columns = cols map {
+        case (ref @ ColumnRef(_, CBoolean), values) => (ref, ArrayBoolColumn(values.asInstanceOf[Array[Boolean]]))
+        case (ref @ ColumnRef(_, CLong), values)    => (ref, ArrayLongColumn(values.asInstanceOf[Array[Long]]))
+        case (ref @ ColumnRef(_, CDouble), values)  => (ref, ArrayDoubleColumn(values.asInstanceOf[Array[Double]]))
+        case (ref @ ColumnRef(_, CDecimalArbitrary), values) => (ref, ArrayNumColumn(values.asInstanceOf[Array[BigDecimal]]))
+        case (ref @ ColumnRef(_, CStringArbitrary), values)  => (ref, ArrayStrColumn(values.asInstanceOf[Array[String]]))
+        case (ref @ ColumnRef(_, CEmptyArray), values)  => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with EmptyArrayColumn)
+        case (ref @ ColumnRef(_, CEmptyObject), values) => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with EmptyObjectColumn)
+        case (ref @ ColumnRef(_, CNull), values)        => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with NullColumn)
+      }
+    }
 
-    (result, SampleData(sampleData.idCount, suffix))
+    (slice, SampleData(sampleData.idCount, suffix))
   }
 
   def fromJson(sampleData: SampleData): Table = {
     val (s, xs) = spec.slice(sampleData)
 
-    new Table(sampleData.idCount, s.columns.keySet, new Iterable[Slice] {
+    new Table(s.columns.keySet, new Iterable[Slice] {
       def iterator = new Iterator[Slice] {
         private var _next = s
         private var _rest = xs

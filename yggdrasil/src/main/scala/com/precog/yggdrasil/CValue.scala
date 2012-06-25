@@ -2,9 +2,12 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.util._
+
 import blueeyes.json.JsonAST._
 import blueeyes.json.xschema._
 import blueeyes.json.xschema.DefaultSerialization._
+
+import org.joda.time.DateTime
 
 import scalaz._
 import scalaz.Ordering._
@@ -56,30 +59,6 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   type CA
 
   val CC: Class[CA]
-
-  @inline 
-  final def cast(v: Any): CA = v.asInstanceOf[CA]
-
-  @inline 
-  final def cast0(f0: Column[_]): Column[CA] = f0.asInstanceOf[Column[CA]]
-
-  @inline 
-  final def cast1[B](f1: F1[_, B]): F1[CA, B] = f1.asInstanceOf[F1[CA, B]]
-
-  @inline 
-  final def cast2_1[B, C](f2: F2[_, B, C]): F2[CA, B, C] = f2.asInstanceOf[F2[CA, B, C]]
-
-  @inline 
-  final def cast2_2[A, C](f2: F2[A, _, C]): F2[A, CA, C] = f2.asInstanceOf[F2[A, CA, C]]
-
-  @inline 
-  final def cast1P[B](f1: F1P[_, B]): F1P[CA, B] = f1.asInstanceOf[F1P[CA, B]]
-
-  @inline 
-  final def cast2P_1[B, C](f2: F2P[_, B, C]): F2P[CA, B, C] = f2.asInstanceOf[F2P[CA, B, C]]
-
-  @inline 
-  final def cast2P_2[A, C](f2: F2P[A, _, C]): F2P[A, CA, C] = f2.asInstanceOf[F2P[A, CA, C]]
 
   implicit val manifest: Manifest[CA]
 
@@ -350,6 +329,14 @@ case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   def jvalueFor(v: BigDecimal) = JDouble(v.toDouble)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
+}
+
+case object CDate extends CType(FixedWidth(8), SString) {
+  type CA = DateTime
+  val CC = classOf[DateTime]
+  def order(v1: DateTime, v2: DateTime) = sys.error("todo")
+  def jvalueFor(v: DateTime) = JString(v.toString)
+  implicit val manifest = implicitly[Manifest[DateTime]]
 }
 
 sealed trait CNullType extends CType

@@ -3,6 +3,7 @@ package table
 
 import com.precog.common.VectorCase
 
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
@@ -14,16 +15,15 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.Ordering._
 
-class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: Iterable[Slice]) { self  =>
-  def map(colId: VColumnId, nextRef: () => Long)(f: F1P[_, _]): ColumnarTable = {
-    val oldRef = VColumnRef(colId, f.accepts)
-    val newId  = DynColumnId(nextRef())
-    val newRef = VColumnRef(newId, f.returns)
-    new ColumnarTable(idCount, foci - oldRef + newRef, slices map { slice => slice.map(colId, newId)(f.toF1) })
+class ColumnarTable(val focus: Set[ColumnRef], val slices: Iterable[Slice]) { self  =>
+  def map(from: JPath, to: JPath)(f: CF1): ColumnarTable = {
+    sys.error("todo") //need to figure out how to determine result column types in the focus.
+    //new ColumnarTable(focus - from + to, slices map { _.map(from, to)(f) })
   }
 
-  def normalize: ColumnarTable = new ColumnarTable(idCount, foci, slices.filterNot(_.isEmpty))
+  def normalize: ColumnarTable = new ColumnarTable(focus, slices.filterNot(_.isEmpty))
 
+/*
   def cogroup(other: ColumnarTable, prefixLength: Int)(merge: CogroupMerge): ColumnarTable = {
     sealed trait CogroupState
     case object StepLeftCheckRight extends CogroupState
@@ -35,7 +35,7 @@ class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: 
 
     new ColumnarTable(
       idCount,
-      foci ++ other.foci,
+      focus ++ other.focus,
       new Iterable[Slice] {
         def iterator = new Iterator[Slice] {
           private val leftIter = self.slices.iterator
@@ -429,8 +429,7 @@ class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: 
       }
     )
   }
-
-  def retain(refs: Set[ColumnRef]) = self.slices map { _.retain(refs) }
+  */
 
   def toJson: Iterable[JValue] = toEvents.map(_._2)
 
@@ -443,6 +442,8 @@ class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: 
   }
 
   private def toEvents[A](f: (Slice, Int) => A): Iterable[(Identities, A)] = {
+    sys.error("todo")
+    /*
     new Iterable[(Identities, A)] {
       def iterator = new Iterator[(Identities, A)] {
         private val iter = self.normalize.slices.iterator
@@ -477,7 +478,7 @@ class ColumnarTable(val idCount: Int, val foci: Set[VColumnRef[_]], val slices: 
           }
         }
       }
-    }
+    } */
   }
 }
 // vim: set ts=4 sw=4 et:
