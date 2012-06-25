@@ -20,23 +20,38 @@
 package com.precog.yggdrasil
 package table
 
-trait CogroupMerge {
-  def apply[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[F2P[A, A, A]]
+import org.joda.time.DateTime
+
+case class ArrayBoolColumn(values: Array[Boolean]) extends BoolColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
 }
 
-object CogroupMerge {
-  object second extends CogroupMerge {
-    def apply[@specialized(Boolean, Long, Double) A](ref: VColumnRef[A]): Option[F2P[A, A, A]] = {
-      Some(
-        new F2P[A, A, A] { 
-          val returns = ref.ctype
-          val accepts = (ref.ctype, ref.ctype)
-          def isDefinedAt(a1: A, a2: A) = true
-          def apply(a1: A, a2: A) = a2 
-        }
-      )
-    }
-  }
+case class ArrayLongColumn(values: Array[Long]) extends LongColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
 }
 
-// vim: set ts=4 sw=4 et:
+case class ArrayDoubleColumn(values: Array[Double]) extends DoubleColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
+}
+
+case class ArrayNumColumn(values: Array[BigDecimal]) extends NumColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
+}
+
+case class ArrayStrColumn(values: Array[String]) extends StrColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
+}
+
+case class ArrayDateColumn(values: Array[DateTime]) extends DateColumn {
+  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+  def apply(row: Int) = values(row)
+}
+
+
+/* help for ctags
+type ArrayColumn */
