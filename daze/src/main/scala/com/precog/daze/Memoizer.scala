@@ -14,14 +14,20 @@ trait Memoizer extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
     def memoizedSpec(spec: BucketSpec, splits: => Map[Split, Split]): BucketSpec = spec match {
-      case MergeBucketSpec(left, right, and) =>
-        MergeBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits), and)
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case ZipBucketSpec(left, right) =>
-        ZipBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case SingleBucketSpec(target, solution) =>
-        SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
+      case dag.Group(id, target, child) =>
+        dag.Group(id, memoized(target, splits), memoizedSpec(child, splits))
+      
+      case UnfixedSolution(id, target) =>
+        UnfixedSolution(id, memoized(target, splits))
+      
+      case dag.Extra(target) =>
+        dag.Extra(memoized(target, splits))
     }
     
     // TODO rewrite!
@@ -59,11 +65,11 @@ trait Memoizer extends DAG {
               back
           }
           
-          case s @ Split(loc, specs, child) => {
+          case s @ Split(loc, spec, child) => {
             lazy val splits2 = splits + (s -> result)
-            lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
+            lazy val spec2 = memoizedSpec(spec, splits2)
             lazy val child2 = memoized(child, splits2)
-            lazy val result: Split = Split(loc, specs2, child2)
+            lazy val result: Split = Split(loc, spec2, child2)
             
             if (refs > 1)
               Memoize(result, refs)
@@ -103,14 +109,20 @@ trait Memoizer extends DAG {
   }
   
   def countSpecRefs(spec: BucketSpec): Map[DepGraph, Int] = spec match {
-    case MergeBucketSpec(left, right, _) =>
+    case UnionBucketSpec(left, right) =>
       merge(countSpecRefs(left), countSpecRefs(right))
     
-    case ZipBucketSpec(left, right) =>
+    case IntersectBucketSpec(left, right) =>
       merge(countSpecRefs(left), countSpecRefs(right))
     
-    case SingleBucketSpec(target, solution) =>
-      merge(increment(countRefs(target), target, 1), increment(countRefs(solution), solution, 1))
+    case dag.Group(_, target, child) =>
+      merge(increment(countRefs(target), target, 1), countSpecRefs(child))
+    
+    case UnfixedSolution(_, target) =>
+      increment(countRefs(target), target, 1)
+    
+    case dag.Extra(target) =>
+      increment(countRefs(target), target, 1)
   }
   
   def countRefs(graph: DepGraph): Map[DepGraph, Int] = graph match {
@@ -129,8 +141,8 @@ trait Memoizer extends DAG {
     case SetReduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
     
-    case Split(_, specs, child) =>
-      merge(countRefs(child), specs map countSpecRefs reduce merge[DepGraph])
+    case Split(_, spec, child) =>
+      merge(countRefs(child), countSpecRefs(spec))
     
     case Join(_, _, left, right) => {
       val rec = merge(countRefs(left), countRefs(right))

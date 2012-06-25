@@ -36,9 +36,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genIUnion,
     genIIntersect,
     
-    genBucket,
+    genGroup,
     genMergeBuckets,
-    genZipBuckets,
+    genKeyPart,
+    genExtra,
     
     genSplit,
     genMerge,
@@ -62,7 +63,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genPushFalse,
     genPushNull,
     genPushObject,
-    genPushArray)
+    genPushArray,
+    
+    genPushGroup,
+    genPushKey)
     
   private lazy val genMap1 = genUnaryOp map Map1
   private lazy val genMap2Match = genBinaryOp map Map2Match
@@ -79,15 +83,12 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genIUnion = IUnion
   private lazy val genIIntersect = IIntersect
   
-  private lazy val genBucket = Bucket
+  private lazy val genGroup = arbitrary[Int] map Group
   private lazy val genMergeBuckets = arbitrary[Boolean] map MergeBuckets
-  private lazy val genZipBuckets = ZipBuckets
+  private lazy val genKeyPart = arbitrary[Int] map KeyPart
+  private lazy val genExtra = Extra
   
-  private lazy val genSplit = for {
-    n <- arbitrary[Short]
-    k <- arbitrary[Short]
-  } yield Split(n, k)
-  
+  private lazy val genSplit = Split
   private lazy val genMerge = Merge
   
   private lazy val genFilterMatch = for {
@@ -129,41 +130,44 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genPushObject = PushObject
   private lazy val genPushArray = PushArray
   
+  private lazy val genPushGroup = arbitrary[Int] map PushGroup
+  private lazy val genPushKey = arbitrary[Int] map PushKey
+  
   private lazy val genUnaryOp = for {
-    op  <- oneOf(lib1.toSeq)
+    op <- oneOf(lib1.toSeq)
     res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1Op(op))
   } yield res
   
   private lazy val genBinaryOp = for {
-    op  <- oneOf(lib2.toSeq)
+    op <- oneOf(lib2.toSeq)
     res <- oneOf(
-    Add,
-    Sub,
-    Mul,
-    Div,
+      Add,
+      Sub,
+      Mul,
+      Div,
+      
+      Lt,
+      LtEq,
+      Gt,
+      GtEq,
+      
+      Eq,
+      NotEq,
+      
+      Or,
+      And,
+      
+      WrapObject,
+      
+      JoinObject,
+      JoinArray,
+      
+      ArraySwap,
+      
+      DerefObject,
+      DerefArray,
     
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    
-    Eq,
-    NotEq,
-    
-    Or,
-    And,
-    
-    WrapObject,
-    
-    JoinObject,
-    JoinArray,
-    
-    ArraySwap,
-    
-    DerefObject,
-    DerefArray,
-  
-    BuiltInFunction2Op(op))
+      BuiltInFunction2Op(op))
   } yield res
 
   private lazy val genReduction = for {

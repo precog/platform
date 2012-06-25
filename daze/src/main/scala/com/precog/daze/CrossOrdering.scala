@@ -11,14 +11,20 @@ trait CrossOrdering extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
     def memoizedSpec(spec: BucketSpec, splits: => Map[dag.Split, dag.Split]): BucketSpec = spec match {
-      case MergeBucketSpec(left, right, and) =>
-        MergeBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits), and)
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case ZipBucketSpec(left, right) =>
-        ZipBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case SingleBucketSpec(target, solution) =>
-        SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
+      case dag.Group(id, target, child) =>
+        dag.Group(id, memoized(target, splits), memoizedSpec(child, splits))
+      
+      case UnfixedSolution(id, target) =>
+        UnfixedSolution(id, memoized(target, splits))
+      
+      case dag.Extra(target) =>
+        dag.Extra(memoized(target, splits))
     }
     
     def memoized(node: DepGraph, _splits: => Map[dag.Split, dag.Split]): DepGraph = {
@@ -46,11 +52,11 @@ trait CrossOrdering extends DAG {
         case dag.Reduce(loc, red, parent) =>
           dag.Reduce(loc, red, memoized(parent, splits))
         
-        case s @ dag.Split(loc, specs, child) => {
+        case s @ dag.Split(loc, spec, child) => {
           lazy val splits2 = splits + (s -> result)
-          lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
+          lazy val spec2 = memoizedSpec(spec, splits2)
           lazy val child2 = memoized(child, splits2)
-          lazy val result: dag.Split = dag.Split(loc, specs2, child2)
+          lazy val result: dag.Split = dag.Split(loc, spec2, child2)
           result
         }
         
