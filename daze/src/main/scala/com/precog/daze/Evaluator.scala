@@ -20,7 +20,8 @@
 package com.precog
 package daze
 
-import memoization._
+import blueeyes.json.JPath
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.util._
@@ -55,9 +56,6 @@ trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
     with TableModule        // TODO specific implementation
-    with MatchAlgebra
-    with OperationsAPI
-    with MemoizationEnvironment
     with ImplLibrary
     with InfixLib
     with BigDecimalOperations
@@ -70,34 +68,14 @@ trait Evaluator extends DAG
   import dag._
   import trans._
 
-  type Dataset[E]
-  type Memoable[E]
-  type Grouping[K, A]
   type YggConfig <: EvaluatorConfig 
 
-  sealed trait Context {
-    def memoizationContext: MemoContext
-    def expiration: Long
-    def nextId(): Long
-    def release: Release
-  }
+  sealed trait Context
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
 
-  implicit def extend[E](d: Dataset[E]): DatasetExtensions[Dataset, Memoable, Grouping, E] = ops.extend(d)
-
-  def withContext[A](f: Context => A): A = {
-    withMemoizationContext { memoContext => 
-      val ctx = new Context { 
-        val memoizationContext = memoContext
-        val expiration = System.currentTimeMillis + yggConfig.maxEvalDuration.toMillis 
-        def nextId() = yggConfig.idSource.nextId()
-        val release = new Release(IO())
-      }
-
-      f(ctx)
-    }
-  }
+  def withContext[A](f: Context => A): A = 
+    f(new Context {})
 
   import yggConfig._
 
@@ -106,55 +84,6 @@ trait Evaluator extends DAG
   def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
 
-    def findCommonality(seen: Set[DepGraph])(graphs: DepGraph*): Option[DepGraph] = {
-      val (seen2, next, back) = graphs.foldLeft((seen, Vector[DepGraph](), None: Option[DepGraph])) {
-        case (pair @ (_, _, Some(_)), _) => pair
-        
-        case ((seen, _, _), graph) if seen(graph) => (seen, Vector(), Some(graph))
-        
-        case ((oldSeen, next, None), graph) => {
-          val seen = oldSeen + graph
-          
-          graph match {
-            case SplitParam(_, _) | SplitGroup(_, _, _) | Root(_, _) | dag.Split(_, _, _) =>
-              (seen, next, None)
-              
-            case dag.New(_, parent) =>
-              (seen, next :+ parent, None)
-            
-            case dag.SetReduce(_, _, parent) =>
-              (seen, next :+ parent, None)
-            
-            case dag.LoadLocal(_, _, parent, _) =>
-              (seen, next :+ parent, None)
-            
-            case Operate(_, _, parent) =>
-              (seen, next :+ parent, None)
-            
-            case dag.Reduce(_, _, parent) =>
-              (seen, next :+ parent, None)
-            
-            case Join(_, _, left, right) =>
-              (seen, next :+ left :+ right, None)
-            
-            case Filter(_, _, _, target, boolean) =>
-              (seen, next :+ target :+ boolean, None)
-            
-            case Sort(parent, _) =>
-              (seen, next :+ parent, None)
-            
-            case Memoize(parent, _) =>
-              (seen, next :+ parent, None)
-          }
-        }
-      }
-      
-      if (back.isDefined || next.isEmpty)
-        back
-      else
-        findCommonality(seen2)(next: _*)
-    }
-  
     def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit, ctx: Context): PendingTable = graph match {
       case g if assume contains g => PendingTable(assume(g), graph, TransSpec1.Id)
       
@@ -170,7 +99,7 @@ trait Evaluator extends DAG
           case SDecimal(d) => ops.constDecimal(d)
           case SBoolean(b) => ops.constBoolean(b)
           case SNull => ops.constNull
-          case SObject(Map()) => ops.constEmptyObject
+          case SObject(map) if map.isEmpty => ops.constEmptyObject
           case SArray(Vector()) => ops.constEmptyArray
         }
         
@@ -185,8 +114,8 @@ trait Evaluator extends DAG
           case Some(_) => ops.empty
           
           case None => {
-            val PendingSpec(table, _, trans) = loop(parent, assume, splits, ctx)
-            ops.loadDynamic(table.transform(trans))
+            val PendingTable(table, _, trans) = loop(parent, assume, splits, ctx)
+            ops.loadDynamic(table.transform(liftToValues(trans)))
           }
         }
         
@@ -204,10 +133,10 @@ trait Evaluator extends DAG
       }
       
       case r @ dag.Reduce(_, red, parent) =>
-        PendingTable(ops.empty, graph, trans.Id)     // TODO
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case s @ dag.Split(line, specs, child) =>
-        PendingTable(ops.empty, graph, trans.Id)     // TODO
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
@@ -322,7 +251,7 @@ trait Evaluator extends DAG
           
           case _ => { 
             if (parentLeftGraph == parentRightGraph) 
-              PendingTable(parentLeftTable, parentLeft, trans.Map2(parentLeftTrans, parentRightTrans, f2))  
+              PendingTable(parentLeftTable, parentLeftGraph, trans.Map2(parentLeftTrans, parentRightTrans, f2))  
             else 
               PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
           }
@@ -333,7 +262,7 @@ trait Evaluator extends DAG
       case j @ Join(_, instr, left, right) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
-      case Filter(_, None, _, target, boolean) => {
+      case dag.Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         
         // TODO binary typing
@@ -347,7 +276,7 @@ trait Evaluator extends DAG
           PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       }
       
-      case f @ Filter(_, Some(cross), _, target, boolean) =>
+      case f @ dag.Filter(_, Some(cross), _, target, boolean) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case s @ Sort(parent, indexes) =>
@@ -357,8 +286,8 @@ trait Evaluator extends DAG
         loop(parent, assume, splits, ctx)     // TODO
     }
     
-    val PendingTable(table, _, trans) = loop(memoize(orderCrosses(graph)), Map(), Map(), ctx)
-    table.transform(trans)
+    val PendingTable(table, _, spec) = loop(memoize(orderCrosses(graph)), Map(), (), ctx)
+    table.transform(liftToValues(spec))
   }
   
   private def binaryOp(op: BinaryOperation): BIF2 = {
@@ -384,7 +313,7 @@ trait Evaluator extends DAG
       case JoinObject => Infix.JoinObject
       case JoinArray  => Infix.JoinArray
       
-      case ArraySwap  => Infix.ArraySwap
+      case instructions.ArraySwap  => Infix.ArraySwap
       
       case DerefObject => Infix.DerefObject
       case DerefArray  => Infix.DerefArray
@@ -398,12 +327,15 @@ trait Evaluator extends DAG
   
   private def svalueToCValue(sv: SValue) = sv match {
     case SString(str) => CString(str)
-    case SDecimal(d) => CDecimal(d)
-    case SLong(l) => CLong(l)
-    case SDouble(d) => CDouble(d)
+    case SDecimal(d) => CNum(d)
+    // case SLong(l) => CLong(l)
+    // case SDouble(d) => CDouble(d)
     case SNull => CNull
     case _ => sys.error("die a horrible death")
   }
+  
+  private def liftToValues(trans: TransSpec1): TransSpec1 =
+    TableTransSpec.makeTransSpec(Map(TableKVConstants.Value -> trans))
   
   
   case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
