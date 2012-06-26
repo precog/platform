@@ -35,6 +35,7 @@ trait EvaluatorConfig {
 trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
+    with TableModule        // TODO specific implementation
     with MatchAlgebra
     with OperationsAPI
     with MemoizationEnvironment
@@ -48,6 +49,7 @@ trait Evaluator extends DAG
   
   import instructions._
   import dag._
+  import trans._
 
   type Dataset[E]
   type Memoable[E]
@@ -82,56 +84,9 @@ trait Evaluator extends DAG
 
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
-  def eval(userUID: String, graph: DepGraph, ctx: Context): Dataset[SValue] = {
+  def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
 
-    def maybeRealize(result: Either[DatasetMask[Dataset], Match], graph: DepGraph, ctx: Context): Match =
-      (result.left map { m => Match(mal.Actual, m.realize(ctx.expiration, ctx.release), graph) }).fold(identity, identity)
-    
-    def realizeMatch(spec: MatchSpec, set: Dataset[SValue]): Dataset[SValue] = spec match {
-      case mal.Actual => set
-      case _ => set collect resolveMatch(spec)
-    }
-
-    def computeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, NEL[Dataset[SValue]]] = spec match {
-      case ZipBucketSpec(left, right) => {
-        val leftGroup = computeGrouping(assume, splits, graph, ctx)(left)
-        val rightGroup = computeGrouping(assume, splits, graph, ctx)(right)
-        ops.zipGroups(leftGroup, rightGroup)
-      }
-      
-      case _: MergeBucketSpec | _: SingleBucketSpec =>
-        ops.mapGrouping[SValue, Dataset[SValue], NEL[Dataset[SValue]]](computeMergeGrouping(assume, splits, graph, ctx)(spec)) { a => NEL(a) }
-    }
-    
-    def computeMergeGrouping(assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], graph: DepGraph, ctx: Context)(spec: BucketSpec): Grouping[SValue, Dataset[SValue]] = spec match {
-      case ZipBucketSpec(_, _) => sys.error("Cannot merge_buckets following a zip_buckets")
-      
-      case MergeBucketSpec(left, right, and) => {
-        val leftGroup = computeMergeGrouping(assume, splits, graph, ctx)(left)
-        val rightGroup = computeMergeGrouping(assume, splits, graph, ctx)(right)
-        ops.mergeGroups(leftGroup, rightGroup, !and, ctx.memoizationContext)
-      }
-      
-      case SingleBucketSpec(target, solution) => {
-        val common: DepGraph = findCommonality(Set())(target, solution) getOrElse sys.error("Case ruled out by Quirrel type checker")
-        val Match(sourceSpec, sourceSet, _) = maybeRealize(loop(common, assume, splits, ctx), common, ctx)
-        val source = realizeMatch(sourceSpec, sourceSet)
-        
-        val grouping = source.group[SValue](IdGen.nextInt(), ctx.memoizationContext) { sv: SValue =>
-          val assume2 = assume + (common -> Match(mal.Actual, ops.point(sv), common))
-          val Match(spec, set, _) = maybeRealize(loop(solution, assume2, splits, ctx), graph, ctx)
-          realizeMatch(spec, set)
-        }
-        
-        ops.mapGrouping(grouping) { bucket =>
-          val assume2 = assume + (common -> Match(mal.Actual, bucket, common))
-          val Match(spec, set, _) = maybeRealize(loop(target, assume2, splits, ctx), graph, ctx)
-          realizeMatch(spec, set)
-        }
-      }
-    }
-    
     def findCommonality(seen: Set[DepGraph])(graphs: DepGraph*): Option[DepGraph] = {
       val (seen2, next, back) = graphs.foldLeft((seen, Vector[DepGraph](), None: Option[DepGraph])) {
         case (pair @ (_, _, Some(_)), _) => pair
@@ -181,468 +136,212 @@ trait Evaluator extends DAG
         findCommonality(seen2)(next: _*)
     }
   
-    def loop(graph: DepGraph, assume: Map[DepGraph, Match], splits: Map[dag.Split, Vector[Dataset[SValue]]], ctx: Context): Either[DatasetMask[Dataset], Match] = graph match {
-      case g if assume contains g => Right(assume(g))
+    def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit, ctx: Context): PendingTable = graph match {
+      case g if assume contains g => PendingTable(assume(g), graph, TransSpec1.Id)
       
       case s @ SplitParam(_, index) =>
-        Right(Match(mal.Actual, splits(s.parent)(index), s))
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case s @ SplitGroup(_, index, _) =>
-        Right(Match(mal.Actual, splits(s.parent)(index), s))
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
-      case Root(_, instr) =>
-        Right(Match(mal.Actual, ops.point(graph.value.get), graph))    // TODO don't be stupid
-      
-      case dag.New(_, parent) =>{
-        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        Right(Match(mal.Actual, realizeMatch(spec, set) identify Some(() => ctx.nextId), graph))
+      case Root(_, instr) => {
+        val table = graph.value collect {
+          case SString(str) => ops.constString(str)
+          case SDecimal(d) => ops.constDecimal(d)
+          case SBoolean(b) => ops.constBoolean(b)
+          case SNull => ops.constNull
+          case SObject(Map()) => ops.constEmptyObject
+          case SArray(Vector()) => ops.constEmptyArray
+        }
+        
+        PendingTable(table.get, graph, TransSpec1.Id)       // die a horrible death if isEmpty
       }
       
-      case dag.LoadLocal(_, _, parent, _) => {    // TODO we can do better here
-        parent.value match {
-          case Some(SString(str)) => Left(query.mask(userUID, Path(str)))
-          case Some(_) => Right(Match(mal.Actual, ops.empty[SValue](1), graph))
+      case dag.New(_, parent) => loop(parent, assume, splits, ctx)   // TODO John swears this part is easy
+      
+      case dag.LoadLocal(_, _, parent, _) => {
+        val back = parent.value match {
+          case Some(SString(str)) => ops.loadStatic(str)
+          case Some(_) => ops.empty
           
           case None => {
-            val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-            val loaded = realizeMatch(spec, set) collect { 
-              case SString(str) => query.fullProjection(userUID, Path(str), ctx.expiration, ctx.release)
-            } 
-
-            Right(Match(mal.Actual, ops.flattenAndIdentify(loaded, () => ctx.nextId()), graph))
-          }
-        }
-      }
-
-      case dag.SetReduce(_, Distinct, parent) => {
-        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        val result = realizeMatch(spec, set).uniq(() => ctx.nextId(), IdGen.nextInt(), ctx.memoizationContext)
-        Right(Match(mal.Actual, result, graph))
-      }
-      
-      case o @ Operate(_, op, parent) => {
-        // TODO unary typing
-        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-        lazy val enum = realizeMatch(spec, set)
-
-        op match {
-          case BuiltInFunction1Op(f) => {
-            val enum2 = f.evalEnum(enum, o, ctx) getOrElse set
-            Right(Match(mal.Op1(spec, op), enum2, graph))
-          }
-
-          case _ => { 
-            Right(Match(mal.Op1(spec, op), set, graph))
-          }
-        }
-      }
-      
-      case r @ dag.Reduce(_, red, parent) => {
-        val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
-
-        val reduction = red match {
-          case BuiltInReduction(red) => {
-            val enum = realizeMatch(spec, set)
-            red.reduced(enum, r, ctx)
-          }
-        }
-
-        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
-      }
-      
-      case s @ dag.Split(line, specs, child) => {
-        def flattenAllGroups(groupings: Vector[Grouping[SValue, NEL[Dataset[SValue]]]], params: Vector[Dataset[SValue]], memoIds: Vector[Int]): Dataset[SValue] = {
-          val current = groupings.head
-          val rest = groupings.tail
-          
-          ops.flattenGroup(current, () => ctx.nextId(), memoIds.head, ctx.memoizationContext) { (key, groups) =>
-            val params2 = ops.point(key) +: (Vector(groups.toList: _*) ++ params)
-            
-            if (rest.isEmpty) {
-              val Match(spec, set, _) = maybeRealize(loop(child, assume, splits + (s -> params2), ctx), child, ctx)
-              val back = realizeMatch(spec, set)
-              
-              // TODO this is probably not safe, since result Iterable might depend on something memoized
-              for (id <- child.findMemos(s)) {
-                ctx.memoizationContext.cache.expire(id)
-              }
-              // NOTE: Nope, it's not safe; it breaks the evaluator.
-              
-              back
-            } else {
-              flattenAllGroups(rest, params2, memoIds.tail)
-            }
+            val PendingSpec(table, _, trans) = loop(parent, assume, splits, ctx)
+            ops.loadDynamic(table.transform(trans))
           }
         }
         
-        val groupings = specs map computeGrouping(assume, splits, graph, ctx)
-        Right(Match(mal.Actual, flattenAllGroups(groupings, Vector(), s.memoIds), s))
+        PendingTable(back, graph, TransSpec1.Id)
       }
+
+      case dag.SetReduce(_, Distinct, parent) =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+      
+      case o @ Operate(_, op, parent) => {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
+        
+        // TODO unary typing
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, op.f1))
+      }
+      
+      case r @ dag.Reduce(_, red, parent) =>
+        PendingTable(ops.empty, graph, trans.Id)     // TODO
+      
+      case s @ dag.Split(line, specs, child) =>
+        PendingTable(ops.empty, graph, trans.Id)     // TODO
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
-      case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) => {
-        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-
-        val cgf = new CogroupF[SValue, SValue, Option[SValue]] {
-          def left(a: SValue) = Some(a)
-          def both(a: SValue, b: SValue) = None
-          def right(a: SValue) = None
-        }
-        
-        val back = instr match { 
-          case IUnion if left.provenance.length == right.provenance.length =>
-            leftEnum.union(rightEnum, ctx.memoizationContext)
-          
-          // apparently Dataset tracks number of identities...
-          case IUnion /* if left.provenance.length != right.provenance.length */ =>
-            ops.empty[SValue](0)
-
-          case IIntersect if left.provenance.length == right.provenance.length =>
-            leftEnum.intersect(rightEnum, ctx.memoizationContext)
-          
-          case IIntersect /* if left.provenance.length != right.provenance.length */ =>
-            ops.empty[SValue](0)
-
-          case SetDifference if left.provenance.length == right.provenance.length =>
-            leftEnum.cogroup(rightEnum)(cgf).collect { 
-              case Some(sv) => sv
-            }
-          
-          case SetDifference /* if left.provenance.length != right.provenance.length */ =>
-            ops.empty[SValue](0)
-        }
-        
-        Right(Match(mal.Actual, back, graph))
-      }
+      case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value match {
           case Some(value @ SString(str)) => {
-            val parent = loop(left, assume, splits, ctx)
-            val part1 = parent.left map { _ derefObject str }
-            
-            part1.right map {
-              case Match(spec, set, graph) => Match(mal.Op2Single(spec, value, DerefObject, true), set, graph)
-            }
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            PendingTable(parentTable, parentGraph, DerefObjectStatic(parentTrans, JPath(str)))
           }
           
-          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
+          case _ =>
+            PendingTable(ops.empty, graph, TransSpec1.Id)
         }
       }
       
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value match {
-          case Some(value @ SDecimal(num)) if num.isValidInt => {
-            val parent = loop(left, assume, splits, ctx)
-            val part1 = parent.left map { _ derefArray num.toInt }
-            
-            part1.right map {
-              case Match(spec, set, graph) => Match(mal.Op2Single(spec, value, DerefArray, true), set, graph)
-            }
+          case Some(value @ SDecimal(d)) => {     // TODO other numeric types
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            PendingTable(parentTable, parentGraph, DerefArrayStatic(parentTrans, d.toInt))
           }
           
-          case _ => Right(Match(mal.Actual, ops.empty[SValue](left.provenance.length), graph))
+          case _ =>
+            PendingTable(ops.empty, graph, TransSpec1.Id)
         }
       }
 
-      case Join(_, Map2Cross(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {  
-        val length = sharedPrefixLength(left, right)
-        val bif = binaryOp(op)
+      case Join(_, Map2Cross(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)      // TODO
 
-        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
+      case Join(_, Map2CrossLeft(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)      // TODO
 
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
+      case Join(_, Map2CrossRight(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)      // TODO
 
-        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
-        val reduction = f.reduced(tupleEnum)
-
-        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
-      }
-
-      case Join(_, Map2CrossLeft(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {
-        val length = sharedPrefixLength(left, right)
-        val bif = binaryOp(op)
-
-        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
-
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-
-        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
-        val reduction = f.reduced(tupleEnum)
-
-        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
-      }
-
-      case Join(_, Map2CrossRight(op @ BuiltInFunction2Op(f)), left, right) if f.requiresReduction => {
-        val length = sharedPrefixLength(left, right)
-        val bif = binaryOp(op)
-
-        val Match(leftSpec, leftSet, _) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
-
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-
-        val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
-        val reduction = f.reduced(tupleEnum)
-
-        reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
-      }
-
-      case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton => {
-        lazy val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        lazy val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
-
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-
-        val back = rightEnum.lastOption match {
-          case Some(value) =>
-            Match(mal.Op2Single(leftSpec, value, op, true), leftSet, leftGraph2)
-          
-          case None =>
-            Match(mal.Actual, ops.empty[SValue](0), graph)
-        }
-        
-        Right(back)
-      }
+      // case Join(_, Map2CrossLeft(op), left, right) if right.isSingleton =>
       
-      case Join(_, Map2CrossRight(op), left, right) if left.isSingleton => {
-        lazy val Match(leftSpec, leftSet, leftGraph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        lazy val Match(rightSpec, rightSet, rightGraph2) = maybeRealize(loop(right, assume, splits, ctx), left, ctx)
-
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-
-        val back = leftEnum.lastOption match {
-          case Some(value) =>
-            Match(mal.Op2Single(rightSpec, value, op, false), rightSet, rightGraph2)
-          
-          case None =>
-            Match(mal.Actual, ops.empty[SValue](0), graph)
-        }
-        
-        Right(back)
-      }
+      // case Join(_, Map2CrossRight(op), left, right) if left.isSingleton =>
       
       // begin: annoyance with Scala's lousy pattern matcher
       case Join(_, Map2Cross(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        
+        val cv = svalueToCValue(right.value.get)
+        val f1 = op.f2.partialRight(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }
       
       case Join(_, Map2CrossRight(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        
+        val cv = svalueToCValue(right.value.get)
+        val f1 = op.f2.partialRight(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }      
 
       case Join(_, Map2CrossLeft(op), left, right) if right.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(left, assume, splits, ctx), left, ctx)
-        Right(Match(mal.Op2Single(spec, right.value.get, op, true), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        
+        val cv = svalueToCValue(right.value.get)
+        val f1 = op.f2.partialRight(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }
       
       case Join(_, Map2Cross(op), left, right) if left.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        
+        val cv = svalueToCValue(left.value.get)
+        val f1 = op.f2.partialLeft(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }
 
       case Join(_, Map2CrossRight(op), left, right) if left.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        
+        val cv = svalueToCValue(left.value.get)
+        val f1 = op.f2.partialLeft(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }
 
       case Join(_, Map2CrossLeft(op), left, right) if left.value.isDefined => {
-        val Match(spec, set, graph2) = maybeRealize(loop(right, assume, splits, ctx), right, ctx)
-        Right(Match(mal.Op2Single(spec, left.value.get, op, false), set, graph2))
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        
+        val cv = svalueToCValue(left.value.get)
+        val f1 = op.f2.partialLeft(cv)
+        
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, f1))
       }
       // end: annoyance
       
       case Join(_, Map2Match(op), left, right) => {
         lazy val length = sharedPrefixLength(left, right)
-        val bif = binaryOp(op)
+        val f2 = op.f2
         
-        val leftRes = loop(left, assume, splits, ctx)
-        val rightRes = loop(right, assume, splits, ctx)
+        // TODO binary typing
         
-        val (leftTpe, rightTpe) = bif.operandType
+        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits, ctx)
         
-        val leftResTyped = leftRes.left map { mask =>
-          leftTpe map mask.typed getOrElse mask
-        }
-        
-        val rightResTyped = rightRes.left map { mask =>
-          rightTpe map mask.typed getOrElse mask
-        }
-        
-        val Match(leftSpec, leftSet, leftGraph) = maybeRealize(leftResTyped, left, ctx)
-        val Match(rightSpec, rightSet, rightGraph) = maybeRealize(rightResTyped, right, ctx)
-        
-        lazy val leftEnum = realizeMatch(leftSpec, leftSet)
-        lazy val rightEnum = realizeMatch(rightSpec, rightSet)
-
         op match {
-          case BuiltInFunction2Op(f) if f.requiresReduction => {
-            lazy val tupleEnum = leftEnum.join(rightEnum, length)(bif.operation)
-
-            lazy val reduction = f.reduced(tupleEnum)
-
-            reduction.map { r => Right(Match(mal.Actual, ops.point[SValue](r), graph)) }.getOrElse(Right(Match(mal.Actual, ops.empty[SValue](0), graph)))
-          }
-          case _ => { 
-            if (leftGraph == rightGraph) 
-              Right(Match(mal.Op2Multi(leftSpec, rightSpec, op), leftSet, leftGraph))  
-            else 
-              Right(Match(mal.Actual, leftEnum.join(rightEnum, length)(bif.operation), graph))
-          }
-        }
-      }
-
-      case j @ Join(_, instr, left, right) => {
-        lazy val length = sharedPrefixLength(left, right)
-        
-        val op = instr match {
-          case Map2Cross(op) => binaryOp(op)
-          case Map2CrossLeft(op) => binaryOp(op)
-          case Map2CrossRight(op) => binaryOp(op)
-        }
-        
-        val leftRes = loop(left, assume, splits, ctx)
-        val rightRes = loop(right, assume, splits, ctx)
-        
-        val (leftTpe, rightTpe) = op.operandType
-        
-        val leftResTyped = leftRes.left map { mask =>
-          leftTpe map mask.typed getOrElse mask
-        }
-        
-        val rightResTyped = rightRes.left map { mask =>
-          rightTpe map mask.typed getOrElse mask
-        }
-        
-        val Match(leftSpec, leftSet, _) = maybeRealize(leftResTyped, left, ctx)
-        val Match(rightSpec, rightSet, _) = maybeRealize(rightResTyped, right, ctx)
-        
-        val leftEnum = realizeMatch(leftSpec, leftSet)
-        val rightEnum = realizeMatch(rightSpec, rightSet)
-        
-        val resultEnum = instr match {
-          case Map2Cross(_) | Map2CrossLeft(_) =>
-            val enum = if (right.isSingleton) rightEnum else rightEnum.memoize(right.memoId, ctx.memoizationContext)
-            leftEnum.crossLeft(enum)(op.operation)
+          case BuiltInFunction2Op(f) if f.requiresReduction =>
+            PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
           
-          case Map2CrossRight(_) =>
-            val enum = if (left.isSingleton) leftEnum else leftEnum.memoize(left.memoId, ctx.memoizationContext)
-            enum.crossRight(rightEnum)(op.operation)
+          case _ => { 
+            if (parentLeftGraph == parentRightGraph) 
+              PendingTable(parentLeftTable, parentLeft, trans.Map2(parentLeftTrans, parentRightTrans, f2))  
+            else 
+              PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+          }
         }
-        
-        Right(Match(mal.Actual, resultEnum, graph))
       }
+
+      // guaranteed: cross, cross_left and cross_right
+      case j @ Join(_, instr, left, right) =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case Filter(_, None, _, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
         
-        val targetRes = loop(target, assume, splits, ctx)
-        val booleanRes = loop(boolean, assume, splits, ctx)
+        // TODO binary typing
         
-        val booleanResTyped = booleanRes.left map { _ typed SBoolean }
+        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits, ctx)
+        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits, ctx)
         
-        val Match(targetSpec, targetSet, targetGraph) = maybeRealize(targetRes, target, ctx)
-        val Match(booleanSpec, booleanSet, booleanGraph) = maybeRealize(booleanResTyped, boolean, ctx)
-        
-        lazy val targetEnum = realizeMatch(targetSpec, targetSet)
-        lazy val booleanEnum = realizeMatch(booleanSpec, booleanSet)
-        
-        if (targetGraph == booleanGraph)
-          Right(Match(mal.Filter(targetSpec, booleanSpec), targetSet, targetGraph))
+        if (parentTargetGraph == parentBooleanGraph)
+          PendingTable(parentTargetTable, parentTargetGraph, trans.Filter(parentTargetTrans, parentBooleanTrans))
         else
-          Right(Match(mal.Actual, targetEnum.join(booleanEnum, length) { case (sv, STrue) => sv }, graph))
+          PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       }
       
-      case f @ Filter(_, Some(cross), _, target, boolean) => {
-        lazy val length = sharedPrefixLength(target, boolean)
-        
-        val targetRes = loop(target, assume, splits, ctx)
-        val booleanRes = loop(boolean, assume, splits, ctx)
-        
-        val booleanResTyped = booleanRes.left map { _ typed SBoolean }
-        
-        val Match(targetSpec, targetSet, _) = maybeRealize(targetRes, target, ctx)
-        val Match(booleanSpec, booleanSet, _) = maybeRealize(booleanResTyped, boolean, ctx)
-        
-        val targetEnum = realizeMatch(targetSpec, targetSet)
-        val booleanEnum = realizeMatch(booleanSpec, booleanSet)
-        
-        val resultEnum = cross match {
-          case CrossNeutral | CrossLeft =>
-            targetEnum.crossLeft(booleanEnum.memoize(boolean.memoId, ctx.memoizationContext)) { case (sv, STrue) => sv }
-          
-          case CrossRight =>
-            targetEnum.memoize(target.memoId, ctx.memoizationContext).crossRight(booleanEnum) { case (sv, STrue) => sv }
-        }
-        
-        Right(Match(mal.Actual, resultEnum, graph))
-      }
+      case f @ Filter(_, Some(cross), _, target, boolean) =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
-      case s @ Sort(parent, indexes) => {
-        loop(parent, assume, splits, ctx).right map {
-          case Match(spec, set, _) => {
-            val enum = realizeMatch(spec, set)
-            Match(mal.Actual, enum.sortByIndexedIds(indexes, s.memoId, ctx.memoizationContext), graph)
-          }
-        }
-      }
+      case s @ Sort(parent, indexes) =>
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
-      case m @ Memoize(parent, _) => {
-        loop(parent, assume, splits, ctx).right map {
-          case Match(mal.Actual, enum, graph) =>
-            Match(mal.Actual, enum.memoize(m.memoId, ctx.memoizationContext), graph)
-          
-          case m => m
-        }
-      }
+      case m @ Memoize(parent, _) =>
+        loop(parent, assume, splits, ctx)     // TODO
     }
     
-    val Match(spec, set, _) = maybeRealize(loop(memoize(orderCrosses(graph)), Map(), Map(), ctx), graph, ctx)
-    realizeMatch(spec, set)
+    val PendingTable(table, _, trans) = loop(memoize(orderCrosses(graph)), Map(), Map(), ctx)
+    table.transform(trans)
   }
   
-  override def resolveUnaryOperation(op: UnaryOperation) = op match {
-    case Comp => {
-      case SBoolean(b) => SBoolean(!b)
-    }
-    
-    case Neg => {
-      case SDecimal(d) => SDecimal(-d)
-    }
-    
-    case WrapArray => {
-      case sv => SArray(Vector(sv))
-    }
-    
-    case BuiltInFunction1Op(f) => f.operation
-  }
-  
-  override def resolveBinaryOperation(op: BinaryOperation) = op match {
-    case DerefObject => {
-      case (sv, SString(str)) if SValue.deref(JPathField(str)).isDefinedAt(sv) =>
-        SValue.deref(JPathField(str))(sv)
-    }
-    
-    case DerefArray => {
-      case (sv, SDecimal(num)) if SValue.deref(JPathIndex(num.toInt)).isDefinedAt(sv) =>
-        SValue.deref(JPathIndex(num.toInt))(sv)
-    }
-    
-    case op => binaryOp(op).operation
-  }
-
   private def binaryOp(op: BinaryOperation): BIF2 = {
     op match {
       case Add => Infix.Add
@@ -677,4 +376,16 @@ trait Evaluator extends DAG
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
+  
+  private def svalueToCValue(sv: SValue) = sv match {
+    case SString(str) => CString(str)
+    case SDecimal(d) => CDecimal(d)
+    case SLong(l) => CLong(l)
+    case SDouble(d) => CDouble(d)
+    case SNull => CNull
+    case _ => sys.error("die a horrible death")
+  }
+  
+  
+  case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
 }

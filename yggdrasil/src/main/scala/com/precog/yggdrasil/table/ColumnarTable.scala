@@ -16,7 +16,7 @@ import scalaz._
 import scalaz.Ordering._
 
 trait ColumnarTableModule extends TableModule {
-  import transforms._
+  import trans._
 
   type F1 = CF1
   type F2 = CF2
