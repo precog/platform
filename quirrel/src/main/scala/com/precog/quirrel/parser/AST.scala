@@ -74,6 +74,12 @@ trait AST extends Phases {
           indent + "unconstrained-params:\n" + unconstrainedStr + "\n" +
           indent + "required-params: " + e.requiredParams
       }
+
+      case Forall(loc, ticVar, child) => {
+        indent + "type: forall\n" +
+          indent + "ticVar: \n" + ticVar + "\n" +
+          indent + "child: \n" + prettyPrint(child, level + 2)
+      }
       
       case Import(loc, spec, child) => {
         val specStr = spec match {
@@ -381,6 +387,9 @@ trait AST extends Phases {
           (params1 == params2) &&
           (left1 equalsIgnoreLoc left2) &&
           (right1 equalsIgnoreLoc right2)
+
+      case (Forall(_, ticVar1, child1), Forall(_, ticVar2, child2)) =>
+        (ticVar1 == ticVar2) && (child1 equalsIgnoreLoc child2)
           
       case (Import(_, spec1, child1), Import(_, spec2, child2)) =>
         (child1 equalsIgnoreLoc child2) && (spec1 == spec2)
@@ -507,6 +516,9 @@ trait AST extends Phases {
     def hashCodeIgnoreLoc: Int = this match {
       case Let(_, id, params, left, right) =>
         id.hashCode + params.hashCode + left.hashCodeIgnoreLoc + right.hashCodeIgnoreLoc
+
+      case Forall(_, ticVar, child) =>
+        ticVar.hashCode + child.hashCodeIgnoreLoc
       
       case Import(_, spec, child) =>
         spec.hashCode + child.hashCodeIgnoreLoc
@@ -647,7 +659,12 @@ trait AST extends Phases {
       def requiredParams = _requiredParams()
       private[quirrel] def requiredParams_=(req: Int) = _requiredParams() = req
     }
-    
+
+    final case class Forall(loc: LineStream, param: TicId, child: Expr) extends ExprUnaryNode {
+      val label = 'forall
+      val isPrefix = true
+    }
+
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
       val label = 'import
       val isPrefix = true

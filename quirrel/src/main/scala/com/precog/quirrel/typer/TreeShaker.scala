@@ -1,6 +1,8 @@
 package com.precog.quirrel
 package typer
 
+import com.codecommit.gll.LineStream
+
 trait TreeShaker extends Phases with parser.AST with Binder {
   import ast._
 
@@ -11,12 +13,13 @@ trait TreeShaker extends Phases with parser.AST with Binder {
     val (root, _, errors) = performShake(tree.root)
     bindRoot(root, root)
     
+    root._errors appendFrom tree._errors
     root._errors ++= errors
     
     root
   }
   
-  private def performShake(tree: Expr): (Expr, Set[(Either[TicId, Identifier], Binding)], Set[Error]) = tree match {
+  def performShake(tree: Expr): (Expr, Set[(Either[TicId, Identifier], Binding)], Set[Error]) = tree match {
     case b @ Let(loc, id, params, left, right) => {
       lazy val (left2, leftBindings, leftErrors) = performShake(left)
       val (right2, rightBindings, rightErrors) = performShake(right)
@@ -32,6 +35,18 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       } else {
         (right2, rightBindings, rightErrors + Error(b, UnusedLetBinding(id)))
       }
+    }
+
+    case b @ Forall(loc, param, child) => {
+      val (child2, bindings, errors) = performShake(child)
+
+      val unusedParamBinding = Set((param, ForallDef(b): Binding)) &~ bindings.collect {
+        case (Left(id), b) => (id, b)
+      }
+
+      val errorsFromUnused = unusedParamBinding map { case (id, _) => Error(b, UnusedTicVariable(id)) }
+
+      (Forall(loc, param, child2), bindings, errorsFromUnused ++ errors) 
     }
     
     case Import(loc, spec, child) => {
