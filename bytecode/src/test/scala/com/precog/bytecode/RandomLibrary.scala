@@ -25,8 +25,8 @@ import Gen._
 
 trait RandomLibrary extends Library {
   case class BIR(namespace: Vector[String], name: String, opcode: Int) extends BuiltInRed
-  case class BIF1(namespace: Vector[String], name: String, opcode: Int) extends BuiltInFunc1
-  case class BIF2(namespace: Vector[String], name: String, opcode: Int) extends BuiltInFunc2
+  case class BIF1(namespace: Vector[String], name: String, opcode: Int, isOperation: Boolean) extends BuiltInFunc1
+  case class BIF2(namespace: Vector[String], name: String, opcode: Int, isOperation: Boolean) extends BuiltInFunc2
 
   private lazy val genRed = for {
     op <- choose(0, 1000)
@@ -35,16 +35,18 @@ trait RandomLibrary extends Library {
   } yield BIR(Vector(ns: _*), n, op)
 
   private lazy val genBuiltIn1 = for {
+    isOp <- oneOf(true, false)
     op <- choose(0, 1000)
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield BIF1(Vector(ns: _*), n, op)
+  } yield BIF1(Vector(ns: _*), n, op, isOp)
 
   private lazy val genBuiltIn2 = for {
+    isOp <- oneOf(true, false)
     op <- choose(0, 1000)
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield BIF2(Vector(ns: _*), n, op)
+  } yield BIF2(Vector(ns: _*), n, op, isOp)
 
   val reductions = Set(
     BIR(Vector(), "count", 0x2000),

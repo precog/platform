@@ -58,17 +58,20 @@ trait ImplLibrary extends Library {
   }
 
   trait BuiltInFunc1Impl extends BuiltInFunc1 {
-    val operation: PartialFunction[SValue, SValue]
-    val operandType: Option[SType]
+    def operation: PartialFunction[SValue, SValue]
+    def operandType: Option[SType]
 
+    def isOperation: Boolean = true
     def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = None
   }
 
   trait BuiltInFunc2Impl extends BuiltInFunc2 {
-    val operation: PartialFunction[(SValue, SValue), SValue]
-    val operandType: (Option[SType], Option[SType])
+    def operation: PartialFunction[(SValue, SValue), SValue]
+    def operandType: (Option[SType], Option[SType])
     
-    val requiresReduction: Boolean = false
+    def isOperation: Boolean = true
+    def requiresReduction: Boolean = false
+
     def reduced(enum: Dataset[SValue]): Option[SValue] = None
   }
 

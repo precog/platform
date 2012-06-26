@@ -887,7 +887,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
     
     case d @ Dispatch(_, _, actuals) => {
-      val provenances = actuals map { e => computeResultProvenance(e, relations, varAssumptions) }
+      val provenances = actuals map { ex => computeResultProvenance(ex, relations, varAssumptions) }
       
       if (d.isReduction) {
         d.provenance
@@ -897,10 +897,17 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             val varAssumptions2 = e.assumptions ++ Map(e.params zip provenances: _*) map {
               case (id, prov) => ((id, e), prov)
             }
-            
             computeResultProvenance(e.left, relations, varAssumptions ++ varAssumptions2)
           }
-          
+          case StdLibBuiltIn1(f) if f.isOperation => {
+            computeResultProvenance(actuals(0), relations, varAssumptions)
+          }
+          case StdLibBuiltIn2(f) if f.isOperation => {
+            val left = computeResultProvenance(actuals(0), relations, varAssumptions)
+            val right = computeResultProvenance(actuals(1), relations, varAssumptions)
+
+            unifyProvenance(relations)(left, right) getOrElse NullProvenance
+          }
           case _ => d.provenance  
         }
       }

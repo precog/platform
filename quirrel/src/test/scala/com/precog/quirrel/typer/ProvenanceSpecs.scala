@@ -37,6 +37,47 @@ object ProvenanceSpecs extends Specification
   import ast._
   
   "provenance computation" should {
+    "compute result provenance correctly in BIF1" in {
+      forall(lib1) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a) := %s('a) 
+          foo(clicks)""".format(f.fqn))
+
+        if (f.isOperation == true) { tree.provenance mustEqual StaticProvenance("/clicks") }
+        else tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    }       
+    
+    "compute result provenance correctly in BIF2" in {
+      forall(lib2) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a, 'b) := %s('a, 'b) 
+          foo(clicks.a, clicks.b)""".format(f.fqn))
+
+        if (f.isOperation == true) { tree.provenance mustEqual StaticProvenance("/clicks") }
+        else tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    }     
+
+    "compute result provenance correctly in a BIR" in {
+      forall(libReduct) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a) := %s('a) 
+          foo(clicks.a)""".format(f.fqn))
+
+        tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    }    
+
     "identify let according to its right expression" in {   // using raw, no-op let
       {
         val tree = parse("a := 1 1")
