@@ -19,10 +19,8 @@ trait TableModule extends Schema {
     case object SourceLeft extends Source2
     case object SourceRight extends Source2
     
-    // why do we need an explicit leaf?
     case class Leaf[+A <: SourceType](source: A) extends TransSpec[A]
     
-    // why does filter take a left and a right?
     case class Filter[+A <: SourceType](target: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
     
     case class Scan[+A <: SourceType, B](target: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
