@@ -500,35 +500,66 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only all possible value results from a characteristic function" in {
-      val input = """
-        | campaigns := //campaigns
-        | f('a) :=
-        |   campaigns.gender where campaigns.platform = 'a
-        |
-        | f""".stripMargin
+    "return only all possible value results from a" >> {
+      "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | f('a) :=
+          |   campaigns.gender where campaigns.platform = 'a
+          | f""".stripMargin
+          
+        val results = evalE(input)
         
-      val results = evalE(input)
-      
-      results must haveSize(100)
-      
-      forall(results) {
-        case (VectorCase(_), SString(gender)) =>
-          gender must beOneOf("male", "female")
-        case r => failure("Result has wrong shape: "+r)
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SString(gender)) =>
+            gender must beOneOf("male", "female")
+          case r => failure("Result has wrong shape: "+r)
+        }
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | forall 'a 
+          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SString(gender)) =>
+            gender must beOneOf("male", "female")
+          case r => failure("Result has wrong shape: "+r)
+        }
       }
     }
     
-    "determine a histogram of genders on campaigns" in {
-      val input = """
-        | campaigns := //campaigns
-        | hist('gender) :=
-        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
-        | hist""".stripMargin
-        
-      eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+    "determine a histogram of genders on campaigns" >> {
+      "characteristic function" >> { 
+        val input = """
+          | campaigns := //campaigns
+          | hist('gender) :=
+          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
+          | hist""".stripMargin
+          
+        eval(input) mustEqual Set(
+          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+      }
+
+      "forall expression" >> { 
+        val input = """
+          | campaigns := //campaigns
+          | forall 'gender 
+          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
+          
+        eval(input) mustEqual Set(
+          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+      }
     }
 
     "load a nonexistent dataset with a dot in the name" in {
@@ -717,13 +748,23 @@ trait EvalStackSpecs extends Specification {
       }
     }
  
-    "set critical conditions given an empty set" in {
+    "set critical conditions given an empty set in" >> {
+      "characteristic function" >> {
         val input = """
           | function('a) :=
           |   //campaigns where //campaigns.foo = 'a
           | function""".stripMargin
 
         eval(input) mustEqual Set()
+      }
+
+      "forall expression" >> {
+        val input = """
+          | forall 'a
+          |   //campaigns where //campaigns.foo = 'a""".stripMargin
+
+        eval(input) mustEqual Set()
+      }
     }
 
     "use NotEq correctly" in {
@@ -740,16 +781,29 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "evaluate an unquantified characteristic function" in {
-      val input = """
-        | campaigns := //campaigns
-        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-        | sums('n) :=
-        |   m := max(nums where nums < 'n)
-        |   (nums where nums = 'n) + m 
-        | sums""".stripMargin
+    "evaluate sliding window in a" >> {
+        "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+          | sums('n) :=
+          |   m := max(nums where nums < 'n)
+          |   (nums where nums = 'n) + m 
+          | sums""".stripMargin
 
-      eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+          | forall 'n
+          |   m := max(nums where nums < 'n)
+          |   (nums where nums = 'n) + m""".stripMargin
+
+        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+      }
     }
 
     "evaluate a quantified characteristic function of two parameters" in {
@@ -771,18 +825,33 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
-      val input = """
-        | campaigns := //campaigns
-        | gender := campaigns.gender
-        | platform := campaigns.platform
-        | equality('a, 'b) :=
-        |   g := gender where gender = 'a
-        |   p := platform where platform = 'b
-        |   campaigns where g = p
-        | equality""".stripMargin
+    "evaluate a function of two parameters" >> {  //note: this is NOT the the most efficient way to implement this query, but it still should work
+      "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | gender := campaigns.gender
+          | platform := campaigns.platform
+          | equality('a, 'b) :=
+          |   g := gender where gender = 'a
+          |   p := platform where platform = 'b
+          |   campaigns where g = p
+          | equality""".stripMargin
 
-      eval(input) mustEqual Set()
+        eval(input) mustEqual Set()
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | gender := campaigns.gender
+          | platform := campaigns.platform
+          | forall 'a forall 'b
+          |   g := gender where gender = 'a
+          |   p := platform where platform = 'b
+          |   campaigns where g = p""".stripMargin
+
+        eval(input) mustEqual Set()
+      }
     }
 
     "determine a histogram of genders on category" in {
@@ -803,27 +872,52 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()   // TODO
     }.pendingUntilFixed
      
-    "determine most isolated clicks in time" in {
-      val input = """
-        | clicks := //clicks
-        | 
-        | spacings('time) :=
-        |   click := clicks where clicks.time = 'time
-        |   belowTime := max(clicks.time where clicks.time < 'time)
-        |   aboveTime := min(clicks.time where clicks.time > 'time)
-        |   
-        |   {
-        |     click: click,
-        |     below: click.time - belowTime,
-        |     above: aboveTime - click.time
-        |   }
-        |   
-        | meanAbove := mean(spacings.above)
-        | meanBelow := mean(spacings.below)
-        | 
-        | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+    "determine most isolated clicks in time" >> {
+      "characteristic function" >> {
+        val input = """
+          | clicks := //clicks
+          | 
+          | spacings('time) :=
+          |   click := clicks where clicks.time = 'time
+          |   belowTime := max(clicks.time where clicks.time < 'time)
+          |   aboveTime := min(clicks.time where clicks.time > 'time)
+          |   
+          |   {
+          |     click: click,
+          |     below: click.time - belowTime,
+          |     above: aboveTime - click.time
+          |   }
+          |   
+          | meanAbove := mean(spacings.above)
+          | meanBelow := mean(spacings.below)
+          | 
+          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-      eval(input) must not(beEmpty)   // TODO
+        eval(input) must not(beEmpty)   // TODO
+      }
+
+      "forall expression" >> {
+        val input = """
+          | clicks := //clicks
+          | 
+          | spacings := (forall 'time
+          |   click := clicks where clicks.time = 'time
+          |   belowTime := max(clicks.time where clicks.time < 'time)
+          |   aboveTime := min(clicks.time where clicks.time > 'time)
+          |   
+          |   {
+          |     click: click,
+          |     below: click.time - belowTime,
+          |     above: aboveTime - click.time
+          |   })
+          |   
+          | meanAbove := mean(spacings.above)
+          | meanBelow := mean(spacings.below)
+          | 
+          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+
+        eval(input) must not(beEmpty)   // TODO
+      }
     }
   
     "evaluate the 'hello, quirrel' examples" >> {

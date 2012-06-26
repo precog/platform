@@ -83,7 +83,7 @@ trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
-      val tree = shakeTree(oldTree)
+      val tree = rewriteForall(shakeTree(oldTree))
       val strs = for (error <- tree.errors) yield showError(error)
       
       if (!tree.errors.isEmpty) {
@@ -124,7 +124,7 @@ trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
       
       case PrintTree(tree) => {
         bindRoot(tree, tree)
-        val tree2 = shakeTree(tree)
+        val tree2 = rewriteForall(shakeTree(tree))
         
         out.println()
         out.println(prettyPrint(tree2))

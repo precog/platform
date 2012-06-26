@@ -48,6 +48,27 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       left.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
+    "bind tic variable in forall" in {
+      {
+        val e @ Forall(_, _, Add(_, t: TicVar, NumLit(_, _))) = parse("forall 'a 'a + 42")
+        t.binding mustEqual ForallDef(e)
+        t.errors must beEmpty
+      }
+      {
+        val e1 @ Forall(_, _, e2 @ Forall(_, _, Add(_, t1: TicVar, t2: TicVar))) = parse("forall 'a forall 'b 'a + 'b")
+        t1.binding mustEqual ForallDef(e1)
+        t2.binding mustEqual ForallDef(e2)
+
+        t1.errors must beEmpty
+        t2.errors must beEmpty
+      }
+      {
+        val e @ Forall(_, _, Forall(_, _, Add(_, t1: TicVar, _))) = parse("forall 'a forall 'b 'a + 42")
+        t1.binding mustEqual ForallDef(e)
+        t1.errors must beEmpty
+      }
+    }
+    
     "bind all tic-variables in expression scope" in {
       {
         val e @ Let(_, _, _, t: TicVar, _) = parse("a('b) := 'b a")
@@ -154,7 +175,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         tree.errors must beEmpty
       }
     }
-    
+
     "reject multiple definitions of tic-variables" in {
       {
         val tree = parse("f('a, 'a) := 1 2")
@@ -306,7 +327,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
   
-  "inherited scoping" should {
+  "inherited scoping in let" should {
     "forward direct binding" in {
       val e @ Let(_, _, _, _, d: Dispatch) = parse("a := 42 a")
       d.binding mustEqual UserDef(e)
@@ -324,6 +345,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d2.binding mustEqual UserDef(e1)
       d2.isReduction mustEqual false
       d2.errors must beEmpty
+    }    
+
+    "forward binding through forall" in {
+      val e1 @ Let(_, _, _, _, Forall(_, _, d: Dispatch)) = parse("a := 42 forall 'b a")
+      
+      d.binding mustEqual UserDef(e1)
+      d.isReduction mustEqual false
+      d.errors must beEmpty
     }
     
     "forward binding through new" in {
@@ -683,6 +712,394 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       val e @ Let(_, _, _, _, Paren(_, d: Dispatch)) = parse("a := 42 (a)")
       d.binding mustEqual UserDef(e)
       d.isReduction mustEqual false
+      d.errors must beEmpty
+    }
+  }
+
+  "inherited scoping in forall" should {
+    "forward direct binding" in {
+      val e @ Forall(_, _, d: TicVar) = parse("forall 'a 'a")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through let" in {
+      val e1 @ Forall(_, _, e2 @ Let(_, _, _, d1: TicVar, d2: Dispatch)) = parse("forall 'a foo := 'a foo")
+      
+      d1.binding mustEqual ForallDef(e1)
+      d1.errors must beEmpty
+      
+      d2.binding mustEqual UserDef(e2)
+      d2.isReduction mustEqual false
+      d2.errors must beEmpty
+    }    
+
+    "forward binding through forall" in {
+      val e1 @ Forall(_, _, Forall(_, _, d: TicVar)) = parse("forall 'a forall 'b 'a")
+      
+      d.binding mustEqual ForallDef(e1)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through new" in {
+      val e @ Forall(_, _, New(_, d: TicVar)) = parse("forall 'a new 'a")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through relate" in {
+      {
+        val e @ Forall(_, _, Relate(_, d: TicVar, _, _)) = parse("forall 'a 'a ~ 1 2")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Relate(_, _, d: TicVar, _)) = parse("forall 'a 1 ~ 'a 2")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Relate(_, _, _, d: TicVar)) = parse("forall 'a 1 ~ 2 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through object definition" in {
+      val e @ Forall(_, _, ObjectDef(_, Vector((_, d: TicVar)))) = parse("forall 'a { a: 'a }")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through array definition" in {
+      val e @ Forall(_, _, ArrayDef(_, Vector(d: TicVar))) = parse("forall 'a ['a]")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through descent" in {
+      val e @ Forall(_, _, Descent(_, d: TicVar, _)) = parse("forall 'a 'a.b")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through dereference" in {
+      val e @ Forall(_, _, Deref(_, _, d: TicVar)) = parse("forall 'a 1['a]")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through dispatch" in {
+      forall(libReduct) { f => 
+        val e @ Forall(_, _, Dispatch(_, _, Vector(d: TicVar))) = parse("forall 'a %s('a)".format(f.fqn))
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through where" in {
+      {
+        val e @ Forall(_, _, Where(_, d: TicVar, _)) = parse("forall 'a 'a where 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Where(_, _, d: TicVar)) = parse("forall 'a 1 where 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through with" in {
+      {
+        val e @ Forall(_, _, With(_, d: TicVar, _)) = parse("forall 'a 'a with 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, With(_, _, d: TicVar)) = parse("forall 'a 1 with 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through union" in {
+      {
+        val e @ Forall(_, _, Union(_, d: TicVar, _)) = parse("forall 'a 'a union 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Union(_, _, d: TicVar)) = parse("forall 'a 1 union 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through intersect" in {
+      {
+        val e @ Forall(_, _, Intersect(_, d: TicVar, _)) = parse("forall 'a 'a intersect 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Intersect(_, _, d: TicVar)) = parse("forall 'a 1 intersect 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through difference" in {
+      {
+        val e @ Forall(_, _, Difference(_, d: TicVar, _)) = parse("forall 'a 'a difference 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Difference(_, _, d: TicVar)) = parse("forall 'a 1 difference 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through addition" in {
+      {
+        val e @ Forall(_, _, Add(_, d: TicVar, _)) = parse("forall 'a 'a + 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Add(_, _, d: TicVar)) = parse("forall 'a 1 + 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through subtraction" in {
+      {
+        val e @ Forall(_, _, Sub(_, d: TicVar, _)) = parse("forall 'a 'a - 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Sub(_, _, d: TicVar)) = parse("forall 'a 1 - 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through multiplication" in {
+      {
+        val e @ Forall(_, _, Mul(_, d: TicVar, _)) = parse("forall 'a 'a * 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Mul(_, _, d: TicVar)) = parse("forall 'a 1 * 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through division" in {
+      {
+        val e @ Forall(_, _, Div(_, d: TicVar, _)) = parse("forall 'a 'a / 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Div(_, _, d: TicVar)) = parse("forall 'a 1 / 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through less-than" in {
+      {
+        val e @ Forall(_, _, Lt(_, d: TicVar, _)) = parse("forall 'a 'a < 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Lt(_, _, d: TicVar)) = parse("forall 'a 1 < 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through less-than-equal" in {
+      {
+        val e @ Forall(_, _, LtEq(_, d: TicVar, _)) = parse("forall 'a 'a <= 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, LtEq(_, _, d: TicVar)) = parse("forall 'a 1 <= 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through greater-than" in {
+      {
+        val e @ Forall(_, _, Gt(_, d: TicVar, _)) = parse("forall 'a 'a > 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Gt(_, _, d: TicVar)) = parse("forall 'a 1 > 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through greater-than-equal" in {
+      {
+        val e @ Forall(_, _, GtEq(_, d: TicVar, _)) = parse("forall 'a 'a >= 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, GtEq(_, _, d: TicVar)) = parse("forall 'a 1 >= 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through equality" in {
+      {
+        val e @ Forall(_, _, Eq(_, d: TicVar, _)) = parse("forall 'a 'a = 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Eq(_, _, d: TicVar)) = parse("forall 'a 1 = 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through not-equality" in {
+      {
+        val e @ Forall(_, _, NotEq(_, d: TicVar, _)) = parse("forall 'a 'a != 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, NotEq(_, _, d: TicVar)) = parse("forall 'a 1 != 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through boolean and" in {
+      {
+        val e @ Forall(_, _, And(_, d: TicVar, _)) = parse("forall 'a 'a & 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, And(_, _, d: TicVar)) = parse("forall 'a 1 & 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through boolean or" in {
+      {
+        val e @ Forall(_, _, Or(_, d: TicVar, _)) = parse("forall 'a 'a | 1")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+      
+      {
+        val e @ Forall(_, _, Or(_, _, d: TicVar)) = parse("forall 'a 1 | 'a")
+        d.binding mustEqual ForallDef(e)
+        
+        d.errors must beEmpty
+      }
+    }
+    
+    "forward binding through complement" in {
+      val e @ Forall(_, _, Comp(_, d: TicVar)) = parse("forall 'a !'a")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through negation" in {
+      val e @ Forall(_, _, Neg(_, d: TicVar)) = parse("forall 'a neg 'a")
+      d.binding mustEqual ForallDef(e)
+      
+      d.errors must beEmpty
+    }
+    
+    "forward binding through parentheses" in {
+      val e @ Forall(_, _, Paren(_, d: TicVar)) = parse("forall 'a ('a)")
+      d.binding mustEqual ForallDef(e)
+
       d.errors must beEmpty
     }
   }

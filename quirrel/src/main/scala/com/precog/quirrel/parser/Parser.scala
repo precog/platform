@@ -77,6 +77,8 @@ trait Parser extends RegexParsers with Filters with AST {
     | id ~ ":=" ~ expr ~ expr                       ^# { (loc, id, _, e1, e2) =>
         Let(loc, Identifier(Vector(), id), Vector(), e1, e2)
       }
+
+    | """forall\b""".r ~ ticId ~ expr ^# { (loc, _, t, e) => Forall(loc, t, e) }
     
     | """import\b""".r ~ importSpec ~ expr ^# { (loc, _, s, e) => Import(loc, s, e) }
     
@@ -192,7 +194,7 @@ trait Parser extends RegexParsers with Filters with AST {
 
   private lazy val nullLiteral = """null\b""".r
   
-  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import".r
+  private lazy val keywords = "new|true|false|where|with|union|intersect|difference|neg|null|import|forall".r
   
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
@@ -210,7 +212,7 @@ trait Parser extends RegexParsers with Filters with AST {
       'new,
       'where,
       'relate,
-      'let,
+      'let, 'forall,
       'import)
       
   private val associativity = (
