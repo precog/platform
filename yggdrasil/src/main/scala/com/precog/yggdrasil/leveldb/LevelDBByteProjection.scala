@@ -55,9 +55,9 @@ trait LevelDBByteProjection extends ByteProjection {
         }
       
       case CBoolean(b) => buf.put(if (b) trueByte else falseByte)
-      case CInt(i) => buf.putInt(i)
+      //case CInt(i) => buf.putInt(i)
       case CLong(l) => buf.putLong(l)
-      case CFloat(f) => buf.putFloat(f)
+      //case CFloat(f) => buf.putFloat(f)
       case CDouble(d) => buf.putDouble(d)
       case CNum(d) => 
         val dbytes = d.as[Array[Byte]]
@@ -91,7 +91,7 @@ trait LevelDBByteProjection extends ByteProjection {
     }
   }
   
-  final def project(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
+  final def toBytes(identities: Identities, cvalues: Seq[CValue]): (Array[Byte], Array[Byte]) = {
     Project.singleProject(identities, cvalues)
   }
   
@@ -179,7 +179,7 @@ trait LevelDBByteProjection extends ByteProjection {
     */
   }
 
-  final def unproject(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue]) = {
+  final def fromBytes(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue]) = {
     //if(keyParsers != null && keyParsers.size == 1 && valueParsers != null && valueParsers.size == 1) {
       Unproject.singleUnproject(keyParsers, valueParsers, keyBytes, valueBytes)
     //} else {
@@ -242,9 +242,9 @@ private[leveldb] object CValueReader {
         else if (b == falseByte) CBoolean(false)
         else                     sys.error("Boolean byte value was not true or false")
 
-      case CInt                   => CInt(buf.getInt)
+      //case CInt                   => CInt(buf.getInt)
       case CLong                  => CLong(buf.getLong)
-      case CFloat                 => CFloat(buf.getFloat)
+      //case CFloat                 => CFloat(buf.getFloat)
       case CDouble                => CDouble(buf.getDouble)
       case CDecimalArbitrary      => 
         val length: Int = buf.getInt

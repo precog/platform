@@ -93,7 +93,7 @@ trait LevelDBProjectionFactory extends ProjectionFactory[IterableDataset[Seq[CVa
 
           def next: (Identities,Seq[CValue]) = {
             val kvPair = chunkIterator.next()
-            unproject(kvPair.getKey, kvPair.getValue)
+            fromBytes(kvPair.getKey, kvPair.getValue)
           }
         }
       }

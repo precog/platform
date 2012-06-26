@@ -63,7 +63,6 @@ trait StorageMetadata {
   def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
     t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
   }
-
 }
 
 sealed trait PathMetadata 

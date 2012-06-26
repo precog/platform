@@ -19,26 +19,40 @@
  */
 package com.precog.yggdrasil
 
-trait Schema {
-  sealed trait JType
-  
-  case object JNumberT extends JType
-  case object JTextT extends JType
-  case object JBooleanT extends JType
-  case object JNullT extends JType
-  
-  sealed trait JArrayT extends JType
-  case class JArrayFixedT(tpe: JType) extends JArrayT
-  case object JArrayUnfixedT extends JArrayT
+import blueeyes.json.JPath
 
-  sealed trait JObjectT extends JType
-  case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
-  case object JObjectUnfixedT extends JObjectT
+import org.specs2.mutable._
 
-  case class JUnionT(left: JType, right: JType) extends JType
-  
-  def flattenUnions(tpe: JType): Set[JType] = tpe match {
-    case JUnionT(left, right) => flattenUnions(left) ++ flattenUnions(right)
-    case t => Set(t)
+import org.scalacheck._
+import org.scalacheck.Gen
+import org.scalacheck.Gen._
+import org.scalacheck.Arbitrary
+import org.scalacheck.Arbitrary._
+
+trait TransformSpec extends TableModuleSpec {
+  import transforms._
+
+  def checkTransformLeaf = check { (sample: SampleData) =>
+    val table = fromJson(sample)
+    val results = toJson(table.transform(Map(JPath.Identity -> Leaf(Source))))
+
+    sample must_== results
+  }
+
+  def checkFilter = check { (sample: SampleData) =>
+    val table = fromJson(sample)
+    val results = toJson(table.transform {
+      Map(
+        JPath.Identity -> Filter(
+          Leaf(Source), 
+          Map1(Leaf(Source)) {
+            liftF1({ case _ => CBoolean(true) }) 
+          }
+        ))
+    })
+
+    sample must_== results
   }
 }
+
+// vim: set ts=4 sw=4 et:

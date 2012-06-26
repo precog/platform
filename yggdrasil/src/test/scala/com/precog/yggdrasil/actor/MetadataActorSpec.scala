@@ -264,13 +264,13 @@ object MetadataActorStateSpec extends Specification {
   }
 
   "helper methods" should {
-    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
+    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CLong, Authorities(Set()))
     val descriptor1 = ProjectionDescriptor(1, colDesc1 :: Nil)
 
     def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
 
     "add initial metadata for the first value inserted" in {
-      val value = CInt(10)
+      val value = CLong(10)
    
       val valueStats = ProjectionMetadata.valueStats(value).get
       val expectedMetadata = Map((colDesc1 -> Map[MetadataType, Metadata]((valueStats.metadataType, valueStats))))
@@ -281,13 +281,13 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "update existing metadata for values other than the first inserted" in {
-      val initialValue = CInt(10)
+      val initialValue = CLong(10)
    
       val initialValueStats = ProjectionMetadata.valueStats(initialValue).get
       val initialMetadata = Map[MetadataType, Metadata]((initialValueStats.metadataType -> initialValueStats))
       val initialColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> initialMetadata))
       
-      val value = CInt(20)
+      val value = CLong(20)
    
       val valueStats = ProjectionMetadata.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
 
@@ -299,12 +299,12 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "metadata is correctly combined" in {
-      val firstValue = CInt(10)
+      val firstValue = CLong(10)
       val firstValueStats = ProjectionMetadata.valueStats(firstValue).get
       val firstMetadata = Map[MetadataType, Metadata](firstValueStats.metadataType -> firstValueStats)
       val firstColumnMetadata = Map(colDesc1 -> firstMetadata)
 
-      val secondValue = CInt(20)
+      val secondValue = CLong(20)
    
       val secondValueStats = ProjectionMetadata.valueStats(secondValue).get
       val secondMetadata = Map[MetadataType, Metadata]((secondValueStats.metadataType -> secondValueStats))

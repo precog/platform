@@ -91,8 +91,6 @@ trait YggUtilsCommon {
       (d, descriptor)
     }
   }
-  
-
 }
 
 object YggUtils {

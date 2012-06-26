@@ -88,7 +88,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
   }
 
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
-    val (idBytes, valueBytes) = project(id, v)
+    val (idBytes, valueBytes) = toBytes(id, v)
 
     if (shouldSync) {
       idIndexFile.put(idBytes, valueBytes, syncOptions)
@@ -191,7 +191,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
 //                  val chunkIter: java.util.Iterator[KeyValuePair] = chunk.getIterator()
 //                  while (chunkIter.hasNext) {
 //                      val kvPair = chunkIter.next()
-//                    buffer += unproject(kvPair.getKey, kvPair.getValue)(f)
+//                    buffer += fromBytes(kvPair.getKey, kvPair.getValue)(f)
 //                  }
 //                  val outChunk = Vector(buffer: _*)
 //
@@ -268,7 +268,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
 //
 //          @inline def next(iter: DBIterator, k: Input[Vector[E]] => IterateeT[X, Vector[E], F, A]) = if (iter.hasNext) {
 //            val rawValues = iter.asScala.map(n => (n, n.getKey.as[Identities])).take(chunkSize)
-//            val chunk = Vector(range.end.map(end => rawValues.takeWhile(_._2 < end)).getOrElse(rawValues).map { case (n, ids) => unproject(n.getKey, n.getValue)(f) }.toSeq: _*)
+//            val chunk = Vector(range.end.map(end => rawValues.takeWhile(_._2 < end)).getOrElse(rawValues).map { case (n, ids) => fromBytes(n.getKey, n.getValue)(f) }.toSeq: _*)
 //            
 //            if (chunk.isEmpty) {
 //              _done
@@ -279,7 +279,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
 ////              val id = n.getKey.as[Identities]
 ////              range.end match {
 ////                case Some(end) if end <= id => _done
-////                case _ => k(elInput(unproject(n.getKey, n.getValue)(f))) >>== step
+////                case _ => k(elInput(fromBytes(n.getKey, n.getValue)(f))) >>== step
 ////              }
 //          } else {
 //            _done
