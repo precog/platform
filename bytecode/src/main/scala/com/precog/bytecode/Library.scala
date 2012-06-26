@@ -2,27 +2,29 @@ package com.precog
 package bytecode
 
 trait BuiltInRed {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+  def namespace: Vector[String]
+  def name: String
+  def opcode: Int
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 trait BuiltInFunc1 {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+  def namespace: Vector[String]
+  def name: String
+  def opcode: Int
+  def isOperation: Boolean
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 trait BuiltInFunc2 {
-  val namespace: Vector[String]
-  val name: String
-  val opcode: Int
+  def namespace: Vector[String]
+  def name: String
+  def opcode: Int
+  def isOperation: Boolean
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn

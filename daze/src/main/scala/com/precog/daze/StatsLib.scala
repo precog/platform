@@ -23,6 +23,8 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
       case (SDecimal(num1), SDecimal(num2)) => SArray(Vector(SDecimal(num1), SDecimal(num2)))  
     }
 
+    override val isOperation = false
+
     override val requiresReduction = true
 
     override def reduced(enum: Dataset[SValue]): Option[SValue] = {              
@@ -52,6 +54,8 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
       case (SDecimal(num1), SDecimal(num2)) => SArray(Vector(SDecimal(num1), SDecimal(num2)))  
     }
 
+    override val isOperation = false
+
     override val requiresReduction = true
 
     override def reduced(enum: Dataset[SValue]): Option[SValue] = {             
@@ -72,6 +76,8 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
     val operation: PartialFunction[(SValue, SValue), SValue] = { 
       case (SDecimal(num1), SDecimal(num2)) => SArray(Vector(SDecimal(num1), SDecimal(num2)))  
     }
+
+    override val isOperation = false
 
     override val requiresReduction = true
 
@@ -101,6 +107,8 @@ trait StatsLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with 
     val operation: PartialFunction[(SValue, SValue), SValue] = { 
       case (SDecimal(num1), SDecimal(num2)) => SArray(Vector(SDecimal(num1), SDecimal(num2)))  
     }
+
+    override val isOperation = false
 
     override val requiresReduction = true
 
