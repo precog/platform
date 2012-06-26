@@ -23,11 +23,11 @@ import blueeyes.json.JPath
 
 trait TableModule extends Schema {
   type F1
-  type F2
+  type F2     // needs pimped: partialRight(CValue): F1 and partialLeft(CValue): F1
 
   def liftF1(f: CValue => CValue): F1
   
-  object transforms {
+  object trans {
     sealed trait TransSpec[+A <: SourceType]
     sealed trait SourceType
   
@@ -46,9 +46,9 @@ trait TableModule extends Schema {
     
     case class Scan[+A <: SourceType, B](target: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
     
-    case class Map1[+A <: SourceType](target: TransSpec[A])(f: F1) extends TransSpec[A]
+    case class Map1[+A <: SourceType](target: TransSpec[A], f: F1) extends TransSpec[A]
     
-    case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A])(f: F2) extends TransSpec[A]
+    case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A]
     
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
@@ -73,7 +73,18 @@ trait TableModule extends Schema {
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
+    
+    object TransSpec1 {
+      val Id = Leaf(Source)
+    }
+    
     type TransSpec2 = TransSpec[Source2]
+    
+    object TransSpec2 {
+      val LeftId = Leaf(SourceLeft)
+      val RightId = Leaf(SourceRight)
+    }
+    
     type TableTransSpec[+A <: SourceType] = Map[JPath, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
@@ -142,12 +153,15 @@ trait TableModule extends Schema {
     
     def empty: Table
     
-    def const(v: String): Table
-    def const(v: Long): Table
-    def const(v: Double): Table
-    def const(v: BigDecimal): Table
-    def const(v: Boolean): Table
+    def constString(v: String): Table
+    def constLong(v: Long): Table
+    def constDouble(v: Double): Table
+    def constDecimal(v: BigDecimal): Table
+    def constBoolean(v: Boolean): Table
     def constNull: Table
+    
+    def constEmptyObject: Table
+    def constEmptyArray: Table
   }
   
   def ops: TableOps
@@ -155,7 +169,7 @@ trait TableModule extends Schema {
   type Table <: TableLike
   
   trait TableLike { this: Table =>
-    import transforms._
+    import trans._
     
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
