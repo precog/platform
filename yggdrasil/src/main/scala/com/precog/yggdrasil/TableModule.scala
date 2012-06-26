@@ -27,6 +27,12 @@ trait TableModule extends Schema {
 
   def liftF1(f: CValue => CValue): F1
   
+  // TODO something saner than a structural type here
+  implicit def pimpF2(f2: F2): {
+    def partialLeft(cv: CValue): F1 
+    def partialRight(cv: CValue): F1
+  }
+  
   object trans {
     sealed trait TransSpec[+A <: SourceType]
     sealed trait SourceType
