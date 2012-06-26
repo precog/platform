@@ -25,45 +25,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait DatasetOpsSpec extends Specification with ScalaCheck with CValueGenerators {
-  type Dataset
-  type Record[A] = (Identities, A)
-
-  override val defaultPrettyParams = Pretty.Params(2)
-
-  implicit def order[A] = tupledIdentitiesOrder[A]()
-
-  case class SampleData(idCount: Int, data: Stream[Record[JValue]]) {
-    override def toString = {
-      "\nSampleData: \nidCount = "+idCount+",\ndata = "+
-      data.map({ case (ids, v) => ids.mkString("(", ",", ")") + ": " + v.toString.replaceAll("\n", "\n  ") }).mkString("[\n  ", ",\n  ", "]\n")
-    }
-  }
-
-  def fromJson(sampleData: SampleData): Dataset
-  def toJson(dataset: Dataset): Stream[Record[JValue]]
-  def toValidatedJson(dataset: Dataset): Stream[Record[ValidationNEL[Throwable, JValue]]]
-  def debugPrint(dataset: Dataset): Unit 
-
-  def normalizeValidations(s: Stream[Record[ValidationNEL[Throwable, JValue]]]): Stream[Record[Option[JValue]]] = {
-    s map {
-      case (ids, Failure(t)) => t.list.foreach(_.printStackTrace); (ids, None)
-      case (ids, Success(v)) => (ids, Some(v))
-    }
-  }
-
-  implicit def identitiesOrdering = IdentitiesOrder.toScalaOrdering
-
-  implicit val arbData = Arbitrary(
-    for {
-      depth   <- choose(0, 3)
-      jschema <- schema(depth)
-      (idCount, data) <- genEventColumns(jschema)
-    } yield {
-      SampleData(idCount, data.sortBy(_._1).toStream map { (assemble _).second })
-    }
-  )
-
+trait CogroupSpec extends TableModuleSpec {
   implicit val cogroupData = Arbitrary(
     for {
       depth   <- choose(1, 2)
@@ -82,13 +44,6 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with CValueGenerators
       (SampleData(idCount, l.sortBy(_._1).toStream), SampleData(idCount, r.sortBy(_._1).toStream))
     }
   )
-
-  def checkMappings = {
-    check { (sample: SampleData) =>
-      val dataset = fromJson(sample)
-      toJson(dataset).toList must containAllOf(sample.data.toList).only
-    }
-  }
 
   type CogroupResult[A] = Stream[Record[Either3[A, (A, A), A]]]
   @tailrec protected final def computeCogroup[A](l: Stream[Record[A]], r: Stream[Record[A]], acc: CogroupResult[A], idPrefix: Int)(implicit ord: Order[Record[A]]): CogroupResult[A] = {
@@ -118,7 +73,7 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with CValueGenerators
     }
   }
 
-  def cogroup(ds1: Dataset, ds2: Dataset): Dataset
+  def cogroup(ds1: Table, ds2: Table): Table
 
   def testCogroup(l: SampleData, r: SampleData) = {
     try {
@@ -240,5 +195,6 @@ trait DatasetOpsSpec extends Specification with ScalaCheck with CValueGenerators
     testCogroup(s1, s2)
   }
 }
+
 
 // vim: set ts=4 sw=4 et:

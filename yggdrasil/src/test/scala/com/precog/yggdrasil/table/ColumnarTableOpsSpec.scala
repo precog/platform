@@ -21,9 +21,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-class TableOpsSpec extends DatasetOpsSpec { spec =>
-  type Dataset = Table
-
+class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableModule { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val sliceSize = 10
@@ -34,11 +32,10 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
     for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
   }
 
-  def cogroup(ds1: Dataset, ds2: Dataset): Dataset = {
+  def cogroup(ds1: Table, ds2: Table): Table = {
     sys.error("todo")
     //ds1.cogroup(ds2, ds1.idCount min ds2.idCount)(CogroupMerge.second)
   }
-  
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)
@@ -67,11 +64,6 @@ class TableOpsSpec extends DatasetOpsSpec { spec =>
                   col
 
                 case JInt(ji) => CType.sizedIntCValue(ji) match {
-                  case CInt(v) => 
-                    val col: Array[Int] = acc.getOrElse(ref, new Array[Long](sliceSize)).asInstanceOf[Array[Int]]
-                    col(sliceIndex) = v
-                    col
-
                   case CLong(v) =>
                     val col: Array[Long] = acc.getOrElse(ref, new Array[Long](sliceSize)).asInstanceOf[Array[Long]]
                     col(sliceIndex) = v

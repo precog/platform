@@ -21,9 +21,7 @@ sealed abstract class CValue {
   private[CValue] final def typeIndex: Int = this match {
     case CString(v) => 0
     case CBoolean(v) => 1
-    case CInt(v) => 2
     case CLong(v) => 3
-    case CFloat(v) => 4
     case CDouble(v) => 5
     case CNum(v) => 6
   }
@@ -32,9 +30,7 @@ sealed abstract class CValue {
   final def toSValue: SValue = this match {
     case CString(v) => SString(v)
     case CBoolean(v) => if (v) STrue else SFalse
-    case CInt(v) => SDecimal(v)
     case CLong(v) => SDecimal(v)
-    case CFloat(v) => SDecimal(v)
     case CDouble(v) => SDecimal(v)
     case CNum(v) => SDecimal(v)
   }
@@ -45,9 +41,7 @@ object CValue {
     def order(v1: CValue, v2: CValue) = (v1, v2) match {
       case (CString(a), CString(b)) => Order[String].order(a, b)
       case (CBoolean(a), CBoolean(b)) => Order[Boolean].order(a, b)
-      case (CInt(a), CInt(b)) => Order[Int].order(a, b)
       case (CLong(a), CLong(b)) => Order[Long].order(a, b)
-      case (CFloat(a), CFloat(b)) => Order[Float].order(a, b)
       case (CDouble(a), CDouble(b)) => Order[Double].order(a, b)
       case (CNum(a), CNum(b)) => Order[BigDecimal].order(a, b)
       case (vx, vy) => Order[Int].order(vx.typeIndex, vy.typeIndex)
@@ -73,9 +67,7 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
     case CStringFixed(_) => 1
     case CStringArbitrary => 2
     
-    case CInt => 3
     case CLong => 4
-    case CFloat => 5
     case CDouble => 6
     case CDecimalArbitrary => 7
     
@@ -90,9 +82,7 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
     case (CStringFixed(_), SString) => true
     case (CStringArbitrary, SString) => true
     
-    case (CInt, SDecimal) => true
     case (CLong, SDecimal) => true
-    case (CFloat, SDecimal) => true
     case (CDouble, SDecimal) => true
     case (CDecimalArbitrary, SDecimal) => true
     
@@ -109,9 +99,7 @@ trait CTypeSerialization {
     case CStringFixed(width)    => "String("+width+")"
     case CStringArbitrary       => "String"
     case CBoolean               => "Boolean"
-    case CInt                   => "Int"
     case CLong                  => "Long"
-    case CFloat                 => "Float"
     case CDouble                => "Double"
     case CDecimalArbitrary      => "Decimal"
     case CNull                  => "Null"
@@ -125,9 +113,7 @@ trait CTypeSerialization {
       case FixedStringR(w) => Some(CStringFixed(w.toInt))
       case "String"        => Some(CStringArbitrary)
       case "Boolean"       => Some(CBoolean)
-      case "Int"           => Some(CInt)
       case "Long"          => Some(CLong)
-      case "Float"         => Some(CFloat)
       case "Double"        => Some(CDouble)
       case "Decimal"       => Some(CDecimalArbitrary)
       case "Null"          => Some(CNull)
@@ -156,9 +142,7 @@ object CType extends CTypeSerialization {
   // CStringFixed(width)
   // CStringArbitrary
   // CBoolean
-  // CInt
   // CLong
-  // CFloat
   // CDouble
   // CDecimalArbitrary
   // CNull
@@ -167,29 +151,13 @@ object CType extends CTypeSerialization {
 
   def unify(t1: CType, t2: CType): Option[CType] = {
     (t1, t2) match {
-      case (CInt, CInt) => Some(CInt )
-      case (CInt, CLong) => Some(CLong)
-      case (CInt, CFloat) => Some(CFloat)
-      case (CInt, CDouble) => Some(CDouble)
-      case (CInt, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CLong, CInt) => Some(CLong)
       case (CLong, CLong) => Some(CLong)
-      case (CLong, CFloat) => Some(CFloat)
       case (CLong, CDouble) => Some(CDouble)
       case (CLong, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CFloat, CInt) => Some(CFloat)
-      case (CFloat, CLong) => Some(CFloat)
-      case (CFloat, CFloat) => Some(CFloat)
-      case (CFloat, CDouble) => Some(CDouble)
-      case (CFloat, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CDouble, CInt) => Some(CDouble)
       case (CDouble, CLong) => Some(CDouble)
-      case (CDouble, CFloat) => Some(CDouble)
       case (CDouble, CDouble) => Some(CDouble)
       case (CDouble, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CDecimalArbitrary, CInt) => Some(CDecimalArbitrary)
       case (CDecimalArbitrary, CLong) => Some(CDecimalArbitrary)
-      case (CDecimalArbitrary, CFloat) => Some(CDecimalArbitrary)
       case (CDecimalArbitrary, CDouble) => Some(CDecimalArbitrary)
       case (CDecimalArbitrary, CDecimalArbitrary) => Some(CDecimalArbitrary)
 
@@ -224,9 +192,7 @@ object CType extends CTypeSerialization {
 
   @inline
   final def sizedIntCValue(bi: BigInt): CValue = {
-    if(bi.isValidInt) {
-      CInt(bi.intValue)
-    } else if(isValidLong(bi)) {
+    if(bi.isValidInt || isValidLong(bi)) {
       CLong(bi.longValue)
     } else {
       CNum(BigDecimal(bi))
@@ -235,9 +201,7 @@ object CType extends CTypeSerialization {
 
   @inline
   private final def sizedIntCType(bi: BigInt): CType = {
-   if(bi.isValidInt) {
-      CInt 
-    } else if(isValidLong(bi)) {
+   if(bi.isValidInt || isValidLong(bi)) {
       CLong
     } else {
       CDecimalArbitrary
@@ -286,15 +250,6 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 //
 // Numerics
 //
-case class CInt(value: Int) extends CValue 
-case object CInt extends CType(FixedWidth(4), SDecimal) {
-  type CA = Int
-  val CC = classOf[Int]
-  def order(v1: Int, v2: Int) = intInstance.order(v1, v2)
-  def jvalueFor(v: Int) = JInt(v)
-  implicit val manifest = implicitly[Manifest[Int]]
-}
-
 case class CLong(value: Long) extends CValue 
 case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
@@ -302,15 +257,6 @@ case object CLong extends CType(FixedWidth(8), SDecimal) {
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   def jvalueFor(v: Long) = JInt(v)
   implicit val manifest = implicitly[Manifest[Long]]
-}
-
-case class CFloat(value: Float) extends CValue 
-case object CFloat extends CType(FixedWidth(4), SDecimal) {
-  type CA = Float
-  val CC = classOf[Float]
-  def order(v1: Float, v2: Float) = floatInstance.order(v1, v2)
-  def jvalueFor(v: Float) = JDouble(v)
-  implicit val manifest = implicitly[Manifest[Float]]
 }
 
 case class CDouble(value: Double) extends CValue 
@@ -331,6 +277,7 @@ case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
+case class CDate(value: DateTime) extends CValue
 case object CDate extends CType(FixedWidth(8), SString) {
   type CA = DateTime
   val CC = classOf[DateTime]

@@ -5,9 +5,11 @@ import blueeyes.json.JPath
 trait TableModule extends Schema {
   type F1
   type F2
+
+  def liftF1(f: CValue => CValue): F1
   
   object transforms {
-    sealed trait TransSpec[A <: SourceType]
+    sealed trait TransSpec[+A <: SourceType]
     sealed trait SourceType
   
     sealed trait Source1 extends SourceType
@@ -17,41 +19,43 @@ trait TableModule extends Schema {
     case object SourceLeft extends Source2
     case object SourceRight extends Source2
     
-    case class Leaf[A <: SourceType](source: A) extends TransSpec[A]
+    // why do we need an explicit leaf?
+    case class Leaf[+A <: SourceType](source: A) extends TransSpec[A]
     
-    case class Filter[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    // why does filter take a left and a right?
+    case class Filter[+A <: SourceType](target: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
     
-    case class Scan[A <: SourceType, B](target: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
+    case class Scan[+A <: SourceType, B](target: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
     
-    case class Map1[A <: SourceType](target: TransSpec[A])(f: F1) extends TransSpec[A]
+    case class Map1[+A <: SourceType](target: TransSpec[A])(f: F1) extends TransSpec[A]
     
-    case class Map2[A <: SourceType](left: TransSpec[A], right: TransSpec[A])(f: F2) extends TransSpec[A]
+    case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A])(f: F2) extends TransSpec[A]
     
-    case class ObjectConcat[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class WrapStatic[A <: SourceType](target: TransSpec[A], field: String) extends TransSpec[A]
+    case class WrapStatic[+A <: SourceType](target: TransSpec[A], field: String) extends TransSpec[A]
     
-    case class WrapDynamic[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class WrapDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class ArrayConcat[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class ArraySwap[A <: SourceType](target: TransSpec[A], index: Long) extends TransSpec[A]
+    case class ArraySwap[+A <: SourceType](target: TransSpec[A], index: Long) extends TransSpec[A]
     
-    case class DerefObjectStatic[A <: SourceType](target: TransSpec[A], field: JPath) extends TransSpec[A]
+    case class DerefObjectStatic[+A <: SourceType](target: TransSpec[A], field: JPath) extends TransSpec[A]
     
-    case class DerefObjectDynamic[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class DerefArrayStatic[A <: SourceType](target: TransSpec[A], element: Int) extends TransSpec[A]
+    case class DerefArrayStatic[+A <: SourceType](target: TransSpec[A], element: Int) extends TransSpec[A]
     
-    case class DerefArrayDynamic[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class Typed[A <: SourceType](target: TransSpec[A], tpe: SType) extends TransSpec[A]
+    case class Typed[+A <: SourceType](target: TransSpec[A], tpe: JType) extends TransSpec[A]
     
-    case class Equal[A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
     type TransSpec2 = TransSpec[Source2]
-    type TableTransSpec[A <: SourceType] = Map[JPath, TransSpec[A]]
+    type TableTransSpec[+A <: SourceType] = Map[JPath, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
   
@@ -113,9 +117,9 @@ trait TableModule extends Schema {
     }
   }
   
-  type Table <: TableAPI
+  type Table <: TableLike
   
-  trait TableAPI { this: Table =>
+  trait TableLike { this: Table =>
     import transforms._
     
     /**
@@ -151,7 +155,8 @@ trait TableModule extends Schema {
     
     def group[A: scalaz.Equal](a: A, groupKeySpec: GroupKeySpec): GroupingSpec[A] = GroupingSource[A](this, a, groupKeySpec)
     
-    def schema: SType
+    // Does this have to be fully known at every point in time?
+    def schema: JType
     
     def drop(n: Int): Table
     

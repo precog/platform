@@ -116,7 +116,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
   //    case CLong             => CLong(in.readLong())
   //    case CFloat            => CFloat(in.readFloat())
   //    case CDouble           => CDouble(in.readDouble())
-      case CInt | CLong | CFloat | CDouble | CDecimalArbitrary => 
+      case CLong | CDouble | CDecimalArbitrary => 
         val length = in.readInt()
         assert(length > 0)
 

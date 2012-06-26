@@ -62,9 +62,7 @@ trait CValueGenerators {
     chooseNum(10, 1000).map(CStringFixed(_)),
     CStringArbitrary,
     CBoolean,
-    CInt,
     CLong,
-    CFloat,
     CDouble,
     CDecimalArbitrary,
     CNull,
@@ -76,9 +74,7 @@ trait CValueGenerators {
     case CStringFixed(width) => alphaStr map (JString(_))
     case CStringArbitrary => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
-    case CInt => arbitrary[Int] map (JInt(_))
     case CLong => arbitrary[Long] map (JInt(_))
-    case CFloat => arbitrary[Float] map (JDouble(_))
     case CDouble => arbitrary[Double] map (JDouble(_))
     case CDecimalArbitrary => arbitrary[Double] map (JDouble(_))
     case CNull => JNull

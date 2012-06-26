@@ -23,11 +23,9 @@ import scalaz._
 
 
 object LevelDBByteProjectionSpec {
-  val cvInt = CInt(4)
   val cvLong = CLong(5)
   val cvString = CString("string")
   val cvBoolean = CBoolean(true)
-  val cvFloat = CFloat(6)
   val cvDouble = CDouble(7)
   val cvDouble2 = CDouble(9)
   val cvNum = CNum(8)
@@ -38,9 +36,7 @@ object LevelDBByteProjectionSpec {
   val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), CStringFixed(1), Authorities(Set()))
   val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CStringArbitrary, Authorities(Set()))
   val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), CBoolean, Authorities(Set()))
-  val colDesInt: ColumnDescriptor = ColumnDescriptor(Path("path1"), JPath("key1"), CInt, Authorities(Set()))
   val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), CLong, Authorities(Set()))
-  val colDesFloat: ColumnDescriptor = ColumnDescriptor(Path("path3"), JPath("key3"), CFloat, Authorities(Set()))
   val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), CDouble, Authorities(Set()))
   val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), CDouble, Authorities(Set()))  
   val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), CDecimalArbitrary, Authorities(Set()))
@@ -78,8 +74,6 @@ object LevelDBByteProjectionSpec {
   def constructValues(listOfColDes: List[ColumnDescriptor]): Seq[CValue] = {
     val listOfTypes = listOfColDes.foldLeft(List.empty: List[CType])((l,col) => l :+ col.valueType)
     listOfTypes.foldLeft(Seq.empty: Seq[CValue]) {
-      case (seq, CInt)  => seq :+ cvInt
-      case (seq, CFloat) => seq :+ cvFloat
       case (seq, CBoolean) => seq :+ cvBoolean
       case (seq, CDouble) => seq :+ cvDouble
       case (seq, CLong) => seq :+ cvLong
@@ -94,7 +88,7 @@ object LevelDBByteProjectionSpec {
 
 class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
   "a byte projection generated from sample data" should {
-    "return the arguments of project, when unproject is applied to project" in {
+    "return the arguments of project, when fromBytes is applied to project" in {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0)
@@ -116,15 +110,15 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         case (des, byte) =>
           val identities: Vector[Long] = constructIds(des.identities)
           val values: Seq[CValue] = constructValues(des.columns)
-          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+          val (projectedIds, projectedValues) = byte.toBytes(VectorCase.fromSeq(identities), values)
 
-          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+          byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
     }
   }
 
   "a byte projection of an empty array" should {
-    "return the arguments of project, when unproject is applied to project" in {
+    "return the arguments of project, when fromBytes is applied to project" in {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.emptyArraySample)
@@ -145,15 +139,15 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         case (des, byte) =>
           val identities: Vector[Long] = constructIds(des.identities)
           val values: Seq[CValue] = constructValues(des.columns)
-          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+          val (projectedIds, projectedValues) = byte.toBytes(VectorCase.fromSeq(identities), values)
 
-          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+          byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
     }
   }
 
   "a byte projection of an empty object" should {
-    "return the arguments of project, when unproject is applied to project" in {
+    "return the arguments of project, when fromBytes is applied to project" in {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.emptyObjectSample)
@@ -174,15 +168,15 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         case (des, byte) =>
           val identities: Vector[Long] = constructIds(des.identities)
           val values: Seq[CValue] = constructValues(des.columns)
-          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+          val (projectedIds, projectedValues) = byte.toBytes(VectorCase.fromSeq(identities), values)
 
-          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+          byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
     }
   }
 
   "a byte projection of null" should {
-    "return the arguments of project, when unproject is applied to project" in {
+    "return the arguments of project, when fromBytes is applied to project" in {
       val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
       val dataPath = Path("/test")
       implicit val (sampleData, _) = DistributedSampleSet.sample(5, 0, AdSamples.nullSample)
@@ -203,24 +197,24 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
         case (des, byte) =>
           val identities: Vector[Long] = constructIds(des.identities)
           val values: Seq[CValue] = constructValues(des.columns)
-          val (projectedIds, projectedValues) = byte.project(VectorCase.fromSeq(identities), values)
+          val (projectedIds, projectedValues) = byte.toBytes(VectorCase.fromSeq(identities), values)
 
-          byte.unproject(projectedIds, projectedValues) must_== (identities, values)
+          byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
     }
   }
 
   /* 
   "a scalacheck-generated byte projection" should {
-    "return the arguments of project, when unproject is applied to project" in {
+    "return the arguments of project, when fromBytes is applied to project" in {
           
       check { (byteProjection: LevelDBByteProjection) =>
         val identities: Vector[Long] = constructIds(byteProjection.descriptor.indexedColumns.values.toList.distinct.size)
         val values: Seq[CValue] = constructValues(byteProjection.descriptor.columns)
 
-        val (projectedIds, projectedValues) = byteProjection.project(identities, values)
+        val (projectedIds, projectedValues) = byteProjection.toBytes(identities, values)
 
-        byteProjection.unproject(projectedIds, projectedValues) must_== (identities, values) 
+        byteProjection.fromBytes(projectedIds, projectedValues) must_== (identities, values) 
       }.set(maxDiscarded -> 500, minTestsOk -> 200)
     }
   }
@@ -234,7 +228,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,0,0,0,0,1,1,64,-64,0,0,0,0,0,0,0,0,0,2)
       val expectedValue: Array[Byte] = Array(0,0,0,0,0,0,0,5)
 
-      val (key, value) = byteProjection.project(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
+      val (key, value) = byteProjection.toBytes(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
       key must_== expectedKey
       value must_== expectedValue
     }
@@ -247,7 +241,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,4,64,28,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,2)
       val expectedValue: Array[Byte] = Array()
 
-      val (key, value) = byteProjection.project(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
+      val (key, value) = byteProjection.toBytes(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
       key must_== expectedKey
       value must_== expectedValue
     } 
@@ -260,21 +254,21 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val expectedKey: Array[Byte] = Array(0,0,0,4,0,0,0,0,0,0,0,5,0,0,0,0,0,0,0,2,64,28,0,0,0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,1)
       val expectedValue: Array[Byte] = Array(64,-64,0,0,1)
 
-      val (key, value) = byteProjection.project(VectorCase(1L,2L,3L), Seq(cvInt, cvLong, cvFloat, cvDouble, cvBoolean))
+      val (key, value) = byteProjection.toBytes(VectorCase(1L,2L,3L), Seq(cvInt, cvLong, cvFloat, cvDouble, cvBoolean))
       key must_== expectedKey
       value must_== expectedValue
     }
   }
 
-  "when applied to the project function, the unproject function" should {
+  "when applied to the project function, the fromBytes function" should {
     "return the arguments of the project function (test1)" in {
       val columns: List[ColumnDescriptor, Int] = List(colDesLong -> 0, colDesBoolean -> 0, colDesFloat -> 1)
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesLong, ById),(colDesBoolean, ByValue),(colDesFloat, ByValueThenId))
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
 
-      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
+      val (projectedIds, projectedValues) = byteProjection.toBytes(VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat))
 
-      byteProjection.unproject(projectedIds, projectedValues) must_== (VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat)) 
+      byteProjection.fromBytes(projectedIds, projectedValues) must_== (VectorCase(1L,2L), Seq(cvLong, cvBoolean, cvFloat)) 
     }
 
     "return the arguments of the project function (test2)" in {
@@ -282,9 +276,9 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesInt, ByValue),(colDesDouble, ByValue),(colDesBoolean, ByValue))
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
 
-      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
+      val (projectedIds, projectedValues) = byteProjection.toBytes(VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean))
 
-      byteProjection.unproject(projectedIds, projectedValues) must_== (VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean)) 
+      byteProjection.fromBytes(projectedIds, projectedValues) must_== (VectorCase(1L,2L), Seq(cvInt, cvDouble, cvBoolean)) 
     }
 
     "return the arguments of the project function (test3)" in {
@@ -292,9 +286,9 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
       val sorting: Seq[(ColumnDescriptor, SortBy)] = Seq((colDesFloat, ById),(colDesInt, ByValue), (colDesDouble, ById), (colDesBoolean, ByValue), (colDesDouble2, ById)) 
       val byteProjection = byteProjectionInstance(columns, sorting) ||| { errorMessage => sys.error("problem constructing projection descriptor: " + errorMessage) }
  
-      val (projectedIds, projectedValues) = byteProjection.project(VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2))
+      val (projectedIds, projectedValues) = byteProjection.toBytes(VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2))
 
-      byteProjection.unproject(projectedIds, projectedValues) must_== (VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2)) 
+      byteProjection.fromBytes(projectedIds, projectedValues) must_== (VectorCase(1L,2L,3L), Seq(cvFloat, cvInt, cvDouble, cvBoolean, cvDouble2)) 
     }
   }
   */

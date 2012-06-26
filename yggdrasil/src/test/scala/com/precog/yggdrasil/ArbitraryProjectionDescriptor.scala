@@ -15,7 +15,7 @@ trait ArbitraryProjectionDescriptor {
   def constructColumnDescriptor: Gen[ColumnDescriptor] = {
     def genPath: Gen[Path] = Gen.oneOf(Seq(Path("path1"),Path("path2"),Path("path3"),Path("path4"),Path("path5")))
     def genJPath: Gen[JPath] = Gen.oneOf(Seq(JPath("jpath1"),JPath("jpath2"),JPath("jpath3"),JPath("jpath4"),JPath("jpath5")))
-    def genCType: Gen[CType] = Gen.oneOf(Seq(CBoolean, CInt, CLong, CFloat, CDouble, CDecimalArbitrary, CStringArbitrary))
+    def genCType: Gen[CType] = Gen.oneOf(Seq(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary))
     def genAuthorities: Gen[Authorities] = Gen.oneOf(Seq(Authorities(Set())))
 
     val genColumnDescriptor = for {
