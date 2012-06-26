@@ -92,6 +92,11 @@ trait TableModule extends Schema {
     type TableTransSpec[+A <: SourceType] = Map[JPath, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
+    
+    object TableTransSpec {
+      def makeTransSpec[A <: SourceType](tableTrans: TableTransSpec[A]): TransSpec[A] =
+        sys.error("TODO")
+    }
   
     sealed trait GroupKeySpec
     case class GroupKeySpecSource(selector: JPath, spec: TransSpec1) extends GroupKeySpec
@@ -185,20 +190,20 @@ trait TableModule extends Schema {
      * If the key transform is not identity, the resulting table will have
      * unknown sort order.
      */
-    def transform(spec: TableTransSpec1): Table
+    def transform(spec: TransSpec1): Table
     
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.
      */
-    def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(left: TableTransSpec1, right: TableTransSpec1, both: TableTransSpec2): Table
+    def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(left: TransSpec1, right: TransSpec1, both: TransSpec2): Table
     
     /**
      * Performs a full cartesian cross on this table with the specified table,
      * applying the specified transformation to merge the two tables into
      * a single table.
      */
-    def cross(that: Table)(spec: TableTransSpec2): Table
+    def cross(that: Table)(spec: TransSpec2): Table
     
     /**
      * Sorts the KV table by ascending or descending order of a transformation

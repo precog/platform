@@ -54,20 +54,20 @@ trait ColumnarTableModule extends TableModule {
      * If the key transform is not identity, the resulting table will have
      * unknown sort order.
      */
-    def transform(spec: TableTransSpec1): Table = sys.error("todo")
+    def transform(spec: TransSpec1): Table = sys.error("todo")
     
     /**
      * Cogroups this table with another table, using equality on the specified
      * transformation on rows of the table.
      */
-    def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(left: TableTransSpec1, right: TableTransSpec1, both: TableTransSpec2): Table = sys.error("todo")
+    def cogroup(leftKey: TransSpec1, rightKey: TransSpec1, that: Table)(left: TransSpec1, right: TransSpec1, both: TransSpec2): Table = sys.error("todo")
     
     /**
      * Performs a full cartesian cross on this table with the specified table,
      * applying the specified transformation to merge the two tables into
      * a single table.
      */
-    def cross(that: Table)(spec: TableTransSpec2): Table = sys.error("todo")
+    def cross(that: Table)(spec: TransSpec2): Table = sys.error("todo")
     
     /**
      * Sorts the KV table by ascending or descending order of a transformation
