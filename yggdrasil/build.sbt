@@ -44,4 +44,4 @@ ivyXML :=
 
 seq(assemblySettings: _*)
 
-mainClass := Some("com.precog.yggdrasil.shard.KafkaShardServer")
+mainClass := Some("com.precog.yggdrasil.util.YggUtils")
