@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import functions._
 import com.precog.common.Path
 import com.precog.common.VectorCase
 
@@ -32,6 +33,19 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
   def debugPrint(dataset: Table): Unit = {
     println("\n\n")
     for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
+  }
+
+  def lookupF1(namespace: Vector[String], name: String): F1 = {
+    val lib = Map[String, CF1](
+      "negate" -> cmath.Negate
+    )
+
+    lib(name)
+  }
+
+  def lookupF2(namespace: Vector[String], name: String): F2 = {
+    val lib  = Map[String, CF2]()
+    lib(name)
   }
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
@@ -116,7 +130,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
   def fromJson(sampleData: SampleData): Table = {
     val (s, xs) = spec.slice(sampleData)
 
-    new Table(s.columns.keySet, new Iterable[Slice] {
+    new Table(new Iterable[Slice] {
       def iterator = new Iterator[Slice] {
         private var _next = s
         private var _rest = xs
@@ -140,7 +154,6 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
   }
 
   def cogroup(ds1: Table, ds2: Table): Table = sys.error("todo")
-  def liftF1(f: CValue => CValue): CF1 = sys.error("todo")
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -185,6 +198,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
 
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
+      "perform a trivial map1" in testMap1IntLeaf
+      //"give the identity transform for the trivial 'true' filter" in checkTrueFilter
     }
   }
 }

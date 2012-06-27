@@ -14,6 +14,8 @@ import scala.annotation.tailrec
 
 import scalaz._
 import scalaz.Ordering._
+import scalaz.std.function._
+import scalaz.syntax.arrow._
 
 trait ColumnarTableModule extends TableModule {
   import trans._
@@ -26,11 +28,47 @@ trait ColumnarTableModule extends TableModule {
   def ops: TableOps = sys.error("todo")
   implicit def pimpF2(f2: F2): PartiallyApplied = sys.error("todo")
 
-  class Table(val focus: Set[ColumnRef], val slices: Iterable[Slice]) extends TableLike { self  =>
+  case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice))
+
+  class Table(val slices: Iterable[Slice]) extends TableLike { self  =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
     def reduce(scanner: Scanner[_, _, _]): Table = sys.error("todo")
+
+    private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
+
+    private def transform0[A](sliceTransform: SliceTransform[A]): Table = {
+      new Table(
+        new Iterable[Slice] {
+          def iterator: Iterator[Slice] = {
+            val baseIter = slices.iterator
+            new Iterator[Slice] {
+              private var state: A = sliceTransform.initial
+              private var next0: Slice = precomputeNext()
+
+              private def precomputeNext(): Slice = {
+                if (baseIter.hasNext) {
+                  val s = baseIter.next
+                  val (nextState, s0) = sliceTransform.f(state, s)
+                  state = nextState
+                  s0
+                } else {
+                  null.asInstanceOf[Slice]
+                }
+              }
+
+              def hasNext: Boolean = next0 != null
+              def next: Slice = {
+                val tmp = next0
+                next0  = precomputeNext()
+                tmp
+              }
+            }
+          }
+        }
+      )
+    }
     
     /**
      * Performs a one-pass transformation of the keys and values in the table.
@@ -40,6 +78,17 @@ trait ColumnarTableModule extends TableModule {
     def transform(spec: TransSpec1): Table = {
       spec match {
         case Leaf(_) => self
+        case Map1(source, f) => 
+          transform(source).transform0 {
+             map0 { slice =>
+              new Slice {
+                val size = slice.size
+                val columns = slice.columns flatMap { case (ref, col) => f(col) map { c => (ref, c) } }
+              }
+            }
+          }
+        case Filter(target, predicate) => sys.error("todo")
+          // match the target table
       }
     }
     
@@ -71,7 +120,7 @@ trait ColumnarTableModule extends TableModule {
     
     def takeRight(n: Int): Table = sys.error("todo")
 
-    def normalize: Table = new Table(focus, slices.filterNot(_.isEmpty))
+    def normalize: Table = new Table(slices.filterNot(_.isEmpty))
 
   /*
     def cogroup(other: Table, prefixLength: Int)(merge: CogroupMerge): Table = {

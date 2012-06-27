@@ -19,6 +19,14 @@ object BitsetColumn {
   }
 }
 
+class Map1Column[T <: Column](c: T) { this: T =>
+  def isDefinedAt(row: Int) = c.isDefinedAt(row)
+}
+
+class Map2Column[T <: Column](c1: T, c2: T) { this: T =>
+  def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+}
+
 class UnionColumn[T <: Column](c1: T, c2: T) { this: T =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) || c2.isDefinedAt(row)
 }
