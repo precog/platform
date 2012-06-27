@@ -106,6 +106,7 @@ class IngestSupervisor(ingestActor: Option[ActorRef], projectionsActor: ActorRef
       }
 
     case DirectIngestData(d) =>
+      logger.info("Processing direct ingest of " + d.size + " messages")
       processMessages(d, sender) 
   }
 

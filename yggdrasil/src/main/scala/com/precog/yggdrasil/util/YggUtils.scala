@@ -716,6 +716,7 @@ object ImportTools extends Command with Logging {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
+      opt("s", "storage", "<storage root>", "directory containing leveldb data files", { s: String => config.storageRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -734,15 +735,14 @@ object ImportTools extends Command with Logging {
   }
 
   def process(config: Config) {
-    val dir = new File("./data") 
-    dir.mkdirs
+    config.storageRoot.mkdirs
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(dir, new FilesystemFileOps {})) yield {
-      object shard extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, new FilesystemFileOps {})) yield {
+      object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val metadataStorage = ms
 
@@ -786,7 +786,8 @@ object ImportTools extends Command with Logging {
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
     var token: TokenID = "root",
-    var verbose: Boolean = false 
+    var verbose: Boolean = false ,
+    var storageRoot: File = new File("./data")
   )
 }
 
