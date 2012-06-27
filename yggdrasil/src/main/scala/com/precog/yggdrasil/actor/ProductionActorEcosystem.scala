@@ -72,9 +72,9 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   lazy val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 
   protected def actorsWithStatus = ingestActor.toList ++
-                                   ingestSupervisor.toList ++
-                                   (metadataActor :: projectionsActor :: Nil)
-  lazy val ingestActor = {
+                                   (ingestSupervisor :: metadataActor :: projectionsActor :: Nil)
+
+  lazy val ingestActor: Option[ActorRef] = {
     logger.info("Starting ingest actor")
     implicit val timeout = Timeout(45000l)
     // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor

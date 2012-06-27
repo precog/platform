@@ -66,7 +66,7 @@ case class DirectIngestData(messages: Seq[IngestMessage])
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routingTable: RoutingTable, 
+class IngestSupervisor(ingestActor: Option[ActorRef], projectionsActor: ActorRef, routingTable: RoutingTable, 
                        idleDelay: Duration, scheduler: Scheduler, shutdownCheck: Duration) extends Actor with Logging {
 
   private var initiated = 0
@@ -75,8 +75,10 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
 
   override def preStart() = {
     logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
-    scheduleIngestRequest(Duration.Zero)
-    logger.info("Initial ingest request scheduled")
+    if (ingestActor.isDefined) {
+      scheduleIngestRequest(Duration.Zero)
+      logger.info("Initial ingest request scheduled")
+    }
   }
 
   override def postStop() = {
@@ -107,7 +109,8 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
       processMessages(d, sender) 
   }
 
-  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
+  private def status: JValue = JObject(JField("Ingest Actor Present", JBool(ingestActor.isDefined)) ::
+                                       JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
                                                                  JField("processed", JInt(processed)) :: Nil)) :: Nil)
 
   private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
@@ -119,8 +122,14 @@ class IngestSupervisor(ingestActor: ActorRef, projectionsActor: ActorRef, routin
   }
 
   private def scheduleIngestRequest(delay: Duration): Unit = {
-    initiated += 1
-    scheduler.scheduleOnce(delay, ingestActor, GetMessages(self))
+    ingestActor match {
+      case Some(actor) => 
+        initiated += 1
+        scheduler.scheduleOnce(delay, actor, GetMessages(self))
+
+      case None => 
+        logger.warn("Attempted to schedule ingest request after delay " + delay + " but no ingest actor reference present.")
+    }
   }
 }
 

@@ -739,7 +739,7 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(dir, new FilesystemFileOps {})) yield {
-      object shard extends ImportActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
+      object shard extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
