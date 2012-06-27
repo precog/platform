@@ -23,10 +23,10 @@ import blueeyes.json.JsonAST._
 trait ActorEcosystem {
   def actorSystem: ActorSystem
 
-  val ingestActor: Option[ActorRef]
-  val ingestSupervisor: ActorRef
-  val metadataActor: ActorRef
-  val projectionsActor: ActorRef
+  def ingestActor: Option[ActorRef]
+  def ingestSupervisor: ActorRef
+  def metadataActor: ActorRef
+  def projectionsActor: ActorRef
 
   def actorsStart: Future[Unit]
   def actorsStop: Future[Unit]
@@ -50,18 +50,15 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   protected implicit lazy val executionContext =
     ExecutionContext.defaultExecutionContext(actorSystem)
   
-  protected val logPrefix: String
+  protected def logPrefix: String
 
   protected def actorsWithStatus: List[ActorRef]
 
-  protected val shardId: String
+  protected def shardId: String
   
-  protected val checkpointCoordination: CheckpointCoordination
+  protected def checkpointCoordination: CheckpointCoordination
 
-  protected val metadataStorage: MetadataStorage
-
-  lazy val ingestSupervisor = actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
-                                                                             yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
+  protected def metadataStorage: MetadataStorage
 
   //
   // Public actors
@@ -75,6 +72,10 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   lazy val projectionsActor =
     actorSystem.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")
 
+  lazy val ingestSupervisor = 
+    actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
+                                                   yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
+
   def status: Future[JArray] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
 
@@ -85,11 +86,12 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   def actorsStart: Future[Unit] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
     logger.info("Starting actor ecosystem")
+    logger.info("Ingest actor present?: " + ingestActor.isDefined)
     (ingestSupervisor ? Status).map(s => logger.info("Ingest supervisor status: " + s)).mapTo[Unit]
   }
 
   def actorsStop: Future[Unit] = {
-    import yggConfig.stopTimeout
+    implicit val stopTimeout = yggConfig.stopTimeout
 
     for {
       _  <- Future(logger.info(logPrefix + " Stopping"))
