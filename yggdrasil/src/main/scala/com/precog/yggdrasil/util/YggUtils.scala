@@ -739,7 +739,7 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(dir, new FilesystemFileOps {})) yield {
-      object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
+      object shard extends ImportActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
@@ -755,10 +755,11 @@ object ImportTools extends Command with Logging {
       config.input.foreach {
         case (db, input) =>
           logger.debug("Inserting batch: %s:%s".format(db, input))
-          val events = Source.fromFile(input).getLines.map {
-            line => EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, JsonParser.parse(line), Map.empty))
-          }.toList
-        
+          val reader = new FileReader(new File(input))
+          val events = JsonParser.parse(reader).children.map { child =>
+            EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
+          }
+          
           logger.debug(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
