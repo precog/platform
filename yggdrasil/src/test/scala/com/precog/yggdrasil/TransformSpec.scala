@@ -30,25 +30,22 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 trait TransformSpec extends TableModuleSpec {
-  import transforms._
+  import trans._
 
   def checkTransformLeaf = check { (sample: SampleData) =>
     val table = fromJson(sample)
-    val results = toJson(table.transform(Map(JPath.Identity -> Leaf(Source))))
+    val results = toJson(table.transform(Leaf(Source)))
 
-    sample must_== results
+    sample.data must_== results
   }
 
   def checkFilter = check { (sample: SampleData) =>
     val table = fromJson(sample)
     val results = toJson(table.transform {
-      Map(
-        JPath.Identity -> Filter(
-          Leaf(Source), 
-          Map1(Leaf(Source)) {
-            liftF1({ case _ => CBoolean(true) }) 
-          }
-        ))
+      Filter(
+        Leaf(Source), 
+        Map1(Leaf(Source), liftF1({ case _ => CBoolean(true) })) 
+      )
     })
 
     sample must_== results

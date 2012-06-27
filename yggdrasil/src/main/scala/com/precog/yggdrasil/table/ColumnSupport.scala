@@ -33,7 +33,9 @@ class BitsetColumn(definedAt: BitSet) { this: Column =>
 }
 
 object BitsetColumn {
-  def bitset(definedAt: Seq[Boolean]) = BitSet(definedAt.zipWithIndex collect { case (v, i) if v => i }: _*)
+  def bitset(definedAt: Seq[Boolean]) = {
+    BitSet(definedAt.zipWithIndex collect { case (v, i) if v => i }: _*)
+  }
 }
 
 class UnionColumn[T <: Column](c1: T, c2: T) { this: T =>

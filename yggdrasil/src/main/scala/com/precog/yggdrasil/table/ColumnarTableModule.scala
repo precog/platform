@@ -36,14 +36,16 @@ import scalaz.Ordering._
 
 trait ColumnarTableModule extends TableModule {
   import trans._
+  import trans.constants._
 
   type F1 = CF1
   type F2 = CF2
+  type RowId = Int
 
-  def liftF1(f: CValue => CValue): CF1 = sys.error("todo")
+  def ops: TableOps = sys.error("todo")
+  implicit def pimpF2(f2: F2): PartiallyApplied = sys.error("todo")
 
   class Table(val focus: Set[ColumnRef], val slices: Iterable[Slice]) extends TableLike { self  =>
-    
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
@@ -54,7 +56,11 @@ trait ColumnarTableModule extends TableModule {
      * If the key transform is not identity, the resulting table will have
      * unknown sort order.
      */
-    def transform(spec: TransSpec1): Table = sys.error("todo")
+    def transform(spec: TransSpec1): Table = {
+      spec match {
+        case Leaf(_) => self
+      }
+    }
     
     /**
      * Cogroups this table with another table, using equality on the specified
@@ -494,54 +500,44 @@ trait ColumnarTableModule extends TableModule {
     }
     */
 
-    def toJson: Iterable[JValue] = toEvents.map(_._2)
-
-    def toEvents: Iterable[(Identities, JValue)] = {
-      toEvents { (slice: Slice, row: Int) => slice.toJson(row) }
+    def toJson: Iterable[JValue] = {
+      toEvents { (slice: Slice, row: RowId) => slice.toJson(row) }
     }
 
-    def toValidatedEvents: Iterable[(Identities, ValidationNEL[Throwable, JValue])] = {
-      toEvents { (slice: Slice, row: Int) => slice.toValidatedJson(row) }
-    }
+    private def toEvents[A](f: (Slice, RowId) => A): Iterable[A] = {
+      new Iterable[A] {
+        def iterator = {
+          val normalized = self.normalize.slices.iterator
 
-    private def toEvents[A](f: (Slice, Int) => A): Iterable[(Identities, A)] = {
-      sys.error("todo")
-      /*
-      new Iterable[(Identities, A)] {
-        def iterator = new Iterator[(Identities, A)] {
-          private val iter = self.normalize.slices.iterator
-          private var slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
-          private var idx = 0
-          private var _next = precomputeNext()
+          new Iterator[A] {
+            private var slice = if (normalized.hasNext) normalized.next else null.asInstanceOf[Slice]
+            private var idx = 0
+            private var next0: A = precomputeNext()
 
-          def hasNext = _next ne null
+            def hasNext = next0 != null
 
-          def next() = {
-            val tmp = _next
-            _next = precomputeNext()
-            tmp
-          }
-         
-          @tailrec def precomputeNext(): (Identities, A) = {
-            if (slice == null) {
-              null.asInstanceOf[(Identities, A)]
-            } else if (idx < slice.size) {
-              if (slice.identities.isEmpty || slice.identities.exists(_.isDefinedAt(idx))) {
-                val result = (VectorCase(slice.identities map { c => if (c.isDefinedAt(idx)) c(idx) else -1L }: _*), f(slice, idx))
+            def next() = {
+              val tmp = next0
+              next0 = precomputeNext()
+              tmp
+            }
+           
+            @tailrec def precomputeNext(): A = {
+              if (slice == null) {
+                null.asInstanceOf[A]
+              } else if (idx < slice.size) {
+                val result = f(slice, idx)
                 idx += 1
                 result
               } else {
-                idx += 1
-                precomputeNext()
+                slice = if (normalized.hasNext) normalized.next else null.asInstanceOf[Slice]
+                idx = 0
+                precomputeNext() //recursive call is okay because hasNext must have returned true to get here
               }
-            } else {
-              slice = if (iter.hasNext) iter.next else null.asInstanceOf[Slice]
-              idx = 0
-              precomputeNext() //recursive call is okay because hasNext must have returned true to get here
             }
           }
         }
-      } */
+      }
     }
   }
 }

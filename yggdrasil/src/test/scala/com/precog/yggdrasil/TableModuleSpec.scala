@@ -26,9 +26,8 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
-import scalaz.{NonEmptyList => NEL, _}
+import scalaz.{Ordering => _, NonEmptyList => NEL, _}
 import scalaz.BiFunctor
-import scalaz.Ordering._
 import scalaz.Either3._
 import scalaz.std.tuple._
 import scalaz.std.function._
@@ -45,43 +44,42 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerators with TableModule {
-  type Record[A] = (Identities, A)
+  import trans.constants._
 
   override val defaultPrettyParams = Pretty.Params(2)
 
-  implicit def order[A] = tupledIdentitiesOrder[A]()
-
-  case class SampleData(idCount: Int, data: Stream[Record[JValue]]) {
-    override def toString = {
-      "\nSampleData: \nidCount = "+idCount+",\ndata = "+
-      data.map({ case (ids, v) => ids.mkString("(", ",", ")") + ": " + v.toString.replaceAll("\n", "\n  ") }).mkString("[\n  ", ",\n  ", "]\n")
-    }
-  }
-
   def fromJson(sampleData: SampleData): Table
-  def toJson(dataset: Table): Stream[Record[JValue]]
+  def toJson(dataset: Table): Stream[JValue]
 
-  def toValidatedJson(dataset: Table): Stream[Record[ValidationNEL[Throwable, JValue]]]
   def debugPrint(dataset: Table): Unit 
 
-  def normalizeValidations(s: Stream[Record[ValidationNEL[Throwable, JValue]]]): Stream[Record[Option[JValue]]] = {
-    s map {
-      case (ids, Failure(t)) => t.list.foreach(_.printStackTrace); (ids, None)
-      case (ids, Success(v)) => (ids, Some(v))
-    }
+  def liftF1(f: CValue => CValue): F1
+
+  implicit def keyOrder[A]: scala.math.Ordering[(Identities, A)] = tupledIdentitiesOrder[A](IdentitiesOrder).toScalaOrdering
+
+  def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {
+    JObject(Nil).set(Key, JArray(ids.map(JInt(_)).toList)).set(Value, jv)
   }
 
-  implicit def identitiesOrdering = IdentitiesOrder.toScalaOrdering
-
-  implicit val arbData = Arbitrary(
+  implicit def arbData = Arbitrary(
     for {
       depth   <- choose(0, 3)
       jschema <- schema(depth)
       (idCount, data) <- genEventColumns(jschema)
     } yield {
-      SampleData(idCount, data.sortBy(_._1).toStream map { (assemble _).second })
+      SampleData(
+        data.sorted.toStream map { 
+          case (ids, jv) => toRecord(ids, assemble(jv))
+        }
+      )
     }
   )
+
+  case class SampleData(data: Stream[JValue]) {
+    override def toString = {
+      "\nSampleData: ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n")
+    }
+  }
 
   def checkMappings = {
     check { (sample: SampleData) =>

@@ -25,10 +25,10 @@ trait TableModule extends Schema {
   type F1
   type F2     // needs pimped: partialRight(CValue): F1 and partialLeft(CValue): F1
 
-  def liftF1(f: CValue => CValue): F1
-  
   // TODO something saner than a structural type here
-  implicit def pimpF2(f2: F2): {
+  implicit def pimpF2(f2: F2): PartiallyApplied
+
+  trait PartiallyApplied {
     def partialLeft(cv: CValue): F1 
     def partialRight(cv: CValue): F1
   }
@@ -128,7 +128,7 @@ trait TableModule extends Schema {
     case object SortDescending extends SortOrder
     case object SortUnknown extends SortOrder
     
-    object TableKVConstants {
+    object constants {
       val Key   = JPath("key")
       val Value = JPath("value")
       val Group = JPath("group")

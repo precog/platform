@@ -29,6 +29,8 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
+import scala.collection.BitSet
+
 import scalaz._
 
 import org.specs2._
@@ -40,7 +42,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableModule { spec =>
+class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with ColumnarTableModule with TransformSpec { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val sliceSize = 10
@@ -51,76 +53,60 @@ class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableMo
     for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
   }
 
-  def cogroup(ds1: Table, ds2: Table): Table = {
-    sys.error("todo")
-    //ds1.cogroup(ds2, ds1.idCount min ds2.idCount)(CogroupMerge.second)
-  }
-
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)
 
-    @tailrec def buildColArrays(from: Stream[Record[JValue]], into: Map[ColumnRef, Array[_]], sliceIndex: Int): (Map[ColumnRef, Object], Int) = {
+    @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
       from match {
-        case (ids, jv) #:: xs =>
-          val withIds: Map[ColumnRef, Array[_]] = (0 until ids.length).foldLeft(into) {
-            case (acc, j) => 
-              val cref = ColumnRef(JPath(JPathField("keys") :: JPathIndex(j) :: Nil: _*), CLong)
-              val arr: Array[Long] = acc.getOrElse(cref, new Array[Long](sliceSize)).asInstanceOf[Array[Long]]
-              arr(j) = ids(j)
-              acc + (cref -> arr)
-          }
-
-          val withIdsAndValues = jv.flattenWithPath.foldLeft(withIds) {
+        case jv #:: xs =>
+          val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
             case (acc, (jpath, JNothing)) => acc
             case (acc, (jpath, v)) =>
               val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
               val ref = ColumnRef(jpath, ctype)
 
-              val col: Array[_] = v match {
+              val pair: (BitSet, Array[_]) = v match {
                 case JBool(b) => 
-                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
                   col(sliceIndex) = b
-                  col
+                  (defined + sliceIndex, col)
 
                 case JInt(ji) => CType.sizedIntCValue(ji) match {
                   case CLong(v) =>
-                    val col: Array[Long] = acc.getOrElse(ref, new Array[Long](sliceSize)).asInstanceOf[Array[Long]]
+                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
                     col(sliceIndex) = v
-                    col
+                    (defined + sliceIndex, col)
 
                   case CNum(v) =>
-                    val col: Array[BigDecimal] = acc.getOrElse(ref, new Array[BigDecimal](sliceSize)).asInstanceOf[Array[BigDecimal]]
+                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
                     col(sliceIndex) = v
-                    col
+                    (defined + sliceIndex, col)
                 }
 
                 case JDouble(d) => 
-                  val col: Array[Double] = acc.getOrElse(ref, new Array[Double](sliceSize)).asInstanceOf[Array[Double]]
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
                   col(sliceIndex) = d
-                  col
+                  (defined + sliceIndex, col)
 
                 case JString(s) => 
-                  val col: Array[String] = acc.getOrElse(ref, new Array[String](sliceSize)).asInstanceOf[Array[String]]
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
                   col(sliceIndex) = s
-                  col
+                  (defined + sliceIndex, col)
                 
                 case JArray(Nil)  => 
-                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
-                  col(sliceIndex) = true
-                  col
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                  (defined + sliceIndex, col)
 
                 case JObject(Nil) => 
-                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
-                  col(sliceIndex) = true
-                  col
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                  (defined + sliceIndex, col)
 
                 case JNull        => 
-                  val col: Array[Boolean] = acc.getOrElse(ref, new Array[Boolean](sliceSize)).asInstanceOf[Array[Boolean]]
-                  col(sliceIndex) = true
-                  col
+                  val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
+                  (defined + sliceIndex, col)
               }
 
-              acc + (ref -> col)
+              acc + (ref -> pair)
           }
 
           buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
@@ -130,20 +116,20 @@ class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableMo
     }
 
     val slice = new Slice {
-      val (cols, size) = buildColArrays(prefix, Map.empty[ColumnRef, Array[_]], 0) 
+      val (cols, size) = buildColArrays(prefix, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
       val columns = cols map {
-        case (ref @ ColumnRef(_, CBoolean), values) => (ref, ArrayBoolColumn(values.asInstanceOf[Array[Boolean]]))
-        case (ref @ ColumnRef(_, CLong), values)    => (ref, ArrayLongColumn(values.asInstanceOf[Array[Long]]))
-        case (ref @ ColumnRef(_, CDouble), values)  => (ref, ArrayDoubleColumn(values.asInstanceOf[Array[Double]]))
-        case (ref @ ColumnRef(_, CDecimalArbitrary), values) => (ref, ArrayNumColumn(values.asInstanceOf[Array[BigDecimal]]))
-        case (ref @ ColumnRef(_, CStringArbitrary), values)  => (ref, ArrayStrColumn(values.asInstanceOf[Array[String]]))
-        case (ref @ ColumnRef(_, CEmptyArray), values)  => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with EmptyArrayColumn)
-        case (ref @ ColumnRef(_, CEmptyObject), values) => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with EmptyObjectColumn)
-        case (ref @ ColumnRef(_, CNull), values)        => (ref, new BitsetColumn(BitsetColumn.bitset(values.asInstanceOf[Array[Boolean]])) with NullColumn)
+        case (ref @ ColumnRef(_, CBoolean), (defined, values))          => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
+        case (ref @ ColumnRef(_, CLong), (defined, values))             => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
+        case (ref @ ColumnRef(_, CDouble), (defined, values))           => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
+        case (ref @ ColumnRef(_, CDecimalArbitrary), (defined, values)) => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
+        case (ref @ ColumnRef(_, CStringArbitrary), (defined, values))  => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
+        case (ref @ ColumnRef(_, CEmptyArray), (defined, values))       => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
+        case (ref @ ColumnRef(_, CEmptyObject), (defined, values))      => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
+        case (ref @ ColumnRef(_, CNull), (defined, values))             => (ref, new BitsetColumn(defined) with NullColumn)
       }
     }
 
-    (slice, SampleData(sampleData.idCount, suffix))
+    (slice, SampleData(suffix))
   }
 
   def fromJson(sampleData: SampleData): Table = {
@@ -168,33 +154,44 @@ class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableMo
     })
   }
 
-  def toJson(dataset: Table): Stream[Record[JValue]] = {
-    dataset.toEvents.toStream
+  def toJson(dataset: Table): Stream[JValue] = {
+    dataset.toJson.toStream
   }
 
-  def toValidatedJson(dataset: Table): Stream[Record[ValidationNEL[Throwable, JValue]]] = {
-    dataset.toValidatedEvents.toStream
-  }
+  def cogroup(ds1: Table, ds2: Table): Table = sys.error("todo")
+  def liftF1(f: CValue => CValue): CF1 = sys.error("todo")
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
-      val sample: List[(Identities, JValue)] = List(
-        (VectorCase(-1l, 0l),JNull), 
-        (VectorCase(-3090012080927607325l, 2875286661755661474l),
-          JObject(List(
+      val sample: List[JValue] = List(
+        JObject(
+          JField("key", JArray(JInt(-1L) :: JInt(0L) :: Nil)) ::
+          JField("value", JNull) :: Nil
+        ), 
+        JObject(
+          JField("key", JArray(JInt(-3090012080927607325l) :: JInt(2875286661755661474l) :: Nil)) ::
+          JField("value", JObject(List(
             JField("q8b", JArray(List(
               JDouble(6.615224799778253E307d), 
               JArray(List(JBool(false), JNull, JDouble(-8.988465674311579E307d))), JDouble(-3.536399224770604E307d)))), 
-            JField("lwu",JDouble(-5.121099465699862E307d))))), 
-        (VectorCase(-3918416808128018609l, 1l),JDouble(-1.0))
+            JField("lwu",JDouble(-5.121099465699862E307d))))
+          ) :: Nil
+        ), 
+        JObject(
+          JField("key", JArray(JInt(-3918416808128018609l) :: JInt(-1L) :: Nil)) ::
+          JField("value", JDouble(-1.0)) :: Nil
+        )
       )
 
-      val dataset = fromJson(SampleData(2, sample.toStream))
-      val results = dataset.toEvents.toList
+      val dataset = fromJson(SampleData(sample.toStream))
+      //dataset.slices.foreach(println)
+      val results = dataset.toJson.toList
       results must containAllOf(sample).only
     }
 
     "verify bijection from JSON" in checkMappings
+
+    /*
     "in cogroup" >> {
       "survive scalacheck" in { 
         check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
@@ -203,8 +200,11 @@ class TableOpsSpec extends TableModuleSpec with CogroupSpec with ColumnarTableMo
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "survive pathology 2" in testCogroupPathology2
     }
+    */
 
-
+    "in transform" >> {
+      "perform the identity transform" in checkTransformLeaf
+    }
   }
 }
 

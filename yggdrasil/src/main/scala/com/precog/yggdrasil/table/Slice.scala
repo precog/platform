@@ -43,6 +43,11 @@ trait Slice { source =>
   def size: Int
   def isEmpty: Boolean = size == 0
 
+  def nest(selectorPrefix: JPath) = new Slice {
+    val size = source.size
+    val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
+  }
+
   def remap(pf: PartialFunction[Int, Int]) = new Slice {
     val size = source.size
     val columns: Map[ColumnRef, Column] = source.columns.mapValues(v => (v |> Remap(pf)).get) //Remap is total
@@ -148,11 +153,11 @@ trait Slice { source =>
   }
 
   def toJson(row: Int): JValue = {
-    val steps = new scala.collection.mutable.ArrayBuffer[(ColumnRef, JValue)]()
+    val steps = new scala.collection.mutable.ArrayBuffer[(ColumnRef, JValue, JValue)]()
 
     columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if (col.isDefinedAt(row)) => 
-        steps += ((ref, jv))
+      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
+        steps += ((ref, jv, col.jValue(row)))
         try {
           jv.unsafeInsert(selector, col.jValue(row))
         } catch { 
@@ -176,8 +181,10 @@ trait Slice { source =>
   }
 
   def toString(row: Int): String = {
-    (columns    collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }).mkString("[", ", ", "]")
+    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }).mkString("[", ", ", "]")
   }
+
+  override def toString = (0 until size).map(toString).mkString("\n")
 }
 
 object Slice {

@@ -22,33 +22,35 @@ package table
 
 import org.joda.time.DateTime
 
-case class ArrayBoolColumn(values: Array[Boolean]) extends BoolColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+import scala.collection.BitSet
+
+trait DefinedAtIndex {
+  val defined: BitSet
+  def isDefinedAt(row: Int) = defined.contains(row)
+}
+
+
+case class ArrayBoolColumn(defined: BitSet, values: Array[Boolean]) extends BoolColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
-case class ArrayLongColumn(values: Array[Long]) extends LongColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+case class ArrayLongColumn(defined: BitSet, values: Array[Long]) extends LongColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
-case class ArrayDoubleColumn(values: Array[Double]) extends DoubleColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+case class ArrayDoubleColumn(defined: BitSet, values: Array[Double]) extends DoubleColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
-case class ArrayNumColumn(values: Array[BigDecimal]) extends NumColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+case class ArrayNumColumn(defined: BitSet, values: Array[BigDecimal]) extends NumColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
-case class ArrayStrColumn(values: Array[String]) extends StrColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+case class ArrayStrColumn(defined: BitSet, values: Array[String]) extends StrColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
-case class ArrayDateColumn(values: Array[DateTime]) extends DateColumn {
-  def isDefinedAt(row: Int) = row >= 0 && row < values.length
+case class ArrayDateColumn(defined: BitSet, values: Array[DateTime]) extends DateColumn with DefinedAtIndex {
   def apply(row: Int) = values(row)
 }
 
