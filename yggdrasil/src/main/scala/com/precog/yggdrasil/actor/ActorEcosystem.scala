@@ -24,7 +24,7 @@ trait ActorEcosystem {
   def actorSystem: ActorSystem
 
   val ingestActor: Option[ActorRef]
-  val ingestSupervisor: Option[ActorRef]
+  val ingestSupervisor: ActorRef
   val metadataActor: ActorRef
   val projectionsActor: ActorRef
 
@@ -60,10 +60,8 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
   protected val metadataStorage: MetadataStorage
 
-  lazy val ingestSupervisor = ingestActor map { actor =>
-    actorSystem.actorOf(Props(new IngestSupervisor(actor, projectionsActor, new SingleColumnProjectionRoutingTable,
-                                                   yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
-  }
+  lazy val ingestSupervisor = actorSystem.actorOf(Props(new IngestSupervisor(ingestActor, projectionsActor, new SingleColumnProjectionRoutingTable,
+                                                                             yggConfig.batchStoreDelay, actorSystem.scheduler, yggConfig.batchShutdownCheckInterval)), "router")
 
   //
   // Public actors
@@ -87,10 +85,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   def actorsStart: Future[Unit] = {
     implicit val to = Timeout(yggConfig.statusTimeout)
     logger.info("Starting actor ecosystem")
-    ingestSupervisor match {
-      case Some(actor) => (actor ? Status).map(s => logger.info("Ingest supervisor status: " + s)).mapTo[Unit]
-      case None => logger.warn("Ingest supervisor not found! Ingest system is offline."); Future(())
-    }
+    (ingestSupervisor ? Status).map(s => logger.info("Ingest supervisor status: " + s)).mapTo[Unit]
   }
 
   def actorsStop: Future[Unit] = {
@@ -98,7 +93,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
 
     for {
       _  <- Future(logger.info(logPrefix + " Stopping"))
-      _  <- ingestSupervisor.map(actorStop(_, "router")).getOrElse(Future(()))
+      _  <- actorStop(ingestSupervisor, "router")
       _  <- actorsStopInternal
       _  <- Future {
               logger.debug(logPrefix + " Stopping actor system")
