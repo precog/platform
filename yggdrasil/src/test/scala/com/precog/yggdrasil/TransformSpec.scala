@@ -20,6 +20,7 @@
 package com.precog.yggdrasil
 
 import blueeyes.json.JPath
+import blueeyes.json.JsonAST._
 
 import org.specs2.mutable._
 
@@ -36,19 +37,27 @@ trait TransformSpec extends TableModuleSpec {
     val table = fromJson(sample)
     val results = toJson(table.transform(Leaf(Source)))
 
-    sample.data must_== results
+    results must_== sample.data
   }
 
-  def checkFilter = check { (sample: SampleData) =>
+  def testMap1IntLeaf = {
+    val sample = (-10 to 10).map(JInt(_)).toStream
+    val table = fromJson(SampleData(sample))
+    val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Vector(), "negate")) })
+
+    results must_== (-10 to 10).map(x => JInt(-x))
+  }
+
+  def checkTrueFilter = check { (sample: SampleData) =>
     val table = fromJson(sample)
     val results = toJson(table.transform {
       Filter(
         Leaf(Source), 
-        Map1(Leaf(Source), liftF1({ case _ => CBoolean(true) })) 
+        Map1(Leaf(Source), lookupF1(Vector(), "true"))
       )
     })
 
-    sample must_== results
+    results must_== sample.data
   }
 }
 
