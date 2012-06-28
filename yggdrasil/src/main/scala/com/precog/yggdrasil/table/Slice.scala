@@ -21,6 +21,13 @@ trait Slice { source =>
 
   def columns: Map[ColumnRef, Column]
 
+  def mapColumns(f: CF1): Slice = new Slice {
+    val size = source.size
+    val columns = source.columns flatMap {
+      case (ref, col) => f(col) map { (ref, _ ) }
+    }
+  }
+
   def size: Int
   def isEmpty: Boolean = size == 0
 
@@ -31,7 +38,7 @@ trait Slice { source =>
 
   def remap(pf: PartialFunction[Int, Int]) = new Slice {
     val size = source.size
-    val columns: Map[ColumnRef, Column] = source.columns.mapValues(v => (v |> Remap(pf)).get) //Remap is total
+    val columns: Map[ColumnRef, Column] = source.columns.mapValues(v => (v |> cf.util.Remap(pf)).get) //Remap is total
   }
 
   def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
@@ -58,11 +65,11 @@ trait Slice { source =>
 
   def filter(fx: (JPath, Column => BoolColumn)*): Slice = {
     new Slice {
-      private lazy val filters = fx flatMap { 
+      lazy val filters = fx flatMap { 
         case (selector, f) => columns collect { case (ref, col) if ref.selector.hasPrefix(selector) => f(col) } 
       }
 
-      private lazy val retained: ArrayIntList = {
+      lazy val retained: ArrayIntList = {
         @inline @tailrec def fill(i: Int, acc: ArrayIntList): ArrayIntList = {
           if (i < source.size && filters.forall(c => c.isDefinedAt(i) && c(i))) {
             fill(i + 1, acc)
@@ -75,7 +82,7 @@ trait Slice { source =>
       }
 
       lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns flatMap { case (ref, col) => Remap(retained).apply(col) map { c => (ref, c) } }
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
     }
   }
 
@@ -87,39 +94,36 @@ trait Slice { source =>
   }
 
   def sortBy(refs: VectorCase[JPath]): Slice = {
-    new Slice {
-      private val sortedIndices: Array[Int] = {
-        import java.util.Arrays
-        val arr = Array.range(0, source.size)
+    val sortedIndices: Array[Int] = {
+      import java.util.Arrays
+      val arr = Array.range(0, source.size)
 
-        val comparator = new IntOrder {
-          def order(i1: Int, i2: Int) = {
-            var i = 0
-            var result: Ordering = EQ
-            //while (i < accessors.length && (result eq EQ)) {
-              sys.error("todo")
-            //}
-            result
-          }
+      val comparator = new IntOrder {
+        def order(i1: Int, i2: Int) = {
+          var i = 0
+          var result: Ordering = EQ
+          //while (i < accessors.length && (result eq EQ)) {
+            sys.error("todo")
+          //}
+          result
         }
-
-        Slice.qsort(arr, comparator)
-        arr
       }
-      
-      lazy val size = source.size
-      lazy val columns = source.columns mapValues { Remap(sortedIndices)(_).get }
+
+      Slice.qsort(arr, comparator)
+      arr
     }
+
+    source mapColumns cf.util.Remap(sortedIndices)
   }
 
   def split(idx: Int): (Slice, Slice) = (
     new Slice {
       val size = idx
-      val columns = source.columns mapValues { new Remap({case i if i < idx => i})(_).get }
+      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < idx => i})).get }
     },
     new Slice {
       val size = source.size - idx
-      val columns = source.columns mapValues { new Remap({case i if i < size => i + idx})(_).get }
+      val columns = source.columns mapValues { col => (col |> cf.util.Remap({case i if i < size => i + idx})).get }
     }
   )
 
@@ -128,7 +132,7 @@ trait Slice { source =>
       val size = source.size + other.size
       val columns = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => 
-          acc + (ref -> acc.get(ref).flatMap(sc => Concat(source.size)(sc, col)).getOrElse(Shift(source.size)(col).get))
+          acc + (ref -> acc.get(ref).flatMap(sc => cf.util.Concat(source.size)(sc, col)).getOrElse((col |> cf.util.Shift(source.size)).get))
       }
     }
   }

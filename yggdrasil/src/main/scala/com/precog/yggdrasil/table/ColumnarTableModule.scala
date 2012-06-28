@@ -9,7 +9,7 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 import java.lang.ref.SoftReference
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.BitSet
 import scala.annotation.tailrec
 
 import scalaz._
@@ -28,7 +28,34 @@ trait ColumnarTableModule extends TableModule {
   def ops: TableOps = sys.error("todo")
   implicit def pimpF2(f2: F2): PartiallyApplied = sys.error("todo")
 
-  case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice))
+  case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {
+    def andThen[B](t: SliceTransform[B]): SliceTransform[(A, B)] = {
+      SliceTransform(
+        (initial, t.initial),
+        { case ((a, b), s) => 
+            val (a0, sa) = f(a, s) 
+            val (b0, sb) = t.f(b, sa)
+            ((a0, b0), sb)
+        }
+      )
+    }
+
+    def zip[B](t: SliceTransform[B])(combine: (Slice, Slice) => Slice): SliceTransform[(A, B)] = {
+      SliceTransform(
+        (initial, t.initial),
+        { case ((a, b), s) =>
+            val (a0, sa) = f(a, s)
+            val (b0, sb) = t.f(b, s)
+            assert(sa.size == sb.size)
+            ((a0, b0), combine(sa, sb))
+        }
+      )
+    }
+  }
+
+  object SliceTransform {
+    def identity[A](initial: A) = SliceTransform(initial, (a: A, s: Slice) => (a, s))
+  }
 
   class Table(val slices: Iterable[Slice]) extends TableLike { self  =>
     /**
@@ -69,6 +96,30 @@ trait ColumnarTableModule extends TableModule {
         }
       )
     }
+
+    // No transform defined herein may reduce the size of a slice. Be it known!
+    private def composeSliceTransform(spec: TransSpec1): SliceTransform[_] = {
+      spec match {
+        case Leaf(_) => SliceTransform.identity[Unit](())
+
+        case Map1(source, f) => 
+          composeSliceTransform(source) andThen {
+             map0 { _ mapColumns f }
+          }
+
+        case Filter(target, predicate) => 
+          composeSliceTransform(target).zip(composeSliceTransform(predicate)) { (s, filter) => 
+            if (s.columns.isEmpty) {
+              s
+            } else {
+              assert(filter.columns.nonEmpty)
+              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { _ & _.definedAt(0, s.size) }
+              s mapColumns { cf.util.Filter(0, s.size, definedAt) }
+            }
+          }
+          // match the target table
+      }
+    }
     
     /**
      * Performs a one-pass transformation of the keys and values in the table.
@@ -76,20 +127,7 @@ trait ColumnarTableModule extends TableModule {
      * unknown sort order.
      */
     def transform(spec: TransSpec1): Table = {
-      spec match {
-        case Leaf(_) => self
-        case Map1(source, f) => 
-          transform(source).transform0 {
-             map0 { slice =>
-              new Slice {
-                val size = slice.size
-                val columns = slice.columns flatMap { case (ref, col) => f(col) map { c => (ref, c) } }
-              }
-            }
-          }
-        case Filter(target, predicate) => sys.error("todo")
-          // match the target table
-      }
+      transform0(composeSliceTransform(spec))
     }
     
     /**

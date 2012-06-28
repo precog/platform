@@ -37,7 +37,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
 
   def lookupF1(namespace: Vector[String], name: String): F1 = {
     val lib = Map[String, CF1](
-      "negate" -> cmath.Negate
+      "negate" -> cf.math.Negate,
+      "true" -> new CF1P({ case _ => Column.const(true) })
     )
 
     lib(name)
@@ -199,7 +200,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      //"give the identity transform for the trivial 'true' filter" in checkTrueFilter
+      "give the identity transform for the trivial filter" in checkTrivialFilter
+      "give the identity transform for the trivial 'true' filter" in checkTrueFilter
     }
   }
 }

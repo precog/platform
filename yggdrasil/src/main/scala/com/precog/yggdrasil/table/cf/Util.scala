@@ -1,0 +1,147 @@
+package com.precog.yggdrasil
+package table
+package cf
+
+import scala.collection.BitSet
+import org.apache.commons.collections.primitives.ArrayIntList
+
+object util {
+
+  /**
+   * Right-biased column union
+   */
+  object UnionRight extends CF2P ({
+    case (c1: BoolColumn, c2: BoolColumn) => new UnionColumn(c1, c2) with BoolColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: LongColumn, c2: LongColumn) => new UnionColumn(c1, c2) with LongColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: DoubleColumn, c2: DoubleColumn) => new UnionColumn(c1, c2) with DoubleColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: NumColumn, c2: NumColumn) => new UnionColumn(c1, c2) with NumColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: StrColumn, c2: StrColumn) => new UnionColumn(c1, c2) with StrColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: DateColumn, c2: DateColumn) => new UnionColumn(c1, c2) with DateColumn { 
+      def apply(row: Int) = {
+        if (c2.isDefinedAt(row)) c2(row) else if (c1.isDefinedAt(row)) c1(row) else sys.error("Attempt to retrieve undefined value for row: " + row)
+      } 
+    }
+
+    case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new UnionColumn(c1, c2) with EmptyArrayColumn
+    case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new UnionColumn(c1, c2) with EmptyObjectColumn
+    case (c1: NullColumn, c2: NullColumn) => new UnionColumn(c1, c2) with NullColumn
+  })
+
+  case class Concat(at: Int) extends CF2P({
+    case (c1: BoolColumn, c2: BoolColumn) => new ConcatColumn(at, c1, c2) with BoolColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: LongColumn, c2: LongColumn) => new ConcatColumn(at, c1, c2) with LongColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: DoubleColumn, c2: DoubleColumn) => new ConcatColumn(at, c1, c2) with DoubleColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: NumColumn, c2: NumColumn) => new ConcatColumn(at, c1, c2) with NumColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: StrColumn, c2: StrColumn) => new ConcatColumn(at, c1, c2) with StrColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: DateColumn, c2: DateColumn) => new ConcatColumn(at, c1, c2) with DateColumn { 
+      def apply(row: Int) = if (row < at) c1(row) else c2(row - at)
+    }
+
+    case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new ConcatColumn(at, c1, c2) with EmptyArrayColumn
+    case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new ConcatColumn(at, c1, c2) with EmptyObjectColumn
+    case (c1: NullColumn, c2: NullColumn) => new ConcatColumn(at, c1, c2) with NullColumn
+  })
+
+  case class Shift(by: Int) extends CF1P ({
+    case c: BoolColumn => new ShiftColumn(by, c) with BoolColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: LongColumn => new ShiftColumn(by, c) with LongColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: DoubleColumn => new ShiftColumn(by, c) with DoubleColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: NumColumn => new ShiftColumn(by, c) with NumColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: StrColumn => new ShiftColumn(by, c) with StrColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: DateColumn => new ShiftColumn(by, c) with DateColumn { 
+      def apply(row: Int) = c(row - by)
+    }
+
+    case c: EmptyArrayColumn => new ShiftColumn(by, c) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new ShiftColumn(by, c) with EmptyObjectColumn
+    case c: NullColumn => new ShiftColumn(by, c) with NullColumn
+  })
+
+  case class Remap(f : PartialFunction[Int, Int]) extends CF1P ({
+    case c: BoolColumn   => new RemapColumn(c, f) with BoolColumn { def apply(row: Int) = c(f(row)) }
+    case c: LongColumn   => new RemapColumn(c, f) with LongColumn { def apply(row: Int) = c(f(row)) }
+    case c: DoubleColumn => new RemapColumn(c, f) with DoubleColumn { def apply(row: Int) = c(f(row)) }
+    case c: NumColumn    => new RemapColumn(c, f) with NumColumn { def apply(row: Int) = c(f(row)) }
+    case c: StrColumn    => new RemapColumn(c, f) with StrColumn { def apply(row: Int) = c(f(row)) }
+    case c: DateColumn   => new RemapColumn(c, f) with DateColumn { def apply(row: Int) = c(f(row)) }
+
+    case c: EmptyArrayColumn  => new RemapColumn(c, f) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new RemapColumn(c, f) with EmptyObjectColumn
+    case c: NullColumn => new RemapColumn(c, f) with NullColumn
+  })
+
+  object Remap {
+    def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i > 0 && i < indices.size) => indices.get(i) })
+  }
+
+  case class Filter(from: Int, to: Int, definedAt : BitSet) extends CF1P ({
+    case c: BoolColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) }
+    case c: LongColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with LongColumn { def apply(row: Int) = c(row) }
+    case c: DoubleColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with DoubleColumn { def apply(row: Int) = c(row) }
+    case c: NumColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with NumColumn { def apply(row: Int) = c(row) }
+    case c: StrColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with StrColumn { def apply(row: Int) = c(row) }
+    case c: DateColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with DateColumn { def apply(row: Int) = c(row) }
+
+    case c: EmptyArrayColumn  => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyObjectColumn
+    case c: NullColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with NullColumn
+  })
+}
+
+
+// vim: set ts=4 sw=4 et:
