@@ -499,8 +499,8 @@ object ZookeeperTools extends Command {
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
       opt("c", "checkpoints", "Show shard checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
       opt("a", "agents", "Show ingest agent state with prefix", { s: String => config.showAgents = Some(s)})
-      opt("uc", "update_checkpoints", "Update agent state prefix:shard:json", {s: String => config.updateCheckpoint = Some(s)})
-      opt("ua", "update_agents", "Update agent state prefix:ingest:json", {s: String => config.updateAgent = Some(s)})
+      opt("uc", "update_checkpoints", "Update agent state. Format = path:json", {s: String => config.updateCheckpoint = Some(s)})
+      opt("ua", "update_agents", "Update agent state. Format = path:json", {s: String => config.updateAgent = Some(s)})
     }
     if (parser.parse(args)) {
       val conn: ZkConnection = new ZkConnection(config.zkConn)
@@ -515,14 +515,11 @@ object ZookeeperTools extends Command {
     }
   }
 
-  val shardCheckpointPath = "/com/precog/ingest/v1/shard/checkpoint"
-  val ingestAgentPath = "/com/precog/ingest/v1/relay_agent"
-
   def process(conn: ZkConnection, client: ZkClient, config: Config) {
-    config.checkpointsPath().foreach { path =>
+    config.showCheckpoints.foreach { path =>
       showChildren("checkpoints", path, pathsAt(path, client))
     }
-    config.relayAgentsPath().foreach { path =>
+    config.showAgents.foreach { path =>
       showChildren("agents", path, pathsAt(path, client))
     }
     config.checkpointUpdate.foreach {
@@ -580,38 +577,14 @@ object ZookeeperTools extends Command {
                var updateCheckpoint: Option[String] = None,
                var updateAgent: Option[String] = None) {
 
-    def checkpointsPath() = showCheckpoints.map { buildPath(_, shardCheckpointPath) } 
-    def relayAgentsPath() = showAgents.map { buildPath(_, ingestAgentPath) } 
-    
-    def buildPath(prefix: String, base: String): String = 
-      if(prefix.trim.size == 0) {
-        base 
-      } else {
-        "/%s%s".format(prefix, base) 
-      }
-
-    def splitOn(delim: Char, s: String): (String, String) = {
-      val t = s.span( _ != delim)
-      (t._1, t._2.substring(1))
+    def splitPathJson(s: String): (String,String) = s.split(":", 2) match {
+      case Array(path,json) => (path, json)
+      case _ => sys.error("Invalid format for path+json: \"%s\"".format(s))
     }
 
-    def splitUpdate(s: String): (String, String, String) = {
-      val t1 = splitOn(':', s)
-      val t2 = splitOn(':', t1._2)
-      (t1._1, t2._1, t2._2)
-    }
+    def checkpointUpdate() = updateCheckpoint.map(splitPathJson)
 
-    def checkpointUpdate() = updateCheckpoint.map{ splitUpdate }.map {
-      case (pre, id, data) =>
-        val path = buildPath(pre, shardCheckpointPath) + "/" + id
-        (path, data)
-    }
-
-    def relayAgentUpdate() = updateAgent.map{ splitUpdate }.map {
-      case (pre, id, data) =>
-        val path = buildPath(pre, ingestAgentPath) + "/" + id
-        (path, data)
-    }
+    def relayAgentUpdate() = updateAgent.map(splitPathJson)
   }
 }
 
