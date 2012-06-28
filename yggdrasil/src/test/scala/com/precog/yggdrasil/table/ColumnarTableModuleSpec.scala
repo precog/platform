@@ -35,7 +35,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
   }
 
-  def lookupF1(namespace: Vector[String], name: String): F1 = {
+  def lookupF1(namespace: List[String], name: String): F1 = {
     val lib = Map[String, CF1](
       "negate" -> cf.math.Negate,
       "true" -> new CF1P({ case _ => Column.const(true) })
@@ -44,10 +44,12 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     lib(name)
   }
 
-  def lookupF2(namespace: Vector[String], name: String): F2 = {
+  def lookupF2(namespace: List[String], name: String): F2 = {
     val lib  = Map[String, CF2]()
     lib(name)
   }
+
+  def lookupScanner(namespace: List[String], name: String) = sys.error("todo")
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)

@@ -23,10 +23,14 @@ trait ColumnarTableModule extends TableModule {
 
   type F1 = CF1
   type F2 = CF2
+  type Scanner = CScanner
+  type Reducer[α] = CReducer[α]
   type RowId = Int
 
+  def partialApplyLeft(f: F2, cv: CValue): F1  = new CF1(f(Column.const(cv), _))
+  def partialApplyRight(f: F2, cv: CValue): F1 = new CF1(f(_, Column.const(cv)))
+
   def ops: TableOps = sys.error("todo")
-  implicit def pimpF2(f2: F2): PartiallyApplied = sys.error("todo")
 
   case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {
     def andThen[B](t: SliceTransform[B]): SliceTransform[(A, B)] = {
@@ -61,7 +65,7 @@ trait ColumnarTableModule extends TableModule {
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce(scanner: Scanner[_, _, _]): Table = sys.error("todo")
+    def reduce[A: Monoid](reducer: Reducer[A]): A = sys.error("todo")
 
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
@@ -127,6 +131,24 @@ trait ColumnarTableModule extends TableModule {
         case DerefArrayStatic(source, element) =>
           composeSliceTransform(source) andThen {
             map0 { _ deref element }
+          }
+
+        case Map2(left, right, f) =>
+          val l0 = composeSliceTransform(left)
+          val r0 = composeSliceTransform(right)
+
+          l0.zip(r0) { (sl, sr) =>
+            new Slice {
+              val size = sl.size
+              val columns: Map[ColumnRef, Column] = 
+                (for {
+                  cl <- sl.valueColumns
+                  cr <- sr.valueColumns
+                  col <- f(cl, cr)
+                } yield {
+                  (ColumnRef(JPath.Identity, col.tpe), col)
+                })(collection.breakOut)
+            }
           }
       }
     }

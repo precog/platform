@@ -1,18 +1,20 @@
 package com.precog.yggdrasil
 
 import blueeyes.json.{JPath,JPathField,JPathIndex}
+import scalaz.Monoid
 
 trait TableModule extends Schema {
   type F1
-  type F2     // needs pimped: partialRight(CValue): F1 and partialLeft(CValue): F1
+  type F2    
+  type Scanner
+  type Reducer[α]
 
-  // TODO something saner than a structural type here
-  implicit def pimpF2(f2: F2): PartiallyApplied
+  def partialApplyLeft(f: F2, cv: CValue): F1 
+  def partialApplyRight(f: F2, cv: CValue): F1
 
-  trait PartiallyApplied {
-    def partialLeft(cv: CValue): F1 
-    def partialRight(cv: CValue): F1
-  }
+  def lookupF1(namespace: List[String], name: String): F1
+  def lookupF2(namespace: List[String], name: String): F2
+  def lookupScanner(namespace: List[String], name: String): Scanner
   
   object trans {
     sealed trait TransSpec[+A <: SourceType]
@@ -29,7 +31,7 @@ trait TableModule extends Schema {
     
     case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
     
-    case class Scan[+A <: SourceType, B](source: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
+    case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A]
     
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A]
     
@@ -164,7 +166,7 @@ trait TableModule extends Schema {
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce(scanner: Scanner[_, _, _]): Table
+    def reduce[A: Monoid](reducer: Reducer[A]): A
     
     /**
      * Performs a one-pass transformation of the keys and values in the table.
