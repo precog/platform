@@ -40,6 +40,8 @@ trait TableModule extends FNModule {
     // containing all the resulting columns.
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
+    case class WrapArray[+A <: SourceType](target: TransSpec[A]) extends TransSpec[A]
+
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
     case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A] //done

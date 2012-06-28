@@ -11,51 +11,54 @@ import bytecode.BuiltInFunc2
 import yggdrasil._
 
 trait GenOpcode extends ImplLibrary {
-  private val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class BIR(val namespace: Vector[String], val name: String, val opcode: Int = defaultReductionOpcode.getAndIncrement) extends ReductionImpl 
+  private val defaultMorphismOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
+  abstract class Morphism(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphismOpcode.getAndIncrement) extends MorphismImpl 
 
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class BIF1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends BuiltInFunc1Impl 
+  abstract class Op1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1Impl
 
   private val defaultBinaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class BIF2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends BuiltInFunc2Impl
+  abstract class Op2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends Op2Impl
 }
 
 trait ImplLibrary extends Library {
-  type Dataset[E]
-  type DepGraph
-  type Context
-
-  lazy val libReduct = _libReduct
+  type Table
+  type F1
+  type F2
+  
+  lazy val libMorphism = _libMorphism
   lazy val lib1 = _lib1
   lazy val lib2 = _lib2
 
-  def _libReduct: Set[BIR] = Set()
-  def _lib1: Set[BIF1] = Set()
-  def _lib2: Set[BIF2] = Set()
+  def _libMorphism: Set[Morphism] = Set()
+  def _lib1: Set[Op1] = Set()
+  def _lib2: Set[Op2] = Set()
 
-  trait ReductionImpl extends BuiltInRed {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue]
+  trait MorphismImpl extends MorphismLike {
+    def alignment: Option[MorphismAlignment]
+    def apply(input: Table): Table
+  }
+  
+  sealed trait MorphismAlignment
+  
+  object MorphismAlignment {
+    case object Match extends MorphismAlignment
+    case object Cross extends MorphismAlignment
   }
 
-  trait BuiltInFunc1Impl extends BuiltInFunc1 {
-    val operation: PartialFunction[SValue, SValue]
-    val operandType: Option[SType]
-
-    def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = None
+  trait Op1Impl extends Op1Like with MorphismImpl {
+    lazy val alignment = None
+    def f1: F1
   }
 
   trait BuiltInFunc2Impl extends BuiltInFunc2 {
-    val operation: PartialFunction[(SValue, SValue), SValue]
-    val operandType: (Option[SType], Option[SType])
-    
-    val requiresReduction: Boolean = false
-    def reduced(enum: Dataset[SValue]): Option[SValue] = None
+    lazy val alignment = None
+    def f2: F2
   }
 
-  type BIR <: ReductionImpl
-  type BIF1 <: BuiltInFunc1Impl
-  type BIF2 <: BuiltInFunc2Impl
+  type Morphism <: MorphismImpl
+  type Op1 <: Op1Impl
+  type Op2 <: Op2Impl
 }
 
 trait StdLib extends InfixLib with ReductionLib with TimeLib with MathLib with StringLib with StatsLib 
