@@ -20,7 +20,7 @@
 package com.precog
 package bytecode
 
-trait BuiltInRed {
+trait MorphismLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
@@ -29,32 +29,31 @@ trait BuiltInRed {
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
-trait BuiltInFunc1 {
+trait Op1Like {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
 
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
-trait BuiltInFunc2 {
+trait Op2Like {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
 
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
 trait Library {
-  type BIR <: BuiltInRed
-  type BIF1 <: BuiltInFunc1
-  type BIF2 <: BuiltInFunc2
+  type Morphism <: MorphismLike
+  type Op1 <: Op1Like with Morphism
+  type Op2 <: Op2Like with Morphism
 
-  def libReduct: Set[BIR]
-  def lib1: Set[BIF1] 
-  def lib2: Set[BIF2]
+  def libMorphism: Set[Morphism]
+  def lib1: Set[Op1] 
+  def lib2: Set[Op2]
 }
-
 
