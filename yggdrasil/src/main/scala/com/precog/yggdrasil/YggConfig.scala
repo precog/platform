@@ -29,7 +29,7 @@ import java.io.File
 trait YggConfigComponent {
   type YggConfig 
 
-  val yggConfig: YggConfig
+  def yggConfig: YggConfig
 }
 
 trait BaseConfig extends Config {
