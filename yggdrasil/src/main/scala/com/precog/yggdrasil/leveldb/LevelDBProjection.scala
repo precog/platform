@@ -109,7 +109,8 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     val positions = descriptor.columns.map(_.valueType.format).foldLeft(List(0)) {
       case (v :: vx, FixedWidth(w))  => (v + w) :: v :: vx
       case (v :: vx, LengthEncoded)  => (v + buf.getInt(v)) :: v :: vx
-    } 
+      case _                         => throw new MatchError("No columns")
+    }
 
     positions.tail.reverse
   }
