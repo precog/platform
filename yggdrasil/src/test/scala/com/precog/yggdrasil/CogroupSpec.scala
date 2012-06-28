@@ -60,7 +60,7 @@ trait CogroupSpec extends TableModuleSpec {
                         (toRecord(ids, assemble(d1)), toRecord(ids, assemble(d2)))
                     } unzip
 
-      (SampleData(l.sortBy(_ \ Key).toStream), SampleData(r.sortBy(_ \ Key).toStream))
+      (SampleData(l.sortBy(_ \ JPath(Key)).toStream), SampleData(r.sortBy(_ \ JPath(Key)).toStream))
     }
   )
 

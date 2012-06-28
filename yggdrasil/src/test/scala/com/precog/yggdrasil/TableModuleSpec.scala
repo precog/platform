@@ -62,7 +62,7 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
     JObject(Nil).set(Key, JArray(ids.map(JInt(_)).toList)).set(Value, jv)
   }
 
-  implicit def arbData = Arbitrary(
+  def sample(schema: Int => Gen[JSchema]) = Arbitrary(
     for {
       depth   <- choose(0, 3)
       jschema <- schema(depth)
@@ -71,18 +71,20 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
       SampleData(
         data.sorted.toStream map { 
           case (ids, jv) => toRecord(ids, assemble(jv))
-        }
+        },
+        Some(jschema)
       )
     }
   )
 
-  case class SampleData(data: Stream[JValue]) {
+  case class SampleData(data: Stream[JValue], schema: Option[JSchema] = None) {
     override def toString = {
       "\nSampleData: ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n")
     }
   }
 
   def checkMappings = {
+    implicit val gen = sample(schema)
     check { (sample: SampleData) =>
       val dataset = fromJson(sample)
       toJson(dataset).toList must containAllOf(sample.data.toList).only

@@ -19,7 +19,7 @@
  */
 package com.precog.yggdrasil
 
-import blueeyes.json.JPath
+import blueeyes.json.{JPath,JPathField}
 import blueeyes.json.JsonAST._
 
 import org.specs2.mutable._
@@ -33,11 +33,14 @@ import org.scalacheck.Arbitrary._
 trait TransformSpec extends TableModuleSpec {
   import trans._
 
-  def checkTransformLeaf = check { (sample: SampleData) =>
-    val table = fromJson(sample)
-    val results = toJson(table.transform(Leaf(Source)))
+  def checkTransformLeaf = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform(Leaf(Source)))
 
-    results must_== sample.data
+      results must_== sample.data
+    }
   }
 
   def testMap1IntLeaf = {
@@ -48,28 +51,50 @@ trait TransformSpec extends TableModuleSpec {
     results must_== (-10 to 10).map(x => JInt(-x))
   }
 
-  def checkTrivialFilter = check { (sample: SampleData) =>
-    val table = fromJson(sample)
-    val results = toJson(table.transform {
-      Filter(
-        Leaf(Source), 
-        Leaf(Source)
-      )
-    })
+  def checkTrivialFilter = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Filter(
+          Leaf(Source), 
+          Leaf(Source)
+        )
+      })
 
-    results must_== sample.data
+      results must_== sample.data
+    }
   }
 
-  def checkTrueFilter = check { (sample: SampleData) =>
-    val table = fromJson(sample)
-    val results = toJson(table.transform {
-      Filter(
-        Leaf(Source), 
-        Map1(Leaf(Source), lookupF1(Vector(), "true"))
-      )
-    })
+  def checkTrueFilter = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Filter(
+          Leaf(Source), 
+          Map1(Leaf(Source), lookupF1(Vector(), "true"))
+        )
+      })
 
-    results must_== sample.data
+      results must_== sample.data
+    }
+  }
+
+  def checkObjectDeref = {
+    implicit val gen: Arbitrary[SampleData] = sample(objectSchema(_, 3))
+    check { (sample: SampleData) =>
+      val (field, _) = sample.schema.get.head
+      val fieldHead = field.head.get
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        DerefObjectStatic(Leaf(Source), fieldHead.asInstanceOf[JPathField])
+      })
+
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
+
+      results must_== expected
+    }
   }
 }
 

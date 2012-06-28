@@ -19,7 +19,7 @@
  */
 package com.precog.yggdrasil
 
-import blueeyes.json.JPath
+import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 trait TableModule extends Schema {
   type F1
@@ -46,33 +46,33 @@ trait TableModule extends Schema {
     
     case class Leaf[+A <: SourceType](source: A) extends TransSpec[A]
     
-    case class Filter[+A <: SourceType](target: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
+    case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
     
-    case class Scan[+A <: SourceType, B](target: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
+    case class Scan[+A <: SourceType, B](source: TransSpec[A], scanner: Scanner[_, _, _]) extends TransSpec[A]
     
-    case class Map1[+A <: SourceType](target: TransSpec[A], f: F1) extends TransSpec[A]
+    case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A]
     
     case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A]
     
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class WrapStatic[+A <: SourceType](target: TransSpec[A], field: String) extends TransSpec[A]
+    case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A]
     
     case class WrapDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
     case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class ArraySwap[+A <: SourceType](target: TransSpec[A], index: Long) extends TransSpec[A]
+    case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Long) extends TransSpec[A]
     
-    case class DerefObjectStatic[+A <: SourceType](target: TransSpec[A], field: JPath) extends TransSpec[A]
+    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A]
     
     case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class DerefArrayStatic[+A <: SourceType](target: TransSpec[A], element: Int) extends TransSpec[A]
+    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A]
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class Typed[+A <: SourceType](target: TransSpec[A], tpe: JType) extends TransSpec[A]
+    case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A]
     
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
   
@@ -129,9 +129,9 @@ trait TableModule extends Schema {
     case object SortUnknown extends SortOrder
     
     object constants {
-      val Key   = JPath("key")
-      val Value = JPath("value")
-      val Group = JPath("group")
+      val Key   = JPathField("key")
+      val Value = JPathField("value")
+      val Group = JPathField("group")
       
       object SourceKey {
         val Single = DerefObjectStatic(Leaf(Source), Key)
