@@ -202,6 +202,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "perform a trivial map1" in testMap1IntLeaf
       "give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
+      "perform an object dereference" in checkObjectDeref
     }
   }
 }

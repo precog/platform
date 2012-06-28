@@ -28,6 +28,14 @@ trait Slice { source =>
     }
   }
 
+  def deref(node : JPathNode) : Slice = new Slice {
+    val size = source.size
+    val columns = source.columns.collect {
+      // case (ColumnRef(JPath(`node` :: rest), ctype), col) => (ColumnRef(JPath(rest), ctype), col) // TODO: why won't this work?
+      case (ColumnRef(JPath(`node`, xs @ _*), ctype), col) => (ColumnRef(JPath(xs: _*), ctype), col)
+    }
+  }
+
   def size: Int
   def isEmpty: Boolean = size == 0
 

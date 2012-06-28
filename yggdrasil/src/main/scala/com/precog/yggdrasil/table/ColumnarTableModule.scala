@@ -107,8 +107,8 @@ trait ColumnarTableModule extends TableModule {
              map0 { _ mapColumns f }
           }
 
-        case Filter(target, predicate) => 
-          composeSliceTransform(target).zip(composeSliceTransform(predicate)) { (s, filter) => 
+        case Filter(source, predicate) => 
+          composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s, filter) => 
             if (s.columns.isEmpty) {
               s
             } else {
@@ -117,7 +117,17 @@ trait ColumnarTableModule extends TableModule {
               s mapColumns { cf.util.Filter(0, s.size, definedAt) }
             }
           }
-          // match the target table
+          // match the source table
+
+        case DerefObjectStatic(source, field) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ deref field }
+          }
+
+        case DerefArrayStatic(source, element) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ deref element }
+          }
       }
     }
     
