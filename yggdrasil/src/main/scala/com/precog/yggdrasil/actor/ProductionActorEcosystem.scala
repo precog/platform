@@ -44,18 +44,18 @@ trait ProductionActorConfig extends ActorEcosystemConfig {
 trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
   type YggConfig <: ProductionActorConfig
 
-  protected val logPrefix = "[Production Yggdrasil Shard]"
+  protected def logPrefix = "[Production Yggdrasil Shard]"
 
-  val actorSystem = ActorSystem("production_actor_system")
+  lazy val actorSystem = ActorSystem("production_actor_system")
 
-  val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
+  lazy val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
   lazy val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 
   protected def actorsWithStatus = ingestActor.toList ++
-                                   ingestSupervisor.toList ++
-                                   (metadataActor :: projectionsActor :: Nil)
-  lazy val ingestActor = {
+                                   (ingestSupervisor :: metadataActor :: projectionsActor :: Nil)
+
+  lazy val ingestActor: Option[ActorRef] = {
     logger.info("Starting ingest actor")
     implicit val timeout = Timeout(45000l)
     // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
@@ -71,11 +71,11 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
   // Internal only actors
   //
   
-  private val metadataSyncCancel = 
+  private lazy val metadataSyncCancel = 
     actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
 
   protected def actorsStopInternal: Future[Unit] = {
-    import yggConfig.stopTimeout
+    implicit val stopTimeout = yggConfig.stopTimeout
 
     metadataSyncCancel.cancel
     for {

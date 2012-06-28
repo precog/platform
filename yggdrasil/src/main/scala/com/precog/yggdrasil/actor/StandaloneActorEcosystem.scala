@@ -42,8 +42,7 @@ abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[D
 
   val shardId = "standalone"
 
-  protected lazy val actorsWithStatus = ingestSupervisor.toList ++
-                                        (metadataActor :: projectionsActor :: Nil)
+  protected lazy val actorsWithStatus = ingestSupervisor :: metadataActor :: projectionsActor :: Nil
 
   protected def actorsStopInternal: Future[Unit] = {
     for {

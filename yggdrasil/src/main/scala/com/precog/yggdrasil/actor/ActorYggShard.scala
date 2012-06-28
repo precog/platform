@@ -42,22 +42,13 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with ActorEcosystem wi
   
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
     implicit val ito = timeout
-    val pollActor = actorSystem.actorOf(Props[PollBatchActor])
-    val batchHandler = actorSystem.actorOf(Props(new BatchHandler(pollActor, null, YggCheckpoint.Empty, Timeout(120000))))
-    ingestSupervisor map { ingestSupervisor =>
-      ingestSupervisor.tell(DirectIngestData(msgs), batchHandler)
+    val result = Promise.apply[BatchComplete]
+    val notifier = actorSystem.actorOf(Props(new BatchCompleteNotifier(result)))
+    val batchHandler = actorSystem.actorOf(Props(new BatchHandler(notifier, null, YggCheckpoint.Empty, Timeout(120000))))
+    ingestSupervisor.tell(DirectIngestData(msgs), batchHandler)
 
-      // Poll until we get a result
-      while (true) {
-        Await.result(pollActor ? PollBatch, 1 second) match {
-          case None => // NOOP, keep waiting
-          case _    => return Future(()) // Done
-        }
-      }
-
-      Future(()) // Done
-    } getOrElse {
-      Futures.failed[Unit](new IllegalStateException("No ingest subsystem present"), implicitly[ExecutionContext])
+    result map { complete =>
+      logger.debug("Batch store complete: " + complete)
     }
   }
 }

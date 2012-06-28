@@ -70,8 +70,6 @@ trait YggUtilsCommon {
       (d, descriptor)
     }
   }
-  
-
 }
 
 object YggUtils {
@@ -670,6 +668,7 @@ object ImportTools extends Command with Logging {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
+      opt("s", "storage", "<storage root>", "directory containing leveldb data files", { s: String => config.storageRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -688,15 +687,14 @@ object ImportTools extends Command with Logging {
   }
 
   def process(config: Config) {
-    val dir = new File("./data") 
-    dir.mkdirs
+    config.storageRoot.mkdirs
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(dir, new FilesystemFileOps {})) yield {
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, new FilesystemFileOps {})) yield {
       object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
 
-        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val metadataStorage = ms
 
@@ -709,10 +707,11 @@ object ImportTools extends Command with Logging {
       config.input.foreach {
         case (db, input) =>
           logger.debug("Inserting batch: %s:%s".format(db, input))
-          val events = Source.fromFile(input).getLines.map {
-            line => EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, JsonParser.parse(line), Map.empty))
-          }.toList
-        
+          val reader = new FileReader(new File(input))
+          val events = JsonParser.parse(reader).children.map { child =>
+            EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
+          }
+          
           logger.debug(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
@@ -739,7 +738,8 @@ object ImportTools extends Command with Logging {
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
     var token: TokenID = "root",
-    var verbose: Boolean = false 
+    var verbose: Boolean = false ,
+    var storageRoot: File = new File("./data")
   )
 }
 
@@ -860,10 +860,10 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant: Future[Grant] = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant: Future[Grant]  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant: Future[Grant] = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List[Future[Grant]](ownerGrant, readGrant, writeGrant))
+      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
       result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
     } yield {
       result match {
