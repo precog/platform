@@ -1,4 +1,4 @@
-check process dev-ingest-v1 with pidfile /var/run/precog/ingest-v1.pid
+check process ingest-v1 with pidfile /var/run/precog/ingest-v1.pid
   start program = "/usr/sbin/service ingest-v1 start" with timeout 30 seconds
   stop program  = "/usr/sbin/service ingest-v1 stop"
   if failed port 30060 protocol http and request '/blueeyes/services/ingest/v1/health' with timeout 15 seconds for 3 cycles 
@@ -15,10 +15,10 @@ check file ingest-v1.server.log with path /var/log/precog/ingest-v1.server.log
   group ingest-v1
 
 
-#check file dev-ingest-v1-health.log with path /var/log/precog/dev-ingest-v1-health.log
-#  start program  = "/usr/bin/touch -c /var/log/precog/dev-ingest-v1-health.log && /bin/chown precog:precog /var/log/precog/dev-ingest-v1-health.log"
-#  stop program  = "/bin/rm /var/log/precog/dev-ingest-v1-health.log"
+#check file ingest-v1-health.log with path /var/log/precog/ingest-v1-health.log
+#  start program  = "/usr/bin/touch -c /var/log/precog/ingest-v1-health.log && /bin/chown precog:precog /var/log/precog/ingest-v1-health.log"
+#  stop program  = "/bin/rm /var/log/precog/ingest-v1-health.log"
 #  if timestamp > 20 minutes then alert
 #  if match "ERROR" for 3 cycles then alert
-#  depends on dev-ingest-v1
-#  group dev-ingest-v1
+#  depends on ingest-v1
+#  group ingest-v1
