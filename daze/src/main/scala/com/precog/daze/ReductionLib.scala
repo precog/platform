@@ -31,14 +31,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
 
   import yggConfig._
 
-  object Count extends BIR(ReductionNamespace, "count") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Count extends Morphism(ReductionNamespace, "count") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       Some(SDecimal(BigDecimal(enum.count))) 
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
 
-  object Max extends BIR(ReductionNamespace, "max") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Max extends Morphism(ReductionNamespace, "max") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
         case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
@@ -48,11 +50,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
 
       if (max.isDefined) max map { v => SDecimal(v) }
       else None
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
 
-  object Min extends BIR(ReductionNamespace, "min") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Min extends Morphism(ReductionNamespace, "min") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val min = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
         case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
@@ -62,11 +66,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       
       if (min.isDefined) min map { v => SDecimal(v) }
       else None
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object Sum extends BIR(ReductionNamespace, "sum") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Sum extends Morphism(ReductionNamespace, "sum") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sum = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
         case (Some(sum), SDecimal(v)) => Some(sum + v)
@@ -75,11 +81,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
 
       if (sum.isDefined) sum map { v => SDecimal(v) }
       else None
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object Mean extends BIR(ReductionNamespace, "mean") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Mean extends Morphism(ReductionNamespace, "mean") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
         case ((count, total), SDecimal(v)) => (count + 1, total + v)
         case (total, _) => total
@@ -87,11 +95,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       
       if (count == BigDecimal(0)) None
       else Some(SDecimal(total / count))
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object GeometricMean extends BIR(ReductionNamespace, "geometricMean") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object GeometricMean extends Morphism(ReductionNamespace, "geometricMean") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
         case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
         case (acc, _) => acc
@@ -99,11 +109,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       
       if (count == BigDecimal(0)) None
       else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object SumSq extends BIR(ReductionNamespace, "sumSq") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object SumSq extends Morphism(ReductionNamespace, "sumSq") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sumsq = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v * v)
         case (Some(sumsq), SDecimal(v)) => Some(sumsq + (v * v))
@@ -112,11 +124,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
 
       if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
       else None
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object Variance extends BIR(ReductionNamespace, "variance") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Variance extends Morphism(ReductionNamespace, "variance") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
         case (acc, _) => acc
@@ -124,11 +138,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
 
       if (count == BigDecimal(0)) None
       else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object StdDev extends BIR(ReductionNamespace, "stdDev") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object StdDev extends Morphism(ReductionNamespace, "stdDev") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
         case (acc, _) => acc
@@ -136,11 +152,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       
       if (count == BigDecimal(0)) None
       else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object Median extends BIR(ReductionNamespace, "median") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Median extends Morphism(ReductionNamespace, "median") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
       val count = enum.reduce(BigDecimal(0)) {
@@ -174,11 +192,13 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
         if (median.isDefined) median map { v => SDecimal(v) }
         else None
       }
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
   
-  object Mode extends BIR(ReductionNamespace, "mode") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
+  object Mode extends Morphism(ReductionNamespace, "mode") {
+    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
       val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
@@ -203,6 +223,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       }
       
       Some(SArray(Vector(modes: _*))) 
-    }
+    } */
+    
+    def apply(table: Table) = table
   }
 }
