@@ -48,6 +48,18 @@ trait TransformSpec extends TableModuleSpec {
     results must_== (-10 to 10).map(x => JInt(-x))
   }
 
+  def checkTrivialFilter = check { (sample: SampleData) =>
+    val table = fromJson(sample)
+    val results = toJson(table.transform {
+      Filter(
+        Leaf(Source), 
+        Leaf(Source)
+      )
+    })
+
+    results must_== sample.data
+  }
+
   def checkTrueFilter = check { (sample: SampleData) =>
     val table = fromJson(sample)
     val results = toJson(table.transform {
