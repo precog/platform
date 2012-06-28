@@ -46,7 +46,7 @@ trait TransformSpec extends TableModuleSpec {
   def testMap1IntLeaf = {
     val sample = (-10 to 10).map(JInt(_)).toStream
     val table = fromJson(SampleData(sample))
-    val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Vector(), "negate")) })
+    val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Nil, "negate")) })
 
     results must_== (-10 to 10).map(x => JInt(-x))
   }
@@ -73,7 +73,7 @@ trait TransformSpec extends TableModuleSpec {
       val results = toJson(table.transform {
         Filter(
           Leaf(Source), 
-          Map1(Leaf(Source), lookupF1(Vector(), "true"))
+          Map1(Leaf(Source), lookupF1(Nil, "true"))
         )
       })
 

@@ -40,6 +40,8 @@ trait Slice { source =>
 
   def columns: Map[ColumnRef, Column]
 
+  lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
+
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {

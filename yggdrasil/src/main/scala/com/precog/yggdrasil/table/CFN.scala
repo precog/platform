@@ -37,3 +37,16 @@ class CF2(f: (Column, Column) => Option[Column]) extends ((Column, Column) => Op
 
 class CF2P(f: PartialFunction[(Column, Column), Column]) extends CF2(Function.untupled(f.lift))
 
+trait CScanner {
+  type A
+  def init: A
+  def scan(a: A, col: Column, range: Range): (A, Option[Column])
+}
+
+trait CReducer[@specialized(Boolean, Long, Double) A] {
+  def reduce(col: Column, range: Range): A
+}
+
+
+/* ctags
+type CFN */

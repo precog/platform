@@ -53,9 +53,6 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
 
   def debugPrint(dataset: Table): Unit 
 
-  def lookupF1(namespace: Vector[String], name: String): F1
-  def lookupF2(namespace: Vector[String], name: String): F2
-
   implicit def keyOrder[A]: scala.math.Ordering[(Identities, A)] = tupledIdentitiesOrder[A](IdentitiesOrder).toScalaOrdering
 
   def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {

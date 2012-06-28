@@ -119,6 +119,8 @@ object NullColumn {
 
 
 object Column {
+  @inline def const(cv: CValue): Column = sys.error("todo")
+
   @inline def const(v: Boolean) = new BoolColumn {
     def isDefinedAt(row: Int) = true
     def apply(row: Int) = v
