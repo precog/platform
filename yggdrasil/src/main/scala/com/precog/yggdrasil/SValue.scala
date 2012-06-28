@@ -45,13 +45,13 @@ sealed trait SValue {
     } else {
       this match {
         case SObject(obj) => 
-          selector.nodes match {
+          (selector.nodes : @unchecked) match {
             case JPathField(name) :: Nil => obj.get(name)
             case JPathField(name) :: xs  => obj.get(name).flatMap(_ \ JPath(xs)) 
           }
 
         case SArray(arr) => 
-          selector.nodes match {
+          (selector.nodes : @unchecked) match {
             case JPathIndex(i)    :: Nil => arr.lift(i) 
             case JPathIndex(i)    :: xs  => arr.lift(i).flatMap(_ \ JPath(xs)) 
           }
@@ -63,7 +63,7 @@ sealed trait SValue {
 
   def set(selector: JPath, cv: CValue): Option[SValue] = this match {
     case SObject(obj) => 
-      selector.nodes match {
+      (selector.nodes : @unchecked) match {
         case JPathField(name) :: Nil => Some(SObject(obj + (name -> cv.toSValue))) 
         case JPathField(name) :: xs  => 
           val child = xs.head match { 
@@ -75,7 +75,7 @@ sealed trait SValue {
       }
 
     case SArray(arr) => 
-      selector.nodes match {
+      (selector.nodes : @unchecked) match {
         case JPathIndex(i) :: Nil => Some(SArray(arr.padTo(i + 1, SNull).updated(i, cv.toSValue))) 
         case JPathIndex(i) :: xs  => 
           val child = xs.head match { 
