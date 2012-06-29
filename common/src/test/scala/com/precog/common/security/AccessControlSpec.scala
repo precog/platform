@@ -252,7 +252,9 @@ trait TokenManagerTestValues extends AkkaDefaults {
     Await.result(Future.sequence(rootGrants.map{ g =>
       tokens.findGrant(g).flatMap {
         case Some(g) => 
-          tokens.newGrant(Some(g.gid), g.permission) }.map { _.gid }
+          tokens.newGrant(Some(g.gid), g.permission)
+        case _ => throw new MatchError("Grant not found")
+      }.map { _.gid }
     }),timeout)
   }
 
@@ -265,7 +267,9 @@ trait TokenManagerTestValues extends AkkaDefaults {
               oi.derive(path = "/child")
             case Grant(_, _, oa: OwnerAwarePermission) => 
               oa.derive(path = "/child", owner = t.tid)
-          }).map { _.gid } }
+          }).map { _.gid }
+        case _ => throw new MatchError("Grant not found")
+      }
     }), timeout)
   }
 
@@ -294,7 +298,9 @@ trait TokenManagerTestValues extends AkkaDefaults {
               oi.derive(path = "/child")
             case Grant(_, _, oa: OwnerAwarePermission) => 
               oa.derive(path = "/child", owner = t.tid)
-          }).map { _.gid } }
+          }).map { _.gid }
+        case _ => throw new MatchError("Grant not found")
+      }
     }), timeout)
   }
 
@@ -330,11 +336,13 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
               oi.derive(path = "/" + name)
             case Grant(gid, _, oa: OwnerAwarePermission) => 
               oa.derive(path = "/", owner = t.tid)
-          }).map { _.gid }}
+          }).map { _.gid }
+          case _ => throw new MatchError("Grant not found")
+        }
       }), timeout)
     }
   }
- 
+
   def addGrants(token: Token, grants: Set[GrantID]): Option[Token] = {
     Await.result(tokens.findToken(token.tid).flatMap { _ match {
       case None => Future(None)
@@ -359,7 +367,9 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
               oi
             case Grant(gid, _, oa: OwnerAwarePermission) => 
               oa.derive(owner = t.tid)
-          }).map { _.gid } }
+          }).map { _.gid }
+        case _ => throw new MatchError("Grant not found")
+      }
     }), timeout)
   }
 
@@ -420,6 +430,7 @@ trait UseCasesTokenManagerTestValues extends AkkaDefaults {
         case Grant(_, _, oa: OwnerAwarePermission) => 
           oa.derive(path = "/customer/cust-id", owner = t.tid)
       }).map { _.gid }
+      case _ => throw new MatchError("Grant not found")
     }})}, timeout)
   }
 

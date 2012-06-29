@@ -79,7 +79,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent w
       }
       
       if (count == BigDecimal(0)) None
-      else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
+      else Some(SDecimal(scala.math.pow(total.toDouble, 1 / count.toDouble)))
     }
   }
   
