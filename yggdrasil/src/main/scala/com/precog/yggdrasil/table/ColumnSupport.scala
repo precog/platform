@@ -62,7 +62,7 @@ class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this
   def isDefinedAt(row: Int) = f.isDefinedAt(row) && delegate.isDefinedAt(f(row))
 }
 
-class ConstColumn { this: Column =>
+class InfiniteColumn { this: Column =>
   def isDefinedAt(row: Int) = true
 }
 

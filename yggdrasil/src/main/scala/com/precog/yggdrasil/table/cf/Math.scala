@@ -57,8 +57,6 @@ object math {
       def apply(row: Int) = c1(row) % c2(row)
     }
   })
-
-
 }
 
 // vim: set ts=4 sw=4 et:

@@ -126,32 +126,32 @@ object Column {
     case CNum(v)      => const(v)
     case CString(v)   => const(v)
     case CDate(v)     => const(v)
-    case CEmptyObject => new ConstColumn with EmptyObjectColumn 
-    case CEmptyArray  => new ConstColumn with EmptyArrayColumn 
-    case CNull        => new ConstColumn with NullColumn 
+    case CEmptyObject => new InfiniteColumn with EmptyObjectColumn 
+    case CEmptyArray  => new InfiniteColumn with EmptyArrayColumn 
+    case CNull        => new InfiniteColumn with NullColumn 
   }
 
-  @inline def const(v: Boolean) = new ConstColumn with BoolColumn {
+  @inline def const(v: Boolean) = new InfiniteColumn with BoolColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: Long) = new ConstColumn with LongColumn {
+  @inline def const(v: Long) = new InfiniteColumn with LongColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: Double) = new ConstColumn with DoubleColumn {
+  @inline def const(v: Double) = new InfiniteColumn with DoubleColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: BigDecimal) = new ConstColumn with NumColumn {
+  @inline def const(v: BigDecimal) = new InfiniteColumn with NumColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: String) = new ConstColumn with StrColumn {
+  @inline def const(v: String) = new InfiniteColumn with StrColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: DateTime) = new ConstColumn with DateColumn {
+  @inline def const(v: DateTime) = new InfiniteColumn with DateColumn {
     def apply(row: Int) = v
   }
 
