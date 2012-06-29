@@ -1185,7 +1185,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, true))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, false))
       d.errors must beEmpty
     }
     
@@ -1238,7 +1238,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdLibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003, true))
+      d2.binding mustEqual StdLibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003, false))
       d2.errors must beEmpty
     }
     
@@ -1272,7 +1272,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, true))
+      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, false))
       d.errors must beEmpty
     }
     
