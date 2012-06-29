@@ -77,6 +77,8 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   
   protected def checkpointCoordination: CheckpointCoordination
 
+  protected def initialCheckpoint: Option[YggCheckpoint]
+
   protected def metadataStorage: MetadataStorage
 
   //
@@ -85,7 +87,7 @@ trait BaseActorEcosystem[Dataset[_]] extends ActorEcosystem with ProjectionsActo
   
   lazy val metadataActor = {
     logger.debug("Starting MetadataActor with storage = " + metadataStorage)
-    actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination)), "metadata")
+    actorSystem.actorOf(Props(new MetadataActor(shardId, metadataStorage, checkpointCoordination, initialCheckpoint)), "metadata")
   }
   
   lazy val projectionsActor =

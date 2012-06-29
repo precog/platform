@@ -37,6 +37,8 @@ import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s.Logging
 
+import scalaz._
+
 import java.net.InetAddress
 
 trait ProductionActorConfig extends ActorEcosystemConfig {
@@ -69,21 +71,32 @@ trait ProductionActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] w
 
   lazy val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
 
-  lazy val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
+  def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
+
+  lazy val initialCheckpoint = checkpointCoordination.loadYggCheckpoint(shardId) match {
+      case Some(Failure(errors)) =>
+        // TODO: This could be normal state on the first startup of a shard
+        logger.error("Unable to load Kafka checkpoint: " + errors)
+        sys.error("Unable to load Kafka checkpoint: " + errors)
+
+      case Some(Success(checkpoint)) => Some(checkpoint)
+      case None => None
+    } 
 
   protected def actorsWithStatus = ingestActor.toList ++
                                    (ingestSupervisor :: metadataActor :: projectionsActor :: Nil)
 
-  lazy val ingestActor: Option[ActorRef] = {
-    logger.info("Starting ingest actor")
-    implicit val timeout = Timeout(45000l)
-    // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
-    logger.debug("Requesting checkpoint from metadata")
-    Await.result((metadataActor ? GetCurrentCheckpoint).mapTo[Option[YggCheckpoint]], 45 seconds) map { checkpoint =>
-      logger.debug("Checkpoint load complete")
-      val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-      actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
-    }
+  lazy val ingestActor: Option[ActorRef] = initialCheckpoint map { 
+    checkpoint => 
+      logger.info("Starting ingest actor")
+      implicit val timeout = Timeout(300000l)
+      // We can't have both actors trying to lock the ZK element or we race, so we just delegate to the metadataActor
+      //logger.debug("Requesting checkpoint from metadata")
+      //Await.result((metadataActor ? GetCurrentCheckpoint).mapTo[Option[YggCheckpoint]], 300 seconds) map { checkpoint =>
+        logger.debug("Checkpoint load complete")
+        val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+        actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
+      //}
   }
 
   //

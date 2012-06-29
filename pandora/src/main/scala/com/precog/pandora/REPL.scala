@@ -291,6 +291,7 @@ object Console extends App {
         object storage extends Storage {
           val yggConfig = replConfig
           val metadataStorage = fileMetadataStorage
+          val initialCheckpoint = None
           val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
