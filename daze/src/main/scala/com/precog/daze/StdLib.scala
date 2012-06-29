@@ -51,7 +51,7 @@ trait ImplLibrary extends Library {
     def f1: F1
   }
 
-  trait BuiltInFunc2Impl extends BuiltInFunc2 {
+  trait Op2Impl extends Op2Like with MorphismImpl {
     lazy val alignment = None
     def f2: F2
   }
