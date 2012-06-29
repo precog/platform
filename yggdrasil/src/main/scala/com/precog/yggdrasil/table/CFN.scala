@@ -30,4 +30,4 @@ trait CReducer[@specialized(Boolean, Long, Double) A] {
 
 
 /* ctags
-type CFN */
+type FN */

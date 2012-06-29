@@ -1,7 +1,6 @@
 package com.precog.yggdrasil
 package table
 
-import functions._
 import com.precog.common.Path
 import com.precog.common.VectorCase
 
@@ -45,7 +44,10 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
   }
 
   def lookupF2(namespace: List[String], name: String): F2 = {
-    val lib  = Map[String, CF2]()
+    val lib  = Map[String, CF2](
+      "mod" -> cf.math.Mod,
+      "eq"  -> cf.std.Eq
+    )
     lib(name)
   }
 
@@ -202,8 +204,9 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     "in transform" >> {
       "perform the identity transform" in checkTransformLeaf
       "perform a trivial map1" in testMap1IntLeaf
-      "give the identity transform for the trivial filter" in checkTrivialFilter
+      //"give the identity transform for the trivial filter" in checkTrivialFilter
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
+      "give the identity transform for a nontrivial filter" in checkFilter
       "perform an object dereference" in checkObjectDeref
     }
   }

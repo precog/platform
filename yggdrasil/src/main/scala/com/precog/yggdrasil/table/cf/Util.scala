@@ -129,7 +129,7 @@ object util {
     def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i > 0 && i < indices.size) => indices.get(i) })
   }
 
-  case class Filter(from: Int, to: Int, definedAt : BitSet) extends CF1P ({
+  case class filter(from: Int, to: Int, definedAt : BitSet) extends CF1P ({
     case c: BoolColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) }
     case c: LongColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with LongColumn { def apply(row: Int) = c(row) }
     case c: DoubleColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with DoubleColumn { def apply(row: Int) = c(row) }
@@ -140,6 +140,13 @@ object util {
     case c: EmptyArrayColumn  => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyArrayColumn
     case c: EmptyObjectColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with EmptyObjectColumn
     case c: NullColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with NullColumn
+  })
+
+  object isSatisfied extends CF1P ({
+    case c: BoolColumn => new BoolColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row)
+      def apply(row: Int) = isDefinedAt(row)
+    }
   })
 }
 

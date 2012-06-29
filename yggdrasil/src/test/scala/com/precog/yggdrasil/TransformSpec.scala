@@ -32,6 +32,7 @@ trait TransformSpec extends TableModuleSpec {
     results must_== (-10 to 10).map(x => JInt(-x))
   }
 
+  /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
   def checkTrivialFilter = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
@@ -46,6 +47,7 @@ trait TransformSpec extends TableModuleSpec {
       results must_== sample.data
     }
   }
+  */
 
   def checkTrueFilter = {
     implicit val gen = sample(schema)
@@ -62,8 +64,33 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
+  def checkFilter = {
+    implicit val gen = sample(_ => Gen.value(Seq(JPath.Identity -> CLong)))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Filter(
+          Leaf(Source), 
+          Map1(
+            DerefObjectStatic(Leaf(Source), JPathField("value")), 
+            lookupF2(Nil, "mod").applyr(CLong(2)) andThen lookupF2(Nil, "eq").applyr(CLong(0))
+          )
+        )
+      })
+
+      val expected = sample.data map { jv =>
+        (jv \ "value") match { 
+          case JInt(x) if x.longValue % 2 == 0 => jv
+          case _ => JNothing 
+        }
+      }
+
+      results must_== expected
+    }
+  }
+
   def checkObjectDeref = {
-    implicit val gen: Arbitrary[SampleData] = sample(objectSchema(_, 3))
+    implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>
       val (field, _) = sample.schema.get.head
       val fieldHead = field.head.get
