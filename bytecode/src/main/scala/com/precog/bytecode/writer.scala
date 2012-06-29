@@ -65,6 +65,8 @@ trait BytecodeWriter extends Writer with Version {
         
         case FilterMatch(_, None) => 0
         case FilterCross(_, None) => 0
+        case FilterCrossLeft(_, None) => 0
+        case FilterCrossRight(_, None) => 0
         
         case Swap(depth) => {
           writeInt(4, buffer)

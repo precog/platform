@@ -73,7 +73,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
     private def fullProjectionFuture(userUID: String, path: Path, expiresAt: Long, release: Release): Future[Dataset[SValue]] = {
       logger.debug("Full projection future on %s for %s from %s".format(path, userUID, storage))
       for {
-        pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) 
+        pathRoot <- storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity)
         dataset  <- assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot), expiresAt, release)
       } yield {
         dataset
@@ -85,7 +85,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
      */
     override def mask(userUID: String, path: Path): DatasetMask[Dataset] = {
       logger.trace("Mask %s for %s".format(path, userUID))
-      LevelDBDatasetMask(userUID, path, None, None) 
+      LevelDBDatasetMask(userUID, path, None, None)
     }
 
     private case class LevelDBDatasetMask(userUID: String, path: Path, selector: Option[JPath], tpe: Option[SType]) extends DatasetMask[Dataset] {
@@ -99,23 +99,23 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
         logger.trace("Realizing %s:%s:%s for %s".format(path, selector, tpe, userUID))
         Await.result(
         (selector, tpe) match {
-          case (Some(s), None | Some(SObject) | Some(SArray)) => 
-            storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot => 
+          case (Some(s), None | Some(SObject) | Some(SArray)) =>
+            storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot =>
               assemble(path, s, sources(s, pathRoot), expiresAt, release)
             }
 
-          case (Some(s), Some(tpe)) => 
+          case (Some(s), Some(tpe)) =>
             storage.userMetadataView(userUID).findPathMetadata(path, s) flatMap { pathRoot =>
-              assemble(path, s, sources(s, pathRoot) filter { 
+              assemble(path, s, sources(s, pathRoot) filter {
                 case (_, `tpe`, _) => true
                 case _ => false
               }, expiresAt, release)
             }
 
-          case (None   , Some(tpe)) if tpe != SObject && tpe != SArray => 
+          case (None   , Some(tpe)) if tpe != SObject && tpe != SArray =>
             storage.userMetadataView(userUID).findPathMetadata(path, JPath.Identity) flatMap { pathRoot =>
-              assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter { 
-                case (_, `tpe`, _) => true 
+              assemble(path, JPath.Identity, sources(JPath.Identity, pathRoot) filter {
+                case (_, `tpe`, _) => true
                 case _ => false
               }, expiresAt, release)
             }
@@ -137,7 +137,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case PathIndex(idx, children) =>
             children.flatMap(search(_, selector \ idx, acc))
 
-          case PathValue(valueType, _, descriptors) => 
+          case PathValue(valueType, _, descriptors) =>
             descriptors.headOption map { case (d, _) => acc + ((selector, valueType.stype, d)) } getOrElse acc
         }
       }
@@ -165,16 +165,16 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
               case _ => sys.error("Inconsistent JSON structure: " + selectors)
             },
             selectors map { s =>
-              (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector)) 
+              (s.dropPrefix(prefix).get, descriptor.columns.indexWhere(col => col.path == path && s == col.selector))
             }
           )
         }
 
         def joinNext(retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
-          case (descriptor, selectors) :: x :: xs => 
+          case (descriptor, selectors) :: x :: xs =>
             val (init, instr) = buildInstructions(descriptor, selectors)
             for {
-              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout)
               dataset    <- joinNext(x :: xs)
             } yield {
               release += prelease.release
@@ -191,14 +191,16 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case (descriptor, selectors) :: Nil =>
             val (init, instr) = buildInstructions(descriptor, selectors)
             for {
-              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+              (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout)
             } yield {
               release += prelease.release
               ops.extend(projection.getAllPairs(expiresAt)) map { appendToObject(init, instr, _) }
             }
+
+          case Nil => Future(ops.empty[SValue](1))
         }
 
-        if (retrievals.isEmpty) Future(ops.empty[SValue](1)) else joinNext(retrievals.toList)
+        joinNext(retrievals.toList)
       }
 
       // determine the projections from which to retrieve data
@@ -206,7 +208,7 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // projection containing a desired column wins. It should be implemented
       // to choose the projection that satisfies the largest number of columns.
       val minimalDescriptors = sources.foldLeft(Map.empty[JPath, Set[ProjectionDescriptor]]) {
-        case (acc, (selector, _, descriptor)) => 
+        case (acc, (selector, _, descriptor)) =>
           acc.get(selector) match {
             case Some(chosen) if chosen.contains(descriptor) ||
                                  (chosen exists { d => descriptor.columnAt(path, selector).exists(d.satisfies) }) => acc

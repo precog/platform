@@ -106,6 +106,7 @@ object LevelDBByteProjectionSpec {
       case (seq, CEmptyArray) => seq :+ cvEmptyArray
       case (seq, CEmptyObject) => seq :+ cvEmptyObject
       case (seq, CNull) => seq :+ cvNull
+      case _ => throw new MatchError("Unexpected type")
     }
   }
 }

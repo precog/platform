@@ -75,7 +75,7 @@ class EventRouter(routeTable: RouteTable, messaging: Messaging) {
     val routes = routeTable.routeTo(msg.event).list
     val futures: List[Future[Unit]] = routes map { messaging.send(_, msg) }
 
-    Future.find(futures) { _ == () } map { _.isDefined }
+    Future.find(futures)(_ => true) map { _.isDefined }
   }
 
   def close(implicit dispatcher: MessageDispatcher): Future[Any] = {

@@ -171,6 +171,7 @@ trait YggdrasilQueryExecutor
     val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
+      // Rewrite with collect or fold?
       val (primitives, compounds) = children.partition {
         case PathValue(_, _, _) => true
         case _                  => false
@@ -183,10 +184,12 @@ trait YggdrasilQueryExecutor
         case PathField(f, children) =>
           val path = "." + f
           JField(path, transform(children))
+        case _ => throw new MatchError("Non-compound in compounds")
       }.toList
 
       val types = JArray(primitives.map { 
         case PathValue(t, _, _) => JString(CType.nameOf(t))
+        case _ => throw new MatchError("Non-primitive in primitives")
       }.toList)
 
       JObject(fields :+ JField("types", types))
