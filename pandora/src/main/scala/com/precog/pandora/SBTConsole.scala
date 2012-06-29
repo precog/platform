@@ -102,6 +102,7 @@ object SBTConsole {
     object storage extends Storage {
       val yggConfig = console.yggConfig
       val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+      val initialCheckpoint = None
       val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
 

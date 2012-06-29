@@ -35,12 +35,13 @@ object MetadataActor {
   }
 }
 
-class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor with Logging { metadataActor =>
+//class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor with Logging { metadataActor =>
+class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination, initialCheckpoint: Option[YggCheckpoint]) extends Actor with Logging { metadataActor =>
   import MetadataActor._
   import ProjectionMetadata._
   
-  private var messageClock: VectorClock = _
-  private var kafkaOffset: Option[Long] = None
+  private var messageClock: VectorClock = initialCheckpoint map { _.messageClock } getOrElse { VectorClock.empty }
+  private var kafkaOffset: Option[Long] = initialCheckpoint map { _.offset }
   private var projections: Map[ProjectionDescriptor, ColumnMetadata] = Map()
   private var dirty: Set[ProjectionDescriptor] = Set()
   private var flushRequests = 0
@@ -49,6 +50,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
   override def preStart(): Unit = {
     logger.info("Loading yggCheckpoint...")
 
+/*
     checkpointCoordination.loadYggCheckpoint(shardId) match {
       case Some(Success(checkpoint)) =>
         messageClock = checkpoint.messageClock
@@ -64,6 +66,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
         messageClock = VectorClock.empty
         kafkaOffset = None
     } 
+    */
 
     logger.info("MetadataActor yggCheckpoint load complete")
   }

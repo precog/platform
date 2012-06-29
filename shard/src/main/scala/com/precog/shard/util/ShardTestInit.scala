@@ -37,6 +37,7 @@ object ShardTestInit extends App {
 
     val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
     val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+    val initialCheckpoint = None
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 

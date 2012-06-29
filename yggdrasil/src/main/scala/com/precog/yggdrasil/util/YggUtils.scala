@@ -697,6 +697,8 @@ object ImportTools extends Command with Logging {
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val metadataStorage = ms
+        
+        val initialCheckpoint = None
 
         val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
       }
