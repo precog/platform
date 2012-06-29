@@ -99,6 +99,16 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       }
     }
 
+    "accept a let followed by a wildcard import" in {
+      parse("""
+        | foo :=
+        |   import std::time::_
+        |   //foo
+        | foo""".stripMargin) must beLike {
+        case Let(_, _, _, Import(_, WildcardImport(Vector("std", "time")), _), _) => ok
+      }
+    }
+
     "accept a wildcard import followed by a distinct" in {
       parse("""
         | import std::time::_
@@ -145,7 +155,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "accept a forall expression followed by a let" in {
       parse("forall 'a foo('b) := 'b + 'a foo") must beLike {
-      case Forall(_, "'a", Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
+        case Forall(_, "'a", Let(_, Identifier(Vector(), "foo"), Vector("'b"), Add(_, TicVar(_, "'b"), TicVar(_, "'a")), Dispatch(_, Identifier(Vector(), "foo"), Vector()))) => ok
       }
     }
     
@@ -159,13 +169,13 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("foo('a) := (forall 'b 'a + 'b) foo") must beLike {
         case Let(_, Identifier(Vector(), "foo"), Vector("'a"), Paren(_, Forall(_, "'b", Add(_, TicVar(_, "'a"), TicVar(_, "'b")))), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
-    }    
+    }
         
     "accept a let expression followed by a forall with no parens around the forall" in {
       parse("foo := forall 'b 'b foo") must beLike {
         case Let(_, Identifier(Vector(), "foo"), Vector(), Forall(_, "'b", TicVar(_, "'b")), Dispatch(_, Identifier(Vector(), "foo"), Vector())) => ok
       }
-    }.pendingUntilFixed    
+    }
     
     "disambiguate forall and let" in {
       parse("forall 'a foo('b) := (forall 'c 'b + 'c) foo + 'a") must beLike {
@@ -183,13 +193,13 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("new foo := //foo foo") must beLike {
         case New(_, _) => ok
       }
-    }.pendingUntilFixed
+    }
 
     "accept a 'new' expression followed by a forall" in {
       parse("new forall 'a 'a") must beLike {
         case New(_, _) => ok
       }
-    }.pendingUntilFixed
+    }
     
     "accept a relate expression" in {
       parse("1 ~ 2 3") must beLike {

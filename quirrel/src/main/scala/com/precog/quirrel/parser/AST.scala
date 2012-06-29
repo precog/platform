@@ -656,8 +656,12 @@ trait AST extends Phases {
       override def children = List(child)
     }
 
-    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprBinaryNode {
+    final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprUnaryNode {
       val label = 'let
+      
+      val isPrefix = true
+      
+      def child = right
       
       lazy val criticalConditions = findCriticalConditions(this)
       lazy val groups = findGroups(this)
@@ -745,7 +749,7 @@ trait AST extends Phases {
     
     final case class Deref(loc: LineStream, left: Expr, right: Expr) extends ExprUnaryNode {
       val label = 'deref
-      val isPrefix = true
+      val isPrefix = false
       val child = left
     }
 
