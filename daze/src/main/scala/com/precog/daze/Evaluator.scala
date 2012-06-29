@@ -230,11 +230,15 @@ trait Evaluator extends DAG
         // TODO unary typing
         val Match(spec, set, _) = maybeRealize(loop(parent, assume, splits, ctx), parent, ctx)
         lazy val enum = realizeMatch(spec, set)
-
+        
         op match {
           case BuiltInFunction1Op(f) => {
-            val enum2 = f.evalEnum(enum, o, ctx) getOrElse set
-            Right(Match(mal.Op1(spec, op), enum2, graph))
+            val enumOption = f.evalEnum(enum, o, ctx)
+            enumOption map { enum2 =>
+              Right(Match(mal.Actual, enum2, graph))
+            } getOrElse {
+              Right(Match(mal.Op1(spec, op), set, graph))
+            }
           }
 
           case _ => { 

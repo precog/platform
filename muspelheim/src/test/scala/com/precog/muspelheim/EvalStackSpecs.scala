@@ -571,6 +571,24 @@ trait EvalStackSpecs extends Specification {
     }
 
     "evaluate rank" >> {
+      "of the product of two sets" >> {
+        val input = """
+          | campaigns := //campaigns 
+          | campaigns where std::stats::rank(campaigns.cpm * campaigns.cpm) = 37""".stripMargin
+
+        val results = evalE(input) 
+        
+        results must haveSize(2)
+
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("cpm" -> SDecimal(6))
+          }
+          case r => failure("Result has wrong shape: "+r)
+        }
+      }      
+      
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
