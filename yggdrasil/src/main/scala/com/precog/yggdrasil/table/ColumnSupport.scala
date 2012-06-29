@@ -38,11 +38,11 @@ object BitsetColumn {
   }
 }
 
-class Map1Column[T <: Column](c: T) { this: T =>
+class Map1Column(c: Column) { this: Column =>
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
 }
 
-class Map2Column[T <: Column](c1: T, c2: T) { this: T =>
+class Map2Column(c1: Column, c2: Column) { this: Column =>
   def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
 }
 
@@ -60,6 +60,10 @@ class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
 
 class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this: T =>
   def isDefinedAt(row: Int) = f.isDefinedAt(row) && delegate.isDefinedAt(f(row))
+}
+
+class ConstColumn { this: Column =>
+  def isDefinedAt(row: Int) = true
 }
 
 

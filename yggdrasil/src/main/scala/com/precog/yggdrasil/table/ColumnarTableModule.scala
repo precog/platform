@@ -46,10 +46,19 @@ trait ColumnarTableModule extends TableModule {
   type Reducer[α] = CReducer[α]
   type RowId = Int
 
-  def partialApplyLeft(f: F2, cv: CValue): F1  = new CF1(f(Column.const(cv), _))
-  def partialApplyRight(f: F2, cv: CValue): F1 = new CF1(f(_, Column.const(cv)))
-
   def ops: TableOps = sys.error("todo")
+
+  implicit def liftF1(f: F1) = new F1Like {
+    def compose(f1: F1) = f compose f1
+    def andThen(f1: F1) = f andThen f1
+  }
+
+  implicit def liftF2(f: F2) = new F2Like {
+    def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
+    def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
+
+    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1)
+  }
 
   case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {
     def andThen[B](t: SliceTransform[B]): SliceTransform[(A, B)] = {
@@ -136,8 +145,11 @@ trait ColumnarTableModule extends TableModule {
               s
             } else {
               assert(filter.columns.nonEmpty)
-              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { _ & _.definedAt(0, s.size) }
-              s mapColumns { cf.util.Filter(0, s.size, definedAt) }
+              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
+                cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
+              }
+
+              s mapColumns { cf.util.filter(0, s.size, definedAt) }
             }
           }
           // match the source table

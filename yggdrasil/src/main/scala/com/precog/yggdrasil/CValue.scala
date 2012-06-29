@@ -35,7 +35,7 @@ import scalaz.std._
 import scalaz.std.math._
 import scalaz.std.AllInstances._
 
-sealed abstract class CValue {
+sealed trait CValue {
   @inline 
   private[CValue] final def typeIndex: Int = this match {
     case CString(v) => 0
@@ -310,7 +310,7 @@ sealed trait CNullType extends CType
 //
 // Nulls
 //
-case object CNull extends CType(FixedWidth(0), SNull) with CNullType {
+case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -318,7 +318,7 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType {
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType {
+case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType with CValue {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -326,7 +326,7 @@ case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType {
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
-case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType {
+case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with CValue {
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ

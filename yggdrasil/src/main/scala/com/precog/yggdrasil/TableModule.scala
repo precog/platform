@@ -22,14 +22,9 @@ package com.precog.yggdrasil
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 import scalaz.Monoid
 
-trait TableModule extends Schema {
-  type F1
-  type F2    
+trait TableModule extends FNModule with Schema {
   type Scanner
   type Reducer[α]
-
-  def partialApplyLeft(f: F2, cv: CValue): F1 
-  def partialApplyRight(f: F2, cv: CValue): F1
 
   def lookupF1(namespace: List[String], name: String): F1
   def lookupF2(namespace: List[String], name: String): F2

@@ -119,35 +119,39 @@ object NullColumn {
 
 
 object Column {
-  @inline def const(cv: CValue): Column = sys.error("todo")
+  @inline def const(cv: CValue): Column = cv match {
+    case CBoolean(v)  => const(v)
+    case CLong(v)     => const(v)
+    case CDouble(v)   => const(v)
+    case CNum(v)      => const(v)
+    case CString(v)   => const(v)
+    case CDate(v)     => const(v)
+    case CEmptyObject => new ConstColumn with EmptyObjectColumn 
+    case CEmptyArray  => new ConstColumn with EmptyArrayColumn 
+    case CNull        => new ConstColumn with NullColumn 
+  }
 
-  @inline def const(v: Boolean) = new BoolColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: Boolean) = new ConstColumn with BoolColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: Long) = new LongColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: Long) = new ConstColumn with LongColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: Double) = new DoubleColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: Double) = new ConstColumn with DoubleColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: BigDecimal) = new NumColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: BigDecimal) = new ConstColumn with NumColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: String) = new StrColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: String) = new ConstColumn with StrColumn {
     def apply(row: Int) = v
   }
 
-  @inline def const(v: DateTime) = new DateColumn {
-    def isDefinedAt(row: Int) = true
+  @inline def const(v: DateTime) = new ConstColumn with DateColumn {
     def apply(row: Int) = v
   }
 

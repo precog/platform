@@ -51,6 +51,14 @@ object math {
       def apply(row: Int) = c1(row) + c2(row)
     }
   })
+
+  object Mod extends CF2P ({
+    case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+      def apply(row: Int) = c1(row) % c2(row)
+    }
+  })
+
+
 }
 
 // vim: set ts=4 sw=4 et:
