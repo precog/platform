@@ -261,7 +261,7 @@ trait Emitter extends AST
         
         case t @ ast.TicVar(loc, name) => { 
           t.binding match {
-            case UserDef(let) => {
+            case LetBinding(let) => {
               emitOrDup(MarkTicVar(let, name)) {
                 StateT.apply[Id, Emission, Unit] { e =>
                   e.ticVars((let, name))(e)     // assert: this will work iff lexical scoping is working
@@ -369,29 +369,32 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case BuiltIn(BuiltIns.Load.name, arity, _) =>
-              assert(arity == 1)
+            case MorphismBinding(m @ BuiltIns.Load.name) =>  //todo get rid of BuiltIns - put this in libMorphism
+              assert(m.arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
-            case BuiltIn(BuiltIns.Distinct.name, arity, _) =>
-              assert(arity == 1)
+            case MorphismBinding(m @ BuiltIns.Distinct.name) => //todo get rid of BuiltIns - put this in libMorphism
+              assert(m.arity == 1)
 
-              emitExpr(actuals.head) >> emitInstr(SetReduce(Distinct))
+              emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism(Distinct)))
 
-            case BuiltIn(n, arity, _) =>
-              notImpl(expr)
+            case MorphismBinding(m) => m.arity match {
+              case 1 => emitExpr(actuals.head) >> emitInstr(Morph2(
+              case 2 => sys.error("todo")
+              case _ => notImpl(expr)
+            }
 
-            case RedLibBuiltIn(f) =>
+            case ReductionBinding(f) =>
               emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))
 
-            case StdLibBuiltIn1(op) =>
+            case Op1Binding(op) =>  
               emitUnary(actuals(0), BuiltInFunction1Op(op))
 
-            case StdLibBuiltIn2(op) =>
+            case Op2Binding(op) =>
               emitMap(actuals(0), actuals(1), BuiltInFunction2Op(op))
 
-            case UserDef(let @ ast.Let(loc, id, params, left, right)) =>
+            case LetBinding(let @ ast.Let(loc, id, params, left, right)) =>
               params.length match {
                 case 0 =>
                   emitOrDup(MarkExpr(left))(emitExpr(left))
