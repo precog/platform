@@ -76,6 +76,15 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     SecondsBetween,
     MillisBetween,
 
+    YearsPlus,
+    MonthsPlus,
+    WeeksPlus,
+    DaysPlus,
+    HoursPlus,
+    MinutesPlus,
+    SecondsPlus,
+    MillisPlus,
+
     MillisToISO,
     ChangeTimeZone,
     ParseDateTime
@@ -102,8 +111,9 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     }
   }
 
+  DateTimeZone.setDefault(DateTimeZone.UTC)
+
   object ParseDateTime extends BIF2(TimeNamespace, "parse") {
-    DateTimeZone.setDefault(DateTimeZone.UTC)
 
     val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
@@ -118,11 +128,23 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => 
-        val format = ISODateTimeFormat.dateTime()
+        val newTime = ISODateTimeFormat.dateTimeParser().parseDateTime(time)
         val timeZone = DateTimeZone.forID(tz)
-        val dateTime = new DateTime(time, timeZone)
-        SString(format.print(dateTime))
+        val dateTime = new DateTime(newTime, timeZone)
+        SString(dateTime.toString())
     }
+  }
+
+  trait TimePlus extends BIF2 {
+    val operandType = (Some(SString), Some(SDecimal)) 
+
+    val operation: PartialFunction[(SValue, SValue), SValue] = {
+      case (SString(time), SDecimal(incr)) if isValidISO(time) => 
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+        SString(plus(newTime, incr.toInt))
+    }
+
+    def plus(d: DateTime, i: Int): String
   }
 
   trait TimeBetween extends BIF2 {
@@ -130,12 +152,44 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => 
-        val newTime1 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time1)
-        val newTime2 = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time2)
+        val newTime1 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time1)
+        val newTime2 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time2)
         SDecimal(between(newTime1, newTime2))
     }
 
     def between(d1: DateTime, d2: DateTime): Long
+  }
+
+  object YearsPlus extends BIF2(TimeNamespace, "yearsPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.years(i)).toString()
+  }
+
+  object MonthsPlus extends BIF2(TimeNamespace, "monthsPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.months(i)).toString()
+  }
+
+  object WeeksPlus extends BIF2(TimeNamespace, "weeksPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.weeks(i)).toString()
+  }
+
+  object DaysPlus extends BIF2(TimeNamespace, "daysPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.days(i)).toString()
+  }
+
+  object HoursPlus extends BIF2(TimeNamespace, "hoursPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.hours(i)).toString()
+  }
+
+  object MinutesPlus extends BIF2(TimeNamespace, "minutesPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.minutes(i)).toString()
+  }
+
+  object SecondsPlus extends BIF2(TimeNamespace, "secondsPlus") with TimePlus{ 
+    def plus(d: DateTime, i: Int) = d.plus(Period.seconds(i)).toString()
+  }
+
+  object MillisPlus extends BIF2(TimeNamespace, "millisPlus") with TimePlus{
+    def plus(d: DateTime, i: Int) = d.plus(Period.millis(i)).toString()
   }
 
   object YearsBetween extends BIF2(TimeNamespace, "yearsBetween") with TimeBetween{ 
@@ -174,10 +228,9 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = (Some(SDecimal), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SDecimal(time), SString(tz)) if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  
-        val format = ISODateTimeFormat.dateTime()
         val timeZone = DateTimeZone.forID(tz)
         val dateTime = new DateTime(time.toLong, timeZone)
-        SString(format.print(dateTime))
+        SString(dateTime.toString())
     }
   }
 
@@ -185,7 +238,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
         SDecimal(newTime.getMillis)
     }    
   }
@@ -195,7 +248,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val format = DateTimeFormat.forPattern("ZZ")
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
         SString(format.print(newTime))
     }
   }
@@ -204,7 +257,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
         val day = newTime.dayOfYear.get
         SString(
           if (day >= 79 & day < 171) "spring"
@@ -219,7 +272,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
         SDecimal(fraction(newTime))
     }
 
@@ -284,7 +337,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
-        val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+        val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
         SString(fmt.print(newTime))
     }
 
