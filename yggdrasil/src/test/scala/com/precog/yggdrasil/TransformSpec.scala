@@ -104,6 +104,29 @@ trait TransformSpec extends TableModuleSpec {
       results must_== expected
     }
   }
+
+  def checkMap2 = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Map2(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")),
+          lookupF2(Nil, "add")
+        )
+      })
+
+      val expected = sample.data map { jv =>
+        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+          case (JInt(x), JInt(y)) => JInt(x+y)
+          case _ => failure("Bogus test data")
+        }
+      }
+
+      results must_== expected
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

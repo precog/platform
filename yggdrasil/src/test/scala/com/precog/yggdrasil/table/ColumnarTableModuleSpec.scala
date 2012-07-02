@@ -45,6 +45,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
 
   def lookupF2(namespace: List[String], name: String): F2 = {
     val lib  = Map[String, CF2](
+      "add" -> cf.math.Add,
       "mod" -> cf.math.Mod,
       "eq"  -> cf.std.Eq
     )
@@ -208,6 +209,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
       "perform an object dereference" in checkObjectDeref
+      "perform a trivial map2" in checkMap2
     }
   }
 }
