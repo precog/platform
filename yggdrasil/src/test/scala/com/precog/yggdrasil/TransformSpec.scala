@@ -127,6 +127,62 @@ trait TransformSpec extends TableModuleSpec {
       results must_== expected
     }
   }
+
+  def checkEqualSelf = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Equal(Leaf(Source), Leaf(Source))
+      })
+
+      results must_== (Stream.tabulate(sample.data.size) { _ => JBool(true) })
+    }
+  }
+
+  def checkEqual = {
+    val genBase: Gen[SampleData] = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong)).arbitrary
+    implicit val gen: Arbitrary[SampleData] = Arbitrary {
+      genBase map { sd =>
+        SampleData(
+          sd.data.zipWithIndex map {
+            case (jv, i) if i%2 == 0 => 
+              // construct object with value1 == value2
+              jv.set(JPath("value/value2"), jv(JPath("value/value1")))
+
+            case (jv, i) if i%5 == 0 => // delete value1
+              jv.set(JPath("value/value1"), JNothing)
+
+            case (jv, i) if i%5 == 3 => // delete value2
+              jv.set(JPath("value/value2"), JNothing)
+
+            case (jv, _) => jv
+          }
+        )
+      }
+    }
+
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Equal(
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
+          DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2"))
+        )
+      })
+
+      val expected = sample.data.map { jv =>
+        ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
+          case (JInt(x), JInt(y))  => JBool(x == y)
+          case (JNothing, JInt(y)) => JNothing
+          case (JInt(x), JNothing) => JNothing
+          case _ => failure("Bogus test data")
+        }
+      }
+
+      results must_== expected
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

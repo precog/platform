@@ -156,10 +156,31 @@ trait ColumnarTableModule extends TableModule {
                 (for {
                   cl <- sl.valueColumns
                   cr <- sr.valueColumns
-                  col <- f(cl, cr)
+                  col <- f(cl, cr) // TODO: Unify columns of the same result type
                 } yield {
                   (ColumnRef(JPath.Identity, col.tpe), col)
                 })(collection.breakOut)
+            }
+          }
+
+        case Equal(left, right) =>
+          val l0 = composeSliceTransform(left)
+          val r0 = composeSliceTransform(right)
+
+          l0.zip(r0) { (sl, sr) =>
+            new Slice {
+              val size = sl.size
+              val columns: Map[ColumnRef, Column] = 
+                if (sl.columns.keySet == sr.columns.keySet) {
+                  val eqResult = sl.columns.keySet.foldLeft(Option.empty[Column]) { (acc, colRef) => 
+                    val colsEq = cf.std.Eq(sl.columns(colRef), sr.columns(colRef))
+                    acc flatMap { accCol => colsEq flatMap { cf.std.And(accCol, _) } } orElse colsEq
+                  }
+
+                  eqResult map { ColumnRef(JPath.Identity, CBoolean) -> _ } toMap
+                } else {
+                  Map(ColumnRef(JPath.Identity, CBoolean) -> new EmptyColumn[BoolColumn] with BoolColumn)
+                }
             }
           }
       }
