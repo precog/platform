@@ -22,43 +22,43 @@ trait TableModule extends FNModule with Schema {
     case object SourceLeft extends Source2
     case object SourceRight extends Source2
     
-    case class Leaf[+A <: SourceType](source: A) extends TransSpec[A]
+    case class Leaf[+A <: SourceType](source: A) extends TransSpec[A] //done
     
-    case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
+    case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A] //done
     
     // Adds a column to the output in the manner of scanLeft
     case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A]
     
-    case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A]
+    case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
     
     // apply a function to the cartesian product of the transformed left and right subsets of columns
-    case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A]
+    case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A] //done
     
     // Perform the specified transformation on the left and right sides, and then create a new set of columns
     // containing all the resulting columns.
-    case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
     // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
     // specified field. 
-    case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A]
+    case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A] //done
     
     case class WrapDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
     case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Long) extends TransSpec[A]
+    case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Int) extends TransSpec[A]
     
-    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A]
+    case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A] //done
     
     case class DerefObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A]
+    case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A] //done
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
     case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A]
     
-    case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
   
     type TransSpec1 = TransSpec[Source1]
     

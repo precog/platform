@@ -188,6 +188,22 @@ trait ColumnarTableModule extends TableModule {
           composeSliceTransform(source) andThen {
             map0 { _ wrap JPathField(field) }
           }
+
+        case ObjectConcat(left, right) =>
+          val l0 = composeSliceTransform(left)
+          val r0 = composeSliceTransform(right)
+
+          l0.zip(r0) { (sl, sr) =>
+            new Slice {
+              val size = sl.size
+              val columns = 
+                // left side first in the seq so that the right side wins
+                (sl.columns.toSeq ++ sr.columns).foldLeft(Map.empty[ColumnRef, Column]) {
+                  case (acc, (ref, col)) if ref.selector.head.exists(_.isInstanceOf[JPathField]) => acc + (ref -> col)
+                  case (acc, _) => acc
+                }
+            }
+          }
       }
     }
     

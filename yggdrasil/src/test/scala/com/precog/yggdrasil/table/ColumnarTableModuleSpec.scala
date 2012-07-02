@@ -209,10 +209,13 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "give the identity transform for the trivial 'true' filter" in checkTrueFilter
       "give the identity transform for a nontrivial filter" in checkFilter
       "perform an object dereference" in checkObjectDeref
+      "perform an array dereference" in checkArrayDeref
       "perform a trivial map2" in checkMap2
       "perform a trivial equality check" in checkEqualSelf
       "perform a slightly less trivial equality check" in checkEqual
       "wrap the results of a transform in an object as the specified field" in checkWrapStatic
+      "give the identity transform for self-object concatenation" in checkObjectConcatSelf
+      "concatenate dissimilar objects" in checkObjectConcat
     }
   }
 }
