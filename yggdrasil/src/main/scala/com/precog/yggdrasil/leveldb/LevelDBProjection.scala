@@ -245,7 +245,11 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
 
         def hasNext: Boolean = next0 != null
 
-        def next: (Identities,Seq[CValue]) = unproject(next0.getKey, next0.getValue)
+        def next: (Identities,Seq[CValue]) = {
+          val current = next0
+          next0 = computeNext()
+          unproject(current.getKey, current.getValue)
+        }
       }
     }
   })
