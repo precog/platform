@@ -8,10 +8,9 @@ import yggdrasil._
 trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
 
-  override def _libReduct = super._libReduct ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Median, Mode)
+  override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Median, Mode)
 
-  import yggConfig._
-
+  // TODO swap to Reduction
   object Count extends Morphism(ReductionNamespace, "count") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       Some(SDecimal(BigDecimal(enum.count))) 

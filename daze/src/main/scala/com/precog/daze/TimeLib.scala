@@ -75,19 +75,25 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     }
   }
 
-  object ChangeTimeZone extends BIF2(TimeNamespace, "changeTimeZone") {
-    val operandType = (Some(SString), Some(SString))
+  object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time), SString(tz)) if (isValidISO(time) && isValidTimeZone(tz)) => 
         val format = ISODateTimeFormat.dateTime()
         val timeZone = DateTimeZone.forID(tz)
         val dateTime = new DateTime(time, timeZone)
         SString(format.print(dateTime))
-    }
+    } */
   }
 
-  trait TimeBetween extends BIF2 {
-    val operandType = (Some(SString), Some(SString)) 
+  trait TimeBetween extends Op2 {
+    /* val operandType = (Some(SString), Some(SString)) 
 
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(time1), SString(time2)) if (isValidISO(time1) && isValidISO(time2)) => 
@@ -96,73 +102,145 @@ trait TimeLib extends GenOpcode with ImplLibrary {
         SDecimal(between(newTime1, newTime2))
     }
 
-    def between(d1: DateTime, d2: DateTime): Long
+    def between(d1: DateTime, d2: DateTime): Long */
   }
 
-  object YearsBetween extends BIF2(TimeNamespace, "yearsBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
+  object YearsBetween extends Op2(TimeNamespace, "yearsBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
   }
 
-  object MonthsBetween extends BIF2(TimeNamespace, "monthsBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
+  object MonthsBetween extends Op2(TimeNamespace, "monthsBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
   }
 
-  object WeeksBetween extends BIF2(TimeNamespace, "weeksBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
+  object WeeksBetween extends Op2(TimeNamespace, "weeksBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
   }
 
-  object DaysBetween extends BIF2(TimeNamespace, "daysBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
+  object DaysBetween extends Op2(TimeNamespace, "daysBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
   }
 
-  object HoursBetween extends BIF2(TimeNamespace, "hoursBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
+  object HoursBetween extends Op2(TimeNamespace, "hoursBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
   }
 
-  object MinutesBetween extends BIF2(TimeNamespace, "minutesBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
+  object MinutesBetween extends Op2(TimeNamespace, "minutesBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
   }
 
-  object SecondsBetween extends BIF2(TimeNamespace, "secondsBetween") with TimeBetween{ 
-    def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
+  object SecondsBetween extends Op2(TimeNamespace, "secondsBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
   }
 
-  object MillisBetween extends BIF2(TimeNamespace, "millisBetween") with TimeBetween{  
-    def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
+  object MillisBetween extends Op2(TimeNamespace, "millisBetween") with TimeBetween{
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
   }
 
-  object MillisToISO extends BIF2(TimeNamespace, "millisToISO") { 
-    val operandType = (Some(SDecimal), Some(SString))
+  object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
+    def f2: F2 = new CF2P({
+      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SDecimal(time), SString(tz)) if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)) =>  
         val format = ISODateTimeFormat.dateTime()
         val timeZone = DateTimeZone.forID(tz)
         val dateTime = new DateTime(time.toLong, timeZone)
         SString(format.print(dateTime))
-    }
+    } */
   }
 
-  object GetMillis extends BIF1(TimeNamespace, "getMillis") { 
-    val operandType = Some(SString)
+  object GetMillis extends Op1(TimeNamespace, "getMillis") {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SDecimal(newTime.getMillis)
-    }    
+    } */    
   }
 
-  object TimeZone extends BIF1(TimeNamespace, "timeZone") { 
-    val operandType = Some(SString)
+  object TimeZone extends Op1(TimeNamespace, "timeZone") {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val format = DateTimeFormat.forPattern("ZZ")
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SString(format.print(newTime))
-    }
+    } */
   }
 
-  object Season extends BIF1(TimeNamespace, "season") { 
-    val operandType = Some(SString)
+  object Season extends Op1(TimeNamespace, "season") {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
@@ -173,130 +251,274 @@ trait TimeLib extends GenOpcode with ImplLibrary {
           else if (day >= 265 & day < 355) "fall"
           else "winter"
         )
-    }
+    } */
   } 
 
-  trait TimeFraction extends BIF1 {
-    val operandType = Some(SString)
+  trait TimeFraction extends Op1 {
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SDecimal(fraction(newTime))
     }
 
-    def fraction(d: DateTime): Int
+    def fraction(d: DateTime): Int */
   }
 
-  object Year extends BIF1(TimeNamespace, "year") with TimeFraction { 
-    def fraction(d: DateTime) = d.year.get
+  object Year extends Op1(TimeNamespace, "year") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.year.get
   }
 
-  object QuarterOfYear extends BIF1(TimeNamespace, "quarter") with TimeFraction { 
-    def fraction(d: DateTime) = ((d.monthOfYear.get - 1) / 3) + 1
+  object QuarterOfYear extends Op1(TimeNamespace, "quarter") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = ((d.monthOfYear.get - 1) / 3) + 1
   }
 
-  object MonthOfYear extends BIF1(TimeNamespace, "monthOfYear") with TimeFraction {
-    def fraction(d: DateTime) = d.monthOfYear.get
+  object MonthOfYear extends Op1(TimeNamespace, "monthOfYear") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.monthOfYear.get
   }
 
-  object WeekOfYear extends BIF1(TimeNamespace, "weekOfYear") with TimeFraction {
-    def fraction(d: DateTime) = d.weekOfWeekyear.get
+  object WeekOfYear extends Op1(TimeNamespace, "weekOfYear") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.weekOfWeekyear.get
   } 
 
-  object WeekOfMonth extends BIF1(TimeNamespace, "weekOfMonth") with TimeFraction {
-    def fraction(newTime: DateTime) = {
+  object WeekOfMonth extends Op1(TimeNamespace, "weekOfMonth") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    /* def fraction(newTime: DateTime) = {
       val dayOfMonth = newTime.dayOfMonth().get
       val firstDate = newTime.withDayOfMonth(1)
       val firstDayOfWeek = firstDate.dayOfWeek().get
       val offset = firstDayOfWeek - 1
       ((dayOfMonth + offset) / 7) + 1
-    }
+    } */
   }
  
-  object DayOfYear extends BIF1(TimeNamespace, "dayOfYear") with TimeFraction {
-    def fraction(d: DateTime) = d.dayOfYear.get
+  object DayOfYear extends Op1(TimeNamespace, "dayOfYear") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.dayOfYear.get
   }
 
-  object DayOfMonth extends BIF1(TimeNamespace, "dayOfMonth") with TimeFraction {
-    def fraction(d: DateTime) = d.dayOfMonth.get
+  object DayOfMonth extends Op1(TimeNamespace, "dayOfMonth") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.dayOfMonth.get
   }
 
-  object DayOfWeek extends BIF1(TimeNamespace, "dayOfWeek") with TimeFraction {
-    def fraction(d: DateTime) = d.dayOfWeek.get
+  object DayOfWeek extends Op1(TimeNamespace, "dayOfWeek") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.dayOfWeek.get
   }
 
-  object HourOfDay extends BIF1(TimeNamespace, "hourOfDay") with TimeFraction {  
-    def fraction(d: DateTime) = d.hourOfDay.get
+  object HourOfDay extends Op1(TimeNamespace, "hourOfDay") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.hourOfDay.get
   }
 
-  object MinuteOfHour extends BIF1(TimeNamespace, "minuteOfHour") with TimeFraction {
-    def fraction(d: DateTime) = d.minuteOfHour.get
+  object MinuteOfHour extends Op1(TimeNamespace, "minuteOfHour") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.minuteOfHour.get
   }
 
-  object SecondOfMinute extends BIF1(TimeNamespace, "secondOfMinute") with TimeFraction {
-    def fraction(d: DateTime) = d.secondOfMinute.get
+  object SecondOfMinute extends Op1(TimeNamespace, "secondOfMinute") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.secondOfMinute.get
   }
     
-  object MillisOfSecond extends BIF1(TimeNamespace, "millisOfSecond") with TimeFraction {
-    def fraction(d: DateTime) = d.millisOfSecond.get
+  object MillisOfSecond extends Op1(TimeNamespace, "millisOfSecond") with TimeFraction {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // def fraction(d: DateTime) = d.millisOfSecond.get
   }
 
-  trait TimeTruncation extends BIF1 {
-    val operandType = Some(SString)
+  trait TimeTruncation extends Op1 {
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(time) if isValidISO(time) => 
         val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
         SString(fmt.print(newTime))
     }
 
-    def fmt: DateTimeFormatter
+    def fmt: DateTimeFormatter */
   }
 
-  object Date extends BIF1(TimeNamespace, "date") with TimeTruncation {
-    val fmt = ISODateTimeFormat.date()
+  object Date extends Op1(TimeNamespace, "date") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.date()
   }
 
-  object YearMonth extends BIF1(TimeNamespace, "yearMonth") with TimeTruncation {
-    val fmt = ISODateTimeFormat.yearMonth()
+  object YearMonth extends Op1(TimeNamespace, "yearMonth") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.yearMonth()
   }
 
-  object YearDayOfYear extends BIF1(TimeNamespace, "yearDayOfYear") with TimeTruncation {
-    val fmt = ISODateTimeFormat.ordinalDate()
+  object YearDayOfYear extends Op1(TimeNamespace, "yearDayOfYear") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.ordinalDate()
   }
 
-  object MonthDay extends BIF1(TimeNamespace, "monthDay") with TimeTruncation {
-    val fmt = DateTimeFormat.forPattern("MM-dd")
+  object MonthDay extends Op1(TimeNamespace, "monthDay") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = DateTimeFormat.forPattern("MM-dd")
   }
 
-  object DateHour extends BIF1(TimeNamespace, "dateHour") with TimeTruncation {
-    val fmt = ISODateTimeFormat.dateHour()
+  object DateHour extends Op1(TimeNamespace, "dateHour") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.dateHour()
   }
 
-  object DateHourMinute extends BIF1(TimeNamespace, "dateHourMin") with TimeTruncation {
-    val fmt = ISODateTimeFormat.dateHourMinute()
+  object DateHourMinute extends Op1(TimeNamespace, "dateHourMin") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.dateHourMinute()
   }
 
-  object DateHourMinuteSecond extends BIF1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
-    val fmt = ISODateTimeFormat.dateHourMinuteSecond()
+  object DateHourMinuteSecond extends Op1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.dateHourMinuteSecond()
   }
 
-  object DateHourMinuteSecondMillis extends BIF1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
-    val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
+  object DateHourMinuteSecondMillis extends Op1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.dateHourMinuteSecondMillis()
   }
 
-  object TimeWithZone extends BIF1(TimeNamespace, "timeWithZone") with TimeTruncation {
-    val fmt = ISODateTimeFormat.time()
+  object TimeWithZone extends Op1(TimeNamespace, "timeWithZone") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.time()
   }
 
-  object TimeWithoutZone extends BIF1(TimeNamespace, "timeWithoutZone") with TimeTruncation {
-    val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
+  object TimeWithoutZone extends Op1(TimeNamespace, "timeWithoutZone") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.hourMinuteSecondMillis()
   }
 
-  object HourMinute extends BIF1(TimeNamespace, "hourMin") with TimeTruncation {
-    val fmt = ISODateTimeFormat.hourMinute()
+  object HourMinute extends Op1(TimeNamespace, "hourMin") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.hourMinute()
   }
 
-  object HourMinuteSecond extends BIF1(TimeNamespace, "hourMinSec") with TimeTruncation {
-    val fmt = ISODateTimeFormat.hourMinuteSecond()
+  object HourMinuteSecond extends Op1(TimeNamespace, "hourMinSec") with TimeTruncation {
+    def f1: F1 = new CF1P({
+      case c: NullColumn => new NullColumn {
+        def isDefinedAt(row: Int) = false
+      }
+    })
+    
+    // val fmt = ISODateTimeFormat.hourMinuteSecond()
   }
 }

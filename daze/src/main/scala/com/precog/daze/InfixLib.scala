@@ -12,6 +12,41 @@ trait InfixLib extends ImplLibrary with GenOpcode {
   type F1 = CF1P
   type F2 = CF2P
   
+  def PrimitiveEqualsF2 = new CF2P({
+    case (c1: LongColumn, c2: LongColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: DoubleColumn, c2: DoubleColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: NumColumn, c2: NumColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: StringColumn, c2: StringColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: BoolColumn, c2: BoolColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = !(c1(row) ^ c2(row))      // when equals just isn't fast enough!
+    }
+    case (c1: NullColumn, c2: NullColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = true
+    }
+    case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = true
+    }
+    case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => new BoolColumn {
+      def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
+      def apply(row: Int) = true
+    }
+  })
+  
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 
@@ -32,7 +67,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Sub extends BIF2(InfixNamespace, "subtract") {
+    object Sub extends Op2(InfixNamespace, "subtract") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new LongColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -49,7 +84,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Mul extends BIF2(InfixNamespace, "multiply") {
+    object Mul extends Op2(InfixNamespace, "multiply") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new LongColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -66,7 +101,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Div extends BIF2(InfixNamespace, "divide") {
+    object Div extends Op2(InfixNamespace, "divide") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new LongColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
@@ -83,7 +118,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Lt extends BIF2(InfixNamespace, "lt") {
+    object Lt extends Op2(InfixNamespace, "lt") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -100,7 +135,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object LtEq extends BIF2(InfixNamespace, "lte") {
+    object LtEq extends Op2(InfixNamespace, "lte") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -117,7 +152,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Gt extends BIF2(InfixNamespace, "gt") {
+    object Gt extends Op2(InfixNamespace, "gt") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -134,7 +169,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object GtEq extends BIF2(InfixNamespace, "gte") {
+    object GtEq extends Op2(InfixNamespace, "gte") {
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -151,7 +186,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object And extends BIF2(InfixNamespace, "and") {
+    object And extends Op2(InfixNamespace, "and") {
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
@@ -160,7 +195,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
       })
     }
 
-    object Or extends BIF2(InfixNamespace, "or") {
+    object Or extends Op2(InfixNamespace, "or") {
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new BoolColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
