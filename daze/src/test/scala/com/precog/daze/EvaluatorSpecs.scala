@@ -70,6 +70,12 @@ class EvaluatorSpecs extends Specification
       case Failure(error) => throw error
     }
   }
+  def testEvalNotToSet(graph: DepGraph): Seq[SEvent] = withContext { ctx =>
+    consumeEvalNotToSet(testUID, graph, ctx) match {
+      case Success(results) => results
+      case Failure(error) => throw error
+    }
+  }
 
   "evaluator" should {
     "evaluate simple two-value multiplication" in {
@@ -1473,6 +1479,28 @@ class EvaluatorSpecs extends Specification
       
       result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
         2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
+    }
+    
+    "correctly evaluate a match following a cross with equality" in {
+      val line = Line(0, "")
+      
+      val numbers = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+      val numbers3 = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het)
+      
+      val input = Join(line, Map2Match(And),
+        Join(line, Map2Cross(And),
+          Join(line, Map2Match(Eq), numbers, numbers),
+          Join(line, Map2Match(Eq), numbers3, numbers3)),
+        Join(line, Map2Match(Eq), numbers3, numbers3))
+      
+      println("***************")
+      println(testEvalNotToSet(Sort(
+        Join(line, Map2CrossLeft(And),
+          Join(line, Map2Match(Eq), numbers, numbers),
+          Join(line, Map2Match(Eq), numbers3, numbers3)), Vector(1))) map { _._1 } mkString "\n")
+      println("***************")
+        
+      testEval(input) must not(beEmpty)
     }
     
     "correctly order a match following a cross within a new" in {

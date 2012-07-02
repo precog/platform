@@ -459,6 +459,19 @@ trait EvalStackSpecs extends Specification {
         }
         case r => failure("Result has wrong shape: "+r)
       }
+    }
+
+    "correctly handle cross-match situations" in {
+      val input = """
+        | campaigns := //campaigns
+        | clicks := //clicks
+        | 
+        | campaigns ~ clicks
+        |   campaigns = campaigns
+        |     & clicks = clicks
+        |     & clicks = clicks""".stripMargin
+        
+      eval(input) must not(beEmpty)
     }    
 
     "add sets of different types" >> {
