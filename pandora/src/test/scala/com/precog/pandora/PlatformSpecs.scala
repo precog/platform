@@ -67,6 +67,7 @@ class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
     val yggConfig = platformSpecs.yggConfig
     val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+    val initialCheckpoint = None
   }
 
   override def startup() {
