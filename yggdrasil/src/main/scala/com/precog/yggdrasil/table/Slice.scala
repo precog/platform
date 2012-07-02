@@ -38,6 +38,9 @@ import scalaz.std.iterable._
 trait Slice { source =>
   import Slice._
 
+  def size: Int
+  def isEmpty: Boolean = size == 0
+
   def columns: Map[ColumnRef, Column]
 
   lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
@@ -57,8 +60,12 @@ trait Slice { source =>
     }
   }
 
-  def size: Int
-  def isEmpty: Boolean = size == 0
+  def wrap(wrapper : JPathField) : Slice = new Slice {
+    val size = source.size
+    val columns = source.columns.map {
+      case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
+    }
+  }
 
   def nest(selectorPrefix: JPath) = new Slice {
     val size = source.size

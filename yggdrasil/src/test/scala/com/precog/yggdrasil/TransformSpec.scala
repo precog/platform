@@ -202,6 +202,20 @@ trait TransformSpec extends TableModuleSpec {
       results must_== expected
     }
   }
+
+  def checkWrapStatic = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        WrapStatic(Leaf(Source), "foo")
+      })
+
+      val expected = sample.data map { jv => JObject(JField("foo", jv) :: Nil) }
+      
+      results must_== expected
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

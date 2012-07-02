@@ -202,6 +202,11 @@ trait ColumnarTableModule extends TableModule {
                 }
             }
           }
+
+        case WrapStatic(source, field) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ wrap JPathField(field) }
+          }
       }
     }
     

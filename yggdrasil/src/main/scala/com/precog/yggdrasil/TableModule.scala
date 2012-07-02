@@ -45,14 +45,20 @@ trait TableModule extends FNModule with Schema {
     
     case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A]
     
+    // Adds a column to the output in the manner of scanLeft
     case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A]
     
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A]
     
+    // apply a function to the cartesian product of the transformed left and right subsets of columns
     case class Map2[+A <: SourceType](left: TransSpec[A], right: TransSpec[A], f: F2) extends TransSpec[A]
     
+    // Perform the specified transformation on the left and right sides, and then create a new set of columns
+    // containing all the resulting columns.
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
+    // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
+    // specified field. 
     case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A]
     
     case class WrapDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
