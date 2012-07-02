@@ -19,7 +19,7 @@
  */
 package com.precog.yggdrasil
 
-import blueeyes.json.{JPath,JPathField}
+import blueeyes.json.{ JPath, JPathField, JPathIndex }
 import blueeyes.json.JsonAST._
 
 import org.specs2.mutable._
@@ -124,6 +124,22 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
+  def checkArrayDeref = {
+    implicit val gen = sample(arraySchema(_, 3))
+    check { (sample: SampleData) =>
+      val (field, _) = sample.schema.get.head
+      val fieldHead = field.head.get
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        DerefArrayStatic(Leaf(Source), fieldHead.asInstanceOf[JPathIndex])
+      })
+
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
+
+      results must_== expected
+    }
+  }
+
   def checkMap2 = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
@@ -214,6 +230,33 @@ trait TransformSpec extends TableModuleSpec {
       val expected = sample.data map { jv => JObject(JField("foo", jv) :: Nil) }
       
       results must_== expected
+    }
+  }
+
+  def checkObjectConcatSelf = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        ObjectConcat(Leaf(Source), Leaf(Source))
+      })
+
+      results must_== sample.data
+    }
+  }
+
+  def checkObjectConcat = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        ObjectConcat(
+          WrapStatic(WrapStatic(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
+          WrapStatic(WrapStatic(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value2"), "value") 
+        )
+      })
+
+      results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
     }
   }
 }
