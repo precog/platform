@@ -9,11 +9,13 @@ import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
 import org.fusesource.leveldbjni.DataWidth
 
+import org.joda.time.DateTime
+
 import java.io._
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.Map.Entry
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.{Executors,TimeoutException}
 import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
@@ -71,6 +73,8 @@ object LevelDBProjection {
 
     baseDirV map { (bd: File) => new LevelDBProjection(bd, descriptor) }
   }
+
+  private val readaheadPool = Executors.newCachedThreadPool()
 }
 
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset] {
@@ -138,7 +142,12 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   import org.fusesource.leveldbjni.KeyValueChunk
   import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
 
-  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Thread {
+  sealed trait ChunkReadResult
+  case class ChunkData(c: KeyValueChunk) extends ChunkReadResult
+  case object ChunkEOF extends ChunkReadResult
+  case class ChunkTimeout(epochDate: Long) extends ChunkReadResult
+
+  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Runnable {
     val bufferQueue = new ArrayBlockingQueue[Pair[ByteBuffer,ByteBuffer]](readAheadSize) // Need a key and value buffer for each readahead
 
     // pre-fill the buffer queue
@@ -150,80 +159,78 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       bufferQueue.put((chunk.keyData, chunk.valueData))
     }
     
-    val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize + 1)
-
-    val running = new AtomicBoolean(true)
+    val chunkQueue  = new ArrayBlockingQueue[ChunkReadResult](readAheadSize + 1)
 
     override def run() {
-      while (running.get && iterator.hasNext) {
+      if (iterator.hasNext) {
         var buffers : Pair[ByteBuffer,ByteBuffer] = null
-        while (running.get && buffers == null) {
+        while (buffers == null) {
           if (System.currentTimeMillis > expiresAt) {
             iterator.close()
-            running.set(false)
-            chunkQueue.put(emptyInput)
+            chunkQueue.put(ChunkTimeout(System.currentTimeMillis))
             return
           }
           buffers = bufferQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
         } 
 
         if (buffers != null) {
-          val chunk = elInput(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
+          val chunk = ChunkData(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
 
-          while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
+          while (! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
             if (System.currentTimeMillis > expiresAt) {
               iterator.close()
-              running.set(false)
-              chunkQueue.put(emptyInput)
+              chunkQueue.put(ChunkTimeout(System.currentTimeMillis))
               return
             }
           }
         }
+
+        // We didn't expire, so reschedule
+        readaheadPool.execute(this)
+      } else {
+        chunkQueue.put(ChunkEOF) // We're here because we reached the end of the iterator, so block and submit
+        iterator.close()
       }
-
-      chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
-
-      iterator.close()
     }
   }
 
-  private final val emptyJavaIterator = new java.util.Iterator[KeyValuePair] {
-    def hasNext() = false
-    def next() = throw new NoSuchElementException("Empty iterator")
-    def remove() = throw new UnsupportedOperationException("Iterators cannot remove")
-  }
-
   def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = IterableDataset[Seq[CValue]](1, new Iterable[(Identities,Seq[CValue])]{
-    def iterator = new Iterator[(Identities,Seq[CValue])] {
+    def iterator = {
       val iter = idIndexFile.iterator.asInstanceOf[JniDBIterator]
       iter.seekToFirst
 
       val reader = new ChunkReader(iter, expiresAt)
-      reader.start()
+      readaheadPool.execute(reader)
+      
+      new Iterator[(Identities,Seq[CValue])] {
+        private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator()
 
-      private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
-
-      private final def nextIterator = 
-        currentChunk.fold(
-          empty = throw new TimeoutException("Iteration expired"),
-          el    = chunk => chunk.getIterator(),
-          eof   = emptyJavaIterator
-        )
-
-      private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator
-
-      def hasNext: Boolean = if(currentChunk.isEof) false else {
-        if (chunkIterator.hasNext) true else {
-          currentChunk.foreach(chunk => reader.returnBuffers(chunk))
-          currentChunk = reader.chunkQueue.take()
-          chunkIterator = nextIterator
-          chunkIterator.hasNext
+        private[this] def nextIterator() = reader.chunkQueue.take() match {
+          case ChunkData(data)  => data.getIterator()
+          case ChunkEOF         => null
+          case ChunkTimeout(at) => throw new TimeoutException("Iteration expired at " + new DateTime(at))
         }
-      }
 
-      def next: (Identities,Seq[CValue]) = {
-        val kvPair = chunkIterator.next()
-        unproject(kvPair.getKey, kvPair.getValue)
+        private[this] def computeNext() : KeyValuePair = {
+          if (chunkIterator == null) {
+            null
+          } else if (chunkIterator.hasNext) {
+            chunkIterator.next()
+          } else {
+            chunkIterator = nextIterator()
+            computeNext()
+          } 
+        }
+
+        private[this] var next0 = computeNext()
+
+        def hasNext: Boolean = next0 != null
+
+        def next: (Identities,Seq[CValue]) = {
+          val current = next0
+          next0 = computeNext()
+          unproject(current.getKey, current.getValue)
+        }
       }
     }
   })
