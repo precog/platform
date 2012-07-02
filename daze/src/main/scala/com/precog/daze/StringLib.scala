@@ -24,41 +24,83 @@ trait StringLib extends GenOpcode with ImplLibrary {
     }
   }
 
-  object length extends BIF1(StringNamespace, "length") {
-    val operandType = Some(SString)
+  object length extends Op1(StringNamespace, "length") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SDecimal(str.length)
-    }
+    } */
   }
-  object trim extends BIF1(StringNamespace, "trim") {
-    val operandType = Some(SString)
+  object trim extends Op1(StringNamespace, "trim") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.trim)
-    }
+    } */
   }
-  object toUpperCase extends BIF1(StringNamespace, "toUpperCase") {
-    val operandType = Some(SString)
+  object toUpperCase extends Op1(StringNamespace, "toUpperCase") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.toUpperCase)
-    }
+    } */
   }  
-  object toLowerCase extends BIF1(StringNamespace, "toLowerCase") {
-    val operandType = Some(SString)
+  object toLowerCase extends Op1(StringNamespace, "toLowerCase") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.toLowerCase)
-    }
+    } */
   }
-  object isEmpty extends BIF1(StringNamespace, "isEmpty") {
-    val operandType = Some(SString)
+  object isEmpty extends Op1(StringNamespace, "isEmpty") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SBoolean(str.isEmpty)
-    }
+    } */
   }
-  object intern extends BIF1(StringNamespace, "intern") {
-    val operandType = Some(SString)
+  object intern extends Op1(StringNamespace, "intern") {
+    def f1: F1 = new CF1P({
+      case c: StringColumn => new StringColumn {
+        def isDefinedAt(row: Int) = c.isDefinedAt(row)
+        def apply(row: Int) = c(row)
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.intern)
-    }
+    } */
   }
   //object hashCode extends BIF1(StringNamespace, "hashCode") {   //mysterious case - java.lang.ClassCastException
   //  val operandType = Some(SString)
@@ -66,85 +108,176 @@ trait StringLib extends GenOpcode with ImplLibrary {
   //    case SString(str) => SDecimal(str.hashCode)
   //  }
   //}
-  object equalsIgnoreCase extends BIF2(StringNamespace, "equalsIgnoreCase") {
-    val operandType = (Some(SString), Some(SString))
+  object equalsIgnoreCase extends Op2(StringNamespace, "equalsIgnoreCase") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.equalsIgnoreCase(v2))
-    }
+    } */
   }
-  object codePointAt extends BIF2(StringNamespace, "codePointAt") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object codePointAt extends Op2(StringNamespace, "codePointAt") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
         SDecimal(str.codePointAt(v2.toInt))
-    }
+    } */
   }
-  object startsWith extends BIF2(StringNamespace, "startsWith") {
-    val operandType = (Some(SString), Some(SString))
+  object startsWith extends Op2(StringNamespace, "startsWith") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.startsWith(v2))
-    }
+    } */
   }
-  object lastIndexOf extends BIF2(StringNamespace, "lastIndexOf") {
-    val operandType = (Some(SString), Some(SString))
+  object lastIndexOf extends Op2(StringNamespace, "lastIndexOf") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.lastIndexOf(v2))
-    }
+    } */
   }
-  object concat extends BIF2(StringNamespace, "concat") {
-    val operandType = (Some(SString), Some(SString))
+  object concat extends Op2(StringNamespace, "concat") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SString(str.concat(v2))
-    }
+    } */
   }
-  object endsWith extends BIF2(StringNamespace, "endsWith") {
-    val operandType = (Some(SString), Some(SString))
+  object endsWith extends Op2(StringNamespace, "endsWith") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.endsWith(v2))
-    }
+    } */
   }
-  object codePointBefore extends BIF2(StringNamespace, "codePointBefore") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object codePointBefore extends Op2(StringNamespace, "codePointBefore") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 > 0) && (str.length >= v2) && isValidInt(v2)) => 
         SDecimal(str.codePointBefore(v2.toInt))
-    }
+    } */
   }
-  object substring extends BIF2(StringNamespace, "substring") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object substring extends Op2(StringNamespace, "substring") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
         SString(str.substring(v2.toInt))
-    }
+    } */
   }
-  object matches extends BIF2(StringNamespace, "matches") {
-    val operandType = (Some(SString), Some(SString))
+  object matches extends Op2(StringNamespace, "matches") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.matches(v2))
-    }
+    } */
   }
-  object compareTo extends BIF2(StringNamespace, "compareTo") {
-    val operandType = (Some(SString), Some(SString))
+  object compareTo extends Op2(StringNamespace, "compareTo") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.compareTo(v2))
-    }
+    } */
   }
-  object compareToIgnoreCase extends BIF2(StringNamespace, "compareToIgnoreCase") {
-    val operandType = (Some(SString), Some(SString))
+  object compareToIgnoreCase extends Op2(StringNamespace, "compareToIgnoreCase") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.compareToIgnoreCase(v2))
-    }
+    } */
   }
-  object equals extends BIF2(StringNamespace, "equals") {
-    val operandType = (Some(SString), Some(SString))
+  object equals extends Op2(StringNamespace, "equals") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.equals(v2))
-    }
+    } */
   }
-  object indexOf extends BIF2(StringNamespace, "indexOf") {
-    val operandType = (Some(SString), Some(SString))
+  object indexOf extends Op2(StringNamespace, "indexOf") {
+    def f2: F2 = new CF2P({
+      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+        def isDefinedAt(row: Int) = c1.isDefinedAt(row)
+        def apply(row: Int) = c1(row)
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.indexOf(v2))
-    }
+    } */
   }
 }
