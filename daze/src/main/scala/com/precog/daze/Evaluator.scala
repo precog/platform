@@ -81,6 +81,8 @@ trait Evaluator extends DAG
 
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
+  def PrimitiveEqualsF2: F2
+  
   def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
 
@@ -125,6 +127,11 @@ trait Evaluator extends DAG
       case dag.SetReduce(_, Distinct, parent) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
+      case Operate(_, instructions.WrapArray, parent) => {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
+        PendingTable(parentTable, parentGraph, trans.WrapArray(parentTrans))
+      }
+      
       case o @ Operate(_, op, parent) => {
         val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
         
@@ -143,6 +150,40 @@ trait Evaluator extends DAG
       case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
+      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => if right.value.isDefined {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, equalsF2.partialRight(svalueToCValue(right.value.get))))
+      }
+      
+      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => if left.value.isDefined {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, equalsF2.partialLeft(svalueToCValue(left.value.get))))
+      }
+      
+      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) => if right.value.isDefined {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get)))
+        PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, Comp.f1))   // TODO
+      }
+      
+      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) => if left.value.isDefined {
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(left.value.get)))
+        PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, Comp.f1))   // TODO
+      }
+      
+      case Join(_, Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject), left, right) if left.value.isDefined => {
+        left.value match {
+          case Some(value @ SString(str)) => {
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            PendingTable(parentTable, parentGraph, WrapStatic(parentTrans, str))
+          }
+          
+          case _ =>
+            PendingTable(ops.empty, graph, TransSpec1.Id)
+        }
+      }
+      
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value match {
           case Some(value @ SString(str)) => {
@@ -160,6 +201,18 @@ trait Evaluator extends DAG
           case Some(value @ SDecimal(d)) => {     // TODO other numeric types
             val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
             PendingTable(parentTable, parentGraph, DerefArrayStatic(parentTrans, d.toInt))
+          }
+          
+          case _ =>
+            PendingTable(ops.empty, graph, TransSpec1.Id)
+        }
+      }
+      
+      case Join(_, Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap), left, right) if right.value.isDefined => {
+        right.value match {
+          case Some(value @ SDecimal(d)) => {     // TODO other numeric types
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            PendingTable(parentTable, parentGraph, ArraySwap(parentTrans, d.toLong))
           }
           
           case _ =>
@@ -262,38 +315,6 @@ trait Evaluator extends DAG
     val PendingTable(table, _, spec) = loop(memoize(orderCrosses(graph)), Map(), (), ctx)
     table.transform(liftToValues(spec))
   }
-  
-  private def binaryOp(op: BinaryOperation): BIF2 = {
-    op match {
-      case Add => Infix.Add
-      case Sub => Infix.Sub
-      case Mul => Infix.Mul
-      case Div => Infix.Div
-      
-      case Lt   => Infix.Lt
-      case LtEq => Infix.LtEq
-      case Gt   => Infix.Gt
-      case GtEq => Infix.GtEq
-      
-      case Eq    => Infix.Eq
-      case NotEq => Infix.NotEq
-      
-      case And => Infix.And
-      case Or  => Infix.Or
-      
-      case WrapObject => Infix.WrapObject
-      
-      case JoinObject => Infix.JoinObject
-      case JoinArray  => Infix.JoinArray
-      
-      case instructions.ArraySwap  => Infix.ArraySwap
-      
-      case DerefObject => Infix.DerefObject
-      case DerefArray  => Infix.DerefArray
-
-      case BuiltInFunction2Op(f) => f
-    }
-  }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
@@ -304,6 +325,8 @@ trait Evaluator extends DAG
     // case SLong(l) => CLong(l)
     // case SDouble(d) => CDouble(d)
     case SNull => CNull
+    case SObject(obj) if obj.isEmpty => CEmptyObject
+    case SArray(Vector()) => CEmptyArray
     case _ => sys.error("die a horrible death")
   }
   
@@ -311,5 +334,5 @@ trait Evaluator extends DAG
     TableTransSpec.makeTransSpec(Map(TableKVConstants.Value -> trans))
   
   
-  case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
+  private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
 }
