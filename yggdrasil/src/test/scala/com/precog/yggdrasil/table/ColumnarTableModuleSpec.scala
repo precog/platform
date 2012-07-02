@@ -229,6 +229,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "give the identity transform for a nontrivial filter" in checkFilter
       "perform an object dereference" in checkObjectDeref
       "perform a trivial map2" in checkMap2
+      "perform a trivial equality check" in checkEqualSelf
+      "perform a slightly less trivial equality check" in checkEqual
     }
   }
 }

@@ -66,6 +66,11 @@ class InfiniteColumn { this: Column =>
   def isDefinedAt(row: Int) = true
 }
 
+class EmptyColumn[T <: Column] { this: T =>
+  def isDefinedAt(row: Int) = false
+  def apply(row: Int): Nothing = sys.error("Undefined.")
+}
+
 
 /* help for ctags
 type ColumnSupport */

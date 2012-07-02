@@ -51,6 +51,12 @@ object std {
       def apply(row: Int) = true // always true where both columns are defined
     }
   })
+
+  object And extends CF2P ({
+    case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) && c2(row)
+    }
+  })
 }
 
 
