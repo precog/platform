@@ -388,7 +388,7 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case MorphismBinding(m @ BuiltIns.Load.name) =>  //todo get rid of BuiltIns - put this in libMorphism
+            case LoadBinding(m @ BuiltIns.Load.name) =>  //todo get rid of BuiltIns - put this in libMorphism
               assert(m.arity == 1)
 
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
