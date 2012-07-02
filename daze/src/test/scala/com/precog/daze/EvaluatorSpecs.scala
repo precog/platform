@@ -611,7 +611,7 @@ class EvaluatorSpecs extends Specification
           obj must haveSize(1)
           obj must haveKey("aa")
         }
-        case _ => throw new MatchError("Result has wrong shape")
+        case _ => failure("Result has wrong shape")
       }
     }
     
@@ -985,7 +985,7 @@ class EvaluatorSpecs extends Specification
           obj must not haveKey("time")
         }
         case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
-        case _ => throw new MatchError("Result has wrong shape")
+        case _ => failure("Result has wrong shape")
       }
     }    
     "compute the set difference of the set difference" in {
@@ -1008,7 +1008,7 @@ class EvaluatorSpecs extends Specification
           obj must haveKey("time")
         }
         case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
-        case _ => throw new MatchError("Result has wrong shape")
+        case _ => failure("Result has wrong shape")
       }
     }      
     
@@ -1635,7 +1635,7 @@ class EvaluatorSpecs extends Specification
           
           obj("t") mustEqual SDecimal(42)
         }
-        case _ => throw new MatchError("Result has wrong shape")
+        case _ => failure("Result has wrong shape")
       }
     }
     
@@ -1665,8 +1665,8 @@ class EvaluatorSpecs extends Specification
           obj("user") must beLike {
             case SNull => ok
           }
-        }            
-        case _ => throw new MatchError("Result has wrong shape")
+        }
+        case _ => failure("Result has wrong shape")
       }
     }
 
@@ -1744,7 +1744,7 @@ class EvaluatorSpecs extends Specification
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
-        case _ => throw new MatchError("Result has wrong shape")
+        case _ => failure("Result has wrong shape")
 
       }
     }
