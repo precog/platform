@@ -212,6 +212,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "perform a trivial map2" in checkMap2
       "perform a trivial equality check" in checkEqualSelf
       "perform a slightly less trivial equality check" in checkEqual
+      "wrap the results of a transform in an object as the specified field" in checkWrapStatic
     }
   }
 }
