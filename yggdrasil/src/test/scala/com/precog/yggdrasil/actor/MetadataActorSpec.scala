@@ -72,14 +72,12 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
     "correctly propagates initial message clock on flush request" in {
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
 
-      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, Some(YggCheckpoint(0, VectorClock.empty))))
       
       (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
           case _ =>
-            there was one(coord).loadYggCheckpoint("test")
             there was one(coord).saveYggCheckpoint("test", YggCheckpoint(0, VectorClock.empty))
         }
       }
@@ -88,7 +86,6 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
     "correctly propagates updated message clock on flush request" in {
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
 
       val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
 
@@ -111,7 +108,6 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
             val stringStats = StringValueStats(2, "Test123", "Test123")
             val resultingMetadata: ColumnMetadata = Map(colDesc -> Map(stringStats.metadataType -> stringStats))
 
-            there was one(coord).loadYggCheckpoint("test")
             storage.updates(descriptor).last.metadata must_== resultingMetadata
         }
       }
