@@ -158,7 +158,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "union two wheres of the same dynamic provenance" >> {

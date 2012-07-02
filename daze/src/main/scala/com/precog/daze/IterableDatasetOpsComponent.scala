@@ -938,8 +938,15 @@ extends DatasetExtensions[IterableDataset, Iterable, IterableGrouping, A] {
   }
 
   def sortByIndexedIds(indices: Vector[Int], memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit fs: SortSerialization[IA]): IterableDataset[A] = {
-    implicit val order = tupledIdentitiesOrder[A](indexedIdentitiesOrder(indices))
-    IterableDataset(value.idCount, memoCtx.sort(value.iterable, memoId))
+    val remappedIds = indices.toSet
+    def remapIndices(ids: Identities): Identities = {
+      val excluded = (0 until ids.length).filterNot(remappedIds)
+      VectorCase(indices.map(ids) ++ excluded.map(ids): _*)
+    }
+
+    val remapped = value.iterable map { case (ids, value) => (remapIndices(ids), value) }
+    implicit val order = tupledIdentitiesOrder[A](prefixIdentityOrder(indices.length))
+    IterableDataset(value.idCount, memoCtx.sort(remapped, memoId))
   }
 
   def sortByValue(memoId: Int, memoCtx: MemoizationContext[Iterable])(implicit ord: Order[A], fs: SortSerialization[IA]): IterableDataset[A] = {
