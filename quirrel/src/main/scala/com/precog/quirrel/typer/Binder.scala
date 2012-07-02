@@ -241,6 +241,11 @@ trait Binder extends parser.AST with Library {
   case class ReductionBinding(red: Reduction) extends FunctionBinding {
     val name = Identifier(red.namespace, red.name)
     override val toString = "<native: %s(%d)>".format(red.name, 1)   //assumes all reductions are arity 1
+  }  
+  
+  case class LoadBinding(red: Reduction) extends FunctionBinding {
+    val name = Identifier(red.namespace, red.name)
+    override val toString = "<native: %s(%d)>".format(red.name, 1)
   }
 
   case class MorphismBinding(mor: Morphism) extends FunctionBinding {
