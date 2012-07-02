@@ -10,7 +10,7 @@ trait Binder extends parser.AST with Library {
   protected override lazy val LoadId = Identifier(Vector(), "load")
 
   object BuiltIns { //todo put these into libMorphism
-    val Load           = BuiltIn(LoadId, 1, false)
+    val Load           = LoadBinding(LoadId, 1, false)
     val Distinct       = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
 
     val all = Set(Load, Distinct)
@@ -224,7 +224,7 @@ trait Binder extends parser.AST with Library {
     override val toString = "<native: %s(%d)>".format(red.name, 1)   //assumes all reductions are arity 1
   }  
   
-  case class LoadBinding(red: Reduction) extends FunctionBinding {
+  case class LoadBinding(id: Identifier) extends FunctionBinding {
     val name = Identifier(red.namespace, red.name)
     override val toString = "<native: %s(%d)>".format(red.name, 1)
   }
