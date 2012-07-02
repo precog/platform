@@ -9,9 +9,9 @@ trait Binder extends parser.AST with Library {
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
 
-  object BuiltIns { //todo put these into libMorphism
-    val Load           = LoadBinding(LoadId, 1, false)
-    val Distinct       = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
+  object BuiltIns { //todo put these into libMorphism? Or just put Distinct there since Load gets its own binding?
+    val Load = LoadBinding(LoadId, 1, false)
+    val Distinct = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
 
     val all = Set(Load, Distinct)
   }

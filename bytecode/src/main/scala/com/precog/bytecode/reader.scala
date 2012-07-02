@@ -14,9 +14,10 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
-  private lazy val stdlibReductOps: Map[Int, BuiltInReduction] = libReduct.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
+  private lazy val stdlibMorphismOps: Map[Int, BuiltInMorphism] = libMorphism.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
+  private lazy val stdlibReductionOps: Map[Int, BuiltInReduction] = libReduction.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
     val version = buffer.getInt()
@@ -54,7 +55,7 @@ trait BytecodeReader extends Reader {
       
       lazy val tableInt = tableEntry flatMap readInt
 
-      lazy val setReduction: Option[SetReduction] = (code & 0xFF) match {
+      lazy val morphism: Option[MorphismAction] = (code & 0xFF) match {
         case 0x00 => Some(Distinct)
       }
       
@@ -103,7 +104,7 @@ trait BytecodeReader extends Reader {
       }
       
       lazy val reduction = (code & 0xFF) match {
-        case 0xC0 => stdlibReductOps.get(((code >> 8) & 0xFFFFFF).toInt)
+        case 0xC0 => stdlibReductionOps.get(((code >> 8) & 0xFFFFFF).toInt)
 
         case _ => None
       }
