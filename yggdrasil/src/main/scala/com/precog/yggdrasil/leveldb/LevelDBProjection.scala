@@ -13,7 +13,7 @@ import java.io._
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.util.Map.Entry
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.{Executors,TimeoutException}
 import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
@@ -71,6 +71,8 @@ object LevelDBProjection {
 
     baseDirV map { (bd: File) => new LevelDBProjection(bd, descriptor) }
   }
+
+  private val readaheadPool = Executors.newCachedThreadPool()
 }
 
 class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset] {
@@ -138,7 +140,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
   import org.fusesource.leveldbjni.KeyValueChunk
   import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
 
-  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Thread {
+  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Runnable {
     val bufferQueue = new ArrayBlockingQueue[Pair[ByteBuffer,ByteBuffer]](readAheadSize) // Need a key and value buffer for each readahead
 
     // pre-fill the buffer queue
@@ -152,15 +154,12 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
     
     val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize + 1)
 
-    val running = new AtomicBoolean(true)
-
     override def run() {
-      while (running.get && iterator.hasNext) {
+      if (iterator.hasNext) {
         var buffers : Pair[ByteBuffer,ByteBuffer] = null
-        while (running.get && buffers == null) {
+        while (buffers == null) {
           if (System.currentTimeMillis > expiresAt) {
             iterator.close()
-            running.set(false)
             chunkQueue.put(emptyInput)
             return
           }
@@ -170,15 +169,18 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
         if (buffers != null) {
           val chunk = elInput(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
 
-          while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
+          while (! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
             if (System.currentTimeMillis > expiresAt) {
               iterator.close()
-              running.set(false)
               chunkQueue.put(emptyInput)
               return
             }
           }
         }
+
+        // We didn't expire, so reschedule
+        readaheadPool.execute(this)
+        return ()
       }
 
       chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
@@ -199,7 +201,7 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       iter.seekToFirst
 
       val reader = new ChunkReader(iter, expiresAt)
-      reader.start()
+      readaheadPool.execute(reader)
 
       private[this] var currentChunk: Input[KeyValueChunk] = reader.chunkQueue.take()
 
