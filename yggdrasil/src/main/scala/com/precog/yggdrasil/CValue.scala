@@ -161,7 +161,11 @@ object CType extends CTypeSerialization {
       case (CDecimalArbitrary, CDouble) => Some(CDecimalArbitrary)
       case (CDecimalArbitrary, CDecimalArbitrary) => Some(CDecimalArbitrary)
 
-      case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => Some(if (w1 > w2) f1 else f2)
+      // The following (with the conditional nested in the Some() causes an explosive bytecode
+      // warning with 2.9.1. Try again with 2.9.2 or later.
+      //case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => Some(if (w1 > w2) f1 else f2) 
+      case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => if (w1 > w2) Some(f1) else Some(f2)
+
       case (CStringFixed(_), CStringArbitrary) => Some(CStringArbitrary)
       case (CStringArbitrary, CStringArbitrary) => Some(CStringArbitrary)
       case (CStringArbitrary, CStringFixed(_)) => Some(CStringArbitrary)
