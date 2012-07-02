@@ -49,6 +49,13 @@ trait MemoryDatasetConsumer extends Evaluator with YggConfigComponent {
       eval(userUID, graph, ctx).iterable.toSet
     } 
   }
+  
+  def consumeEvalNotToSet(userUID: String, graph: DepGraph, ctx: Context) = {
+    implicit val bind = Validation.validationMonad[Throwable]
+    Validation.fromTryCatch {
+      eval(userUID, graph, ctx).iterable.toList
+    } 
+  }
 }
 
 
