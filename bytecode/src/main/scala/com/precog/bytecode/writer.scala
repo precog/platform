@@ -133,7 +133,7 @@ trait BytecodeWriter extends Writer with Version {
       case BuiltInFunction2Op(op) => 0xB1 | (op.opcode << 8)
     }
     
-    def reductionNum(red: Reduction) = red match {
+    def reductionNum(red: ReductionAction) = red match {
       case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
