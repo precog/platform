@@ -173,7 +173,7 @@ trait DAG extends Instructions {
         
         case instr: JoinInstr => processJoinInstr(instr)
         
-        case instr @ instructions.Reduce(red) => {
+        case instr @ instructions.Reduce(BuiltInReduction(red)) => {
           val eitherRoots = roots match {
             case Right(hd) :: tl => Right(Right(Reduce(loc, red, hd)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
@@ -181,13 +181,34 @@ trait DAG extends Instructions {
           }
           
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
-        }        
+        }
 
-        case instr @ instructions.SetReduce(red) => {
+        case instr @ instructions.Morph1(BuiltInMorphism(m1)) => {
           val eitherRoots = roots match {
-            case Right(hd) :: tl => Right(Right(SetReduce(loc, red, hd)) :: tl)
+            case Right(hd) :: tl => Right(Right(Morph1(loc, m1, hd)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
             case _ => Left(StackUnderflow(instr))
+          }
+          
+          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        }
+
+        case instr @ instructions.Morph2(BuiltInMorphism(m2)) => {
+          val eitherRoots = roots match {
+            case Right(right) :: Right(left) :: tl => Right(Right(Morph2(loc, m2, left, right)) :: tl)
+            case Left(_) :: _ => Left(OperationOnBucket(instr))
+            case _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+            case _ => Left(StackUnderflow(instr))
+          }
+          
+          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        }
+        
+        case instructions.Distinct => {
+          val eitherRoots = roots match {
+            case Right(hd) :: tl => Right(Right(Distinct(loc, hd)) :: tl)
+            case Left(_) :: _ => Left(OperationOnBucket(instructions.Distinct))
+            case _ => Left(StackUnderflow(instructions.Distinct))
           }
           
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
@@ -487,9 +508,41 @@ trait DAG extends Instructions {
       }
       
       lazy val containsSplitArg = parent.containsSplitArg
-    }    
+    }
 
-    case class SetReduce(loc: Line, red: SetReduction, parent: DepGraph) extends DepGraph {
+    case class Morph1(loc: Line, m: Morphism, parent: DepGraph) extends DepGraph {
+      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      
+      lazy val isSingleton = false
+      
+      def findMemos(s: Split) = {
+        val back = parent.findMemos(s)
+        if (back.isEmpty)
+          back
+        else
+          back + memoId
+      }
+      
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+
+    case class Morph2(loc: Line, m: Morphism, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      
+      lazy val isSingleton = false
+      
+      def findMemos(s: Split) = {
+        val back = left.findMemos(s) ++ right.findMemos(s)
+        if (back.isEmpty)
+          back
+        else
+          back + memoId
+      }
+      
+      lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
+    }
+
+    case class Distinct(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       lazy val isSingleton = parent.isSingleton
