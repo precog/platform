@@ -32,6 +32,7 @@ import org.scalacheck.Arbitrary._
 
 trait TransformSpec extends TableModuleSpec {
   import trans._
+  import Schema._
 
   def checkTransformLeaf = {
     implicit val gen = sample(schema)
