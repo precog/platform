@@ -2,10 +2,9 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
 
 import yggdrasil._
+import yggdrasil.table._
 
 import org.joda.time._
 import org.joda.time.format._
