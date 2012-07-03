@@ -69,9 +69,9 @@ trait BytecodeWriter extends Writer with Version {
   
   @tailrec
   private[this] def writeInstructions(stream: Vector[Instruction], table: Map[DataInstr, Int], buffer: ByteBuffer, written: Int): Int = {
-    def setReductionNum(red: SetReduction) = red match {
-      case Distinct => 0x00
-    }
+    def morph1Num(m1: BuiltInMorphism) = sys.error("todo")
+
+    def morph2Num(m2: BuiltInMorphism) = sys.error("todo")
 
     def unaryOpNum(op: UnaryOperation) = op match {
       case Comp => 0x40
@@ -114,7 +114,7 @@ trait BytecodeWriter extends Writer with Version {
       case BuiltInFunction2Op(op) => 0xB1 | (op.opcode << 8)
     }
     
-    def reductionNum(red: ReductionAction) = red match {
+    def reductionNum(red: BuiltInReduction) = red match {
       case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
@@ -131,7 +131,8 @@ trait BytecodeWriter extends Writer with Version {
         case Map2CrossRight(op) => (0x06, 0.toShort, binaryOpNum(op))
         
         case Reduce(red) => (0x08, 0.toShort, reductionNum(red))
-        case SetReduce(red) => (0x09, 0.toShort, setReductionNum(red))
+        case Morph1(m1) => (0x09, 0.toShort, morph1Num(m1))
+        case Morph2(m2) => (0x19, 0.toShort, morph2Num(m2))
         
         case VUnion => (0x10, 0.toShort, 0)
         case VIntersect => (0x11, 0.toShort, 0)

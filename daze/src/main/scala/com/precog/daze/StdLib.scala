@@ -42,7 +42,6 @@ trait ImplLibrary extends Library {
 
   trait MorphismImpl extends MorphismLike {
     def alignment: Option[MorphismAlignment]  //not necessary for unary operations
-    def arity: Int
     def apply(input: Table): Table
   }
   

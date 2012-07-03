@@ -9,11 +9,10 @@ trait Binder extends parser.AST with Library {
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
 
-  object BuiltIns { //todo put these into libMorphism? Or just put Distinct there since Load gets its own binding?
-    val Load = LoadBinding(LoadId, 1, false)
-    val Distinct = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
+  object BuiltIns { //todo put Distinct in libMorphism
+    val Load = LoadBinding(LoadId)
 
-    val all = Set(Load, Distinct)
+    val all = Set(Load)
   }
 
   override def bindNames(tree: Expr) = {
@@ -225,7 +224,7 @@ trait Binder extends parser.AST with Library {
   }  
   
   case class LoadBinding(id: Identifier) extends FunctionBinding {
-    val name = Identifier(red.namespace, red.name)
+    val name = Identifier(id.namespace, id.id)
     override val toString = "<native: %s(%d)>".format(red.name, 1)
   }
 

@@ -1,10 +1,18 @@
 package com.precog
 package bytecode
 
+sealed trait Arity
+
+object Arity {
+  case object One extends Arity
+  case object Two extends Arity
+}
+
 trait MorphismLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val arity: Arity
 
   lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   override def toString = "[0x%06x]".format(opcode) + fqn

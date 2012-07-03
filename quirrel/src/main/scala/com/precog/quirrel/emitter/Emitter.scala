@@ -5,6 +5,7 @@ package emitter
 import parser.AST
 import typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import bytecode.Instructions
+import bytecode.Arity._
 
 import scalaz.{StateT, Id, Bind, Monoid}
 import scalaz.Scalaz._
@@ -16,7 +17,7 @@ trait Emitter extends AST
     with GroupSolver {
       
   import instructions._
-  
+
   case class EmitterError(expr: Option[Expr], message: String) extends Exception(message)
   
   private def nullProvenanceError[A](): A = throw EmitterError(None, "Expression has null provenance")
@@ -370,18 +371,11 @@ trait Emitter extends AST
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case LoadBinding(m @ BuiltIns.Load.name) =>  //todo get rid of BuiltIns - put this in libMorphism
-              assert(m.arity == 1)
-
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
 
-            case MorphismBinding(m @ BuiltIns.Distinct.name) => //todo get rid of BuiltIns - put this in libMorphism
-              assert(m.arity == 1)
-
-              emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism(Distinct)))
-
             case MorphismBinding(m) => m.arity match {
-              case 1 => emitExpr(actuals.head) >> emitInstr(Morph2(
-              case 2 => sys.error("todo")
+              case One => emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism(m)))
+              case Two => emitExpr(actuals(0)) >> emitExpr(actuals(1)) >> emitInstr(Morph2(BuiltInMorphism(m)))
               case _ => notImpl(expr)
             }
 
