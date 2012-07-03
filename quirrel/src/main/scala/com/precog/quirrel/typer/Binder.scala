@@ -135,10 +135,7 @@ trait Binder extends parser.AST with Library {
           d.binding = env(Right(name))
           
           d.isReduction = env(Right(name)) match {
-            case RedLibBuiltIn(_) => true
-            case BuiltIn(BuiltIns.Load.name, _, _) => false
-            case BuiltIn(_, _, true) => true
-            case BuiltIn(_, _, false) => false
+            case ReductionBinding(_) => true
             case _ => false
           }
           
@@ -208,7 +205,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduct.map(ReductionBinding) ++ libMorphism.map(MorphismBinding)).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism.map(MorphismBinding)).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
@@ -225,7 +222,7 @@ trait Binder extends parser.AST with Library {
   
   case class LoadBinding(id: Identifier) extends FunctionBinding {
     val name = Identifier(id.namespace, id.id)
-    override val toString = "<native: %s(%d)>".format(red.name, 1)
+    override val toString = "<native: %s(%d)>".format(id.id, 1)
   }
 
   case class MorphismBinding(mor: Morphism) extends FunctionBinding {
@@ -235,7 +232,7 @@ trait Binder extends parser.AST with Library {
 
   case class Op1Binding(op1: Op1) extends FunctionBinding {
     val name = Identifier(op1.namespace, op1.name)
-    override val toString = "<native: %s(%d)>".format(f.name, 1)
+    override val toString = "<native: %s(%d)>".format(op1.name, 1)
   }
   
   case class Op2Binding(op2: Op2) extends FunctionBinding {
