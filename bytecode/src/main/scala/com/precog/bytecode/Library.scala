@@ -20,11 +20,18 @@
 package com.precog
 package bytecode
 
-sealed trait Arity
+sealed trait Arity {
+  def toInt: Int
+}
+
 
 object Arity {
-  case object One extends Arity
-  case object Two extends Arity
+  case object One extends Arity {
+    def toInt = 1
+  }
+  case object Two extends Arity {
+    def toInt = 2
+  }
 }
 
 trait MorphismLike {

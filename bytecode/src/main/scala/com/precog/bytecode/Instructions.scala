@@ -178,8 +178,6 @@ trait Instructions extends Library {
     case class BuiltInFunction2Op(op: Op2) extends BinaryOperation
     case class BuiltInReduction(red: Reduction)
 
-    case object Distinct //necessary?? won't Distinct be a Morphism?
-
     case object Add extends BinaryOperation with PredicateInstr with PredicateOp
     case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
     case object Mul extends BinaryOperation with PredicateInstr with PredicateOp

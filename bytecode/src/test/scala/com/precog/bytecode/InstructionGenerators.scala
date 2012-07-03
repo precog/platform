@@ -34,8 +34,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbPredicate: Arbitrary[Predicate] = Arbitrary(genPredicate)
   implicit lazy val arbPredicateInstr: Arbitrary[PredicateInstr] = Arbitrary(genPredicateInstr)
   
-  implicit lazy val arbReduction: Arbitrary[Reduction] = Arbitrary(genReduction)
-  implicit lazy val arbSetReduction: Arbitrary[SetReduction] = Arbitrary(genSetReduction)
+  implicit lazy val arbReduction: Arbitrary[BuiltInReduction] = Arbitrary(genReduction)
+  implicit lazy val arbMorphism: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism)
   
   implicit lazy val arbType: Arbitrary[Type] = Arbitrary(genType)
   
@@ -47,7 +47,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genMap2CrossRight,
     
     genReduce,
-    genSetReduce,
+    genMorph1,
+    genMorph2,
     
     genVUnion,
     genVIntersect,
@@ -94,7 +95,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   
   private lazy val genReduce = genReduction map Reduce
-  private lazy val genSetReduce = genSetReduction map SetReduce
+  private lazy val genMorph1 = genMorphism map Morph1
+  private lazy val genMorph2 = genMorphism map Morph2
   
   private lazy val genVUnion = VUnion
   private lazy val genVIntersect = VIntersect
@@ -190,11 +192,14 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   } yield res
 
   private lazy val genReduction = for {
-    red <- oneOf(libReduct.toSeq)
+    red <- oneOf(libReduction.toSeq)
     res <- BuiltInReduction(red)
   } yield res
 
-  private lazy val genSetReduction = Distinct
+  private lazy val genMorphism = for {
+    m <- oneOf(libMorphism.toSeq)
+    res <- BuiltInMorphism(m)
+  } yield res
     
   private lazy val genPredicate = listOf(genPredicateInstr) map { xs => Vector(xs: _*) }
   
