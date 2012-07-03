@@ -11,13 +11,15 @@ import typer._
 
 object QuirrelConsole {
   trait EmptyLibrary extends Library {
-    type BIR = BuiltInRed
-    type BIF1 = BuiltInFunc1
-    type BIF2 = BuiltInFunc2
+    type Morphism = MorphismLike
+    type Op1 = Op1Like with Morphism
+    type Op2 = Op2Like with Morphism
+    type Reduction = ReductionLike with Morphism
 
-    def libReduct = Set()
+    def libMorphism = Set()
     def lib1 = Set()
     def lib2 = Set()
+    def libReduction = Set()
   }
 
   val compiler = new Parser

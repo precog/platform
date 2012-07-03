@@ -192,7 +192,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == UserDef(b) }
+        val result = solveRelation(expr) { case t @ TicVar(_, `tv`) => t.binding == LetBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -208,7 +208,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
         (None, Set(Error(expr, InseparablePairedTicVariables(vars))))
       } else {
         val tv = vars.head
-        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == UserDef(b) }
+        val result = solveComplement(expr) { case t @ TicVar(_, `tv`) => t.binding == LetBinding(b) }
         
         if (result.isDefined)
           (result map { UnfixedSolution(tv, _) }, Set())
@@ -247,7 +247,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case Let(_, _, _, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     case New(_, child) => listTicVars(b, child)
     case Relate(_, from, to, in) => listTicVars(b, from) ++ listTicVars(b, to) ++ listTicVars(b, in)
-    case t @ TicVar(_, name) if t.binding == UserDef(b) => Set(name)
+    case t @ TicVar(_, name) if t.binding == LetBinding(b) => Set(name)
     case TicVar(_, _) => Set()
     case StrLit(_, _) => Set()
     case NumLit(_, _) => Set()
@@ -260,7 +260,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     
     case d @ Dispatch(_, _, actuals) => {
       val leftSet = d.binding match {
-        case UserDef(b2) => listTicVars(b, b2.left)
+        case LetBinding(b2) => listTicVars(b, b2.left)
         case _ => Set[TicId]()
       }
       (actuals map { listTicVars(b, _) }).fold(leftSet) { _ ++ _ }
