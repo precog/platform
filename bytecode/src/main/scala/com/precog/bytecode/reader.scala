@@ -14,7 +14,7 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
-  val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }
+  val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }  //todo is this okay? 
 
   private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism] = libMorphism1.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
   private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism] = libMorphism2.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
