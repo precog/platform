@@ -20,6 +20,7 @@ import scalaz.syntax.arrow._
 trait ColumnarTableModule extends TableModule {
   import trans._
   import trans.constants._
+  import Schema._
 
   type F1 = CF1
   type F2 = CF2

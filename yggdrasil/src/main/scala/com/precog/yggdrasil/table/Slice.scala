@@ -18,6 +18,7 @@ import scalaz.std.iterable._
 
 trait Slice { source =>
   import Slice._
+  import Schema._
 
   def size: Int
   def isEmpty: Boolean = size == 0

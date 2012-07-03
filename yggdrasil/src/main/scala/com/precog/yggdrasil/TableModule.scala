@@ -3,7 +3,9 @@ package com.precog.yggdrasil
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 import scalaz.Monoid
 
-trait TableModule extends FNModule with Schema {
+trait TableModule extends FNModule {
+  import Schema._
+
   type Scanner
   type Reducer[α]
 
