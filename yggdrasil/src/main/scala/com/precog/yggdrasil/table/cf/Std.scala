@@ -10,8 +10,26 @@ object std {
     case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) == c2(row)
     }
+    case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = BigDecimal(c1(row)) == c2(row)
+    }
+    case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) == c2(row)
+    }
     case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) == c2(row)
+    }
+    case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = BigDecimal(c1(row)) == c2(row)
+    }
+    case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) == BigDecimal(c2(row))
+    }
+    case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) == BigDecimal(c2(row))
     }
     case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) == c2(row)
@@ -36,6 +54,12 @@ object std {
   object And extends CF2P ({
     case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
       def apply(row: Int) = c1(row) && c2(row)
+    }
+  })
+
+  object Or extends CF2P ({
+    case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
+      def apply(row: Int) = c1(row) || c2(row)
     }
   })
 }

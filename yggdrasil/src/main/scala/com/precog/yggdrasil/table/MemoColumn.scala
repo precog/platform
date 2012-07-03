@@ -4,8 +4,8 @@ package table
 import org.joda.time.DateTime
 
 class MemoBoolColumn(c: BoolColumn) extends BoolColumn {
-  private var row0 = -1
-  private var memo: Boolean = _
+  private[this] var row0 = -1
+  private[this] var memo: Boolean = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
@@ -14,8 +14,8 @@ class MemoBoolColumn(c: BoolColumn) extends BoolColumn {
 }
 
 class MemoLongColumn(c: LongColumn) extends LongColumn {
-  private var row0 = -1 
-  private var memo: Long = _
+  private[this] var row0 = -1
+  private[this] var memo: Long = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
@@ -24,8 +24,8 @@ class MemoLongColumn(c: LongColumn) extends LongColumn {
 }
 
 class MemoDoubleColumn(c: DoubleColumn) extends DoubleColumn {
-  private var row0 = -1 
-  private var memo: Double = _
+  private[this] var row0 = -1
+  private[this] var memo: Double = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
@@ -34,8 +34,8 @@ class MemoDoubleColumn(c: DoubleColumn) extends DoubleColumn {
 }
 
 class MemoNumColumn(c: NumColumn) extends NumColumn {
-  private var row0 = -1 
-  private var memo: BigDecimal = _
+  private[this] var row0 = -1
+  private[this] var memo: BigDecimal = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
@@ -44,8 +44,8 @@ class MemoNumColumn(c: NumColumn) extends NumColumn {
 }
 
 class MemoStrColumn(c: StrColumn) extends StrColumn {
-  private var row0 = -1 
-  private var memo: String = _
+  private[this] var row0 = -1
+  private[this] var memo: String = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
@@ -54,16 +54,11 @@ class MemoStrColumn(c: StrColumn) extends StrColumn {
 }
 
 class MemoDateColumn(c: DateColumn) extends DateColumn {
-  private var row0 = -1 
-  private var memo: DateTime = _
+  private[this] var row0 = -1
+  private[this] var memo: DateTime = _
   def isDefinedAt(row: Int) = c.isDefinedAt(row)
   def apply(row: Int) = {
     if (row != row0) { row0 = row; memo = c(row) }
     memo
   }
 }
-
-/* help for ctags
-type MemoColumn 
-*/
-
