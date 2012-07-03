@@ -150,23 +150,23 @@ trait Evaluator extends DAG
       case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
-      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => if right.value.isDefined {
+      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if right.value.isDefined => {
         val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, equalsF2.partialRight(svalueToCValue(right.value.get))))
       }
       
-      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => if left.value.isDefined {
+      case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if left.value.isDefined => {
         val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, equalsF2.partialLeft(svalueToCValue(left.value.get))))
       }
       
-      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) => if right.value.isDefined {
+      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if right.value.isDefined => {
         val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
         val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get)))
         PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, Comp.f1))   // TODO
       }
       
-      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) => if left.value.isDefined {
+      case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if left.value.isDefined => {
         val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
         val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(left.value.get)))
         PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, Comp.f1))   // TODO

@@ -24,7 +24,7 @@ import bytecode.Library
 
 import yggdrasil._
 
-trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations with Evaluator {  
+trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
 
   override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Median, Mode)
