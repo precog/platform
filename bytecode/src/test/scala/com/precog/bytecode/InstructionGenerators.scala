@@ -35,7 +35,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbPredicateInstr: Arbitrary[PredicateInstr] = Arbitrary(genPredicateInstr)
   
   implicit lazy val arbReduction: Arbitrary[BuiltInReduction] = Arbitrary(genReduction)
-  implicit lazy val arbMorphism: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism)
+  implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism1)
+  implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism2)
   
   implicit lazy val arbType: Arbitrary[Type] = Arbitrary(genType)
   
@@ -76,6 +77,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genLine,
     
     genLoadLocal,
+    genDistinct,
     
     genPushString,
     genPushNum,
@@ -95,8 +97,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   
   private lazy val genReduce = genReduction map Reduce
-  private lazy val genMorph1 = genMorphism map Morph1
-  private lazy val genMorph2 = genMorphism map Morph2
+  private lazy val genMorph1 = genMorphism1 map Morph1
+  private lazy val genMorph2 = genMorphism2 map Morph2
   
   private lazy val genVUnion = VUnion
   private lazy val genVIntersect = VIntersect
@@ -142,6 +144,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   } yield Line(num, text)
   
   private lazy val genLoadLocal = genType map LoadLocal
+  private lazy val genDistinct = Distinct
   
   private lazy val genPushString = arbitrary[String] map PushString
   private lazy val genPushNum = arbitrary[String] map PushNum
@@ -196,8 +199,15 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     res <- BuiltInReduction(red)
   } yield res
 
-  private lazy val genMorphism = for {
-    m <- oneOf(libMorphism.toSeq)
+  private lazy val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }
+
+  private lazy val genMorphism1 = for {
+    m <- oneOf(libMorphism1.toSeq)
+    res <- BuiltInMorphism(m)
+  } yield res
+
+  private lazy val genMorphism2 = for {
+    m <- oneOf(libMorphism2.toSeq)
     res <- BuiltInMorphism(m)
   } yield res
     
