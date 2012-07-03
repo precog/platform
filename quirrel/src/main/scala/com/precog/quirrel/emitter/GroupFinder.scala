@@ -42,7 +42,7 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case UserDef(`root`) => currentWhere map { where => Set(Condition(where): GroupTree) } getOrElse Set()
+        case LetBinding(`root`) => currentWhere map { where => Set(Condition(where): GroupTree) } getOrElse Set()
         case _ => Set()
       }
       
@@ -71,14 +71,14 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
         val merged = sets.fold(Set()) { _ ++ _ }
         
         val fromDef = d.binding match {
-          case UserDef(e) => loop(root, e.left, currentWhere)
+          case LetBinding(e) => loop(root, e.left, currentWhere)
           case _ => Set[GroupTree]()
         }
         
         val back: Set[GroupTree] = merged ++ fromDef
         
         d.binding match {
-          case b: RedLibBuiltIn if d.isReduction =>
+          case b: ReductionBinding if d.isReduction =>
             Set(Reduction(b, back): GroupTree)
           
           case _ => back
@@ -157,6 +157,6 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
   
   object group {
     case class Condition(op: Where) extends GroupTree
-    case class Reduction(b: RedLibBuiltIn, children: Set[GroupTree]) extends GroupTree
+    case class Reduction(b: ReductionBinding, children: Set[GroupTree]) extends GroupTree
   }
 }
