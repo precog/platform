@@ -688,7 +688,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     }
   }
   
-  "pre-binding of BuiltIns" should {
+  "pre-binding of load and distinct" should {
     "bind load" in {
       val d @ Dispatch(_, _, _) = parse("load")
       d.binding mustEqual LoadBinding(Identifier(Vector(), "load"))
@@ -705,6 +705,17 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
 
   "pre-binding of built-in functions" should {
+    "bind morphisms" in {
+      libMorphism must not(beEmpty)
+
+      forall(libMorphism) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual MorphismBinding(f)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }    
+    
     "bind reductions" in {
       libReduction must not(beEmpty)
 
