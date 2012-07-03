@@ -74,10 +74,6 @@ trait BytecodeReader extends Reader {
       
       lazy val tableInt = tableEntry flatMap readInt
 
-      lazy val morphism: Option[MorphismAction] = (code & 0xFF) match {
-        case 0x00 => Some(Distinct)
-      }
-      
       lazy val unOp: Option[UnaryOperation] = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
@@ -126,6 +122,18 @@ trait BytecodeReader extends Reader {
         case 0xC0 => stdlibReductionOps.get(((code >> 8) & 0xFFFFFF).toInt)
 
         case _ => None
+      }      
+
+      lazy val morphism1 = (code & 0xFF) match {
+        case 0xC0 => stdlibMorphismOps.get(((code >> 8) & 0xFFFFFF).toInt)
+
+        case _ => None
+      }
+
+      lazy val morphism2 = (code & 0xFF) match {
+        case 0xC0 => stdlibMorphismOps.get(((code >> 8) & 0xFFFFFF).toInt)  //todo split out morphism1 and morphism2 earlier
+
+        case _ => None
       }
 
       lazy val tpe = (code & 0xFF) match {
@@ -144,7 +152,8 @@ trait BytecodeReader extends Reader {
         case 0x06 => binOp map Map2CrossRight
         
         case 0x08 => reduction map Reduce
-        case 0x09 => setReduction map SetReduce
+        case 0x09 => morphism1 map Morph1
+        case 0x19 => morphism2 map Morph2
         
         case 0x10 => Some(VUnion)
         case 0x11 => Some(VIntersect)

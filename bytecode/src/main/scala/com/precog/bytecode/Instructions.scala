@@ -102,9 +102,9 @@ trait Instructions extends Library {
     case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
-    case class Reduce(red: ReductionAction) extends Instruction
-    case class Morph1(red: MorphismAction) extends Instruction
-    case class Morph2(red: MorphismAction) extends Instruction with JoinInstr
+    case class Reduce(red: BuiltInReduction) extends Instruction
+    case class Morph1(m1: BuiltInMorphism) extends Instruction
+    case class Morph2(m2: BuiltInMorphism) extends Instruction with JoinInstr
     
     case object VUnion extends Instruction with JoinInstr
     case object VIntersect extends Instruction with JoinInstr
@@ -147,10 +147,8 @@ trait Instructions extends Library {
     case class PushGroup(id: Int) extends Instruction
     case class PushKey(id: Int) extends Instruction
     
-    sealed trait MorphismAction
     sealed trait UnaryOperation
     sealed trait BinaryOperation
-    sealed trait ReductionAction
     
     sealed trait PredicateInstr { self =>
       def predicateStackDelta: (Int, Int) = self match {
@@ -175,12 +173,12 @@ trait Instructions extends Library {
     
     sealed trait PredicateOp
 
-    case class BuiltInMorphism(mor: Morphism) extends MorphismAction
+    case class BuiltInMorphism(mor: Morphism)
     case class BuiltInFunction1Op(op: Op1) extends UnaryOperation
     case class BuiltInFunction2Op(op: Op2) extends BinaryOperation
-    case class BuiltInReduction(red: Reduction) extends ReductionAction
+    case class BuiltInReduction(red: Reduction)
 
-    case object Distinct extends MorphismAction  //necessary?? won't Distinct be a Morphism?
+    case object Distinct //necessary?? won't Distinct be a Morphism?
 
     case object Add extends BinaryOperation with PredicateInstr with PredicateOp
     case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
