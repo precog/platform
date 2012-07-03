@@ -342,7 +342,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         val (prov, errors) = expr.binding match {
-          case LoadBinding(BuiltIns.Load.name) => {
+          case LoadBinding(_) => {
             if (exprs.length == 1) {
               lazy val prov = DynamicProvenance(provenanceId(expr))
 
@@ -354,25 +354,25 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             }
           }
 
-          //case MorphismBinding(Distinct) => {
-          //  if (exprs.length == 1) {
-          //    val prov = DynamicProvenance(currentId.incrementAndGet())
-          //    expr.accumulatedProvenance = Some(Vector(prov))
+          case DistinctBinding(_) => {
+            if (exprs.length == 1) {
+              val prov = DynamicProvenance(currentId.incrementAndGet())
+              expr.accumulatedProvenance = Some(Vector(prov))
 
-          //    (prov, Set())
-          //  } else {
-          //    expr.accumulatedProvenance = None
-          //    (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
-          //  }
-          //}
+              (prov, Set())
+            } else {
+              expr.accumulatedProvenance = None
+              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
+            }
+          }
 
           case MorphismBinding(m) => {
-            if (exprs.length == m.arity.toInt) {
+            if (exprs.length == m.arity.ordinal) {
               expr.accumulatedProvenance = Some(Vector())
               (ValueProvenance, Set())  
             } else {
               expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(m.arity.toInt, exprs.length))))
+              (NullProvenance, Set(Error(expr, IncorrectArity(m.arity.ordinal, exprs.length))))
             }
           }
 
