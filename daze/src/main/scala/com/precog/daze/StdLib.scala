@@ -12,7 +12,7 @@ import yggdrasil._
 
 trait GenOpcode extends ImplLibrary {
   private val defaultMorphismOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class Morphism(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphismOpcode.getAndIncrement) extends MorphismImpl 
+  abstract class Morphism(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphismOpcode.getAndIncrement, val arity: Arity) extends MorphismImpl 
 
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1Impl
