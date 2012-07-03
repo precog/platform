@@ -190,17 +190,78 @@ trait ColumnarTableModule extends TableModule {
           l0.zip(r0) { (sl, sr) =>
             new Slice {
               val size = sl.size
-              val columns: Map[ColumnRef, Column] = 
-                if (sl.columns.keySet == sr.columns.keySet) {
-                  val eqResult = sl.columns.keySet.foldLeft(Option.empty[Column]) { (acc, colRef) => 
-                    val colsEq = cf.std.Eq(sl.columns(colRef), sr.columns(colRef))
-                    acc flatMap { accCol => colsEq flatMap { cf.std.And(accCol, _) } } orElse colsEq
-                  }
+              val columns: Map[ColumnRef, Column] = {
+                // 'excluded' is the set of columns that do not exist on both sides of the equality comparison
+                // if, for a given row, any of these columns' isDefinedAt returns true, then
+                // the result is defined for that row, and its value is false. If isDefinedAt
+                // returns false for all columns, then the result (true, false, or undefined) 
+                // must be determined by comparing the remaining columns pairwise.
 
-                  eqResult map { ColumnRef(JPath.Identity, CBoolean) -> _ } toMap
-                } else {
-                  Map(ColumnRef(JPath.Identity, CBoolean) -> new EmptyColumn[BoolColumn] with BoolColumn)
+                // In the following fold, we compute all paired columns, and the columns on the left that
+                // have no counterpart on the right.
+                val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
+                  case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CDecimalArbitrary), col)) => 
+                    val numEq = for {
+                                  ctype <- CLong :: CDouble :: CDecimalArbitrary :: Nil
+                                  col0  <- sr.columns.get(ColumnRef(selector, ctype)) 
+                                  boolc <- cf.std.Eq(col, col0)
+                                } yield boolc
+
+                    if (numEq.isEmpty) {
+                      (paired, excluded + col)
+                    } else {
+                      val resultCol = new BoolColumn {
+                        def isDefinedAt(row: Int) = {
+                          numEq exists { _.isDefinedAt(row) }
+                        }
+                        def apply(row: Int) = {
+                          numEq exists { case col: BoolColumn => col.isDefinedAt(row) && col(row) }
+                        }
+                      }
+
+                      (paired + (selector -> paired.get(selector).flatMap(cf.std.And(_, resultCol)).getOrElse(resultCol)), excluded)
+                    }
+
+                  case ((paired, excluded), (ref, col)) =>
+                    sr.columns.get(ref) flatMap { col0 =>
+                      cf.std.Eq(col, col0) map { boolc =>
+                        // todo: This line contains something that might be an error case going to none, but I can't see through it
+                        // well enough to know for sure. Please review.
+                        (paired + (ref.selector -> paired.get(ref.selector).flatMap(cf.std.And(_, boolc)).getOrElse(boolc)), excluded)
+                      }
+                    } getOrElse {
+                      (paired, excluded + col)
+                    }
                 }
+
+                val excluded = excludedLeft ++ sr.columns.collect({
+                  case (ColumnRef(selector, CLong | CDouble | CDecimalArbitrary), col) 
+                    if !(CLong :: CDouble :: CDecimalArbitrary :: Nil).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
+
+                  case (ref, col) if !sl.columns.contains(ref) => col
+                })
+
+                val allColumns = sl.columns ++ sr.columns
+                
+                val resultCol = new MemoBoolColumn(
+                  new BoolColumn {
+                    def isDefinedAt(row: Int): Boolean = {
+                      allColumns exists { case (_, c) => c.isDefinedAt(row) } 
+                    }
+
+                    def apply(row: Int): Boolean = {
+                      !(
+                        // if any excluded column exists for the row, unequal
+                        excluded.exists(_.isDefinedAt(row)) || 
+                         // if any paired column compares unequal, unequal
+                        paired.exists({ case (_, equal: BoolColumn) => equal.isDefinedAt(row) && !equal(row) })
+                      )
+                    }
+                  }
+                )
+                
+                Map(ColumnRef(JPath.Identity, CBoolean) -> resultCol)
+              }
             }
           }
 

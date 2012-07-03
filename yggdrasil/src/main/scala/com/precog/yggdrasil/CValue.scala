@@ -75,6 +75,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
   implicit val manifest: Manifest[CA]
 
+  def isNumeric: Boolean = false
+
   def order(a: CA, b: CA): Ordering
 
   def jvalueFor(a: CA): JValue
@@ -277,6 +279,7 @@ case class CLong(value: Long) extends CValue
 case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
   val CC = classOf[Long]
+  override def isNumeric: Boolean = true
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   def jvalueFor(v: Long) = JInt(v)
   implicit val manifest = implicitly[Manifest[Long]]
@@ -286,6 +289,7 @@ case class CDouble(value: Double) extends CValue
 case object CDouble extends CType(FixedWidth(8), SDecimal) {
   type CA = Double
   val CC = classOf[Double]
+  override def isNumeric: Boolean = true
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
   def jvalueFor(v: Double) = JDouble(v)
   implicit val manifest = implicitly[Manifest[Double]]
@@ -295,6 +299,7 @@ case class CNum(value: BigDecimal) extends CValue
 case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
+  override def isNumeric: Boolean = true
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   def jvalueFor(v: BigDecimal) = JDouble(v.toDouble)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
