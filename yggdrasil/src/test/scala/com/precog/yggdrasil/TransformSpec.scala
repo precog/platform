@@ -241,6 +241,29 @@ trait TransformSpec extends TableModuleSpec {
       results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
     }
   }
+
+  def checkTyped = {
+    implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Typed(Leaf(Source), JNumberT)
+      })
+
+      val expected = sample.data map { jv =>
+        JObject(
+          JField("key", jv \ "key") ::
+          JField("value",
+            JObject(
+              JField("value1", jv \ "value" \ "value1") ::
+              JField("value3", jv \ "value" \ "value3") ::
+              Nil)) ::
+          Nil)
+      }
+
+      results must_== expected
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:
