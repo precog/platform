@@ -14,7 +14,10 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
-  private lazy val stdlibMorphismOps: Map[Int, BuiltInMorphism] = libMorphism.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
+  val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }
+
+  private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism] = libMorphism1.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
+  private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism] = libMorphism2.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   private lazy val stdlibReductionOps: Map[Int, BuiltInReduction] = libReduction.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
@@ -106,13 +109,13 @@ trait BytecodeReader extends Reader {
       }      
 
       lazy val morphism1 = (code & 0xFF) match {
-        case 0xC0 => stdlibMorphismOps.get(((code >> 8) & 0xFFFFFF).toInt)
+        case 0xC1 => stdlibMorphism1Ops.get(((code >> 8) & 0xFFFFFF).toInt)
 
         case _ => None
       }
 
       lazy val morphism2 = (code & 0xFF) match {
-        case 0xC0 => stdlibMorphismOps.get(((code >> 8) & 0xFFFFFF).toInt)  //todo split out morphism1 and morphism2 earlier
+        case 0xC2 => stdlibMorphism2Ops.get(((code >> 8) & 0xFFFFFF).toInt) 
 
         case _ => None
       }
@@ -156,6 +159,8 @@ trait BytecodeReader extends Reader {
         
         case 0x1E => Some(Split)
         case 0x1F => Some(Merge)
+
+        case 0x03 => Some(Distinct)
         
         // manipulative instructions
         
