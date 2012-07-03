@@ -34,6 +34,8 @@ import com.codecommit.gll.LineStream
 
 import typer._
 
+import bytecode.Arity._
+
 import scalaz.Success
 import scalaz.Scalaz._
 
@@ -504,60 +506,74 @@ object EmitterSpecs extends Specification
           Map2Match(Add)))
     }
 
-    "emit distinct set-reduction" in {
-      testEmit("distinct(1)")(
-        Vector(
-          PushNum("1"),
-          SetReduce(Distinct)))
+    "emit morphism" in {
+      forall(libMorphism) { f =>
+        if (f.arity == One) {
+          testEmit("""%s(4224)""".format(f.fqn))(
+            Vector(
+              PushNum("4224"),
+              Morph1(BuiltInMorphism(f))))
+        } else if (f.arity == Two) {
+          testEmit("""%s(4224, 17)""".format(f.fqn))(
+            Vector(
+              PushNum("4224"),
+              PushNum("17"),
+              Morph2(BuiltInMorphism(f))))
+        } else sys.error("unreachable case")
+      }
     } 
 
     "emit count reduction" in {
       testEmit("count(1)")(
         Vector(
           PushNum("1"),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
     }
 
     "emit arbitrary reduction" in {
-      val f = libReduct.head
-      testEmit("""%s::%s(4224)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushNum("4224"),
-          Reduce(BuiltInReduction(f))))
+      forall(libReduction) { f => 
+        testEmit("""%s(4224)""".format(f.fqn))(
+          Vector(
+            PushNum("4224"),
+            Reduce(BuiltInReduction(f))))
+      }
     }    
 
     "emit unary non-reduction with object deref" in {
-      val f = lib1.head
-      testEmit("""%s::%s(//foobar.baz)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("/foobar"),
-          LoadLocal(Het),
-          PushString("baz"),
-          Map2Cross(DerefObject),
-          Map1(BuiltInFunction1Op(f))))
+      forall(lib1) { f => 
+        testEmit("""%s(//foobar.baz)""".format(f.fqn))(
+          Vector(
+            PushString("/foobar"),
+            LoadLocal(Het),
+            PushString("baz"),
+            Map2Cross(DerefObject),
+            Map1(BuiltInFunction1Op(f))))
+      }
     }    
     
     "emit unary non-reduction" in {
-      val f = lib1.head
-      testEmit("""%s::%s("2012-02-29T00:44:52.599+08:00")""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("2012-02-29T00:44:52.599+08:00"),
-          Map1(BuiltInFunction1Op(f))))
+      forall(lib1) { f => 
+        testEmit("""%s("2012-02-29T00:44:52.599+08:00")""".format(f.fqn))(
+          Vector(
+            PushString("2012-02-29T00:44:52.599+08:00"),
+            Map1(BuiltInFunction1Op(f))))
+      }
     }    
 
     "emit binary non-reduction" in {
-      val f = lib2.head
-      testEmit("""%s::%s(//foo.time, //foo.timeZone)""".format(f.namespace.mkString("::"), f.name))(
-        Vector(
-          PushString("/foo"),
-          LoadLocal(Het),
-          PushString("time"),
-          Map2Cross(DerefObject),
-          PushString("/foo"),
-          LoadLocal(Het),
-          PushString("timeZone"),
-          Map2Cross(DerefObject),
-          Map2Match(BuiltInFunction2Op(f))))
+      forall(lib2) { f =>
+        testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
+          Vector(
+            PushString("/foo"),
+            LoadLocal(Het),
+            PushString("time"),
+            Map2Cross(DerefObject),
+            PushString("/foo"),
+            LoadLocal(Het),
+            PushString("timeZone"),
+            Map2Cross(DerefObject),
+            Map2Match(BuiltInFunction2Op(f))))
+      }
     }
 
     "emit body of fully applied characteristic function" in {
@@ -978,9 +994,9 @@ object EmitterSpecs extends Specification
           MergeBuckets(false),
           Split,
           PushGroup(0),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           PushGroup(2),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Map2Cross(Div),
           Merge))
     }
@@ -1001,7 +1017,7 @@ object EmitterSpecs extends Specification
           Group(0),
           Split,
           PushGroup(0),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Merge,
           Dup,
           PushString("a"),
@@ -1033,7 +1049,7 @@ object EmitterSpecs extends Specification
         PushNum("10"),
         Map2Cross(Lt),
         FilterMatch(0, None),
-        SetReduce(Distinct),
+        Distinct,
         Dup,
         Dup,
         Dup,
@@ -1048,7 +1064,7 @@ object EmitterSpecs extends Specification
         PushKey(1),
         Map2Cross(Lt),
         FilterMatch(0, None),
-        Reduce(BuiltInReduction(BIR(Vector(), "max", 0x2001))),
+        Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
         Map2Cross(Add),
         Merge))
     }
@@ -1166,7 +1182,7 @@ object EmitterSpecs extends Specification
             Swap(4),
             PushString("duration"),
             Map2Cross(DerefObject),
-            Reduce(BuiltInReduction(BIR(Vector(), "mean", 0x2013))),
+            Reduce(BuiltInReduction(Reduction(Vector(), "mean", 0x2013))),
             Swap(1),
             Swap(2),
             Swap(3),
@@ -1174,7 +1190,7 @@ object EmitterSpecs extends Specification
             Swap(5),
             PushString("duration"),
             Map2Cross(DerefObject),
-            Reduce(BuiltInReduction(BIR(Vector(), "stdDev", 0x2007))),
+            Reduce(BuiltInReduction(Reduction(Vector(), "stdDev", 0x2007))),
             PushNum("3"),
             Map2Cross(Mul),
             Map2Cross(Add),
@@ -1303,7 +1319,7 @@ object EmitterSpecs extends Specification
             PushKey(7),
             Map2Cross(Gt),
             FilterMatch(0, None),
-            Reduce(BuiltInReduction(BIR(Vector(), "min", 0x2004))),
+            Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
             Map2Cross(Eq),
             FilterMatch(0,None),
             Dup,
@@ -1334,7 +1350,7 @@ object EmitterSpecs extends Specification
             Split,
             PushString("cnt"),
             PushGroup(0),
-            Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+            Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
             Map2Cross(WrapObject),
             PushString("value"),
             PushKey(1),

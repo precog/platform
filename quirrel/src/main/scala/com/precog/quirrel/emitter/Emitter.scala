@@ -389,8 +389,11 @@ trait Emitter extends AST
         
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
-            case LoadBinding(m @ BuiltIns.Load.name) =>  //todo get rid of BuiltIns - put this in libMorphism
+            case LoadBinding(_) =>
               emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
+
+            case DistinctBinding(_) =>
+              emitExpr(actuals.head) >> emitInstr(Distinct)
 
             case MorphismBinding(m) => m.arity match {
               case One => emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism(m)))
