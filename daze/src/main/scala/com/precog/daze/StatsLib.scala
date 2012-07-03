@@ -2,16 +2,14 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
 
 import yggdrasil._
+import yggdrasil.table._
 
 import com.precog.util.IdGen
 
 trait StatsLib extends GenOpcode
     with ImplLibrary
-    with DatasetOpsComponent
     with BigDecimalOperations
     with Evaluator {
   
@@ -89,7 +87,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object LogarithmicRegression extends BIF2(StatsNamespace, "logReg") {
+  object LogarithmicRegression extends Morphism(StatsNamespace, "logReg") {
     lazy val alignment = Some(MorphismAlignment.Match)
     
     def apply(table: Table) = table
@@ -144,7 +142,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object Rank extends Morphism(StatsNamespace, "rank") with RankFunction {
+  object Rank extends Morphism(StatsNamespace, "rank") {
     def apply(table: Table) = table
     
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {

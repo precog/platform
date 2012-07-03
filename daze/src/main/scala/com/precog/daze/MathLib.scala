@@ -2,12 +2,11 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
 
 import java.lang.Math
 
 import yggdrasil._
+import yggdrasil.table._
 
 object MathLib extends MathLib
 

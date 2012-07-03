@@ -2,9 +2,9 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
+
 import yggdrasil._
+import yggdrasil.table._
 
 object InfixLib extends InfixLib
 
@@ -31,7 +31,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = c1(row) + c2(row)
         }
-        case (c1: DoubleColumn, c2: Long) => new NumColumn {
+        case (c1: DoubleColumn, c2: LongColumn) => new NumColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
         }
@@ -72,7 +72,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = c1(row) - c2(row)
         }
-        case (c1: DoubleColumn, c2: Long) => new NumColumn {
+        case (c1: DoubleColumn, c2: LongColumn) => new NumColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = (c1(row): BigDecimal) - c2(row)
         }
@@ -113,7 +113,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = c1(row) * c2(row)
         }
-        case (c1: DoubleColumn, c2: Long) => new NumColumn {
+        case (c1: DoubleColumn, c2: LongColumn) => new NumColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = (c1(row): BigDecimal) * c2(row)
         }
@@ -154,7 +154,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = c1(row) / c2(row)
         }
-        case (c1: DoubleColumn, c2: Long) => new NumColumn {
+        case (c1: DoubleColumn, c2: LongColumn) => new NumColumn {
           def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row)
           def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
         }

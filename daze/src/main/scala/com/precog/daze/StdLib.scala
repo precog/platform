@@ -9,6 +9,7 @@ import bytecode.BuiltInFunc1
 import bytecode.BuiltInFunc2
 
 import yggdrasil._
+import yggdrasil.table._
 
 trait GenOpcode extends ImplLibrary {
   private val defaultMorphismOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -24,11 +25,9 @@ trait GenOpcode extends ImplLibrary {
   abstract class Reduction(val namespace: Vector[String], val name: String, val opcode: Int = defaultReductionOpcode.getAndIncrement) extends ReductionImpl
 }
 
-trait ImplLibrary extends Library {
-  type Table
-  type F1
-  type F2
-  type CReducer
+trait ImplLibrary extends Library with ColumnarTableModule {
+  type F1 = CF1P
+  type F2 = CF2P
   
   lazy val libMorphism = _libMorphism
   lazy val lib1 = _lib1
@@ -64,7 +63,7 @@ trait ImplLibrary extends Library {
 
   trait ReductionImpl extends ReductionLike with MorphismImpl {
     lazy val alignment = None
-    def reducer: CReducer
+    def reducer: Reducer
   }
 
   type Morphism <: MorphismImpl  //todo Morphism need to know eventually for Emitter if it's a unary or binary morphism
