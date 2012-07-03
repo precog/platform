@@ -68,6 +68,13 @@ trait Slice { source =>
     }
   }
 
+  def typed(jtpe : JType) : Slice = new Slice {
+    val size = source.size
+    val columns = source.columns.collect {
+      case assoc @ (ColumnRef(_, ctpe), _) if (subsumes(jtpe, ctpe)) => assoc
+    }
+  }
+
   def nest(selectorPrefix: JPath) = new Slice {
     val size = source.size
     val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }

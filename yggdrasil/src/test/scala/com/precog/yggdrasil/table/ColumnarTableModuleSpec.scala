@@ -235,6 +235,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "wrap the results of a transform in an object as the specified field" in checkWrapStatic
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "concatenate dissimilar objects" in checkObjectConcat
+      "perform a trivial type-based filter" in checkTyped
     }
   }
 }

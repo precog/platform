@@ -77,7 +77,8 @@ trait TableModule extends FNModule {
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A]
+    // Filter out all the source columns whose CType is not subsumed by the supplied JType
+    case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done
     
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
   

@@ -224,6 +224,11 @@ trait ColumnarTableModule extends TableModule {
                 }
             }
           }
+
+        case Typed(source, tpe) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ typed tpe }
+          }
       }
     }
     
