@@ -8,12 +8,7 @@ trait Binder extends parser.AST with Library {
   import ast._
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
-
-  object BuiltIns { //todo put Distinct in libMorphism
-    val Load = LoadBinding(LoadId)
-
-    val all = Set(Load)
-  }
+  protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[Either[TicId, Identifier], Binding]): Set[Error] = tree match {
@@ -205,7 +200,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism.map(MorphismBinding)).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism.map(MorphismBinding) ++ Set(LoadBinding(LoadId), DistinctBinding(DistinctId))).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
@@ -220,7 +215,12 @@ trait Binder extends parser.AST with Library {
     override val toString = "<native: %s(%d)>".format(red.name, 1)   //assumes all reductions are arity 1
   }  
   
-  case class LoadBinding(id: Identifier) extends FunctionBinding {
+  case class DistinctBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
+    val name = Identifier(id.namespace, id.id)
+    override val toString = "<native: %s(%d)>".format(id.id, 1)
+  }  
+
+  case class LoadBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
     val name = Identifier(id.namespace, id.id)
     override val toString = "<native: %s(%d)>".format(id.id, 1)
   }

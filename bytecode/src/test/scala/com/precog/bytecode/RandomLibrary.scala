@@ -5,16 +5,17 @@ import Arbitrary.arbitrary
 import Gen._
 
 trait RandomLibrary extends Library {
-  case class Morphism(namespace: Vector[String], name: String, opcode: Int) extends MorphismLike
+  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
   case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like
   case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like
   case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike
 
   private lazy val genMorphism = for {
     op <- choose(0, 1000)
+    a  <- choose(1, 2) map { case 1 => Arity.One; case 2 => Arity.Two }
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield Morphism(Vector(ns: _*), n, op)
+  } yield Morphism(Vector(ns: _*), n, op, a)
 
   private lazy val genOp1 = for {
     op <- choose(0, 1000)
@@ -46,6 +47,7 @@ trait RandomLibrary extends Library {
     Reduction(Vector(), "stdDev", 0x2007),
     Reduction(Vector(), "median", 0x2008),
     Reduction(Vector(), "mode", 0x2009))
+
     
   lazy val libMorphism = containerOfN[Set, Morphism](30, genMorphism).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val lib1 = containerOfN[Set, Op1](30, genOp1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
