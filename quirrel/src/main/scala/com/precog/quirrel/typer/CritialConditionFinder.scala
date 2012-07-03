@@ -42,7 +42,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
+        case LetBinding(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): ConditionTree)) } getOrElse Map()
         case _ => Map()
       }
       
@@ -71,14 +71,14 @@ trait CriticalConditionFinder extends parser.AST with Binder {
         val merged = maps.fold(Map())(merge)
         
         val fromDef = d.binding match {
-          case UserDef(e) => loop(root, e.left, currentWhere)
+          case LetBinding(e) => loop(root, e.left, currentWhere)
           case _ => Map[String, Set[ConditionTree]]()
         }
         
         val back = merge(merged, fromDef)
         
         d.binding match {
-          case b: BuiltIn if d.isReduction =>
+          case b: ReductionBinding =>
             back map { case (key, value) => key -> Set(Reduction(b, value): ConditionTree) }
           
           case _ => back
@@ -187,7 +187,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       referencesTicVar(root)(from) || referencesTicVar(root)(to) || referencesTicVar(root)(in)
     
     case t @ TicVar(_, _) => t.binding match {
-      case UserDef(`root`) => true
+      case LetBinding(`root`) => true
       case _ => false
     }
     
@@ -204,7 +204,7 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case d @ Dispatch(_, _, actuals) => {
       val paramRef = actuals exists referencesTicVar(root)
       val defRef = d.binding match {
-        case UserDef(e) => referencesTicVar(root)(e.left)
+        case LetBinding(e) => referencesTicVar(root)(e.left)
         case _ => false
       }
       
@@ -257,6 +257,6 @@ trait CriticalConditionFinder extends parser.AST with Binder {
   
   object condition {
     case class Condition(expr: Expr) extends ConditionTree
-    case class Reduction(b: BuiltIn, children: Set[ConditionTree]) extends ConditionTree
+    case class Reduction(b: ReductionBinding, children: Set[ConditionTree]) extends ConditionTree
   }
 }
