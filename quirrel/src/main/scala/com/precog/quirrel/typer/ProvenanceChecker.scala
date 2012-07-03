@@ -323,43 +323,43 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         }
         
         val (prov, errors) = expr.binding match {
-          case BuiltIn(BuiltIns.Load.name, arity, _) => {
-            if (exprs.length == arity) {
+          case LoadBinding(BuiltIns.Load.name) => {
+            if (exprs.length == 1) {
               lazy val prov = DynamicProvenance(provenanceId(expr))
 
               expr.accumulatedProvenance = Some(Vector(pathParam map StaticProvenance getOrElse prov))
               (pathParam map StaticProvenance getOrElse prov, Set())
             } else {
               expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+              (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
             }
           }
 
-          case BuiltIn(BuiltIns.Distinct.name, arity, _) => {
-            if (exprs.length == arity) {
-              val prov = DynamicProvenance(currentId.incrementAndGet())
-              expr.accumulatedProvenance = Some(Vector(prov))
+          //case MorphismBinding(Distinct) => {
+          //  if (exprs.length == 1) {
+          //    val prov = DynamicProvenance(currentId.incrementAndGet())
+          //    expr.accumulatedProvenance = Some(Vector(prov))
 
-              (prov, Set())
-            } else {
-              expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
-            }
-          }
+          //    (prov, Set())
+          //  } else {
+          //    expr.accumulatedProvenance = None
+          //    (NullProvenance, Set(Error(expr, IncorrectArity(1, exprs.length))))
+          //  }
+          //}
 
-          case BuiltIn(_, arity, true) => {
-            if (exprs.length == arity) {
+          case MorphismBinding(m) => {
+            if (exprs.length == m.arity.toInt) {
               expr.accumulatedProvenance = Some(Vector())
               (ValueProvenance, Set())  
             } else {
               expr.accumulatedProvenance = None
-              (NullProvenance, Set(Error(expr, IncorrectArity(arity, exprs.length))))
+              (NullProvenance, Set(Error(expr, IncorrectArity(m.arity.toInt, exprs.length))))
             }
           }
 
-          case BuiltIn(_, arity, _) => checkMappedFunction(arity)
+          //case MorphismBinding(m) => checkMappedFunction(m.arity.toInt)
 
-          case RedLibBuiltIn(_) => { //assumes all reductions are arity 1
+          case ReductionBinding(_) => { //assumes all reductions are arity 1
             if (exprs.length == 1) {
               expr.accumulatedProvenance = Some(Vector())
               (ValueProvenance, Set())  
@@ -369,11 +369,11 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
             }
           }
 
-          case StdLibBuiltIn1(_) => checkMappedFunction(1)
+          case Op1Binding(_) => checkMappedFunction(1)
 
-          case StdLibBuiltIn2(_) => checkMappedFunction(2)
+          case Op2Binding(_) => checkMappedFunction(2)
           
-          case UserDef(e) => {  
+          case LetBinding(e) => {  
             if (exprs.length > e.params.length) {
               expr.accumulatedProvenance = None
               (NullProvenance, Set(Error(expr, IncorrectArity(e.params.length, exprs.length))))
@@ -837,7 +837,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
     
     case t @ TicVar(_, id) => t.binding match {
-      case UserDef(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
+      case LetBinding(lt) => varAssumptions get (id -> lt) getOrElse t.provenance
       case _ => t.provenance
     }
     
@@ -874,7 +874,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         d.provenance
       } else {
         d.binding match {
-          case UserDef(e) if (e.params.length == actuals.length) => { 
+          case LetBinding(e) if (e.params.length == actuals.length) => { 
             val varAssumptions2 = e.assumptions ++ Map(e.params zip provenances: _*) map {
               case (id, prov) => ((id, e), prov)
             }
@@ -1004,7 +1004,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     case StrLit(_, _) | NumLit(_, _) | BoolLit(_, _) | NullLit(_) => Some(Vector())
 
     case t @ TicVar(_, id) => t.binding match {
-      case UserDef(lt) => varAccumulatedAssumptions get (id -> lt) getOrElse Some(Vector())
+      case LetBinding(lt) => varAccumulatedAssumptions get (id -> lt) getOrElse Some(Vector())
       case _ => Some(Vector())
     }
 
@@ -1069,7 +1069,7 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         Some(Vector())
       } else {
         d.binding match {
-          case UserDef(e) if (e.params.length == actuals.length) => {
+          case LetBinding(e) if (e.params.length == actuals.length) => {
             val varAccumulatedAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
               e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
                 case (id, accProv) => ((id, e), accProv)
