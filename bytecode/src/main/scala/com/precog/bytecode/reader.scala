@@ -67,8 +67,6 @@ trait BytecodeReader extends Reader {
       
       lazy val tableEntry = table get parameter
       
-      lazy val predicate = tableEntry map { b => readPredicate(b, Vector()) }
-      
       lazy val lineInfo = tableEntry flatMap readLineInfo
       
       lazy val string = tableEntry flatMap readString
@@ -166,10 +164,10 @@ trait BytecodeReader extends Reader {
 
         case 0x15 => Some(SetDifference)
         
-        case 0x14 => Some(FilterMatch(depth, predicate))
-        case 0x16 => Some(FilterCross(depth, predicate))
-        case 0x17 => Some(FilterCrossLeft(depth, predicate))
-        case 0x18 => Some(FilterCrossRight(depth, predicate))
+        case 0x14 => Some(FilterMatch)
+        case 0x16 => Some(FilterCross)
+        case 0x17 => Some(FilterCrossLeft)
+        case 0x18 => Some(FilterCrossRight)
         
         case 0x1A => Some(Group(parameter))
         case 0x1B => Some(MergeBuckets((code & 0x01) == 1))
@@ -213,42 +211,6 @@ trait BytecodeReader extends Reader {
     instr match {
       case Some(i) => readStream(buffer, table, acc :+ i)
       case None => acc
-    }
-  }
-  
-  @tailrec
-  private[this] def readPredicate(buffer: ByteBuffer, acc: Vector[PredicateInstr]): Predicate = {
-    val opcode = try {
-      Some(buffer.get & 0xFF)     // promote the *unsigned* byte to int
-    } catch {
-      case _: BufferUnderflowException => None
-    }
-    
-    val instr = opcode collect {
-      case 0x00 => Add
-      case 0x01 => Sub
-      case 0x02 => Mul
-      case 0x03 => Div
-     
-      case 0x41 => Neg
-      
-      case 0x30 => Or
-      case 0x31 => And
-      
-      case 0x40 => Comp
-      
-      case 0xA0 => DerefObject
-      case 0xA1 => DerefArray
-      
-      case 0xFF => Range
-    }
-    
-    instr match {
-      case Some(i) => readPredicate(buffer, acc :+ i)
-      case None => {
-        buffer.rewind()
-        acc
-      }
     }
   }
   
