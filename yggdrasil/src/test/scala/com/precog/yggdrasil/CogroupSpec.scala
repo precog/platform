@@ -27,13 +27,12 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scalaz.{NonEmptyList => NEL, _}
-import scalaz.BiFunctor
 import scalaz.Ordering._
 import scalaz.Either3._
 import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
-import scalaz.syntax.biFunctor._
+import scalaz.syntax.bifunctor._
 import scala.annotation.tailrec
 
 import org.specs2._
@@ -53,7 +52,7 @@ trait CogroupSpec extends TableModuleSpec {
       jschema  <- Gen.oneOf(arraySchema(depth, 2), objectSchema(depth, 2))
       (idCount, data) <- genEventColumns(jschema)
     } yield {
-      val (lschema, rschema) = BiFunctor[Tuple2].umap(jschema.splitAt(jschema.size / 2)) { _.map(_._1).toSet }
+      val (lschema, rschema) = Bifunctor[Tuple2].umap(jschema.splitAt(jschema.size / 2)) { _.map(_._1).toSet }
       val (l, r) =  data map {
                       case (ids, values) => 
                         val (d1, d2) = values.partition { case (jpath, _) => lschema.contains(jpath) }

@@ -27,12 +27,10 @@ import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
-import scalaz.BiFunctor
-import scalaz.Either3._
 import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
-import scalaz.syntax.biFunctor._
+import scalaz.syntax.bifunctor._
 import scala.annotation.tailrec
 
 import org.specs2._
