@@ -38,8 +38,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
 
   object sinh extends Op1(MathNamespace, "sinh") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sinh(c(row))
       }
     })
     
@@ -50,8 +50,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object toDegrees extends Op1(MathNamespace, "toDegrees") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toDegrees(c(row))
       }
     })
     
@@ -62,8 +62,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object expm1 extends Op1(MathNamespace, "expm1") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.expm1(c(row))
       }
     })
     
@@ -74,8 +74,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object getExponent extends Op1(MathNamespace, "getExponent") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.getExponent(c(row))
       }
     })
     
@@ -86,8 +86,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object asin extends Op1(MathNamespace, "asin") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.asin(c(row))
       }
     })
     
@@ -99,8 +99,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object log10 extends Op1(MathNamespace, "log10") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.log10(c(row))
       }
     })
     
@@ -112,8 +112,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object cos extends Op1(MathNamespace, "cos") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cos(c(row))
       }
     })
     
@@ -124,8 +124,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object exp extends Op1(MathNamespace, "exp") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.exp(c(row))
       }
     })
     
@@ -136,8 +136,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object cbrt extends Op1(MathNamespace, "cbrt") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cbrt(c(row))
       }
     })
     
@@ -148,8 +148,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object atan extends Op1(MathNamespace, "atan") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.atan(c(row))
       }
     })
     
@@ -160,8 +160,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object ceil extends Op1(MathNamespace, "ceil") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ceil(c(row))
       }
     })
     
@@ -172,8 +172,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object rint extends Op1(MathNamespace, "rint") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.rint(c(row))
       }
     })
     
@@ -184,8 +184,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object log1p extends Op1(MathNamespace, "log1p") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.log1p(c(row))
       }
     })
     
@@ -197,8 +197,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object sqrt extends Op1(MathNamespace, "sqrt") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sqrt(c(row))
       }
     })
     
@@ -210,8 +210,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object floor extends Op1(MathNamespace, "floor") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.floor(c(row))
       }
     })
     
@@ -222,8 +222,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object toRadians extends Op1(MathNamespace, "toRadians") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toRadians(c(row))
       }
     })
     
@@ -234,8 +234,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object tanh extends Op1(MathNamespace, "tanh") {val operandType = Some(SDecimal)
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.tanh(c(row))
       }
     })
     
@@ -246,8 +246,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object round extends Op1(MathNamespace, "round") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.round(c(row))
       }
     })
     
@@ -258,8 +258,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object cosh extends Op1(MathNamespace, "cosh") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cosh(c(row))
       }
     })
     
@@ -270,8 +270,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object tan extends Op1(MathNamespace, "tan") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.tan(c(row))
       }
     })
     
@@ -283,8 +283,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object abs extends Op1(MathNamespace, "abs") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.abs(c(row))
       }
     })
     
@@ -295,8 +295,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object sin extends Op1(MathNamespace, "sin") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sin(c(row))
       }
     })
     
@@ -307,8 +307,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object nextUp extends Op1(MathNamespace, "nextUp") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.nextUp(c(row))
       }
     })
     
@@ -319,8 +319,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object log extends Op1(MathNamespace, "log") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.log(c(row))
       }
     })
     
@@ -332,8 +332,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object signum extends Op1(MathNamespace, "signum") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.signum(c(row))
       }
     })
     
@@ -344,8 +344,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object acos extends Op1(MathNamespace, "acos") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.acos(c(row))
       }
     })
     
@@ -357,8 +357,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object ulp extends Op1(MathNamespace, "ulp") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ulp(c(row))
       }
     })
     
@@ -369,8 +369,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object nextAfter extends Op2(MathNamespace, "nextAfter") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row), c2(row))
       }
     })
     
@@ -381,8 +381,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object min extends Op2(MathNamespace, "min") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.min(c1(row), c2(row))
       }
     })
     
@@ -393,8 +393,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object hypot extends Op2(MathNamespace, "hypot") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.hypot(c1(row), c2(row))
       }
     })
     
@@ -405,8 +405,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object pow extends Op2(MathNamespace, "pow") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.pow(c1(row), c2(row))
       }
     })
     
@@ -417,8 +417,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object max extends Op2(MathNamespace, "max") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.max(c1(row), c2(row))
       }
     })
     
@@ -429,8 +429,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object atan2 extends Op2(MathNamespace, "atan2") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.atan2(c1(row), c2(row))
       }
     })
     
@@ -441,8 +441,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object copySign extends Op2(MathNamespace, "copySign") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.copySign(c1(row), c2(row))
       }
     })
     
@@ -453,8 +453,8 @@ trait MathLib extends GenOpcode with ImplLibrary {
   }
   object IEEEremainder extends Op2(MathNamespace, "IEEEremainder") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.IEEEremainder(c1(row), c2(row))
       }
     })
     
