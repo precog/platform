@@ -44,6 +44,12 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "reduce the obnoxiously large dataset" >> {
+      "<root>" >> {
+        eval("mean(//obnoxious.v)", true) mustEqual Set(SDecimal(50000.5))
+      }
+    }
+
     "accept !true and !false" >> {
       "!true" >> {
         eval("!true") mustEqual Set(SBoolean(false))

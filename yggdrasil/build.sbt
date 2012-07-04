@@ -16,6 +16,18 @@ run <<= inputTask { argTask =>
   }
 }
 
+run in Test <<= inputTask { argTask =>
+  (javaOptions in run in Test, fullClasspath in Compile in Test, connectInput in run in Test, outputStrategy, mainClass in run in Test, argTask) map { (opts, cp, ci, os, mc, args) =>
+    val delim = java.io.File.pathSeparator
+    val opts2 = opts ++
+      Seq("-classpath", cp map { _.data } mkString delim) ++
+      Seq(mc.get) ++
+      args
+    Fork.java.fork(None, opts2, None, Map(), ci, os getOrElse StdoutOutput).exitValue()
+    jline.Terminal.getTerminal.initializeTerminal()
+  }
+}
+
 // For now, skip column specs because SBT will die a horrible, horrible death
 testOptions := Seq(Tests.Filter(s => ! s.contains("ColumnSpec")))
 
