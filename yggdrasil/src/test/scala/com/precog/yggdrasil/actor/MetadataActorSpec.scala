@@ -24,7 +24,7 @@ import scalaz.Success
 import scalaz.effect._
 import scalaz.std.map._
 import scalaz.syntax.semigroup._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 
 import org.specs2.mock.Mockito
 import org.specs2.mutable._
