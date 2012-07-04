@@ -47,12 +47,9 @@ object Schema {
   }
 
   def includes(jtpe : JType, path : JPath, ctpe : CType) : Boolean = (jtpe, (path, ctpe)) match {
-    case (JNumberT, (JPath.Identity, CLong)) => true
-    case (JNumberT, (JPath.Identity, CDouble)) => true
-    case (JNumberT, (JPath.Identity, CDecimalArbitrary)) => true
+    case (JNumberT, (JPath.Identity, CLong | CDouble | CDecimalArbitrary)) => true
 
-    case (JTextT, (JPath.Identity, CStringFixed(_))) => true
-    case (JTextT, (JPath.Identity, CStringArbitrary)) => true
+    case (JTextT, (JPath.Identity, CStringFixed(_) | CStringArbitrary)) => true
 
     case (JBooleanT, (JPath.Identity, CBoolean)) => true
 
