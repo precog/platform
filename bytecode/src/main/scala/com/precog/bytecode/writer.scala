@@ -56,29 +56,7 @@ trait BytecodeWriter extends Writer with Version {
   private def writeTable(table: Map[DataInstr, Int], buffer: ByteBuffer) = {
     val lengths = for ((instr, id) <- table) yield {
       buffer.putInt(id)
-      
-      val pred = instr match {
-        case FilterMatch(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCross(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCrossLeft(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCrossRight(_, Some(pred)) => writePredicate(pred, buffer)
-        
-        case FilterMatch(_, None) => 0
-        case FilterCross(_, None) => 0
-        
-        case Swap(depth) => {
-          writeInt(4, buffer)
-          writeInt(depth, buffer)
-          8
-        }
-        
-        case Line(num, text) => writeLineInfo(num, text, buffer)
-        
-        case PushString(str) => writeString(str, buffer)
-        case PushNum(num) => writeNum(num, buffer)
-      }
-      
-      4 + pred
+      4
     }
     
     buffer.putInt(0x0)
@@ -165,15 +143,15 @@ trait BytecodeWriter extends Writer with Version {
 
         case SetDifference => (0x15, 0.toShort, 0)
         
-        case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
-        case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))
-        case i @ FilterCrossLeft(depth, Some(_)) => (0x17, depth, table(i))
-        case i @ FilterCrossRight(depth, Some(_)) => (0x18, depth, table(i))
+        case i @ FilterMatch => (0x14, 0.toShort, table(i))
+        case i @ FilterCross => (0x16, 0.toShort, table(i))
+        case i @ FilterCrossLeft => (0x17, 0.toShort, table(i))
+        case i @ FilterCrossRight => (0x18, 0.toShort, table(i))
         
-        case FilterMatch(depth, None) => (0x14, depth, 0)
-        case FilterCross(depth, None) => (0x16, depth, 0)
-        case FilterCrossLeft(depth, None) => (0x17, depth, 0)
-        case FilterCrossRight(depth, None) => (0x18, depth, 0)
+        case FilterMatch => (0x14, 0.toShort, 0)
+        case FilterCross => (0x16, 0.toShort, 0)
+        case FilterCrossLeft => (0x17, 0.toShort, 0)
+        case FilterCrossRight => (0x18, 0.toShort, 0)
         
         case Group(id) => (0x1A, 0.toShort, id)
         case MergeBuckets(and) => (0x1B, 0.toShort, if (and) 0x01 else 0x00)
@@ -219,39 +197,6 @@ trait BytecodeWriter extends Writer with Version {
     }
   }
   
-  private def writePredicate(pred: Predicate, buffer: ByteBuffer) = {
-    writeInt(pred.length, buffer)
-    writePredicateStream(pred, buffer, 4)
-  }
-  
-  private[this] def writePredicateStream(stream: Vector[PredicateInstr], buffer: ByteBuffer, written: Int): Int = {
-    if (!stream.isEmpty) {
-      val opcode = stream.head match {
-        case Add => 0x00
-        case Sub => 0x01
-        case Mul => 0x02
-        case Div => 0x03
-        
-        case Neg => 0x41
-        
-        case Or => 0x30
-        case And => 0x31
-        
-        case Comp => 0x40
-        
-        case DerefObject => 0xA0
-        case DerefArray => 0xA1
-        
-        case Range => 0xFF
-      }
-      
-      buffer.put(opcode.toByte)
-      writePredicateStream(stream.tail, buffer, written + 4)
-    } else {
-      written
-    }
-  }
-  
   private def writeLineInfo(num: Int, text: String, buffer: ByteBuffer) = {
     writeInt(text.length * 2 + 4, buffer)
     buffer.putInt(num)
@@ -281,10 +226,10 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     instructions.collect({
-      case i @ FilterMatch(_, Some(_)) => i -> currentInt()
-      case i @ FilterCross(_, Some(_)) => i -> currentInt()
-      case i @ FilterCrossLeft(_, Some(_)) => i -> currentInt()
-      case i @ FilterCrossRight(_, Some(_)) => i -> currentInt()
+      case i @ FilterMatch => i -> currentInt()
+      case i @ FilterCross => i -> currentInt()
+      case i @ FilterCrossLeft => i -> currentInt()
+      case i @ FilterCrossRight => i -> currentInt()
       
       case i: Swap => i -> currentInt()
       
