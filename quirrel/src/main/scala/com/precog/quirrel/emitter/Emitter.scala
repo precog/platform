@@ -159,7 +159,7 @@ trait Emitter extends AST
         if (expr.children exists { _.constrainingExpr == Some(const) })
           None
         else {
-          Some(emitExpr(const) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch(0, None)))
+          Some(emitExpr(const) >> emitInstr(Dup) >> emitInstr(Map2Match(Eq)) >> emitInstr(FilterMatch))
         }
       }
       
@@ -190,15 +190,15 @@ trait Emitter extends AST
       emitExpr(expr) >> emitInstr(Map1(op))
     }
 
-    def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
+    def emitFilterState(left: EmitterState, leftProv: Provenance, right: EmitterState, rightProv: Provenance): EmitterState = {
       emitCrossOrMatchState(left, leftProv, right, rightProv)(
-        ifCross = FilterCross(depth, pred),
-        ifMatch = FilterMatch(depth, pred)
+        ifCross = FilterCross,
+        ifMatch = FilterMatch
       )
     }
 
-    def emitFilter(left: Expr, right: Expr, depth: Short = 0, pred: Option[Predicate] = None): EmitterState = {
-      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance, depth, pred)
+    def emitFilter(left: Expr, right: Expr): EmitterState = {
+      emitFilterState(emitExpr(left), left.provenance, emitExpr(right), right.provenance)
     }
     
     def emitWhere(where: ast.Where): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
@@ -208,7 +208,7 @@ trait Emitter extends AST
         val id = e.groups(where)
         emitOrDup(MarkGroup(where))(emitInstr(PushGroup(id)))
       } else {
-        emitFilter(left, right, 0, None)
+        emitFilter(left, right)
       }
       
       state(e)

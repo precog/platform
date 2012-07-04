@@ -82,8 +82,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushNum("5"),
             PushNum("2"),
-            FilterCross(0,
-          None)))
+            FilterCross))
       }
 
       "which are null and string" >> {
@@ -91,8 +90,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushNull,
             PushString("foo"),
-            FilterCross(0,
-          None)))
+            FilterCross))
       }
 
     }
@@ -408,8 +406,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("1"),
           PushTrue,
-          FilterCross(0,
-          None)))
+          FilterCross))
     }
 
     "emit filter cross for where loads from value provenance" in {
@@ -423,8 +420,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           PushNull,
           Map2Cross(Eq),
-          FilterMatch(0,
-          None)))
+          FilterMatch))
     }
 
     "emit descent for array load with non-constant indices" in {
@@ -444,8 +440,7 @@ object EmitterSpecs extends Specification
           LoadLocal(Het),
           Dup,
           Swap(1),
-          FilterMatch(0,
-          None)))
+          FilterMatch))
     }
 
     "emit filter match for loads from same provenance when performing equality filter" in {
@@ -459,8 +454,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           PushNum("2"),
           Map2Cross(Eq),
-          FilterMatch(0,
-          None)))
+          FilterMatch))
     }
 
     "use dup bytecode to duplicate the same load" in {
@@ -568,8 +562,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           PushString("foo"),
           Map2Cross(Eq),
-          FilterMatch(0,
-          None)))
+          FilterMatch))
     }
     
     "emit body of a fully applied characteristic function with two variables" in {
@@ -598,8 +591,7 @@ object EmitterSpecs extends Specification
           PushString("female"),
           Map2Cross(Eq),
           Map2Match(And),
-          FilterMatch(0,
-          None)))
+          FilterMatch))
     }
 
     "emit match for first-level union provenance" in {
@@ -636,8 +628,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0,
-          None),
+          FilterMatch,
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
@@ -655,8 +646,7 @@ object EmitterSpecs extends Specification
           Swap(2),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0,
-          None),
+          FilterMatch,
           PushString("x"),
           Map2Cross(DerefObject),
           Map2Cross(Sub),
@@ -665,8 +655,7 @@ object EmitterSpecs extends Specification
           Swap(2),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0,
-          None),
+          FilterMatch,
           PushString("y"),
           Map2Cross(DerefObject),
           Swap(1),
@@ -676,8 +665,7 @@ object EmitterSpecs extends Specification
           Swap(3),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0,
-          None),
+          FilterMatch,
           PushString("y"),
           Map2Cross(DerefObject),
           Map2Cross(Sub),
@@ -1029,7 +1017,7 @@ object EmitterSpecs extends Specification
         Map2Cross(DerefObject),
         PushNum("10"),
         Map2Cross(Lt),
-        FilterMatch(0, None),
+        FilterMatch,
         Distinct,
         Dup,
         Dup,
@@ -1044,7 +1032,7 @@ object EmitterSpecs extends Specification
         Swap(2),
         PushKey(1),
         Map2Cross(Lt),
-        FilterMatch(0, None),
+        FilterMatch,
         Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
         Map2Cross(Add),
         Merge))
@@ -1088,7 +1076,7 @@ object EmitterSpecs extends Specification
           Map2Cross(DerefObject),
           PushKey(1),
           Map2Cross(Gt),
-          FilterMatch(0, None),
+          FilterMatch,
           Map2Cross(WrapObject),
           PushString("kay"),
           PushGroup(0),
@@ -1176,7 +1164,7 @@ object EmitterSpecs extends Specification
             Map2Cross(Mul),
             Map2Cross(Add),
             Map2Cross(Gt),
-            FilterMatch(0, None),
+            FilterMatch,
             Map2Cross(WrapObject),
             Map2Cross(JoinObject),
             Merge))
@@ -1251,7 +1239,7 @@ object EmitterSpecs extends Specification
             PushGroup(6),
             Dup,
             Map2Match(Eq),
-            FilterMatch(0, None),
+            FilterMatch,
             Map2Cross(WrapObject),
             PushString("nextConversion"),
             PushGroup(4),
@@ -1299,13 +1287,13 @@ object EmitterSpecs extends Specification
             Map2Cross(DerefObject),
             PushKey(7),
             Map2Cross(Gt),
-            FilterMatch(0, None),
+            FilterMatch,
             Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
             Map2Cross(Eq),
-            FilterMatch(0,None),
+            FilterMatch,
             Dup,
             Map2Match(Eq),
-            FilterMatch(0,None),
+            FilterMatch,
             Map2Cross(WrapObject),
             Map2Cross(JoinObject),
             Merge,
