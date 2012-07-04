@@ -37,7 +37,26 @@ trait BytecodeWriter extends Writer with Version {
   private def writeTable(table: Map[DataInstr, Int], buffer: ByteBuffer) = {
     val lengths = for ((instr, id) <- table) yield {
       buffer.putInt(id)
-      4
+
+      val pred = instr match {
+        case FilterMatch => 0
+        case FilterCross => 0
+        case FilterCrossLeft => 0
+        case FilterCrossRight => 0
+
+        case Swap(depth) => {
+          writeInt(4, buffer)
+          writeInt(depth, buffer)
+          8
+        }
+
+        case Line(num, text) => writeLineInfo(num, text, buffer)
+        
+        case PushString(str) => writeString(str, buffer)
+        case PushNum(num) => writeNum(num, buffer)
+      }
+
+      4 + pred
     }
     
     buffer.putInt(0x0)
@@ -124,11 +143,6 @@ trait BytecodeWriter extends Writer with Version {
 
         case SetDifference => (0x15, 0.toShort, 0)
         
-        case i @ FilterMatch => (0x14, 0.toShort, table(i))
-        case i @ FilterCross => (0x16, 0.toShort, table(i))
-        case i @ FilterCrossLeft => (0x17, 0.toShort, table(i))
-        case i @ FilterCrossRight => (0x18, 0.toShort, table(i))
-        
         case FilterMatch => (0x14, 0.toShort, 0)
         case FilterCross => (0x16, 0.toShort, 0)
         case FilterCrossLeft => (0x17, 0.toShort, 0)
@@ -207,11 +221,6 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     instructions.collect({
-      case i @ FilterMatch => i -> currentInt()
-      case i @ FilterCross => i -> currentInt()
-      case i @ FilterCrossLeft => i -> currentInt()
-      case i @ FilterCrossRight => i -> currentInt()
-      
       case i: Swap => i -> currentInt()
       
       case i: Line => i -> currentInt()
