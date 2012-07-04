@@ -200,7 +200,10 @@ trait ColumnarTableModule extends TableModule {
                           numEq exists { _.isDefinedAt(row) }
                         }
                         def apply(row: Int) = {
-                          numEq exists { case col: BoolColumn => col.isDefinedAt(row) && col(row) }
+                          numEq exists { 
+                            case col: BoolColumn => col.isDefinedAt(row) && col(row) 
+                            case _ => sys.error("Unreachable code - only boolean columns can be derived from equality.")
+                          }
                         }
                       }
 
@@ -302,6 +305,30 @@ trait ColumnarTableModule extends TableModule {
         case Typed(source, tpe) =>
           composeSliceTransform(source) andThen {
             map0 { _ typed tpe }
+          }
+
+        case Scan(source, scanner) => 
+          composeSliceTransform(source) andThen {
+            SliceTransform[scanner.A](
+              scanner.init,
+              (state: scanner.A, slice: Slice) => {
+                assert(slice.columns.size <= 1)
+                slice.columns.headOption flatMap {
+                  case (ColumnRef(selector, ctype), col) =>
+                    val (nextState, nextCol) = scanner.scan(state, col, 0 until slice.size)
+                    nextCol map { c =>
+                      ( nextState, 
+                        new Slice { 
+                          val size = slice.size; 
+                          val columns = Map(ColumnRef(selector, c.tpe) -> c)
+                        }
+                      )
+                    }
+                } getOrElse {
+                  (state, slice)
+                } 
+              }
+            )
           }
       }
     }

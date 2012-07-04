@@ -259,6 +259,7 @@ trait TransformSpec extends TableModuleSpec {
       results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
     }
   }
+
   def checkTyped = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>
@@ -281,6 +282,24 @@ trait TransformSpec extends TableModuleSpec {
       }
 
       results must_== expected
+    }
+  }
+
+  def checkScan = {
+    implicit val gen = sample(_ => Seq(JPath.Identity -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
+      })
+
+      val (_, expected) = sample.data.foldLeft((BigInt(0), Vector.empty[JValue])) { 
+        case ((a, s), jv) => 
+          val JInt(i) = jv \ "value"
+          (a + i, s :+ JDouble((a + i).toDouble))
+      }
+
+      results must_== expected.toStream
     }
   }
 }

@@ -52,7 +52,31 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     lib(name)
   }
 
-  def lookupScanner(namespace: List[String], name: String) = sys.error("todo")
+  def lookupScanner(namespace: List[String], name: String) = {
+    val lib = Map[String, CScanner](
+      "sum" -> new CScanner {
+        type A = BigDecimal
+        val init = BigDecimal(0)
+        def scan(a: BigDecimal, col: Column, range: Range) = {
+          col match {
+            case lc: LongColumn => 
+              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+                case ((a0, acc), i) => 
+                  val intermediate = a0 + lc(i)
+                  acc(i) = intermediate
+                  (intermediate, acc)
+              }
+
+              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+
+            case _ => (a, None)
+          }
+        }
+      }
+    )
+
+    lib(name)
+  }
 
   def slice(sampleData: SampleData): (Slice, SampleData) = {
     val (prefix, suffix) = sampleData.data.splitAt(sliceSize)
@@ -218,6 +242,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
       "perform a trivial type-based filter" in checkTyped
+      "perform a summation scan" in checkScan
     }
   }
 }
