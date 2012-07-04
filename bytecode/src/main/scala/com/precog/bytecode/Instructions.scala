@@ -24,15 +24,15 @@ trait Instructions extends Library {
       case IIntersect => (2, 1)
       case SetDifference => (2, 1)
       
-      case FilterMatch(depth, Some(_)) => (2 + depth, 1)
-      case FilterCross(depth, Some(_)) => (2 + depth, 1)
-      case FilterCrossLeft(depth, Some(_)) => (2 + depth, 1)
-      case FilterCrossRight(depth, Some(_)) => (2 + depth, 1)
+      case FilterMatch => (2, 1)
+      case FilterCross => (2, 1)
+      case FilterCrossLeft => (2, 1)
+      case FilterCrossRight => (2, 1)
       
-      case FilterMatch(_, None) => (2, 1)
-      case FilterCross(_, None) => (2, 1)
-      case FilterCrossLeft(_, None) => (2, 1)
-      case FilterCrossRight(_, None) => (2, 1)
+      case FilterMatch => (2, 1)
+      case FilterCross => (2, 1)
+      case FilterCrossLeft => (2, 1)
+      case FilterCrossRight => (2, 1)
       
       case Group(_) => (2, 1)
       case MergeBuckets(_) => (2, 1)
@@ -62,18 +62,10 @@ trait Instructions extends Library {
       case PushGroup(_) => (0, 1)
       case PushKey(_) => (0, 1)
     }
-
-    def predicateStackDelta: (Int, Int) = self match {
-      case FilterMatch(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
-      case FilterCross(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
-      case _ => (0, 0)
-    }
   }
   
   // namespace
   object instructions {
-    type Predicate = Vector[PredicateInstr]
-    
     sealed trait DataInstr extends Instruction
     
     sealed trait JoinInstr extends Instruction
@@ -103,10 +95,10 @@ trait Instructions extends Library {
     case object Split extends Instruction
     case object Merge extends Instruction
     
-    case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCross(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCrossLeft(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCrossRight(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
+    case object FilterMatch extends Instruction with DataInstr
+    case object FilterCross extends Instruction with DataInstr
+    case object FilterCrossLeft extends Instruction with DataInstr
+    case object FilterCrossRight extends Instruction with DataInstr
     
     case object Dup extends Instruction
     case object Drop extends Instruction
@@ -133,38 +125,15 @@ trait Instructions extends Library {
     sealed trait UnaryOperation
     sealed trait BinaryOperation
     
-    sealed trait PredicateInstr { self =>
-      def predicateStackDelta: (Int, Int) = self match {
-        case Add => (2, 1)
-        case Sub => (2, 1)
-        case Mul => (2, 1)
-        case Div => (2, 1)
-        
-        case Neg => (1, 1)
-        
-        case Or => (2, 1)
-        case And => (2, 1)
-        
-        case Comp => (1, 1)
-        
-        case DerefObject => (1, 1)
-        case DerefArray => (1, 1)
-        
-        case Range => (2, 1)
-      }
-    }
-    
-    sealed trait PredicateOp
-
     case class BuiltInMorphism(mor: Morphism)
     case class BuiltInFunction1Op(op: Op1) extends UnaryOperation
     case class BuiltInFunction2Op(op: Op2) extends BinaryOperation
     case class BuiltInReduction(red: Reduction)
 
-    case object Add extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Mul extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Div extends BinaryOperation with PredicateInstr with PredicateOp
+    case object Add extends BinaryOperation
+    case object Sub extends BinaryOperation
+    case object Mul extends BinaryOperation
+    case object Div extends BinaryOperation
     
     case object Lt extends BinaryOperation
     case object LtEq extends BinaryOperation
@@ -174,12 +143,12 @@ trait Instructions extends Library {
     case object Eq extends BinaryOperation
     case object NotEq extends BinaryOperation
     
-    case object Or extends BinaryOperation with PredicateInstr
-    case object And extends BinaryOperation with PredicateInstr
+    case object Or extends BinaryOperation
+    case object And extends BinaryOperation
     
     case object New extends UnaryOperation
-    case object Comp extends UnaryOperation with PredicateInstr
-    case object Neg extends UnaryOperation with PredicateInstr with PredicateOp
+    case object Comp extends UnaryOperation
+    case object Neg extends UnaryOperation
     
     case object WrapObject extends BinaryOperation
     case object WrapArray extends UnaryOperation
@@ -189,10 +158,10 @@ trait Instructions extends Library {
     
     case object ArraySwap extends BinaryOperation
     
-    case object DerefObject extends BinaryOperation with PredicateInstr
-    case object DerefArray extends BinaryOperation with PredicateInstr
+    case object DerefObject extends BinaryOperation
+    case object DerefArray extends BinaryOperation
     
-    case object Range extends PredicateInstr
+    case object Range
 
     sealed trait Type
     

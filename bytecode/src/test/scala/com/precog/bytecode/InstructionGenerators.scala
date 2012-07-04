@@ -12,9 +12,6 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbUnaryOp: Arbitrary[UnaryOperation] = Arbitrary(genUnaryOp)
   implicit lazy val arbBinaryOp: Arbitrary[BinaryOperation] = Arbitrary(genBinaryOp)
   
-  implicit lazy val arbPredicate: Arbitrary[Predicate] = Arbitrary(genPredicate)
-  implicit lazy val arbPredicateInstr: Arbitrary[PredicateInstr] = Arbitrary(genPredicateInstr)
-  
   implicit lazy val arbReduction: Arbitrary[BuiltInReduction] = Arbitrary(genReduction)
   implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism1)
   implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism2)
@@ -95,25 +92,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genSplit = Split
   private lazy val genMerge = Merge
   
-  private lazy val genFilterMatch = for {
-    depth <- arbitrary[Short]
-    pred <- genPredicate
-    optPred <- oneOf(Some(pred), None)
-  } yield FilterMatch(depth, optPred)
-  
-  private lazy val genFilterCross = for {
-    depth <- arbitrary[Short]
-    pred <- genPredicate
-    optPred <- oneOf(Some(pred), None)
-  } yield FilterCross(depth, optPred)
-  
-  private lazy val genFilterCrossLeft = genFilterCross map {
-    case FilterCross(depth, pred) => FilterCrossLeft(depth, pred)
-  }
-  
-  private lazy val genFilterCrossRight = genFilterCross map {
-    case FilterCross(depth, pred) => FilterCrossRight(depth, pred)
-  }
+  private lazy val genFilterMatch = FilterMatch
+  private lazy val genFilterCross = FilterCross
+  private lazy val genFilterCrossLeft = FilterCrossLeft
+  private lazy val genFilterCrossRight = FilterCrossRight
   
   private lazy val genDup = Dup
   private lazy val genDrop = Drop
@@ -191,25 +173,6 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     m <- oneOf(libMorphism2.toSeq)
     res <- BuiltInMorphism(m)
   } yield res
-    
-  private lazy val genPredicate = listOf(genPredicateInstr) map { xs => Vector(xs: _*) }
-  
-  private lazy val genPredicateInstr = oneOf(
-    Add,
-    Sub,
-    Mul,
-    Div,
-    
-    Or,
-    And,
-    
-    Comp,
-    Neg,
-    
-    DerefObject,
-    DerefArray,
-    
-    Range)
     
   private lazy val genType = Het
 }
