@@ -222,12 +222,16 @@ class LevelDBProjection private (val baseDir: File, val descriptor: ProjectionDe
       readaheadPool.execute(reader)
       
       new Iterator[(Identities,Seq[CValue])] {
+        private[this] var currentChunk: Option[KeyValueChunk] = None
         private[this] var chunkIterator: java.util.Iterator[KeyValuePair] = nextIterator()
 
-        private[this] def nextIterator() = reader.chunkQueue.take() match {
-          case ChunkData(data)  => data.getIterator()
-          case ChunkEOF         => null
-          case ChunkTimeout(at) => throw new TimeoutException("Iteration expired at " + new DateTime(at))
+        private[this] def nextIterator() = {
+          currentChunk.foreach(reader.returnBuffers)
+          reader.chunkQueue.take() match {
+            case ChunkData(data)  => currentChunk = Some(data); data.getIterator()
+            case ChunkEOF         => null
+            case ChunkTimeout(at) => throw new TimeoutException("Iteration expired at " + new DateTime(at))
+          }
         }
 
         private[this] def computeNext() : KeyValuePair = {
