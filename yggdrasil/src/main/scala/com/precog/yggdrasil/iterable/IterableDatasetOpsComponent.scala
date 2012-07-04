@@ -15,7 +15,7 @@ import blueeyes.util.Clock
 import java.io.File
 
 import scala.annotation.tailrec
-import scalaz.{NonEmptyList => NEL, Identity => _, _}
+import scalaz.{NonEmptyList => NEL, _}
 import scalaz.Ordering._
 import scalaz.effect._
 import scalaz.syntax.semigroup._

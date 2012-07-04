@@ -18,16 +18,15 @@ import akka.dispatch.Future
 
 import java.io.File
 
-import scala.collection.immutable.ListMap
-
 import scalaz._
-import scalaz.effect.IO
-import scalaz.Scalaz._
 import scalaz.Validation._
-import scalaz.syntax.biFunctor._
-import scalaz.ValidationT._
-
-import annotation.tailrec
+import scalaz.effect.IO
+import scalaz.syntax.apply._
+import scalaz.syntax.bifunctor._
+import scalaz.syntax.show._
+import scalaz.syntax.std.option._
+import scala.annotation.tailrec
+import scala.collection.immutable.ListMap
 
 sealed trait SortBy
 case object ById extends SortBy

@@ -4,8 +4,6 @@ package iteratee
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 
-import scalaz.{Identity => _, _}
-
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -17,7 +15,7 @@ import scalaz.std.partialFunction._
 
 import Iteratee._
 
-case class DatasetEnum[E, F[_]](fenum: Future[EnumeratorP[Unit, Vector[(Identities, E)], F]], descriptor: Option[ProjectionDescriptor] = None) {
+case class DatasetEnum[E, F[_]](fenum: Future[EnumeratorP[Vector[(Identities, E)], F]], descriptor: Option[ProjectionDescriptor] = None) {
   /*
   type Chunk[T] = Vector[(Identities, T)]
 

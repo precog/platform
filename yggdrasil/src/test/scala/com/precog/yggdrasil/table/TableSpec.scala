@@ -9,7 +9,7 @@ import org.specs2.matcher.MatchResult
 import scalaz._
 import scalaz.std.option
 import scalaz.syntax.bind._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 import scalaz.Either3._
 
 import org.scalacheck.Gen

@@ -44,7 +44,7 @@ trait Emitter extends AST
   private type EmitterState = StateT[Id, Emission, Unit]
 
   private implicit val EmitterStateMonoid: Monoid[EmitterState] = new Monoid[EmitterState] {
-    val zero = StateT.stateT[Id, Unit, Emission](())
+    val zero = StateT.stateT[Id, Emission, Unit](())
 
     def append(v1: EmitterState, v2: => EmitterState): EmitterState = v1 >> v2
   }
@@ -60,9 +60,9 @@ trait Emitter extends AST
       val before = e.bytecode.take(idx)
       val after  = e.bytecode.drop(idx)
 
-      ((), e.copy(
+      (e.copy(
         bytecode = before ++ is ++ after,
-        marks = e.marks.transform((k, v) => v.insert(idx, is.length))))
+        marks = e.marks.transform((k, v) => v.insert(idx, is.length))), ())
     }
 
     def insertInstrAt(i: Instruction, idx: Int): EmitterState = insertInstrAt(i :: Nil, idx)
@@ -82,7 +82,7 @@ trait Emitter extends AST
 
     def emitLine(lineNum: Int, line: String): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       e.curLine match {
-        case Some((`lineNum`, `line`)) => ((), e)
+        case Some((`lineNum`, `line`)) => (e, ())
 
         case _ => emitInstr(Line(lineNum, line))(e.copy(curLine = Some((lineNum, line))))
       }
@@ -102,22 +102,22 @@ trait Emitter extends AST
     // Emits the bytecode and marks it so it can be reused in DUPing operations.
     private def emitAndMark(markType: MarkType)(f: => EmitterState): EmitterState = StateT.apply[Id, Emission, Unit] { e =>
       f(e) match {
-        case (_, e) =>
+        case (e, _) =>
           val mark = Mark(e.bytecode.length, 0)
         
-          ((), e.copy(marks = e.marks + (markType -> mark)))
+          (e.copy(marks = e.marks + (markType -> mark)), ())
       }
     }
     
     private def labelTicVar(let: ast.Let, name: TicId)(state: => EmitterState): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        ((), e.copy(ticVars = e.ticVars + ((let, name) -> state)))
+        (e.copy(ticVars = e.ticVars + ((let, name) -> state)), ())
       }
     }
     
     private def labelGroup(where: ast.Where, id: Int): EmitterState = {
       StateT.apply[Id, Emission, Unit] { e =>
-        ((), e.copy(groups = e.groups + (where -> id)))
+        (e.copy(groups = e.groups + (where -> id)), ())
       }
     }
     
@@ -338,7 +338,7 @@ trait Emitter extends AST
               val currentIndex = indices.indexOf(n)
               val targetIndex  = n
 
-              ((), if (currentIndex == targetIndex) (indices, state)
+              (if (currentIndex == targetIndex) (indices, state)
                 else {
                   var (startIndex, endIndex) = if (currentIndex < targetIndex) (currentIndex, targetIndex) else (targetIndex, currentIndex)
 
@@ -352,7 +352,7 @@ trait Emitter extends AST
 
                   (newIndices, newState)
                 }
-              )
+              , ())
           }
 
           val fixAll = (0 until indices.length).map(fixN)
