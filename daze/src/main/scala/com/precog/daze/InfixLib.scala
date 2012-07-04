@@ -17,12 +17,12 @@ trait InfixLib extends ImplLibrary with GenOpcode {
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 
-    object Add extends Op2(InfixNamespace, "add") {
+    object Add extends Op2(InfixNamespace, "add") {  //TODO do we need cases for NullColumn?
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) + c2(row)
         }
-        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {   //TODO why is c1(row) type BigDecimal?
           def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
         }
         case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
