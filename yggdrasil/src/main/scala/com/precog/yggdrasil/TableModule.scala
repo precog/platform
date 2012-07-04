@@ -40,15 +40,15 @@ trait TableModule extends FNModule {
     // containing all the resulting columns.
     case class ObjectConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
     
-    // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
-    // specified field. 
-    case class WrapStatic[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A] //done
-    
-    case class WrapDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
-    
     case class ArrayConcat[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
     
-    case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Int) extends TransSpec[A]
+    // Take the output of the specified TransSpec and prefix all of the resulting selectors with the
+    // specified field. 
+    case class WrapObject[+A <: SourceType](source: TransSpec[A], field: String) extends TransSpec[A] //done
+    
+    case class WrapObjectDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    
+    case class WrapArray[+A <: SourceType](source: TransSpec[A]) extends TransSpec[A] //done
     
     case class DerefObjectStatic[+A <: SourceType](source: TransSpec[A], field: JPathField) extends TransSpec[A] //done
     
@@ -57,6 +57,8 @@ trait TableModule extends FNModule {
     case class DerefArrayStatic[+A <: SourceType](source: TransSpec[A], element: JPathIndex) extends TransSpec[A] //done
     
     case class DerefArrayDynamic[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A]
+    
+    case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Int) extends TransSpec[A]
     
     // Filter out all the source columns whose CType is not subsumed by the supplied JType
     case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done

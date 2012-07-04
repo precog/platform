@@ -15,7 +15,11 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.Ordering._
 import scalaz.std.function._
+import scalaz.std.list._
+import scalaz.std.tuple._
 import scalaz.syntax.arrow._
+import scalaz.syntax.traverse._
+import scalaz.syntax.bitraverse._
 
 trait ColumnarTableModule extends TableModule {
   import trans._
@@ -246,9 +250,14 @@ trait ColumnarTableModule extends TableModule {
             }
           }
 
-        case WrapStatic(source, field) =>
+        case WrapObject(source, field) =>
           composeSliceTransform(source) andThen {
             map0 { _ wrap JPathField(field) }
+          }
+
+        case WrapArray(source) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ wrap JPathIndex(0) }
           }
 
         case ObjectConcat(left, right) =>
@@ -264,6 +273,29 @@ trait ColumnarTableModule extends TableModule {
                   case (acc, (ref, col)) if ref.selector.head.exists(_.isInstanceOf[JPathField]) => acc + (ref -> col)
                   case (acc, _) => acc
                 }
+            }
+          }
+
+        case ArrayConcat(left, right) =>
+          val l0 = composeSliceTransform(left)
+          val r0 = composeSliceTransform(right)
+
+          l0.zip(r0) { (sl, sr) =>
+            def assertDense(paths: Set[JPath]) = assert {
+              (paths collect { case JPath(JPathIndex(i), _ @ _*) => i }).toList.sorted.zipWithIndex forall { case (a, b) => a == b }
+            }
+
+            assertDense(sl.columns.keySet.map(_.selector))
+            assertDense(sr.columns.keySet.map(_.selector))
+
+            new Slice {
+              val size = sl.size
+              val columns: Map[ColumnRef, Column] = {
+                val (indices, lcols) = sl.columns.toList map { case t @ (ColumnRef(JPath(JPathIndex(i), xs @ _*), _), _) => (i, t) } unzip
+                val maxIndex = indices.reduceLeftOption(_ max _).map(_ + 1).getOrElse(0)
+                val rcols = sr.columns map { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + maxIndex) +: xs : _*), ctype), col) }
+                lcols.toMap ++ rcols
+              }
             }
           }
 
