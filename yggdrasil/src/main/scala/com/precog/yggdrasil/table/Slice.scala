@@ -8,6 +8,7 @@ import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
+import scala.collection.breakOut
 import scalaz.Ordering
 import scalaz.Ordering._
 import scalaz.ValidationNEL
@@ -51,8 +52,13 @@ trait Slice { source =>
 
   def typed(jtpe : JType) : Slice = new Slice {
     val size = source.size
-    val columns = source.columns.collect {
-      case assoc @ (ColumnRef(_, ctpe), _) if (subsumes(jtpe, ctpe)) => assoc
+    val columns = {
+      if(subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
+        source.columns.filter { case (ColumnRef(path, ctpe), _) => includes(jtpe, path, ctpe) }
+      else {
+        println("Empty!")
+        Map.empty[ColumnRef, Column]
+      }
     }
   }
 

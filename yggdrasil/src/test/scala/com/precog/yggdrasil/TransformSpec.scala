@@ -247,12 +247,14 @@ trait TransformSpec extends TableModuleSpec {
     check { (sample: SampleData) =>
       val table = fromJson(sample)
       val results = toJson(table.transform {
-        Typed(Leaf(Source), JNumberT)
+        Typed(Leaf(Source),
+          JObjectFixedT(Map("value" ->
+            JObjectFixedT(Map("value1" -> JNumberT, "value3" -> JNumberT))))
+        )
       })
 
       val expected = sample.data map { jv =>
         JObject(
-          JField("key", jv \ "key") ::
           JField("value",
             JObject(
               JField("value1", jv \ "value" \ "value1") ::
