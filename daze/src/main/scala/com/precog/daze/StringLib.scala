@@ -2,12 +2,11 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
 
 import java.lang.String
 
 import yggdrasil._
+import yggdrasil.table._
 
 object StringLib extends StringLib
 
@@ -26,7 +25,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
 
   object length extends Op1(StringNamespace, "length") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -39,7 +38,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object trim extends Op1(StringNamespace, "trim") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -52,7 +51,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object toUpperCase extends Op1(StringNamespace, "toUpperCase") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -65,7 +64,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }  
   object toLowerCase extends Op1(StringNamespace, "toLowerCase") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -78,7 +77,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object isEmpty extends Op1(StringNamespace, "isEmpty") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -91,7 +90,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object intern extends Op1(StringNamespace, "intern") {
     def f1: F1 = new CF1P({
-      case c: StringColumn => new StringColumn {
+      case c: StrColumn => new StrColumn {
         def isDefinedAt(row: Int) = c.isDefinedAt(row)
         def apply(row: Int) = c(row)
       }
@@ -110,7 +109,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   //}
   object equalsIgnoreCase extends Op2(StringNamespace, "equalsIgnoreCase") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -123,7 +122,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object codePointAt extends Op2(StringNamespace, "codePointAt") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -137,7 +136,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object startsWith extends Op2(StringNamespace, "startsWith") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -150,7 +149,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object lastIndexOf extends Op2(StringNamespace, "lastIndexOf") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -163,7 +162,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object concat extends Op2(StringNamespace, "concat") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -176,7 +175,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object endsWith extends Op2(StringNamespace, "endsWith") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -189,7 +188,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object codePointBefore extends Op2(StringNamespace, "codePointBefore") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -203,7 +202,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object substring extends Op2(StringNamespace, "substring") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -217,7 +216,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object matches extends Op2(StringNamespace, "matches") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -230,7 +229,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object compareTo extends Op2(StringNamespace, "compareTo") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -243,7 +242,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object compareToIgnoreCase extends Op2(StringNamespace, "compareToIgnoreCase") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -256,7 +255,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object equals extends Op2(StringNamespace, "equals") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
@@ -269,7 +268,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
   object indexOf extends Op2(StringNamespace, "indexOf") {
     def f2: F2 = new CF2P({
-      case (c1: StringColumn, c2: StringColumn) => new StringColumn {
+      case (c1: StrColumn, c2: StrColumn) => new StrColumn {
         def isDefinedAt(row: Int) = c1.isDefinedAt(row)
         def apply(row: Int) = c1(row)
       }
