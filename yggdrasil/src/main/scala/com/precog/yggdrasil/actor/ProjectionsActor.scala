@@ -29,7 +29,7 @@ import scala.collection.mutable
 import scalaz._
 import scalaz.Validation._
 import scalaz.effect._
-import scalaz.syntax.std.optionV._
+import scalaz.syntax.std.option._
 
 //////////////
 // MESSAGES //

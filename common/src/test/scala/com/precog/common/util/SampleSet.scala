@@ -8,7 +8,7 @@ import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
-import scalaz.syntax.std.booleanV._
+import scalaz.syntax.std.boolean._
 
 trait SampleSet[T] {
   // the number of samples to return in the queriablesamples list

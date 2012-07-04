@@ -48,7 +48,7 @@ import org.apache.zookeeper.data.Stat
 
 import scalaz.{Success, Failure}
 import scalaz.effect.IO
-import scalaz.syntax.std.booleanV._
+import scalaz.syntax.std.boolean._
 
 import org.streum.configrity._
 
