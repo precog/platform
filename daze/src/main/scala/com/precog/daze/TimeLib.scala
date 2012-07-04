@@ -76,8 +76,19 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        def apply(row: Int) = {
+          val time = c1(row)
+          val tz = c2(row)
+
+          if (isValidISO(time) && isValidTimeZone(tz)) {
+            val newTime = ISODateTimeFormat.dateTimeParser().parseDateTime(time)
+            val timeZone = DateTimeZone.forID(tz)
+            val dateTime = new DateTime(newTime, timeZone)
+
+            dateTime.toString()
+          } else sys.error("todo")
+        }
       }
     })
     
@@ -92,6 +103,23 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   }
 
   trait TimeBetween extends Op2 {
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = {
+          val time1 = c1(row)
+          val time2 = c2(row)
+
+          if (isValidISO(time1) && isValidISO(time2)) {
+            val newTime1 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time1)
+            val newTime2 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time2)
+
+            between(newTime1, newTime2)
+          } else sys.error("todo'")
+        }
+
+        def between(d1: DateTime, d2: DateTime): Long
+      }
+    })
     /* val operandType = (Some(SString), Some(SString)) 
 
     val operation: PartialFunction[(SValue, SValue), SValue] = {
@@ -105,89 +133,41 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   }
 
   object YearsBetween extends Op2(TimeNamespace, "yearsBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
+    def between(d1: DateTime, d2: DateTime) = Years.yearsBetween(d1, d2).getYears
   }
 
   object MonthsBetween extends Op2(TimeNamespace, "monthsBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
+    def between(d1: DateTime, d2: DateTime) = Months.monthsBetween(d1, d2).getMonths
   }
 
   object WeeksBetween extends Op2(TimeNamespace, "weeksBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
+    def between(d1: DateTime, d2: DateTime) = Weeks.weeksBetween(d1, d2).getWeeks
   }
 
   object DaysBetween extends Op2(TimeNamespace, "daysBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
+    def between(d1: DateTime, d2: DateTime) = Days.daysBetween(d1, d2).getDays
   }
 
   object HoursBetween extends Op2(TimeNamespace, "hoursBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
+    def between(d1: DateTime, d2: DateTime) = Hours.hoursBetween(d1, d2).getHours
   }
 
   object MinutesBetween extends Op2(TimeNamespace, "minutesBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
+    def between(d1: DateTime, d2: DateTime) = Minutes.minutesBetween(d1, d2).getMinutes
   }
 
   object SecondsBetween extends Op2(TimeNamespace, "secondsBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
+    def between(d1: DateTime, d2: DateTime) = Seconds.secondsBetween(d1, d2).getSeconds
   }
 
   object MillisBetween extends Op2(TimeNamespace, "millisBetween") with TimeBetween{
-    def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
-      }
-    })
-    
-    // def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
+    def between(d1: DateTime, d2: DateTime) = d2.getMillis - d1.getMillis
   }
 
   object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
     def f2: F2 = new CF2P({
-      case (c1: NullColumn, c2: NullColumn) => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -203,8 +183,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object GetMillis extends Op1(TimeNamespace, "getMillis") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -218,8 +198,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object TimeZone extends Op1(TimeNamespace, "timeZone") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -234,8 +214,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object Season extends Op1(TimeNamespace, "season") {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -266,8 +246,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object Year extends Op1(TimeNamespace, "year") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -276,8 +256,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object QuarterOfYear extends Op1(TimeNamespace, "quarter") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -286,8 +266,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object MonthOfYear extends Op1(TimeNamespace, "monthOfYear") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -296,8 +276,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object WeekOfYear extends Op1(TimeNamespace, "weekOfYear") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -306,8 +286,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object WeekOfMonth extends Op1(TimeNamespace, "weekOfMonth") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -322,8 +302,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
  
   object DayOfYear extends Op1(TimeNamespace, "dayOfYear") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -332,8 +312,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DayOfMonth extends Op1(TimeNamespace, "dayOfMonth") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -342,8 +322,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DayOfWeek extends Op1(TimeNamespace, "dayOfWeek") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -352,8 +332,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object HourOfDay extends Op1(TimeNamespace, "hourOfDay") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -362,8 +342,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object MinuteOfHour extends Op1(TimeNamespace, "minuteOfHour") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -372,8 +352,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object SecondOfMinute extends Op1(TimeNamespace, "secondOfMinute") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -382,8 +362,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     
   object MillisOfSecond extends Op1(TimeNamespace, "millisOfSecond") with TimeFraction {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -403,8 +383,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object Date extends Op1(TimeNamespace, "date") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -413,8 +393,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object YearMonth extends Op1(TimeNamespace, "yearMonth") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -423,8 +403,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object YearDayOfYear extends Op1(TimeNamespace, "yearDayOfYear") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -433,8 +413,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object MonthDay extends Op1(TimeNamespace, "monthDay") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -443,8 +423,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DateHour extends Op1(TimeNamespace, "dateHour") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -453,8 +433,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DateHourMinute extends Op1(TimeNamespace, "dateHourMin") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -463,8 +443,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DateHourMinuteSecond extends Op1(TimeNamespace, "dateHourMinSec") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -473,8 +453,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object DateHourMinuteSecondMillis extends Op1(TimeNamespace, "dateHourMinSecMilli") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -483,8 +463,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object TimeWithZone extends Op1(TimeNamespace, "timeWithZone") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -493,8 +473,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object TimeWithoutZone extends Op1(TimeNamespace, "timeWithoutZone") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -503,8 +483,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object HourMinute extends Op1(TimeNamespace, "hourMin") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
@@ -513,8 +493,8 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
   object HourMinuteSecond extends Op1(TimeNamespace, "hourMinSec") with TimeTruncation {
     def f1: F1 = new CF1P({
-      case c: NullColumn => new NullColumn {
-        def isDefinedAt(row: Int) = false
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = 
       }
     })
     
