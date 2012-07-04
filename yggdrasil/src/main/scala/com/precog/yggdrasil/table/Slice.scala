@@ -74,10 +74,8 @@ trait Slice { source =>
     val columns = {
       if(subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
         source.columns.filter { case (ColumnRef(path, ctpe), _) => includes(jtpe, path, ctpe) }
-      else {
-        println("Empty!")
+      else
         Map.empty[ColumnRef, Column]
-      }
     }
   }
 
