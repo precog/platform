@@ -220,12 +220,12 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
-  def checkWrapStatic = {
+  def checkWrapObject = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
       val table = fromJson(sample)
       val results = toJson(table.transform {
-        WrapStatic(Leaf(Source), "foo")
+        WrapObject(Leaf(Source), "foo")
       })
 
       val expected = sample.data map { jv => JObject(JField("foo", jv) :: Nil) }
@@ -252,8 +252,8 @@ trait TransformSpec extends TableModuleSpec {
       val table = fromJson(sample)
       val results = toJson(table.transform {
         ObjectConcat(
-          WrapStatic(WrapStatic(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
-          WrapStatic(WrapStatic(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value2"), "value") 
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
+          WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value2")), "value2"), "value") 
         )
       })
 
@@ -261,6 +261,23 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
+  def checkArrayConcat = {
+    implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        WrapObject(
+          ArrayConcat(
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathIndex(0))),
+            WrapArray(DerefArrayStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathIndex(1)))
+          ), 
+          "value"
+        )
+      })
+
+      results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
+    }
+  }
   def checkTyped = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>

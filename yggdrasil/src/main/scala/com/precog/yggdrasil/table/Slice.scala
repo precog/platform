@@ -62,7 +62,7 @@ trait Slice { source =>
     }
   }
 
-  def wrap(wrapper : JPathField) : Slice = new Slice {
+  def wrap(wrapper : JPathNode) : Slice = new Slice {
     val size = source.size
     val columns = source.columns.map {
       case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)
