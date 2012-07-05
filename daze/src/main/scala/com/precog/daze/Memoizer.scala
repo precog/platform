@@ -75,8 +75,26 @@ trait Memoizer extends DAG {
           case Reduce(loc, red, parent) =>
             Reduce(loc, red, memoized(parent, splits))
 
-          case SetReduce(loc, red, parent) => {
-            val back = SetReduce(loc, red, memoized(parent, splits))
+          case Morph1(loc, m, parent) => {
+            val back = Morph1(loc, m, memoized(parent, splits))
+            
+            if (refs > 1)
+              Memoize(back, refs)
+            else
+              back
+          }
+
+          case Morph2(loc, m, left, right) => {
+            val back = Morph2(loc, m, memoized(left, splits), memoized(right, splits))
+            
+            if (refs > 1)
+              Memoize(back, refs)
+            else
+              back
+          }
+
+          case Distinct(loc, parent) => {
+            val back = Distinct(loc, memoized(parent, splits))
             
             if (refs > 1)
               Memoize(back, refs)
@@ -103,11 +121,11 @@ trait Memoizer extends DAG {
             Join(loc, instr, left2, right2)
           }
           
-          case Filter(loc, cross, range, target, boolean) => {
+          case Filter(loc, cross, target, boolean) => {
             val target2 = memoized(target, splits)
             val boolean2 = memoized(boolean, splits)
             
-            Filter(loc, cross, range, target2, boolean2)
+            Filter(loc, cross, target2, boolean2)
           }
           
           case Sort(parent, indexes) =>
@@ -157,7 +175,15 @@ trait Memoizer extends DAG {
     case Reduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
         
-    case SetReduce(_, _, parent) =>
+    case Morph1(_, _, parent) =>
+      increment(countRefs(parent), parent, 1)
+        
+    case Morph2(_, _, left, right) => {
+      val rec = merge(countRefs(left), countRefs(right))
+      increment(increment(rec, left, 1), right, 1)
+    }
+        
+    case Distinct(_, parent) =>
       increment(countRefs(parent), parent, 1)
     
     case Split(_, spec, child) =>
@@ -168,7 +194,7 @@ trait Memoizer extends DAG {
       increment(increment(rec, left, 1), right, 1)
     }
     
-    case Filter(_, _, _, target, boolean) => {
+    case Filter(_, _, target, boolean) => {
       val rec = merge(countRefs(target), countRefs(boolean))
       increment(increment(rec, boolean, 1), target, 1)
     }
