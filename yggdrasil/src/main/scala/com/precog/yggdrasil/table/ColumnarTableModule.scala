@@ -799,6 +799,7 @@ trait ColumnarTableModule extends TableModule {
     }
     */
 
+    
     def toJson: Iterable[JValue] = {
       toEvents { (slice: Slice, row: RowId) => slice.toJson(row) }
     }
