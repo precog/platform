@@ -97,7 +97,7 @@ trait TableModule extends FNModule {
       val RightId = Leaf(SourceRight)
     }
     
-    type TableTransSpec[+A <: SourceType] = Map[JPath, TransSpec[A]]
+    type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
     type TableTransSpec1 = TableTransSpec[Source1]
     type TableTransSpec2 = TableTransSpec[Source2]
     
