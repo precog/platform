@@ -90,7 +90,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
             ISO.toString()
           } else sys.error("todo")
         }
-    
+      }
 
     //val operandType = (Some(SString), Some(SString))
     //val operation: PartialFunction[(SValue, SValue), SValue] = {
@@ -98,7 +98,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     //    val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
     //    val ISO = format.parseDateTime(time)
     //    SString(ISO.toString())
-    //}
+    })
   }
 
   object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
@@ -254,7 +254,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
     def f2: F2 = new CF2P({
       case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with DateColumn {
-        def apply(row: Int) = 
+        def apply(row: Int) = { 
           val time = c1(row)
           val tz = c2(row)
 
@@ -303,7 +303,7 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object TimeZone extends Op1(TimeNamespace, "timeZone") {
     def f1: F1 = new CF1P({
       case c: DateColumn => new Map1Column(c) with StrColumn {
-        def apply(row: Int) = 
+        def apply(row: Int) = { 
           val time = c1(row)
 
           if (isValidISO(time)) {
@@ -363,9 +363,11 @@ trait TimeLib extends GenOpcode with ImplLibrary {
         def apply(row: Int) = {
           val time = c(row)
 
-          if (isValidISO(time)) => {
+          if (isValidISO(time)) {
             val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
             fraction(newTime)
+          } else {
+            sys.error("todo")     // DEATH!
           }
         }
 
