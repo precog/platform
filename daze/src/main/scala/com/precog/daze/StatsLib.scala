@@ -2,6 +2,7 @@ package com.precog
 package daze
 
 import bytecode.Library
+import bytecode.Arity._
 
 import yggdrasil._
 import yggdrasil.table._
@@ -17,7 +18,7 @@ trait StatsLib extends GenOpcode
 
   override def _libMorphism = super._libMorphism ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression)
  
-  object LinearCorrelation extends Morphism(StatsNamespace, "corr") {
+  object LinearCorrelation extends Morphism(StatsNamespace, "corr", Two) {
     lazy val alignment = Some(MorphismAlignment.Match)
     
     def apply(table: Table) = table
@@ -43,7 +44,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object Covariance extends Morphism(StatsNamespace, "cov") {
+  object Covariance extends Morphism(StatsNamespace, "cov", Two) {
     lazy val alignment = Some(MorphismAlignment.Match)
     
     def apply(table: Table) = table
@@ -61,7 +62,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object LinearRegression extends Morphism(StatsNamespace, "linReg") {
+  object LinearRegression extends Morphism(StatsNamespace, "linReg", Two) {
     lazy val alignment = Some(MorphismAlignment.Match)
     
     def apply(table: Table) = table
@@ -87,7 +88,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object LogarithmicRegression extends Morphism(StatsNamespace, "logReg") {
+  object LogarithmicRegression extends Morphism(StatsNamespace, "logReg", Two) {
     lazy val alignment = Some(MorphismAlignment.Match)
     
     def apply(table: Table) = table
@@ -116,7 +117,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object DenseRank extends Morphism(StatsNamespace, "denseRank") {
+  object DenseRank extends Morphism(StatsNamespace, "denseRank", One) {
     def apply(table: Table) = table
     
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
@@ -142,7 +143,7 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object Rank extends Morphism(StatsNamespace, "rank") {
+  object Rank extends Morphism(StatsNamespace, "rank", One) {
     def apply(table: Table) = table
     
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {

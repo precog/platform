@@ -2,16 +2,18 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.BuiltInRed
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
+import bytecode.Arity
+import bytecode.MorphismLike
+import bytecode.Op1Like
+import bytecode.Op2Like
+import bytecode.ReductionLike
 
 import yggdrasil._
 import yggdrasil.table._
 
 trait GenOpcode extends ImplLibrary {
   private val defaultMorphismOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class Morphism(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphismOpcode.getAndIncrement, val arity: Arity) extends MorphismImpl 
+  abstract class Morphism(val namespace: Vector[String], val name: String, val arity: Arity, val opcode: Int = defaultMorphismOpcode.getAndIncrement) extends MorphismImpl 
 
   private val defaultUnaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op1(val namespace: Vector[String], val name: String, val opcode: Int = defaultUnaryOpcode.getAndIncrement) extends Op1Impl
@@ -61,7 +63,7 @@ trait ImplLibrary extends Library with ColumnarTableModule {
 
   trait ReductionImpl extends ReductionLike with MorphismImpl {
     lazy val alignment = None
-    def reducer: Reducer
+    def reducer[A]: Reducer[A]
   }
 
   type Morphism <: MorphismImpl  //todo Morphism need to know eventually for Emitter if it's a unary or binary morphism
