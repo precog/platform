@@ -269,7 +269,6 @@ trait Evaluator extends DAG
             case Eq => trans.Equal
             case NotEq => { (left, right) => trans.Map1(trans.Equal(left, right), Comp) }     // TODo
             case WrapObject => WrapDynamic
-            case instructions.WrapArray => trans.WrapArray
             case JoinObject => ObjectConcat
             case JoinArray => ArrayConcat
             case instructions.ArraySwap => sys.error("nothing happens")
