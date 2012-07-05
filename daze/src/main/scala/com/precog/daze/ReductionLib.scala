@@ -17,7 +17,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       Some(SDecimal(BigDecimal(enum.count))) 
     } */
     
-    def reducer: Reducer = sys.error("todo")
+    val reducer: Reducer = new Reducer {
+      def reduce(col: Column, range: Range): Int = {
+        sys.error("todo") 
+      }
+    }
     def apply(table: Table) = table.reduce(reducer) 
   }
 
