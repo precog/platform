@@ -33,6 +33,18 @@ class CF1P(f: PartialFunction[Column, Column]) extends CF1(f.lift)
 
 class CF2(f: (Column, Column) => Option[Column]) extends ((Column, Column) => Option[Column]) {
   def apply(c1: Column, c2: Column): Option[Column] = f(c1, c2)
+  
+  @inline
+  def partialLeft(cv: CValue): CF1 = {
+    val c1 = Column.const(cv)
+    new CF1({ c2 => apply(c1, c2) })
+  }
+  
+  @inline
+  def partialRight(cv: CValue): CF1 = {
+    val c2 = Column.const(cv)
+    new CF1({ c1 => apply(c1, c2) })
+  }
 }
 
 class CF2P(f: PartialFunction[(Column, Column), Column]) extends CF2(Function.untupled(f.lift))
