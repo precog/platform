@@ -1,8 +1,6 @@
 package com.precog
 package daze
 
-import memoization._
-
 import bytecode.Library
 import bytecode.BuiltInRed
 import bytecode.BuiltInFunc1
@@ -26,8 +24,8 @@ trait GenOpcode extends ImplLibrary {
 }
 
 trait ImplLibrary extends Library with ColumnarTableModule {
-  type F1 = CF1P
-  type F2 = CF2P
+  type F1 = CF1
+  type F2 = CF2
   
   lazy val libMorphism = _libMorphism
   lazy val lib1 = _lib1

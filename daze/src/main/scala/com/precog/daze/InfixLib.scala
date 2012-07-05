@@ -9,8 +9,8 @@ import yggdrasil.table._
 object InfixLib extends InfixLib
 
 trait InfixLib extends ImplLibrary with GenOpcode {
-  type F1 = CF1P
-  type F2 = CF2P
+  type F1 = CF1
+  type F2 = CF2
   
   def PrimitiveEqualsF2 = table.cf.std.Eq
   
