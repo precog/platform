@@ -123,7 +123,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   object equalsIgnoreCase extends Op2(StringNamespace, "equalsIgnoreCase") {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
-        def apply(row: Int) = c1(row).equalIgnoreCase(c2(row))
+        def apply(row: Int) = c1(row).equalsIgnoreCase(c2(row))
       }
     })
     
@@ -225,7 +225,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   object substring extends Op2(StringNamespace, "substring") {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
-        def apply(row: Int) = c1(row)
+        def apply(row: Int) = {
           val str = c1(row)
           val num = c2(row)
 
@@ -233,6 +233,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
             str.substring(num.toInt)
           else
             sys.error("todo")
+        }
       }
     })
     

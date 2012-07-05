@@ -21,6 +21,7 @@ package com.precog
 package daze
 
 import bytecode.Library
+import bytecode.Arity._
 
 import yggdrasil._
 
@@ -31,7 +32,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   override def _libMorphism = super._libMorphism ++ Set(Median, Mode)
 
   // TODO swap to Reduction
-  object Count extends Morphism(ReductionNamespace, "count") {
+  object Count extends Reduction(ReductionNamespace, "count") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       Some(SDecimal(BigDecimal(enum.count))) 
     } */
@@ -39,7 +40,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table 
   }
 
-  object Max extends Morphism(ReductionNamespace, "max") {
+  object Max extends Reduction(ReductionNamespace, "max") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -55,7 +56,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
 
-  object Min extends Morphism(ReductionNamespace, "min") {
+  object Min extends Reduction(ReductionNamespace, "min") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val min = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -71,7 +72,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object Sum extends Morphism(ReductionNamespace, "sum") {
+  object Sum extends Reduction(ReductionNamespace, "sum") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sum = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -86,7 +87,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object Mean extends Morphism(ReductionNamespace, "mean") {
+  object Mean extends Reduction(ReductionNamespace, "mean") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
         case ((count, total), SDecimal(v)) => (count + 1, total + v)
@@ -100,7 +101,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object GeometricMean extends Morphism(ReductionNamespace, "geometricMean") {
+  object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
         case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
@@ -114,7 +115,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object SumSq extends Morphism(ReductionNamespace, "sumSq") {
+  object SumSq extends Reduction(ReductionNamespace, "sumSq") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sumsq = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v * v)
@@ -129,7 +130,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object Variance extends Morphism(ReductionNamespace, "variance") {
+  object Variance extends Reduction(ReductionNamespace, "variance") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
@@ -143,7 +144,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object StdDev extends Morphism(ReductionNamespace, "stdDev") {
+  object StdDev extends Reduction(ReductionNamespace, "stdDev") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
@@ -157,7 +158,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object Median extends Morphism(ReductionNamespace, "median") {
+  object Median extends Morphism(ReductionNamespace, "median", One) {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
@@ -197,7 +198,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def apply(table: Table) = table
   }
   
-  object Mode extends Morphism(ReductionNamespace, "mode") {
+  object Mode extends Morphism(ReductionNamespace, "mode", One) {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
