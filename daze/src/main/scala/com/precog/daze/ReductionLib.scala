@@ -27,7 +27,8 @@ import yggdrasil._
 trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
 
-  override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Median, Mode)
+  override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
+  override def _libMorphism = super._libMorphism ++ Set(Median, Mode)
 
   // TODO swap to Reduction
   object Count extends Morphism(ReductionNamespace, "count") {
@@ -35,7 +36,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       Some(SDecimal(BigDecimal(enum.count))) 
     } */
     
-    def apply(table: Table) = table
+    def reducer: Reducer = sys.error("todo")
+    def apply(table: Table) = table.reduce(reducer) 
   }
 
   object Max extends Morphism(ReductionNamespace, "max") {
