@@ -9,9 +9,6 @@ import yggdrasil.table._
 object UnaryLib extends UnaryLib
 
 trait UnaryLib extends ImplLibrary with GenOpcode {
-  type F1 = CF1
-  type F2 = CF2
-  
   object Unary {
     val UnaryNamespace = Vector("std", "unary")
 

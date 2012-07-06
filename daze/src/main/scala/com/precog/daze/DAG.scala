@@ -66,16 +66,6 @@ trait DAG extends Instructions {
         }
         
         case instr: JoinInstr => processJoinInstr(instr)
-        
-        case instr @ instructions.Reduce(BuiltInReduction(red)) => {
-          val eitherRoots = roots match {
-            case Right(hd) :: tl => Right(Right(Reduce(loc, red, hd)) :: tl)
-            case Left(_) :: _ => Left(OperationOnBucket(instr))
-            case _ => Left(StackUnderflow(instr))
-          }
-          
-          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
-        }
 
         case instr @ instructions.Morph1(BuiltInMorphism(m1)) => {
           val eitherRoots = roots match {
@@ -92,6 +82,16 @@ trait DAG extends Instructions {
             case Right(right) :: Right(left) :: tl => Right(Right(Morph2(loc, m2, left, right)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
             case _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+            case _ => Left(StackUnderflow(instr))
+          }
+          
+          eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
+        }
+        
+        case instr @ instructions.Reduce(BuiltInReduction(red)) => {
+          val eitherRoots = roots match {
+            case Right(hd) :: tl => Right(Right(Reduce(loc, red, hd)) :: tl)
+            case Left(_) :: _ => Left(OperationOnBucket(instr))
             case _ => Left(StackUnderflow(instr))
           }
           

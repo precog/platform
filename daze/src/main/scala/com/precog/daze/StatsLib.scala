@@ -118,6 +118,8 @@ trait StatsLib extends GenOpcode
   }
 
   object DenseRank extends Morphism(StatsNamespace, "denseRank", One) {
+    lazy val alignment = None
+    
     def apply(table: Table) = table
     
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
@@ -144,6 +146,8 @@ trait StatsLib extends GenOpcode
   }
 
   object Rank extends Morphism(StatsNamespace, "rank", One) {
+    lazy val alignment = None
+    
     def apply(table: Table) = table
     
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {

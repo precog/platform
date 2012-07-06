@@ -30,7 +30,7 @@ trait Op1Like {
   val name: String
   val opcode: Int
 
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
@@ -39,7 +39,7 @@ trait Op2Like {
   val name: String
   val opcode: Int
 
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
@@ -48,7 +48,7 @@ trait ReductionLike {
   val name: String
   val opcode: Int
 
-  lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
+  def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
