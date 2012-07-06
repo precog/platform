@@ -20,10 +20,6 @@
 package com.precog.bytecode
 
 trait StaticLibrary extends Library {
-  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
-  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like
-  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like
-  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike
 
   lazy val libReduction = Set(
     Reduction(Vector(), "count", 0x0000),
@@ -59,4 +55,19 @@ trait StaticLibrary extends Library {
     Morphism(Vector("std"), "bin9", 0x0001, Arity.Two),
     Morphism(Vector(), "bar33", 0x0002, Arity.One),
     Morphism(Vector("std", "lib9"), "baz2", 0x0003, Arity.Two))
+  
+  
+  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
+  
+  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
+    lazy val arity = Arity.One
+  }
+  
+  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
+    lazy val arity = Arity.Two
+  }
+  
+  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
+    lazy val arity = Arity.One
+  }
 }

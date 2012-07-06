@@ -24,10 +24,6 @@ import Arbitrary.arbitrary
 import Gen._
 
 trait RandomLibrary extends Library {
-  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
-  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like
-  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like
-  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike
 
   private lazy val genMorphism = for {
     op <- choose(0, 1000)
@@ -72,4 +68,19 @@ trait RandomLibrary extends Library {
   lazy val lib1 = containerOfN[Set, Op1](30, genOp1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val lib2 = containerOfN[Set, Op2](30, genOp2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val libReduction = reductions ++ containerOfN[Set, Reduction](30, genReduction).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  
+  
+  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
+  
+  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
+    lazy val arity = Arity.One
+  }
+  
+  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
+    lazy val arity = Arity.Two
+  }
+  
+  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
+    lazy val arity = Arity.One
+  }
 }
