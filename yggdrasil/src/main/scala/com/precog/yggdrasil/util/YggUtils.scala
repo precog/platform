@@ -1,11 +1,13 @@
 package com.precog.yggdrasil
 package util
 
+import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.Timeout
 import akka.util.Duration
+import akka.pattern.gracefulStop
 
 import org.joda.time._
 
@@ -689,22 +691,19 @@ object ImportTools extends Command with Logging {
   def process(config: Config) {
     config.storageRoot.mkdirs
 
+    val stopTimeout = Duration(310, "seconds")
+
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, new FilesystemFileOps {})) yield {
-      object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-        class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
+      class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
+      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
-
-        val metadataStorage = ms
-        
-        val initialCheckpoint = None
-
+      object shard extends LevelDBActorYggShard[YggConfig](yggConfig, ms)(ActorSystem("yggutilImport")) {
         val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
       }
 
       logger.info("Starting shard input")
-      Await.result(shard.actorsStart, Duration(60, "seconds"))
+      Await.result(shard.start(), Duration(60, "seconds"))
       logger.info("Shard input started")
       config.input.foreach {
         case (db, input) =>
@@ -725,7 +724,7 @@ object ImportTools extends Command with Logging {
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(shard.actorsStop, Duration(310, "seconds"))
+      Await.result(shard.stop(), stopTimeout)
 
       logger.info("Shutdown")
       sys.exit(0)

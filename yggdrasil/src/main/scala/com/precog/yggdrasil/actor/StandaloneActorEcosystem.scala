@@ -31,24 +31,24 @@ class NoopIngestActor extends Actor {
  * FIXME: The standalone actor ecosystem does not support updates to the metadata system.
  * This is why an empty checkpoint is passed in.
  */
-abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
-  protected val logPrefix = "[Standalone Yggdrasil Shard]"
-
-  val actorSystem = ActorSystem("standalone_actor_system")
-
-  val ingestActor = None
-  
-  val checkpointCoordination = CheckpointCoordination.Noop
-
-  val shardId = "standalone"
-
-  protected lazy val actorsWithStatus = ingestSupervisor :: metadataActor :: projectionsActor :: Nil
-
-  protected def actorsStopInternal: Future[Unit] = {
-    for {
-      _  <- actorStop(projectionsActor, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-    } yield ()
-  }
-}
+//abstract class StandaloneActorEcosystem[Dataset[_]] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
+//  protected val logPrefix = "[Standalone Yggdrasil Shard]"
+//
+//  val actorSystem = ActorSystem("standaloneActorSystem")
+//
+//  val ingestActor = None
+//  
+//  val checkpointCoordination = CheckpointCoordination.Noop
+//
+//  val shardId = "standalone"
+//
+//  protected lazy val actorsWithStatus = ingestSupervisor :: metadataActor :: projectionsActor :: Nil
+//
+//  protected def actorsStopInternal: Future[Unit] = {
+//    for {
+//      _  <- actorStop(projectionsActor, "projection")
+//      _  <- actorStop(metadataActor, "metadata")
+//    } yield ()
+//  }
+//}
 // vim: set ts=4 sw=4 et:

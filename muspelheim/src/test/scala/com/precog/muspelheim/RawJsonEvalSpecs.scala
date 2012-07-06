@@ -49,7 +49,7 @@ trait ParseEvalStackSpecs extends Specification
 
   def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
-  val actorSystem = ActorSystem("platform_specs_actor_system")
+  implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
@@ -62,7 +62,7 @@ trait ParseEvalStackSpecs extends Specification
     DiskMemoizationConfig with 
     DatasetConsumersConfig with
     IterableDatasetOpsConfig with 
-    ProductionActorConfig
+    StandaloneShardSystemConfig
 
   object yggConfig extends YggConfig {
     logger.trace("Init yggConfig")

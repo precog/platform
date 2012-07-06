@@ -134,7 +134,7 @@ with DiskIterableMemoizationComponent {
   def rec(i: Long) = (VectorCase(i), i: Long)
   def unstableRec(i: Long) = (VectorCase(idSource.nextId()), i: Long)
 
-  val actorSystem = ActorSystem("stub_operations_api")
+  val actorSystem = ActorSystem("stubOperationsApi")
   implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   var memoCtx: MemoContext = _

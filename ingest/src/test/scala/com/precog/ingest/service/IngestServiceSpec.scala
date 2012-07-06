@@ -75,7 +75,7 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   val messaging = new CollectingMessaging
 
   def queryExecutorFactory(config: Configuration) = new NullQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingest_service_spec")
+    lazy val actorSystem = ActorSystem("ingestServiceSpec")
     implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
   }
 

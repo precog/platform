@@ -29,7 +29,7 @@ trait RoutingPerformanceSpec extends Specification with PerformanceSpec {
 
       val inserts = 100000
 
-      val system = ActorSystem("routing_actor_test")
+      val system = ActorSystem("routingActorTest")
 
       val batchSize = 100
 

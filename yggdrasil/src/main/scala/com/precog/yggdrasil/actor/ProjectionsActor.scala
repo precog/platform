@@ -35,10 +35,13 @@ import scalaz.syntax.std.option._
 // MESSAGES //
 //////////////
 
-case class AcquireProjection(descriptor: ProjectionDescriptor)
-case class ReleaseProjection(descriptor: ProjectionDescriptor) 
+// To simplify routing, tag all messages for the Projection actor
+sealed trait ShardProjectionAction
 
-case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row])
+case class AcquireProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
+case class ReleaseProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
+
+case class ProjectionInsert(descriptor: ProjectionDescriptor, rows: Seq[ProjectionInsert.Row]) extends ShardProjectionAction
 object ProjectionInsert {
   case class Row(id: EventId, values: Seq[CValue], metadata: Seq[Set[Metadata]])
 }
@@ -46,12 +49,12 @@ object ProjectionInsert {
 case class BatchInsert(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef)
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
 
-trait ProjectionsActorModule[Dataset[_]] {
-  // projection retrieval result messages
-  trait ProjectionResult
-  case class ProjectionAcquired(projection: Projection[Dataset]) extends ProjectionResult
-  case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
+// projection retrieval result messages
+sealed trait ProjectionResult
+case class ProjectionAcquired[Dataset[_]](projection: Projection[Dataset]) extends ProjectionResult
+case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
 
+trait ProjectionsActorModule[Dataset[_]] {
   ////////////
   // ACTORS //
   ////////////

@@ -35,7 +35,7 @@ with StubYggShardComponent with IterableDatasetOpsComponent {
 
   override type Dataset[E] = IterableDataset[E]
 
-  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_query_api_spec")
+  implicit val actorSystem: ActorSystem = ActorSystem("leveldbQueryApiSpec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   def sampleSize = 1 
 

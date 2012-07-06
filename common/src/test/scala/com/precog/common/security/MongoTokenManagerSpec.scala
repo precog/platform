@@ -109,7 +109,7 @@ object MongoTokenManagerSpec extends Specification {
   }
 
   class tokenManager extends After {
-    val defaultActorSystem = ActorSystem("token_manager_test")
+    val defaultActorSystem = ActorSystem("tokenManagerTest")
     implicit val execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
 
     val mongo = new MockMongo

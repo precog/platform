@@ -216,7 +216,7 @@ object Console extends App {
       DiskMemoizationConfig with 
       DatasetConsumersConfig with 
       IterableDatasetOpsConfig with 
-      ProductionActorConfig {
+      StandaloneShardSystemConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -257,29 +257,24 @@ object Console extends App {
         override type Dataset[A] = IterableDataset[A]
         override type Memoable[A] = Iterable[A]
 
-        lazy val actorSystem = ActorSystem("repl_actor_system")
+        implicit lazy val actorSystem = ActorSystem("replActorSystem")
         implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-          type YggConfig = REPLConfig
-        }
+        type Storage = LevelDBActorYggShard[REPLConfig]
 
         object ops extends Ops 
         object query extends QueryAPI 
-        object storage extends Storage {
-          val yggConfig = replConfig
-          val metadataStorage = fileMetadataStorage
-          val initialCheckpoint = None
+        object storage extends LevelDBActorYggShard[REPLConfig](replConfig, fileMetadataStorage) {
           val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
-        def startup = IO { Await.result(storage.actorsStart, controlTimeout) }
+        def startup = IO { Await.result(storage.start(), controlTimeout) }
 
         def shutdown = IO { 
-          Await.result(storage.actorsStop, controlTimeout) 
+          Await.result(storage.stop(), controlTimeout) 
           actorSystem.shutdown
         }
       })
