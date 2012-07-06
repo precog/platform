@@ -19,6 +19,7 @@
  */
 package com.precog.yggdrasil
 
+import com.precog.common.Path
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 import scalaz.Monoid
 
@@ -28,10 +29,6 @@ trait TableModule extends FNModule {
   type Scanner
   type Reducer[α]
 
-  def lookupF1(namespace: List[String], name: String): F1
-  def lookupF2(namespace: List[String], name: String): F2
-  def lookupScanner(namespace: List[String], name: String): Scanner
-  
   object trans {
     sealed trait TransSpec[+A <: SourceType]
     sealed trait SourceType
@@ -48,7 +45,7 @@ trait TableModule extends FNModule {
     case class Filter[+A <: SourceType](source: TransSpec[A], predicate: TransSpec[A]) extends TransSpec[A] //done
     
     // Adds a column to the output in the manner of scanLeft
-    case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A]
+    case class Scan[+A <: SourceType](source: TransSpec[A], scanner: Scanner) extends TransSpec[A] //done
     
     case class Map1[+A <: SourceType](source: TransSpec[A], f: F1) extends TransSpec[A] //done
     
@@ -103,7 +100,7 @@ trait TableModule extends FNModule {
     
     object TableTransSpec {
       def makeTransSpec[A <: SourceType](tableTrans: TableTransSpec[A]): TransSpec[A] =
-        sys.error("TODO")
+        sys.error("todo")
     }
   
     sealed trait GroupKeySpec
@@ -165,7 +162,7 @@ trait TableModule extends FNModule {
   }
   
   trait TableOps {
-    def loadStatic(path: String): Table
+    def loadStatic(path: Path): Table
     def loadDynamic(source: Table): Table
     
     def empty: Table

@@ -321,6 +321,24 @@ trait TransformSpec extends TableModuleSpec {
       results must_== expected.toStream
     }
   }
+
+  def testDerefObjectDynamic = {
+    val data =  JObject(JField("foo", JInt(1)) :: JField("ref", JString("foo")) :: Nil) #::
+                JObject(JField("bar", JInt(2)) :: JField("ref", JString("bar")) :: Nil) #::
+                JObject(JField("baz", JInt(3)) :: JField("ref", JString("baz")) :: Nil) #:: Stream.empty[JValue]
+
+    val table = fromJson(SampleData(data))
+    val results = toJson(table.transform {
+      DerefObjectDynamic(
+        Leaf(Source),
+        DerefObjectStatic(Leaf(Source), JPathField("ref"))
+      )
+    })
+
+    val expected = JInt(1) #:: JInt(2) #:: JInt(3) #:: Stream.empty[JValue]
+
+    results must_== expected
+  }
 }
 
 // vim: set ts=4 sw=4 et:

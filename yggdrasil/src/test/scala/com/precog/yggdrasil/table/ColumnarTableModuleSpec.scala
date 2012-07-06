@@ -262,6 +262,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "concatenate dissimilar arrays" in checkArrayConcat
       "perform a trivial type-based filter" in checkTyped
       "perform a summation scan" in checkScan
+      "perform dynamic object deref" in testDerefObjectDynamic
     }
   }
 }

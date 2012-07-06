@@ -104,6 +104,7 @@ trait EmptyObjectColumn extends Column {
   override def jValue(row: Int) = JObject(Nil)
   override def strValue(row: Int): String = "{}"
 }
+
 object EmptyObjectColumn {
   def apply(definedAt: BitSet) = new BitsetColumn(definedAt) with EmptyObjectColumn
 }

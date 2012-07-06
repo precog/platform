@@ -46,6 +46,10 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
 
   override val defaultPrettyParams = Pretty.Params(2)
 
+  def lookupF1(namespace: List[String], name: String): F1
+  def lookupF2(namespace: List[String], name: String): F2
+  def lookupScanner(namespace: List[String], name: String): Scanner
+  
   def fromJson(sampleData: SampleData): Table
   def toJson(dataset: Table): Stream[JValue]
 
