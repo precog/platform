@@ -22,13 +22,12 @@ package actor
 
 import com.precog.common._
 
-import akka.actor.Actor
-import akka.actor.Scheduler
-import akka.actor.ActorRef
+import akka.actor.{Actor,ActorRef,Props,Scheduler}
 import akka.dispatch.Await
 import akka.dispatch.Future
 import akka.dispatch.ExecutionContext
 import akka.pattern.ask
+import akka.pattern.gracefulStop
 import akka.util.Timeout
 import akka.util.duration._
 import akka.util.Duration
@@ -50,11 +49,12 @@ import scalaz.syntax.bind._
 
 case class GetMessages(sendTo: ActorRef)
 
-sealed trait IngestResult
+sealed trait ShardIngestAction
+sealed trait IngestResult extends ShardIngestAction
 case class IngestErrors(errors: Seq[String]) extends IngestResult
 case class IngestData(messages: Seq[IngestMessage]) extends IngestResult
 
-case class DirectIngestData(messages: Seq[IngestMessage])
+case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAction
 
 ////////////
 // ACTORS //
@@ -66,23 +66,25 @@ case class DirectIngestData(messages: Seq[IngestMessage])
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-class IngestSupervisor(ingestActor: Option[ActorRef], projectionsActor: ActorRef, routingTable: RoutingTable, 
+class IngestSupervisor(ingestActorInit: () => Option[Actor], projectionsActor: ActorRef, routingTable: RoutingTable, 
                        idleDelay: Duration, scheduler: Scheduler, shutdownCheck: Duration) extends Actor with Logging {
+
+  private[this] var ingestActor: ActorRef = _
 
   private var initiated = 0
   private var processed = 0
   private var errors = 0
 
   override def preStart() = {
+    ingestActor = context.actorOf(Props(() => ingestActorInit().getOrElse(sys.error("Could not initialize ingest actor")), "ingestActor"))
     logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
-    if (ingestActor.isDefined) {
-      scheduleIngestRequest(Duration.Zero)
-      logger.info("Initial ingest request scheduled")
-    }
+    scheduleIngestRequest(Duration.Zero)
+    logger.info("Initial ingest request scheduled")
   }
 
   override def postStop() = {
     logger.info("IngestSupervisor shutting down")
+    gracefulStop(ingestActor, shutdownCheck)(context.system)
   }
 
   def receive = {
@@ -110,8 +112,7 @@ class IngestSupervisor(ingestActor: Option[ActorRef], projectionsActor: ActorRef
       processMessages(d, sender) 
   }
 
-  private def status: JValue = JObject(JField("Ingest Actor Present", JBool(ingestActor.isDefined)) ::
-                                       JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
+  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
                                                                  JField("processed", JInt(processed)) :: Nil)) :: Nil)
 
   private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
@@ -123,14 +124,8 @@ class IngestSupervisor(ingestActor: Option[ActorRef], projectionsActor: ActorRef
   }
 
   private def scheduleIngestRequest(delay: Duration): Unit = {
-    ingestActor match {
-      case Some(actor) => 
-        initiated += 1
-        scheduler.scheduleOnce(delay, actor, GetMessages(self))
-
-      case None => 
-        logger.warn("Attempted to schedule ingest request after delay " + delay + " but no ingest actor reference present.")
-    }
+    initiated += 1
+    scheduler.scheduleOnce(delay, ingestActor, GetMessages(self))
   }
 }
 

@@ -63,7 +63,7 @@ object SBTConsole {
                     with DiskMemoizationConfig 
                     with DatasetConsumersConfig 
                     with IterableDatasetOpsConfig 
-                    with ProductionActorConfig
+                    with StandaloneShardSystemConfig
 
     override type Dataset[A] = IterableDataset[A]
     override type Memoable[A] = Iterable[A]
@@ -81,7 +81,7 @@ object SBTConsole {
     import org.streum.configrity.Configuration
     import org.streum.configrity.io.BlockFormat
 
-    lazy val actorSystem = ActorSystem("sbt_console_actor_system")
+    implicit lazy val actorSystem = ActorSystem("sbtConsoleActorSystem")
     implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
     lazy val controlTimeout = Duration(30, "seconds")
@@ -112,16 +112,11 @@ object SBTConsole {
       }
     }
 
-    trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-      type YggConfig = console.YggConfig
-    }
-    
+    type Storage = LevelDBActorYggShard[console.YggConfig]
+
     object ops extends Ops 
     object query extends QueryAPI 
-    object storage extends Storage {
-      val yggConfig = console.yggConfig
-      val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
-      val initialCheckpoint = None
+    object storage extends LevelDBActorYggShard[console.YggConfig](console.yggConfig, FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
       val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
 
@@ -141,12 +136,12 @@ object SBTConsole {
 
     def startup() {
       // start storage shard 
-      Await.result(storage.actorsStart, controlTimeout)
+      Await.result(storage.start(), controlTimeout)
     }
     
     def shutdown() {
       // stop storage shard
-      Await.result(storage.actorsStop, controlTimeout)
+      Await.result(storage.stop(), controlTimeout)
       
       actorSystem.shutdown()
     }

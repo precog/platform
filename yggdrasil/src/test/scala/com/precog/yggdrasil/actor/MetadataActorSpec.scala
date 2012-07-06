@@ -65,7 +65,7 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
 }
 
 object MetadataActorSpec extends Specification with FutureMatchers with Mockito {
-  implicit val system = ActorSystem("shard_metadata_test")
+  implicit val system = ActorSystem("shardMetadataTest")
   implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
@@ -122,7 +122,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 }
 
 object MetadataActorStateSpec extends Specification {
-  implicit val system = ActorSystem("shard_metadata_test")
+  implicit val system = ActorSystem("shardMetadataTest")
 
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))

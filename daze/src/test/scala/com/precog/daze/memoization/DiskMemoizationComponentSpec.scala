@@ -55,7 +55,7 @@ class DiskMemoizationComponentSpec extends Specification with DiskIterableMemoiz
   override type Dataset[α] = IterableDataset[α]
   override type Memoable[α] = Iterable[α]
 
-  implicit val actorSystem: ActorSystem = ActorSystem("leveldb_memoization_spec")
+  implicit val actorSystem: ActorSystem = ActorSystem("leveldbMemoizationSpec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   implicit val timeout = Timeout(intToDurationInt(30).seconds)

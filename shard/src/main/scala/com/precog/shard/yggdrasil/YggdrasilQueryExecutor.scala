@@ -61,7 +61,7 @@ trait YggdrasilQueryExecutorConfig extends
     DiskMemoizationConfig with 
     DatasetConsumersConfig with 
     IterableDatasetOpsConfig with 
-    ProductionActorConfig {
+    ProductionShardSystemConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -96,23 +96,18 @@ trait YggdrasilQueryExecutorComponent {
     val yConfig = wrapConfig(config)
     
     new YggdrasilQueryExecutor {
-      //trait Storage extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
+      type Storage = LevelDBActorYggShard[YggdrasilQueryExecutorConfig]
 
-      lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
+      implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
       object ops extends Ops 
       object query extends QueryAPI 
 
-      // Early initializers FTW (and to avoid cake badness with metadataStorage)
-      class Storage extends {
-        type YggConfig = YggdrasilQueryExecutorConfig
-        val yggConfig = yConfig
-        val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+      val storage = new LevelDBActorYggShard[YggdrasilQueryExecutorConfig](yggConfig, FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
         val accessControl = extAccessControl
-      } with ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
-      val storage = new Storage
+      }
     }
   }
 }
@@ -131,12 +126,12 @@ trait YggdrasilQueryExecutor
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard[IterableDataset]
 
-  def startup() = storage.actorsStart.onComplete {
+  def startup() = storage.start.onComplete {
     case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
     case Right(_) => logger.info("Actor ecosystem started.")
   }
 
-  def shutdown() = storage.actorsStop.onComplete {
+  def shutdown() = storage.stop.onComplete {
     case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
     case Right(_) => logger.info("Actor ecossytem shutdown complete.")
   }

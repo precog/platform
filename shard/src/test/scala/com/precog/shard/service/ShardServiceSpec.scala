@@ -87,7 +87,7 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
   override val configuration = "services { quirrel { v1 { " + config + " } } }"
 
   def queryExecutorFactory(config: Configuration, accessControl: AccessControl) = new TestQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingest_service_spec")
+    lazy val actorSystem = ActorSystem("ingestServiceSpec")
     implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
     lazy val allowedUID = TestTokenUID
   }
@@ -196,6 +196,6 @@ trait TestQueryExecutor extends QueryExecutor {
  
   def status() = Future(Success(JArray(List(JString("status")))))
 
-  def startup = Future(())
-  def shutdown = Future { actorSystem.shutdown }
+  def startup = Future(true)
+  def shutdown = Future { actorSystem.shutdown; true }
 }
