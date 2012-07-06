@@ -30,6 +30,8 @@ import bytecode.ReductionLike
 import yggdrasil._
 import yggdrasil.table._
 
+import scalaz.Monoid
+
 trait GenOpcode extends ImplLibrary {
   private val defaultMorphismOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Morphism(val namespace: Vector[String], val name: String, val arity: Arity, val opcode: Int = defaultMorphismOpcode.getAndIncrement) extends MorphismImpl 
@@ -45,9 +47,6 @@ trait GenOpcode extends ImplLibrary {
 }
 
 trait ImplLibrary extends Library with ColumnarTableModule {
-  type F1 = CF1
-  type F2 = CF2
-  
   lazy val libMorphism = _libMorphism
   lazy val lib1 = _lib1
   lazy val lib2 = _lib2
@@ -72,17 +71,25 @@ trait ImplLibrary extends Library with ColumnarTableModule {
 
   trait Op1Impl extends Op1Like with MorphismImpl {
     lazy val alignment = None
+    lazy val arity = Arity.One
+    def apply(table: Table) = sys.error("morphism application of an op1")     // TODO make this actually work
     def f1: F1
   }
 
   trait Op2Impl extends Op2Like with MorphismImpl {
     lazy val alignment = None
+    lazy val arity = Arity.Two
+    def apply(table: Table) = sys.error("morphism application of an op2")     // TODO make this actually work
     def f2: F2
   }
 
   trait ReductionImpl extends ReductionLike with MorphismImpl {
+    type Result
     lazy val alignment = None
-    def reducer[A]: Reducer[A]
+    lazy val arity = Arity.One
+    def apply(table: Table) = sys.error("morphism application of a reduction")     // TODO make this actually work
+    def reducer: CReducer[Result]
+    def monoid: Monoid[Result]
   }
 
   type Morphism <: MorphismImpl  //todo Morphism need to know eventually for Emitter if it's a unary or binary morphism

@@ -97,7 +97,7 @@ trait Instructions extends Library {
     
     case class Reduce(red: BuiltInReduction) extends Instruction
     case class Morph1(m1: BuiltInMorphism) extends Instruction
-    case class Morph2(m2: BuiltInMorphism) extends Instruction with JoinInstr
+    case class Morph2(m2: BuiltInMorphism) extends Instruction
     
     case object VUnion extends Instruction with JoinInstr
     case object VIntersect extends Instruction with JoinInstr

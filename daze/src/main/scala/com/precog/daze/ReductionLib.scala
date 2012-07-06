@@ -21,9 +21,13 @@ package com.precog
 package daze
 
 import bytecode.Library
-import bytecode.Arity._
+import bytecode.Arity
 
 import yggdrasil._
+import yggdrasil.table._
+
+import scalaz.Monoid
+import scalaz.std.anyVal._
 
 trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
@@ -33,14 +37,24 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
   // TODO swap to Reduction
   object Count extends Reduction(ReductionNamespace, "count") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       Some(SDecimal(BigDecimal(enum.count))) 
     } */
     
-    def apply(table: Table) = table 
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -53,10 +67,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val min = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -69,10 +89,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object Sum extends Reduction(ReductionNamespace, "sum") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sum = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -84,10 +110,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
         case ((count, total), SDecimal(v)) => (count + 1, total + v)
@@ -98,10 +130,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal(total / count))
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
         case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
@@ -112,10 +150,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal(Math.pow(total.toDouble, 1 / count.toDouble)))
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object SumSq extends Reduction(ReductionNamespace, "sumSq") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sumsq = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v * v)
@@ -127,10 +171,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object Variance extends Reduction(ReductionNamespace, "variance") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
@@ -141,10 +191,16 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
+    type Result = Int
+    
+    def monoid = implicitly[Monoid[Int]]
+    
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
@@ -155,10 +211,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
     } */
     
-    def apply(table: Table) = table
+    def reducer: CReducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = 0
+    }
   }
   
-  object Median extends Morphism(ReductionNamespace, "median", One) {
+  object Median extends Morphism(ReductionNamespace, "median", Arity.One) {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
@@ -195,10 +253,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     } */
     
+    lazy val alignment = None
+
     def apply(table: Table) = table
   }
   
-  object Mode extends Morphism(ReductionNamespace, "mode", One) {
+  object Mode extends Morphism(ReductionNamespace, "mode", Arity.One) {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
@@ -226,6 +286,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       Some(SArray(Vector(modes: _*))) 
     } */
     
+    lazy val alignment = None
+
     def apply(table: Table) = table
   }
 }

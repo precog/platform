@@ -55,7 +55,7 @@ trait CScanner {
   def scan(a: A, col: Column, range: Range): (A, Option[Column])
 }
 
-trait CReducer[@specialized(Boolean, Long, Double) A] {
+trait CReducer[A] {
   def reduce(col: Column, range: Range): A
 }
 
