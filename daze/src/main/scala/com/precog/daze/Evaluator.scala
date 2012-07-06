@@ -96,7 +96,7 @@ trait Evaluator extends DAG
       
       case dag.LoadLocal(_, _, parent, _) => {
         val back = parent.value match {
-          case Some(SString(str)) => ops.loadStatic(str)
+          case Some(SString(str)) => ops.loadStatic(Path(str))
           case Some(_) => ops.empty
           
           case None => {

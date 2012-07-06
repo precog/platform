@@ -1,13 +1,12 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.common.VectorCase
+import com.precog.common.{Path, VectorCase}
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
-
-import java.lang.ref.SoftReference
+import org.joda.time.DateTime
 
 import scala.collection.BitSet
 import scala.annotation.tailrec
@@ -19,7 +18,6 @@ import scalaz.std.list._
 import scalaz.std.tuple._
 import scalaz.syntax.arrow._
 import scalaz.syntax.traverse._
-import scalaz.syntax.bitraverse._
 
 trait ColumnarTableModule extends TableModule {
   import trans._
@@ -33,6 +31,24 @@ trait ColumnarTableModule extends TableModule {
   type RowId = Int
 
   def ops: TableOps = sys.error("todo")
+/*
+  object ops extends TableOps {
+    def loadStatic(path: Path): Table = sys.error("todo")
+    def loadDynamic(source: Table): Table = sys.error("todo")
+    
+    def empty: Table = new Table(Iterable.empty[Slice])
+    
+    def constString(v: String): Table = sys.error("todo")
+    def constLong(v: Long): Table = sys.error("todo")
+    def constDouble(v: Double): Table = sys.error("todo")
+    def constDecimal(v: BigDecimal): Table = sys.error("todo")
+    def constBoolean(v: Boolean): Table = sys.error("todo")
+    def constNull: Table = sys.error("todo")
+    
+    def constEmptyObject: Table = sys.error("todo")
+    def constEmptyArray: Table = sys.error("todo")
+  }
+  */
 
   implicit def liftF1(f: F1) = new F1Like {
     def compose(f1: F1) = f compose f1
@@ -329,6 +345,34 @@ trait ColumnarTableModule extends TableModule {
                 } 
               }
             )
+          }
+
+        case DerefObjectDynamic(source, ref) =>
+          composeSliceTransform(source).zip(composeSliceTransform(ref)) { (slice, derefBy) => 
+            assert(derefBy.columns.size <= 1)
+            derefBy.columns.headOption collect {
+              case (ColumnRef(JPath.Identity, CStringArbitrary | CStringFixed(_)), c: StrColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathField(c(row)) })
+            } getOrElse {
+              slice
+            }
+          }
+
+        case DerefArrayDynamic(source, ref) =>
+          composeSliceTransform(source).zip(composeSliceTransform(ref)) { (slice, derefBy) => 
+            assert(derefBy.columns.size <= 1)
+            derefBy.columns.headOption collect {
+              case (ColumnRef(JPath.Identity, CLong), c: LongColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+
+              case (ColumnRef(JPath.Identity, CDouble), c: DoubleColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+
+              case (ColumnRef(JPath.Identity, CDecimalArbitrary), c: NumColumn) => 
+                new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
+            } getOrElse {
+              slice
+            }
           }
       }
     }
