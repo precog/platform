@@ -72,8 +72,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       val left = dag.LoadLocal(line, None, Root(line, PushString("/foo")), Het)
       val right = Root(line, PushNum("42"))
       
-      val input = Filter(line, None, None, Join(line, Map2Cross(Eq), left, right), left)
-      val expected = Filter(line, None, None, Join(line, Map2CrossLeft(Eq), left, right), left)
+      val input = Filter(line, None, Join(line, Map2Cross(Eq), left, right), left)
+      val expected = Filter(line, None, Join(line, Map2CrossLeft(Eq), left, right), left)
       
       orderCrosses(input) mustEqual expected
     }
@@ -135,8 +135,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
           left,
           dag.LoadLocal(line, None, Root(line, PushString("/bar")), Het))
         
-        val input = Filter(line, None, None, left, right)
-        val expected = Filter(line, None, None, left, Sort(right, Vector(1)))
+        val input = Filter(line, None, left, right)
+        val expected = Filter(line, None, left, Sort(right, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }
@@ -149,8 +149,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
           right,
           dag.LoadLocal(line, None, Root(line, PushString("/bar")), Het))
         
-        val input = Filter(line, None, None, left, right)
-        val expected = Filter(line, None, None, Sort(left, Vector(1)), right)
+        val input = Filter(line, None, left, right)
+        val expected = Filter(line, None, Sort(left, Vector(1)), right)
         
         orderCrosses(input) mustEqual expected
       }
@@ -165,8 +165,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
         val left = Join(line, Map2CrossRight(Add), foo, bar)
         val right = Join(line, Map2CrossRight(Add), foo, baz)
         
-        val input = Filter(line, None, None, left, right)
-        val expected = Filter(line, None, None, Sort(left, Vector(1)), Sort(right, Vector(1)))
+        val input = Filter(line, None, left, right)
+        val expected = Filter(line, None, Sort(left, Vector(1)), Sort(right, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }
