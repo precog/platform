@@ -33,6 +33,11 @@ package object util {
     def zero: Vector[A] = Vector.empty[A]
     def append(v1: Vector[A], v2: => Vector[A]) = v1 ++ v2
   }
+
+  implicit def bigDecimalMonoid: Monoid[BigDecimal] = new Monoid[BigDecimal] {
+    def zero: BigDecimal = BigDecimal(0)
+    def append(v1: BigDecimal, v2: => BigDecimal): BigDecimal = v1 + v2
+  }
 }
 
 
