@@ -16,6 +16,7 @@ import scalaz.Ordering._
 import scalaz.std.function._
 import scalaz.std.list._
 import scalaz.std.tuple._
+import scalaz.std.iterable._
 import scalaz.syntax.arrow._
 import scalaz.syntax.traverse._
 
@@ -109,7 +110,12 @@ trait ColumnarTableModule extends TableModule {
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): A = sys.error("todo")
+    def reduce[A: Monoid](reducer: Reducer[A]): A = {  //todo for optimization, instead of composing just in the case when we're doing multiple reductions over the same column, we can do reductions over multiple columns in a given table!
+      slices flatMap { s => 
+        assert(s.columns.size <= 1)
+        s.columns.values map { col => reducer.reduce(col, 0 until s.size) } 
+      } suml
+    }
 
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
