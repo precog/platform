@@ -30,25 +30,39 @@ trait ColumnarTableModule extends TableModule {
   type Reducer[α] = CReducer[α]
   type RowId = Int
 
-  def ops: TableOps = sys.error("todo")
-/*
   object ops extends TableOps {
     def loadStatic(path: Path): Table = sys.error("todo")
     def loadDynamic(source: Table): Table = sys.error("todo")
     
     def empty: Table = new Table(Iterable.empty[Slice])
     
-    def constString(v: String): Table = sys.error("todo")
-    def constLong(v: Long): Table = sys.error("todo")
-    def constDouble(v: Double): Table = sys.error("todo")
-    def constDecimal(v: BigDecimal): Table = sys.error("todo")
-    def constBoolean(v: Boolean): Table = sys.error("todo")
-    def constNull: Table = sys.error("todo")
-    
-    def constEmptyObject: Table = sys.error("todo")
-    def constEmptyArray: Table = sys.error("todo")
+    def constBoolean(v: Boolean): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> Column.const(v)), 1)))
+
+    def constLong(v: Long): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> Column.const(v)), 1)))
+
+    def constDouble(v: Double): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> Column.const(v)), 1)))
+
+    def constDecimal(v: BigDecimal): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> Column.const(v)), 1)))
+
+    def constString(v: String): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> Column.const(v)), 1)))
+
+    def constDate(v: DateTime): Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> Column.const(v)), 1)))
+
+    def constNull: Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with NullColumn), 1)))
+
+    def constEmptyObject: Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with EmptyObjectColumn), 1)))
+
+    def constEmptyArray: Table = 
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with EmptyArrayColumn), 1)))
   }
-  */
 
   implicit def liftF1(f: F1) = new F1Like {
     def compose(f1: F1) = f compose f1
