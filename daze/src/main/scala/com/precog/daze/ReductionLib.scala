@@ -176,7 +176,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
-    type Result = Option[(BigDecimal, BigDecimal)]
+    type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)
     
     implicit def monoid = new Monoid[Result] {    //(sum, count)
@@ -232,7 +232,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
-    type Result = Option[(BigDecimal, BigDecimal)]
+    type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)
     
     implicit def monoid = new Monoid[Result] {    //(product, count)
@@ -366,9 +366,17 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   }
   
   object Variance extends Reduction(ReductionNamespace, "variance") {
-    type Result = Int
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal, BigDecimal)
     
-    def monoid = implicitly[Monoid[Int]]
+    implicit def monoid = new Monoid[Result] {    //(count, sum, sumsq)
+      def zero = None
+      def append(left: Result, right: => Result) = {
+        val both = for ((l1, l2, l3) <- left; (r1, r2, r3) <- right) yield (l1 + r1, l2 + r2, l3 + r3)
+        both orElse left orElse right
+      }
+    }
+
     
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -378,20 +386,64 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
       if (count == BigDecimal(0)) None
       else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
-    } */
-    
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
+    } */        
+
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(col: Column, range: Range): Result = {
+        col match {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+        }
+      }
     }
 
-    def extract(res: Int): Table = ops.constLong(res)
+    def extract(res: Result): Table =
+      res map { case (count, sum, sumsq) => ops.constDecimal((sumsq - (sum * (sum / count))) / count) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
-    type Result = Int
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal, BigDecimal)
     
-    def monoid = implicitly[Monoid[Int]]
-    
+    implicit def monoid = new Monoid[Result] {    //(count, sum, sumsq)
+      def zero = None
+      def append(left: Result, right: => Result) = {
+        val both = for ((l1, l2, l3) <- left; (r1, r2, r3) <- right) yield (l1 + r1, l2 + r2, l3 + r3)
+        both orElse left orElse right
+      }
+    }
+
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
@@ -402,11 +454,48 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
     } */
     
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(col: Column, range: Range): Result = {
+        col match {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+        }
+      }
     }
 
-    def extract(res: Int): Table = ops.constLong(res)
+    def extract(res: Result): Table =
+      res map { case (count, sum, sumsq) => ops.constDecimal(sqrt(count * sumsq - sum * sum) / count) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
   object Median extends Morphism(ReductionNamespace, "median", Arity.One) {
