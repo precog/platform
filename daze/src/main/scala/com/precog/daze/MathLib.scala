@@ -22,6 +22,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.sinh(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sinh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sinh(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -33,6 +39,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.toDegrees(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toDegrees(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toDegrees(c(row).toDouble)
       }
     })
     
@@ -46,6 +58,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.expm1(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.expm1(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.expm1(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -58,6 +76,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.getExponent(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.getExponent(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.getExponent(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -68,7 +92,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object asin extends Op1(MathNamespace, "asin") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
         def apply(row: Int) = Math.asin(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = Math.asin(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = Math.asin(c(row).toDouble)
       }
     })
     
@@ -81,7 +114,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object log10 extends Op1(MathNamespace, "log10") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
         def apply(row: Int) = Math.log10(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = Math.log10(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = Math.log10(c(row).toDouble)
       }
     })
     
@@ -96,6 +138,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.cos(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cos(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cos(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -107,6 +155,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.exp(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.exp(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.exp(c(row).toDouble)
       }
     })
     
@@ -120,6 +174,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.cbrt(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cbrt(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cbrt(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -131,6 +191,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.atan(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.atan(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.atan(c(row).toDouble)
       }
     })
     
@@ -144,6 +210,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.ceil(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ceil(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ceil(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -156,6 +228,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.rint(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.rint(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.rint(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -166,7 +244,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object log1p extends Op1(MathNamespace, "log1p") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
         def apply(row: Int) = Math.log1p(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
+        def apply(row: Int) = Math.log1p(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
+        def apply(row: Int) = Math.log1p(c(row).toDouble)
       }
     })
     
@@ -179,7 +266,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object sqrt extends Op1(MathNamespace, "sqrt") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
         def apply(row: Int) = Math.sqrt(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
+        def apply(row: Int) = Math.sqrt(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
+        def apply(row: Int) = Math.sqrt(c(row).toDouble)
       }
     })
     
@@ -194,6 +290,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.floor(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.floor(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.floor(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -205,6 +307,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.toRadians(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toRadians(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.toRadians(c(row).toDouble)
       }
     })
     
@@ -218,6 +326,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.tanh(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.tanh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.tanh(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -229,6 +343,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.round(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.round(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.round(c(row).toDouble)
       }
     })
     
@@ -242,6 +362,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.cosh(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cosh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.cosh(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -252,7 +378,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object tan extends Op1(MathNamespace, "tan") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (Math.PI / 2) == 0) || (c(row) % (Math.PI) == 0))
         def apply(row: Int) = Math.tan(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (Math.PI / 2) == 0) || (c(row) % (Math.PI) == 0))
+        def apply(row: Int) = Math.tan(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (Math.PI / 2) == 0) || (c(row) % (Math.PI) == 0))
+        def apply(row: Int) = Math.tan(c(row).toDouble)
       }
     })
     
@@ -267,6 +402,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.abs(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.abs(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.abs(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -278,6 +419,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.sin(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sin(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.sin(c(row).toDouble)
       }
     })
     
@@ -291,6 +438,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.nextUp(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.nextUp(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.nextUp(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -301,7 +454,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object log extends Op1(MathNamespace, "log") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
         def apply(row: Int) = Math.log(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = Math.log(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = Math.log(c(row).toDouble)
       }
     })
     
@@ -316,6 +478,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.signum(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.signum(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.signum(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -326,7 +494,16 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object acos extends Op1(MathNamespace, "acos") {
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
         def apply(row: Int) = Math.acos(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = Math.acos(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = Math.acos(c(row).toDouble)
       }
     })
     
@@ -341,6 +518,12 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = Math.ulp(c(row))
       }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ulp(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = Math.ulp(c(row).toDouble)
+      }
     })
     
     /* val operandType = Some(SDecimal)
@@ -348,7 +531,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case SDecimal(num) => SDecimal(Math.ulp(num.toDouble))
     } */
   }
-  object nextAfter extends Op2(MathNamespace, "nextAfter") {
+  object nextAfter extends Op2(MathNamespace, "nextAfter") {   //AHHHHHHHH nine cases AHHHHHHHHHHH
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.nextAfter(c1(row), c2(row))

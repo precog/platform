@@ -39,7 +39,7 @@ class MathLibSpec extends Specification
     "return failing validations for bad input" in todo
   }
 
-  "for homogeneous sets, the appropriate math function" should {
+  "for homogeneous sets, the appropriate math function" should {   //todo test in particular cases when functions are not defined!!
     "do stuff" in todo
     
     /* "compute sinh" in {
