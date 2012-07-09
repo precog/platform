@@ -320,6 +320,24 @@ trait TransformSpec extends TableModuleSpec {
 
     results must_== expected
   }
+
+  def checkArraySwap = {
+    implicit val gen = sample(arraySchema(_, 3))
+    check { (sample: SampleData) =>
+      val table = fromJson(sample)
+      val results = toJson(table.transform {
+        ArraySwap(DerefObjectStatic(Leaf(Source), JPathField("value")), 2)
+      })
+
+      val expected = sample.data map { jv =>
+        ((jv \ "value"): @unchecked) match {
+          case JArray(x :: y :: z :: xs) => JArray(z :: y :: x :: xs)
+        }
+      }
+
+      results must_== expected
+    }
+  }
 }
 
 // vim: set ts=4 sw=4 et:

@@ -65,6 +65,19 @@ trait Slice { source =>
     val columns = source.columns map { case (ColumnRef(selector, ctype), v) => ColumnRef(selectorPrefix \ selector, ctype) -> v }
   }
 
+  def arraySwap(index: Int) = new Slice {
+    val size = source.size
+    val columns = source.columns.collect {
+      case (ColumnRef(JPath(JPathIndex(0), xs @ _*), ctype), col) => 
+        (ColumnRef(JPath(JPathIndex(index) +: xs : _*), ctype), col)
+
+      case (ColumnRef(JPath(JPathIndex(`index`), xs @ _*), ctype), col) => 
+        (ColumnRef(JPath(JPathIndex(0) +: xs : _*), ctype), col)
+
+      case unchanged => unchanged
+    }
+  }
+
   def remap(pf: PartialFunction[Int, Int]) = new Slice {
     val size = source.size
     val columns: Map[ColumnRef, Column] = source.columns.mapValues(v => (v |> cf.util.Remap(pf)).get) //Remap is total
@@ -176,8 +189,8 @@ trait Slice { source =>
           jv.unsafeInsert(selector, col.jValue(row))
         } catch { 
           case ex => 
-            steps.foreach(s => println(s + "\n\n"))
-            ex.printStackTrace
+            println("JSON reassembly failed after steps: ")
+            steps.foreach(println)
             throw ex
         }
 

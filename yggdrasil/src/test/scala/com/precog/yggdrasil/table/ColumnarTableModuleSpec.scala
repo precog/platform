@@ -244,6 +244,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "perform a trivial type-based filter" in checkTyped
       "perform a summation scan" in checkScan
       "perform dynamic object deref" in testDerefObjectDynamic
+      "perform an array swap" in checkArraySwap
     }
   }
 }
