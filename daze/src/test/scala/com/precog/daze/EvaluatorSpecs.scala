@@ -1,8 +1,8 @@
 package com.precog
 package daze
 
-import memoization._
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
 import com.precog.common.VectorCase
 import com.precog.util.IOUtils
@@ -23,7 +23,7 @@ import org.specs2.mutable._
 trait TestConfigComponent {
   object yggConfig extends YggConfig
 
-  trait YggConfig extends YggEnumOpsConfig with DiskMemoizationConfig with EvaluatorConfig with DatasetConsumersConfig with IterableDatasetOpsConfig {
+  trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
     val clock = blueeyes.util.Clock.System
@@ -46,24 +46,17 @@ trait TestConfigComponent {
 
 class EvaluatorSpecs extends Specification
     with Evaluator
-    with StubOperationsAPI 
     with TestConfigComponent 
-    with DiskIterableMemoizationComponent 
     with StdLib
     with MemoryDatasetConsumer { self =>
-  override type Dataset[α] = IterableDataset[α]
-  override type Memoable[α] = Iterable[α]
-
+  
   import Function._
   
   import dag._
   import instructions._
 
-  object ops extends Ops 
-  
   val testUID = "testUID"
 
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
     consumeEval(testUID, graph, ctx) match {
       case Success(results) => results
@@ -419,8 +412,8 @@ class EvaluatorSpecs extends Specification
     "reduce a filtered dataset" >> {
       val line = Line(0, "")
 
-      val input = dag.Reduce(line, BuiltInReduction(Count),
-        Filter(line, None, None,
+      val input = dag.Reduce(line, Count,
+        Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
           Join(line, Map2Cross(Gt),
             Join(line, Map2Cross(DerefObject),
@@ -445,7 +438,7 @@ class EvaluatorSpecs extends Specification
 
         val input = Join(line, Map2Cross(Add), 
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-          dag.Reduce(line, BuiltInReduction(Count), 
+          dag.Reduce(line, Count, 
             Root(line, PushNum("42"))))
 
         val result = testEval(input)
@@ -463,7 +456,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Map2Cross(Add), 
-          dag.Reduce(line, BuiltInReduction(Count), 
+          dag.Reduce(line, Count, 
             Root(line, PushNum("42"))),
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
 
@@ -1056,7 +1049,7 @@ class EvaluatorSpecs extends Specification
       "less-than" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(Lt),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1076,7 +1069,7 @@ class EvaluatorSpecs extends Specification
       "less-than-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(LtEq),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1096,7 +1089,7 @@ class EvaluatorSpecs extends Specification
       "greater-than" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(Gt),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1116,7 +1109,7 @@ class EvaluatorSpecs extends Specification
       "greater-than-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(GtEq),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1136,7 +1129,7 @@ class EvaluatorSpecs extends Specification
       "equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(Eq),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1156,7 +1149,7 @@ class EvaluatorSpecs extends Specification
       "not-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Cross(NotEq),
             dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
@@ -1176,7 +1169,7 @@ class EvaluatorSpecs extends Specification
       "and" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Match(And),
             Join(line, Map2Cross(NotEq),
@@ -1200,7 +1193,7 @@ class EvaluatorSpecs extends Specification
       "or" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Join(line, Map2Match(Or),
             Join(line, Map2Cross(Eq),
@@ -1224,7 +1217,7 @@ class EvaluatorSpecs extends Specification
       "complement of equality" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
           Operate(line, Comp,
             Join(line, Map2Cross(Eq),
@@ -1247,7 +1240,7 @@ class EvaluatorSpecs extends Specification
       "less-than" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(Lt),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1267,7 +1260,7 @@ class EvaluatorSpecs extends Specification
       "less-than-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(LtEq),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1287,7 +1280,7 @@ class EvaluatorSpecs extends Specification
       "greater-than" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(Gt),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1307,7 +1300,7 @@ class EvaluatorSpecs extends Specification
       "greater-than-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(GtEq),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1327,7 +1320,7 @@ class EvaluatorSpecs extends Specification
       "equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(Eq),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1347,7 +1340,7 @@ class EvaluatorSpecs extends Specification
       "not-equal" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Cross(NotEq),
             dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
@@ -1372,7 +1365,7 @@ class EvaluatorSpecs extends Specification
       "and" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Match(And),
             Join(line, Map2Cross(NotEq),
@@ -1401,7 +1394,7 @@ class EvaluatorSpecs extends Specification
       "or" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Join(line, Map2Match(Or),
             Join(line, Map2Cross(Eq),
@@ -1425,7 +1418,7 @@ class EvaluatorSpecs extends Specification
       "complement of equality" >> {
         val line = Line(0, "")
         
-        val input = Filter(line, None, None,
+        val input = Filter(line, None,
           dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
           Operate(line, Comp,
             Join(line, Map2Cross(Eq),
@@ -1509,11 +1502,11 @@ class EvaluatorSpecs extends Specification
       val nums = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
       
       lazy val input: dag.Split = dag.Split(line,
-        Vector(SingleBucketSpec(nums, nums)),
+        dag.Group(1, nums, UnfixedSolution(0, nums)),
         Join(line, Map2Cross(Add),
           SplitGroup(line, 1, nums.provenance)(input),
-          dag.Reduce(line,BuiltInReduction(Max) ,
-            Filter(line, None, None,
+          dag.Reduce(line, Max,
+            Filter(line, None,
               nums,
               Join(line, Map2Cross(Lt),
                 nums,
@@ -1546,18 +1539,19 @@ class EvaluatorSpecs extends Specification
       val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
        
       lazy val input: dag.Split = dag.Split(line,
-        Vector(SingleBucketSpec(
+        dag.Group(1,
           clicks,
-          Join(line, Map2Cross(DerefObject),
-            clicks,
-            Root(line, PushString("user"))))),
+          UnfixedSolution(0, 
+            Join(line, Map2Cross(DerefObject),
+              clicks,
+              Root(line, PushString("user"))))),
         Join(line, Map2Cross(JoinObject),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("user")),
             SplitParam(line, 0)(input)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
-            dag.Reduce(line, BuiltInReduction(Count),
+            dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.provenance)(input)))))
       
       val result = testEval(input)
@@ -1623,7 +1617,7 @@ class EvaluatorSpecs extends Specification
       // //clicks where //clicks.user = null
       //
       //
-      val input = Filter(line, None, None,
+      val input = Filter(line, None,
         dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
         Join(line, Map2Cross(Eq),
           Join(line, Map2Cross(DerefObject),
@@ -1659,21 +1653,22 @@ class EvaluatorSpecs extends Specification
       val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
        
       lazy val histogram: dag.Split = dag.Split(line,
-        Vector(SingleBucketSpec(
+        dag.Group(1,
           clicks,
-          Join(line, Map2Cross(DerefObject),
-            clicks,
-            Root(line, PushString("user"))))),
+          UnfixedSolution(0,
+            Join(line, Map2Cross(DerefObject),
+              clicks,
+              Root(line, PushString("user"))))),
         Join(line, Map2Cross(JoinObject),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("user")),
             SplitParam(line, 0)(histogram)),
           Join(line, Map2Cross(WrapObject),
             Root(line, PushString("num")),
-            dag.Reduce(line, BuiltInReduction(Count),
+            dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.provenance)(histogram)))))
        
-      val input = Filter(line, None, None,
+      val input = Filter(line, None,
         histogram,
         Join(line, Map2Cross(Eq),
           Join(line, Map2Cross(DerefObject),
@@ -1723,46 +1718,42 @@ class EvaluatorSpecs extends Specification
       }
     }
 
-    "set-reduce homogenous set of numbers" >> {
-      "distinct" >> {
-        val line = Line(0, "")
-        
-        val input = dag.SetReduce(line, Distinct,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
-        }
-        
-        result2 must contain(42, 12, 77, 1, 13)
+    "distinct homogenous set of numbers" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Distinct(line,
+      dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
+      
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
       }
-    }    
+      
+      result2 must contain(42, 12, 77, 1, 13)
+    }
     
-    "set-reduce heterogenous sets" >> {
-      "distinct" >> {
-        val line = Line(0, "")
-        
-        val input = dag.SetReduce(line, Distinct,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
-          
-        val result = testEval(input)
-        
-        result must haveSize(10)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
-          case (VectorCase(_), SBoolean(b)) => b
-          case (VectorCase(_), SString(s)) => s
-          case (VectorCase(_), SArray(a)) => a
-          case (VectorCase(_), SObject(o)) => o
-        }
-        
-        result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
+    "distinct heterogenous sets" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Distinct(line,
+      dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
+      
+      val result = testEval(input)
+      
+      result must haveSize(10)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (VectorCase(_), SBoolean(b)) => b
+        case (VectorCase(_), SString(s)) => s
+        case (VectorCase(_), SArray(a)) => a
+        case (VectorCase(_), SObject(o)) => o
       }
+      
+      result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
     }
   }
 }
