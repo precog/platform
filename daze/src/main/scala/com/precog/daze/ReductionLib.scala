@@ -26,7 +26,11 @@ import bytecode.Arity
 import yggdrasil._
 import yggdrasil.table._
 
+import com.precog.util._
+
 import scalaz._
+import scalaz.std.option._
+import scalaz.syntax.std.option._
 import scalaz.std.anyVal._
 
 trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
@@ -52,18 +56,18 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def apply(table: Table): Table = ops.constLong(table.reduce(reducer)) 
+    //def apply(table: Table): Table = ops.constLong(table.reduce(reducer)) 
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
-    type Result = Int
+    type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Int]]
+    def monoid = implicitly[Monoid[Option[BigDecimal]]]
     
     def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
         col match {
-          case col: LongColumn => 
+          case col: LongColumn =>  //need all the cases
             val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
             if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.max))
         }
@@ -81,20 +85,20 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
-    }
+    //def reducer: CReducer[Int] = new CReducer[Int] {
+    //  def reduce(col: Column, range: Range) = 0
+    //}
 
-    def apply(table: Table): Table = {
-      val result = table.reduce(reducer) map ops.constDecimal 
-      result getOrElse ops.empty
-    }
+    //def apply(table: Table): Table = {
+    //  val result = table.reduce(reducer) map ops.constDecimal 
+    //  result getOrElse ops.empty
+    //}
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
-    type Result = Int
+    type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Int]]
+    def monoid = implicitly[Monoid[Option[BigDecimal]]]
     
     def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
@@ -117,21 +121,22 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else None
     } */
     
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
-    }
-    def apply(table: Table): Table = {
-      val result = table.reduce(reducer) map ops.constDecimal 
-      result getOrElse ops.empty
-    }
+    //def reducer: CReducer[Int] = new CReducer[Int] {
+    //  def reduce(col: Column, range: Range) = 0
+    //}
+
+    //def apply(table: Table): Table = {
+    //  val result = table.reduce(reducer) map ops.constDecimal 
+    //  result getOrElse ops.empty
+    //}
   }
   
   object Sum extends Reduction(ReductionNamespace, "sum") {
-    type Result = Int
+    type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Int]]
+    def monoid = implicitly[Monoid[Option[BigDecimal]]]
     
-    def reducer: Reducer[Option[BigDecimal]] = new Reducer[Option[BigDecimal]] {
+    def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
         col match {
           case col: LongColumn => {
@@ -142,10 +147,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def apply(table: Table): Table = {
-      val result = table.reduce(reducer) map ops.constDecimal 
-      result getOrElse ops.empty
-    }
+    //def apply(table: Table): Table = {
+    //  val result = table.reduce(reducer) map ops.constDecimal 
+    //  result getOrElse ops.empty
+    //}
 
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sum = enum.reduce(Option.empty[BigDecimal]) {
@@ -160,9 +165,9 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
-    type Result = Int
+    type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Int]]
+    def monoid = implicitly[Monoid[Option[BigDecimal]]]
     
     def reducer: Reducer[Option[BigDecimal]] = new Reducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
@@ -175,10 +180,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def apply(table: Table): Table = {
-      val result = table.reduce(reducer) map ops.constDecimal 
-      result getOrElse ops.empty
-    }
+    //def apply(table: Table): Table = {
+    //  val result = table.reduce(reducer) map ops.constDecimal 
+    //  result getOrElse ops.empty
+    //}
 
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
