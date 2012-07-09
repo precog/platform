@@ -54,14 +54,16 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     }
     
     "parse out reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
-      result mustEqual Right(dag.Reduce(Line(0, ""), BuiltInReduction(BIR(Vector(), "count", 0x2000)), Root(Line(0, ""), PushFalse)))
+      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
+      result mustEqual Right(dag.Reduce(Line(0, ""), Reduction(Vector(), "count", 0x2000), Root(Line(0, ""), PushFalse)))
     }
 
-    "parse out set-reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushNull, instructions.SetReduce(Distinct)))
-      result mustEqual Right(dag.SetReduce(Line(0, ""), Distinct, Root(Line(0, ""), PushNull)))
+    "parse out distinct" in {
+      val result = decorate(Vector(Line(0, ""), PushNull, instructions.Distinct))
+      result mustEqual Right(dag.Distinct(Line(0, ""), Root(Line(0, ""), PushNull)))
     }
+    
+    // TODO morphisms
     
     "parse a single-level split" in {
       val line = Line(0, "")
@@ -70,20 +72,24 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         line,
         PushTrue,
         Dup,
-        Bucket,
-        instructions.Split(1, 2),
+        KeyPart(1),
+        Swap(1),
+        instructions.Group(2),
+        instructions.Split,
+        PushKey(1),
+        PushGroup(2),
         VUnion,
         Merge))
         
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            Vector(SingleBucketSpec(
+            dag.Group(2,
               Root(`line`, PushTrue),
-              Root(`line`, PushTrue))),
+              UnfixedSolution(1, Root(`line`, PushTrue))),
             Join(`line`, VUnion, 
-              sg @ SplitGroup(`line`, 1, Vector()),
-              sp @ SplitParam(`line`, 0)))) => {
+              sg @ SplitGroup(`line`, 2, Vector()),
+              sp @ SplitParam(`line`, 1)))) => {
               
           sp.parent mustEqual s
           sg.parent mustEqual s
@@ -97,11 +103,17 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(
         line,
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushKey(1),
+        PushGroup(2),
+        KeyPart(3),
+        instructions.Group(4),
+        instructions.Split,
+        PushKey(3),
+        PushGroup(4),
         VUnion,
         Merge,
         Merge))
@@ -109,12 +121,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            dag.Group(2, UnfixedSolution(1, Root(`line`, PushTrue)), Root(`line`, PushFalse)),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(sg1 @ SplitGroup(`line`, 1, Vector()), sp1 @ SplitParam(`line`, 0))),
+              dag.Group(4, UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Vector())), sp1 @ SplitParam(`line`, 1)),
               Join(`line`, VUnion,
-                sg2 @ SplitGroup(`line`, 1, Vector()),
-                sp2 @ SplitParam(`line`, 0))))) => {
+                sg2 @ SplitGroup(`line`, 4, Vector()),
+                sp2 @ SplitParam(`line`, 3))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
@@ -131,15 +143,19 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(
         line,
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushKey(1),
+        PushGroup(2),
         Map2Cross(Add),
         PushNum("42"),
+        KeyPart(3),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
-        Drop,
+        instructions.Group(4),
+        instructions.Split,
+        PushKey(3),
         VUnion,
         Merge,
         Merge))
@@ -147,21 +163,21 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            dag.Group(2, UnfixedSolution(1, Root(`line`, PushTrue)), Root(`line`, PushFalse)),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(Root(`line`, PushNum("42")), Root(`line`, PushFalse))),
+              dag.Group(4, UnfixedSolution(3, Root(`line`, PushNum("42"))), Root(`line`, PushFalse)),
               Join(`line`, VUnion,
                 Join(`line`, Map2Cross(Add),
-                  sg1 @ SplitGroup(`line`, 1, Vector()),
-                  sp1 @ SplitParam(`line`, 0)),
-                sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
+                  sg1 @ SplitGroup(`line`, 2, Vector()),
+                  sp1 @ SplitParam(`line`, 1)),
+                sg2 @ SplitGroup(`line`, 4, Vector()))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
           
           sg2.parent mustEqual s2
         }
-      } 
+      }
     }
     
     "parse a split with merged buckets" >> {
@@ -171,13 +187,14 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         val result = decorate(Vector(
           line,
           PushNum("1"),
-          PushNum("2"),
-          Bucket,
+          KeyPart(1),
           PushNum("3"),
-          PushNum("4"),
-          Bucket,
+          KeyPart(2)
           MergeBuckets(false),
-          instructions.Split(1, 2),
+          PushNum("2"),
+          instructions.Group(3),
+          instructions.Split,
+          PushGroup(3),
           IUnion,
           Merge))
           
@@ -519,7 +536,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "reduce" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))
+        val instr = instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }  
 
