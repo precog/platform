@@ -7,7 +7,7 @@ import bytecode.Arity
 import yggdrasil._
 import yggdrasil.table._
 
-import scalaz.Monoid
+import scalaz._
 import scalaz.std.anyVal._
 
 trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
@@ -25,10 +25,15 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       Some(SDecimal(BigDecimal(enum.count))) 
     } */
-    
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
+
+    def reducer: Reducer[Int] = new CReducer[Int] {
+      def reduce(col: Column, range: Range) = {
+        val colSeq = range.view filter col.isDefinedAt
+        colSeq.size
+      }
     }
+
+    def apply(table: Table): Table = ops.constLong(table.reduce(reducer)) 
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
@@ -36,6 +41,15 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     
     def monoid = implicitly[Monoid[Int]]
     
+    def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
+      def reduce(col: Column, range: Range) = {
+        col match {
+          case col: LongColumn => 
+            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
+            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.max))
+        }
+      }
+    }
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -51,6 +65,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+
+    def apply(table: Table): Table = {
+      val result = table.reduce(reducer) map ops.constDecimal 
+      result getOrElse ops.empty
+    }
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
@@ -58,6 +77,15 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     
     def monoid = implicitly[Monoid[Int]]
     
+    def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
+      def reduce(col: Column, range: Range) = {
+        col match {
+          case col: LongColumn => 
+            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
+            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.min))
+        }
+      }
+    }
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val min = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -73,6 +101,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+    def apply(table: Table): Table = {
+      val result = table.reduce(reducer) map ops.constDecimal 
+      result getOrElse ops.empty
+    }
   }
   
   object Sum extends Reduction(ReductionNamespace, "sum") {
@@ -80,6 +112,22 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     
     def monoid = implicitly[Monoid[Int]]
     
+    def reducer: Reducer[Option[BigDecimal]] = new Reducer[Option[BigDecimal]] {
+      def reduce(col: Column, range: Range) = {
+        col match {
+          case col: LongColumn => {
+            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
+            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.sum))  //todo does this assume entire seq is in memory?
+          }
+        }
+      }
+    }
+
+    def apply(table: Table): Table = {
+      val result = table.reduce(reducer) map ops.constDecimal 
+      result getOrElse ops.empty
+    }
+
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sum = enum.reduce(Option.empty[BigDecimal]) {
         case (None, SDecimal(v)) => Some(v)
@@ -90,10 +138,6 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       if (sum.isDefined) sum map { v => SDecimal(v) }
       else None
     } */
-    
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
-    }
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
@@ -101,6 +145,22 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     
     def monoid = implicitly[Monoid[Int]]
     
+    def reducer: Reducer[Option[BigDecimal]] = new Reducer[Option[BigDecimal]] {
+      def reduce(col: Column, range: Range) = {
+        col match {
+          case col: LongColumn => {
+            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
+            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.sum))
+          }
+        }
+      }
+    }
+
+    def apply(table: Table): Table = {
+      val result = table.reduce(reducer) map ops.constDecimal 
+      result getOrElse ops.empty
+    }
+
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
         case ((count, total), SDecimal(v)) => (count + 1, total + v)
@@ -111,9 +171,6 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       else Some(SDecimal(total / count))
     } */
     
-    def reducer: CReducer[Int] = new CReducer[Int] {
-      def reduce(col: Column, range: Range) = 0
-    }
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
