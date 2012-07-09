@@ -41,160 +41,194 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
   // TODO swap to Reduction
   object Count extends Reduction(ReductionNamespace, "count") {
-    type Result = Int
+    type Result = Long
     
-    def monoid = implicitly[Monoid[Int]]
+    def monoid = implicitly[Monoid[Long]]
     
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      Some(SDecimal(BigDecimal(enum.count))) 
-    } */
-
-    def reducer: Reducer[Int] = new CReducer[Int] {
+    def reducer: Reducer[Long] = new CReducer[Long] {
       def reduce(col: Column, range: Range) = {
         val colSeq = range.view filter col.isDefinedAt
         colSeq.size
       }
     }
 
-    //def apply(table: Table): Table = ops.constLong(table.reduce(reducer)) 
+    def extract(res: Result): Table = ops.constLong(res)
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
     type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Option[BigDecimal]]]
+    implicit def monoid = new Monoid[Option[BigDecimal]] {
+      def zero = None
+      def append(left: Option[BigDecimal], right: => Option[BigDecimal]) = {
+        val both = for (l <- left; r <- right) yield l max r
+        both orElse left orElse right
+      }
+    }
     
     def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
-      def reduce(col: Column, range: Range) = {
+      def reduce(col: Column, range: Range): Option[BigDecimal] = {
         col match {
-          case col: LongColumn =>  //need all the cases
-            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
-            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.max))
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
         }
       }
     }
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
-        case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
-        case (acc, _) => acc
-      }
 
-      if (max.isDefined) max map { v => SDecimal(v) }
-      else None
-    } */
-    
-    //def reducer: CReducer[Int] = new CReducer[Int] {
-    //  def reduce(col: Column, range: Range) = 0
-    //}
-
-    //def apply(table: Table): Table = {
-    //  val result = table.reduce(reducer) map ops.constDecimal 
-    //  result getOrElse ops.empty
-    //}
+    def extract(res: Option[BigDecimal]): Table =
+      res map ops.constDecimal getOrElse ops.empty
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
     type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Option[BigDecimal]]]
+    implicit def monoid = new Monoid[Option[BigDecimal]] {
+      def zero = None
+      def append(left: Option[BigDecimal], right: => Option[BigDecimal]) = {
+        val both = for (l <- left; r <- right) yield l min r
+        both orElse left orElse right
+      }
+    }
     
     def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
         col match {
           case col: LongColumn => 
-            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
-            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.min))
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.min: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.min: BigDecimal)
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.min: BigDecimal)
         }
       }
     }
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val min = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
-        case (Some(v1), SDecimal(v2)) if v1 > v2 => Some(v2)
-        case (acc, _) => acc
-      }
-      
-      if (min.isDefined) min map { v => SDecimal(v) }
-      else None
-    } */
-    
-    //def reducer: CReducer[Int] = new CReducer[Int] {
-    //  def reduce(col: Column, range: Range) = 0
-    //}
 
-    //def apply(table: Table): Table = {
-    //  val result = table.reduce(reducer) map ops.constDecimal 
-    //  result getOrElse ops.empty
-    //}
+    def extract(res: Option[BigDecimal]): Table =
+      res map ops.constDecimal getOrElse ops.empty
   }
   
   object Sum extends Reduction(ReductionNamespace, "sum") {
     type Result = Option[BigDecimal]
     
-    def monoid = implicitly[Monoid[Option[BigDecimal]]]
-    
+    implicit def monoid = new Monoid[Option[BigDecimal]] {
+      def zero = None
+      def append(left: Option[BigDecimal], right: => Option[BigDecimal]) = {
+        val both = for (l <- left; r <- right) yield l + r
+        both orElse left orElse right
+      }
+    }
+
     def reducer: Reducer[Option[BigDecimal]] = new CReducer[Option[BigDecimal]] {
       def reduce(col: Column, range: Range) = {
         col match {
-          case col: LongColumn => {
-            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
-            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.sum))  //todo does this assume entire seq is in memory?
-          }
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
         }
       }
     }
 
-    //def apply(table: Table): Table = {
-    //  val result = table.reduce(reducer) map ops.constDecimal 
-    //  result getOrElse ops.empty
-    //}
-
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val sum = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(sum), SDecimal(v)) => Some(sum + v)
-        case (acc, _) => acc
-      }
-
-      if (sum.isDefined) sum map { v => SDecimal(v) }
-      else None
-    } */
+    def extract(res: Option[BigDecimal]): Table =
+      res map ops.constDecimal getOrElse ops.empty
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
-    type Result = Option[BigDecimal]
+    type Result = Option[(BigDecimal, BigDecimal)]
+    type FirstResult = (BigDecimal, BigDecimal)
     
-    def monoid = implicitly[Monoid[Option[BigDecimal]]]
+    implicit def monoid = new Monoid[Option[(BigDecimal, BigDecimal)]] {    //(sum, count)
+      def zero = None
+      def append(left: Option[(BigDecimal, BigDecimal)], right: => Option[(BigDecimal, BigDecimal)]) = {
+        val both = for ((l1, l2) <- left; (r1, r2) <- right) yield (l1 + r1, l2 + r2)
+        both orElse left orElse right
+      }
+    }
     
-    def reducer: Reducer[Option[BigDecimal]] = new Reducer[Option[BigDecimal]] {
-      def reduce(col: Column, range: Range) = {
+    def reducer: Reducer[Option[(BigDecimal, BigDecimal)]] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
+      def reduce(col: Column, range: Range): Result = {
         col match {
-          case col: LongColumn => {
-            val definedRange = range collect { case i if col.isDefinedAt(i) => col(i) } 
-            if (definedRange.isEmpty) None else Some(BigDecimal(definedRange.sum))
-          }
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: FirstResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: FirstResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: FirstResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
         }
       }
     }
 
-    //def apply(table: Table): Table = {
-    //  val result = table.reduce(reducer) map ops.constDecimal 
-    //  result getOrElse ops.empty
-    //}
-
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
-        case ((count, total), SDecimal(v)) => (count + 1, total + v)
-        case (total, _) => total
-      }
-      
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal(total / count))
-    } */
-    
+    def extract(res: Option[(BigDecimal, BigDecimal)]): Table =
+      res map { case (sum, count) => ops.constDecimal(sum / count) } getOrElse ops.empty
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
@@ -215,6 +249,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+
+    def extract(res: Int): Table = ops.constLong(res)
   }
   
   object SumSq extends Reduction(ReductionNamespace, "sumSq") {
@@ -236,6 +272,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+
+    def extract(res: Int): Table = ops.constLong(res)
   }
   
   object Variance extends Reduction(ReductionNamespace, "variance") {
@@ -256,6 +294,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+
+    def extract(res: Int): Table = ops.constLong(res)
   }
   
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
@@ -276,6 +316,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def reducer: CReducer[Int] = new CReducer[Int] {
       def reduce(col: Column, range: Range) = 0
     }
+
+    def extract(res: Int): Table = ops.constLong(res)
   }
   
   object Median extends Morphism(ReductionNamespace, "median", Arity.One) {

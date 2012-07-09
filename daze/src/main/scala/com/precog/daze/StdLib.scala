@@ -87,9 +87,10 @@ trait ImplLibrary extends Library with ColumnarTableModule {
     type Result
     lazy val alignment = None
     lazy val arity = Arity.One
-    def apply(table: Table) = sys.error("morphism application of a reduction")     // TODO make this actually work
+    def apply(table: Table) = extract(table.reduce(reducer))
     def reducer: CReducer[Result]
-    def monoid: Monoid[Result]
+    implicit def monoid: Monoid[Result]
+    def extract(res: Result): Table
   }
 
   type Morphism <: MorphismImpl  //todo Morphism need to know eventually for Emitter if it's a unary or binary morphism
