@@ -160,31 +160,6 @@ trait ColumnarTableModule extends TableModule {
              map0 { _ mapColumns f }
           }
 
-        case Filter(source, predicate) => 
-          composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s, filter) => 
-            if (s.columns.isEmpty) {
-              s
-            } else {
-              assert(filter.columns.nonEmpty)
-              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
-                cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
-              }
-
-              s mapColumns { cf.util.filter(0, s.size, definedAt) }
-            }
-          }
-          // match the source table
-
-        case DerefObjectStatic(source, field) =>
-          composeSliceTransform(source) andThen {
-            map0 { _ deref field }
-          }
-
-        case DerefArrayStatic(source, element) =>
-          composeSliceTransform(source) andThen {
-            map0 { _ deref element }
-          }
-
         case Map2(left, right, f) =>
           val l0 = composeSliceTransform(left)
           val r0 = composeSliceTransform(right)
@@ -200,6 +175,20 @@ trait ColumnarTableModule extends TableModule {
                 } yield {
                   (ColumnRef(JPath.Identity, col.tpe), col)
                 })(collection.breakOut)
+            }
+          }
+
+        case Filter(source, predicate) => 
+          composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s, filter) => 
+            if (s.columns.isEmpty) {
+              s
+            } else {
+              assert(filter.columns.nonEmpty)
+              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
+                cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
+              }
+
+              s mapColumns { cf.util.filter(0, s.size, definedAt) }
             }
           }
 
@@ -366,6 +355,11 @@ trait ColumnarTableModule extends TableModule {
             )
           }
 
+        case DerefObjectStatic(source, field) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ deref field }
+          }
+
         case DerefObjectDynamic(source, ref) =>
           composeSliceTransform(source).zip(composeSliceTransform(ref)) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
@@ -375,6 +369,11 @@ trait ColumnarTableModule extends TableModule {
             } getOrElse {
               slice
             }
+          }
+
+        case DerefArrayStatic(source, element) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ deref element }
           }
 
         case DerefArrayDynamic(source, ref) =>
@@ -392,6 +391,11 @@ trait ColumnarTableModule extends TableModule {
             } getOrElse {
               slice
             }
+          }
+
+        case ArraySwap(source, index) =>
+          composeSliceTransform(source) andThen {
+            map0 { _ arraySwap index }
           }
       }
     }
