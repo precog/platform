@@ -140,6 +140,9 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       }
     }
 
+    // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
+    // columns won't satisfy sampleData.schema. This will cause the subsumption test in
+    // Slice#typed to fail unless it allows for vacuous success
     val slice = new Slice {
       val (cols, size) = buildColArrays(prefix, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
       val columns = cols map {
@@ -241,7 +244,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
-      "perform a trivial type-based filter" in checkTyped
+      "perform a trivial type-based filter" in checkTypedTrivial
+      "perform a less trivial type-based filter" in checkTyped
       "perform a summation scan" in checkScan
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap

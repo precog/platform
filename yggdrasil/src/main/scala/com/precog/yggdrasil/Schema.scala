@@ -27,6 +27,47 @@ object Schema {
     case t => Set(t)
   }
 
+  /**
+   * Constructs a JType corresponding to the supplied sequence of (JPath, CType) pairs. Returns None if the
+   * supplied sequence is empty.
+   */
+  def mkType(ctpes : Seq[(JPath, CType)]) : Option[JType] = {
+    val primitives = ctpes.collect {
+      case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => JNumberT
+      case (JPath.Identity, CStringFixed(_) | CStringArbitrary) => JTextT
+      case (JPath.Identity, CBoolean) => JBooleanT
+      case (JPath.Identity, CNull) => JNullT
+    }
+
+    val indices = ctpes.foldLeft(BitSet()) {
+      case (acc, (JPath(JPathIndex(i), _*), _)) => acc+i
+      case (acc, _) => acc
+    }
+
+    val array = indices.map { i =>
+      ctpes.collect {
+        case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe)
+      }
+    }.flatMap(mkType).reduceOption(JUnionT).map(JArrayFixedT).toList
+
+    val keys = ctpes.foldLeft(Set.empty[String]) {
+      case (acc, (JPath(JPathField(key), _*), _)) => acc+key
+      case (acc, _) => acc
+    }
+
+    val members = keys.flatMap { key =>
+      mkType(ctpes.collect {
+        case (JPath(JPathField(`key`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe)
+      }).map(key -> _)
+    }
+    val obj = if (members.isEmpty) Nil else List(JObjectFixedT(members.toMap))
+
+    (primitives ++ array ++ obj).reduceOption(JUnionT)
+  }
+
+  /**
+   * Tests whether the supplied JType includes the supplied JPath and CType.
+   */
   def includes(jtpe : JType, path : JPath, ctpe : CType) : Boolean = (jtpe, (path, ctpe)) match {
     case (JNumberT, (JPath.Identity, CLong | CDouble | CDecimalArbitrary)) => true
 
@@ -51,7 +92,11 @@ object Schema {
     case _ => false
   }
 
-  def subsumes(ctpes : List[(JPath, CType)], jtpe : JType) : Boolean = (jtpe, ctpes) match {
+  /**
+   * Tests whether the supplied sequence contains all the (JPath, CType) pairs that are
+   * included by the supplied JType.
+   */
+  def subsumes(ctpes : Seq[(JPath, CType)], jtpe : JType) : Boolean = (jtpe, ctpes) match {
     case (JNumberT, ctpes) => ctpes.exists {
       case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => true
       case _ => false
@@ -88,8 +133,9 @@ object Schema {
     case (JArrayFixedT(jtpe), ctpes) => {
       val indices = ctpes.foldLeft(BitSet()) {
         case (acc, (JPath(JPathIndex(i), _*), _)) => acc + i
+        case (acc, _) => acc
       }
-      indices.forall { i =>
+      indices.exists { i =>
         subsumes(
           ctpes.collect { case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe) },
           jtpe)

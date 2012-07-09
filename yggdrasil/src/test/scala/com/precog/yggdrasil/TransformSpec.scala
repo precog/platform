@@ -260,10 +260,11 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
-  def checkTyped = {
+  def checkTypedTrivial = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>
       val table = fromJson(sample)
+
       val results = toJson(table.transform {
         Typed(Leaf(Source),
           JObjectFixedT(Map("value" ->
@@ -279,6 +280,53 @@ trait TransformSpec extends TableModuleSpec {
               JField("value3", jv \ "value" \ "value3") ::
               Nil)) ::
           Nil)
+      }
+
+      results must_== expected
+    }
+  }
+
+  def checkTyped = {
+    implicit val gen = sample(schema)
+    check { (sample: SampleData) =>
+      val schema = sample.schema.getOrElse(List())
+      val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
+      val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
+      val jtpe = JObjectFixedT(Map(
+        "value" -> valuejtpe,
+        "key"   -> JArrayFixedT(JNumberT)
+      ))
+
+      // JType schema isn't fine grained enough to capture arbitrary exclusions (eg. arbitrary
+      // array elements by index where the type at that index is present elsewhere in same
+      // array), so to make a working test we have to exclude only the path/type pairs that are
+      // actually excluded by the JType.
+      val included = (schema collect {
+        case (path, ctpe) if includes(valuejtpe, path, ctpe) => path -> ctpe
+      }).toMap
+
+      val table = fromJson(sample)
+      val results = toJson(table.transform(
+        Typed(Leaf(Source), jtpe)
+      ))
+
+      val expected = sample.data map { jv =>
+        JValue.unflatten(jv.flattenWithPath.filter {
+          case (JPath(JPathField("key"), _*), _) => true
+          case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
+            (included(JPath(tail : _*)), value) match {
+              case (CBoolean, JBool(_)) => true
+              case (CStringFixed(_) | CStringArbitrary, JString(_)) => true
+              case (CLong, JInt(_)) => true
+              case (CDouble | CDecimalArbitrary, JDouble(_)) => true
+              case (CEmptyObject, JObject.empty) => true
+              case (CEmptyArray, JArray.empty) => true
+              case (CNull, JNull) => true
+              case _ => false
+            }
+          }
+          case _ => false
+        })
       }
 
       results must_== expected
