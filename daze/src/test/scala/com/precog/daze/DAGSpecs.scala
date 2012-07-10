@@ -95,8 +95,8 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         Swap(1),
         instructions.Group(2),
         instructions.Split,
-        PushKey(1),
         PushGroup(2),
+        PushKey(1),
         VUnion,
         Merge))
         
@@ -126,13 +126,13 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushFalse,
         instructions.Group(2),
         instructions.Split,
-        PushKey(1),
         PushGroup(2),
         KeyPart(3),
+        PushKey(1),
         instructions.Group(4),
         instructions.Split,
-        PushKey(3),
         PushGroup(4),
+        PushKey(3),
         VUnion,
         Merge,
         Merge))
@@ -166,15 +166,15 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushFalse,
         instructions.Group(2),
         instructions.Split,
-        PushKey(1),
         PushGroup(2),
+        PushKey(1),
         Map2Cross(Add),
         PushNum("42"),
         KeyPart(3),
         PushFalse,
         instructions.Group(4),
         instructions.Split,
-        PushKey(3),
+        PushGroup(4),
         VUnion,
         Merge,
         Merge))
@@ -225,10 +225,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
                 Root(`line`, PushNum("2")),
                 UnionBucketSpec(
                   UnfixedSolution(1, Root(`line`, PushNum("1"))),
-                  UnfixedSolution(1, Root(`line`, PushNum("1"))))),
+                  UnfixedSolution(1, Root(`line`, PushNum("3"))))),
               Join(`line`, IUnion,
-                sg @ SplitGroup(`line`, 1, Vector()),
-                sp @ SplitParam(`line`, 0)))) => {
+                sg @ SplitGroup(`line`, 3, Vector()),
+                sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
             sp.parent mustEqual s
@@ -261,10 +261,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
                 Root(`line`, PushNum("2")),
                 IntersectBucketSpec(
                   UnfixedSolution(1, Root(`line`, PushNum("1"))),
-                  UnfixedSolution(1, Root(`line`, PushNum("1"))))),
+                  UnfixedSolution(1, Root(`line`, PushNum("3"))))),
               Join(`line`, IUnion,
-                sg @ SplitGroup(`line`, 1, Vector()),
-                sp @ SplitParam(`line`, 0)))) => {
+                sg @ SplitGroup(`line`, 3, Vector()),
+                sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
             sp.parent mustEqual s
@@ -300,12 +300,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         case Right(
           s @ dag.Split(`line`,
             IntersectBucketSpec(
-              dag.Group(2, Root(`line`, PushNum("1")), UnfixedSolution(1, Root(`line`, PushNum("2")))),
-              dag.Group(3, Root(`line`, PushNum("3")), UnfixedSolution(1, Root(`line`, PushNum("4"))))),
+              dag.Group(2, Root(`line`, PushNum("2")), UnfixedSolution(1, Root(`line`, PushNum("1")))),
+              dag.Group(3, Root(`line`, PushNum("4")), UnfixedSolution(1, Root(`line`, PushNum("3"))))),
             Join(`line`, IUnion,
-              sg2 @ SplitGroup(`line`, 3, Vector()),
+              sg2 @ SplitGroup(`line`, 2, Vector()),
               Join(`line`, IUnion,
-                sg1 @ SplitGroup(`line`, 2, Vector()),
+                sg1 @ SplitGroup(`line`, 3, Vector()),
                 sp1 @ SplitParam(`line`, 1))))) => {
           
           sg1.parent mustEqual s
@@ -326,14 +326,14 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushNull,
         instructions.Group(2),
         instructions.Split,
-        PushKey(1),
+        PushGroup(2),
         Map2Match(Add),
         Merge))
         
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            dag.Group(2, Root(`line`, PushTrue), UnfixedSolution(1, Root(`line`, PushNull))),
+            dag.Group(2, Root(`line`, PushNull), UnfixedSolution(1, Root(`line`, PushTrue))),
             Join(`line`, Map2Match(Add),
               Root(`line`, PushNum("42")),
               sg @ SplitGroup(`line`, 2, Vector())))) => {
@@ -674,7 +674,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         VIntersect))
       
       lazy val split: dag.Split = dag.Split(line,
-        dag.Group(2, Root(line, PushNum("42")), UnfixedSolution(1, Root(line, PushNum("12")))),
+        dag.Group(2, Root(line, PushNum("12")), UnfixedSolution(1, Root(line, PushNum("42")))),
         Join(line, VUnion,
           SplitGroup(line, 2, Vector())(split),
           Root(line, PushTrue)))
@@ -707,6 +707,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushFalse,
         instructions.Group(2),
         instructions.Split,
+        PushGroup(2),
         PushTrue,
         Merge))
         
