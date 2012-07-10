@@ -714,12 +714,16 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, new FilesystemFileOps {})) yield {
-      class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
-      val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
+      object shardModule extends LevelDBActorYggShardModule with ProductionShardSystemActorModule[IterableDataset] {
+        class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-      object shard extends LevelDBActorYggShard[YggConfig](yggConfig, ms)(ActorSystem("yggutilImport")) {
-        val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+        object shard extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
+          val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+        }
       }
+
+      import shardModule._
 
       logger.info("Starting shard input")
       Await.result(shard.start(), Duration(60, "seconds"))

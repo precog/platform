@@ -95,8 +95,8 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor {
-      type Storage = LevelDBActorYggShard[YggdrasilQueryExecutorConfig]
+    new YggdrasilQueryExecutor with LevelDBActorYggShardModule with ProductionShardSystemActorModule[IterableDataset] {
+      type Storage = LevelDBActorYggShard
 
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
@@ -105,7 +105,7 @@ trait YggdrasilQueryExecutorComponent {
       object ops extends Ops 
       object query extends QueryAPI 
 
-      val storage = new LevelDBActorYggShard[YggdrasilQueryExecutorConfig](yggConfig, FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
+      val storage = new LevelDBActorYggShard(FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
         val accessControl = extAccessControl
       }
     }
