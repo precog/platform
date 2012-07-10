@@ -553,7 +553,31 @@ trait MathLib extends GenOpcode with ImplLibrary {
   object nextAfter extends Op2(MathNamespace, "nextAfter") {   //AHHHHHHHH nine cases AHHHHHHHHHHH
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
-        def apply(row: Int) = Math.nextAfter(c1(row), c2(row))
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
       }
     })
     
@@ -567,6 +591,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.min(c1(row), c2(row))
       }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
     })
     
     /* val operandType = (Some(SDecimal), Some(SDecimal))
@@ -578,6 +626,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.hypot(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
       }
     })
     
@@ -591,6 +663,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.pow(c1(row), c2(row))
       }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
     })
     
     /* val operandType = (Some(SDecimal), Some(SDecimal))
@@ -602,6 +698,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.max(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
       }
     })
     
@@ -615,6 +735,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.atan2(c1(row), c2(row))
       }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
     })
     
     /* val operandType = (Some(SDecimal), Some(SDecimal))
@@ -627,6 +771,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.copySign(c1(row), c2(row))
       }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
     })
     
     /* val operandType = (Some(SDecimal), Some(SDecimal))
@@ -638,6 +806,30 @@ trait MathLib extends GenOpcode with ImplLibrary {
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = Math.IEEEremainder(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = Math.nextAfter(c1(row).toDouble, c2(row).toDouble)
       }
     })
     
