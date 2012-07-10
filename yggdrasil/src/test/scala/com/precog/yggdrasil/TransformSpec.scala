@@ -292,10 +292,11 @@ trait TransformSpec extends TableModuleSpec {
       val schema = sample.schema.getOrElse(List())
       val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
       val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
+      val jtpe = JObjectFixedT(Map(
+        "value" -> valuejtpe,
+        "key" -> JArrayUnfixedT
+      ))
 
-      // We're no longer able to express the variable length array of identities,
-      // so we omit it from the overall JType schema
-      val jtpe = JObjectFixedT(Map("value" -> valuejtpe))
       val table = fromJson(sample)
       val results = toJson(table.transform(
         Typed(Leaf(Source), jtpe)
@@ -305,6 +306,7 @@ trait TransformSpec extends TableModuleSpec {
 
       val expected = sample.data map { jv =>
         JValue.unflatten(jv.flattenWithPath.filter {
+          case (path @ JPath(JPathField("key"), _*), _) => true
           case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
             (included(JPath(tail : _*)), value) match {
               case (CBoolean, JBool(_)) => true
