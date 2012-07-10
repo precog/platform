@@ -13,7 +13,7 @@ object Schema {
   case object JNullT extends JType
   
   sealed trait JArrayT extends JType
-  case class JArrayFixedT(tpe: JType) extends JArrayT
+  case class JArrayFixedT(elements: Map[Int, JType]) extends JArrayT
   case object JArrayUnfixedT extends JArrayT
 
   sealed trait JObjectT extends JType
@@ -37,6 +37,8 @@ object Schema {
       case (JPath.Identity, CStringFixed(_) | CStringArbitrary) => JTextT
       case (JPath.Identity, CBoolean) => JBooleanT
       case (JPath.Identity, CNull) => JNullT
+      case (JPath.Identity, CEmptyArray) => JArrayFixedT(Map())
+      case (JPath.Identity, CEmptyObject) => JObjectFixedT(Map())
     }
 
     val indices = ctpes.foldLeft(BitSet()) {
@@ -44,11 +46,12 @@ object Schema {
       case (acc, _) => acc
     }
 
-    val array = indices.map { i =>
-      ctpes.collect {
+    val elements = indices.flatMap { i =>
+      mkType(ctpes.collect {
         case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe)
-      }
-    }.flatMap(mkType).reduceOption(JUnionT).map(JArrayFixedT).toList
+      }).map(i -> _)
+    }
+    val array = if (elements.isEmpty) Nil else List(JArrayFixedT(elements.toMap))
 
     val keys = ctpes.foldLeft(Set.empty[String]) {
       case (acc, (JPath(JPathField(key), _*), _)) => acc+key
@@ -79,13 +82,15 @@ object Schema {
 
     case (JObjectUnfixedT, (JPath.Identity, CEmptyObject)) => true
     case (JObjectUnfixedT, (JPath(JPathField(_), _*), _)) => true
+    case (JObjectFixedT(fields), (JPath.Identity, CEmptyObject)) if fields.isEmpty => true
     case (JObjectFixedT(fields), (JPath(JPathField(head), tail @ _*), ctpe)) =>
       fields.get(head).map(includes(_, JPath(tail : _*), ctpe)).getOrElse(false)
 
     case (JArrayUnfixedT, (JPath.Identity, CEmptyArray)) => true
     case (JArrayUnfixedT, (JPath(JPathIndex(_), _*), _)) => true
-    case (JArrayFixedT(jtpe), (JPath(JPathIndex(_), tail @ _*), ctpe)) =>
-      includes(jtpe, JPath(tail : _*), ctpe)
+    case (JArrayFixedT(elements), (JPath.Identity, CEmptyArray)) if elements.isEmpty => true
+    case (JArrayFixedT(elements), (JPath(JPathIndex(i), tail @ _*), ctpe)) =>
+      elements.get(i).map(includes(_, JPath(tail : _*), ctpe)).getOrElse(false)
 
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
@@ -130,15 +135,12 @@ object Schema {
       case (JPath(JPathIndex(_), _*), _) => true
       case _ => false
     }
-    case (JArrayFixedT(jtpe), ctpes) => {
-      val indices = ctpes.foldLeft(BitSet()) {
-        case (acc, (JPath(JPathIndex(i), _*), _)) => acc + i
-        case (acc, _) => acc
-      }
-      indices.exists { i =>
+    case (JArrayFixedT(elements), ctpes) => {
+      val indices = elements.keySet
+      indices.forall { i =>
         subsumes(
-          ctpes.collect { case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe) },
-          jtpe)
+          ctpes.collect { case (JPath(JPathIndex(`i`), tail @ _*), ctpe) => (JPath(tail : _*), ctpe) }, 
+          elements(i))
       }
     }
 
