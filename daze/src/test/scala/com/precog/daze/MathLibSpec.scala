@@ -61,7 +61,7 @@ class MathLibSpec extends Specification
   "for homogeneous sets, the appropriate math function" should {   //todo test in particular cases when functions are not defined!!
     "do stuff" in todo
     
-    /* "compute sinh" in {
+    "compute sinh" in {
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sinh),
@@ -1199,7 +1199,7 @@ class MathLibSpec extends Specification
       }
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
-    } */
+    } 
   }
 }
 

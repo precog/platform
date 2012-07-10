@@ -58,7 +58,7 @@ class StringLibSpec extends Specification
     "return failing validations for bad input" in todo
   }
 
-  /* "for homogeneous sets, the appropriate string function" should {
+  "for homogeneous sets, the appropriate string function" should {
     "determine length" in {
       val line = Line(0, "")
       
@@ -800,5 +800,5 @@ class StringLibSpec extends Specification
       
       result2 must contain(true, false)
     }    
-  } */
+  }
 }

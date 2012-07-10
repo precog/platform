@@ -61,7 +61,7 @@ class TimeLibSpec extends Specification
     "return failing validations for bad input" in todo
   }
 
-  /* "changing time zones (homogenous case)" should {
+  "changing time zones (homogenous case)" should {
     "change to the correct time zone" in {
       val line = Line(0, "")
       
@@ -1388,7 +1388,7 @@ class TimeLibSpec extends Specification
       
       result2 must contain("09:37:52","20:09:59","06:44:52","09:11:33","22:38:19")
     }
-  } */
+  }
 }
 
 // vim: set ts=4 sw=4 et:
