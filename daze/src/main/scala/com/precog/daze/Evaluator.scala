@@ -66,6 +66,7 @@ trait Evaluator extends DAG
   implicit val valueOrder: (SValue, SValue) => Ordering = Order[SValue].order _
   
   def PrimitiveEqualsF2: F2
+  def ConstantEmptyArray: F1
   
   def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
@@ -113,8 +114,26 @@ trait Evaluator extends DAG
         PendingTable(m(parentTable.transform(parentTrans)), graph, TransSpec1.Id)
       }
       
-      case dag.Morph2(_, m, left, right) =>
-        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO the alignment will determine the initial match/cross and do that here
+      case dag.Morph2(_, m, left, right) => {
+        val PendingTable(leftTable, _, leftTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(rightTable, _, rightTrans) = loop(right, assume, splits, ctx)
+        
+        val leftResult = leftTable.transform(leftTrans)
+        val rightResult = rightTable.transform(rightTrans)
+        
+        val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
+        val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+        
+        val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+        
+        val aligned = m.alignment match {
+          case Some(MorphismAlignment.Cross) => leftResult.cross(rightResult)(spec)
+          case Some(MorphismAlignment.Match) => leftResult.cogroup(key, key, rightResult)(emptySpec, emptySpec, spec)
+          case None => sys.error("oh the calamity!")
+        }
+        
+        PendingTable(m(aligned), graph, TransSpec1.Id)
+      }
       
       case dag.Distinct(_, parent) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
@@ -131,8 +150,11 @@ trait Evaluator extends DAG
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, op1(op).f1))
       }
       
-      case r @ dag.Reduce(_, red, parent) =>
-        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+      case r @ dag.Reduce(_, red, parent) => {
+        val PendingTable(parentTable, _, parentTrans) = loop(parent, assume, splits, ctx)
+        val result = red(parentTable.transform(parentTrans))
+        PendingTable(result, graph, TransSpec1.Id)
+      }
       
       case s @ dag.Split(line, specs, child) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO

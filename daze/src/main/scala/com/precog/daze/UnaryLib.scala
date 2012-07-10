@@ -9,6 +9,9 @@ import yggdrasil.table._
 object UnaryLib extends UnaryLib
 
 trait UnaryLib extends ImplLibrary with GenOpcode {
+  def ConstantEmptyArray =
+    new CF1(Function.const(Some(new InfiniteColumn with EmptyArrayColumn {})))
+  
   object Unary {
     val UnaryNamespace = Vector("std", "unary")
 
