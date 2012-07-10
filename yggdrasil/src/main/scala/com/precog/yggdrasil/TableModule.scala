@@ -93,15 +93,6 @@ trait TableModule extends FNModule {
       val LeftId = Leaf(SourceLeft)
       val RightId = Leaf(SourceRight)
     }
-    
-    type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
-    type TableTransSpec1 = TableTransSpec[Source1]
-    type TableTransSpec2 = TableTransSpec[Source2]
-    
-    object TableTransSpec {
-      def makeTransSpec[A <: SourceType](tableTrans: TableTransSpec[A]): TransSpec[A] =
-        sys.error("todo")
-    }
   
     sealed trait GroupKeySpec[A]
     
