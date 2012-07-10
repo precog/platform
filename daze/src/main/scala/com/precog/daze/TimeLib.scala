@@ -28,9 +28,12 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
-object TimeLib extends TimeLib
+object TimeLib extends TimeLib 
 
-trait TimeLib extends GenOpcode with ImplLibrary {
+//todo instead of using StrColumn, use TimeColumn!
+//todo test is not defined cases when fails at isValidISO(_), etc
+
+trait TimeLib extends GenOpcode with ImplLibrary {    
   val TimeNamespace = Vector("std", "time")
 
   override def _lib1 = super._lib1 ++ Set(
@@ -105,16 +108,16 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object ParseDateTime extends Op2(TimeNamespace, "parse") {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidFormat(c1(row), c2(row))
+
         def apply(row: Int) = {
           val time = c1(row)
           val fmt = c2(row)
 
-          if (isValidFormat(time, fmt)) {
-            val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
-            val ISO = format.parseDateTime(time)
+          val format = DateTimeFormat.forPattern(fmt).withOffsetParsed()
+          val ISO = format.parseDateTime(time)
 
-            ISO.toString()
-          } else sys.error("todo")
+          ISO.toString()
         }
       }
 
@@ -130,17 +133,17 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object ChangeTimeZone extends Op2(TimeNamespace, "changeTimeZone") {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidTimeZone(c2(row))
+
         def apply(row: Int) = {
           val time = c1(row)
           val tz = c2(row)
 
-          if (isValidISO(time) && isValidTimeZone(tz)) {
-            val newTime = ISODateTimeFormat.dateTimeParser().parseDateTime(time)
-            val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(newTime, timeZone)
+          val newTime = ISODateTimeFormat.dateTimeParser().parseDateTime(time)
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(newTime, timeZone)
 
-            dateTime.toString()
-          } else sys.error("todo")
+          dateTime.toString()
         }
       }
     })
@@ -158,15 +161,15 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   trait TimePlus extends Op2 {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))   //todo test isValidInt(c2(row))
+
         def apply(row: Int) = {
           val time = c1(row)
           val incr = c2(row)
 
-          if (isValidISO(time)) {   //TODO test for isValidInt case
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
 
-            plus(newTime, incr.toInt)
-          } else sys.error("todo'")
+          plus(newTime, incr.toInt)
         }
       }
     })
@@ -218,16 +221,16 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   trait TimeBetween extends Op2 {
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row)) && isValidISO(c2(row))
+
         def apply(row: Int) = {
           val time1 = c1(row)
           val time2 = c2(row)
 
-          if (isValidISO(time1) && isValidISO(time2)) {
-            val newTime1 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time1)
-            val newTime2 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time2)
+          val newTime1 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time1)
+          val newTime2 = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time2)
 
-            between(newTime1, newTime2)
-          } else sys.error("todo'")
+          between(newTime1, newTime2)
         }
       }
     })
@@ -280,16 +283,16 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object MillisToISO extends Op2(TimeNamespace, "millisToISO") {
     def f2: F2 = new CF2P({
       case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
+
         def apply(row: Int) = { 
           val time = c1(row)
           val tz = c2(row)
 
-          if (time >= Long.MinValue && time <= Long.MaxValue && isValidTimeZone(tz)){
-            val timeZone = DateTimeZone.forID(tz)
-            val dateTime = new DateTime(time.toLong, timeZone)
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(time.toLong, timeZone)
 
-            dateTime.toString()
-          } else sys.error("todo")
+          dateTime.toString()
         }
       }
     })
@@ -307,13 +310,13 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object GetMillis extends Op1(TimeNamespace, "getMillis") {
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with LongColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+
         def apply(row: Int) = {
           val time = c(row)
 
-          if (isValidISO(time)) {
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
-            newTime.getMillis()
-          } else sys.error("todo")
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          newTime.getMillis()
         }
       }
     })
@@ -329,14 +332,14 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object TimeZone extends Op1(TimeNamespace, "timeZone") {
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+
         def apply(row: Int) = { 
           val time = c(row)
 
-          if (isValidISO(time)) {
-            val format = DateTimeFormat.forPattern("ZZ")
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
-            format.print(newTime)
-          } else sys.error("todo")
+          val format = DateTimeFormat.forPattern("ZZ")
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          format.print(newTime)
         }
       }
     })
@@ -353,18 +356,18 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   object Season extends Op1(TimeNamespace, "season") {
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+
         def apply(row: Int) = {
           val time = c(row)
 
-          if (isValidISO(time)) {
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
-            val day = newTime.dayOfYear.get
-            
-            if (day >= 79 & day < 171) "spring"
-            else if (day >= 171 & day < 265) "summer"
-            else if (day >= 265 & day < 355) "fall"
-            else "winter"
-          } else sys.error("todo")  //todo TEST THIS!!!!!!!!!!!!!!!!!!!!
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          val day = newTime.dayOfYear.get
+          
+          if (day >= 79 & day < 171) "spring"
+          else if (day >= 171 & day < 265) "summer"
+          else if (day >= 265 & day < 355) "fall"
+          else "winter"
         }
       }
     })
@@ -386,15 +389,13 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   trait TimeFraction extends Op1 {
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with LongColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+
         def apply(row: Int) = {
           val time = c(row)
 
-          if (isValidISO(time)) {
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
-            fraction(newTime)
-          } else {
-            sys.error("todo")     // DEATH!
-          }
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          fraction(newTime)
         }
       }
     })
@@ -465,20 +466,20 @@ trait TimeLib extends GenOpcode with ImplLibrary {
   }
 
   trait TimeTruncation extends Op1 {
-    def fmt: DateTimeFormatter
-
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && isValidISO(c(row))
+
         def apply(row: Int) = {
           val time = c(row)
 
-          if (isValidISO(time)) {
-            val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
-            fmt.print(newTime)
-          } else sys.error("todo")
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+          fmt.print(newTime)
         }
       }
     })
+
+    def fmt: DateTimeFormatter
 
     /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
