@@ -311,27 +311,19 @@ trait TransformSpec extends TableModuleSpec {
       val schema = sample.schema.getOrElse(List())
       val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
       val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
-      val jtpe = JObjectFixedT(Map(
-        "value" -> valuejtpe,
-        "key"   -> JArrayFixedT(JNumberT)
-      ))
 
-      // JType schema isn't fine grained enough to capture arbitrary exclusions (eg. arbitrary
-      // array elements by index where the type at that index is present elsewhere in same
-      // array), so to make a working test we have to exclude only the path/type pairs that are
-      // actually excluded by the JType.
-      val included = (schema collect {
-        case (path, ctpe) if includes(valuejtpe, path, ctpe) => path -> ctpe
-      }).toMap
-
+      // We're no longer able to express the variable length array of identities,
+      // so we omit it from the overall JType schema
+      val jtpe = JObjectFixedT(Map("value" -> valuejtpe))
       val table = fromJson(sample)
       val results = toJson(table.transform(
         Typed(Leaf(Source), jtpe)
       ))
 
+      val included = reducedSchema.toMap
+
       val expected = sample.data map { jv =>
         JValue.unflatten(jv.flattenWithPath.filter {
-          case (JPath(JPathField("key"), _*), _) => true
           case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
             (included(JPath(tail : _*)), value) match {
               case (CBoolean, JBool(_)) => true
