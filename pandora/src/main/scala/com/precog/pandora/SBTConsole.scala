@@ -36,7 +36,9 @@ object SBTConsole {
                   with LevelDBQueryComponent 
                   with DiskIterableMemoizationComponent 
                   with MemoryDatasetConsumer
-                  with DAGPrinter {
+                  with DAGPrinter 
+                  with LevelDBActorYggShardModule
+                  with StandaloneShardSystemActorModule[IterableDataset] {
 
     trait YggConfig extends BaseConfig 
                     with YggEnumOpsConfig 
@@ -93,11 +95,11 @@ object SBTConsole {
       }
     }
 
-    type Storage = LevelDBActorYggShard[console.YggConfig]
+    type Storage = LevelDBActorYggShard
 
     object ops extends Ops 
     object query extends QueryAPI 
-    object storage extends LevelDBActorYggShard[console.YggConfig](console.yggConfig, FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
+    object storage extends LevelDBActorYggShard(FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
       val accessControl = new UnlimitedAccessControl()(asyncContext)
     }
 

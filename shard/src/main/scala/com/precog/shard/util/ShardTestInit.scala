@@ -28,7 +28,7 @@ import blueeyes.json.JsonAST._
 
 import scalaz.effect.IO
 
-object ShardTestInit extends App {
+object ShardTestInit extends App with LevelDBActorYggShardModule with StandaloneShardSystemActorModule[IterableDataset] {
 
   val dir = new File("./data") 
   dir.mkdirs
@@ -38,7 +38,7 @@ object ShardTestInit extends App {
   val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
   val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
 
-  object shard extends LevelDBActorYggShard[YggConfig](yggConfig, metadataStorage, "ShardTestInit") {
+  object shard extends LevelDBActorYggShard(metadataStorage, "ShardTestInit") {
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 

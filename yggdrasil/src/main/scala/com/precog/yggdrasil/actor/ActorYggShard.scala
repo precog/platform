@@ -58,17 +58,25 @@ trait ActorYggShard[Dataset[_]] extends YggShard[Dataset] with Logging {
   }
 }
 
-abstract class LevelDBActorYggShard[Config <: ShardConfig](config: Config, storage: MetadataStorage)(implicit val actorSystem: ActorSystem) extends ActorYggShard[IterableDataset] {
-  def this(config: Config, storage: MetadataStorage, systemName: String) = this(config, storage)(ActorSystem(systemName))
+trait LevelDBActorYggShardModule extends ShardSystemActorModule[IterableDataset] with LevelDBProjectionsActorModule {
+  abstract class LevelDBActorYggShard(storage: MetadataStorage)(implicit val actorSystem: ActorSystem) extends ActorYggShard[IterableDataset] {
+    def this(storage: MetadataStorage, systemName: String) = this(storage)(ActorSystem(systemName))
 
-  private var shardSystemActor0: ActorRef = _
-  def shardSystemActor = shardSystemActor0
-  
-  def start() = Future {
-    shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor[Config,IterableDataset](config, storage) with LevelDBProjectionsActorModule), "shardSystem")
-    true
+    private var shardSystemActor0: ActorRef = _
+    def shardSystemActor = shardSystemActor0
+    
+    def start() = Future {
+      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor[IterableDataset](storage)), "shardSystem")
+      true
+    }
+
+    def stop() = {
+      import yggConfig.stopTimeout
+
+      for {
+        _ <- shardSystemActor ? ShutdownSystem
+        shutdownResult <- gracefulStop(shardSystemActor0, stopTimeout.duration)
+      } yield shutdownResult
+    }
   }
-
-  def stop() = gracefulStop(shardSystemActor0, config.stopTimeout.duration)
 }
-

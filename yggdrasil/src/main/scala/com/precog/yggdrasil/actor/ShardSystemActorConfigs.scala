@@ -39,18 +39,26 @@ trait ProductionShardSystemConfig extends ShardConfig {
     serviceUID.hostId + serviceUID.serviceId
   }
   val logPrefix = "[Production Yggdrasil Shard]"
+}
+
+trait ProductionShardSystemActorModule[Dataset[_]] extends ShardSystemActorModule[Dataset] {
+  type YggConfig <: ProductionShardSystemConfig
 
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
-    val consumer = new SimpleConsumer(kafkaHost, kafkaPort, kafkaSocketTimeout.toMillis.toInt, kafkaBufferSize)
-    Some(new KafkaShardIngestActor(shardId, checkpoint, metadataActor, consumer, kafkaTopic, ingestEnabled))
+    val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
+    Some(new KafkaShardIngestActor(yggConfig.shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled))
   }
 
-  def checkpointCoordination = ZookeeperSystemCoordination(zookeeperHosts, serviceUID, ingestEnabled) 
+  def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
 }
 
 trait StandaloneShardSystemConfig extends ShardConfig {
   val shardId = "standalone"
   val logPrefix = "[Standalone Yggdrasil Shard]"
+}
+
+trait StandaloneShardSystemActorModule[Dataset[_]] extends ShardSystemActorModule[Dataset] {
+  type YggConfig <: StandaloneShardSystemConfig
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = None
   def checkpointCoordination = CheckpointCoordination.Noop
 }

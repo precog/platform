@@ -249,11 +249,13 @@ object Console extends App {
     replConfig <- loadConfig(args.headOption) 
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, new FilesystemFileOps {})
   } yield {
-      scalaz.Success(new REPL 
+      scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with IterableDatasetOpsComponent
           with LevelDBQueryComponent
           with DiskIterableMemoizationComponent 
-          with Lifecycle { self =>
+          with Lifecycle 
+          with LevelDBActorYggShardModule
+          with StandaloneShardSystemActorModule[IterableDataset] { self =>
         override type Dataset[A] = IterableDataset[A]
         override type Memoable[A] = Iterable[A]
 
@@ -263,11 +265,11 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        type Storage = LevelDBActorYggShard[REPLConfig]
+        type Storage = LevelDBActorYggShard
 
         object ops extends Ops 
         object query extends QueryAPI 
-        object storage extends LevelDBActorYggShard[REPLConfig](replConfig, fileMetadataStorage) {
+        object storage extends LevelDBActorYggShard(fileMetadataStorage) {
           val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
