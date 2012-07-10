@@ -114,7 +114,7 @@ trait Evaluator extends DAG
       }
       
       case dag.Morph2(_, m, left, right) =>
-        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO the alignment will determine the initial match/cross and do that here
       
       case dag.Distinct(_, parent) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO

@@ -18,7 +18,6 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   val ReductionNamespace = Vector()
 
   override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
-  override def _libMorphism = super._libMorphism ++ Set(Median, Mode)
 
   // TODO swap to Reduction
   object Count extends Reduction(ReductionNamespace, "count") {
@@ -479,78 +478,5 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       res map { case (count, sum, sumsq) => ops.constDecimal(sqrt(count * sumsq - sum * sum) / count) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
-  object Median extends Morphism(ReductionNamespace, "median", Arity.One) {
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
-      val count = enum.reduce(BigDecimal(0)) {
-        case (count, SDecimal(v)) => count + 1
-        case (acc, _) => acc
-      }
-      
-      if (count == BigDecimal(0)) None
-      else {
-        val (c, median) = if (count.toInt % 2 == 0) {
-          val index = (count.toInt / 2, (count.toInt / 2) + 1)
-        
-          enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
-            case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
-            case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
-              (count + 1, 
-                if (prev.isDefined) prev map { x => (x + v) / 2 } 
-                else None)  
-            }
-            case (acc, _) => acc
-          } 
-        } else {
-          val index = (count.toInt / 2) + 1
-        
-          enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
-            case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
-            case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
-            case (acc, _) => acc
-          }
-        }
-        if (median.isDefined) median map { v => SDecimal(v) }
-        else None
-      }
-    } */
-    
-    lazy val alignment = None
-
-    def apply(table: Table) = table
-  }
-  
-  object Mode extends Morphism(ReductionNamespace, "mode", Arity.One) {
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-
-      val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
-        case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
-        case ((Some(currentRun), count, modes, maxCount), sv) => {
-          if (currentRun == sv) {
-            if (count >= maxCount)
-              (Some(sv), count + 1, List(sv), maxCount + 1)
-            else if (count + 1 == maxCount)
-              (Some(sv), count + 1, modes :+ sv, maxCount)
-            else
-              (Some(sv), count + 1, modes, maxCount)
-          } else {
-            if (maxCount == 1)
-              (Some(sv), 1, modes :+ sv, maxCount)
-            else
-              (Some(sv), 1, modes, maxCount)
-          }
-        }
-
-        case(acc, _) => acc
-      }
-      
-      Some(SArray(Vector(modes: _*))) 
-    } */
-    
-    lazy val alignment = None
-
-    def apply(table: Table) = table
-  }
 }

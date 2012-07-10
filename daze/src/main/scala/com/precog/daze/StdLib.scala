@@ -39,7 +39,7 @@ trait ImplLibrary extends Library with ColumnarTableModule {
   def _libReduction: Set[Reduction] = Set()
 
   trait MorphismImpl extends MorphismLike {
-    def alignment: Option[MorphismAlignment]  //not necessary for unary operations
+    def alignment: Option[MorphismAlignment]  //None for unary operations
     def apply(input: Table): Table
   }
   
@@ -74,7 +74,7 @@ trait ImplLibrary extends Library with ColumnarTableModule {
     def extract(res: Result): Table
   }
 
-  type Morphism <: MorphismImpl  //todo Morphism need to know eventually for Emitter if it's a unary or binary morphism
+  type Morphism <: MorphismImpl
   type Op1 <: Op1Impl
   type Op2 <: Op2Impl
   type Reduction <: ReductionImpl
