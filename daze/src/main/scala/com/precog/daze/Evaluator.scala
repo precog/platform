@@ -141,13 +141,11 @@ trait Evaluator extends DAG
         val rightResult = rightTable.transform(rightTrans)
         
         val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
-        val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
-        
         val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
         
         val aligned = m.alignment match {
           case Some(MorphismAlignment.Cross) => leftResult.cross(rightResult)(spec)
-          case Some(MorphismAlignment.Match) => leftResult.cogroup(key, key, rightResult)(emptySpec, emptySpec, spec)
+          case Some(MorphismAlignment.Match) => join(leftResult, rightResult)(key, spec)
           case None => sys.error("oh the calamity!")
         }
         
@@ -300,27 +298,40 @@ trait Evaluator extends DAG
         val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits, ctx)
         
         if (parentLeftGraph == parentRightGraph) {
-          val tf: (TransSpec1, TransSpec1) => TransSpec1 = op match {
-            case Eq => trans.Equal[Source1]
-            case NotEq => { (left, right) => trans.Map1(trans.Equal(left, right), op1(Comp).f1) }     // TODo
-            case instructions.WrapObject => WrapObjectDynamic[Source1]
-            case JoinObject => ObjectConcat[Source1]
-            case JoinArray => ArrayConcat[Source1]
-            case instructions.ArraySwap => sys.error("nothing happens")
-            case DerefObject => DerefObjectDynamic[Source1]
-            case DerefArray => DerefArrayDynamic[Source1]
-            case _ => { (left, right) => trans.Map2(left, right, op2(op).f2) }
-          }
-          
-          PendingTable(parentLeftTable, parentLeftGraph, tf(parentLeftTrans, parentRightTrans))
+          PendingTable(parentLeftTable, parentLeftGraph, transFromBinOp(op)(parentLeftTrans, parentRightTrans))
         } else {
-          PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+          val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+          
+          val leftResult = parentLeftTable.transform(parentLeftTrans)
+          val rightResult = parentRightTable.transform(parentRightTrans)
+          
+          // TODO identities?
+          val result = join(leftResult, rightResult)(key, transFromBinOp(op)(Leaf(SourceLeft), Leaf(SourceRight)))
+          PendingTable(result, graph, TransSpec1.Id)
         } 
       }
 
       // guaranteed: cross, cross_left and cross_right
-      case j @ Join(_, instr, left, right) =>
-        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+      case j @ Join(_, instr, left, right) => {
+        val (op, isLeft) = instr match {
+          case Map2Cross(op) => (op, true)
+          case Map2CrossRight(op) => (op, false)
+          case Map2CrossLeft(op) => (op, true)
+        }
+        
+        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits, ctx)
+        
+        val leftResult = parentLeftTable.transform(parentLeftTrans)
+        val rightResult = parentRightTable.transform(parentRightTrans)
+        
+        val result = if (isLeft)
+          leftResult.cross(rightResult)(transFromBinOp(op)(Leaf(SourceLeft), Leaf(SourceRight)))
+        else
+          rightResult.cross(leftResult)(transFromBinOp(op)(Leaf(SourceRight), Leaf(SourceLeft)))
+        
+        PendingTable(result, graph, TransSpec1.Id)
+      }
       
       case dag.Filter(_, None, target, boolean) => {
         lazy val length = sharedPrefixLength(target, boolean)
@@ -332,12 +343,44 @@ trait Evaluator extends DAG
         
         if (parentTargetGraph == parentBooleanGraph)
           PendingTable(parentTargetTable, parentTargetGraph, trans.Filter(parentTargetTrans, parentBooleanTrans))
-        else
-          PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+        else {
+          val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+          
+          val targetResult = parentTargetTable.transform(parentTargetTrans)
+          val booleanResult = parentBooleanTable.transform(parentBooleanTrans)
+          
+          // TODO identities?
+          val result = join(targetResult, booleanResult)(key, trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)))
+          PendingTable(result, graph, TransSpec1.Id)
+        }
       }
       
-      case f @ dag.Filter(_, Some(cross), target, boolean) =>
-        PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
+      case f @ dag.Filter(_, Some(cross), target, boolean) => {
+        val isLeft = cross match {
+          case CrossNeutral => true
+          case CrossRight => false
+          case CrossLeft => true
+        }
+        
+        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits, ctx)
+        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits, ctx)
+        
+        /* target match {
+          case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => {
+            
+          }
+        } */
+        
+        val targetResult = parentTargetTable.transform(parentTargetTrans)
+        val booleanResult = parentBooleanTable.transform(parentBooleanTrans)
+        
+        val result = if (isLeft)
+          targetResult.cross(booleanResult)(trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)))
+        else
+          booleanResult.cross(targetResult)(trans.Filter(Leaf(SourceRight), Leaf(SourceLeft)))
+        
+        PendingTable(result, graph, TransSpec1.Id)
+      }
       
       case s @ Sort(parent, indexes) =>
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
@@ -381,6 +424,18 @@ trait Evaluator extends DAG
          instructions.JoinArray | instructions.ArraySwap |
          instructions.DerefObject | instructions.DerefArray => sys.error("assertion error")
   }
+  
+  private def transFromBinOp[A <: SourceType](op: BinaryOperation)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
+    case Eq => trans.Equal(left, right)
+    case NotEq => trans.Map1(trans.Equal(left, right), op1(Comp).f1)
+    case instructions.WrapObject => WrapObjectDynamic(left, right)
+    case JoinObject => ObjectConcat(left, right)
+    case JoinArray => ArrayConcat(left, right)
+    case instructions.ArraySwap => sys.error("nothing happens")
+    case DerefObject => DerefObjectDynamic(left, right)
+    case DerefArray => DerefArrayDynamic(left, right)
+    case _ => trans.Map2(left, right, op2(op).f2)
+  }
 
   private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
     left.provenance zip right.provenance takeWhile { case (a, b) => a == b } length
@@ -394,6 +449,12 @@ trait Evaluator extends DAG
     case SObject(obj) if obj.isEmpty => CEmptyObject
     case SArray(Vector()) => CEmptyArray
     case _ => sys.error("die a horrible death")
+  }
+  
+  private def join(left: Table, right: Table)(key: TransSpec1, spec: TransSpec2): Table = {
+    val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+    val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
+    result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
   }
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
