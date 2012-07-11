@@ -30,8 +30,8 @@ trait ColumnarTableModule extends TableModule {
   type Scanner = CScanner
   type Reducer[α] = CReducer[α]
   type RowId = Int
-
-  object ops extends TableOps {
+  
+  trait ColumnarTableOps extends TableOps {
     def loadStatic(path: Path): Table = sys.error("todo")
     def loadDynamic(source: Table): Table = sys.error("todo")
     
@@ -64,6 +64,8 @@ trait ColumnarTableModule extends TableModule {
     def constEmptyArray: Table = 
       new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with EmptyArrayColumn), 1)))
   }
+
+  def ops: TableOps = new ColumnarTableOps {} 
 
   implicit def liftF1(f: F1) = new F1Like {
     def compose(f1: F1) = f compose f1
