@@ -290,8 +290,6 @@ trait Evaluator extends DAG
       // end: annoyance
       
       case Join(_, Map2Match(op), left, right) => {
-        lazy val length = sharedPrefixLength(left, right)
-        
         // TODO binary typing
         
         val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits, ctx)
@@ -305,8 +303,13 @@ trait Evaluator extends DAG
           val leftResult = parentLeftTable.transform(parentLeftTrans)
           val rightResult = parentRightTable.transform(parentRightTrans)
           
-          // TODO identities?
-          val result = join(leftResult, rightResult)(key, transFromBinOp(op)(Leaf(SourceLeft), Leaf(SourceRight)))
+          val spec = buildWrappedJoinSpec(
+            transFromBinOp(op)(
+              DerefObjectStatic(Leaf(SourceLeft), constants.Value),
+              DerefObjectStatic(Leaf(SourceRight), constants.Value)),
+            sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)
+          
+          val result = join(leftResult, rightResult)(key, spec)
           PendingTable(result, graph, TransSpec1.Id)
         } 
       }
@@ -334,8 +337,6 @@ trait Evaluator extends DAG
       }
       
       case dag.Filter(_, None, target, boolean) => {
-        lazy val length = sharedPrefixLength(target, boolean)
-        
         // TODO binary typing
         
         val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits, ctx)
@@ -349,8 +350,11 @@ trait Evaluator extends DAG
           val targetResult = parentTargetTable.transform(parentTargetTrans)
           val booleanResult = parentBooleanTable.transform(parentBooleanTrans)
           
-          // TODO identities?
-          val result = join(targetResult, booleanResult)(key, trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)))
+          val spec = buildWrappedJoinSpec(
+            trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)),
+            sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length)
+          
+          val result = join(targetResult, booleanResult)(key, spec)
           PendingTable(result, graph, TransSpec1.Id)
         }
       }
@@ -455,6 +459,37 @@ trait Evaluator extends DAG
     val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
     val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
     result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+  }
+  
+  private def buildWrappedJoinSpec(spec: TransSpec2, sharedLength: Int, leftLength: Int, rightLength: Int): TransSpec2 = {
+    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), constants.Key)
+    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), constants.Key)
+    
+    val sharedDerefs = for (i <- 0 until sharedLength)
+      yield DerefArrayStatic(leftIdentitySpec, JPathIndex(i))
+    
+    val unsharedLeft = for (i <- (sharedLength - 1) until (leftLength - sharedLength))
+      yield DerefArrayStatic(leftIdentitySpec, JPathIndex(i))
+    
+    val unsharedRight = for (i <- (sharedLength - 1) until (rightLength - sharedLength))
+      yield DerefArrayStatic(rightIdentitySpec, JPathIndex(i))
+    
+    val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
+    
+    val newIdentitySpec = if (derefs.isEmpty)
+      trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+    else
+      derefs reduce { trans.ArrayConcat(_, _) }
+    
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, constants.Key.name)
+    
+    val wrappedValueSpec = trans.WrapObject(spec, constants.Value.name)
+      
+    ObjectConcat(
+      ObjectConcat(
+        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
+        wrappedIdentitySpec),
+      wrappedValueSpec)
   }
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
