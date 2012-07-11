@@ -284,11 +284,7 @@ trait Evaluator extends DAG
           val leftResult = parentLeftTable.transform(parentLeftTrans)
           val rightResult = parentRightTable.transform(parentRightTrans)
           
-          val spec = buildWrappedJoinSpec(
-            transFromBinOp(op)(
-              DerefObjectStatic(Leaf(SourceLeft), constants.Value),
-              DerefObjectStatic(Leaf(SourceRight), constants.Value)),
-            sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)
+          val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)(transFromBinOp(op))
           
           val result = join(leftResult, rightResult)(key, spec)
           PendingTable(result, graph, TransSpec1.Id)
@@ -310,9 +306,9 @@ trait Evaluator extends DAG
         val rightResult = parentRightTable.transform(parentRightTrans)
         
         val result = if (isLeft)
-          leftResult.cross(rightResult)(transFromBinOp(op)(Leaf(SourceLeft), Leaf(SourceRight)))
+          leftResult.cross(rightResult)(buildWrappedCrossSpec(transFromBinOp(op)))
         else
-          rightResult.cross(leftResult)(transFromBinOp(op)(Leaf(SourceRight), Leaf(SourceLeft)))
+          rightResult.cross(leftResult)(buildWrappedCrossSpec(flip(transFromBinOp(op))))
         
         PendingTable(result, graph, TransSpec1.Id)
       }
@@ -331,9 +327,9 @@ trait Evaluator extends DAG
           val targetResult = parentTargetTable.transform(parentTargetTrans)
           val booleanResult = parentBooleanTable.transform(parentBooleanTrans)
           
-          val spec = buildWrappedJoinSpec(
-            trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)),
-            sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length)
+          val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length) { (srcLeft, srcRight) =>
+            trans.Filter(srcLeft, srcRight)
+          }
           
           val result = join(targetResult, booleanResult)(key, spec)
           PendingTable(result, graph, TransSpec1.Id)
@@ -359,10 +355,17 @@ trait Evaluator extends DAG
         val targetResult = parentTargetTable.transform(parentTargetTrans)
         val booleanResult = parentBooleanTable.transform(parentBooleanTrans)
         
-        val result = if (isLeft)
-          targetResult.cross(booleanResult)(trans.Filter(Leaf(SourceLeft), Leaf(SourceRight)))
-        else
-          booleanResult.cross(targetResult)(trans.Filter(Leaf(SourceRight), Leaf(SourceLeft)))
+        val result = if (isLeft) {
+          val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
+            trans.Filter(srcLeft, srcRight)
+          }
+          targetResult.cross(booleanResult)(spec)
+        } else {
+          val spec = buildWrappedCrossSpec { (srcLeft, srcRight) =>
+            trans.Filter(srcRight, srcLeft)
+          }
+          booleanResult.cross(targetResult)(spec)
+        }
         
         PendingTable(result, graph, TransSpec1.Id)
       }
@@ -442,7 +445,7 @@ trait Evaluator extends DAG
     result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
   }
   
-  private def buildWrappedJoinSpec(spec: TransSpec2, sharedLength: Int, leftLength: Int, rightLength: Int): TransSpec2 = {
+  private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), constants.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), constants.Key)
     
@@ -464,7 +467,10 @@ trait Evaluator extends DAG
     
     val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, constants.Key.name)
     
-    val wrappedValueSpec = trans.WrapObject(spec, constants.Value.name)
+    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), constants.Value)
+    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), constants.Value)
+    
+    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), constants.Value.name)
       
     ObjectConcat(
       ObjectConcat(
@@ -472,6 +478,28 @@ trait Evaluator extends DAG
         wrappedIdentitySpec),
       wrappedValueSpec)
   }
+  
+  private def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), constants.Key)
+    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), constants.Key)
+    
+    val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
+    
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, constants.Key.name)
+    
+    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), constants.Value)
+    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), constants.Value)
+    
+    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), constants.Value.name)
+      
+    ObjectConcat(
+      ObjectConcat(
+        ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
+        wrappedIdentitySpec),
+      wrappedValueSpec)
+  }
+  
+  private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
     TableTransSpec.makeTransSpec(Map(constants.Value -> trans))
@@ -517,7 +545,6 @@ trait Evaluator extends DAG
       case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
     }
   }
-  
   
   private case class PendingTable(table: Table, graph: DepGraph, trans: TransSpec1)
 }
