@@ -20,6 +20,7 @@
 package com.precog
 package muspelheim 
 
+import yggdrasil._
 import daze._
 
 import quirrel._
@@ -30,8 +31,8 @@ import quirrel.typer._
 trait ParseEvalStack extends Compiler
     with LineErrors
     with ProvenanceChecker
-    with CriticalConditionSolver
+    with CriticalConditionFinder
     with Emitter
     with Evaluator
     with StdLib
-    with OperationsAPI
+    with TableModule

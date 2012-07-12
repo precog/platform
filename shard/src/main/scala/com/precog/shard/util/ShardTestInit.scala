@@ -30,6 +30,7 @@ import com.precog.util.FilesystemFileOps
 
 import java.io.File
 
+import akka.actor.ActorSystem
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 import akka.util.Timeout
@@ -46,16 +47,17 @@ import blueeyes.json.JsonAST._
 
 import scalaz.effect.IO
 
-object ShardTestInit extends App {
+object ShardTestInit extends App with LevelDBActorYggShardModule with StandaloneShardSystemActorModule[IterableDataset] {
 
   val dir = new File("./data") 
   dir.mkdirs
 
-  object shard extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-    class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
+  class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
 
-    val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+  val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+
+  object shard extends LevelDBActorYggShard(metadataStorage, "ShardTestInit") {
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 
@@ -67,10 +69,10 @@ object ShardTestInit extends App {
   private val seqId = new AtomicInteger(0) 
 
   def run(loads: Array[String]) {
-    Await.result(shard.actorsStart, Duration(30, "seconds"))
+    Await.result(shard.start(), Duration(30, "seconds"))
     val timeout = Timeout(30000) 
     loads.foreach{ insert(_, timeout) }
-    Await.result(shard.actorsStop, Duration(30, "seconds"))
+    Await.result(shard.stop(), Duration(30, "seconds"))
   }
 
   def insert(load: String, timeout: Timeout) {

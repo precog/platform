@@ -61,6 +61,303 @@ class TimeLibSpec extends Specification
     "return failing validations for bad input" in todo
   }
 
+  "parse a time string into an ISO801 string, given its format" should {
+    "time zone not specified" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2020-06-03T03:12:33.000Z")
+    }
+
+    "time zone specified" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM -08:00")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2020-06-03T03:12:33.000-08:00")
+    }
+
+    "malformed string" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+        Root(line, PushString("Jun 3, 2020 3:12:33 AM -08:00 asteroid")),
+        Root(line, PushString("MMM d, yyyy h:mm:ss a Z")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+      
+      result must beEmpty
+    }
+
+    "results used in another time function from homogeneous set" in {
+      val line = Line(0, "")
+
+      val input = dag.Operate(line, BuiltInFunction1Op(Date),
+        Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+          dag.LoadLocal(line, None, Root(line, PushString("/hom/timeString")), Het),
+          Root(line, PushString("MMM dd yyyy k:mm:ss.SSS"))))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(_), SString(d)) => d.toString
+      }
+
+      result must haveSize(4)
+
+      result must contain("2010-06-03", "2010-06-04", "2011-08-12", "2010-10-09")
+    }
+
+    "from heterogeneous set" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
+          dag.LoadLocal(line, None, Root(line, PushString("/het/timeString")), Het),
+          Root(line, PushString("MMM dd yyyy k:mm:ss.SSS")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(_), SString(d)) => d.toString
+      }
+
+      result must haveSize(4)
+
+      result must contain("2010-06-03T04:12:33.323Z", "2010-06-04T13:31:49.002Z", "2011-08-12T22:42:33.310Z", "2010-10-09T09:27:31.953Z")
+    }
+
+    "ChangeTimeZone function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
+          Root(line, PushString("2010-06-04")),
+          Root(line, PushString("-10:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2010-06-03T14:00:00.000-10:00")
+    }
+
+    "ChangeTimeZone function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
+          Root(line, PushString("2010-06-04T+05:00")),
+          Root(line, PushString("-10:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2010-06-03T09:00:00.000-10:00")
+    }
+
+    "Plus function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
+          Root(line, PushString("2010-06-04T05:04:01")),
+          Root(line, PushNum("10")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2010-06-04T05:14:01.000Z")
+    }
+
+    "Plus function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
+          Root(line, PushString("2010-06-04T05:04:01.000+05:00")),
+          Root(line, PushNum("10")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("2010-06-04T05:14:01.000+05:00")
+    }
+
+    "Between function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
+          Root(line, PushString("2010-06-04T05:04:01")),
+          Root(line, PushString("2010-06-04T07:04:01+00:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+
+      result must haveSize(1)
+
+      result must contain(2)
+    }
+
+    "Between function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
+          Root(line, PushString("2010-06-04T05:04:01+05:00")),
+          Root(line, PushString("2010-06-04T05:04:01+01:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+
+      result must haveSize(1)
+
+      result must contain(4)
+    }
+
+    "GetMillis function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(GetMillis),
+          Root(line, PushString("2010-06-04T05")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toLong
+      }
+
+      result must haveSize(1)
+
+      result must contain(1275627600000L)
+    }
+
+    "GetMillis function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(GetMillis),
+          Root(line, PushString("2010-06-04T03-02:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toLong
+      }
+
+      result must haveSize(1)
+
+      result must contain(1275627600000L)
+    }
+
+    "TimeZone function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(TimeZone),
+          Root(line, PushString("2010-06-04T05")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("+00:00")
+    }
+
+    "TimeZone function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(TimeZone),
+          Root(line, PushString("2010-06-04T03-02:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("-02:00")
+    }
+
+    "Season function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(Season),
+          Root(line, PushString("2010-01-04")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("winter")
+    }
+
+    "Season function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(Season),
+          Root(line, PushString("2010-01-04T-02:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SString(d)) => d.toString
+      }
+
+      result must haveSize(1)
+
+      result must contain("winter")
+    }
+
+    "TimeFraction function with not fully formed string without tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(HourOfDay),
+          Root(line, PushString("2010-01-04")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+
+      result must haveSize(1)
+
+      result must contain(0)
+    }
+
+    "TimeFraction function with not fully formed string with tz" in {
+      val line = Line(0, "")
+
+      val input = Operate(line, BuiltInFunction1Op(HourOfDay),
+          Root(line, PushString("2010-01-04T03-02:00")))
+        
+      val result = testEval(input) collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+
+      result must haveSize(1)
+
+      result must contain(3)
+    }
+  }
+      
   "changing time zones (homogenous case)" should {
     "change to the correct time zone" in {
       val line = Line(0, "")
@@ -89,7 +386,7 @@ class TimeLibSpec extends Specification
       
       val result2 = result collect {
         case (VectorCase(_), SString(time)) => 
-          val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
           newTime.getMillis.toLong
       }
 
@@ -147,7 +444,7 @@ class TimeLibSpec extends Specification
       
       val result2 = result collect {
         case (VectorCase(_), SString(time)) => 
-          val newTime = ISODateTimeFormat.dateTime().withOffsetParsed.parseDateTime(time)
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
           newTime.getMillis.toLong
       }
 
@@ -255,6 +552,412 @@ class TimeLibSpec extends Specification
 
     "default to UTC if time zone is not specified" in todo
 
+  }
+
+  "time plus functions (homogeneous case)" should {
+    "compute incrememtation of positive number of years" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2015-04-29T09:37:52.599+08:00", 
+        "2016-02-21T20:09:59.165+09:00",
+        "2016-09-06T06:44:52.848-10:00",
+        "2017-02-11T09:11:33.394-07:00",
+        "2017-12-28T22:38:19.430+06:00")
+    }
+    "compute incrememtation of negative number of years" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("-5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2005-04-29T09:37:52.599+08:00", 
+        "2006-02-21T20:09:59.165+09:00",
+        "2006-09-06T06:44:52.848-10:00",
+        "2007-02-11T09:11:33.394-07:00",
+        "2007-12-28T22:38:19.430+06:00")
+    }
+    "compute incrememtation of zero of years" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("0")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:37:52.599+08:00", 
+        "2011-02-21T20:09:59.165+09:00",
+        "2011-09-06T06:44:52.848-10:00",
+        "2012-02-11T09:11:33.394-07:00",
+        "2012-12-28T22:38:19.430+06:00")
+    }
+
+    "compute incrememtation of months" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-09-29T09:37:52.599+08:00", 
+        "2011-07-21T20:09:59.165+09:00",
+        "2012-02-06T06:44:52.848-10:00",
+        "2012-07-11T09:11:33.394-07:00",
+        "2013-05-28T22:38:19.430+06:00")
+    }
+
+    "compute incrememtation of weeks" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2011-10-11T06:44:52.848-10:00", 
+        "2012-03-17T09:11:33.394-07:00", 
+        "2011-03-28T20:09:59.165+09:00", 
+        "2013-02-01T22:38:19.430+06:00",
+        "2010-06-03T09:37:52.599+08:00")
+    }
+    "compute incrememtation of days" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-05-04T09:37:52.599+08:00", 
+        "2011-02-26T20:09:59.165+09:00",
+        "2011-09-11T06:44:52.848-10:00",
+        "2012-02-16T09:11:33.394-07:00",
+        "2013-01-02T22:38:19.430+06:00")
+    }
+    "compute incrememtation of hours" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T14:37:52.599+08:00",
+        "2011-02-22T01:09:59.165+09:00",
+        "2011-09-06T11:44:52.848-10:00",
+        "2012-02-11T14:11:33.394-07:00",
+        "2012-12-29T03:38:19.430+06:00")
+    }
+    "compute incrememtation of minutes" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:42:52.599+08:00", 
+        "2011-02-21T20:14:59.165+09:00",
+        "2011-09-06T06:49:52.848-10:00",
+        "2012-02-11T09:16:33.394-07:00",
+        "2012-12-28T22:43:19.430+06:00")
+    }
+    "compute incrememtation of seconds" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:37:57.599+08:00", 
+        "2011-02-21T20:10:04.165+09:00",
+        "2011-09-06T06:44:57.848-10:00",
+        "2012-02-11T09:11:38.394-07:00",
+        "2012-12-28T22:38:24.430+06:00")
+    }
+    "compute incrememtation of ms" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:37:52.604+08:00", 
+        "2011-02-21T20:09:59.170+09:00",
+        "2011-09-06T06:44:52.853-10:00",
+        "2012-02-11T09:11:33.399-07:00",
+        "2012-12-28T22:38:19.435+06:00")
+    }
+  }
+
+  "time plus functions (heterogeneous case)" should {
+    "compute incrememtation of years" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2015-04-29T09:37:52.599+08:00", 
+        "2016-02-21T20:09:59.165+09:00",
+        "2016-09-06T06:44:52.848-10:00",
+        "2017-02-11T09:11:33.394-07:00",
+        "2017-12-28T22:38:19.430+06:00")
+    }
+
+    "compute incrememtation of months" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-09-29T09:37:52.599+08:00", 
+        "2011-07-21T20:09:59.165+09:00",
+        "2012-02-06T06:44:52.848-10:00",
+        "2012-07-11T09:11:33.394-07:00",
+        "2013-05-28T22:38:19.430+06:00")
+    }
+
+    "compute incrememtation of weeks" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2011-10-11T06:44:52.848-10:00", 
+        "2012-03-17T09:11:33.394-07:00", 
+        "2011-03-28T20:09:59.165+09:00", 
+        "2013-02-01T22:38:19.430+06:00",
+        "2010-06-03T09:37:52.599+08:00")
+    }
+    "compute incrememtation of days" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-05-04T09:37:52.599+08:00", 
+        "2011-02-26T20:09:59.165+09:00",
+        "2011-09-11T06:44:52.848-10:00",
+        "2012-02-16T09:11:33.394-07:00",
+        "2013-01-02T22:38:19.430+06:00")
+    }
+    "compute incrememtation of hours" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T14:37:52.599+08:00",
+        "2011-02-22T01:09:59.165+09:00",
+        "2011-09-06T11:44:52.848-10:00",
+        "2012-02-11T14:11:33.394-07:00",
+        "2012-12-29T03:38:19.430+06:00")
+    }
+    "compute incrememtation of minutes" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:42:52.599+08:00", 
+        "2011-02-21T20:14:59.165+09:00",
+        "2011-09-06T06:49:52.848-10:00",
+        "2012-02-11T09:16:33.394-07:00",
+        "2012-12-28T22:43:19.430+06:00")
+    }
+    "compute incrememtation of seconds" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:37:57.599+08:00", 
+        "2011-02-21T20:10:04.165+09:00",
+        "2011-09-06T06:44:57.848-10:00",
+        "2012-02-11T09:11:38.394-07:00",
+        "2012-12-28T22:38:24.430+06:00")
+    }
+    "compute incrememtation of ms" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisPlus)),
+        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        Root(line, PushNum("5")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(5)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SString(s)) => s
+      }
+      
+      result2 must contain(
+        "2010-04-29T09:37:52.604+08:00", 
+        "2011-02-21T20:09:59.170+09:00",
+        "2011-09-06T06:44:52.853-10:00",
+        "2012-02-11T09:11:33.399-07:00",
+        "2012-12-28T22:38:19.435+06:00")
+    }
   }
 
   "time difference functions (homogeneous case)" should {

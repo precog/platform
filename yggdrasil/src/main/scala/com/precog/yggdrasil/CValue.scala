@@ -36,8 +36,7 @@ import scalaz.std.math._
 import scalaz.std.AllInstances._
 
 sealed trait CValue {
-  @inline 
-  private[CValue] final def typeIndex: Int = this match {
+  @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
     case CString(v) => 0
     case CBoolean(v) => 1
     case CLong(v) => 3
@@ -45,8 +44,7 @@ sealed trait CValue {
     case CNum(v) => 6
   }
 
-  @inline 
-  final def toSValue: SValue = this match {
+  @inline final def toSValue: SValue = (this : @unchecked) match {
     case CString(v) => SString(v)
     case CBoolean(v) => if (v) STrue else SFalse
     case CLong(v) => SDecimal(v)

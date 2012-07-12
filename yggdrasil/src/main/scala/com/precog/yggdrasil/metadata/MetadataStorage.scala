@@ -205,6 +205,8 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     }
   }
 
+  override def toString = "FileMetadataStorage(root = " + baseDir + ")"
+
   private def newRandomDir(parent: File): IO[File] = {
     def dirUUID: String = {
       val uuid = java.util.UUID.randomUUID.toString.toLowerCase.replace("-", "")

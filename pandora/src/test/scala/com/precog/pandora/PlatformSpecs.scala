@@ -59,24 +59,23 @@ import org.streum.configrity.io.BlockFormat
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
-class PlatformSpecs extends ParseEvalStackSpecs { platformSpecs =>
-  trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
-  
-  object storage extends Storage {
-    type YggConfig = platformSpecs.YggConfig
-    val yggConfig = platformSpecs.yggConfig
-    val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+class PlatformSpecs extends ParseEvalStackSpecs with LevelDBActorYggShardModule with StandaloneShardSystemActorModule[IterableDataset] { platformSpecs =>
+  type Storage = LevelDBActorYggShard
+                                               
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+
+  object storage extends LevelDBActorYggShard(metadataStorage) {
     val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
   }
 
   override def startup() {
     // start storage shard 
-    Await.result(storage.actorsStart, controlTimeout)
+    Await.result(storage.start(), controlTimeout)
   }
   
   override def shutdown() {
     // stop storage shard
-    Await.result(storage.actorsStop, controlTimeout)
+    Await.result(storage.stop(), controlTimeout)
     
     actorSystem.shutdown()
   }

@@ -31,6 +31,7 @@ import org.specs2.mutable._
 import org.specs2.specification._
 
 class ZookeeperSystemCoordinationSpec extends Specification {
+  sequential
 
   "zookeeper system coordination " should {
     "register relay agent" in zookeeperClient() { factory: ClientFactory =>

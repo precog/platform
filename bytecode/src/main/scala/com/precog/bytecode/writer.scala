@@ -62,7 +62,7 @@ trait BytecodeWriter extends Writer with Version {
         case FilterCross => 0
         case FilterCrossLeft => 0
         case FilterCrossRight => 0
-
+        
         case Swap(depth) => {
           writeInt(4, buffer)
           writeInt(depth, buffer)

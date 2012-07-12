@@ -37,6 +37,43 @@ object ProvenanceSpecs extends Specification
   import ast._
   
   "provenance computation" should {
+    "compute result provenance correctly in BIF1" in {
+      forall(lib1) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a) := %s('a) 
+          foo(clicks)""".format(f.fqn))
+
+        tree.provenance mustEqual StaticProvenance("/clicks")
+        tree.errors must beEmpty
+      }
+    }       
+    
+    "compute result provenance correctly in BIF2" in {
+      forall(lib2) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a, 'b) := %s('a, 'b) 
+          foo(clicks.a, clicks.b)""".format(f.fqn))
+
+        tree.provenance mustEqual StaticProvenance("/clicks")
+        tree.errors must beEmpty
+      }
+    }     
+
+    "compute result provenance correctly in a BIR" in {
+      forall(libReduction) { f =>
+        val tree = parse("""
+          clicks := //clicks
+          foo('a) := %s('a) 
+          foo(clicks.a)""".format(f.fqn))
+
+        tree.provenance mustEqual ValueProvenance
+
+        tree.errors must beEmpty
+      }
+    }    
+
     "identify let according to its right expression" in {   // using raw, no-op let
       {
         val tree = parse("a := 1 1")
@@ -764,7 +801,21 @@ object ProvenanceSpecs extends Specification
           val tree = compile("foo := [//bar] foo")
           tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
           tree.errors must beEmpty
-        }  
+        }        
+        {
+          val tree = compile("""
+            | clicks := new //clicks
+            | clicks where true""".stripMargin)
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }         
+        {
+          val tree = compile("""
+            | clicks := new //clicks
+            | clicks where clicks""".stripMargin)
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        } 
       }
 
       "New" >> {

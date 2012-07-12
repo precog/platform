@@ -105,7 +105,7 @@ trait RawJsonShardComponent extends YggShardComponent {
 
     lazy val metadataActor = {
       implicit val system = actorSystem
-      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop))
+      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop, None))
     }
 
     def metadata = new ActorStorageMetadata(metadataActor)

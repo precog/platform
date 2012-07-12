@@ -65,7 +65,7 @@ class YggdrasilEnumOpsComponentSpec extends Specification with YggdrasilEnumOpsC
     LimitList(acc)
   }
 
-  implicit val actorSystem: ActorSystem = ActorSystem("yggdrasil_ops_spec")
+  implicit val actorSystem: ActorSystem = ActorSystem("yggdrasilOpsSpec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
   val timeout = intToDurationInt(30).seconds
 

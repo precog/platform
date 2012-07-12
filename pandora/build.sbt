@@ -24,8 +24,6 @@ import java.io.File
 
 name := "pandora"
 
-version := "0.0.1-SNAPSHOT"
-
 javaOptions ++= Seq("-Xmx1G")
 
 libraryDependencies ++= Seq(
@@ -77,6 +75,7 @@ test <<= (streams, fullClasspath in Test, outputStrategy in Test, extractData, m
     Seq("-Xmx1G") ++
     Seq("-classpath", cpStr) ++
     Seq("-Dprecog.storage.root=" + dataDir) ++
+    (if (System.getProperty("sbt.log.noformat") == "true") Seq("-Dspecs2.color=false") else Seq()) ++
     Seq("-XX:+HeapDumpOnOutOfMemoryError") ++
     Seq("specs2.run") ++
     Seq(testName)

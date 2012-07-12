@@ -37,9 +37,11 @@ import blueeyes.json.JsonAST._
 
 import com.weiglewilczek.slf4s.Logging
 
+import scalaz._
+
 import java.net.InetAddress
 
-trait ProductionActorConfig extends ActorEcosystemConfig {
+trait ProductionShardSystemConfig extends ShardConfig {
   def kafkaHost: String = config[String]("kafka.batch.host")
   def kafkaPort: Int = config[Int]("kafka.batch.port")
   def kafkaTopic: String = config[String]("kafka.batch.topic") 
@@ -50,57 +52,34 @@ trait ProductionActorConfig extends ActorEcosystemConfig {
   def zookeeperBase: List[String] = config[List[String]]("zookeeper.basepath")
   def zookeeperPrefix: String = config[String]("zookeeper.prefix")   
 
-  def ingestEnabled: Boolean = config[Boolean]("ingest_enabled", true)
-
   def serviceUID: ServiceUID = ZookeeperSystemCoordination.extractServiceUID(config)
+  lazy val shardId = {
+    val suid = serviceUID
+    serviceUID.hostId + serviceUID.serviceId
+  }
+  val logPrefix = "[Production Yggdrasil Shard]"
 }
 
-/**
- * The production actor ecosystem includes a real ingest actor which will read from the kafka queue.
- * At present, there's a bit of a problem around metadata serialization as the standalone actor
- * will not include manually ingested data in serialized metadata; this needs to be addressed.
- */
-trait ProductionActorEcosystem[Dataset] extends BaseActorEcosystem[Dataset] with YggConfigComponent with Logging {
-  type YggConfig <: ProductionActorConfig
+trait ProductionShardSystemActorModule[Dataset] extends ShardSystemActorModule[Dataset] {
+  type YggConfig <: ProductionShardSystemConfig
 
-  protected val logPrefix = "[Production Yggdrasil Shard]"
-
-  val actorSystem = ActorSystem("production_actor_system")
-
-  val shardId: String = yggConfig.serviceUID.hostId + yggConfig.serviceUID.serviceId 
-
-  val checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
-
-  protected def actorsWithStatus = ingestActor :: 
-                                   ingestSupervisor :: 
-                                   metadataActor :: 
-                                   projectionsActor :: Nil
-  val ingestActor = {
-    logger.info("Starting ingest actor")
+  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    actorSystem.actorOf(Props(new KafkaShardIngestActor(shardId, checkpointCoordination, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled)), "shard_ingest")
+    Some(new KafkaShardIngestActor(yggConfig.shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled))
   }
 
-  logger.info("Starting ingest supervisor")
-  logger.debug("Ingest supervisor = " + ingestSupervisor)
+  def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
+}
 
-  //
-  // Internal only actors
-  //
-  
-  private val metadataSyncCancel = 
-    actorSystem.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata)
+trait StandaloneShardSystemConfig extends ShardConfig {
+  val shardId = "standalone"
+  val logPrefix = "[Standalone Yggdrasil Shard]"
+}
 
-  protected def actorsStopInternal: Future[Unit] = {
-    import yggConfig.stopTimeout
-
-    metadataSyncCancel.cancel
-    for {
-      _  <- actorStop(ingestActor, "ingest")
-      _  <- actorStop(projectionsActor, "projection")
-      _  <- actorStop(metadataActor, "metadata")
-    } yield ()
-  }
+trait StandaloneShardSystemActorModule[Dataset] extends ShardSystemActorModule[Dataset] {
+  type YggConfig <: StandaloneShardSystemConfig
+  def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = None
+  def checkpointCoordination = CheckpointCoordination.Noop
 }
 
 // vim: set ts=4 sw=4 et:

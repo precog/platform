@@ -495,7 +495,7 @@ class TestQueryExecutor(config: Configuration, testShard: TestShard) extends
 
   override type Dataset[A] = IterableDataset[A]
 
-  lazy val actorSystem = ActorSystem("test_query_executor")
+  lazy val actorSystem = ActorSystem("testQueryExecutor")
   implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
   lazy val yggConfig = new YggdrasilQueryExecutorConfig {
       val config = TestQueryExecutor.this.config

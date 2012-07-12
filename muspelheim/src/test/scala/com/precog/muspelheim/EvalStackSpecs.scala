@@ -63,6 +63,12 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
+    "reduce the obnoxiously large dataset" >> {
+      "<root>" >> {
+        eval("mean(//obnoxious.v)", true) mustEqual Set(SDecimal(50000.5))
+      }
+    }
+
     "accept !true and !false" >> {
       "!true" >> {
         eval("!true") mustEqual Set(SBoolean(false))
@@ -158,7 +164,22 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (ids, _) => ids must haveSize(2)
         }
-      }.pendingUntilFixed
+      }
+    }
+
+    "union two wheres of the same dynamic provenance" >> {
+      val input = """
+      | clicks := //clicks
+      | clicks' := new clicks
+      |
+      | xs := clicks where clicks.time > 0
+      | ys := clicks' where clicks'.pageId != "blah"
+      |
+      | xs union ys""".stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(200)
     }
 
     "use the where operator on a unioned set" >> {
@@ -176,6 +197,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("gender" -> SString("female"))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -193,6 +215,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("platform" -> SString("android"))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -233,6 +256,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -243,6 +267,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { Set(4,5) must contain(d) }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -260,6 +285,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 4 }
           case (VectorCase(_), SObject(obj)) => { obj must contain("foo" -> 3) }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -270,6 +296,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 5 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -280,6 +307,7 @@ trait EvalStackSpecs extends Specification {
         
         forall(results) {
           case (VectorCase(_), SDecimal(d)) => { d mustEqual 1 }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
       {
@@ -305,6 +333,7 @@ trait EvalStackSpecs extends Specification {
         forall(results) {
           case (VectorCase(_), SString(campaign)) =>
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -334,6 +363,7 @@ trait EvalStackSpecs extends Specification {
           case (VectorCase(_), SDecimal(num)) => {
             Set(100,39,91,77,96,99,48,67,10,17,90,58,20,38,1,43,49,23,72,42,94,16,9,21,52,5,40,62,4,33,28,54,70,82,76,22,6,12,65,31,80,45,51,89,69) must contain(num)
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
     }
@@ -361,6 +391,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("platform" -> SString("android"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -375,6 +406,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("cpm" -> SDecimal(1))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -389,6 +421,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("ageRange" -> SArray(Vector(SDecimal(37), SDecimal(48))))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
@@ -427,6 +460,7 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(1)
           obj must haveKey("aa")
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
     
@@ -448,7 +482,21 @@ trait EvalStackSpecs extends Specification {
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
+        case r => failure("Result has wrong shape: "+r)
       }
+    }
+
+    "correctly handle cross-match situations" in {
+      val input = """
+        | campaigns := //campaigns
+        | clicks := //clicks
+        | 
+        | campaigns ~ clicks
+        |   campaigns = campaigns
+        |     & clicks = clicks
+        |     & clicks = clicks""".stripMargin
+        
+      eval(input) must not(beEmpty)
     }    
 
     "add sets of different types" >> {
@@ -471,34 +519,66 @@ trait EvalStackSpecs extends Specification {
       }
     }
 
-    "return only all possible value results from a characteristic function" in {
-      val input = """
-        | campaigns := //campaigns
-        | f('a) :=
-        |   campaigns.gender where campaigns.platform = 'a
-        |
-        | f""".stripMargin
+    "return only all possible value results from a" >> {
+      "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | f('a) :=
+          |   campaigns.gender where campaigns.platform = 'a
+          | f""".stripMargin
+          
+        val results = evalE(input)
         
-      val results = evalE(input)
-      
-      results must haveSize(100)
-      
-      forall(results) {
-        case (VectorCase(_), SString(gender)) =>
-          gender must beOneOf("male", "female")
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SString(gender)) =>
+            gender must beOneOf("male", "female")
+          case r => failure("Result has wrong shape: "+r)
+        }
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | forall 'a 
+          |   campaigns.gender where campaigns.platform = 'a""".stripMargin
+          
+        val results = evalE(input)
+        
+        results must haveSize(100)
+        
+        forall(results) {
+          case (VectorCase(_), SString(gender)) =>
+            gender must beOneOf("male", "female")
+          case r => failure("Result has wrong shape: "+r)
+        }
       }
     }
     
-    "determine a histogram of genders on campaigns" in {
-      val input = """
-        | campaigns := //campaigns
-        | hist('gender) :=
-        |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
-        | hist""".stripMargin
-        
-      eval(input) mustEqual Set(
-        SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
-        SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+    "determine a histogram of genders on campaigns" >> {
+      "characteristic function" >> { 
+        val input = """
+          | campaigns := //campaigns
+          | hist('gender) :=
+          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }
+          | hist""".stripMargin
+          
+        eval(input) mustEqual Set(
+          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+      }
+
+      "forall expression" >> { 
+        val input = """
+          | campaigns := //campaigns
+          | forall 'gender 
+          |   { gender: 'gender, num: count(campaigns.gender where campaigns.gender = 'gender) }""".stripMargin
+          
+        eval(input) mustEqual Set(
+          SObject(Map("gender" -> SString("female"), "num" -> SDecimal(46))),
+          SObject(Map("gender" -> SString("male"), "num" -> SDecimal(54))))
+      }
     }
 
     "load a nonexistent dataset with a dot in the name" in {
@@ -529,6 +609,24 @@ trait EvalStackSpecs extends Specification {
     }
 
     "evaluate rank" >> {
+      "of the product of two sets" >> {
+        val input = """
+          | campaigns := //campaigns 
+          | campaigns where std::stats::rank(campaigns.cpm * campaigns.cpm) = 37""".stripMargin
+
+        val results = evalE(input) 
+        
+        results must haveSize(2)
+
+        forall(results) {
+          case (VectorCase(_), SObject(obj)) => {
+            obj must haveSize(5)
+            obj must contain("cpm" -> SDecimal(6))
+          }
+          case r => failure("Result has wrong shape: "+r)
+        }
+      }      
+      
       "using where" >> {
         val input = """
           | campaigns := //campaigns 
@@ -543,6 +641,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -582,6 +681,7 @@ trait EvalStackSpecs extends Specification {
             obj must haveSize(5)
             obj must contain("cpm" -> SDecimal(6))
           }
+          case r => failure("Result has wrong shape: "+r)
         }
       }
 
@@ -630,7 +730,10 @@ trait EvalStackSpecs extends Specification {
           | std::time::yearsBetween(time, "2012-02-09T19:31:13.616+10:00")""".stripMargin
 
         val results = evalE(input) 
-        val results2 = results map { case (VectorCase(_), SDecimal(d)) => d.toInt } 
+        val results2 = results map {
+          case (VectorCase(_), SDecimal(d)) => d.toInt
+          case r => failure("Result has wrong shape: "+r)
+        }
 
         results2 must contain(0).only
       }
@@ -642,7 +745,10 @@ trait EvalStackSpecs extends Specification {
             | std::stats::corr(cpm, 10)""".stripMargin
 
           val results = evalE(input) 
-          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+          val results2 = results map {
+            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case r => failure("Result has wrong shape: "+r)
+          }
 
           results2 must haveSize(0)
         }
@@ -655,7 +761,10 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input) 
           results must haveSize(1)
 
-          val results2 = results map { case (VectorCase(), SDecimal(d)) => d.toDouble } 
+          val results2 = results map {
+            case (VectorCase(), SDecimal(d)) => d.toDouble
+            case r => failure("Result has wrong shape: "+r)
+          }
           results2 must contain(0)
         }
 
@@ -667,19 +776,32 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input) 
           results must haveSize(1)
 
-          val results2 = results map { case (VectorCase(), SArray(Vector(SDecimal(slope), SDecimal(yint)))) => Vector(slope, yint) } 
-          results2 must contain(Vector(0, 10))
+          val results2 = results map {
+            case (VectorCase(), SObject(fields)) => fields
+            case r => failure("Result has wrong shape: "+r)
+          }
+          results2 must contain(Map("slope" -> SDecimal(0), "intercept" -> SDecimal(10)))
         }
       }
     }
  
-    "set critical conditions given an empty set" in {
+    "set critical conditions given an empty set in" >> {
+      "characteristic function" >> {
         val input = """
           | function('a) :=
           |   //campaigns where //campaigns.foo = 'a
           | function""".stripMargin
 
         eval(input) mustEqual Set()
+      }
+
+      "forall expression" >> {
+        val input = """
+          | forall 'a
+          |   //campaigns where //campaigns.foo = 'a""".stripMargin
+
+        eval(input) mustEqual Set()
+      }
     }
 
     "use NotEq correctly" in {
@@ -692,19 +814,33 @@ trait EvalStackSpecs extends Specification {
           obj must haveSize(5)
           obj must contain("gender" -> SString("male"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
-    "evaluate an unquantified characteristic function" in {
-      val input = """
-        | campaigns := //campaigns
-        | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
-        | sums('n) :=
-        |   m := max(nums where nums < 'n)
-        |   (nums where nums = 'n) + m 
-        | sums""".stripMargin
+    "evaluate sliding window in a" >> {
+        "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+          | sums('n) :=
+          |   m := max(nums where nums < 'n)
+          |   (nums where nums = 'n) + m 
+          | sums""".stripMargin
 
-      eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | nums := distinct(campaigns.cpm where campaigns.cpm < 10)
+          | forall 'n
+          |   m := max(nums where nums < 'n)
+          |   (nums where nums = 'n) + m""".stripMargin
+
+        eval(input) mustEqual Set(SDecimal(15), SDecimal(11), SDecimal(9), SDecimal(5))
+      }
     }
 
     "evaluate a quantified characteristic function of two parameters" in {
@@ -714,6 +850,7 @@ trait EvalStackSpecs extends Specification {
         | fun([25,36], "female")""".stripMargin
 
       val results = evalE(input) 
+      results must haveSize(14)
       
       forall(results) {
         case (VectorCase(_), SObject(obj)) => {
@@ -721,21 +858,37 @@ trait EvalStackSpecs extends Specification {
           obj must contain("ageRange" -> SArray(Vector(SDecimal(25), SDecimal(36))))
           obj must contain("gender" -> SString("female"))
         }
+        case r => failure("Result has wrong shape: "+r)
       }
     }
 
-    "evaluate an unquantified characteristic function of two parameters" in {  //note: this is NOT the the most efficient way to implement this query, but it still should work
-      val input = """
-        | campaigns := //campaigns
-        | gender := campaigns.gender
-        | platform := campaigns.platform
-        | equality('a, 'b) :=
-        |   g := gender where gender = 'a
-        |   p := platform where platform = 'b
-        |   campaigns where g = p
-        | equality""".stripMargin
+    "evaluate a function of two parameters" >> {  //note: this is NOT the the most efficient way to implement this query, but it still should work
+      "characteristic function" >> {
+        val input = """
+          | campaigns := //campaigns
+          | gender := campaigns.gender
+          | platform := campaigns.platform
+          | equality('a, 'b) :=
+          |   g := gender where gender = 'a
+          |   p := platform where platform = 'b
+          |   campaigns where g = p
+          | equality""".stripMargin
 
-      eval(input) mustEqual Set()
+        eval(input) mustEqual Set()
+      }
+
+      "forall expression" >> {
+        val input = """
+          | campaigns := //campaigns
+          | gender := campaigns.gender
+          | platform := campaigns.platform
+          | forall 'a forall 'b
+          |   g := gender where gender = 'a
+          |   p := platform where platform = 'b
+          |   campaigns where g = p""".stripMargin
+
+        eval(input) mustEqual Set()
+      }
     }
 
     "determine a histogram of genders on category" in {
@@ -756,27 +909,52 @@ trait EvalStackSpecs extends Specification {
       eval(input) mustEqual Set()   // TODO
     }.pendingUntilFixed
      
-    "determine most isolated clicks in time" in {
-      val input = """
-        | clicks := //clicks
-        | 
-        | spacings('time) :=
-        |   click := clicks where clicks.time = 'time
-        |   belowTime := max(clicks.time where clicks.time < 'time)
-        |   aboveTime := min(clicks.time where clicks.time > 'time)
-        |   
-        |   {
-        |     click: click,
-        |     below: click.time - belowTime,
-        |     above: aboveTime - click.time
-        |   }
-        |   
-        | meanAbove := mean(spacings.above)
-        | meanBelow := mean(spacings.below)
-        | 
-        | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+    "determine most isolated clicks in time" >> {
+      "characteristic function" >> {
+        val input = """
+          | clicks := //clicks
+          | 
+          | spacings('time) :=
+          |   click := clicks where clicks.time = 'time
+          |   belowTime := max(clicks.time where clicks.time < 'time)
+          |   aboveTime := min(clicks.time where clicks.time > 'time)
+          |   
+          |   {
+          |     click: click,
+          |     below: click.time - belowTime,
+          |     above: aboveTime - click.time
+          |   }
+          |   
+          | meanAbove := mean(spacings.above)
+          | meanBelow := mean(spacings.below)
+          | 
+          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
 
-      eval(input) must not(beEmpty)   // TODO
+        eval(input) must not(beEmpty)   // TODO
+      }
+
+      "forall expression" >> {
+        val input = """
+          | clicks := //clicks
+          | 
+          | spacings := (forall 'time
+          |   click := clicks where clicks.time = 'time
+          |   belowTime := max(clicks.time where clicks.time < 'time)
+          |   aboveTime := min(clicks.time where clicks.time > 'time)
+          |   
+          |   {
+          |     click: click,
+          |     below: click.time - belowTime,
+          |     above: aboveTime - click.time
+          |   })
+          |   
+          | meanAbove := mean(spacings.above)
+          | meanBelow := mean(spacings.below)
+          | 
+          | spacings.click where spacings.below > meanBelow | spacings.above > meanAbove""".stripMargin
+
+        eval(input) must not(beEmpty)   // TODO
+      }
     }
   
     "evaluate the 'hello, quirrel' examples" >> {
