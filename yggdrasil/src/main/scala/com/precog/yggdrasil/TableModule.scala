@@ -23,6 +23,8 @@ import com.precog.common.Path
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 import scalaz.Monoid
 
+import collection.SortedSet
+
 trait TableModule extends FNModule {
   import Schema._
 
@@ -179,11 +181,11 @@ trait TableModule extends FNModule {
     
     def empty: Table
     
-    def constString(v: String): Table
-    def constLong(v: Long): Table
-    def constDouble(v: Double): Table
-    def constDecimal(v: BigDecimal): Table
-    def constBoolean(v: Boolean): Table
+    def constString(v: SortedSet[CString]): Table
+    def constLong(v: SortedSet[CLong]): Table
+    def constDouble(v: SortedSet[CDouble]): Table
+    def constDecimal(v: SortedSet[CNum]): Table
+    def constBoolean(v: SortedSet[CBoolean]): Table
     def constNull: Table
     
     def constEmptyObject: Table

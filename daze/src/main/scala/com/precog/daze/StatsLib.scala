@@ -138,8 +138,79 @@ trait StatsLib extends GenOpcode
     } */
     
     lazy val alignment = None
+    type Result = List[BigDecimal]  //(currentRunValue, curentCount, listOfModes, maxCount)
+    
+    implicit def monoid = new Monoid[BigDecimal] {  
+      def zero = BigDecimal(0)
+      def append(left: BigDecimal, right: => BigDecimal) = left + right
+    }
 
-    def apply(table: Table) = table
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(col: Column, range: Range): Result = {
+        col match {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              List.empty[BigDecimal]
+            } else {
+              val foldedMapped: (Option[BigDecimal], BigDecimal, List[BigDecimal], BigDecimal) = mapped.foldLeft(Option.empty[BigDecimal], BigDecimal(0), List.empty[BigDecimal], BigDecimal(0)) {
+                case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
+                case ((Some(currentRun), count, modes, maxCount), sv) => {
+                  if (currentRun == sv) {
+                    if (count >= maxCount)
+                      (Some(sv), count + 1, List(sv), maxCount + 1)
+                    else if (count + 1 == maxCount)
+                      (Some(sv), count + 1, modes :+ BigDecimal(sv), maxCount)
+                    else
+                      (Some(sv), count + 1, modes, maxCount)
+                  } else {
+                    if (maxCount == 1)
+                      (Some(sv), 1, modes :+ BigDecimal(sv), maxCount)
+                    else
+                      (Some(sv), 1, modes, maxCount)
+                  }
+                }
+              }
+
+              val (_, _, result, _) = foldedMapped
+              result
+            }
+          //case col: DoubleColumn => 
+          //  val mapped = range filter col.isDefinedAt map { x => col(x) }
+          //  if (mapped.isEmpty) {
+          //    None
+          //  } else {
+          //    val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+          //      case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+          //    }
+
+          //    Some(foldedMapped)
+          //  }
+          //case col: NumColumn => 
+          //  val mapped = range filter col.isDefinedAt map { x => col(x) }
+          //  if (mapped.isEmpty) {
+          //    None
+          //  } else {
+          //    val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+          //      case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+          //    }
+
+          //    Some(foldedMapped)
+          //  }
+        }
+      }
+    }
+
+    def extract(res: Result): Table =
+      res map { case (sum, count) => ops.constDecimal(sum / count) } getOrElse ops.empty
+
+    def apply(table: Table) = {
+      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+      val sortedTable = table.sort(sortKey, SortAscending)
+
+      
+
+    }
   }
  
   object LinearCorrelation extends Morphism(StatsNamespace, "corr", Two) {

@@ -24,6 +24,7 @@ import blueeyes.json.JPath
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.CValue.order
 import com.precog.util._
 import com.precog.common.{Path, VectorCase}
 
@@ -32,6 +33,7 @@ import org.joda.time.format._
 import org.joda.time.DateTimeZone
 
 import java.lang.Math._
+import collection.SortedSet
 
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
@@ -101,9 +103,9 @@ trait Evaluator extends DAG
       
       case Root(_, instr) => {
         val table = graph.value collect {
-          case SString(str) => ops.constString(str)
-          case SDecimal(d) => ops.constDecimal(d)
-          case SBoolean(b) => ops.constBoolean(b)
+          case SString(str) => ops.constString(SortedSet(CString(str)))
+          case SDecimal(d) => ops.constDecimal(SortedSet(CNum(d)))
+          case SBoolean(b) => ops.constBoolean(SortedSet(CBoolean(b)))
           case SNull => ops.constNull
           case SObject(map) if map.isEmpty => ops.constEmptyObject
           case SArray(Vector()) => ops.constEmptyArray
