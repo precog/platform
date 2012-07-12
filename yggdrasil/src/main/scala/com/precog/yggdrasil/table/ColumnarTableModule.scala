@@ -9,6 +9,7 @@ import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 
 import scala.collection.BitSet
+import scala.collection.SortedSet
 import scala.annotation.tailrec
 
 import scalaz._
@@ -37,22 +38,61 @@ trait ColumnarTableModule extends TableModule {
     
     def empty: Table = new Table(Iterable.empty[Slice])
     
-    def constBoolean(v: Boolean): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> Column.const(v)), 1)))
+    def constBoolean(v: SortedSet[CBoolean]): Table = {
+      val column = new BoolColumn {
+        val range = v.size
+        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
 
-    def constLong(v: Long): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> Column.const(v)), 1)))
+        val seq = v.toIndexedSeq
+        def apply(row: Int): Boolean = seq(row).value
+      }
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), 1)))
+    }
 
-    def constDouble(v: Double): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> Column.const(v)), 1)))
+    def constLong(v: SortedSet[CLong]): Table = {
+      val column = new LongColumn {
+        val range = v.size
+        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
 
-    def constDecimal(v: BigDecimal): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> Column.const(v)), 1)))
+        val seq = v.toIndexedSeq
+        def apply(row: Int): Long = seq(row).value
+      }
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), 1)))
+    }
 
-    def constString(v: String): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> Column.const(v)), 1)))
+    def constDouble(v: SortedSet[CDouble]): Table = {
+      val column = new DoubleColumn {
+        val range = v.size
+        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
 
-    def constDate(v: DateTime): Table = 
+        val seq = v.toIndexedSeq
+        def apply(row: Int): Double = seq(row).value
+      }
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), 1)))
+    }
+
+    def constDecimal(v: SortedSet[CNum]): Table = {
+      val column = new NumColumn {
+        val range = v.size
+        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
+
+        val seq = v.toIndexedSeq
+        def apply(row: Int): BigDecimal = seq(row).value
+      }
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> column), 1)))
+    }
+
+    def constString(v: SortedSet[CString]): Table = {
+      val column = new StrColumn {
+        val range = v.size
+        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
+        val seq = v.toIndexedSeq
+        def apply(row: Int): String = seq(row).value
+      }
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> column), 1)))
+    }
+
+    def constDate(v: DateTime): Table =  //TODO should take a set; use CDate
       new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> Column.const(v)), 1)))
 
     def constNull: Table = 
