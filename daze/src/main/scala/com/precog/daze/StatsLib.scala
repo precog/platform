@@ -9,10 +9,20 @@ import yggdrasil.table._
 
 import com.precog.util.IdGen
 
+import scalaz.Monoid
+import scalaz.std.anyVal._
+
+import org.apache.commons.collections.primitives.ArrayIntList
+
 trait StatsLib extends GenOpcode
+    with ReductionLib
     with ImplLibrary
     with BigDecimalOperations
     with Evaluator {
+
+  import trans._
+  import Count._
+  import Mean._
   
   val StatsNamespace = Vector("std", "stats")
   val EmptyNamespace = Vector()
@@ -20,6 +30,9 @@ trait StatsLib extends GenOpcode
   override def _libMorphism = super._libMorphism ++ Set(Median, Mode, Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
   
   object Median extends Morphism(EmptyNamespace, "median", One) {
+    
+
+
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
@@ -55,10 +68,26 @@ trait StatsLib extends GenOpcode
         else None
       }
     } */
-    
+   
     lazy val alignment = None
+    
+    def apply(table: Table): Table = {  //TODO write tests for the empty table case
+      val compactedTable = table.compact(Leaf(Source))
 
-    def apply(table: Table) = table
+      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+      val sortedTable = compactedTable.sort(sortKey, SortAscending)
+
+      val count = sortedTable.reduce(Count.reducer)
+      
+      if (count % 2 == 0) {
+        val middleValues = sortedTable.take((count / 2) + 1).drop((count / 2) - 1)
+        Mean(middleValues)
+        //Mean.extract(middleValues.reduce(Mean.reducer))
+
+      } else {
+        sortedTable.take((count / 2) + 1).drop(count / 2)
+      }
+    }
   }
   
   object Mode extends Morphism(EmptyNamespace, "mode", One) {

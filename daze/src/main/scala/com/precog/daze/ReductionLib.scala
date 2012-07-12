@@ -23,9 +23,9 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Count extends Reduction(ReductionNamespace, "count") {
     type Result = Long
     
-    def monoid = implicitly[Monoid[Long]]
+    def monoid = implicitly[Monoid[Result]]
     
-    def reducer: Reducer[Long] = new CReducer[Long] {
+    def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(col: Column, range: Range) = {
         val colSeq = range.view filter col.isDefinedAt
         colSeq.size
@@ -167,7 +167,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
     
-    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
+    def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(col: Column, range: Range): Result = {
         col match {
           case col: LongColumn => 

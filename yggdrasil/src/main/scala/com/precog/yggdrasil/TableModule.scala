@@ -184,6 +184,12 @@ trait TableModule extends FNModule {
     def reduce[A: Monoid](reducer: Reducer[A]): A
     
     /**
+     * Removes all rows in the table for which all values are undefined. 
+     * Remaps the indicies.
+     */
+    def compact(spec: TransSpec1): Table
+
+    /**
      * Performs a one-pass transformation of the keys and values in the table.
      * If the key transform is not identity, the resulting table will have
      * unknown sort order.
@@ -214,10 +220,10 @@ trait TableModule extends FNModule {
     // Does this have to be fully known at every point in time?
     def schema: JType
     
-    def drop(n: Int): Table
+    def drop(n: Long): Table
     
-    def take(n: Int): Table
+    def take(n: Long): Table
     
-    def takeRight(n: Int): Table
+    def takeRight(n: Long): Table
   }
 }
