@@ -13,7 +13,6 @@ import org.joda.time.format._
 import org.joda.time.DateTimeZone
 
 import java.lang.Math._
-import collection.SortedSet
 import collection.immutable.ListSet
 
 import akka.dispatch.{Await, Future}
@@ -84,9 +83,9 @@ trait Evaluator extends DAG
       
       case Root(_, instr) => {
         val table = graph.value collect {
-          case SString(str) => ops.constString(ListSet(CString(str)))
-          case SDecimal(d) => ops.constDecimal(ListSet(CNum(d)))
-          case SBoolean(b) => ops.constBoolean(ListSet(CBoolean(b)))
+          case SString(str) => ops.constString(Set(CString(str)))
+          case SDecimal(d) => ops.constDecimal(Set(CNum(d)))
+          case SBoolean(b) => ops.constBoolean(Set(CBoolean(b)))
           case SNull => ops.constNull
           case SObject(map) if map.isEmpty => ops.constEmptyObject
           case SArray(Vector()) => ops.constEmptyArray
