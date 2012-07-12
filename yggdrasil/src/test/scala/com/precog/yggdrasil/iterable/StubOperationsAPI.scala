@@ -19,7 +19,7 @@ import scalaz._
 object StubOperationsAPI {
   import akka.dispatch.ExecutionContext
 
-  val actorSystem = ActorSystem("stub_operations_api")
+  val actorSystem = ActorSystem("stubOperationsApi")
   implicit val asyncContext: akka.dispatch.ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
 }
 

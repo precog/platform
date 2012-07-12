@@ -1,0 +1,6 @@
+/etc/precog/ingest-v1.conf=dev/dev-ingest-v1.conf
+default=dev/dev-ingest-v1.default
+init=dev/dev-ingest-v1.init
+/etc/monit/conf.d/ingest-v1.monit=dev/dev-ingest-v1.monit
+/etc/precog/ingest-v1.logging.xml=dev/dev-ingest-v1.logging.xml
+postinstall=dev/postinstall.sh

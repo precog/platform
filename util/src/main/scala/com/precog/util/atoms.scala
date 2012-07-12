@@ -110,6 +110,37 @@ class Atom[A] extends Source[A] with Sink[A] {
       }
     }
   }
+
+  def appendFrom[E, Coll[_]](a: Atom[Coll[E]])(implicit cbf: CanBuildFrom[Coll[E], E, A], evidence: A =:= Coll[E], evidence2: Coll[E] <:< TraversableOnce[E]) {
+    if (!isForced || setterThread != null) {
+      lock.lock()
+      try {
+        if (!isForced || setterThread != null) {
+          val builder = if (value == null) {        // TODO gross!
+            cbf()
+          } else {
+            val current = evidence(value)
+            val back = cbf(current)
+            back ++= current
+            back
+          }
+         
+          // not thread safe, basically horrible
+          if (a.value != null) {
+            builder ++= evidence2(a.value)
+          }
+          
+          value = builder.result()
+          
+          if (setterThread != null) {
+            isSet = true
+          }
+        }
+      } finally {
+        lock.unlock()
+      }
+    }
+  }
   
   def from(source: Source[A]) {
     source.into(this)

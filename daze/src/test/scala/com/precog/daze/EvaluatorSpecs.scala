@@ -618,6 +618,7 @@ class EvaluatorSpecs extends Specification
           obj must haveSize(1)
           obj must haveKey("aa")
         }
+        case _ => failure("Result has wrong shape")
       }
     }
     
@@ -991,6 +992,7 @@ class EvaluatorSpecs extends Specification
           obj must not haveKey("time")
         }
         case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+        case _ => failure("Result has wrong shape")
       }
     }    
     "compute the set difference of the set difference" in {
@@ -1013,6 +1015,7 @@ class EvaluatorSpecs extends Specification
           obj must haveKey("time")
         }
         case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+        case _ => failure("Result has wrong shape")
       }
     }      
     
@@ -1498,6 +1501,21 @@ class EvaluatorSpecs extends Specification
         2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
     }
     
+    "correctly evaluate a match following a cross with equality" in {
+      val line = Line(0, "")
+      
+      val numbers = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+      val numbers3 = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het)
+      
+      val input = Join(line, Map2Match(And),
+        Join(line, Map2Cross(And),
+          Join(line, Map2Match(Eq), numbers, numbers),
+          Join(line, Map2Match(Eq), numbers3, numbers3)),
+        Join(line, Map2Match(Eq), numbers3, numbers3))
+      
+      testEval(input) must not(beEmpty)
+    }
+    
     "correctly order a match following a cross within a new" in {
       val line = Line(0, "")
       
@@ -1604,7 +1622,7 @@ class EvaluatorSpecs extends Specification
             case SNull => ok
           }
 
-          val user = obj("user") match {
+          val user = (obj("user") : @unchecked) match {
             case SString(user) => user
             case SNull => SNull
           }
@@ -1640,6 +1658,7 @@ class EvaluatorSpecs extends Specification
           
           obj("t") mustEqual SDecimal(42)
         }
+        case _ => failure("Result has wrong shape")
       }
     }
     
@@ -1669,7 +1688,8 @@ class EvaluatorSpecs extends Specification
           obj("user") must beLike {
             case SNull => ok
           }
-        }            
+        }
+        case _ => failure("Result has wrong shape")
       }
     }
 
@@ -1748,6 +1768,8 @@ class EvaluatorSpecs extends Specification
           obj must haveKey("aa")
           obj must haveKey("bb")
         }
+        case _ => failure("Result has wrong shape")
+
       }
     }
 

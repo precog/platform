@@ -46,21 +46,19 @@ class TestMetadataStorage(data: Map[ProjectionDescriptor, ColumnMetadata]) exten
 }
 
 object MetadataActorSpec extends Specification with FutureMatchers with Mockito {
-  implicit val system = ActorSystem("shard_metadata_test")
+  implicit val system = ActorSystem("shardMetadataTest")
   implicit val timeout = Timeout(30000) 
 
   "shard metadata actor" should {
     "correctly propagates initial message clock on flush request" in {
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
 
-      val actorRef = TestActorRef(new MetadataActor("test", storage, coord))
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, Some(YggCheckpoint(0, VectorClock.empty))))
       
       (actorRef ? FlushMetadata) must whenDelivered {
         beLike {
           case _ =>
-            there was one(coord).loadYggCheckpoint("test")
             there was one(coord).saveYggCheckpoint("test", YggCheckpoint(0, VectorClock.empty))
         }
       }
@@ -69,9 +67,8 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
     "correctly propagates updated message clock on flush request" in {
       val storage = new TestMetadataStorage(Map())
       val coord = mock[CheckpointCoordination]
-      coord.loadYggCheckpoint("test") returns Some(Success(YggCheckpoint(0, VectorClock.empty)))
 
-      val actorRef = TestActorRef(new MetadataActor("test", storage, coord))
+      val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
 
       val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
 
@@ -89,7 +86,6 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
             val stringStats = StringValueStats(2, "Test123", "Test123")
             val resultingMetadata: ColumnMetadata = Map(colDesc -> Map(stringStats.metadataType -> stringStats))
 
-            there was one(coord).loadYggCheckpoint("test")
             storage.updates(descriptor).last.metadata must_== resultingMetadata
         }
       }
@@ -104,7 +100,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 }
 
 object MetadataActorStateSpec extends Specification {
-  implicit val system = ActorSystem("shard_metadata_test")
+  implicit val system = ActorSystem("shardMetadataTest")
 
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
@@ -154,7 +150,7 @@ object MetadataActorStateSpec extends Specification {
     ))
   ))
 
-  val actor = TestActorRef(new MetadataActor("test", new TestMetadataStorage(data), CheckpointCoordination.Noop)).underlyingActor
+  val actor = TestActorRef(new MetadataActor("test", new TestMetadataStorage(data), CheckpointCoordination.Noop, None)).underlyingActor
 
   def dump(root: PathRoot, indent: Int = 0) {
     dumpMeta(root.children, indent)

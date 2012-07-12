@@ -104,6 +104,29 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
         
         orderCrosses(input) mustEqual expected
       }
+      
+      "random-case-without-a-label" >> {
+        val line = Line(0, "")
+        
+        val numbers = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+        val numbers3 = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het)
+        
+        val input = Join(line, Map2Match(And),
+          Join(line, Map2Cross(And),
+            Join(line, Map2Match(Eq), numbers, numbers),
+            Join(line, Map2Match(Eq), numbers3, numbers3)),
+          Join(line, Map2Match(Eq), numbers3, numbers3))
+        
+        val expected = Join(line, Map2Match(And),
+          Sort(
+            Join(line, Map2CrossLeft(And),
+              Join(line, Map2Match(Eq), numbers, numbers),
+              Memoize(Join(line, Map2Match(Eq), numbers3, numbers3), 100)),
+            Vector(1)),
+          Join(line, Map2Match(Eq), numbers3, numbers3))
+            
+        orderCrosses(input) mustEqual expected
+      }
     }
     
     // this will eventually be a re-order cross test case

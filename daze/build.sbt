@@ -1,7 +1,5 @@
 name := "daze"
 
-version := "0.0.1-SNAPSHOT"
-
 scalacOptions += "-Ydependent-method-types"
 
 libraryDependencies ++= Seq(

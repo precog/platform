@@ -30,8 +30,8 @@ trait QueryExecutor {
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]]
   def structure(userUID: String, path: Path): Future[Validation[String, JObject]]
   def status(): Future[Validation[String, JValue]]
-  def startup(): Future[Unit]
-  def shutdown(): Future[Unit]
+  def startup(): Future[Boolean]
+  def shutdown(): Future[Boolean]
 }
 
 trait NullQueryExecutor extends QueryExecutor {
@@ -46,8 +46,8 @@ trait NullQueryExecutor extends QueryExecutor {
   def structure(userUID: String, path: Path) = sys.error("feature not available")
   def status() = sys.error("feature not available")
 
-  def startup = Future(())
-  def shutdown = Future { actorSystem.shutdown }
+  def startup = Future(true)
+  def shutdown = Future { actorSystem.shutdown; true }
 }
 
 // vim: set ts=4 sw=4 et:

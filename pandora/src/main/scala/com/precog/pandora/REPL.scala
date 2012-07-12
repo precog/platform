@@ -20,9 +20,9 @@ import yggdrasil._
 import yggdrasil.actor._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
+import yggdrasil.memoization._
 
 import daze._
-import daze.memoization._
 
 import quirrel.LineErrors
 import quirrel.emitter._
@@ -64,7 +64,7 @@ trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
     def compile(oldTree: Expr): Option[Expr] = {
       bindRoot(oldTree, oldTree)
       
-      val tree = shakeTree(oldTree)
+      val tree = rewriteForall(shakeTree(oldTree))
       val strs = for (error <- tree.errors) yield showError(error)
       
       if (!tree.errors.isEmpty) {
@@ -105,7 +105,7 @@ trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
       
       case PrintTree(tree) => {
         bindRoot(tree, tree)
-        val tree2 = shakeTree(tree)
+        val tree2 = rewriteForall(shakeTree(tree))
         
         out.println()
         out.println(prettyPrint(tree2))
@@ -216,7 +216,7 @@ object Console extends App {
       DiskMemoizationConfig with 
       DatasetConsumersConfig with 
       IterableDatasetOpsConfig with 
-      ProductionActorConfig {
+      StandaloneShardSystemConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
 
@@ -247,38 +247,36 @@ object Console extends App {
 
   val repl: IO[scalaz.Validation[blueeyes.json.xschema.Extractor.Error, Lifecycle]] = for {
     replConfig <- loadConfig(args.headOption) 
-    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, new FilesystemFileOps {})
+    fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, FilesystemFileOps)
   } yield {
-      scalaz.Success(new REPL 
+      scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with IterableDatasetOpsComponent
           with LevelDBQueryComponent
           with DiskIterableMemoizationComponent 
-          with Lifecycle { self =>
+          with Lifecycle 
+          with LevelDBActorYggShardModule
+          with StandaloneShardSystemActorModule { self =>
         override type Dataset[A] = IterableDataset[A]
         override type Memoable[A] = Iterable[A]
 
-        lazy val actorSystem = ActorSystem("repl_actor_system")
+        implicit lazy val actorSystem = ActorSystem("replActorSystem")
         implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        trait Storage extends StandaloneActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule {
-          type YggConfig = REPLConfig
-        }
+        type Storage = LevelDBActorYggShard
 
         object ops extends Ops 
         object query extends QueryAPI 
-        object storage extends Storage {
-          val yggConfig = replConfig
-          val metadataStorage = fileMetadataStorage
+        object storage extends LevelDBActorYggShard(fileMetadataStorage) {
           val accessControl = new UnlimitedAccessControl()(asyncContext)
         }
 
-        def startup = IO { Await.result(storage.actorsStart, controlTimeout) }
+        def startup = IO { Await.result(storage.start(), controlTimeout) }
 
         def shutdown = IO { 
-          Await.result(storage.actorsStop, controlTimeout) 
+          Await.result(storage.stop(), controlTimeout) 
           actorSystem.shutdown
         }
       })

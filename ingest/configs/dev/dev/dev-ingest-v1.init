@@ -1,0 +1,23 @@
+# dev-ingest-v1 - ReportGrid dev ingest service (v1)
+#
+#
+
+description "dev-ingest-v1 - ReportGrid dev ingest service (v1)"
+
+start on runlevel [2345]
+stop on runlevel [06]
+
+respawn
+
+pre-start script
+  [ -d /var/run/precog ] || install -m 755 -o precog -g precog -d /var/run/precog
+end script
+
+script
+  if [ -f /etc/default/ingest-v1 ]; then . /etc/default/ingest-v1; fi
+  su precog -s "/bin/bash" -c "/usr/bin/java $JAVA_OPTS -Dlogback.configurationFile=/etc/precog/ingest-v1.logging.xml -jar /usr/share/java/ingest-v1.jar --configFile /etc/precog/ingest-v1.conf >> /var/log/precog/ingest-v1.stdout.log 2>&1"
+end script
+
+post-start script
+  echo `status ingest-v1 | egrep -o '[0-9]+$' | head -n1` > /var/run/precog/ingest-v1.pid
+end script

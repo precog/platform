@@ -61,6 +61,13 @@ trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggC
     case JArray(values) =>
       SArray(Vector(values map jvalueToSValue: _*))
   }
+  
+  def consumeEvalNotToSet(userUID: String, graph: DepGraph, ctx: Context) = {
+    implicit val bind = Validation.validationMonad[Throwable]
+    Validation.fromTryCatch {
+      eval(userUID, graph, ctx).toJson
+    } 
+  }
 }
 
 

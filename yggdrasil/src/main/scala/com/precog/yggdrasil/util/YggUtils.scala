@@ -11,11 +11,13 @@ import com.precog.common.kafka._
 import com.precog.common.security._
 
 
+import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
 import akka.dispatch.Future
 import akka.util.Timeout
 import akka.util.Duration
+import akka.pattern.gracefulStop
 
 import org.joda.time._
 
@@ -473,8 +475,8 @@ object ZookeeperTools extends Command {
       opt("z", "zookeeper", "The zookeeper host:port", { s: String => config.zkConn = s })
       opt("c", "checkpoints", "Show shard checkpoint state with prefix", { s: String => config.showCheckpoints = Some(s)})
       opt("a", "agents", "Show ingest agent state with prefix", { s: String => config.showAgents = Some(s)})
-      opt("uc", "update_checkpoints", "Update agent state prefix:shard:json", {s: String => config.updateCheckpoint = Some(s)})
-      opt("ua", "update_agents", "Update agent state prefix:ingest:json", {s: String => config.updateAgent = Some(s)})
+      opt("uc", "update_checkpoints", "Update agent state. Format = path:json", {s: String => config.updateCheckpoint = Some(s)})
+      opt("ua", "update_agents", "Update agent state. Format = path:json", {s: String => config.updateAgent = Some(s)})
     }
     if (parser.parse(args)) {
       val conn: ZkConnection = new ZkConnection(config.zkConn)
@@ -489,14 +491,11 @@ object ZookeeperTools extends Command {
     }
   }
 
-  val shardCheckpointPath = "/com/precog/ingest/v1/shard/checkpoint"
-  val ingestAgentPath = "/com/precog/ingest/v1/relay_agent"
-
   def process(conn: ZkConnection, client: ZkClient, config: Config) {
-    config.checkpointsPath().foreach { path =>
+    config.showCheckpoints.foreach { path =>
       showChildren("checkpoints", path, pathsAt(path, client))
     }
-    config.relayAgentsPath().foreach { path =>
+    config.showAgents.foreach { path =>
       showChildren("agents", path, pathsAt(path, client))
     }
     config.checkpointUpdate.foreach {
@@ -554,38 +553,14 @@ object ZookeeperTools extends Command {
                var updateCheckpoint: Option[String] = None,
                var updateAgent: Option[String] = None) {
 
-    def checkpointsPath() = showCheckpoints.map { buildPath(_, shardCheckpointPath) } 
-    def relayAgentsPath() = showAgents.map { buildPath(_, ingestAgentPath) } 
-    
-    def buildPath(prefix: String, base: String): String = 
-      if(prefix.trim.size == 0) {
-        base 
-      } else {
-        "/%s%s".format(prefix, base) 
-      }
-
-    def splitOn(delim: Char, s: String): (String, String) = {
-      val t = s.span( _ != delim)
-      (t._1, t._2.substring(1))
+    def splitPathJson(s: String): (String,String) = s.split(":", 2) match {
+      case Array(path,json) => (path, json)
+      case _ => sys.error("Invalid format for path+json: \"%s\"".format(s))
     }
 
-    def splitUpdate(s: String): (String, String, String) = {
-      val t1 = splitOn(':', s)
-      val t2 = splitOn(':', t1._2)
-      (t1._1, t2._1, t2._2)
-    }
+    def checkpointUpdate() = updateCheckpoint.map(splitPathJson)
 
-    def checkpointUpdate() = updateCheckpoint.map{ splitUpdate }.map {
-      case (pre, id, data) =>
-        val path = buildPath(pre, shardCheckpointPath) + "/" + id
-        (path, data)
-    }
-
-    def relayAgentUpdate() = updateAgent.map{ splitUpdate }.map {
-      case (pre, id, data) =>
-        val path = buildPath(pre, ingestAgentPath) + "/" + id
-        (path, data)
-    }
+    def relayAgentUpdate() = updateAgent.map(splitPathJson)
   }
 }
 
@@ -690,6 +665,7 @@ object ImportTools extends Command with Logging {
     val config = new Config
     val parser = new OptionParser("yggutils import") {
       opt("t", "token", "<token>", "token to insert data under", { s: String => config.token = s })
+      opt("s", "storage", "<storage root>", "directory containing leveldb data files", { s: String => config.storageRoot = new File(s) })
       arglist("<json input> ...", "json input file mappings {db}={input}", {s: String => 
         val parts = s.split("=")
         val t = (parts(0) -> parts(1))
@@ -708,36 +684,40 @@ object ImportTools extends Command with Logging {
   }
 
   def process(config: Config) {
-    val dir = new File("./data") 
-    dir.mkdirs
+    config.storageRoot.mkdirs
+
+    val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(dir, FilesystemFileOps)) yield {
-      type Dataset = Seq[CValue]
-      object shard extends StandaloneActorEcosystem[IterableDataset[Dataset]] with ActorYggShard[IterableDataset[Dataset]] with ProjectionsActorModule[IterableDataset[Dataset]] with LevelDBProjectionFactory {
-        class YggConfig(val config: Configuration) extends BaseConfig with ProductionActorConfig 
-
-        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-
-        val metadataStorage = ms
-
-        val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
-
-        val fileOps = FilesystemFileOps
-
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
+      object shardModule extends LevelDBActorYggShardModule 
+      with LevelDBProjectionFactory
+      with ProductionShardSystemActorModule[IterableDataset[Seq[CValue]]] {
         def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
+
+        def fileOps = FilesystemFileOps
+
+        class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
+        val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
+
+        object shard extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
+          val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+        }
       }
 
+      import shardModule._
+
       logger.info("Starting shard input")
-      Await.result(shard.actorsStart, Duration(60, "seconds"))
+      Await.result(shard.start(), Duration(60, "seconds"))
       logger.info("Shard input started")
       config.input.foreach {
         case (db, input) =>
           logger.debug("Inserting batch: %s:%s".format(db, input))
-          val events = Source.fromFile(input).getLines.map {
-            line => EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, JsonParser.parse(line), Map.empty))
-          }.toList
-        
+          val reader = new FileReader(new File(input))
+          val events = JsonParser.parse(reader).children.map { child =>
+            EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
+          }
+          
           logger.debug(events.size + " total inserts")
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
@@ -749,7 +729,7 @@ object ImportTools extends Command with Logging {
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(shard.actorsStop, Duration(310, "seconds"))
+      Await.result(shard.stop(), stopTimeout)
 
       logger.info("Shutdown")
       sys.exit(0)
@@ -764,7 +744,8 @@ object ImportTools extends Command with Logging {
     var input: Vector[(String, String)] = Vector.empty, 
     val batchSize: Int = 1000, 
     var token: TokenID = "root",
-    var verbose: Boolean = false 
+    var verbose: Boolean = false ,
+    var storageRoot: File = new File("./data")
   )
 }
 
@@ -885,10 +866,10 @@ object TokenTools extends Command with AkkaDefaults with Logging {
   def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
-      val ownerGrant: Future[Grant] = tokenManager.newGrant(None, OwnerPermission(path, None))
-      val readGrant: Future[Grant]  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
-      val writeGrant: Future[Grant] = tokenManager.newGrant(None, WritePermission(path, None))
-      grants <- Future.sequence(List[Future[Grant]](ownerGrant, readGrant, writeGrant))
+      val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
+      val readGrant  = tokenManager.newGrant(None, ReadPermission(path, token.tid, None))
+      val writeGrant = tokenManager.newGrant(None, WritePermission(path, None))
+      grants <- Future.sequence(List(ownerGrant, readGrant, writeGrant))
       result <- tokenManager.addGrants(token.tid, grants.map(_.gid).toSet)
     } yield {
       result match {

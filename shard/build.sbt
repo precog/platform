@@ -1,7 +1,5 @@
 name := "shard"
 
-version := "1.1.0-SNAPSHOT"
-
 libraryDependencies ++= Seq(
       "org.apache"                %% "kafka-core"         % "0.7.5",
       "joda-time"                 % "joda-time"           % "1.6.2",

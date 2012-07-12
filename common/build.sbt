@@ -1,7 +1,5 @@
 name := "common"
 
-version := "1.2.1-SNAPSHOT"
-
 libraryDependencies ++= Seq(
   "joda-time"                 % "joda-time"            % "1.6.2",
   "org.streum"                % "configrity_2.9.1"     % "0.9.0",

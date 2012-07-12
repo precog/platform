@@ -42,7 +42,7 @@ trait YggdrasilQueryExecutorConfig extends
     DiskMemoizationConfig with 
     DatasetConsumersConfig with 
     IterableDatasetOpsConfig with 
-    ProductionActorConfig {
+    ProductionShardSystemConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
   lazy val maxEvalDuration: Duration = config[Int]("precog.evaluator.timeout.eval", 90) seconds
@@ -76,24 +76,19 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor {
-      //trait Storage extends ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
+    new YggdrasilQueryExecutor with LevelDBActorYggShardModule with ProductionShardSystemActorModule[IterableDataset] {
+      type Storage = LevelDBActorYggShard
 
-      lazy val actorSystem = ActorSystem("yggdrasil_exeuctor_actor_system")
+      implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
       object ops extends Ops 
       object query extends QueryAPI 
 
-      // Early initializers FTW (and to avoid cake badness with metadataStorage)
-      class Storage extends {
-        type YggConfig = YggdrasilQueryExecutorConfig
-        val yggConfig = yConfig
-        val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+      val storage = new LevelDBActorYggShard(FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
         val accessControl = extAccessControl
-      } with ProductionActorEcosystem[IterableDataset] with ActorYggShard[IterableDataset] with LevelDBProjectionsActorModule
-      val storage = new Storage
+      }
     }
   }
 }
@@ -112,8 +107,15 @@ trait YggdrasilQueryExecutor
   type YggConfig = YggdrasilQueryExecutorConfig
   type Storage <: ActorYggShard[IterableDataset]
 
-  def startup() = storage.actorsStart
-  def shutdown() = storage.actorsStop
+  def startup() = storage.start.onComplete {
+    case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
+    case Right(_) => logger.info("Actor ecosystem started.")
+  }
+
+  def shutdown() = storage.stop.onComplete {
+    case Left(error) => logger.error("An error was encountered in actor ecosystem shutdown!", error)
+    case Right(_) => logger.info("Actor ecossytem shutdown complete.")
+  }
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
@@ -145,6 +147,7 @@ trait YggdrasilQueryExecutor
     val futRoot = storage.userMetadataView(userUID).findPathMetadata(path, JPath(""))
 
     def transform(children: Set[PathMetadata]): JObject = {
+      // Rewrite with collect or fold?
       val (primitives, compounds) = children.partition {
         case PathValue(_, _, _) => true
         case _                  => false
@@ -157,10 +160,12 @@ trait YggdrasilQueryExecutor
         case PathField(f, children) =>
           val path = "." + f
           JField(path, transform(children))
+        case _ => throw new MatchError("Non-compound in compounds")
       }.toList
 
       val types = JArray(primitives.map { 
         case PathValue(t, _, _) => JString(CType.nameOf(t))
+        case _ => throw new MatchError("Non-primitive in primitives")
       }.toList)
 
       JObject(fields :+ JField("types", types))

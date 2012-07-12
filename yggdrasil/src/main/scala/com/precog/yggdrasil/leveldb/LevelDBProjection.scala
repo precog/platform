@@ -10,9 +10,12 @@ import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory
 import org.fusesource.leveldbjni.DataWidth
 
+import org.joda.time.DateTime
+
 import java.io._
 import java.nio.ByteBuffer
-import java.util.concurrent.TimeoutException
+import java.util.Map.Entry
+import Bijection._
 
 import com.weiglewilczek.slf4s.Logger
 import scala.collection.JavaConverters._
@@ -30,15 +33,45 @@ import scalaz.syntax.show._
 import scalaz.Scalaz._
 import IterateeT._
 
-trait LevelDBProjection extends LevelDBByteProjection {
-  val baseDir: File
-  val descriptor: ProjectionDescriptor
+import blueeyes.json.JPath
+import blueeyes.json.JsonAST._
+import blueeyes.json.JsonDSL._
+import blueeyes.json.JsonParser
+import blueeyes.json.Printer
+import blueeyes.json.xschema._
+import blueeyes.json.xschema.Extractor._
+import blueeyes.json.xschema.DefaultSerialization._
+
+object LevelDBProjectionComparator {
+
+  import Printer._
+
+  def apply(_descriptor: ProjectionDescriptor) = new DBComparator {
+    val projection: ByteProjection = new LevelDBByteProjection {
+      val descriptor = _descriptor
+    }
+
+    def name = compact(render(_descriptor.serialize))
+    def compare(k1: Array[Byte], k2: Array[Byte]) = projection.keyOrder.order(k1, k2).toInt
+
+    // default implementations
+    def findShortestSeparator(start: Array[Byte], limit: Array[Byte]) = start
+    def findShortSuccessor(key: Array[Byte]) = key
+  }
+}
+
+object LevelDBProjection {
+  private final val comparatorMetadataFilename = "comparator"
+}
+
+abstract class LevelDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with Projection[IterableDataset[Seq[CValue]]] {
+  import LevelDBProjection._
 
   val chunkSize = 32000 // bytes
   val maxOpenFiles = 25
 
   val logger = Logger("col:" + descriptor.shows)
-  logger.debug("Opening column index files")
+  logger.debug("Opening column index files for projection " + descriptor.shows + " at " + baseDir)
 
   override def toString = "LevelDBProjection(" + descriptor.columns + ")"
 
@@ -56,18 +89,6 @@ trait LevelDBProjection extends LevelDBByteProjection {
     idIndexFile.close()
   }
 
-  def sync: IO[Unit] = IO { } 
-
-  def valueOffsets(values: Array[Byte]): List[Int] = {
-    val buf = ByteBuffer.wrap(values)
-    val positions = descriptor.columns.map(_.valueType.format).foldLeft(List(0)) {
-      case (v :: vx, FixedWidth(w))  => (v + w) :: v :: vx
-      case (v :: vx, LengthEncoded)  => (v + buf.getInt(v)) :: v :: vx
-    } 
-
-    positions.tail.reverse
-  }
-
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     val (idBytes, valueBytes) = toBytes(id, v)
 
@@ -77,74 +98,7 @@ trait LevelDBProjection extends LevelDBByteProjection {
       idIndexFile.put(idBytes, valueBytes)
     }
   }
-
-  ///////////////////
-  // ID Traversals //
-  ///////////////////
-
-  val readAheadSize = 2 // TODO: Make configurable
-  val readPollTime = 100l
-
-  import java.util.concurrent.{ArrayBlockingQueue,TimeUnit}
-  import java.util.concurrent.atomic.AtomicBoolean
-  import org.fusesource.leveldbjni.internal.JniDBIterator
-  import org.fusesource.leveldbjni.KeyValueChunk
-  import org.fusesource.leveldbjni.KeyValueChunk.KeyValuePair
-
-  class ChunkReader(iterator: JniDBIterator, expiresAt: Long) extends Thread {
-    val bufferQueue = new ArrayBlockingQueue[Pair[ByteBuffer,ByteBuffer]](readAheadSize) // Need a key and value buffer for each readahead
-
-    // pre-fill the buffer queue
-    (1 to readAheadSize).foreach {
-      _ => bufferQueue.put((ByteBuffer.allocate(chunkSize), ByteBuffer.allocate(chunkSize)))
-    }
-
-    def returnBuffers(chunk: KeyValueChunk) {
-      bufferQueue.put((chunk.keyData, chunk.valueData))
-    }
-    
-    val chunkQueue  = new ArrayBlockingQueue[Input[KeyValueChunk]](readAheadSize + 1)
-
-    val running = new AtomicBoolean(true)
-
-    override def run() {
-      while (running.get && iterator.hasNext) {
-        var buffers : Pair[ByteBuffer,ByteBuffer] = null
-        while (running.get && buffers == null) {
-          if (System.currentTimeMillis > expiresAt) {
-            iterator.close()
-            running.set(false)
-            chunkQueue.put(emptyInput)
-            return
-          }
-          buffers = bufferQueue.poll(readPollTime, TimeUnit.MILLISECONDS)
-        } 
-
-        if (buffers != null) {
-          val chunk = elInput(iterator.nextChunk(buffers._1, buffers._2, DataWidth.VARIABLE, DataWidth.VARIABLE))
-
-          while (running.get && ! chunkQueue.offer(chunk, readPollTime, TimeUnit.MILLISECONDS)) {
-            if (System.currentTimeMillis > expiresAt) {
-              iterator.close()
-              running.set(false)
-              chunkQueue.put(emptyInput)
-              return
-            }
-          }
-        }
-      }
-
-      chunkQueue.put(eofInput) // We're here because we reached the end of the iterator, so block and submit
-
-      iterator.close()
-    }
-  }
-
-  protected def emptyJavaIterator = new java.util.Iterator[KeyValuePair] {
-    def hasNext() = false
-    def next() = throw new NoSuchElementException("Empty iterator")
-    def remove() = throw new UnsupportedOperationException("Iterators cannot remove")
-  }
+}
 
 //  def traverseIndexEnumerator[E, F[_]](expiresAt: Long)(f: (Identities, Seq[CValue]) => E)(implicit MO: F |>=| IO): EnumeratorT[X, Vector[E], F] = {
 //    import MO._
@@ -388,4 +342,3 @@ trait LevelDBProjection extends LevelDBByteProjection {
 //    }
 //    enumerator(iter, IO(iter.close).liftIO[F])
 //  }
-}

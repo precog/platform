@@ -3,7 +3,9 @@ package iterable
 
 import serialization._
 import memoization._
-import scalaz.{Order, NonEmptyList => NEL}
+
+import scalaz.{Order, NonEmptyList => NEL, _}
+import scalaz.effect._
 
 trait DatasetOps[Dataset[_], Memoable[_], Grouping[_, _]] {
   implicit def extend[A](d: Dataset[A]): DatasetExtensions[Dataset, Memoable, Grouping, A]
