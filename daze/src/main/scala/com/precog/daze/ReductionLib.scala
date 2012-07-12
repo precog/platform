@@ -28,6 +28,8 @@ import yggdrasil.table._
 
 import com.precog.util._
 
+import collection.Set
+
 import scalaz._
 import scalaz.std.option._
 import scalaz.syntax.std.option._
@@ -51,7 +53,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table = ops.constLong(res)
+    def extract(res: Result): Table = ops.constLong(Set(CLong(res)))
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
@@ -91,7 +93,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map ops.constDecimal getOrElse ops.empty
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
@@ -131,7 +133,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map ops.constDecimal getOrElse ops.empty
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
   
   object Sum extends Reduction(ReductionNamespace, "sum") {
@@ -171,7 +173,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map ops.constDecimal getOrElse ops.empty
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
   
   object Mean extends Reduction(ReductionNamespace, "mean") {
@@ -227,7 +229,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map { case (sum, count) => ops.constDecimal(sum / count) } getOrElse ops.empty
+      res map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
@@ -293,7 +295,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map { case (prod, count) => ops.constDecimal(Math.pow(prod.toDouble, 1 / count.toDouble)) } getOrElse ops.empty  //todo using toDouble is BAD
+      res map { case (prod, count) => ops.constDecimal(Set(CNum(Math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty  //todo using toDouble is BAD
 
   }
   
@@ -349,7 +351,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map ops.constDecimal getOrElse ops.empty
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
 
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val sumsq = enum.reduce(Option.empty[BigDecimal]) {
@@ -428,7 +430,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map { case (count, sum, sumsq) => ops.constDecimal((sumsq - (sum * (sum / count))) / count) } getOrElse ops.empty  //todo using toDouble is BAD
+      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
@@ -494,7 +496,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table =
-      res map { case (count, sum, sumsq) => ops.constDecimal(sqrt(count * sumsq - sum * sum) / count) } getOrElse ops.empty  //todo using toDouble is BAD
+      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
 
