@@ -133,10 +133,12 @@ trait ColumnarTableModule extends TableModule {
      */
     def reduce[A: Monoid](reducer: Reducer[A]): A = {  //todo for optimization, instead of composing just in the case when we're doing multiple reductions over the same column, we can do reductions over multiple columns in a given table!
       slices flatMap { s => 
-        assert(s.columns.size <= 1)
+        //assert(s.columns.size <= 1)
         s.columns.values map { col => reducer.reduce(col, 0 until s.size) } 
       } suml
     }
+
+    def compact(spec: TransSpec1): Table = sys.error("todo")
 
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
@@ -453,11 +455,11 @@ trait ColumnarTableModule extends TableModule {
     // Does this have to be fully known at every point in time?
     def schema: JType = sys.error("todo")
     
-    def drop(n: Int): Table = sys.error("todo")
+    def drop(n: Long): Table = sys.error("todo")
     
-    def take(n: Int): Table = sys.error("todo")
+    def take(n: Long): Table = sys.error("todo")
     
-    def takeRight(n: Int): Table = sys.error("todo")
+    def takeRight(n: Long): Table = sys.error("todo")
 
     def normalize: Table = new Table(slices.filterNot(_.isEmpty))
 

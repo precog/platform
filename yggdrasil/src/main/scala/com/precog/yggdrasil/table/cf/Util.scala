@@ -131,7 +131,7 @@ object util {
     case c: NullColumn => new ShiftColumn(by, c) with NullColumn
   })
 
-  case class Remap(f : PartialFunction[Int, Int]) extends CF1P ({
+  case class Remap(f: PartialFunction[Int, Int]) extends CF1P ({
     case c: BoolColumn   => new RemapColumn(c, f) with BoolColumn { def apply(row: Int) = c(f(row)) }
     case c: LongColumn   => new RemapColumn(c, f) with LongColumn { def apply(row: Int) = c(f(row)) }
     case c: DoubleColumn => new RemapColumn(c, f) with DoubleColumn { def apply(row: Int) = c(f(row)) }
@@ -148,7 +148,7 @@ object util {
     def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i > 0 && i < indices.size) => indices.get(i) })
   }
 
-  case class filter(from: Int, to: Int, definedAt : BitSet) extends CF1P ({
+  case class filter(from: Int, to: Int, definedAt: BitSet) extends CF1P ({
     case c: BoolColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) }
     case c: LongColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with LongColumn { def apply(row: Int) = c(row) }
     case c: DoubleColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with DoubleColumn { def apply(row: Int) = c(row) }
