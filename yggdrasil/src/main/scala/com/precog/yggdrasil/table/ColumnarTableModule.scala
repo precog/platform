@@ -38,15 +38,9 @@ trait ColumnarTableModule extends TableModule {
     
     def empty: Table = new Table(Iterable.empty[Slice])
     
-    def constBoolean(v: SortedSet[CBoolean]): Table = {
-      val column = new BoolColumn {
-        val range = v.size
-        def isDefinedAt(row: Int): Boolean = (row < v.size) && (row >= 0) 
-
-        val seq = v.toIndexedSeq
-        def apply(row: Int): Boolean = seq(row).value
-      }
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), 1)))
+    def constBoolean(v: Set[CBoolean]): Table = {
+      val column = ArrayBoolColumn(v.toArray)
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size)))
     }
 
     def constLong(v: SortedSet[CLong]): Table = {

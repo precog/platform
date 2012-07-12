@@ -27,9 +27,13 @@ class ArrayBoolColumn(val defined: mutable.BitSet, values: mutable.BitSet) exten
 object ArrayBoolColumn {
   def apply(defined: BitSet, values: BitSet) = new ArrayBoolColumn(makeMutable(defined), makeMutable(values))
   def apply(defined: BitSet, values: Array[Boolean]) = new ArrayBoolColumn(makeMutable(defined), mutable.BitSet((0 until values.length).filter(values): _*))
+  def apply(values: Array[Boolean]) = {
+    val definedAt = mutable.BitSet(0 until values.length: _*)
+    new ArrayBoolColumn(definedAt, definedAt.filter(values))
+  }
+
   def empty(): ArrayBoolColumn = new ArrayBoolColumn(mutable.BitSet.empty, mutable.BitSet.empty)
 }
-
 
 class ArrayLongColumn(val defined: mutable.BitSet, values: Array[Long]) extends ArrayColumn[Long] with LongColumn {
   def apply(row: Int) = values(row)
@@ -41,6 +45,7 @@ class ArrayLongColumn(val defined: mutable.BitSet, values: Array[Long]) extends 
 }
 
 object ArrayLongColumn {
+  def apply(values: Array[Long]) = new ArrayLongColumn(mutable.BitSet(0 until values.length: _*), values)
   def apply(defined: BitSet, values: Array[Long]) = new ArrayLongColumn(makeMutable(defined), values)
   def empty(size: Int): ArrayLongColumn = new ArrayLongColumn(mutable.BitSet.empty, new Array[Long](size))
 }
@@ -56,6 +61,7 @@ class ArrayDoubleColumn(val defined: mutable.BitSet, values: Array[Double]) exte
 }
 
 object ArrayDoubleColumn {
+  def apply(values: Array[Double]) = new ArrayDoubleColumn(mutable.BitSet(0 until values.length: _*), values)
   def apply(defined: BitSet, values: Array[Double]) = new ArrayDoubleColumn(makeMutable(defined), values)
   def empty(size: Int): ArrayDoubleColumn = new ArrayDoubleColumn(mutable.BitSet.empty, new Array[Double](size))
 }
@@ -71,6 +77,7 @@ class ArrayNumColumn(val defined: mutable.BitSet, values: Array[BigDecimal]) ext
 }
 
 object ArrayNumColumn {
+  def apply(values: Array[BigDecimal]) = new ArrayNumColumn(mutable.BitSet(0 until values.length: _*), values)
   def apply(defined: BitSet, values: Array[BigDecimal]) = new ArrayNumColumn(makeMutable(defined), values)
   def empty(size: Int): ArrayNumColumn = new ArrayNumColumn(mutable.BitSet.empty, new Array[BigDecimal](size))
 }
@@ -86,6 +93,7 @@ class ArrayStrColumn(val defined: mutable.BitSet, values: Array[String]) extends
 }
 
 object ArrayStrColumn {
+  def apply(values: Array[String]) = new ArrayStrColumn(mutable.BitSet(0 until values.length: _*), values)
   def apply(defined: BitSet, values: Array[String]) = new ArrayStrColumn(makeMutable(defined), values)
   def empty(size: Int): ArrayStrColumn = new ArrayStrColumn(mutable.BitSet.empty, new Array[String](size))
 }
@@ -100,6 +108,7 @@ class ArrayDateColumn(val defined: mutable.BitSet, values: Array[DateTime]) exte
 }
 
 object ArrayDateColumn {
+  def apply(values: Array[DateTime]) = new ArrayDateColumn(mutable.BitSet(0 until values.length: _*), values)
   def apply(defined: BitSet, values: Array[DateTime]) = new ArrayDateColumn(makeMutable(defined), values)
   def empty(size: Int): ArrayDateColumn = new ArrayDateColumn(mutable.BitSet.empty, new Array[DateTime](size))
 }
