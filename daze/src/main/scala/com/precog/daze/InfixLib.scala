@@ -6,11 +6,9 @@ import bytecode.Library
 import yggdrasil._
 import yggdrasil.table._
 
-object InfixLib extends InfixLib
-
 trait InfixLib extends ImplLibrary with GenOpcode {
   
-  def PrimitiveEqualsF2 = table.cf.std.Eq
+  def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
   
   object Infix {
     val InfixNamespace = Vector("std", "infix")

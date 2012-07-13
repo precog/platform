@@ -8,8 +8,6 @@ import java.lang.String
 import yggdrasil._
 import yggdrasil.table._
 
-object StringLib extends StringLib
-
 trait StringLib extends GenOpcode with ImplLibrary {
   val StringNamespace = Vector("std", "string")
 

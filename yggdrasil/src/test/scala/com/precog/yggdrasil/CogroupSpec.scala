@@ -73,8 +73,6 @@ trait CogroupSpec extends TableModuleSpec {
     }
   }
 
-  def cogroup(ds1: Table, ds2: Table): Table
-
   def testCogroup(l: SampleData, r: SampleData) = {
     try {
       val ltable = fromJson(l)

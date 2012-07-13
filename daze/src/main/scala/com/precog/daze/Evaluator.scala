@@ -1,6 +1,8 @@
 package com.precog
 package daze
 
+import akka.dispatch.Await
+import akka.util.duration._
 import blueeyes.json.JPath
 
 import com.precog.yggdrasil._
@@ -99,18 +101,13 @@ trait Evaluator extends DAG
       
       case dag.New(_, parent) => loop(parent, assume, splits)   // TODO John swears this part is easy
       
-      case dag.LoadLocal(_, parent, _) => {
-        val back = parent.value match {
-          case Some(SString(str)) => ops.loadStatic(Path(str))
-          case Some(_) => ops.empty
-          
-          case None => {
-            val PendingTable(table, _, trans) = loop(parent, assume, splits)
-            ops.loadDynamic(table.transform(liftToValues(trans)))
-          }
+      case dag.LoadLocal(_, parent, jtpe) => {
+        val back = {
+          val PendingTable(table, _, trans) = loop(parent, assume, splits)
+          table.transform(liftToValues(trans)).load(jtpe)
         }
         
-        PendingTable(back, graph, TransSpec1.Id)
+        PendingTable(Await.result(back, 1 second), graph, TransSpec1.Id)
       }
       
       case dag.Morph1(_, m, parent) => {
@@ -383,7 +380,7 @@ trait Evaluator extends DAG
     
     val rewrite = (orderCrosses _) andThen
       (memoize _) andThen
-      (if (optimize) inferTypes(Schema.JUnfixedT) else identity)
+      (if (optimize) inferTypes(JType.JUnfixedT) else identity)
     
     val PendingTable(table, _, spec) = loop(rewrite(graph), Map(), ())
     table.transform(liftToValues(spec))

@@ -4,6 +4,7 @@ package table
 import com.precog.common.Path
 import com.precog.common.VectorCase
 
+import akka.dispatch.Future
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
@@ -23,7 +24,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with ColumnarTableModule with TransformSpec { spec =>
+class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with TestColumnarTableModule with TransformSpec { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val sliceSize = 10
@@ -78,13 +79,15 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Colu
     lib(name)
   }
 
-  def fromJson(sampleData: SampleData): Table =
-    Table.fromJson(sampleData.data)
+  def fromJson(sampleData: SampleData): Table = fromJson(sampleData.data)
+  def toJson(dataset: Table): Stream[JValue] = dataset.toJson.toStream
 
-  def toJson(dataset: Table): Stream[JValue] =
-    dataset.toJson.toStream
+  type Table = UnloadableTable
+  class UnloadableTable(slices: Iterable[Slice]) extends ColumnarTable(slices) {
+    def load(jtpe: JType): Future[Table] = sys.error("todo")
+  }
 
-  def cogroup(ds1: Table, ds2: Table): Table = sys.error("todo")
+  def table(slices: Iterable[Slice]) = new UnloadableTable(slices)
 
   "a table dataset" should {
     "verify bijection from static JSON" in {

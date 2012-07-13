@@ -22,7 +22,7 @@ sealed trait Column {
   def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
 }
 
-trait BoolColumn extends Column {
+trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
 
   override val tpe = CBoolean
@@ -30,7 +30,7 @@ trait BoolColumn extends Column {
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
-trait LongColumn extends Column {
+trait LongColumn extends Column with (Int => Long) {
   def apply(row: Int): Long
 
   override val tpe = CLong
@@ -38,7 +38,7 @@ trait LongColumn extends Column {
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
-trait DoubleColumn extends Column {
+trait DoubleColumn extends Column with (Int => Double) {
   def apply(row: Int): Double
 
   override val tpe = CDouble
@@ -46,7 +46,7 @@ trait DoubleColumn extends Column {
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
-trait NumColumn extends Column {
+trait NumColumn extends Column with (Int => BigDecimal) {
   def apply(row: Int): BigDecimal
 
   override val tpe = CDecimalArbitrary
@@ -54,7 +54,7 @@ trait NumColumn extends Column {
   override def strValue(row: Int): String = this(row).toString
 }
 
-trait StrColumn extends Column {
+trait StrColumn extends Column with (Int => String) {
   def apply(row: Int): String
 
   override val tpe = CStringArbitrary
@@ -62,7 +62,7 @@ trait StrColumn extends Column {
   override def strValue(row: Int): String = this(row)
 }
 
-trait DateColumn extends Column {
+trait DateColumn extends Column with (Int => DateTime) {
   def apply(row: Int): DateTime
 
   override val tpe = CDate

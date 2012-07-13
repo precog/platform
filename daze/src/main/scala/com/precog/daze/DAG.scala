@@ -5,7 +5,6 @@ import bytecode._
 
 import com.precog.util.IdGen
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.Schema._
 
 import scala.collection.mutable
 
@@ -453,7 +452,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JUnfixedT) extends DepGraph {
+    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JType.JUnfixedT) extends DepGraph {
       lazy val provenance = parent match {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
         case _ => Vector(DynamicProvenance(IdGen.nextInt()))

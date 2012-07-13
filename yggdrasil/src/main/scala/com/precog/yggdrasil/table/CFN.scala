@@ -1,6 +1,8 @@
 package com.precog.yggdrasil
 package table
 
+import blueeyes.json._
+
 class CF1(f: Column => Option[Column]) extends (Column => Option[Column]) {
   def apply(c: Column): Option[Column] = f(c)
 
@@ -37,7 +39,7 @@ trait CScanner {
 }
 
 trait CReducer[A] {
-  def reduce(col: Column, range: Range): A
+  def reduce(columns: (JType => Set[Column]), range: Range): A
 }
 
 

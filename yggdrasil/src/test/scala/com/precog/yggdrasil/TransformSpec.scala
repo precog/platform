@@ -13,7 +13,6 @@ import org.scalacheck.Arbitrary._
 
 trait TransformSpec extends TableModuleSpec {
   import trans._
-  import Schema._
 
   def checkTransformLeaf = {
     implicit val gen = sample(schema)
@@ -291,7 +290,7 @@ trait TransformSpec extends TableModuleSpec {
     check { (sample: SampleData) =>
       val schema = sample.schema.getOrElse(List())
       val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
-      val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
+      val valuejtpe = JType.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
       val jtpe = JObjectFixedT(Map(
         "value" -> valuejtpe,
         "key" -> JArrayUnfixedT

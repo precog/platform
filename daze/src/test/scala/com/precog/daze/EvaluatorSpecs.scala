@@ -13,6 +13,9 @@ import com.precog.util.IdGen
 import akka.dispatch.Await
 import akka.util.duration._
 
+import blueeyes.json._
+import JsonAST.{JObject, JField, JArray, JInt}
+
 import java.io._
 import scalaz._
 import scalaz.effect._
@@ -25,39 +28,8 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait TestConfigComponent extends table.ColumnarTableModule {
+trait TestConfigComponent extends table.StubColumnarTableModule {
   object yggConfig extends YggConfig
-  
-  trait StubTableOps extends ColumnarTableOps {
-    private var initialIndices = collection.mutable.Map[Path, Int]()
-    private var currentIndex = 0
-    
-    override def loadStatic(path: Path): Table = {
-      import blueeyes.json._
-      import JsonAST.{JObject, JField, JArray, JInt}
-      
-      val index = initialIndices get path getOrElse {
-        initialIndices += (path -> currentIndex)
-        currentIndex
-      }
-      
-      val target = path.path.replaceAll("/$", ".json")
-      val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-      val parsed = src.getLines map JsonParser.parse toStream
-      
-      currentIndex += parsed.length
-      
-      val attributed = parsed zip (Stream from index) map {
-        case (value, id) => JObject(JField("key", JArray(JInt(id) :: Nil)) :: JField("value", value) :: Nil)
-      }
-      
-      Table fromJson attributed
-    }
-    
-    override def loadDynamic(source: Table): Table = sys.error("todo")
-  }
-  
-  override def ops = new StubTableOps {}
 
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000

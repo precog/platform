@@ -4,24 +4,43 @@ import scala.collection.immutable.BitSet
 
 import blueeyes.json.{ JPath, JPathField, JPathIndex }
 
-object Schema {
-  sealed trait JType
-  
-  case object JUnfixedT extends JType
-  case object JNumberT extends JType
-  case object JTextT extends JType
-  case object JBooleanT extends JType
-  case object JNullT extends JType
-  
-  sealed trait JArrayT extends JType
-  case class JArrayFixedT(elements: Map[Int, JType]) extends JArrayT
-  case object JArrayUnfixedT extends JArrayT
+sealed trait JType {
+  def |(jtype: JType) = JUnionT(this, jtype)
+}
 
-  sealed trait JObjectT extends JType
-  case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
-  case object JObjectUnfixedT extends JObjectT
+sealed trait JPrimitiveType extends JType {
+  def ctypes: Set[CType]
+}
 
-  case class JUnionT(left: JType, right: JType) extends JType
+case object JNumberT extends JPrimitiveType {
+  val ctypes: Set[CType] = Set(CLong, CDouble, CDecimalArbitrary)
+}
+
+case object JTextT extends JPrimitiveType {
+  val ctypes: Set[CType] = Set(CStringArbitrary)
+}
+
+case object JBooleanT extends JPrimitiveType {
+  val ctypes: Set[CType] = Set(CBoolean)
+}
+
+case object JNullT extends JPrimitiveType {
+  val ctypes: Set[CType] = Set(CNull)
+}
+
+sealed trait JArrayT extends JType
+case class JArrayFixedT(elements: Map[Int, JType]) extends JArrayT
+case object JArrayUnfixedT extends JArrayT
+
+sealed trait JObjectT extends JType
+case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
+case object JObjectUnfixedT extends JObjectT
+
+case class JUnionT(left: JType, right: JType) extends JType
+
+object JType {
+  val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT
+  val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
   
   def flattenUnions(tpe: JType): Set[JType] = tpe match {
     case JUnionT(left, right) => flattenUnions(left) ++ flattenUnions(right)
