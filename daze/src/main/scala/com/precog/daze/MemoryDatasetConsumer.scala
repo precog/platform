@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import common.VectorCase
+
 import yggdrasil._
 import yggdrasil.table._
 
@@ -44,16 +46,16 @@ trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggC
   
   type X = Throwable
   type YggConfig <: DatasetConsumersConfig
-  type SEvent = (Vector[Long], SValue)
+  type SEvent = (VectorCase[Long], SValue)
 
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
       val result = eval(userUID, graph, ctx)
+      val json = result.toJson
       
-      val events = result.toJson collect {
-        case JObject(JField("key", JArray(identities)) :: JField("value", value) :: Nil) =>
-          (Vector(identities collect { case JInt(bi) => bi.toLong }: _*), jvalueToSValue(value))
+      val events = json map { jvalue =>
+        (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JInt(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
       }
       
       events.toSet
