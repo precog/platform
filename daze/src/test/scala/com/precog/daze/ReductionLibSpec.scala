@@ -37,6 +37,7 @@ class ReductionLibSpec extends Specification
     with Evaluator
     with TestConfigComponent 
     with ReductionLib 
+    with StatsLib
     with InfixLib
     with MemoryDatasetConsumer { self =>
       
@@ -105,108 +106,6 @@ class ReductionLibSpec extends Specification
       
       result2 must contain(29)
     }
-    
-    /* "median with odd number of elements" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, Median,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
-      }
-      
-      result2 must contain(13)
-    }
-    
-    "median with even number of elements" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, Median,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers5"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
-      }
-      
-      result2 must contain(2)
-    }      
-
-    "median with singleton" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, Median,
-        Root(line, PushNum("42")))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
-      }
-      
-      result2 must contain(42)
-    }
-    
-    "mode" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, Mode,
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
-      }
-      
-      result2 must contain(Vector(SDecimal(1)))
-    }      
-
-    "mode with a singleton" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, BuiltInReduction(Mode),
-        Root(line, PushNum("42")))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
-      }
-      
-      result2 must contain(Vector(SDecimal(42)))
-    }
-
-    "mode where each value appears exactly once" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
-      }
-      
-      result2 must contain(Vector(SDecimal(1), SDecimal(12), SDecimal(13), SDecimal(42), SDecimal(77)))
-    } */
     
     "max" >> {
       val line = Line(0, "")
@@ -363,57 +262,6 @@ class ReductionLibSpec extends Specification
       
       result2 must contain(29)
     }
-    
-    /* "median" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, BuiltInReduction(Median),
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d
-      }
-      
-      result2 must contain(13)
-    }
-    
-    "mode in the case there is only one" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
-      }
-      
-      result2 must contain(Vector(SDecimal(1)))
-    }
-    
-    "mode in the case there is more than one" >> {
-      val line = Line(0, "")
-      
-      val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, Root(line, PushString("/het/random"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val result2 = result collect {
-        case (VectorCase(), SArray(d)) => d
-      }
-      
-      result2 must contain(Vector(SDecimal(4), SString("a")))
-    } */
     
     "max" >> {
       val line = Line(0, "")
