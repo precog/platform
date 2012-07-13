@@ -58,6 +58,7 @@ trait EvaluatorConfig {
 trait Evaluator extends DAG
     with CrossOrdering
     with Memoizer
+    with TypeInferencer
     with TableModule        // TODO specific implementation
     with ImplLibrary
     with InfixLib
@@ -88,7 +89,7 @@ trait Evaluator extends DAG
   def PrimitiveEqualsF2: F2
   def ConstantEmptyArray: F1
   
-  def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
+  def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
 
     def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit): PendingTable = graph match {
@@ -209,7 +210,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(instructions.WrapObject) | Map2CrossLeft(instructions.WrapObject) | Map2CrossRight(instructions.WrapObject), left, right) if left.value.isDefined => {
         left.value match {
           case Some(value @ SString(str)) => {
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits)
             PendingTable(parentTable, parentGraph, trans.WrapObject(parentTrans, str))
           }
           
@@ -399,7 +400,11 @@ trait Evaluator extends DAG
         loop(parent, assume, splits)     // TODO
     }
     
-    val PendingTable(table, _, spec) = loop(memoize(orderCrosses(graph)), Map(), ())
+    val rewrite = (orderCrosses _) andThen
+      (memoize _) andThen
+      (if (optimize) inferTypes(Schema.JUnfixedT) else identity)
+    
+    val PendingTable(table, _, spec) = loop(rewrite(graph), Map(), ())
     table.transform(liftToValues(spec))
   }
   

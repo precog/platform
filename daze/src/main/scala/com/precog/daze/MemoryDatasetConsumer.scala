@@ -48,10 +48,10 @@ trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggC
   type YggConfig <: DatasetConsumersConfig
   type SEvent = (VectorCase[Long], SValue)
 
-  def consumeEval(userUID: String, graph: DepGraph, ctx: Context): Validation[X, Set[SEvent]] = {
+  def consumeEval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
-      val result = eval(userUID, graph, ctx)
+      val result = eval(userUID, graph, ctx, optimize)
       val json = result.toJson
       
       val events = json map { jvalue =>
