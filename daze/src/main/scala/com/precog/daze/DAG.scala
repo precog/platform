@@ -24,6 +24,7 @@ import bytecode._
 
 import com.precog.util.IdGen
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.Schema._
 
 import scala.collection.mutable
 
@@ -246,9 +247,9 @@ trait DAG extends Instructions {
         // TODO reenable lines
         case _: Line => loop(loc, roots, splits, stream.tail)
         
-        case instr @ instructions.LoadLocal(tpe) => {
+        case instr @ instructions.LoadLocal => {
           val eitherRoots = roots match {
-            case Right(hd) :: tl => Right(Right(LoadLocal(loc, None, hd, tpe)) :: tl)
+            case Right(hd) :: tl => Right(Right(LoadLocal(loc, hd)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
             case _ => Left(StackUnderflow(instr))
           }
@@ -471,7 +472,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class LoadLocal(loc: Line, range: Option[IndexRange], parent: DepGraph, tpe: Type) extends DepGraph {
+    case class LoadLocal(loc: Line, parent: DepGraph, jtpe: JType = JUnfixedT) extends DepGraph {
       lazy val provenance = parent match {
         case Root(_, PushString(path)) => Vector(StaticProvenance(path))
         case _ => Vector(DynamicProvenance(IdGen.nextInt()))

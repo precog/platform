@@ -67,7 +67,7 @@ trait Instructions extends Library {
       
       case Line(_, _) => (0, 0)
       
-      case LoadLocal(_) => (1, 1)
+      case LoadLocal => (1, 1)
       case Distinct => (1, 1)
       
       case PushString(_) => (0, 1)
@@ -125,7 +125,7 @@ trait Instructions extends Library {
     
     case class Line(num: Int, text: String) extends Instruction with DataInstr
     
-    case class LoadLocal(tpe: Type) extends Instruction
+    case object LoadLocal extends Instruction
     case object Distinct extends Instruction
     
     sealed trait RootInstr extends Instruction
@@ -181,9 +181,5 @@ trait Instructions extends Library {
     case object DerefArray extends BinaryOperation
     
     case object Range
-
-    sealed trait Type
-    
-    case object Het extends Type
   }
 }

@@ -35,8 +35,6 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism1)
   implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism2)
   
-  implicit lazy val arbType: Arbitrary[Type] = Arbitrary(genType)
-  
   private lazy val genInstruction: Gen[Instruction] = oneOf(
     genMap1,
     genMap2Match,
@@ -125,7 +123,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     text <- arbitrary[String]
   } yield Line(num, text)
   
-  private lazy val genLoadLocal = genType map LoadLocal
+  private lazy val genLoadLocal = LoadLocal
   private lazy val genDistinct = Distinct
   
   private lazy val genPushString = arbitrary[String] map PushString
@@ -192,6 +190,4 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     m <- oneOf(libMorphism2.toSeq)
     res <- BuiltInMorphism(m)
   } yield res
-    
-  private lazy val genType = Het
 }

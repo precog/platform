@@ -138,10 +138,6 @@ trait BytecodeWriter extends Writer with Version {
       case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
-    def typeNum(tpe: Type) = tpe match {
-      case Het => 0x00
-    }
-
     if (!stream.isEmpty) {
       val (opcode, pad, arg) = stream.head match {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
@@ -183,7 +179,7 @@ trait BytecodeWriter extends Writer with Version {
         
         case i @ Line(_, _) => (0x2A, 0.toShort, table(i))
         
-        case LoadLocal(tpe) => (0x40, 0.toShort, typeNum(tpe))
+        case LoadLocal => (0x40, 0.toShort, 0)
         
         case i @ PushString(_) => (0x80, 0.toShort, table(i))
         case i @ PushNum(_) => (0x81, 0.toShort, table(i))

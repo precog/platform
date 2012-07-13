@@ -28,6 +28,7 @@ import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
 
 import scala.collection.BitSet
+import scala.collection.Set
 import scala.annotation.tailrec
 
 import scalaz._
@@ -56,22 +57,32 @@ trait ColumnarTableModule extends TableModule {
     
     def empty: Table = new Table(Iterable.empty[Slice])
     
-    def constBoolean(v: Boolean): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> Column.const(v)), 1)))
+    def constBoolean(v: Set[CBoolean]): Table = {
+      val column = ArrayBoolColumn(v.toArray map(_.value))
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size)))
+    }
 
-    def constLong(v: Long): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> Column.const(v)), 1)))
+    def constLong(v: Set[CLong]): Table = {
+      val column = ArrayLongColumn(v.toArray map(_.value))
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size)))
+    }
 
-    def constDouble(v: Double): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> Column.const(v)), 1)))
+    def constDouble(v: Set[CDouble]): Table = {
+      val column = ArrayDoubleColumn(v.toArray map(_.value))
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size)))
+    }
 
-    def constDecimal(v: BigDecimal): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> Column.const(v)), 1)))
+    def constDecimal(v: Set[CNum]): Table = {
+      val column = ArrayNumColumn(v.toArray map(_.value))
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> column), v.size)))
+    }
 
-    def constString(v: String): Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> Column.const(v)), 1)))
+    def constString(v: Set[CString]): Table = {
+      val column = ArrayStrColumn(v.toArray map(_.value))
+      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> column), 1)))
+    }
 
-    def constDate(v: DateTime): Table = 
+    def constDate(v: DateTime): Table =  //TODO should take a set; use CDate
       new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> Column.const(v)), 1)))
 
     def constNull: Table = 
@@ -207,7 +218,6 @@ trait ColumnarTableModule extends TableModule {
             if (s.columns.isEmpty) {
               s
             } else {
-              assert(filter.columns.nonEmpty)
               val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
                 cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
               }

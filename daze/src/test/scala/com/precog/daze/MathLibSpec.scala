@@ -65,7 +65,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sinh),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -81,7 +81,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toDegrees),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -97,7 +97,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(expm1),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -113,7 +113,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(getExponent),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -129,7 +129,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(asin),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -145,7 +145,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log10),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -161,7 +161,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cos),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -177,7 +177,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(exp),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -193,7 +193,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cbrt),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -209,7 +209,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(atan),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -225,7 +225,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(ceil),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -241,7 +241,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(rint),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -257,7 +257,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log1p),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -273,7 +273,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sqrt),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -289,7 +289,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(floor),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -305,7 +305,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toRadians),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -321,7 +321,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(tanh),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -337,7 +337,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(round),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -353,7 +353,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cosh),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -369,7 +369,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(tan),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -385,7 +385,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(abs),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -401,7 +401,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sin),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -417,7 +417,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(nextUp),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -433,7 +433,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -449,7 +449,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(signum),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -465,7 +465,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(acos),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -481,7 +481,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(ulp),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       val result = testEval(input)
       
@@ -497,7 +497,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(nextAfter)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -514,7 +514,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(min)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -531,7 +531,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(hypot)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -548,7 +548,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(pow)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -565,7 +565,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(max)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -582,7 +582,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(atan2)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -599,7 +599,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(copySign)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -616,7 +616,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(IEEEremainder)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -636,7 +636,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sinh),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -652,7 +652,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toDegrees),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -668,7 +668,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(expm1),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -684,7 +684,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(getExponent),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -700,7 +700,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(asin),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -716,7 +716,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log10),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -732,7 +732,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cos),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -748,7 +748,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(exp),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -764,7 +764,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cbrt),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -780,7 +780,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(atan),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -796,7 +796,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(ceil),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -812,7 +812,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(rint),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -828,7 +828,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log1p),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -844,7 +844,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sqrt),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -860,7 +860,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(floor),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -876,7 +876,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toRadians),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -892,7 +892,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(tanh),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -908,7 +908,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(round),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -924,7 +924,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cosh),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -940,7 +940,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(tan),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -956,7 +956,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(abs),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -972,7 +972,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(sin),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -988,7 +988,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(nextUp),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -1004,7 +1004,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(log),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -1020,7 +1020,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(signum),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -1036,7 +1036,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(acos),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -1052,7 +1052,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(ulp),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
         
       val result = testEval(input)
       
@@ -1068,7 +1068,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(nextAfter)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1085,7 +1085,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(min)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1102,7 +1102,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(hypot)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1119,7 +1119,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(pow)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1136,7 +1136,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(max)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1153,7 +1153,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(atan2)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1170,7 +1170,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(copySign)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -1187,7 +1187,7 @@ class MathLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(IEEEremainder)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers4")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
