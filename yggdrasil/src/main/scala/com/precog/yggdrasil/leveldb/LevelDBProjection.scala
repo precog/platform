@@ -67,9 +67,14 @@ object LevelDBProjectionComparator {
 object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 
-  def forDescriptor(baseDir : File, descriptor: ProjectionDescriptor): Validation[Throwable, LevelDBProjection] = {
-    val baseDirV = if (! baseDir.exists && ! baseDir.mkdirs()) (new IOException("Could not create database basedir " + baseDir): Throwable).fail[File] 
-                   else baseDir.success[Throwable]
+  def forDescriptor(baseDir : File, descriptor: ProjectionDescriptor): IO[LevelDBProjection] = {
+    val baseDirV = IO {
+      if (! baseDir.exists && ! baseDir.mkdirs()) { 
+        throw new IOException("Could not create database basedir " + baseDir)
+      } else {
+        baseDir
+      }
+    }
 
     baseDirV map { (bd: File) => new LevelDBProjection(bd, descriptor) }
   }
