@@ -13,6 +13,7 @@ import org.joda.time.format._
 import org.joda.time.DateTimeZone
 
 import java.lang.Math._
+import collection.immutable.ListSet
 
 import akka.dispatch.{Await, Future}
 import akka.util.duration._
@@ -71,7 +72,7 @@ trait Evaluator extends DAG
   def eval(userUID: String, graph: DepGraph, ctx: Context): Table = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
 
-    def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit, ctx: Context): PendingTable = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit): PendingTable = graph match {
       case g if assume contains g => PendingTable(assume(g), graph, TransSpec1.Id)
       
       case s @ SplitParam(_, index) =>
@@ -82,26 +83,28 @@ trait Evaluator extends DAG
       
       case Root(_, instr) => {
         val table = graph.value collect {
-          case SString(str) => ops.constString(str)
-          case SDecimal(d) => ops.constDecimal(d)
-          case SBoolean(b) => ops.constBoolean(b)
+          case SString(str) => ops.constString(Set(CString(str)))
+          case SDecimal(d) => ops.constDecimal(Set(CNum(d)))
+          case SBoolean(b) => ops.constBoolean(Set(CBoolean(b)))
           case SNull => ops.constNull
           case SObject(map) if map.isEmpty => ops.constEmptyObject
           case SArray(Vector()) => ops.constEmptyArray
         }
         
-        PendingTable(table.get, graph, TransSpec1.Id)       // die a horrible death if isEmpty
+        val bottomWrapped = trans.WrapObject(trans.Map1(Leaf(Source), ConstantEmptyArray), constants.Key.name)
+        
+        PendingTable(table.get.transform(trans.ObjectConcat(bottomWrapped, trans.WrapObject(Leaf(Source), constants.Value.name))), graph, TransSpec1.Id)
       }
       
-      case dag.New(_, parent) => loop(parent, assume, splits, ctx)   // TODO John swears this part is easy
+      case dag.New(_, parent) => loop(parent, assume, splits)   // TODO John swears this part is easy
       
-      case dag.LoadLocal(_, _, parent, _) => {
+      case dag.LoadLocal(_, parent, _) => {
         val back = parent.value match {
           case Some(SString(str)) => ops.loadStatic(Path(str))
           case Some(_) => ops.empty
           
           case None => {
-            val PendingTable(table, _, trans) = loop(parent, assume, splits, ctx)
+            val PendingTable(table, _, trans) = loop(parent, assume, splits)
             ops.loadDynamic(table.transform(liftToValues(trans)))
           }
         }
@@ -110,13 +113,13 @@ trait Evaluator extends DAG
       }
       
       case dag.Morph1(_, m, parent) => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits)
         PendingTable(m(parentTable.transform(parentTrans)), graph, TransSpec1.Id)
       }
       
       case dag.Morph2(_, m, left, right) => {
-        val PendingTable(leftTable, _, leftTrans) = loop(left, assume, splits, ctx)
-        val PendingTable(rightTable, _, rightTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(leftTable, _, leftTrans) = loop(left, assume, splits)
+        val PendingTable(rightTable, _, rightTrans) = loop(right, assume, splits)
         
         val leftResult = leftTable.transform(leftTrans)
         val rightResult = rightTable.transform(rightTrans)
@@ -137,19 +140,19 @@ trait Evaluator extends DAG
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case Operate(_, instructions.WrapArray, parent) => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits)
         PendingTable(parentTable, parentGraph, trans.WrapArray(parentTrans))
       }
       
       case o @ Operate(_, op, parent) => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(parent, assume, splits)
         
         // TODO unary typing
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, op1(op).f1))
       }
       
       case r @ dag.Reduce(_, red, parent) => {
-        val PendingTable(parentTable, _, parentTrans) = loop(parent, assume, splits, ctx)
+        val PendingTable(parentTable, _, parentTrans) = loop(parent, assume, splits)
         val result = red(parentTable.transform(parentTrans))
         PendingTable(result, graph, TransSpec1.Id)
       }
@@ -163,23 +166,23 @@ trait Evaluator extends DAG
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if right.value.isDefined => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get))))
       }
       
       case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if left.value.isDefined => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits)
         PendingTable(parentTable, parentGraph, trans.Map1(parentTrans, PrimitiveEqualsF2.partialLeft(svalueToCValue(left.value.get))))
       }
       
       case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if right.value.isDefined => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
         val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get)))
         PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, op1(Comp).f1))
       }
       
       case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if left.value.isDefined => {
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits)
         val eqTrans = trans.Map1(parentTrans, PrimitiveEqualsF2.partialRight(svalueToCValue(left.value.get)))
         PendingTable(parentTable, parentGraph, trans.Map1(eqTrans, op1(Comp).f1))
       }
@@ -187,7 +190,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(instructions.WrapObject) | Map2CrossLeft(instructions.WrapObject) | Map2CrossRight(instructions.WrapObject), left, right) if left.value.isDefined => {
         left.value match {
           case Some(value @ SString(str)) => {
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
             PendingTable(parentTable, parentGraph, trans.WrapObject(parentTrans, str))
           }
           
@@ -199,7 +202,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
         right.value match {
           case Some(value @ SString(str)) => {
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
             PendingTable(parentTable, parentGraph, DerefObjectStatic(parentTrans, JPathField(str)))
           }
           
@@ -211,7 +214,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
         right.value match {
           case Some(value @ SDecimal(d)) => {
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
             PendingTable(parentTable, parentGraph, DerefArrayStatic(parentTrans, JPathIndex(d.toInt)))
           }
           
@@ -225,7 +228,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(instructions.ArraySwap) | Map2CrossLeft(instructions.ArraySwap) | Map2CrossRight(instructions.ArraySwap), left, right) if right.value.isDefined => {
         right.value match {
           case Some(value @ SDecimal(d)) => {     // TODO other numeric types
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
             PendingTable(parentTable, parentGraph, trans.ArraySwap(parentTrans, d.toInt))
           }
           
@@ -246,7 +249,7 @@ trait Evaluator extends DAG
           case Map2CrossLeft(op) => op
         }
         
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
         
         val cv = svalueToCValue(right.value.get)
         val f1 = op2(op).f2.partialRight(cv)
@@ -261,7 +264,7 @@ trait Evaluator extends DAG
           case Map2CrossLeft(op) => op
         }
         
-        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits)
         
         val cv = svalueToCValue(left.value.get)
         val f1 = op2(op).f2.partialLeft(cv)
@@ -273,8 +276,8 @@ trait Evaluator extends DAG
       case Join(_, Map2Match(op), left, right) => {
         // TODO binary typing
         
-        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits, ctx)
-        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits)
+        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits)
         
         if (parentLeftGraph == parentRightGraph) {
           PendingTable(parentLeftTable, parentLeftGraph, transFromBinOp(op)(parentLeftTrans, parentRightTrans))
@@ -299,8 +302,8 @@ trait Evaluator extends DAG
           case Map2CrossLeft(op) => (op, true)
         }
         
-        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits, ctx)
-        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits, ctx)
+        val PendingTable(parentLeftTable, parentLeftGraph, parentLeftTrans) = loop(left, assume, splits)
+        val PendingTable(parentRightTable, parentRightGraph, parentRightTrans) = loop(right, assume, splits)
         
         val leftResult = parentLeftTable.transform(parentLeftTrans)
         val rightResult = parentRightTable.transform(parentRightTrans)
@@ -316,8 +319,8 @@ trait Evaluator extends DAG
       case dag.Filter(_, None, target, boolean) => {
         // TODO binary typing
         
-        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits, ctx)
-        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits, ctx)
+        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits)
+        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits)
         
         if (parentTargetGraph == parentBooleanGraph)
           PendingTable(parentTargetTable, parentTargetGraph, trans.Filter(parentTargetTrans, parentBooleanTrans))
@@ -343,8 +346,8 @@ trait Evaluator extends DAG
           case CrossLeft => true
         }
         
-        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits, ctx)
-        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits, ctx)
+        val PendingTable(parentTargetTable, parentTargetGraph, parentTargetTrans) = loop(target, assume, splits)
+        val PendingTable(parentBooleanTable, parentBooleanGraph, parentBooleanTrans) = loop(boolean, assume, splits)
         
         /* target match {
           case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => {
@@ -374,10 +377,10 @@ trait Evaluator extends DAG
         PendingTable(ops.empty, graph, TransSpec1.Id)     // TODO
       
       case m @ Memoize(parent, _) =>
-        loop(parent, assume, splits, ctx)     // TODO
+        loop(parent, assume, splits)     // TODO
     }
     
-    val PendingTable(table, _, spec) = loop(memoize(orderCrosses(graph)), Map(), (), ctx)
+    val PendingTable(table, _, spec) = loop(memoize(orderCrosses(graph)), Map(), ())
     table.transform(liftToValues(spec))
   }
   

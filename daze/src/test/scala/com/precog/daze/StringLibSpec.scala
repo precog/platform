@@ -44,7 +44,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(length),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -60,7 +60,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(trim),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -76,7 +76,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -92,7 +92,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -108,7 +108,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -124,7 +124,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(intern),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))))
         
       val result = testEval(input)
       
@@ -141,7 +141,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -158,7 +158,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -175,7 +175,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(startsWith)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
       val result = testEval(input)
@@ -192,7 +192,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(lastIndexOf)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
       val result = testEval(input)
@@ -209,7 +209,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(concat)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("7")))
         
       val result = testEval(input)
@@ -226,7 +226,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(endsWith)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("y")))
         
       val result = testEval(input)
@@ -243,7 +243,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -260,7 +260,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -277,7 +277,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -294,7 +294,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -311,7 +311,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(matches)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
       val result = testEval(input)
@@ -328,7 +328,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(compareTo)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
       val result = testEval(input)
@@ -345,7 +345,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(compareToIgnoreCase)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("QUIRKY")))
         
       val result = testEval(input)
@@ -362,7 +362,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(equals)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
       val result = testEval(input)
@@ -379,7 +379,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(indexOf)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("e")))
         
       val result = testEval(input)
@@ -396,7 +396,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(equalsIgnoreCase)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/strings")), Het), 
+        dag.LoadLocal(line, Root(line, PushString("/hom/strings"))), 
         Root(line, PushString("QUIRKY")))
         
       val result = testEval(input)
@@ -416,7 +416,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(length),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -432,7 +432,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(trim),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -448,7 +448,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toUpperCase),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -464,7 +464,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(toLowerCase),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -480,7 +480,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(isEmpty),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -496,7 +496,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(intern),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))))
         
       val result = testEval(input)
       
@@ -513,7 +513,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -530,7 +530,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -547,7 +547,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(startsWith)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
       val result = testEval(input)
@@ -564,7 +564,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(lastIndexOf)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
       val result = testEval(input)
@@ -581,7 +581,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(concat)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("7")))
         
       val result = testEval(input)
@@ -598,7 +598,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(endsWith)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("y")))
         
       val result = testEval(input)
@@ -615,7 +615,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -632,7 +632,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -649,7 +649,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
       val result = testEval(input)
@@ -666,7 +666,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
       val result = testEval(input)
@@ -683,7 +683,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(matches)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
       val result = testEval(input)
@@ -700,7 +700,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(compareTo)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
       val result = testEval(input)
@@ -717,7 +717,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(compareToIgnoreCase)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("QUIRKY")))
         
       val result = testEval(input)
@@ -734,7 +734,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(equals)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
       val result = testEval(input)
@@ -751,7 +751,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(indexOf)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("e")))
         
       val result = testEval(input)
@@ -768,7 +768,7 @@ class StringLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(equalsIgnoreCase)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/strings")), Het), 
+        dag.LoadLocal(line, Root(line, PushString("/het/strings"))), 
         Root(line, PushString("QUIRKY")))
         
       val result = testEval(input)

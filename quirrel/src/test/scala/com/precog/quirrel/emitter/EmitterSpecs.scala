@@ -107,9 +107,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") union load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           IUnion))
     }    
     
@@ -117,9 +117,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") intersect load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           IIntersect))
     }    
 
@@ -127,9 +127,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") difference load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           SetDifference))
     }
 
@@ -216,7 +216,7 @@ object EmitterSpecs extends Specification
       testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("2"),
           Map2Cross(Mul)))
     }
@@ -226,7 +226,7 @@ object EmitterSpecs extends Specification
         Vector(
           Line(1,"load(\"foo\") * 2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("2"),
           Map2Cross(Mul)))
     }
@@ -236,7 +236,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Map2Cross(Mul)))
     }
 
@@ -297,7 +297,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("foo"),
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Map2Cross(WrapObject)))
     }    
     
@@ -306,7 +306,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("foo"),
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -346,7 +346,7 @@ object EmitterSpecs extends Specification
       testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("a"),
           Map2Cross(DerefObject),
@@ -357,7 +357,7 @@ object EmitterSpecs extends Specification
           Map1(WrapArray),
           Map2Match(JoinArray),
           PushString("/bar"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -379,7 +379,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicks.foo")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("foo"),
           Map2Cross(DerefObject)))
     }
@@ -388,7 +388,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicks[1]")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("1"),
           Map2Cross(DerefArray)))
     }
@@ -397,7 +397,7 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het))
+          LoadLocal)
       )
     }
 
@@ -413,9 +413,9 @@ object EmitterSpecs extends Specification
       testEmit("""//clicks where //clicks.foo = null""")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("foo"),
           Map2Cross(DerefObject),
           PushNull,
@@ -427,7 +427,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicks[clicks]")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           Map2Match(DerefArray)))
@@ -437,7 +437,7 @@ object EmitterSpecs extends Specification
       testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           FilterMatch))
@@ -447,7 +447,7 @@ object EmitterSpecs extends Specification
       testEmit("foo := //foo foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           PushString("id"),
@@ -461,7 +461,7 @@ object EmitterSpecs extends Specification
       testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           Map2Match(Add)))
@@ -472,7 +472,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -519,7 +519,7 @@ object EmitterSpecs extends Specification
         testEmit("""%s(//foobar.baz)""".format(f.fqn))(
           Vector(
             PushString("/foobar"),
-            LoadLocal(Het),
+            LoadLocal,
             PushString("baz"),
             Map2Cross(DerefObject),
             Map1(BuiltInFunction1Op(f))))
@@ -540,11 +540,11 @@ object EmitterSpecs extends Specification
         testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
           Vector(
             PushString("/foo"),
-            LoadLocal(Het),
+            LoadLocal,
             PushString("time"),
             Map2Cross(DerefObject),
             PushString("/foo"),
-            LoadLocal(Het),
+            LoadLocal,
             PushString("timeZone"),
             Map2Cross(DerefObject),
             Map2Match(BuiltInFunction2Op(f))))
@@ -555,7 +555,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           PushString("userId"),
@@ -573,9 +573,9 @@ object EmitterSpecs extends Specification
           "female")""".stripMargin)(
         Vector(
           PushString("/campaigns"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("/campaigns"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("ageRange"),
           Map2Cross(DerefObject),
           PushNum("25"),
@@ -585,7 +585,7 @@ object EmitterSpecs extends Specification
           Map2Cross(JoinArray),
           Map2Cross(Eq),
           PushString("/campaigns"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("gender"),
           Map2Cross(DerefObject),
           PushString("female"),
@@ -598,12 +598,12 @@ object EmitterSpecs extends Specification
       testEmit("a := //a b := //b a ~ b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -621,7 +621,7 @@ object EmitterSpecs extends Specification
           Map2Match(Mul)),
         Vector(
           PushString("/b"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
@@ -632,7 +632,7 @@ object EmitterSpecs extends Specification
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -676,7 +676,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("day"),
           Map2Cross(DerefObject),
@@ -692,7 +692,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           PushString("day"),
@@ -714,7 +714,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           PushString("day"),
@@ -741,7 +741,7 @@ object EmitterSpecs extends Specification
         | foo""")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           PushString("time"),
@@ -784,7 +784,7 @@ object EmitterSpecs extends Specification
         | foo""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
@@ -825,7 +825,7 @@ object EmitterSpecs extends Specification
         | foo""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
@@ -868,7 +868,7 @@ object EmitterSpecs extends Specification
         | foo""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("a"),
           Map2Cross(DerefObject),
@@ -876,7 +876,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           Group(0),
           PushString("/impressions"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -905,7 +905,7 @@ object EmitterSpecs extends Specification
         | foo""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           KeyPart(1),
@@ -942,7 +942,7 @@ object EmitterSpecs extends Specification
         | ctr""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("day"),
           Map2Cross(DerefObject),
@@ -950,7 +950,7 @@ object EmitterSpecs extends Specification
           Swap(1),
           Group(0),
           PushString("/impressions"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -979,7 +979,7 @@ object EmitterSpecs extends Specification
       testEmit(input)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           KeyPart(1),
           Swap(1),
@@ -1008,7 +1008,7 @@ object EmitterSpecs extends Specification
 
       testEmit(input)(Vector(
         PushString("/campaigns"),
-        LoadLocal(Het),
+        LoadLocal,
         Dup,
         PushString("cpm"),
         Map2Cross(DerefObject),
@@ -1052,7 +1052,7 @@ object EmitterSpecs extends Specification
       testEmit(input)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("time"),
           Map2Cross(DerefObject),
@@ -1064,7 +1064,7 @@ object EmitterSpecs extends Specification
           Split,
           PushString("jay"),
           PushString("/views"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -1105,7 +1105,7 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/interactions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
             Dup,
             Dup,
@@ -1193,7 +1193,7 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/conversions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
             Dup,
             Dup,
@@ -1203,7 +1203,7 @@ object EmitterSpecs extends Specification
             Swap(1),
             Group(0),
             PushString("/impressions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
             Swap(2),
             Swap(1),
@@ -1311,7 +1311,7 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/clicks"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
             KeyPart(1),
             Swap(1),

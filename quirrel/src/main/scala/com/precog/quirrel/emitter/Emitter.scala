@@ -371,7 +371,7 @@ trait Emitter extends AST
         case d @ ast.Dispatch(loc, name, actuals) => 
           d.binding match {
             case LoadBinding(_) =>
-              emitExpr(actuals.head) >> emitInstr(LoadLocal(Het))
+              emitExpr(actuals.head) >> emitInstr(LoadLocal)
 
             case DistinctBinding(_) =>
               emitExpr(actuals.head) >> emitInstr(Distinct)
