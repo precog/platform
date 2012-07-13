@@ -26,6 +26,7 @@ import blueeyes.json.{ JPath, JPathField, JPathIndex }
 object Schema {
   sealed trait JType
   
+  case object JUnfixedT extends JType
   case object JNumberT extends JType
   case object JTextT extends JType
   case object JBooleanT extends JType

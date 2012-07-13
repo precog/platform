@@ -39,6 +39,9 @@ import scalaz.iteratee._
 import scalaz.std.list._
 import Iteratee._
 
+import org.specs2.specification.Fragment
+import org.specs2.specification.Fragments
+import org.specs2.execute.Result
 import org.specs2.mutable._
 
 trait TestConfigComponent extends table.ColumnarTableModule {
@@ -100,7 +103,8 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with TestConfigComponent 
     with StdLib
-    with MemoryDatasetConsumer { self =>
+    with MemoryDatasetConsumer 
+    with TypeInferencer { self =>
   
   import Function._
   
@@ -109,11 +113,15 @@ class EvaluatorSpecs extends Specification
 
   val testUID = "testUID"
 
-  def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx) match {
-      case Success(results) => results
+  def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = withContext { ctx =>
+    (consumeEval(testUID, graph, ctx) match {
+      case Success(results) => test(results)
       case Failure(error) => throw error
-    }
+    }) and 
+    (consumeEval(testUID, inferTypes(graph, Schema.JUnfixedT), ctx) match {
+      case Success(results) => test(results)
+      case Failure(error) => throw error
+    })
   }
 
   "evaluator" should {
@@ -124,126 +132,126 @@ class EvaluatorSpecs extends Specification
         Root(line, PushNum("6")),
         Root(line, PushNum("7")))
         
-      val result = testEval(input)
+      testEval(input) { result => 
       
       result must haveSize(1)
       
       val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
       }
       
       result2 must contain(42)
-    }
+    }}
     
     "evaluate single value roots" >> {
       "push_string" >> {
         val line = Line(0, "")
         val input = Root(line, PushString("daniel"))
-        val result = testEval(input)
+        testEval(input) { result =>
         
         result must haveSize(1)
         
         val result2 = result collect {
-          case (VectorCase(), SString(str)) => str
+          case (ids, SString(str)) if ids.isEmpty => str
         }
         
         result2 must contain("daniel")
-      }
+      }}
       
       "push_num" >> {
         val line = Line(0, "")
         val input = Root(line, PushNum("42"))
-        val result = testEval(input)
+        testEval(input) { result =>
         
         result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SDecimal(d)) => d.toInt
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
+          }
+          
+          result2 must contain(42)
         }
-        
-        result2 must contain(42)
       }
       
       "push_true" >> {
         val line = Line(0, "")
         val input = Root(line, PushTrue)
-        val result = testEval(input)
+        testEval(input) { result =>
         
         result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SBoolean(b)) => b
+          val result2 = result collect {
+            case (ids, SBoolean(b)) if ids.isEmpty => b
+          }
+          
+          result2 must contain(true)
         }
-        
-        result2 must contain(true)
       }
       
       "push_false" >> {
         val line = Line(0, "")
         val input = Root(line, PushFalse)
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SBoolean(b)) => b
-        }
-        
-        result2 must contain(false)
-      }      
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SBoolean(b)) if ids.isEmpty => b
+          }
+          
+          result2 must contain(false)
+        }      
+      }
 
       "push_null" >> {
         val line = Line(0, "")
         val input = Root(line, PushNull)
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        result must contain((VectorCase(), SNull))
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          result must contain((VectorCase(), SNull))
+        }
       }
       
       "push_object" >> {
         val line = Line(0, "")
         val input = Root(line, PushObject)
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SObject(obj)) => obj
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SObject(obj)) if ids.isEmpty => obj
+          }
+          
+          result2 must contain(Map())
         }
-        
-        result2 must contain(Map())
       }
       
       "push_array" >> {
         val line = Line(0, "")
         val input = Root(line, PushArray)
-        val result = testEval(input)
+        testEval(input) { result =>
         
         result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(), SArray(arr)) => arr
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.isEmpty => arr
+          }
+          
+          result2 must contain(Vector())
         }
-        
-        result2 must contain(Vector())
       }
     }
     
     "evaluate a load_local" in {
       val line = Line(0, "")
       val input = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
-    }
+    }}
     
     "evaluate a negation mapped over numbers" in {
       val line = Line(0, "")
@@ -251,16 +259,16 @@ class EvaluatorSpecs extends Specification
       val input = Operate(line, Neg,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(-42, -12, -77, -1, -13)
-    }
+    }}
     
     "evaluate a new mapped over numbers as no-op" in {
       val line = Line(0, "")
@@ -268,16 +276,16 @@ class EvaluatorSpecs extends Specification
       val input = dag.New(line,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
-    }
+    }}
 
     "join two sets with a match" >> {
       "from different paths" >> {
@@ -291,9 +299,9 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 
-        val result = testEval(input)
-
-        result must haveSize(500)
+        testEval(input) { result =>
+          result must haveSize(500)
+        }
       }
 
       "from the same path" >> {
@@ -307,9 +315,9 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 
-        val result = testEval(input)
-
-        result must haveSize(5)
+        testEval(input) { result =>
+          result must haveSize(5)
+        }
       }
     }
 
@@ -321,15 +329,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(47, 17, 82, 6, 18)
         }
-        
-        result2 must contain(47, 17, 82, 6, 18)
       }
       
       "subtraction" >> {
@@ -339,15 +347,16 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(37, 7, 72, -4, 8)
         }
-        
-        result2 must contain(37, 7, 72, -4, 8)
       }
       
       "multiplication" >> {
@@ -357,15 +366,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(210, 60, 385, 5, 65)
         }
-        
-        result2 must contain(210, 60, 385, 5, 65)
       }
       
       "division" >> {
@@ -375,15 +384,16 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toDouble
+        testEval(input) { result =>
+          
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+          }
+          
+          result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
         }
-        
-        result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
       }
     }
     
@@ -395,15 +405,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(47, 17, 82, 6, 18)
         }
-        
-        result2 must contain(47, 17, 82, 6, 18)
       }
       
       "subtraction" >> {
@@ -413,15 +423,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(37, 7, 72, -4, 8)
         }
-        
-        result2 must contain(37, 7, 72, -4, 8)
       }
       
       "multiplication" >> {
@@ -431,15 +441,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(210, 60, 385, 5, 65)
         }
-        
-        result2 must contain(210, 60, 385, 5, 65)
       }
       
       "division" >> {
@@ -449,15 +459,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
-        val result = testEval(input)
-        
-        result must haveSize(5)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toDouble
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+          }
+          
+          result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
         }
-        
-        result2 must contain(8.4, 2.4, 15.4, 0.2, 2.6)
       }
     }
 
@@ -473,15 +483,15 @@ class EvaluatorSpecs extends Specification
               Root(line, PushString("time"))),
             Root(line, PushNum("0")))))
 
-      val result = testEval(input)
+      testEval(input) { result =>
+        result must haveSize(1)
 
-      result must haveSize(1)
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
+        }
 
-      val result2 = result collect {
-        case (VectorCase(), SDecimal(d)) => d.toInt
+        result2 must contain(100)
       }
-
-      result2 must contain(100)
     }
 
     "evaluate cross when one side is a singleton" >> {
@@ -493,15 +503,15 @@ class EvaluatorSpecs extends Specification
           dag.Reduce(line, Count, 
             Root(line, PushNum("42"))))
 
-        val result = testEval(input)
+        testEval(input) { result =>
+          result must haveSize(5)
 
-        result must haveSize(5)
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
 
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d
+          result2 must contain(43, 13, 78, 2, 14)
         }
-
-        result2 must contain(43, 13, 78, 2, 14)
       }
 
       "a reduction on the left side of the cross" >> {
@@ -512,15 +522,15 @@ class EvaluatorSpecs extends Specification
             Root(line, PushNum("42"))),
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
 
-        val result = testEval(input)
+        testEval(input) { result =>
+          result must haveSize(5)
 
-        result must haveSize(5)
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
 
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d
+          result2 must contain(43, 13, 78, 2, 14)
         }
-
-        result2 must contain(43, 13, 78, 2, 14)
       }
 
       "a root on the right side of the cross" >> {
@@ -530,15 +540,15 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("3")))
          
-        val result = testEval(input)
+        testEval(input) { result =>
+          result must haveSize(5)
 
-        result must haveSize(5)
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
 
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d
+          result2 must contain(45, 15, 80, 4, 16)
         }
-
-        result2 must contain(45, 15, 80, 4, 16)
       }
 
       "a root on the left side of the cross" >> {
@@ -548,15 +558,15 @@ class EvaluatorSpecs extends Specification
           Root(line, PushNum("3")),
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
 
-        val result = testEval(input)
+        testEval(input) { result =>
+          result must haveSize(5)
 
-        result must haveSize(5)
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d
+          }
 
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d
+          result2 must contain(45, 15, 80, 4, 16)
         }
-
-        result2 must contain(45, 15, 80, 4, 16)
       }
     }
 
@@ -567,23 +577,23 @@ class EvaluatorSpecs extends Specification
         Root(line, PushString("answer")),
         Root(line, PushNum("42")))
         
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      
-      val optObj = result find {
-        case (VectorCase(), SObject(_)) => true
-        case _ => false
-      } collect {
-        case (_, SObject(obj)) => obj
-      }
-      
-      optObj must beSome
-      val obj = optObj.get
-      
-      obj must haveKey("answer")
-      obj("answer") must beLike {
-        case SDecimal(d) => d mustEqual 42
+      testEval(input) { result =>
+        result must haveSize(1)
+        
+        val optObj = result find {
+          case (ids, SObject(_)) if ids.isEmpty => true
+          case _ => false
+        } collect {
+          case (_, SObject(obj)) => obj
+        }
+        
+        optObj must beSome
+        val obj = optObj.get
+        
+        obj must haveKey("answer")
+        obj("answer") must beLike {
+          case SDecimal(d) => d mustEqual 42
+        }
       }
     }
 
@@ -596,12 +606,12 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("question")),
           Root(line, PushNull)))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(1)
       
       val optObj = result find {
-        case (VectorCase(), SObject(_)) => true
+        case (ids, SObject(_)) if ids.isEmpty => true
         case _ => false
       } collect {
         case (_, SObject(obj)) => obj
@@ -617,7 +627,7 @@ class EvaluatorSpecs extends Specification
           obj("question") mustEqual SNull
         }
       }
-    }
+    }}
     
     "evaluate wrap_object on clicks dataset" in {
       val line = Line(0, "")
@@ -628,17 +638,17 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/clicks"))),
           Root(line, PushString("user"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(100)
       
       forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) if ids.size == 1 => {
           obj must haveSize(1)
           obj must haveKey("aa")
         }
       }
-    }
+    }}
     
     "evaluate wrap_array on a single numeric value" in {
       val line = Line(0, "")
@@ -646,12 +656,12 @@ class EvaluatorSpecs extends Specification
       val input = Operate(line, WrapArray,
         Root(line, PushNum("42")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(1)
       
       val optArr = result find {
-        case (VectorCase(), SArray(_)) => true
+        case (ids, SArray(_)) if ids.isEmpty => true
         case _ => false
       } collect {
         case (_, SArray(arr)) => arr
@@ -664,7 +674,7 @@ class EvaluatorSpecs extends Specification
       arr.head must beLike {
         case SDecimal(d) => d mustEqual 42
       }
-    }    
+    }}
 
     "evaluate wrap_array on a single null value" in {
       val line = Line(0, "")
@@ -672,12 +682,12 @@ class EvaluatorSpecs extends Specification
       val input = Operate(line, WrapArray,
         Root(line, PushNull))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(1)
       
       val optArr = result find {
-        case (VectorCase(), SArray(_)) => true
+        case (ids, SArray(_)) if ids.isEmpty => true
         case _ => false
       } collect {
         case (_, SArray(arr)) => arr
@@ -688,7 +698,7 @@ class EvaluatorSpecs extends Specification
       
       arr must haveSize(1)
       arr.head mustEqual SNull
-    }
+    }}
     
     "evaluate join_object on single values" in {
       val line = Line(0, "")
@@ -701,12 +711,12 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("answer")),
           Root(line, PushNum("42"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(1)
       
       val optObj = result find {
-        case (VectorCase(), SObject(_)) => true
+        case (ids, SObject(_)) if ids.isEmpty => true
         case _ => false
       } collect {
         case (_, SObject(obj)) => obj
@@ -724,7 +734,7 @@ class EvaluatorSpecs extends Specification
       obj("question") must beLike {
         case SString(str) => str mustEqual "What is six times nine?"
       }
-    }
+    }}
     
     "evaluate join_array on single values" in {
       val line = Line(0, "")
@@ -735,12 +745,12 @@ class EvaluatorSpecs extends Specification
         Operate(line, WrapArray,
           Root(line, PushNum("42"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(1)
       
       val optArr = result find {
-        case (VectorCase(), SArray(_)) => true
+        case (ids, SArray(_)) if ids.isEmpty => true
         case _ => false
       } collect {
         case (_, SArray(arr)) => arr
@@ -755,7 +765,7 @@ class EvaluatorSpecs extends Specification
           d2 mustEqual 42
         }
       }
-    }
+    }}
     
     "evaluate array_swap on single values" >> {
       "at start" >> {
@@ -772,25 +782,25 @@ class EvaluatorSpecs extends Specification
                 Root(line, PushNum("42"))))),
           Root(line, PushNum("1")))
           
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val optArr = result find {
-          case (VectorCase(), SArray(_)) => true
-          case _ => false
-        } collect {
-          case (_, SArray(arr)) => arr
-        }
-        
-        optArr must beSome
-        val arr = optArr.get
-        
-        arr must beLike {
-          case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
-            d1 mustEqual 24
-            d2 mustEqual 12
-            d3 mustEqual 42
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val optArr = result find {
+            case (ids, SArray(_)) if ids.isEmpty => true
+            case _ => false
+          } collect {
+            case (_, SArray(arr)) => arr
+          }
+          
+          optArr must beSome
+          val arr = optArr.get
+          
+          arr must beLike {
+            case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
+              d1 mustEqual 24
+              d2 mustEqual 12
+              d3 mustEqual 42
+            }
           }
         }
       }
@@ -809,25 +819,25 @@ class EvaluatorSpecs extends Specification
                 Root(line, PushNum("42"))))),
           Root(line, PushNum("2")))
           
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val optArr = result find {
-          case (VectorCase(), SArray(_)) => true
-          case _ => false
-        } collect {
-          case (_, SArray(arr)) => arr
-        }
-        
-        optArr must beSome
-        val arr = optArr.get
-        
-        arr must beLike {
-          case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
-            d1 mustEqual 12
-            d2 mustEqual 42
-            d3 mustEqual 24
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val optArr = result find {
+            case (ids, SArray(_)) if ids.isEmpty => true
+            case _ => false
+          } collect {
+            case (_, SArray(arr)) => arr
+          }
+          
+          optArr must beSome
+          val arr = optArr.get
+          
+          arr must beLike {
+            case Vector(SDecimal(d1), SDecimal(d2), SDecimal(d3)) => {
+              d1 mustEqual 12
+              d2 mustEqual 42
+              d3 mustEqual 24
+            }
           }
         }
       }
@@ -840,16 +850,16 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
         Root(line, PushString("first")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
-    }
+    }}
     
     "evaluate descent on a heterogeneous set" in {
       val line = Line(0, "")
@@ -858,17 +868,17 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/het/pairs"))),
         Root(line, PushString("first")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
-        case (VectorCase(_), SNull) => SNull
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        case (ids, SNull) if ids.size == 1 => SNull
       }
       
       result2 must contain(42, 12, 1, 13, SNull)
-    }
+    }}
     
     "evaluate descent producing a heterogeneous set" in {
       val line = Line(0, "")
@@ -877,19 +887,19 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/het/het-pairs"))),
         Root(line, PushString("first")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
-        case (VectorCase(_), SString(str)) => str
-        case (VectorCase(_), SBoolean(b)) => b
-        case (VectorCase(_), SNull) => SNull
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        case (ids, SString(str)) if ids.size == 1 => str
+        case (ids, SBoolean(b)) if ids.size == 1 => b
+        case (ids, SNull) if ids.size == 1 => SNull
       }
       
       result2 must contain(42, true, "daniel", 1, SNull)
-    }
+    }}
     
     "evaluate array dereference on a homogeneous set" in {
       val line = Line(0, "")
@@ -898,16 +908,16 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/arrays"))),
         Root(line, PushNum("2")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
-    }
+    }}
     
     "evaluate array dereference on a heterogeneous set" in {
       val line = Line(0, "")
@@ -916,16 +926,16 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/het/arrays"))),
         Root(line, PushNum("2")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(42, 12, 77, 1, 13)
-    }
+    }}
     
     "evaluate array dereference producing a heterogeneous set" in {
       val line = Line(0, "")
@@ -934,19 +944,19 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/het/het-arrays"))),
         Root(line, PushNum("2")))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
-        case (VectorCase(_), SString(str)) => str
-        case (VectorCase(_), SBoolean(b)) => b
-        case (VectorCase(_), SNull) => SNull
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        case (ids, SString(str)) if ids.size == 1 => str
+        case (ids, SBoolean(b)) if ids.size == 1 => b
+        case (ids, SNull) if ids.size == 1 => SNull
       }
       
       result2 must contain(42, true, "daniel", 1, SNull)
-    }
+    }}
     
     "evaluate matched binary numeric operation" in {
       val line = Line(0, "")
@@ -959,16 +969,16 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("second"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(5)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(36, 12, 115, -165)
-    }
+    }}
     
     "evaluate matched binary numeric operation dropping undefined result" in {
       val line = Line(0, "")
@@ -981,16 +991,16 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("second"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
       }
       
       result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
-    }
+    }}
     
     "compute the set difference of two sets" in {
       val line = Line(0, "")
@@ -1001,17 +1011,17 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
           Root(line, PushString("time"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(6)
       
       forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) if ids.size == 1 => {
           obj must not haveKey("time")
         }
-        case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+        case (ids, SString(s)) if ids.size == 1 => s mustEqual "string cheese"
       }
-    }    
+    }}    
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
       
@@ -1023,17 +1033,17 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
             Root(line, PushString("time")))))
 
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(101)
       
       forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) if ids.size == 1 => {
           obj must haveKey("time")
         }
-        case (VectorCase(_), SString(s)) => s mustEqual "string cheese"
+        case (ids, SString(s)) if ids.size == 1 => s mustEqual "string cheese"
       }
-    }      
+    }}      
     
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1042,16 +1052,16 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(10)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
       }
       
       result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
-    }
+    }}
     
     "compute the iunion of two datasets" in {
       val line = Line(0, "")
@@ -1060,10 +1070,10 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/clicks"))),
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(105)
-    }
+    }}
     
     "compute the iintersect of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1072,16 +1082,16 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(0)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toDouble
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
       }
       
       result2 must beEmpty
-    }
+    }}
     
     "compute the iintersect of two datasets" in {
       val line = Line(0, "")
@@ -1090,10 +1100,10 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/clicks"))),
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(0)
-    }
+    }}
     
     
     
@@ -1107,15 +1117,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(1, 12)
         }
-        
-        result2 must contain(1, 12)
       }
       
       "less-than-equal" >> {
@@ -1127,15 +1137,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(3)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(12, 1, 13)
         }
-        
-        result2 must contain(12, 1, 13)
       }
       
       "greater-than" >> {
@@ -1147,15 +1157,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77)
         }
-        
-        result2 must contain(42, 77)
       }
       
       "greater-than-equal" >> {
@@ -1167,15 +1177,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(3)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77, 13)
         }
-        
-        result2 must contain(42, 77, 13)
       }
       
       "equal" >> {
@@ -1187,15 +1197,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(13)
         }
-        
-        result2 must contain(13)
       }
       
       "not-equal" >> {
@@ -1207,15 +1217,13 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(4)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 77, 1)
         }
-        
-        result2 must contain(42, 12, 77, 1)
       }
       
       "and" >> {
@@ -1231,15 +1239,15 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(3)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 1)
         }
-        
-        result2 must contain(42, 12, 1)
       }
       
       "or" >> {
@@ -1255,15 +1263,15 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(77, 13)
         }
-        
-        result2 must contain(77, 13)
       }
       
       "complement of equality" >> {
@@ -1276,15 +1284,15 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(4)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(4)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 12, 77, 1)
         }
-        
-        result2 must contain(42, 12, 77, 1)
       }
     }
     
@@ -1298,15 +1306,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(1, 12)
         }
-        
-        result2 must contain(1, 12)
       }
       
       "less-than-equal" >> {
@@ -1318,15 +1326,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(3)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(12, 1, 13)
         }
-        
-        result2 must contain(12, 1, 13)
       }
       
       "greater-than" >> {
@@ -1338,15 +1346,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77)
         }
-        
-        result2 must contain(42, 77)
       }
       
       "greater-than-equal" >> {
@@ -1358,15 +1366,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(3)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(42, 77, 13)
         }
-        
-        result2 must contain(42, 77, 13)
       }
       
       "equal" >> {
@@ -1378,15 +1386,15 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(1)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(13)
         }
-        
-        result2 must contain(13)
       }
       
       "not-equal" >> {
@@ -1398,20 +1406,20 @@ class EvaluatorSpecs extends Specification
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
-        val result = testEval(input)
-        
-        result must haveSize(9)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
-          case (VectorCase(_), SBoolean(b)) => b
-          case (VectorCase(_), SString(str)) => str
-          case (VectorCase(_), SObject(obj)) => obj
-          case (VectorCase(_), SArray(arr)) => arr
+        testEval(input) { result =>
+          result must haveSize(9)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+            case (ids, SBoolean(b)) if ids.size == 1 => b
+            case (ids, SString(str)) if ids.size == 1 => str
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+          
+          result2 must contain(42, 12, 77, 1, true, false, "daniel",
+            Map("test" -> SString("fubar")), Vector())
         }
-        
-        result2 must contain(42, 12, 77, 1, true, false, "daniel",
-          Map("test" -> SString("fubar")), Vector())
       }
       
       "and" >> {
@@ -1427,20 +1435,20 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(8)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
-          case (VectorCase(_), SBoolean(b)) => b
-          case (VectorCase(_), SString(str)) => str
-          case (VectorCase(_), SObject(obj)) => obj
-          case (VectorCase(_), SArray(arr)) => arr
+        testEval(input) { result =>
+          result must haveSize(8)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+            case (ids, SBoolean(b)) if ids.size == 1 => b
+            case (ids, SString(str)) if ids.size == 1 => str
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+          
+          result2 must contain(42, 12, 1, true, false, "daniel",
+            Map("test" -> SString("fubar")), Vector())
         }
-        
-        result2 must contain(42, 12, 1, true, false, "daniel",
-          Map("test" -> SString("fubar")), Vector())
       }
       
       "or" >> {
@@ -1456,15 +1464,15 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(2)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
+        testEval(input) { result =>
+          result must haveSize(2)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          }
+          
+          result2 must contain(77, 13)
         }
-        
-        result2 must contain(77, 13)
       }
       
       "complement of equality" >> {
@@ -1477,20 +1485,20 @@ class EvaluatorSpecs extends Specification
               dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
-        val result = testEval(input)
-        
-        result must haveSize(9)
-        
-        val result2 = result collect {
-          case (VectorCase(_), SDecimal(d)) => d.toInt
-          case (VectorCase(_), SBoolean(b)) => b
-          case (VectorCase(_), SString(str)) => str
-          case (VectorCase(_), SObject(obj)) => obj
-          case (VectorCase(_), SArray(arr)) => arr
+        testEval(input) { result =>
+          result must haveSize(9)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+            case (ids, SBoolean(b)) if ids.size == 1 => b
+            case (ids, SString(str)) if ids.size == 1 => str
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+          
+          result2 must contain(42, 12, 77, 1, true, false, "daniel",
+            Map("test" -> SString("fubar")), Vector())
         }
-        
-        result2 must contain(42, 12, 77, 1, true, false, "daniel",
-          Map("test" -> SString("fubar")), Vector())
       }
     }
     
@@ -1503,18 +1511,19 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))))
           
-      val result = testEval(input)
-      
-      result must haveSize(25)
-      
-      val result2 = result collect {
-        case (VectorCase(_, _), SDecimal(d)) => d.toInt
+      testEval(input) { result =>
+        
+        result must haveSize(25)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
+        }
+        
+        result2 must haveSize(23)
+        
+        result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
+          2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
       }
-      
-      result2 must haveSize(23)
-      
-      result2 must contain(0, -377, -780, 6006, -76, 5929, 1, 156, 169, 2, 1764,
-        2695, 144, 1806, -360, 1176, -832, 182, 4851, -1470, -13, -41, -24)
     }
     
     "correctly order a match following a cross within a new" in {
@@ -1526,19 +1535,19 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           dag.New(line, dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))))
           
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(25)
       
       val result2 = result collect {
-        case (VectorCase(_, _), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
       }
       
       result2 must haveSize(20)
       
       result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
         2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
-    }
+    }}
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
@@ -1564,16 +1573,16 @@ class EvaluatorSpecs extends Specification
                 nums,
                 SplitParam(line, 0)(input))))))
               
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(4)
       
       val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
       }
       
       result2 must contain(55, 13, 119, 25)
-    }
+    }}
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
@@ -1606,12 +1615,12 @@ class EvaluatorSpecs extends Specification
             dag.Reduce(line, Count,
               SplitGroup(line, 1, clicks.provenance)(input)))))
       
-      val result = testEval(input)
+      testEval(input) { result =>
       
       result must haveSize(10)
       
       forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
+        case (ids, SObject(obj)) if ids.size == 1 => {
           obj must haveKey("user")
           obj must haveKey("num")
           
@@ -1635,7 +1644,7 @@ class EvaluatorSpecs extends Specification
         
         case p => failure("'%s' does not match the expected pattern".format(p))
       }
-    }
+    }}
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
@@ -1646,18 +1655,19 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("t")),
           Root(line, PushNum("42"))))
           
-      val result = testEval(input)
-      
-      result must haveSize(100)
-      
-      forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
-          obj must haveKey("user")
-          obj must haveKey("time")
-          obj must haveKey("page")
-          obj must haveKey("t")
-          
-          obj("t") mustEqual SDecimal(42)
+      testEval(input) { result =>
+        
+        result must haveSize(100)
+        
+        forall(result) {
+          case (ids, SObject(obj)) if ids.size == 1 => {
+            obj must haveKey("user")
+            obj must haveKey("time")
+            obj must haveKey("page")
+            obj must haveKey("t")
+            
+            obj("t") mustEqual SDecimal(42)
+          }
         }
       }
     }
@@ -1677,18 +1687,19 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("user"))),
           Root(line, PushNull)))
 
-      val result = testEval(input)
+      testEval(input) { result =>
 
-      result must haveSize(3)
+        result must haveSize(3)
 
-      forall(result) {
-        case (VectorCase(_), SObject(obj)) => {
-          obj must haveKey("user")
+        forall(result) {
+          case (ids, SObject(obj)) if ids.size == 1 => {
+            obj must haveKey("user")
 
-          obj("user") must beLike {
-            case SNull => ok
-          }
-        }            
+            obj("user") must beLike {
+              case SNull => ok
+            }
+          }            
+        }
       }
     }
 
@@ -1728,16 +1739,17 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("num"))),
           Root(line, PushNum("9"))))
                   
-      val result = testEval(input)
-      
-      result must haveSize(1)
-      result.toList.head must beLike {
-        case (VectorCase(_), SObject(obj)) => {
-          obj must haveKey("user")
-          obj("user") must beLike { case SString("daniel") => ok }
-          
-          obj must haveKey("num")
-          obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
+      testEval(input) { result =>
+        
+        result must haveSize(1)
+        result.toList.head must beLike {
+          case (ids, SObject(obj)) if ids.size == 1 => {
+            obj must haveKey("user")
+            obj("user") must beLike { case SString("daniel") => ok }
+            
+            obj must haveKey("num")
+            obj("num") must beLike { case SDecimal(d) => d mustEqual 9 }
+          }
         }
       }
     }
@@ -1757,15 +1769,16 @@ class EvaluatorSpecs extends Specification
             dag.New(line, dag.LoadLocal(line, Root(line, PushString("/clicks")))),
             Root(line, PushString("user")))))
             
-      val result = testEval(input)
-      
-      result must haveSize(10000)
-      
-      forall(result) {
-        case (VectorCase(_, _), SObject(obj)) => {
-          obj must haveSize(2)
-          obj must haveKey("aa")
-          obj must haveKey("bb")
+      testEval(input) { result =>
+        
+        result must haveSize(10000)
+        
+        forall(result) {
+          case (ids, SObject(obj)) if ids.size == 2 => {
+            obj must haveSize(2)
+            obj must haveKey("aa")
+            obj must haveKey("bb")
+          }
         }
       }
     }
@@ -1776,15 +1789,16 @@ class EvaluatorSpecs extends Specification
       val input = dag.Distinct(line,
       dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
       
-      val result = testEval(input)
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
+      testEval(input) { result =>
+        
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
       }
-      
-      result2 must contain(42, 12, 77, 1, 13)
     }
     
     "distinct heterogenous sets" >> {
@@ -1793,19 +1807,19 @@ class EvaluatorSpecs extends Specification
       val input = dag.Distinct(line,
       dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
       
-      val result = testEval(input)
-      
-      result must haveSize(10)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d.toInt
-        case (VectorCase(_), SBoolean(b)) => b
-        case (VectorCase(_), SString(s)) => s
-        case (VectorCase(_), SArray(a)) => a
-        case (VectorCase(_), SObject(o)) => o
+      testEval(input) { result =>
+        result must haveSize(10)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          case (ids, SBoolean(b)) if ids.size == 1 => b
+          case (ids, SString(s)) if ids.size == 1 => s
+          case (ids, SArray(a)) if ids.size == 1 => a
+          case (ids, SObject(o)) if ids.size == 1 => o
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
       }
-      
-      result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
     }
   }
 }

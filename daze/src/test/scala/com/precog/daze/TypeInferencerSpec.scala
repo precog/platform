@@ -17,24 +17,30 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-name := "common"
+package com.precog.daze
 
-version := "1.2.1-SNAPSHOT"
+import com.precog.bytecode.RandomLibrary
 
-libraryDependencies ++= Seq(
-  "joda-time"                 % "joda-time"            % "1.6.2",
-  "org.streum"                % "configrity_2.9.1"     % "0.9.0",
-  "org.apache"                %% "kafka-core"          % "0.7.5",
-  "com.reportgrid"            %% "blueeyes-json"       % "0.6.0-SNAPSHOT" changing(),
-  "com.reportgrid"            %% "blueeyes-core"       % "0.6.0-SNAPSHOT" changing(),
-  "com.reportgrid"            %% "blueeyes-mongo"      % "0.6.0-SNAPSHOT" changing())
+import org.specs2.mutable._
 
-ivyXML :=
-  <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
-      <exclude org="com.sun.jdmk"/>
-      <exclude org="com.sun.jmx"/>
-      <exclude org="javax.jms"/>
-      <exclude org="jline"/>
-    </dependency>
-  </dependencies>
+class TypeInferencerSpec extends Specification with DAG with RandomLibrary with TypeInferencer {
+  import instructions._
+  import dag._
+  "type inference" should {
+    "rewrite loads such that they will restrict the columns loaded" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Match(Add),
+        Join(line, Map2Cross(DerefObject), 
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushString("time"))),
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
+          Root(line, PushString("height"))))
+
+      todo
+    }
+  }
+}
+
+// vim: set ts=4 sw=4 et:
