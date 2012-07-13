@@ -137,9 +137,9 @@ trait BytecodeReader extends Reader {
         case _ => None
       }
 
-      lazy val tpe = (code & 0xFF) match {
-        case 0x00 => Some(Het)
-      }
+//      lazy val tpe = (code & 0xFF) match {
+//        case 0x00 => Some(Het)
+//      }
       
       lazy val depth = ((code >> 32) & 0xFFFFFF).toShort
       
@@ -189,7 +189,8 @@ trait BytecodeReader extends Reader {
         
         // introductive instructions
         
-        case 0x40 => tpe map LoadLocal
+        //case 0x40 => tpe map LoadLocal
+        case 0x40 => Some(LoadLocal)
         
         case 0x80 => string map PushString
         case 0x81 => num map PushNum

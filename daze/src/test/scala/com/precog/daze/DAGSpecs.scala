@@ -63,8 +63,8 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     }
     
     "parse out load_local" in {
-      val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal(Het)))
-      result mustEqual Right(dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/foo")), Het))
+      val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal))
+      result mustEqual Right(dag.LoadLocal(Line(0, ""), Root(Line(0, ""), PushString("/foo"))))
     }
     
     "parse out map1" in {
@@ -610,7 +610,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "load_local" >> {
-        val instr = instructions.LoadLocal(Het)
+        val instr = instructions.LoadLocal
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
     }

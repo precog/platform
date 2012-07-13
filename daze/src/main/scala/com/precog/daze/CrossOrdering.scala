@@ -59,9 +59,9 @@ trait CrossOrdering extends DAG {
         case dag.New(loc, parent) =>
           dag.New(loc, memoized(parent, splits))
         
-        case dag.LoadLocal(loc, range, parent, tpe) =>
-          dag.LoadLocal(loc, range, memoized(parent, splits), tpe)
-        
+        case dag.LoadLocal(loc, parent, tpe) =>
+          dag.LoadLocal(loc, memoized(parent, splits), tpe)
+
         case Operate(loc, op, parent) =>
           Operate(loc, op, memoized(parent, splits))
         

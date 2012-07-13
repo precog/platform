@@ -59,7 +59,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -76,7 +76,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -93,7 +93,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -110,7 +110,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Median,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -127,7 +127,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Median,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers5")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers5"))))
         
       val result = testEval(input)
       
@@ -161,7 +161,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mode,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
         
       val result = testEval(input)
       
@@ -195,7 +195,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -212,7 +212,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -229,7 +229,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -246,7 +246,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -263,7 +263,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -280,7 +280,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -297,7 +297,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -317,7 +317,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Count,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -334,7 +334,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, GeometricMean,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -351,7 +351,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Mean,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -368,7 +368,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, BuiltInReduction(Median),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -385,7 +385,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
         
       val result = testEval(input)
       
@@ -402,7 +402,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, BuiltInReduction(Mode),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/random")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/random"))))
         
       val result = testEval(input)
       
@@ -419,7 +419,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Max,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -436,7 +436,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Min,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -453,7 +453,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, StdDev,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -470,7 +470,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Sum,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -487,7 +487,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, SumSq,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       
@@ -504,7 +504,7 @@ class ReductionLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Reduce(line, Variance,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))))
         
       val result = testEval(input)
       

@@ -69,7 +69,7 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Rank),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))))
 
       val result = testEval(input)
 
@@ -86,10 +86,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
         Join(line, Map2Cross(Eq),
           dag.Operate(line, BuiltInFunction1Op(Rank),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
           Root(line, PushNum("5"))))
         
       val result = testEval(input)
@@ -108,7 +108,7 @@ class StatsLibSpec extends Specification
 
       val input = Join(line, Map2Cross(Add),
         dag.Operate(line, BuiltInFunction1Op(Rank),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -128,7 +128,7 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(Rank),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))))
 
       val result = testEval(input)
 
@@ -145,10 +145,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Map2Cross(Eq),
           dag.Operate(line, BuiltInFunction1Op(Rank),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("9"))))
         
       val result = testEval(input)
@@ -166,10 +166,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Map2Cross(Eq),
           dag.Operate(line, BuiltInFunction1Op(Rank),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("1"))))
         
       val result = testEval(input)
@@ -188,10 +188,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Map2Cross(LtEq),
           dag.Operate(line, BuiltInFunction1Op(Rank),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("5"))))
         
       val result = testEval(input)
@@ -210,7 +210,7 @@ class StatsLibSpec extends Specification
 
       val input = Join(line, Map2Cross(Add),
         dag.Operate(line, BuiltInFunction1Op(Rank),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -230,7 +230,7 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DenseRank),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))))
 
       val result = testEval(input)
 
@@ -247,10 +247,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
         Join(line, Map2Cross(Eq),
           dag.Operate(line, BuiltInFunction1Op(DenseRank),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
           Root(line, PushNum("4"))))
         
       val result = testEval(input)
@@ -269,7 +269,7 @@ class StatsLibSpec extends Specification
 
       val input = Join(line, Map2Cross(Add),
         dag.Operate(line, BuiltInFunction1Op(DenseRank),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers6")), Het)),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -289,7 +289,7 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = dag.Operate(line, BuiltInFunction1Op(DenseRank),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))))
 
       val result = testEval(input)
 
@@ -306,10 +306,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Map2Cross(Eq),
           dag.Operate(line, BuiltInFunction1Op(DenseRank),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("6"))))
         
       val result = testEval(input)
@@ -327,10 +327,10 @@ class StatsLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Filter(line, None, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
         Join(line, Map2Cross(LtEq),
           dag.Operate(line, BuiltInFunction1Op(DenseRank),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("5"))))
         
       val result = testEval(input)
@@ -349,7 +349,7 @@ class StatsLibSpec extends Specification
 
       val input = Join(line, Map2Cross(Add),
         dag.Operate(line, BuiltInFunction1Op(DenseRank),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers6")), Het)),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -370,10 +370,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearCorrelation)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -392,10 +392,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(Covariance)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -414,10 +414,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -440,10 +440,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -468,10 +468,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(LinearCorrelation)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -490,10 +490,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(Covariance)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -512,10 +512,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(LinearRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -538,10 +538,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -566,10 +566,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearCorrelation)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
       val result = testEval(input)
@@ -588,10 +588,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(Covariance)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
       val result = testEval(input)
@@ -610,10 +610,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
       val result = testEval(input)
@@ -636,10 +636,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
       val result = testEval(input)
@@ -664,10 +664,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearCorrelation)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -686,10 +686,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(Covariance)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -708,10 +708,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LinearRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -734,10 +734,10 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Match(BuiltInFunction2Op(LogarithmicRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("het/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
       val result = testEval(input)
@@ -763,7 +763,7 @@ class StatsLibSpec extends Specification
         
         val input = Join(line, Map2Cross(BuiltInFunction2Op(LinearCorrelation)),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))),
           Root(line, PushNum("5")))
 
@@ -778,7 +778,7 @@ class StatsLibSpec extends Specification
         val input = Join(line, Map2Cross(BuiltInFunction2Op(LinearCorrelation)),
           Root(line, PushNum("5")),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))))
 
         val result = testEval(input)
@@ -792,7 +792,7 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(Covariance)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Root(line, PushNum("5")))
 
@@ -812,7 +812,7 @@ class StatsLibSpec extends Specification
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(LinearRegression)),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Root(line, PushNum("5")))
 
@@ -837,7 +837,7 @@ class StatsLibSpec extends Specification
         
         val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))),
           Root(line, PushNum("5")))
 
@@ -863,7 +863,7 @@ class StatsLibSpec extends Specification
           Operate(line, Neg, 
             Root(line, PushNum("5"))),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))))
 
         val result = testEval(input)
@@ -876,10 +876,10 @@ class StatsLibSpec extends Specification
         
         val input = Join(line, Map2Cross(BuiltInFunction2Op(LogarithmicRegression)),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight_neg")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight_neg"))),
             Root(line, PushString("height"))),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("hom/heightWeight_neg")), Het),
+            dag.LoadLocal(line, Root(line, PushString("hom/heightWeight_neg"))),
             Root(line, PushString("weight"))))
 
         val result = testEval(input)

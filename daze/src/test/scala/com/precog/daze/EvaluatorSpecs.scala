@@ -233,7 +233,7 @@ class EvaluatorSpecs extends Specification
     
     "evaluate a load_local" in {
       val line = Line(0, "")
-      val input = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+      val input = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
       val result = testEval(input)
       
       result must haveSize(5)
@@ -249,7 +249,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Operate(line, Neg,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -266,7 +266,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = dag.New(line,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
         
       val result = testEval(input)
       
@@ -285,10 +285,10 @@ class EvaluatorSpecs extends Specification
 
         val input = Join(line, Map2Match(Add),
           Join(line, Map2Cross(DerefObject), 
-            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/clicks"))),
             Root(line, PushString("time"))),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 
         val result = testEval(input)
@@ -301,10 +301,10 @@ class EvaluatorSpecs extends Specification
 
         val input = Join(line, Map2Match(Add),
           Join(line, Map2Cross(DerefObject), 
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("weight"))),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/heightWeight")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 
         val result = testEval(input)
@@ -318,7 +318,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Add),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -336,7 +336,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Sub),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -354,7 +354,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Mul),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -372,7 +372,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Div),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -392,7 +392,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Add),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -410,7 +410,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Sub),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -428,7 +428,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Mul),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -446,7 +446,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Div),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Root(line, PushNum("5")))
           
         val result = testEval(input)
@@ -466,10 +466,10 @@ class EvaluatorSpecs extends Specification
 
       val input = dag.Reduce(line, Count,
         Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
           Join(line, Map2Cross(Gt),
             Join(line, Map2Cross(DerefObject),
-              dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/clicks"))),
               Root(line, PushString("time"))),
             Root(line, PushNum("0")))))
 
@@ -489,7 +489,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Map2Cross(Add), 
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           dag.Reduce(line, Count, 
             Root(line, PushNum("42"))))
 
@@ -510,7 +510,7 @@ class EvaluatorSpecs extends Specification
         val input = Join(line, Map2Cross(Add), 
           dag.Reduce(line, Count, 
             Root(line, PushNum("42"))),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
 
         val result = testEval(input)
 
@@ -527,7 +527,7 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
 
         val input = Join(line, Map2Cross(Add),  
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Root(line, PushNum("3")))
          
         val result = testEval(input)
@@ -546,7 +546,7 @@ class EvaluatorSpecs extends Specification
 
         val input = Join(line, Map2Cross(Add), 
           Root(line, PushNum("3")),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))
 
         val result = testEval(input)
 
@@ -625,7 +625,7 @@ class EvaluatorSpecs extends Specification
       val input = Join(line, Map2Cross(WrapObject),
         Root(line, PushString("aa")),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
           Root(line, PushString("user"))))
         
       val result = testEval(input)
@@ -837,7 +837,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefObject),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
         Root(line, PushString("first")))
         
       val result = testEval(input)
@@ -855,7 +855,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefObject),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/pairs")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/pairs"))),
         Root(line, PushString("first")))
         
       val result = testEval(input)
@@ -874,7 +874,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefObject),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/het-pairs")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/het-pairs"))),
         Root(line, PushString("first")))
         
       val result = testEval(input)
@@ -895,7 +895,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefArray),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/arrays")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/arrays"))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -913,7 +913,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefArray),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/arrays")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/arrays"))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -931,7 +931,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(DerefArray),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/het-arrays")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/het-arrays"))),
         Root(line, PushNum("2")))
         
       val result = testEval(input)
@@ -953,10 +953,10 @@ class EvaluatorSpecs extends Specification
       
       val input = Join(line, Map2Match(Sub),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("first"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("second"))))
         
       val result = testEval(input)
@@ -975,10 +975,10 @@ class EvaluatorSpecs extends Specification
       
       val input = Join(line, Map2Match(Div),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("first"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/pairs")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/pairs"))),
           Root(line, PushString("second"))))
         
       val result = testEval(input)
@@ -996,9 +996,9 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, SetDifference,
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
         Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
           Root(line, PushString("time"))))
         
       val result = testEval(input)
@@ -1016,11 +1016,11 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, SetDifference,
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
         Join(line, SetDifference,
-          dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("/clicks2")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/clicks2"))),
             Root(line, PushString("time")))))
 
       val result = testEval(input)
@@ -1039,8 +1039,8 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, IUnion,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       val result = testEval(input)
       
@@ -1057,8 +1057,8 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, IUnion,
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       val result = testEval(input)
       
@@ -1069,8 +1069,8 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, IIntersect,
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       val result = testEval(input)
       
@@ -1087,8 +1087,8 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, IIntersect,
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       val result = testEval(input)
       
@@ -1102,9 +1102,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(Lt),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1122,9 +1122,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(LtEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1142,9 +1142,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(Gt),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1162,9 +1162,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(GtEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1182,9 +1182,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(Eq),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1202,9 +1202,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Cross(NotEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1222,13 +1222,13 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Match(And),
             Join(line, Map2Cross(NotEq),
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("77"))),
             Join(line, Map2Cross(NotEq),
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1246,13 +1246,13 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Join(line, Map2Match(Or),
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("77"))),
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1270,10 +1270,10 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
           Operate(line, Comp,
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1293,9 +1293,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(Lt),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1313,9 +1313,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(LtEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1333,9 +1333,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(Gt),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1353,9 +1353,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(GtEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1373,9 +1373,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(Eq),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1393,9 +1393,9 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Cross(NotEq),
-            dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
           
         val result = testEval(input)
@@ -1418,13 +1418,13 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Match(And),
             Join(line, Map2Cross(NotEq),
-              dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("77"))),
             Join(line, Map2Cross(NotEq),
-              dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1447,13 +1447,13 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Join(line, Map2Match(Or),
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("77"))),
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1471,10 +1471,10 @@ class EvaluatorSpecs extends Specification
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
           Operate(line, Comp,
             Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, None, Root(line, PushString("/het/numbers")), Het),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
               Root(line, PushNum("13")))))
           
         val result = testEval(input)
@@ -1498,10 +1498,10 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(Mul),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
         Join(line, Map2Cross(Sub),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers3")), Het)))
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))))
           
       val result = testEval(input)
       
@@ -1521,10 +1521,10 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Match(Mul),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
         Join(line, Map2Cross(Sub),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het),
-          dag.New(line, dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het))))
+          dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+          dag.New(line, dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))))
           
       val result = testEval(input)
       
@@ -1551,7 +1551,7 @@ class EvaluatorSpecs extends Specification
       // sums
       // 
        
-      val nums = dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers")), Het)
+      val nums = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
       
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1, nums, UnfixedSolution(0, nums)),
@@ -1588,7 +1588,7 @@ class EvaluatorSpecs extends Specification
       // histogram
       // 
       // 
-      val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
        
       lazy val input: dag.Split = dag.Split(line,
         dag.Group(1,
@@ -1641,7 +1641,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(JoinObject),
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
         Join(line, Map2Cross(WrapObject),
           Root(line, PushString("t")),
           Root(line, PushNum("42"))))
@@ -1670,10 +1670,10 @@ class EvaluatorSpecs extends Specification
       //
       //
       val input = Filter(line, None,
-        dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/clicks"))),
         Join(line, Map2Cross(Eq),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/clicks"))),
             Root(line, PushString("user"))),
           Root(line, PushNull)))
 
@@ -1702,7 +1702,7 @@ class EvaluatorSpecs extends Specification
       // histogram where histogram.num = 9
       // 
       // 
-      val clicks = dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
        
       lazy val histogram: dag.Split = dag.Split(line,
         dag.Group(1,
@@ -1749,12 +1749,12 @@ class EvaluatorSpecs extends Specification
         Join(line, Map2Cross(WrapObject),
           Root(line, PushString("aa")),
           Join(line, Map2Cross(DerefObject),
-            dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het),
+            dag.LoadLocal(line, Root(line, PushString("/clicks"))),
             Root(line, PushString("user")))),
         Join(line, Map2Cross(WrapObject),
           Root(line, PushString("bb")),
           Join(line, Map2Cross(DerefObject),
-            dag.New(line, dag.LoadLocal(line, None, Root(line, PushString("/clicks")), Het)),
+            dag.New(line, dag.LoadLocal(line, Root(line, PushString("/clicks")))),
             Root(line, PushString("user")))))
             
       val result = testEval(input)
@@ -1774,7 +1774,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, None, Root(line, PushString("/hom/numbers2")), Het))
+      dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
       
       val result = testEval(input)
       
@@ -1791,7 +1791,7 @@ class EvaluatorSpecs extends Specification
       val line = Line(0, "")
       
       val input = dag.Distinct(line,
-      dag.LoadLocal(line, None, Root(line, PushString("/het/numbers2")), Het))
+      dag.LoadLocal(line, Root(line, PushString("/het/numbers2"))))
       
       val result = testEval(input)
       
