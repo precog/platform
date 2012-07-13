@@ -28,12 +28,14 @@ import yggdrasil.table._
 
 import com.precog.util._
 
-import collection.Set
-
 import scalaz._
-import scalaz.std.option._
-import scalaz.syntax.std.option._
 import scalaz.std.anyVal._
+import scalaz.std.option._
+import scalaz.std.set._
+import scalaz.std.tuple._
+import scalaz.syntax.foldable._
+import scalaz.syntax.std.option._
+import scalaz.syntax.std.boolean._
 
 trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
@@ -47,8 +49,9 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def monoid = implicitly[Monoid[Result]]
     
     def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(col: Column, range: Range) = {
-        val colSeq = range.view filter col.isDefinedAt
+      def reduce(cols: JType => Set[Column], range: Range) = {
+        val cx = cols(JType.JUnfixedT)
+        val colSeq = range.view filter { i => cx.exists(_.isDefinedAt(i)) }
         colSeq.size
       }
     }
@@ -68,8 +71,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
     
     def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val max = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
@@ -88,7 +91,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
               None
             else
               Some(mapped.max: BigDecimal)
-        }
+
+          case _ => None
+        } 
+        
+        (max.isEmpty).option(max.suml)
       }
     }
 
@@ -108,8 +115,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
     
     def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(col: Column, range: Range) = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val min = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
@@ -118,18 +125,17 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
               Some(mapped.min: BigDecimal)
           case col: DoubleColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.min: BigDecimal)
+            (mapped.isEmpty).option(mapped.min: BigDecimal)
+
           case col: NumColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
-            if (mapped.isEmpty)
-              None
-            else
-              Some(mapped.min: BigDecimal)
-        }
-      }
+            (mapped.isEmpty).option(mapped.min: BigDecimal)
+
+          case _ => None
+        } 
+        
+        (min.isEmpty).option(min.suml)
+      } 
     }
 
     def extract(res: Result): Table =
@@ -148,8 +154,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(col: Column, range: Range) = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range) = {
+        val sum = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
@@ -168,7 +174,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
               None
             else
               Some(mapped.sum: BigDecimal)
-        }
+
+          case _ => None
+        } 
+
+        (sum.isEmpty).option(sum.suml)
       }
     }
 
@@ -189,8 +199,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
     
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -224,7 +234,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
               Some(foldedMapped)
             }
-        }
+
+          case _ => None
+        } 
+
+        (result.isEmpty).option(result.suml)
       }
     }
 
@@ -255,8 +269,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     } */
         
     def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -290,7 +304,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
               Some(foldedMapped)
             }
+
+          case _ => None
         }
+
+        (result.isEmpty).option(result.suml)
       }
     }
 
@@ -311,8 +329,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
             
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -346,7 +364,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
               Some(foldedMapped)
             }
+
+          case _ => None
         }
+          
+        (result.isEmpty).option(result.suml)
       }
     }
 
@@ -390,8 +412,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     } */        
 
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -425,7 +447,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
               Some(foldedMapped)
             }
+          case _ => None
         }
+
+        (result.isEmpty).option(result.suml)
       }
     }
 
@@ -456,8 +481,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     } */
     
     def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -491,13 +516,14 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
               Some(foldedMapped)
             }
+          case _ => None
         }
+
+        (result.isEmpty).option(result.suml)
       }
     }
 
     def extract(res: Result): Table =
       res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
   }
-  
-
 }

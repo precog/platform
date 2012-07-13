@@ -30,6 +30,12 @@ import com.precog.util.IdGen
 
 import scalaz.Monoid
 import scalaz.std.anyVal._
+import scalaz.std.option._
+import scalaz.std.set._
+import scalaz.std.tuple._
+import scalaz.syntax.foldable._
+import scalaz.syntax.std.option._
+import scalaz.syntax.std.boolean._
 
 import org.apache.commons.collections.primitives.ArrayIntList
 
@@ -151,8 +157,8 @@ trait StatsLib extends GenOpcode
     }
 
     def reducer: Reducer[Result] = new Reducer[Result] {  //TODO add cases for other column types; get information necessary for dealing with slice boundaries and unsoretd slices in the Iterable[Slice] that's used in table.reduce
-      def reduce(col: Column, range: Range): Result = {
-        col match {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty) {
@@ -180,6 +186,8 @@ trait StatsLib extends GenOpcode
               val (_, _, result, _) = foldedMapped
               result
             }
+
+          case _ => Set.empty[BigDecimal]
         }
       }
     }

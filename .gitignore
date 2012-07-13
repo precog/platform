@@ -19,3 +19,4 @@ hs_err_pid*log
 *.out
 .DS_Store
 tools/lib/*
+yggdrasil/data

@@ -27,8 +27,6 @@ import java.lang.Math
 import yggdrasil._
 import yggdrasil.table._
 
-object MathLib extends MathLib
-
 trait MathLib extends GenOpcode with ImplLibrary {
   val MathNamespace = Vector("std", "math")
 

@@ -20,9 +20,9 @@
 package com.precog
 package daze
 
+import yggdrasil._
+
 trait TypeInferencer extends DAG {
-  import yggdrasil.{ SDecimal, SString }
-  import yggdrasil.Schema._
   import instructions.{ DerefArray, DerefObject, Map2Cross, Map2CrossLeft, Map2CrossRight }
   import dag._
 

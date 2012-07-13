@@ -43,59 +43,56 @@ import scalaz.syntax.traverse._
 trait ColumnarTableModule extends TableModule {
   import trans._
   import trans.constants._
-  import Schema._
 
   type F1 = CF1
   type F2 = CF2
   type Scanner = CScanner
   type Reducer[α] = CReducer[α]
   type RowId = Int
+  type Table <: ColumnarTable
   
-  trait ColumnarTableOps extends TableOps {
-    def loadStatic(path: Path): Table = sys.error("todo")
-    def loadDynamic(source: Table): Table = sys.error("todo")
-    
-    def empty: Table = new Table(Iterable.empty[Slice])
+  object ops extends TableOps {
+    def empty: Table = table(Iterable.empty[Slice])
     
     def constBoolean(v: Set[CBoolean]): Table = {
-      val column = ArrayBoolColumn(v.toArray map(_.value))
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size)))
+      val column = ArrayBoolColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size)))
     }
 
     def constLong(v: Set[CLong]): Table = {
-      val column = ArrayLongColumn(v.toArray map(_.value))
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size)))
+      val column = ArrayLongColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size)))
     }
 
     def constDouble(v: Set[CDouble]): Table = {
-      val column = ArrayDoubleColumn(v.toArray map(_.value))
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size)))
+      val column = ArrayDoubleColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size)))
     }
 
     def constDecimal(v: Set[CNum]): Table = {
-      val column = ArrayNumColumn(v.toArray map(_.value))
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> column), v.size)))
+      val column = ArrayNumColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> column), v.size)))
     }
 
     def constString(v: Set[CString]): Table = {
-      val column = ArrayStrColumn(v.toArray map(_.value))
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> column), 1)))
+      val column = ArrayStrColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> column), 1)))
     }
 
-    def constDate(v: DateTime): Table =  //TODO should take a set; use CDate
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> Column.const(v)), 1)))
+    def constDate(v: Set[CDate]): Table =  {
+      val column = ArrayDateColumn(v.map(_.value).toArray)
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), 1)))
+    }
 
     def constNull: Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with NullColumn), 1)))
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1)))
 
     def constEmptyObject: Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with EmptyObjectColumn), 1)))
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1)))
 
     def constEmptyArray: Table = 
-      new Table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> new InfiniteColumn with EmptyArrayColumn), 1)))
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1)))
   }
-
-  def ops: TableOps = new ColumnarTableOps {} 
 
   implicit def liftF1(f: F1) = new F1Like {
     def compose(f1: F1) = f compose f1
@@ -109,7 +106,7 @@ trait ColumnarTableModule extends TableModule {
     def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1)
   }
 
-  case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {
+  private case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {
     def andThen[B](t: SliceTransform[B]): SliceTransform[(A, B)] = {
       SliceTransform(
         (initial, t.initial),
@@ -134,18 +131,18 @@ trait ColumnarTableModule extends TableModule {
     }
   }
 
-  object SliceTransform {
+  private object SliceTransform {
     def identity[A](initial: A) = SliceTransform(initial, (a: A, s: Slice) => (a, s))
   }
 
-  class Table(val slices: Iterable[Slice]) extends TableLike { self  =>
+  def table(slices: Iterable[Slice]): Table
+
+  abstract class ColumnarTable(val slices: Iterable[Slice]) extends TableLike { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
     def reduce[A: Monoid](reducer: Reducer[A]): A = {  
-      slices flatMap { s => 
-        s.columns.values map { col => reducer.reduce(col, 0 until s.size) } 
-      } suml
+      slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) } suml
     }
 
     def compact(spec: TransSpec1): Table = sys.error("todo")
@@ -153,7 +150,7 @@ trait ColumnarTableModule extends TableModule {
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
     private def transform0[A](sliceTransform: SliceTransform[A]): Table = {
-      new Table(
+      table(
         new Iterable[Slice] {
           def iterator: Iterator[Slice] = {
             val baseIter = slices.iterator
@@ -470,7 +467,7 @@ trait ColumnarTableModule extends TableModule {
     
     def takeRight(n: Long): Table = sys.error("todo")
 
-    def normalize: Table = new Table(slices.filterNot(_.isEmpty))
+    def normalize: Table = table(slices.filterNot(_.isEmpty))
 
   /*
     def cogroup(other: Table, prefixLength: Int)(merge: CogroupMerge): Table = {
@@ -482,7 +479,7 @@ trait ColumnarTableModule extends TableModule {
       case object Cartesian extends CogroupState
       case object Done extends CogroupState
 
-      new Table(
+      table(
         idCount,
         focus ++ other.focus,
         new Iterable[Slice] {
@@ -919,114 +916,6 @@ trait ColumnarTableModule extends TableModule {
           }
         }
       }
-    }
-  }
-  
-  object Table {
-    def fromJson(values: Iterable[JValue]): Table = {
-      val sliceSize = 10      // ???
-      
-      def makeSlice(sampleData: Iterable[JValue]): (Slice, Iterable[JValue]) = {
-        val (prefix, suffix) = sampleData.splitAt(sliceSize)
-    
-        @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
-          from match {
-            case jv #:: xs =>
-              val withIdsAndValues = jv.flattenWithPath.foldLeft(into) {
-                case (acc, (jpath, JNothing)) => acc
-                case (acc, (jpath, v)) =>
-                  val ctype = CType.forJValue(v) getOrElse { sys.error("Cannot determine ctype for " + v + " at " + jpath + " in " + jv) }
-                  val ref = ColumnRef(jpath, ctype)
-    
-                  val pair: (BitSet, Array[_]) = v match {
-                    case JBool(b) => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
-                      col(sliceIndex) = b
-                      (defined + sliceIndex, col)
-    
-                    case JInt(ji) => CType.sizedIntCValue(ji) match {
-                      case CLong(v) =>
-                        val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                        col(sliceIndex) = v
-                        (defined + sliceIndex, col)
-    
-                      case CNum(v) =>
-                        val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                        col(sliceIndex) = v
-                        (defined + sliceIndex, col)
-                    }
-    
-                    case JDouble(d) => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
-                      col(sliceIndex) = d
-                      (defined + sliceIndex, col)
-    
-                    case JString(s) => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
-                      col(sliceIndex) = s
-                      (defined + sliceIndex, col)
-                    
-                    case JArray(Nil)  => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-    
-                    case JObject(Nil) => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-    
-                    case JNull        => 
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), null)).asInstanceOf[(BitSet, Array[Boolean])]
-                      (defined + sliceIndex, col)
-                  }
-    
-                  acc + (ref -> pair)
-              }
-    
-              buildColArrays(xs, withIdsAndValues, sliceIndex + 1)
-    
-            case _ => (into, sliceIndex)
-          }
-        }
-    
-        // FIXME: If prefix is empty (eg. because sampleData.data is empty) the generated
-        // columns won't satisfy sampleData.schema. This will cause the subsumption test in
-        // Slice#typed to fail unless it allows for vacuous success
-        val slice = new Slice {
-          val (cols, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
-          val columns = cols map {
-            case (ref @ ColumnRef(_, CBoolean), (defined, values))          => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
-            case (ref @ ColumnRef(_, CLong), (defined, values))             => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
-            case (ref @ ColumnRef(_, CDouble), (defined, values))           => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
-            case (ref @ ColumnRef(_, CDecimalArbitrary), (defined, values)) => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
-            case (ref @ ColumnRef(_, CStringArbitrary), (defined, values))  => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
-            case (ref @ ColumnRef(_, CEmptyArray), (defined, values))       => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
-            case (ref @ ColumnRef(_, CEmptyObject), (defined, values))      => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
-            case (ref @ ColumnRef(_, CNull), (defined, values))             => (ref, new BitsetColumn(defined) with NullColumn)
-          }
-        }
-    
-        (slice, suffix)
-      }
-      
-      val (s, xs) = makeSlice(values)
-      
-      new Table(new Iterable[Slice] {
-        def iterator = new Iterator[Slice] {
-          private var _next = s
-          private var _rest = xs
-  
-          def hasNext = _next != null
-          def next() = {
-            val tmp = _next
-            _next = if (_rest.isEmpty) null else {
-              val (s, xs) = makeSlice(_rest)
-              _rest = xs
-              s
-            }
-            tmp
-          }
-        }
-      })
     }
   }
 }

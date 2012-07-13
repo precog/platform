@@ -38,12 +38,17 @@ import scalaz.std.iterable._
 
 trait Slice { source =>
   import Slice._
-  import Schema._
 
   def size: Int
   def isEmpty: Boolean = size == 0
 
   def columns: Map[ColumnRef, Column]
+
+  def logicalColumns: JType => Set[Column] = { jtpe =>
+    columns collect {
+      case (ColumnRef(jpath, ctype), col) if JType.includes(jtpe, jpath, ctype) => col
+    } toSet
+  }
 
   lazy val valueColumns: Set[Column] = columns collect { case (ColumnRef(JPath.Identity, _), col) => col } toSet
 
@@ -72,8 +77,8 @@ trait Slice { source =>
   def typed(jtpe : JType) : Slice = new Slice {
     val size = source.size
     val columns = {
-      if(size == 0 || subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => includes(jtpe, path, ctpe) }
+      if(size == 0 || JType.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
+        source.columns.filter { case (ColumnRef(path, ctpe), _) => JType.includes(jtpe, path, ctpe) }
       else
         Map.empty[ColumnRef, Column]
     }

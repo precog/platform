@@ -21,13 +21,12 @@ package com.precog.yggdrasil
 
 import com.precog.common.Path
 import blueeyes.json.{JPath,JPathField,JPathIndex}
+import akka.dispatch.Future
 import scalaz.Monoid
 
 import collection.Set
 
 trait TableModule extends FNModule {
-  import Schema._
-
   type Scanner
   type Reducer[α]
 
@@ -78,7 +77,8 @@ trait TableModule extends FNModule {
     
     case class ArraySwap[+A <: SourceType](source: TransSpec[A], index: Int) extends TransSpec[A]
     
-    // Filter out all the source columns whose CType is not subsumed by the supplied JType
+    // Filter out all the source columns whose selector and CType is not specified by the supplied JType
+    // if the set of columns does not cover the JType specified, this will return the empty slice.
     case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done
     
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
@@ -176,9 +176,6 @@ trait TableModule extends FNModule {
   }
   
   trait TableOps {
-    def loadStatic(path: Path): Table
-    def loadDynamic(source: Table): Table
-    
     def empty: Table
     
     def constString(v: Set[CString]): Table
@@ -198,6 +195,12 @@ trait TableModule extends FNModule {
   
   trait TableLike { this: Table =>
     import trans._
+
+    /**
+     * For each distinct path in the table, load all columns identified by the specified
+     * jtype and concatenate the resulting slices into a new table.
+     */
+    def load(tpe: JType): Future[Table]
     
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
@@ -237,9 +240,6 @@ trait TableModule extends FNModule {
     def sort(sortKey: TransSpec1, sortOrder: SortOrder): Table
     
     def group[A: scalaz.Equal](a: A, groupKeySpec: GroupKeySpec[A]): GroupingSpec[A] = GroupingSource[A](this, a, groupKeySpec)
-    
-    // Does this have to be fully known at every point in time?
-    def schema: JType
     
     def drop(n: Long): Table
     

@@ -28,8 +28,6 @@ import yggdrasil.table._
 import org.joda.time._
 import org.joda.time.format._
 
-object TimeLib extends TimeLib 
-
 //todo instead of using StrColumn, use TimeColumn!
 //todo test is not defined cases when fails at isValidISO(_), etc
 
