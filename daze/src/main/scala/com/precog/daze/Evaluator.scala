@@ -96,7 +96,7 @@ trait Evaluator extends DAG
       
       case dag.New(_, parent) => loop(parent, assume, splits, ctx)   // TODO John swears this part is easy
       
-      case dag.LoadLocal(_, _, parent, _) => {
+      case dag.LoadLocal(_, parent, _) => {
         val back = parent.value match {
           case Some(SString(str)) => ops.loadStatic(Path(str))
           case Some(_) => ops.empty

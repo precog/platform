@@ -47,8 +47,8 @@ trait Memoizer extends DAG {
           case New(loc, parent) =>
             New(loc, memoized(parent, splits))
           
-          case LoadLocal(loc, range, parent, tpe) =>
-            LoadLocal(loc, range, memoized(parent, splits), tpe)
+          case LoadLocal(loc, parent, tpe) =>
+            LoadLocal(loc, memoized(parent, splits), tpe)
           
           case Operate(loc, op, parent) =>
             Operate(loc, op, memoized(parent, splits))
@@ -147,7 +147,7 @@ trait Memoizer extends DAG {
     case New(_, parent) =>
       increment(countRefs(parent), parent, 1)
     
-    case LoadLocal(_, _, parent, _) =>
+    case LoadLocal(_, parent, _) =>
       increment(countRefs(parent), parent, 1)
     
     case Operate(_, _, parent) =>
