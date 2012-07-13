@@ -210,7 +210,7 @@ trait Evaluator extends DAG
       case Join(_, Map2Cross(instructions.WrapObject) | Map2CrossLeft(instructions.WrapObject) | Map2CrossRight(instructions.WrapObject), left, right) if left.value.isDefined => {
         left.value match {
           case Some(value @ SString(str)) => {
-            val PendingTable(parentTable, parentGraph, parentTrans) = loop(left, assume, splits)
+            val PendingTable(parentTable, parentGraph, parentTrans) = loop(right, assume, splits)
             PendingTable(parentTable, parentGraph, trans.WrapObject(parentTrans, str))
           }
           
