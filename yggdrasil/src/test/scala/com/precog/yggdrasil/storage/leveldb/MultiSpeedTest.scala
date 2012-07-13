@@ -57,9 +57,7 @@ object MultiSpeedTest {
 
     // Spin up some actor
     class DBActor(name : String, basedir : String) extends Actor {
-      private val column = LevelDBProjection.forDescriptor(new File(basedir, name), sys.error("todo") /*Some(ProjectionComparator.BigDecimal)*/) ||| {
-        errors => throw errors
-      }
+      private val column = LevelDBProjection.forDescriptor(new File(basedir, name), sys.error("todo") /*Some(ProjectionComparator.BigDecimal)*/).unsafePerformIO
 
       private var count = 0
       

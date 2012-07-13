@@ -105,9 +105,7 @@ object ContinuousSpeedTest {
     }
 
     def column(n: String, comparator: DBComparator): LevelDBProjection = {
-      LevelDBProjection.forDescriptor(new File(basedir, n), sys.error("todo")/*Some(comparator)*/) ||| { 
-        errors => throw errors
-      }
+      LevelDBProjection.forDescriptor(new File(basedir, n), sys.error("todo")/*Some(comparator)*/).unsafePerformIO
     }
 /*
     (dataType.toLowerCase match {

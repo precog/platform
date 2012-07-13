@@ -30,9 +30,7 @@ import java.nio.ByteBuffer
 
 object SimpleTest {
   def main (argv : Array[String]) {
-    val c = LevelDBProjection.forDescriptor(new File("/tmp/test"), sys.error("todo") /* Some(ProjectionComparator.BigDecimal)*/) ||| {
-      errors => throw errors
-    }
+    val c = LevelDBProjection.forDescriptor(new File("/tmp/test"), sys.error("todo") /* Some(ProjectionComparator.BigDecimal)*/).unsafePerformIO
 
     c.insert(VectorCase(12364534l), sys.error("todo") /*new BigDecimal("1.445322").as[Array[Byte]].as[ByteBuffer]*/)
   }

@@ -96,14 +96,14 @@ trait ProjectionsActorModule[Dataset[_]] {
         logger.debug("Acquiring projection for " + descriptor)
         val mySender = sender
         for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, false)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          projection(dir, descriptor) match {
-            case Success(p) =>
+          (projection(dir, descriptor) map {
+            p => {
               reserved(p.descriptor)
-            mySender ! ProjectionAcquired(p)
-            
-            case Failure(error) =>
-              mySender ! ProjectionError(descriptor, error)
-          }
+              mySender ! ProjectionAcquired(p)
+            }
+          } except {
+            error: Throwable => logger.error("Error acquiring projection for " + descriptor, error); IO { mySender ! ProjectionError(descriptor, error) }
+          }).unsafePerformIO
         } 
       
       // Decrement the outstanding reference count for the specified descriptor
@@ -115,8 +115,8 @@ trait ProjectionsActorModule[Dataset[_]] {
         val coordinator = sender
         logger.debug(coordinator + " is inserting into projection for " + descriptor)
         for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, true)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          projection(dir, descriptor) match {
-            case Success(p) =>
+          (projection(dir, descriptor) map {
+            p => {
               logger.debug("Reserving " + descriptor + " in " + dir)
               reserved(p.descriptor)
               // Spawn a new short-lived insert actor for the projection and send a batch insert
@@ -124,11 +124,13 @@ trait ProjectionsActorModule[Dataset[_]] {
               // references. This could alternately be a single actor, but this design conforms more closely
               // to 'error kernel' or 'let it crash' style.
               context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, coordinator)
-
-            case Failure(error) => 
-              logger.error("Could not load projection: " + error)
-              coordinator ! ProjectionError(descriptor, error)
-          }
+            }
+          } except {
+            error: Throwable => {
+              logger.error("Could not load projection for " + descriptor, error)
+              IO { coordinator ! ProjectionError(descriptor, error) }
+            }
+          }).unsafePerformIO
         }
     }
 
@@ -138,7 +140,7 @@ trait ProjectionsActorModule[Dataset[_]] {
 
     protected def status: JValue
 
-    protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[Dataset]]
+    protected def projection(base: Option[File], descriptor: ProjectionDescriptor): IO[Projection[Dataset]]
 
     protected def reserved(descriptor: ProjectionDescriptor): Unit 
 
@@ -167,27 +169,35 @@ trait ProjectionsActorModule[Dataset[_]] {
     def receive = {
       case BatchInsert(rows, replyTo) =>
         logger.debug("Inserting " + rows.size + " rows into " + projection)
-        insertAll(rows)
+        val insertOK = insertAll(rows)
         sender  ! ReleaseProjection(projection.descriptor)
 
-        // Notify the coordinator of the completeion of the insert of this projection batch,
-        // along with a patch for the associated metadata. This patch will be combined with the
-        // other patches for the *ingest* batch (the block of messages retrieved from kafka)
-        // and the result will be sent on to the metadata actor when the batch is complete.
-        replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+        if (insertOK) {
+          // Notify the coordinator of the completeion of the insert of this projection batch,
+          // along with a patch for the associated metadata. This patch will be combined with the
+          // other patches for the *ingest* batch (the block of messages retrieved from kafka)
+          // and the result will be sent on to the metadata actor when the batch is complete.
+          replyTo ! InsertMetadata(projection.descriptor, ProjectionMetadata.columnMetadata(projection.descriptor, rows))
+        }
+
         self    ! PoisonPill
     }
 
-    private def insertAll(batch: Seq[Row]): Unit = {
-      @tailrec def step(iter: Iterator[Row]) {
-        if (iter.hasNext) {
-          val Row(eventId, values, _) = iter.next
-          projection.insert(Vector1(eventId.uid), values).unsafePerformIO
-          step(iter)
+    private def insertAll(batch: Seq[Row]): Boolean = {
+      try {
+        @tailrec def step(iter: Iterator[Row]) {
+          if (iter.hasNext) {
+            val Row(eventId, values, _) = iter.next
+            projection.insert(Vector1(eventId.uid), values).unsafePerformIO
+            step(iter)
+          }
         }
-      }
 
-      step(batch.iterator)
+        step(batch.iterator)
+        true
+      } catch {
+        case t: Throwable => logger.error("Error during insert, aborting batch", t); false
+      }
     }
   }
 }

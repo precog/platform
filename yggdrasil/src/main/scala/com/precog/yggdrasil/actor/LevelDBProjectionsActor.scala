@@ -69,19 +69,20 @@ trait LevelDBProjectionsActorModule extends ProjectionsActorModule[IterableDatas
       protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JInt(projections.size)) :: 
                                                                     JField("outstandingReferences", JInt(outstandingReferences.size)) :: Nil)) :: Nil)
 
-      protected def projection(base: Option[File], descriptor: ProjectionDescriptor): Validation[Throwable, Projection[IterableDataset]] = base match {
-        case Some(root) =>
-          logger.debug("Obtaining LevelDB projection for " + descriptor + " from " + root)
-          projections.get(descriptor) map { success[Throwable, Projection[IterableDataset]] } getOrElse {
-            for (projection <- LevelDBProjection.forDescriptor(root, descriptor)) yield {
-              // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
-              projections.putIfAbsent(descriptor, projection) getOrElse projection 
+      protected def projection(base: Option[File], descriptor: ProjectionDescriptor): IO[Projection[IterableDataset]] = { 
+        base match {
+          case Some(root) =>
+            logger.debug("Obtaining LevelDB projection for " + descriptor + " from " + root)
+            projections.get(descriptor).map { p => IO(p) }.getOrElse {
+              for (projection <- LevelDBProjection.forDescriptor(root, descriptor)) yield {
+                // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
+                projections.putIfAbsent(descriptor, projection) getOrElse projection
+              }
             }
-          }
 
-        case None => 
-          logger.error("No base for projection")
-          Failure(new java.io.FileNotFoundException("Could not locate base for " + descriptor))
+          case None => 
+            IO { throw new java.io.FileNotFoundException("Could not locate base for " + descriptor) }
+        }
       }
 
       protected def reserved(descriptor: ProjectionDescriptor): Unit = {

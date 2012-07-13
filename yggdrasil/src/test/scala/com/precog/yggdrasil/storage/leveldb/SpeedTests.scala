@@ -54,9 +54,7 @@ object SpeedTests {
     val colDesc = ColumnDescriptor(Path("/"), ".foo", CInt, Authorities(Set()))
     
     ProjectionDescriptor(ListMap(colDesc -> 0), Seq(colDesc -> ById)) foreach { descriptor =>
-      val writeColumn = LevelDBProjection.forDescriptor(dataDir, descriptor) ||| {
-        errors => throw errors
-      }
+      val writeColumn = LevelDBProjection.forDescriptor(dataDir, descriptor).unsafePerformIO
   
       val intGen = Arbitrary.arbitrary[Int]
   
@@ -87,9 +85,7 @@ object SpeedTests {
       val totalduration = results.map(_._2).sum
       println("Total duration for %d writes = %d ms (%f/s)".format(count, totalduration, count / (totalduration / 1000.0)))
   
-      val readColumn = LevelDBProjection.forDescriptor(dataDir, descriptor) ||| {
-        errors => throw errors
-      }
+      val readColumn = LevelDBProjection.forDescriptor(dataDir, descriptor).unsafePerformIO
 
       // Pull it all back out
       val readCount = 50
