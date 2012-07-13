@@ -84,8 +84,7 @@ class EvaluatorSpecs extends Specification
     with Evaluator
     with TestConfigComponent 
     with StdLib
-    with MemoryDatasetConsumer 
-    with TypeInferencer { self =>
+    with MemoryDatasetConsumer { self =>
   
   import Function._
   
@@ -99,7 +98,7 @@ class EvaluatorSpecs extends Specification
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) and 
-    (consumeEval(testUID, inferTypes(graph, Schema.JUnfixedT), ctx) match {
+    (consumeEval(testUID, graph, ctx, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })
