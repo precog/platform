@@ -45,7 +45,7 @@ object PlatformBuild extends Build {
   
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "1.1.2-SNAPSHOT",
+    version := "1.1.2",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     scalaVersion := "2.9.1",
     libraryDependencies ++= Seq(
