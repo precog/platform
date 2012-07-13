@@ -199,7 +199,6 @@ trait ColumnarTableModule extends TableModule {
             if (s.columns.isEmpty) {
               s
             } else {
-              assert(filter.columns.nonEmpty)
               val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
                 cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
               }
