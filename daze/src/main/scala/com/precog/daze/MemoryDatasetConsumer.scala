@@ -52,7 +52,9 @@ trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggC
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
       val result = eval(userUID, graph, ctx, optimize)
-      val json = result.toJson
+      val json = result.toJson filterNot { jvalue =>
+        (jvalue \ "value") == JNothing
+      }
       
       val events = json map { jvalue =>
         (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JInt(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
