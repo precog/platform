@@ -188,8 +188,33 @@ trait StatsLib extends GenOpcode
  
   object LinearCorrelation extends Morphism(StatsNamespace, "corr", Two) {
     lazy val alignment = Some(MorphismAlignment.Match)
+    type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
     
+    //implicit def monoid = new Monoid[Result] {  //TODO find scalaz monoids for tuple and option
+    //  def zero = None
+    //  def append(left: Result, right: => Result) = {
+    //    val both = for ((l1, l2, l3, l4, l5, l6) <- left; (r1, r2, r3, r4, r5, r6) <- right) yield (l1 + r1, l2 + r2, l3 + r3, l4 + r4, l5 + r5, l6 + r6)
+    //    both orElse left orElse right
+    //  }
+    //}   
+
+    //def reducer: Reducer[Result] = new Reducer[Result] {
+    //  def reduce(cols: JType => Set[Column], range: Range): Result = {
+    //    col match {
+    //      case col: LongColumn =>
+    //        val mapped = range filter col.isDefinedAt map { x => col(x) }
+    //        if (mapped.isEmpty) {
+    //          None
+    //        } else {
+    //          val foldedMapped: 
+    //        }
+    //    }
+    //  }
+    //}
+    //
     def apply(table: Table) = table
+
+
     
     /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {              
       val (count, sum1, sum2, sumsq1, sumsq2, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
