@@ -26,6 +26,8 @@ import yggdrasil._
 import yggdrasil.table._
 
 import akka.dispatch.Await
+import akka.util.Duration
+
 import scalaz.Validation
 import scalaz.effect.IO
 import scalaz.iteratee._
@@ -37,7 +39,7 @@ import Iteratee._
 import blueeyes.json._
 
 trait DatasetConsumersConfig extends EvaluatorConfig {
-  def maxEvalDuration: akka.util.Duration
+  def maxEvalDuration: Duration
 }
 
 // TODO decouple this from the evaluator specifics
@@ -47,11 +49,13 @@ trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggC
   type X = Throwable
   type YggConfig <: DatasetConsumersConfig
   type SEvent = (VectorCase[Long], SValue)
-
+  
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
-      val result = eval(userUID, graph, ctx, optimize)
+      val resultF = eval(userUID, graph, ctx, optimize)
+      val result = Await.result(resultF, yggConfig.maxEvalDuration)
+      
       val json = result.toJson filterNot { jvalue =>
         (jvalue \ "value") == JNothing
       }
