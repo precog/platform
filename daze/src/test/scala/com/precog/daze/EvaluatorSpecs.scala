@@ -10,13 +10,15 @@ import com.precog.common.VectorCase
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
 
-import akka.dispatch.Await
+import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
 import JsonAST.{JObject, JField, JArray, JInt}
 
 import java.io._
+import java.util.concurrent.Executors
+
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -29,8 +31,11 @@ import org.specs2.execute.Result
 import org.specs2.mutable._
 
 trait TestConfigComponent extends table.StubColumnarTableModule {
+  
+  def asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
+  
   object yggConfig extends YggConfig
-
+  
   trait YggConfig extends EvaluatorConfig with DatasetConsumersConfig {
     val sortBufferSize = 1000
     val sortWorkDir: File = IOUtils.createTmpDir("idsoSpec").unsafePerformIO
