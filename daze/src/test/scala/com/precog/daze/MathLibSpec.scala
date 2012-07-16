@@ -413,22 +413,6 @@ class MathLibSpec extends Specification
       
       result2 must contain(0.0, 0.8414709848078965, -0.8414709848078965, -0.9165215479156338, 0.8462204041751706)
     }  
-    "compute nextUp" in {
-      val line = Line(0, "")
-      
-      val input = dag.Operate(line, BuiltInFunction1Op(nextUp),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(6)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
-      }
-      
-      result2 must contain(4.9E-324, 1.0000000000000002, -0.9999999999999999, 42.00000000000001, -22.999999999999996)
-    }  
     "compute log" in {
       val line = Line(0, "")
       
@@ -492,23 +476,6 @@ class MathLibSpec extends Specification
       }
       
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
-    }
-    "compute nextAfter" in {
-      val line = Line(0, "")
-      
-      val input = Join(line, Map2Match(BuiltInFunction2Op(nextAfter)),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
-        Root(line, PushNum("7")))
-        
-      val result = testEval(input)
-      
-      result must haveSize(6)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
-      }
-      
-      result2 must contain(4.9E-324, 1.0000000000000002, -0.9999999999999999, 41.99999999999999, -22.999999999999996)
     }
     "compute min" in {
       val line = Line(0, "")
@@ -984,22 +951,6 @@ class MathLibSpec extends Specification
       
       result2 must contain(0.0, 0.8414709848078965, -0.8414709848078965, -0.9165215479156338, 0.8462204041751706)
     }  
-    "compute nextUp" in {
-      val line = Line(0, "")
-      
-      val input = dag.Operate(line, BuiltInFunction1Op(nextUp),
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
-        
-      val result = testEval(input)
-      
-      result must haveSize(6)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
-      }
-      
-      result2 must contain(4.9E-324, 1.0000000000000002, -0.9999999999999999, 42.00000000000001, -22.999999999999996)
-    }  
     "compute log" in {
       val line = Line(0, "")
       
@@ -1063,23 +1014,6 @@ class MathLibSpec extends Specification
       }
       
       result2 must contain(4.9E-324, 2.220446049250313E-16, 2.220446049250313E-16, 7.105427357601002E-15, 3.552713678800501E-15)
-    }
-    "compute nextAfter" in {
-      val line = Line(0, "")
-      
-      val input = Join(line, Map2Match(BuiltInFunction2Op(nextAfter)),
-        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
-        Root(line, PushNum("7")))
-        
-      val result = testEval(input)
-      
-      result must haveSize(6)
-      
-      val result2 = result collect {
-        case (VectorCase(_), SDecimal(d)) => d
-      }
-      
-      result2 must contain(4.9E-324, 1.0000000000000002, -0.9999999999999999, 41.99999999999999, -22.999999999999996)
     }
     "compute min" in {
       val line = Line(0, "")
