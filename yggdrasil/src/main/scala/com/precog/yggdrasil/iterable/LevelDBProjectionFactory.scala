@@ -42,32 +42,12 @@ import scalaz.effect._
 import scalaz.syntax.validation._
 import scalaz.iteratee.Input //todo: Get rid of!
 
-trait LevelDBProjectionFactory extends ProjectionFactory[IterableDataset[Seq[CValue]]] {
-  def fileOps: FileOps
-
-  def baseDir(descriptor: ProjectionDescriptor): File
-
-  def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
-    val base = baseDir(descriptor)
-    val baseDirV: IO[File] = 
-      fileOps.exists(base) flatMap { 
-        case true  => IO(base)
-        case false => fileOps.mkdir(base) map {
-                        case true  => base
-                        case false => throw new RuntimeException("Could not create database basedir " + base)
-                      }
-      }
-
-    baseDirV map { (bd: File) => new ProjectionImpl(bd, descriptor) }
-  }
-
-  def close(projection: ProjectionImpl) = IO(projection.close())
-
+trait LevelDBProjectionsModule extends ProjectionsModule {
   // pool for readahead threads
   private val readaheadPool = Executors.newCachedThreadPool()
 
-  class ProjectionImpl private[LevelDBProjectionFactory] (baseDir: File, descriptor: ProjectionDescriptor) 
-  extends LevelDBProjection(baseDir, descriptor) with Projection[IterableDataset[Seq[CValue]]] {
+  class ProjectionImpl private[LevelDBProjectionsModule] (baseDir: File, descriptor: ProjectionDescriptor) 
+  extends LevelDBProjection(baseDir, descriptor) with FullProjection[IterableDataset[Seq[CValue]]] {
     ///////////////////
     // ID Traversals //
     ///////////////////
@@ -179,6 +159,29 @@ trait LevelDBProjectionFactory extends ProjectionFactory[IterableDataset[Seq[CVa
     })
 
     @inline final def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
+  }  
+  
+  
+  trait LevelDBProjectionFactory extends ProjectionFactory {
+    def fileOps: FileOps
+
+    def baseDir(descriptor: ProjectionDescriptor): File
+
+    def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
+      val base = baseDir(descriptor)
+      val baseDirV: IO[File] = 
+        fileOps.exists(base) flatMap { 
+          case true  => IO(base)
+          case false => fileOps.mkdir(base) map {
+                          case true  => base
+                          case false => throw new RuntimeException("Could not create database basedir " + base)
+                        }
+        }
+
+      baseDirV map { (bd: File) => new ProjectionImpl(bd, descriptor) }
+    }
+
+    def close(projection: ProjectionImpl) = IO(projection.close())
   }
 }
 

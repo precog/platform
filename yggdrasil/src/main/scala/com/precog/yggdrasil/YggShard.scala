@@ -19,7 +19,7 @@
  */
 package com.precog.yggdrasil 
 
-import metadata.MetadataView
+import metadata.StorageMetadata
 import com.precog.common._
 
 import akka.dispatch.Future 
@@ -28,17 +28,18 @@ import akka.util.Timeout
 import scalaz.effect._
 import scalaz.syntax.bind._
 
-trait YggShardComponent[Dataset] {
-  type Storage <: YggShard[Dataset]
+trait YggShardComponent {
+  type ProjectionImpl <: Projection
+  type Storage <: YggShard[ProjectionImpl]
   def storage: Storage
 }
 
 trait YggShardMetadata {
-  def userMetadataView(uid: String): MetadataView
+  def userMetadataView(uid: String): StorageMetadata
 }
 
-trait YggShard[Dataset] extends YggShardMetadata { self =>
-  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)]
+trait YggShard[+P <: Projection] extends YggShardMetadata { self =>
+  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(P, Release)]
   def store(msg: EventMessage, timeout: Timeout): Future[Unit] = storeBatch(Vector(msg), timeout) 
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit]
 }

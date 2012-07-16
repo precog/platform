@@ -37,15 +37,15 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait LevelDBActorYggShardModule extends ShardSystemActorModule[IterableDataset[Seq[CValue]]] {
-  abstract class LevelDBActorYggShard(storage: MetadataStorage)(implicit val actorSystem: ActorSystem) extends ActorYggShard[IterableDataset[Seq[CValue]]] {
+trait LevelDBActorYggShardModule extends ActorYggShardComponent with ShardSystemActorModule {
+  abstract class LevelDBActorYggShard(storage: MetadataStorage)(implicit val actorSystem: ActorSystem) extends ActorYggShard {
     def this(storage: MetadataStorage, systemName: String) = this(storage)(ActorSystem(systemName))
 
     private var shardSystemActor0: ActorRef = _
     def shardSystemActor = shardSystemActor0
     
     def start() = Future {
-      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor[IterableDataset[Seq[CValue]]](storage)), "shardSystem")
+      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(storage)), "shardSystem")
       true
     }
 

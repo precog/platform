@@ -49,11 +49,9 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent[IterableDataset[Seq[CValue]]] with ScalaCheck with ArbitrarySValue {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubYggShardComponent with ScalaCheck with ArbitrarySValue {
   override val defaultPrettyParams = Pretty.Params(2)
-
-  type Dataset[α] = IterableDataset[α]
-  //override type Memoable[α] = Iterable[α]
+  type TestDataset = IterableDataset[Seq[CValue]]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldbMemoizationSpec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
