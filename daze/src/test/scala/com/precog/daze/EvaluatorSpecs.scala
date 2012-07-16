@@ -809,15 +809,15 @@ class EvaluatorSpecs extends Specification
         Root(line, PushString("first")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
       }
-      
-      result2 must contain(42, 12, 77, 1, 13)
-    }}
+    }
     
     "evaluate descent on a heterogeneous set" in {
       val line = Line(0, "")
@@ -827,16 +827,16 @@ class EvaluatorSpecs extends Specification
         Root(line, PushString("first")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-        case (ids, SNull) if ids.size == 1 => SNull
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          case (ids, SNull) if ids.size == 1 => SNull
+        }
+        
+        result2 must contain(42, 12, 1, 13, SNull)
       }
-      
-      result2 must contain(42, 12, 1, 13, SNull)
-    }}
+    }
     
     "evaluate descent producing a heterogeneous set" in {
       val line = Line(0, "")
@@ -846,18 +846,18 @@ class EvaluatorSpecs extends Specification
         Root(line, PushString("first")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-        case (ids, SString(str)) if ids.size == 1 => str
-        case (ids, SBoolean(b)) if ids.size == 1 => b
-        case (ids, SNull) if ids.size == 1 => SNull
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          case (ids, SString(str)) if ids.size == 1 => str
+          case (ids, SBoolean(b)) if ids.size == 1 => b
+          case (ids, SNull) if ids.size == 1 => SNull
+        }
+        
+        result2 must contain(42, true, "daniel", 1, SNull)
       }
-      
-      result2 must contain(42, true, "daniel", 1, SNull)
-    }}
+    }
     
     "evaluate array dereference on a homogeneous set" in {
       val line = Line(0, "")
@@ -867,15 +867,15 @@ class EvaluatorSpecs extends Specification
         Root(line, PushNum("2")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
       }
-      
-      result2 must contain(42, 12, 77, 1, 13)
-    }}
+    }
     
     "evaluate array dereference on a heterogeneous set" in {
       val line = Line(0, "")
@@ -885,15 +885,15 @@ class EvaluatorSpecs extends Specification
         Root(line, PushNum("2")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13)
       }
-      
-      result2 must contain(42, 12, 77, 1, 13)
-    }}
+    }
     
     "evaluate array dereference producing a heterogeneous set" in {
       val line = Line(0, "")
@@ -903,18 +903,18 @@ class EvaluatorSpecs extends Specification
         Root(line, PushNum("2")))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-        case (ids, SString(str)) if ids.size == 1 => str
-        case (ids, SBoolean(b)) if ids.size == 1 => b
-        case (ids, SNull) if ids.size == 1 => SNull
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+          case (ids, SString(str)) if ids.size == 1 => str
+          case (ids, SBoolean(b)) if ids.size == 1 => b
+          case (ids, SNull) if ids.size == 1 => SNull
+        }
+        
+        result2 must contain(42, true, "daniel", 1, SNull)
       }
-      
-      result2 must contain(42, true, "daniel", 1, SNull)
-    }}
+    }
     
     "evaluate matched binary numeric operation" in {
       val line = Line(0, "")
@@ -928,15 +928,15 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("second"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(5)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        result must haveSize(5)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(36, 12, 115, -165)
       }
-      
-      result2 must contain(36, 12, 115, -165)
-    }}
+    }
     
     "evaluate matched binary numeric operation dropping undefined result" in {
       val line = Line(0, "")
@@ -950,15 +950,15 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("second"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(4)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        result must haveSize(4)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        }
+        
+        result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
       }
-      
-      result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
-    }}
+    }
     
     "compute the set difference of two sets" in {
       val line = Line(0, "")
@@ -970,19 +970,20 @@ class EvaluatorSpecs extends Specification
           Root(line, PushString("time"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(6)
-      
-      forall(result) {
-        _ must beLike {
-          case (ids, SObject(obj)) if ids.size == 1 => 
-            obj must not haveKey("time")
-
-          case (ids, SString(s)) if ids.size == 1 => 
-            s mustEqual "string cheese"
+        result must haveSize(6)
+        
+        forall(result) {
+          _ must beLike {
+            case (ids, SObject(obj)) if ids.size == 1 => 
+              obj must not haveKey("time")
+  
+            case (ids, SString(s)) if ids.size == 1 => 
+              s mustEqual "string cheese"
+          }
         }
       }
-    }}    
+    }
+    
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
       
@@ -995,19 +996,19 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("time")))))
 
       testEval(input) { result =>
-      
-      result must haveSize(101)
-      
-      forall(result) {
-        _ must beLike {
-          case (ids, SObject(obj)) if ids.size == 1 => 
-            obj must haveKey("time")
-
-          case (ids, SString(s)) if ids.size == 1 => 
-            s mustEqual "string cheese"
+        result must haveSize(101)
+        
+        forall(result) {
+          _ must beLike {
+            case (ids, SObject(obj)) if ids.size == 1 => 
+              obj must haveKey("time")
+  
+            case (ids, SString(s)) if ids.size == 1 => 
+              s mustEqual "string cheese"
+          }
         }
       }
-    }}      
+    }      
     
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1017,15 +1018,15 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(10)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        result must haveSize(10)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        }
+        
+        result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
       }
-      
-      result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
-    }}
+    }
     
     "compute the iunion of two datasets" in {
       val line = Line(0, "")
@@ -1035,9 +1036,9 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(105)
-    }}
+        result must haveSize(105)
+      }
+    }
     
     "compute the iintersect of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1047,15 +1048,15 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(0)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        result must haveSize(0)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
+        }
+        
+        result2 must beEmpty
       }
-      
-      result2 must beEmpty
-    }}
+    }
     
     "compute the iintersect of two datasets" in {
       val line = Line(0, "")
@@ -1065,11 +1066,9 @@ class EvaluatorSpecs extends Specification
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
         
       testEval(input) { result =>
-      
-      result must haveSize(0)
-    }}
-    
-    
+        result must haveSize(0)
+      }
+    }
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
@@ -1476,7 +1475,6 @@ class EvaluatorSpecs extends Specification
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))))
           
       testEval(input) { result =>
-        
         result must haveSize(25)
         
         val result2 = result collect {
@@ -1515,18 +1513,18 @@ class EvaluatorSpecs extends Specification
           dag.New(line, dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))))))
           
       testEval(input) { result =>
-      
-      result must haveSize(25)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
+        result must haveSize(25)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 2 => d.toInt
+        }
+        
+        result2 must haveSize(20)
+        
+        result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
+          2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
       }
-      
-      result2 must haveSize(20)
-      
-      result2 must contain(0, 1260, -1470, 1722, 1218, -360, -780, 132, -12,
-        2695, 5005, 5852, 4928, -41, -11, -76, -377, 13, -832, 156)
-    }}
+    }
     
     "split on a homogeneous set" in {
       val line = Line(0, "")
@@ -1553,15 +1551,15 @@ class EvaluatorSpecs extends Specification
                 SplitParam(line, 0)(input))))))
               
       testEval(input) { result =>
-      
-      result must haveSize(4)
-      
-      val result2 = result collect {
-        case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        result must haveSize(4)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+        }
+        
+        result2 must contain(55, 13, 119, 25)
       }
-      
-      result2 must contain(55, 13, 119, 25)
-    }}
+    }
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
@@ -1595,35 +1593,35 @@ class EvaluatorSpecs extends Specification
               SplitGroup(line, 1, clicks.provenance)(input)))))
       
       testEval(input) { result =>
-      
-      result must haveSize(10)
-      
-      forall(result) {
-        _ must beLike {
-          case (ids, SObject(obj)) if ids.size == 1 => {
-            obj must haveKey("user")
-            obj must haveKey("num")
-            
-            obj("user") must beLike {
-              case SString(str) => {
-                str must beOneOf("daniel", "kris", "derek", "nick", "john",
-                  "alissa", "franco", "matthew", "jason")
-              }
-              case SNull => ok
-            }
-
-            val user = (obj("user") : @unchecked) match {
-              case SString(user) => user
-              case SNull => SNull
-            }
+        result must haveSize(10)
+        
+        forall(result) {
+          _ must beLike {
+            case (ids, SObject(obj)) if ids.size == 1 => {
+              obj must haveKey("user")
+              obj must haveKey("num")
               
-            obj("num") must beLike {
-              case SDecimal(d) => d mustEqual Expected(user)
+              obj("user") must beLike {
+                case SString(str) => {
+                  str must beOneOf("daniel", "kris", "derek", "nick", "john",
+                    "alissa", "franco", "matthew", "jason")
+                }
+                case SNull => ok
+              }
+  
+              val user = (obj("user") : @unchecked) match {
+                case SString(user) => user
+                case SNull => SNull
+              }
+                
+              obj("num") must beLike {
+                case SDecimal(d) => d mustEqual Expected(user)
+              }
             }
           }
         }
       }
-    }}
+    }
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
@@ -1635,7 +1633,6 @@ class EvaluatorSpecs extends Specification
           Root(line, PushNum("42"))))
           
       testEval(input) { result =>
-        
         result must haveSize(100)
         
         forall(result) {
@@ -1668,7 +1665,6 @@ class EvaluatorSpecs extends Specification
           Root(line, PushNull)))
 
       testEval(input) { result =>
-
         result must haveSize(3)
 
         forall(result) {
@@ -1718,7 +1714,6 @@ class EvaluatorSpecs extends Specification
           Root(line, PushNum("9"))))
                   
       testEval(input) { result =>
-        
         result must haveSize(1)
         result.toList.head must beLike {
           case (ids, SObject(obj)) if ids.size == 1 => {
@@ -1748,7 +1743,6 @@ class EvaluatorSpecs extends Specification
             Root(line, PushString("user")))))
             
       testEval(input) { result =>
-        
         result must haveSize(10000)
         
         forall(result) {
@@ -1769,7 +1763,6 @@ class EvaluatorSpecs extends Specification
       dag.LoadLocal(line, Root(line, PushString("/hom/numbers2"))))
       
       testEval(input) { result =>
-        
         result must haveSize(5)
         
         val result2 = result collect {
