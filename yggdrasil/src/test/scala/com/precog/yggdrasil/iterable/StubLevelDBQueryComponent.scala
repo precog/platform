@@ -18,16 +18,15 @@ import SValue._
 
 import java.io.File
 
-trait StubLevelDBQueryComponent extends LevelDBQueryComponent 
-with StubYggShardComponent[IterableDataset[Seq[CValue]]] with IterableDatasetOpsComponent {
+trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubYggShardComponent with IterableDatasetOpsComponent {
+  type TestDataset = Dataset[Seq[CValue]]
+
   trait YggConfig extends LevelDBQueryConfig with IterableDatasetOpsConfig {
     val projectionRetrievalTimeout = Timeout(intToDurationInt(10).seconds)
     val clock = blueeyes.util.Clock.System
     val sortBufferSize: Int = 1000
     val sortWorkDir: File = new File("/tmp")
   }
-
-  override type Dataset[E] = IterableDataset[E]
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb-query-api-spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext

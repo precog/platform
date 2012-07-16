@@ -691,16 +691,18 @@ object ImportTools extends Command with Logging {
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
       object shardModule extends LevelDBActorYggShardModule 
-      with LevelDBProjectionFactory
-      with ProductionShardSystemActorModule[IterableDataset[Seq[CValue]]] {
-        def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
-
-        def fileOps = FilesystemFileOps
-
+      with LevelDBProjectionsModule
+      with ProductionShardSystemActorModule {
+        type Storage = LevelDBActorYggShard
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-        object shard extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
+        object projectionFactory extends LevelDBProjectionFactory {
+          def fileOps = FilesystemFileOps
+          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
+        }
+
+        object storage extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
           val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
         }
       }
@@ -708,7 +710,7 @@ object ImportTools extends Command with Logging {
       import shardModule._
 
       logger.info("Starting shard input")
-      Await.result(shard.start(), Duration(60, "seconds"))
+      Await.result(storage.start(), Duration(60, "seconds"))
       logger.info("Shard input started")
       config.input.foreach {
         case (db, input) =>
@@ -722,14 +724,14 @@ object ImportTools extends Command with Logging {
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(shard.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
               logger.info("Batch saved")
             }
           }
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(shard.stop(), stopTimeout)
+      Await.result(storage.stop(), stopTimeout)
 
       logger.info("Shutdown")
       sys.exit(0)

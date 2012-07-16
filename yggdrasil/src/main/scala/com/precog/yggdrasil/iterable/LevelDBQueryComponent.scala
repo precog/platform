@@ -21,18 +21,18 @@ trait LevelDBQueryConfig {
   def projectionRetrievalTimeout: akka.util.Timeout
 }
 
-trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsComponent with YggConfigComponent with YggShardComponent[IterableDataset[Seq[CValue]]] {
-  type Dataset[α] = IterableDataset[α]
+trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsComponent with YggConfigComponent with YggShardComponent {
+  type ProjectionImpl <: FullProjection[Dataset[Seq[CValue]]]
   type YggConfig <: LevelDBQueryConfig
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
   
-  class QueryAPI extends LevelDBProjectionOps[IterableDataset[SValue]](yggConfig.clock, storage) with StorageEngineQueryAPI[IterableDataset] {
+  class QueryAPI extends LevelDBProjectionOps[Dataset[SValue]](yggConfig.clock, storage) with StorageEngineQueryAPI[Dataset] {
     def fullProjection(userUID: String, path: Path, expiresAt: Long, release: Release): Dataset[SValue] = load(userUID, path, expiresAt, release)
 
     // pull each projection from the database, then for all the selectors that are provided
     // by tat projection, merge the values
-    protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long, release: Release): Future[IterableDataset[SValue]] = {
+    protected def retrieveAndJoin(path: Path, prefix: JPath, retrievals: Map[ProjectionDescriptor, Set[JPath]], expiresAt: Long, release: Release): Future[Dataset[SValue]] = {
       def appendToObject(sv: SValue, instructions: Set[(CType, JPath, Int)], cvalues: Seq[CValue]) = {
         instructions.foldLeft(sv) {
           case (sv, (ctype, selector, columnIndex)) => 
@@ -61,7 +61,7 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
         )
       }
 
-      def joinNext(retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[IterableDataset[SValue]] = retrievals match {
+      def joinNext(retrievals: List[(ProjectionDescriptor, Set[JPath])]): Future[Dataset[SValue]] = retrievals match {
         case (descriptor, selectors) :: x :: xs => 
           val (init, instr) = buildInstructions(descriptor, selectors)
           for {

@@ -51,10 +51,10 @@ case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMeta
 
 // projection retrieval result messages
 sealed trait ProjectionResult
-case class ProjectionAcquired[Dataset](projection: Projection[Dataset]) extends ProjectionResult
+case class ProjectionAcquired(projection: Projection) extends ProjectionResult
 case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
 
-trait ProjectionsActorModule[Dataset] extends ProjectionFactory[Dataset] {
+trait ProjectionsActorModule extends ProjectionsModule {
   ////////////
   // ACTORS //
   ////////////
@@ -65,7 +65,7 @@ trait ProjectionsActorModule[Dataset] extends ProjectionFactory[Dataset] {
   class ProjectionsActor extends Actor with Logging { self =>
     private val projectionCacheSettings = CacheSettings(
       expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
-      evict = (descriptor: ProjectionDescriptor, projection: ProjectionImpl) => close(projection).unsafePerformIO
+      evict = (descriptor: ProjectionDescriptor, projection: ProjectionImpl) => projectionFactory.close(projection).unsafePerformIO
     )
 
     // Cache control map that stores reference counts for projection descriptors managed by the cache
@@ -123,7 +123,7 @@ trait ProjectionsActorModule[Dataset] extends ProjectionFactory[Dataset] {
 
     private def cacheLookup(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
       projections.get(descriptor) map { IO(_) } getOrElse {
-        for (p <- projection(descriptor)) yield {
+        for (p <- projectionFactory.projection(descriptor)) yield {
           // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
           projections.putIfAbsent(descriptor, p) getOrElse p 
         }
@@ -162,7 +162,7 @@ trait ProjectionsActorModule[Dataset] extends ProjectionFactory[Dataset] {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(projection: Projection[Dataset]) extends Actor with Logging {
+  class ProjectionInsertActor(projection: ProjectionImpl) extends Actor with Logging {
     override def preStart(): Unit = {
       logger.debug("Preparing for insert on " + projection)
     }

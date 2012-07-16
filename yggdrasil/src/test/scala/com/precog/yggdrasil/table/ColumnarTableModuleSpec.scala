@@ -143,6 +143,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
       "perform a slightly less trivial equality check" in checkEqual
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
+      "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
       "perform a trivial type-based filter" in checkTypedTrivial

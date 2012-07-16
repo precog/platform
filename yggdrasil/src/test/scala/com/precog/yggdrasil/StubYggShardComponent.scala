@@ -24,34 +24,36 @@ import scalaz.effect._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-trait StubYggShardComponent[Dataset] extends YggShardComponent[Dataset] {
+trait StubYggShardComponent extends YggShardComponent {
+  type TestDataset
+
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
   implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
 
   val dataPath = Path("/test")
   def sampleSize: Int
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): Dataset
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
 
-  trait Storage extends YggShard[Dataset] {
+  // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
+  case class ProjectionImpl(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends FullProjection[TestDataset] {
+    val chunkSize = 2000
+
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Dummy Projection doesn't support insert")      
+
+    def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
+  }
+
+  trait Storage extends YggShard[ProjectionImpl] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
     
-    // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
-    case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
-      val chunkSize = 2000
-
-      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")      
-
-      def allRecords(expiresAt: Long): Dataset = dataset(1, data)
-    }
-
     lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
 
-    val projections: Map[ProjectionDescriptor, Projection[Dataset]] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, DummyProjection]) { 
+    val projections: Map[ProjectionDescriptor, ProjectionImpl] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, ProjectionImpl]) { 
       case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
         case (acc, ProjectionData(descriptor, values, _)) =>
-          acc + (descriptor -> (DummyProjection(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (VectorCase(EventId(0,i).uid) -> values))))
+          acc + (descriptor -> (ProjectionImpl(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (VectorCase(EventId(0,i).uid) -> values))))
       }
     }
 
@@ -69,7 +71,7 @@ trait StubYggShardComponent[Dataset] extends YggShardComponent[Dataset] {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] =
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(ProjectionImpl, Release)] =
       Future((projections(descriptor), new Release(IO(()))))
   }
 }

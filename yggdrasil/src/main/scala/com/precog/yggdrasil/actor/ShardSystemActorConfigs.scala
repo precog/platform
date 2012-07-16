@@ -41,7 +41,7 @@ trait ProductionShardSystemConfig extends ShardConfig {
   val logPrefix = "[Production Yggdrasil Shard]"
 }
 
-trait ProductionShardSystemActorModule[Dataset] extends ShardSystemActorModule[Dataset] {
+trait ProductionShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: ProductionShardSystemConfig
 
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
@@ -57,10 +57,13 @@ trait StandaloneShardSystemConfig extends ShardConfig {
   val logPrefix = "[Standalone Yggdrasil Shard]"
 }
 
-trait StandaloneShardSystemActorModule[Dataset] extends ShardSystemActorModule[Dataset] {
+trait StandaloneShardSystemActorModule extends ShardSystemActorModule {
   type YggConfig <: StandaloneShardSystemConfig
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = None
   def checkpointCoordination = CheckpointCoordination.Noop
 }
 
 // vim: set ts=4 sw=4 et:
+/* tmux
+type ShardSystemActorConfigs */
+
