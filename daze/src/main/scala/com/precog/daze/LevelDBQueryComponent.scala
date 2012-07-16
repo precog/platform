@@ -132,9 +132,12 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
       // by that projection, merge the values
       def retrieveAndJoin(retrievals: Map[ProjectionDescriptor, Set[JPath]]): Future[Dataset[SValue]] = {
         def appendToObject(sv: SValue, instructions: Set[(JPath, Int)], cvalues: Seq[CValue]) = {
-          instructions.foldLeft(sv) {
-            case (sv, (selector, columnIndex)) => sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
+          logger.trace("Applying " + instructions + " to " + sv)
+          val result = instructions.foldLeft(sv) {
+            case (sv, (selector, columnIndex)) => logger.trace("Setting " + selector + " on " + sv + " to " + cvalues(columnIndex)); sv.set(selector, cvalues(columnIndex)).getOrElse(sv)
           }
+          logger.trace("Applying " + instructions + " to " + sv + " resulted in " + result)
+          result
         }
 
         def buildInstructions(descriptor: ProjectionDescriptor, selectors: Set[JPath]): (SValue, Set[(JPath, Int)]) = {
@@ -181,7 +184,8 @@ trait LevelDBQueryComponent extends YggConfigComponent with StorageEngineQueryCo
           case Nil => Future(ops.empty[SValue](1))
         }
 
-        joinNext(retrievals.toList)
+        // Sort by selector to ensure proper ordering of array index instructions (Bug #412)
+        joinNext(retrievals.toList.sortBy(_._2.toString).reverse) 
       }
 
       // determine the projections from which to retrieve data
