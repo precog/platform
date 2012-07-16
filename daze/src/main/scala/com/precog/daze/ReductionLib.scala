@@ -259,9 +259,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table =
-      res map { case (prod, count) => ops.constDecimal(Set(CNum(Math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty  //todo using toDouble is BAD
+    def extract(res: Result): Table = { //TODO division by zero 
+      val nonzeroRes = res filter { case (_, count) => count != 0 }
 
+      nonzeroRes map { case (prod, count) => ops.constDecimal(Set(CNum(Math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
+    }
   }
   
   object SumSq extends Reduction(ReductionNamespace, "sumSq") {

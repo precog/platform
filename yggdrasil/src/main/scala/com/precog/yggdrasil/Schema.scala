@@ -51,7 +51,7 @@ object JType {
    * Constructs a JType corresponding to the supplied sequence of (JPath, CType) pairs. Returns None if the
    * supplied sequence is empty.
    */
-  def mkType(ctpes : Seq[(JPath, CType)]) : Option[JType] = {
+  def mkType(ctpes: Seq[(JPath, CType)]): Option[JType] = {
     val primitives = ctpes.collect {
       case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => JNumberT
       case (JPath.Identity, CStringFixed(_) | CStringArbitrary) => JTextT
@@ -91,7 +91,7 @@ object JType {
   /**
    * Tests whether the supplied JType includes the supplied JPath and CType.
    */
-  def includes(jtpe : JType, path : JPath, ctpe : CType) : Boolean = (jtpe, (path, ctpe)) match {
+  def includes(jtpe: JType, path: JPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
     case (JNumberT, (JPath.Identity, CLong | CDouble | CDecimalArbitrary)) => true
 
     case (JTextT, (JPath.Identity, CStringFixed(_) | CStringArbitrary)) => true
@@ -104,13 +104,13 @@ object JType {
     case (JObjectUnfixedT, (JPath(JPathField(_), _*), _)) => true
     case (JObjectFixedT(fields), (JPath.Identity, CEmptyObject)) if fields.isEmpty => true
     case (JObjectFixedT(fields), (JPath(JPathField(head), tail @ _*), ctpe)) =>
-      fields.get(head).map(includes(_, JPath(tail : _*), ctpe)).getOrElse(false)
+      fields.get(head).map(includes(_, JPath(tail: _*), ctpe)).getOrElse(false)
 
     case (JArrayUnfixedT, (JPath.Identity, CEmptyArray)) => true
     case (JArrayUnfixedT, (JPath(JPathIndex(_), _*), _)) => true
     case (JArrayFixedT(elements), (JPath.Identity, CEmptyArray)) if elements.isEmpty => true
     case (JArrayFixedT(elements), (JPath(JPathIndex(i), tail @ _*), ctpe)) =>
-      elements.get(i).map(includes(_, JPath(tail : _*), ctpe)).getOrElse(false)
+      elements.get(i).map(includes(_, JPath(tail: _*), ctpe)).getOrElse(false)
 
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
@@ -121,7 +121,7 @@ object JType {
    * Tests whether the supplied sequence contains all the (JPath, CType) pairs that are
    * included by the supplied JType.
    */
-  def subsumes(ctpes : Seq[(JPath, CType)], jtpe : JType) : Boolean = (jtpe, ctpes) match {
+  def subsumes(ctpes: Seq[(JPath, CType)], jtpe: JType): Boolean = (jtpe, ctpes) match {
     case (JNumberT, ctpes) => ctpes.exists {
       case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => true
       case _ => false
