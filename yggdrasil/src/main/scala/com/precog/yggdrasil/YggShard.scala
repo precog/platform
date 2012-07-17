@@ -29,8 +29,8 @@ import scalaz.effect._
 import scalaz.syntax.bind._
 
 trait YggShardComponent {
-  type ProjectionImpl <: Projection
-  type Storage <: YggShard[ProjectionImpl]
+  type Projection <: ProjectionLike
+  type Storage <: YggShard[Projection]
   def storage: Storage
 }
 
@@ -38,7 +38,7 @@ trait YggShardMetadata {
   def userMetadataView(uid: String): StorageMetadata
 }
 
-trait YggShard[+P <: Projection] extends YggShardMetadata { self =>
+trait YggShard[+P <: ProjectionLike] extends YggShardMetadata { self =>
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(P, Release)]
   def store(msg: EventMessage, timeout: Timeout): Future[Unit] = storeBatch(Vector(msg), timeout) 
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit]

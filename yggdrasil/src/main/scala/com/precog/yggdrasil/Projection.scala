@@ -21,28 +21,28 @@ package com.precog.yggdrasil
 
 import scalaz.effect._
 
-trait Projection {
+trait ProjectionLike {
   def descriptor: ProjectionDescriptor
 
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
 }
 
-trait ProjectionsModule {
-  type ProjectionImpl <: Projection
+trait ProjectionModule {
+  type Projection <: ProjectionLike
 
-  protected def projectionFactory: ProjectionFactory
+  val Projection: ProjectionCompanion
 
-  trait ProjectionFactory {
-    def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl]
+  trait ProjectionCompanion {
+    def open(descriptor: ProjectionDescriptor): IO[Projection]
 
-    def close(p: ProjectionImpl): IO[Unit]
+    def close(p: Projection): IO[Unit]
   }
 }
 
-trait BlockProjection[+Block] extends Projection {
+trait BlockProjectionLike[+Block] extends ProjectionLike {
   def getBlockAfter(id: Option[Identities]): Option[Block]
 }
 
-trait FullProjection[+Dataset] extends Projection {
+trait FullProjectionLike[+Dataset] extends ProjectionLike {
   def allRecords(expiresAt: Long): Dataset
 }

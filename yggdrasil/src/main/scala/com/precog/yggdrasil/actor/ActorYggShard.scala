@@ -37,7 +37,7 @@ import scalaz.effect._
 import com.weiglewilczek.slf4s.Logging
 
 trait ActorYggShardComponent extends YggShardComponent {
-  trait ActorYggShard extends YggShard[ProjectionImpl] with Logging {
+  trait ActorYggShard extends YggShard[Projection] with Logging {
     def accessControl: AccessControl
     protected implicit def actorSystem: ActorSystem
     def shardSystemActor: ActorRef
@@ -53,13 +53,13 @@ trait ActorYggShardComponent extends YggShardComponent {
       new UserMetadataView(uid, accessControl, metadata)
     }
     
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(ProjectionImpl, Release)] = {
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection, Release)] = {
       logger.debug("Obtain projection for " + descriptor)
       implicit val ito = timeout 
 
       (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor))) yield {
         logger.debug("  projection obtained")
-        (projection.asInstanceOf[ProjectionImpl], new Release(IO(shardSystemActor ! ReleaseProjection(descriptor))))
+        (projection.asInstanceOf[Projection], new Release(IO(shardSystemActor ! ReleaseProjection(descriptor))))
       }) onFailure {
         case e => logger.error("Error acquiring projection: " + descriptor, e)
       }

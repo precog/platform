@@ -710,13 +710,13 @@ object ImportTools extends Command with Logging {
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
       object shardModule extends LevelDBActorYggShardModule 
-      with LevelDBProjectionsModule
+      with LevelDBProjectionModule
       with ProductionShardSystemActorModule {
         type Storage = LevelDBActorYggShard
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-        object projectionFactory extends LevelDBProjectionFactory {
+        object Projection extends LevelDBProjectionCompanion {
           def fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
         }
