@@ -23,12 +23,11 @@ import scalaz.effect._
 import scalaz.syntax.validation._
 import scalaz.iteratee.Input //todo: Get rid of!
 
-trait LevelDBProjectionsModule extends ProjectionsModule {
+trait LevelDBProjectionModule extends ProjectionModule {
   // pool for readahead threads
   private val readaheadPool = Executors.newCachedThreadPool()
 
-  class ProjectionImpl private[LevelDBProjectionsModule] (baseDir: File, descriptor: ProjectionDescriptor) 
-  extends LevelDBProjection(baseDir, descriptor) with FullProjection[IterableDataset[Seq[CValue]]] {
+  class Projection private[LevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection(baseDir, descriptor) {
     ///////////////////
     // ID Traversals //
     ///////////////////
@@ -143,12 +142,12 @@ trait LevelDBProjectionsModule extends ProjectionsModule {
   }  
   
   
-  trait LevelDBProjectionFactory extends ProjectionFactory {
+  trait LevelDBProjectionCompanion extends ProjectionCompanion {
     def fileOps: FileOps
 
     def baseDir(descriptor: ProjectionDescriptor): File
 
-    def projection(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
+    def open(descriptor: ProjectionDescriptor): IO[Projection] = {
       val base = baseDir(descriptor)
       val baseDirV: IO[File] = 
         fileOps.exists(base) flatMap { 
@@ -159,10 +158,10 @@ trait LevelDBProjectionsModule extends ProjectionsModule {
                         }
         }
 
-      baseDirV map { (bd: File) => new ProjectionImpl(bd, descriptor) }
+      baseDirV map { (bd: File) => new Projection(bd, descriptor) }
     }
 
-    def close(projection: ProjectionImpl) = IO(projection.close())
+    def close(projection: Projection) = IO(projection.close())
   }
 }
 

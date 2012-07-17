@@ -17,7 +17,7 @@ trait LevelDBTableConfig {
 }
 
 trait LevelDBColumnarTableModule extends ColumnarTableModule with YggShardComponent {
-  type ProjectionImpl <: BlockProjection[Slice]
+  type Projection <: BlockProjectionLike[Slice]
   type YggConfig <: LevelDBTableConfig
 
   protected implicit def executionContext: ExecutionContext

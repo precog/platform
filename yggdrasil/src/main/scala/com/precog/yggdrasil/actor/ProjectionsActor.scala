@@ -35,7 +35,7 @@ import scalaz.syntax.std.option._
 // MESSAGES //
 //////////////
 
-// To simplify routing, tag all messages for the Projection actor
+// To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
 case class AcquireProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
@@ -51,10 +51,10 @@ case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMeta
 
 // projection retrieval result messages
 sealed trait ProjectionResult
-case class ProjectionAcquired(projection: Projection) extends ProjectionResult
+case class ProjectionAcquired(projection: ProjectionLike) extends ProjectionResult
 case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
 
-trait ProjectionsActorModule extends ProjectionsModule {
+trait ProjectionsActorModule extends ProjectionModule {
   ////////////
   // ACTORS //
   ////////////
@@ -65,14 +65,14 @@ trait ProjectionsActorModule extends ProjectionsModule {
   class ProjectionsActor extends Actor with Logging { self =>
     private val projectionCacheSettings = CacheSettings(
       expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
-      evict = (descriptor: ProjectionDescriptor, projection: ProjectionImpl) => projectionFactory.close(projection).unsafePerformIO
+      evict = (descriptor: ProjectionDescriptor, projection: Projection) => Projection.close(projection).unsafePerformIO
     )
 
     // Cache control map that stores reference counts for projection descriptors managed by the cache
     private val outstandingReferences = mutable.Map.empty[ProjectionDescriptor, Int]
 
     // Cache for active projections
-    private val projections = Cache.concurrentWithCheckedEviction[ProjectionDescriptor, ProjectionImpl](projectionCacheSettings) {
+    private val projections = Cache.concurrentWithCheckedEviction[ProjectionDescriptor, Projection](projectionCacheSettings) {
       (descriptor, _) => outstandingReferences.get(descriptor) forall { _ == 0 }
     }
 
@@ -121,9 +121,9 @@ trait ProjectionsActorModule extends ProjectionsModule {
     protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JInt(projections.size)) :: 
                                                                   JField("outstandingReferences", JInt(outstandingReferences.size)) :: Nil)) :: Nil)
 
-    private def cacheLookup(descriptor: ProjectionDescriptor): IO[ProjectionImpl] = {
+    private def cacheLookup(descriptor: ProjectionDescriptor): IO[Projection] = {
       projections.get(descriptor) map { IO(_) } getOrElse {
-        for (p <- projectionFactory.projection(descriptor)) yield {
+        for (p <- Projection.open(descriptor)) yield {
           // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
           projections.putIfAbsent(descriptor, p) getOrElse p 
         }
@@ -162,7 +162,7 @@ trait ProjectionsActorModule extends ProjectionsModule {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(projection: ProjectionImpl) extends Actor with Logging {
+  class ProjectionInsertActor(projection: Projection) extends Actor with Logging {
     override def preStart(): Unit = {
       logger.debug("Preparing for insert on " + projection)
     }

@@ -22,7 +22,7 @@ trait LevelDBQueryConfig {
 }
 
 trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsComponent with YggConfigComponent with YggShardComponent {
-  type ProjectionImpl <: FullProjection[Dataset[Seq[CValue]]]
+  type Projection <: FullProjectionLike[Dataset[Seq[CValue]]]
   type YggConfig <: LevelDBQueryConfig
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
