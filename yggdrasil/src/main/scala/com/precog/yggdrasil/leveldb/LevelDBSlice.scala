@@ -32,12 +32,15 @@ import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization.bijections._
 
+import blueeyes.json.{JPath,JPathField,JPathIndex}
+
 /**
  * A slice that wraps a LevelDB KeyValue Chunk from a given
  * LevelDB Projection.
  */
 sealed trait LevelDBSlice extends Slice with Logging {
   protected val chunk: KeyValueChunk
+  protected val identCount: Int
   protected val descriptors: Seq[ColumnDescriptor]
 
   val size = chunk.pairLength
@@ -46,29 +49,42 @@ sealed trait LevelDBSlice extends Slice with Logging {
     def isDefinedAt(row: Int) = row < size
   }
 
+  case class IdentColumn(index: Int) extends LongColumn with BaseColumn {
+    private[this] final val rowWidth = identCount * 8
+    def apply(row: Int): Long = chunk.keyData.getLong(row * rowWidth + index * 8)
+  }
+
+  protected def keyColumns: Map[ColumnRef, Column] = (0 until identCount).map {
+    idx: Int => ColumnRef(JPath(JPathField("key") :: JPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
+  }.toMap
+
+  protected def valColumns: Seq[(ColumnRef, Column)]
+
+  lazy val columns: Map[ColumnRef, Column] = keyColumns ++ valColumns
+
   object LNullColumn extends table.NullColumn with BaseColumn
   object LEmptyObjectColumn extends table.EmptyObjectColumn with BaseColumn
   object LEmptyArrayColumn extends table.EmptyArrayColumn with BaseColumn
 }
 
 object LevelDBSlice {
-  def apply(chunk: KeyValueChunk, descriptors: Seq[ColumnDescriptor]) = chunk.valueWidth match {
-    case w: FixedWidth if descriptors.forall { case ColumnDescriptor(_, _, ctpe, _) => ctpe.format.isFixed } => new FixedLevelDBSlice(chunk, descriptors)
-    case _ => new VariableLevelDBSlice(chunk, descriptors)
+  def apply(chunk: KeyValueChunk, identCount: Int, descriptors: Seq[ColumnDescriptor]) = chunk.valueWidth match {
+    case w: FixedWidth if descriptors.forall { case ColumnDescriptor(_, _, ctpe, _) => ctpe.format.isFixed } => new FixedLevelDBSlice(chunk, identCount, descriptors)
+    case _ => new VariableLevelDBSlice(chunk, identCount, descriptors)
   }
 
   /**
    * A slice for which all columns are fixed width.
    */
-  class FixedLevelDBSlice private[LevelDBSlice] (val chunk: KeyValueChunk, val descriptors: Seq[ColumnDescriptor]) extends LevelDBSlice {
+  class FixedLevelDBSlice private[LevelDBSlice] (val chunk: KeyValueChunk, val identCount: Int, val descriptors: Seq[ColumnDescriptor]) extends LevelDBSlice {
     private val offsets: List[Int] = descriptors.foldLeft((0,List[Int]())) { 
       case ((current,offsets), ColumnDescriptor(_, _, ctpe, _)) => (current + ctpe.format.asInstanceOf[FixedWidth].width, current :: offsets)
     }._2.reverse
 
     private val rowWidth = offsets.sum
 
-    lazy val columns: Map[ColumnRef, Column] = descriptors.zip(offsets).map {
-      case (ColumnDescriptor(_, selector, ctpe, _),rowOffset) => ColumnRef(selector, ctpe) -> (ctpe match {
+    def valColumns: Seq[(ColumnRef, Column)] = descriptors.zip(offsets).map {
+      case (ColumnDescriptor(_, selector, ctpe, _),rowOffset) => ColumnRef(JPath(".value") \ selector, ctpe) -> (ctpe match {
         case CBoolean => new BoolColumn with BaseColumn {
           def apply(row: Int): Boolean = chunk.valueData.get(row * rowWidth + rowOffset) != 0
         }
@@ -93,15 +109,15 @@ object LevelDBSlice {
 
         // CStringFixed will be departing soon, so we're not handling it now
 
-        //case invalid => sys.error("Invalid fixed with CType: " + invalid)
+        case invalid => sys.error("Invalid fixed with CType: " + invalid)
       })
-    }.toMap
+    }
   }
 
   /**
    * A slice for which at least one column is variable width. NOT THREAD SAFE.
    */
-  class VariableLevelDBSlice private[LevelDBSlice] (val chunk: KeyValueChunk, val descriptors: Seq[ColumnDescriptor]) extends LevelDBSlice {
+  class VariableLevelDBSlice private[LevelDBSlice] (val chunk: KeyValueChunk, val identCount: Int, val descriptors: Seq[ColumnDescriptor]) extends LevelDBSlice {
     private final val columnCount = descriptors.size
 
     private val columnWidth: Array[Int] = descriptors.map { case ColumnDescriptor(_, _, ctpe, _) => ctpe.format match {
@@ -157,7 +173,7 @@ object LevelDBSlice {
       }
     }
 
-    lazy val columns = descriptors.zipWithIndex.map {
+    def valColumns: Seq[(ColumnRef, Column)] = descriptors.zipWithIndex.map {
       case (ColumnDescriptor(_, selector, ctpe, _),index) => ColumnRef(selector, ctpe) -> (ctpe match {
         //// Fixed width types within the var width row
         case CBoolean => new BoolColumn with BaseColumn {
@@ -215,9 +231,9 @@ object LevelDBSlice {
           }
         }
 
-        //case invalid => sys.error("Invalid fixed with CType: " + invalid)
+        case invalid => sys.error("Invalid fixed with CType: " + invalid)
       })
-    }.toMap
+    }
   }
 }
 
