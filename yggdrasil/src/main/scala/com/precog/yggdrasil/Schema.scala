@@ -23,49 +23,15 @@ import scala.collection.immutable.BitSet
 
 import blueeyes.json.{ JPath, JPathField, JPathIndex }
 
-sealed trait JType {
-  def |(jtype: JType) = JUnionT(this, jtype)
-}
+import com.precog.bytecode._
 
-sealed trait JPrimitiveType extends JType {
-  def ctypes: Set[CType]
-}
-
-case object JNumberT extends JPrimitiveType {
-  val ctypes: Set[CType] = Set(CLong, CDouble, CDecimalArbitrary)
-}
-
-case object JTextT extends JPrimitiveType {
-  val ctypes: Set[CType] = Set(CStringArbitrary)
-}
-
-case object JBooleanT extends JPrimitiveType {
-  val ctypes: Set[CType] = Set(CBoolean)
-}
-
-case object JNullT extends JPrimitiveType {
-  val ctypes: Set[CType] = Set(CNull)
-}
-
-sealed trait JArrayT extends JType
-case class JArrayFixedT(elements: Map[Int, JType]) extends JArrayT
-case object JArrayUnfixedT extends JArrayT
-
-sealed trait JObjectT extends JType
-case class JObjectFixedT(fields: Map[String, JType]) extends JObjectT
-case object JObjectUnfixedT extends JObjectT
-
-case class JUnionT(left: JType, right: JType) extends JType
-
-object JType {
-  val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT
-  val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
-  
-  def flattenUnions(tpe: JType): Set[JType] = tpe match {
-    case JUnionT(left, right) => flattenUnions(left) ++ flattenUnions(right)
-    case t => Set(t)
+object Schema {
+  def ctypes(primitive : JPrimitiveType): Set[CType] = primitive match {
+    case JNumberT => Set(CLong, CDouble, CDecimalArbitrary)
+    case JTextT => Set(CStringArbitrary)
+    case JBooleanT => Set(CBoolean)
+    case JNullT => Set(CNull)
   }
-
   /**
    * Constructs a JType corresponding to the supplied sequence of (JPath, CType) pairs. Returns None if the
    * supplied sequence is empty.

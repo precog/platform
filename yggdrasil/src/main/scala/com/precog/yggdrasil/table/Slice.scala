@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.VectorCase
+import com.precog.bytecode.JType
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -46,7 +47,7 @@ trait Slice { source =>
 
   def logicalColumns: JType => Set[Column] = { jtpe =>
     columns collect {
-      case (ColumnRef(jpath, ctype), col) if JType.includes(jtpe, jpath, ctype) => col
+      case (ColumnRef(jpath, ctype), col) if Schema.includes(jtpe, jpath, ctype) => col
     } toSet
   }
 
@@ -77,8 +78,8 @@ trait Slice { source =>
   def typed(jtpe : JType) : Slice = new Slice {
     val size = source.size
     val columns = {
-      if(size == 0 || JType.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
-        source.columns.filter { case (ColumnRef(path, ctpe), _) => JType.includes(jtpe, path, ctpe) }
+      if(size == 0 || Schema.subsumes(source.columns.map { case (ColumnRef(path, ctpe), _) => (path, ctpe) }(breakOut), jtpe))
+        source.columns.filter { case (ColumnRef(path, ctpe), _) => Schema.includes(jtpe, path, ctpe) }
       else
         Map.empty[ColumnRef, Column]
     }

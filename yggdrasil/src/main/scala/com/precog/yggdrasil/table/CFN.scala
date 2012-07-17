@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package table
 
 import blueeyes.json._
+import com.precog.bytecode.JType
 
 class CF1(f: Column => Option[Column]) extends (Column => Option[Column]) {
   def apply(c: Column): Option[Column] = f(c)

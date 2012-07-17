@@ -20,8 +20,7 @@
 package com.precog
 package daze
 
-import bytecode.Library
-import bytecode.Arity
+import bytecode._
 
 import yggdrasil._
 import yggdrasil.table._

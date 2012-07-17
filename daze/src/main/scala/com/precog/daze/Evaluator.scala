@@ -28,6 +28,7 @@ import com.precog.yggdrasil._
 import com.precog.yggdrasil.serialization._
 import com.precog.util._
 import com.precog.common.{Path, VectorCase}
+import com.precog.bytecode._
 
 import org.joda.time._
 import org.joda.time.format._
