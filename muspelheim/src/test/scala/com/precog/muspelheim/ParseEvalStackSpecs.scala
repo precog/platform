@@ -5,7 +5,6 @@ import common.VectorCase
 import common.kafka._
 
 import daze._
-import daze.memoization._
 import daze.util._
 
 import quirrel._
@@ -13,13 +12,18 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
+import bytecode.JType
+
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.memoization._
 import yggdrasil.serialization._
+import yggdrasil.table._
 import muspelheim._
 
 import org.specs2.mutable._
   
+import akka.dispatch.Future
 import akka.dispatch.Await
 import akka.util.Duration
 
@@ -38,31 +42,21 @@ import akka.dispatch.ExecutionContext
 
 trait ParseEvalStackSpecs extends Specification 
     with ParseEvalStack
-    with IterableDatasetOpsComponent
-    with LevelDBQueryComponent
-    with DiskIterableMemoizationComponent 
+    with StorageModule
     with MemoryDatasetConsumer 
     with Logging {
 
-  override type Dataset[A] = IterableDataset[A]
-  override type Memoable[α] = Iterable[α]
-
+  val sliceSize = 10
+  
   def controlTimeout = Duration(30, "seconds")      // it's just unreasonable to run tests longer than this
   
   implicit val actorSystem = ActorSystem("platformSpecsActorSystem")
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]) = IterableDataset(idCount, data)
-
-  trait YggConfig extends 
-    BaseConfig with 
-    YggEnumOpsConfig with 
-    LevelDBQueryConfig with 
-    DiskMemoizationConfig with 
-    DatasetConsumersConfig with
-    IterableDatasetOpsConfig with 
-    StandaloneShardSystemConfig
+  trait YggConfig 
+    extends BaseConfig 
+    with DatasetConsumersConfig 
 
   object yggConfig extends YggConfig {
     logger.trace("Init yggConfig")
@@ -90,9 +84,6 @@ trait ParseEvalStackSpecs extends Specification
       def nextId() = source.getAndIncrement
     }
   }
-
-  object ops extends Ops 
-  object query extends QueryAPI 
 
   step {
     startup()
@@ -128,7 +119,5 @@ trait ParseEvalStackSpecs extends Specification
   def shutdown() = ()
 }
 
-object RawJsonStackSpecs extends ParseEvalStackSpecs with RawJsonShardComponent { 
-  object storage extends Storage
-}
+object RawJsonStackSpecs extends ParseEvalStackSpecs with RawJsonColumnarTableStorageModule 
 // vim: set ts=4 sw=4 et:

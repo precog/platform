@@ -1,5 +1,9 @@
 package com.precog.muspelheim
 
+import com.precog.bytecode.JType
+import com.precog.yggdrasil._
+import com.precog.yggdrasil.table._
+
 import akka.actor._
 import akka.dispatch._
 import akka.testkit.TestActorRef
@@ -28,29 +32,23 @@ import scalaz.std.AllInstances._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-trait RawJsonShardComponent extends YggShardComponent {
-  type Dataset[α]
-
+trait RawJsonStorageModule extends StorageModule {
   def actorSystem: ActorSystem 
   implicit def asyncContext: ExecutionContext
   implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
 
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): Dataset[Seq[CValue]]
+  trait ProjectionCompanion {
+    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
+  }
 
-  trait Storage extends YggShard[Dataset] {
+  val Projection: ProjectionCompanion
+
+  trait Storage extends StorageLike[Projection] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
-    case class DummyProjection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends Projection[Dataset] {
-      val chunkSize = 2000
-
-      def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
-
-      def allRecords(expiresAt: Long): Dataset[Seq[CValue]] = dataset(1, data)
-    }
-
     private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
-    private var projections: Map[ProjectionDescriptor, DummyProjection] = Map() 
+    private var projections: Map[ProjectionDescriptor, Vector[JValue]] = Map() 
 
     private def load(path: Path) = {
       val resourceName = ("/test_data" + path.toString.init + ".json").replaceAll("/+", "/")   
@@ -62,8 +60,8 @@ trait RawJsonShardComponent extends YggShardComponent {
           case (acc, jobj) => 
             val evID = EventId(0, identity.getAndIncrement)
             routingTable.route(EventMessage(evID, Event(path, "", jobj, Map()))).foldLeft(acc) {
-              case (acc, ProjectionData(descriptor, values, _)) =>
-                acc + (descriptor -> (acc.getOrElse(descriptor, DummyProjection(descriptor, new TreeMap())) + ((VectorCase(evID.uid), values))))
+              case (acc, data) =>
+                acc + (data.descriptor -> (acc.getOrElse(data.descriptor, Vector.empty[JValue]) :+ data.toJValue))
           }
         }
       }
@@ -93,13 +91,34 @@ trait RawJsonShardComponent extends YggShardComponent {
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection[Dataset], Release)] = {
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection, Release)] = {
       Future {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
-        (projections(descriptor), new Release(scalaz.effect.IO(())))
+        (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
       }
     }
   }
+}
+
+trait RawJsonColumnarTableStorageModule extends RawJsonStorageModule with ColumnarTableModule {
+
+  class Table(slices: Iterable[Slice]) extends ColumnarTable(slices) {
+    def load(tpe: JType): Future[Table] = {
+      sys.error("todo")
+    }
+  }
+
+  class Projection(val descriptor: ProjectionDescriptor, data: Vector[JValue]) extends ProjectionLike {
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
+  }
+
+  object Projection extends ProjectionCompanion {
+    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = sys.error("todo")
+  }
+
+  def table(slices: Iterable[Slice]) = new Table(slices)
+
+  object storage extends Storage
 }
 
 
