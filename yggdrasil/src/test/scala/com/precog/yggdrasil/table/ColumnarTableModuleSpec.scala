@@ -72,12 +72,12 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
     lib(name)
   }
 
-  def lookupScanner(namespace: List[String], name: String) = {
+  def lookupScanner(namespace: List[String], name: String): CScanner = {
     val lib = Map[String, CScanner](
       "sum" -> new CScanner {
         type A = BigDecimal
         val init = BigDecimal(0)
-        def scan(a: BigDecimal, col: Column, range: Range) = {
+        def scan(a: BigDecimal, col: Column, range: Range): (A, Option[Column]) = {
           col match {
             case lc: LongColumn => 
               val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {

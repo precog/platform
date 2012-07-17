@@ -29,6 +29,8 @@ import yggdrasil.table._
 import com.precog.util.IdGen
 import com.precog.util._
 
+import scala.collection.BitSet
+
 import scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
@@ -518,9 +520,53 @@ trait StatsLib extends GenOpcode
 
   object DenseRank extends Morphism(StatsNamespace, "denseRank", Arity.One) {
     lazy val alignment = None
+
+    def rankScanner: CScanner = {
+      new CScanner {
+        type A = (Option[BigDecimal], BigDecimal)  // (value, count)
+        val init = (None, BigDecimal(0))
+
+        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
+          col match {
+            case lc: LongColumn => {
+              val filteredRange = range filter lc.isDefinedAt
+              val defined: BitSet = BitSet(filteredRange: _*)
+
+              val ((finalValue, finalCount), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+                case (((value, count), acc), i) => {
+                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+                    acc(i) = 1
+                    ((Some(BigDecimal(lc(i))), 1), acc)
+                  } else if (Some(BigDecimal(lc(i))) == value) {
+                    acc(i) = count
+                    ((Some(BigDecimal(lc(i))), count), acc)
+                  } else  {
+                    acc(i) = count + 1
+                    ((Some(BigDecimal(lc(i))), count + 1), acc)
+                  }
+                }
+              }
+
+              ((finalValue, finalCount), Some(ArrayNumColumn(defined, acc)))
+            }
+
+          case _ => (a, None)
+          }
+        }
+      }
+    }
     
-    def apply(table: Table) = table
-    
+    def apply(table: Table) = {
+      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+      val sortedTable = table.sort(sortKey, SortAscending)
+
+      val transScan = Scan(DerefObjectStatic(Leaf(Source), constants.Value), rankScanner)
+      
+      sortedTable.transform(transScan)
+    }
+
+
+
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
       var count = 0
       var previous: Option[SValue] = Option.empty[SValue]
@@ -542,13 +588,57 @@ trait StatsLib extends GenOpcode
       }
       Some(enum3.sortByIdentity(IdGen.nextInt, ctx.memoizationContext))
     } */
+
   }
 
-  object Rank extends Morphism(StatsNamespace, "rank", Arity.One) {
+  object Rank extends Morphism(StatsNamespace, "rank", Arity.One) {  //TODO what happens across slices??
     lazy val alignment = None
     
-    def apply(table: Table) = table
+    def rankScanner: CScanner = {
+      new CScanner {
+        type A = (Option[BigDecimal], BigDecimal, BigDecimal)  // (value, countEach, countTotal)
+        val init = (None, BigDecimal(0), BigDecimal(0))
+
+        def scan(a: A, col: Column, range: Range): (A, Option[Column]) = {
+          col match {
+            case lc: LongColumn => {
+              val filteredRange = range filter lc.isDefinedAt
+              val defined: BitSet = BitSet(filteredRange: _*)
+
+              val ((finalValue, finalCountEach, finalCountTotal), acc) = filteredRange.foldLeft((a, new Array[BigDecimal](range.end))) {
+                case (((value, countEach, countTotal), acc), i) => {
+                  if (value == None) {  //TODO best way to deal with the None case, which occurs only on the first fold
+                    acc(i) = 1
+                    ((Some(BigDecimal(lc(i))), 1, 1), acc)
+                  } else if (Some(BigDecimal(lc(i))) == value) {
+                    acc(i) = countTotal
+                    ((Some(BigDecimal(lc(i))), countEach + 1, countTotal), acc)
+                  } else  {
+                    acc(i) = countEach + countTotal
+                    ((Some(BigDecimal(lc(i))), 1, countEach + countTotal), acc)
+                  }
+                }
+              }
+
+              ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
+            }
+
+          case _ => (a, None)
+          }
+        }
+      }
+    }
     
+    def apply(table: Table) = {
+      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+      val sortedTable = table.sort(sortKey, SortAscending)
+
+      val transScan = Scan(DerefObjectStatic(Leaf(Source), constants.Value), rankScanner)
+      
+      sortedTable.transform(transScan)
+    }
+
+
     /* override def evalEnum(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[Dataset[SValue]] = {
       var countTotal = 0
       var countEach = 1
