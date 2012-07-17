@@ -19,7 +19,7 @@
  */
 package com.precog.yggdrasil
 
-import blueeyes.json.{ JPath, JPathField, JPathIndex }
+import blueeyes.json._
 import blueeyes.json.JsonAST._
 
 import org.specs2.mutable._
@@ -275,6 +275,16 @@ trait TransformSpec extends TableModuleSpec {
 
       results must_== (sample.data map { _ \ "value" } map { case v => JObject(JField("value1", v \ "value2") :: Nil) })
     }
+  }
+
+  def testObjectConcatOverwrite = {
+    val sample = SampleData(Stream(JsonParser.parse("""{ "key": [], "value": 42 }""")))
+    val table = fromJson(sample)
+    val results = toJson(table.transform {
+      ObjectConcat(Leaf(Source),WrapObject(WrapObject(DerefObjectStatic(Leaf(Source), JPathField("value")), "answer"),"value"))
+    })
+
+    results must_== Stream(JsonParser.parse("""{ "key": [], "value": { "answer": 42 } }"""))
   }
 
   def checkArrayConcat = {
