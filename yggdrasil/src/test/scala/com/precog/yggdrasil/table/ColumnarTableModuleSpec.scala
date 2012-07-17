@@ -1,15 +1,14 @@
 package com.precog.yggdrasil
 package table
 
-import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
+import com.precog.bytecode.JType
 
 import akka.dispatch.Future
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
-import blueeyes.json.JsonParser
 
 import scala.annotation.tailrec
 import scala.collection.BitSet
@@ -145,6 +144,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
+      "correctly discard fields in object/primitive concat conflicts" in testObjectConcatOverwrite
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
       "perform a trivial type-based filter" in checkTypedTrivial

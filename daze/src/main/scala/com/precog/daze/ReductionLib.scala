@@ -261,7 +261,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def extract(res: Result): Table = { //TODO division by zero 
       val nonzeroRes = res filter { case (_, count) => count != 0 }
 
-      nonzeroRes map { case (prod, count) => ops.constDecimal(Set(CNum(Math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
+      nonzeroRes map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
     }
   }
   

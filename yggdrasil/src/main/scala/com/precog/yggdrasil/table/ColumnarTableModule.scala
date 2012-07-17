@@ -306,12 +306,20 @@ trait ColumnarTableModule extends TableModule {
           l0.zip(r0) { (sl, sr) =>
             new Slice {
               val size = sl.size
-              val columns = 
-                // left side first in the seq so that the right side wins
-                (sl.columns.toSeq ++ sr.columns).foldLeft(Map.empty[ColumnRef, Column]) {
+              val columns = {
+                // select only the columns on the left that are not overwritten by columns on the right
+                val lcols = sl.columns.keys filter {
+                  // TODO: make this better than n^2
+                  case ColumnRef(lpath, _) => ! sr.columns.keySet.exists {
+                    case ColumnRef(rpath, _) => rpath.hasPrefix(lpath) || lpath.hasPrefix(rpath)
+                  }
+                }
+
+                (lcols.map(ref => (ref, sl.columns(ref))) ++ sr.columns).foldLeft(Map.empty[ColumnRef, Column]) {
                   case (acc, (ref, col)) if ref.selector.head.exists(_.isInstanceOf[JPathField]) => acc + (ref -> col)
                   case (acc, _) => acc
                 }
+              }
             }
           }
 
@@ -859,9 +867,12 @@ trait ColumnarTableModule extends TableModule {
     }
     */
 
+    def toStrings: Iterable[String] = {
+      toEvents { (slice, row) => slice.toString(row) }
+    }
     
     def toJson: Iterable[JValue] = {
-      toEvents { (slice: Slice, row: RowId) => slice.toJson(row) }
+      toEvents { (slice, row) => slice.toJson(row) }
     }
 
     private def toEvents[A](f: (Slice, RowId) => A): Iterable[A] = {
