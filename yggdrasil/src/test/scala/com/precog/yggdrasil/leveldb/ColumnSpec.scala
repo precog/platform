@@ -20,24 +20,24 @@
 package com.precog.yggdrasil
 package leveldb
 
-import iterable.LevelDBProjectionFactory
-import com.precog.util.IOUtils
-import com.precog.util.Interval
-
-import java.io.File
-import java.nio.ByteBuffer
-
-import scalaz._
-import scalaz.std.list._ 
-import scalaz.effect.IO 
-
-import com.weiglewilczek.slf4s.Logging
-
-import org.scalacheck.{Arbitrary,Gen}
-import org.specs2.ScalaCheck
-import org.specs2.matcher.ThrownMessages
-import org.specs2.mutable.{BeforeAfter,Specification}
-import org.specs2.specification.Scope
+//import iterable.LevelDBProjectionFactory
+//import com.precog.util.IOUtils
+//import com.precog.util.Interval
+//
+//import java.io.File
+//import java.nio.ByteBuffer
+//
+//import scalaz._
+//import scalaz.std.list._ 
+//import scalaz.effect.IO 
+//
+//import com.weiglewilczek.slf4s.Logging
+//
+//import org.scalacheck.{Arbitrary,Gen}
+//import org.specs2.ScalaCheck
+//import org.specs2.matcher.ThrownMessages
+//import org.specs2.mutable.{BeforeAfter,Specification}
+//import org.specs2.specification.Scope
 
 
 //class ColumnSpec extends Specification with ScalaCheck with ThrownMessages with Logging with LevelDBProjectionFactory {
