@@ -122,44 +122,95 @@ trait Instructions extends Library {
     case class PushGroup(id: Int) extends Instruction
     case class PushKey(id: Int) extends Instruction
     
-    sealed trait UnaryOperation
-    sealed trait BinaryOperation
+    object Map2 {
+      def unapply(instr: JoinInstr): Option[BinaryOperationType] = instr match {
+        case Map2Match(op) => Some(op.tpe)
+        case Map2Cross(op) => Some(op.tpe) 
+        case Map2CrossLeft(op) => Some(op.tpe)
+        case Map2CrossRight(op) => Some(op.tpe)
+        case _ => None
+      }
+    }
     
+    sealed trait UnaryOperation {
+      val tpe : UnaryOperationType
+    }
+    
+    trait NumericUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JNumberT, JNumberT)
+    }
+
+    trait BooleanUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JBooleanT, JBooleanT)
+    }
+
+    trait UnfixedUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+    }
+
+    sealed trait BinaryOperation {
+      val tpe : BinaryOperationType
+    }
+    
+    trait NumericBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    }
+    
+    trait NumericComparisonOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    }
+
+    trait BooleanBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+    }
+
+    trait EqualityOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+    }
+    
+    trait UnfixedBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JBooleanT)
+    }
+    
+    case class BuiltInFunction1Op(op: Op1) extends UnaryOperation {
+      val tpe = op.tpe
+    }
+    case class BuiltInFunction2Op(op: Op2) extends BinaryOperation {
+      val tpe = op.tpe
+    }
     case class BuiltInMorphism(mor: Morphism)
-    case class BuiltInFunction1Op(op: Op1) extends UnaryOperation
-    case class BuiltInFunction2Op(op: Op2) extends BinaryOperation
     case class BuiltInReduction(red: Reduction)
 
-    case object Add extends BinaryOperation
-    case object Sub extends BinaryOperation
-    case object Mul extends BinaryOperation
-    case object Div extends BinaryOperation
+    case object Add extends NumericBinaryOperation
+    case object Sub extends NumericBinaryOperation
+    case object Mul extends NumericBinaryOperation
+    case object Div extends NumericBinaryOperation
     
-    case object Lt extends BinaryOperation
-    case object LtEq extends BinaryOperation
-    case object Gt extends BinaryOperation
-    case object GtEq extends BinaryOperation
+    case object Lt extends NumericComparisonOperation
+    case object LtEq extends NumericComparisonOperation
+    case object Gt extends NumericComparisonOperation
+    case object GtEq extends NumericComparisonOperation
     
-    case object Eq extends BinaryOperation
-    case object NotEq extends BinaryOperation
+    case object Eq extends EqualityOperation
+    case object NotEq extends EqualityOperation
     
-    case object Or extends BinaryOperation
-    case object And extends BinaryOperation
+    case object Or extends BooleanBinaryOperation
+    case object And extends BooleanBinaryOperation
     
-    case object New extends UnaryOperation
-    case object Comp extends UnaryOperation
-    case object Neg extends UnaryOperation
+    case object New extends UnfixedUnaryOperation
+    case object Comp extends BooleanUnaryOperation
+    case object Neg extends NumericUnaryOperation
     
-    case object WrapObject extends BinaryOperation
-    case object WrapArray extends UnaryOperation
+    case object WrapObject extends UnfixedBinaryOperation
+    case object WrapArray extends UnfixedUnaryOperation
     
-    case object JoinObject extends BinaryOperation
-    case object JoinArray extends BinaryOperation
+    case object JoinObject extends UnfixedBinaryOperation
+    case object JoinArray extends UnfixedBinaryOperation
     
-    case object ArraySwap extends BinaryOperation
+    case object ArraySwap extends UnfixedBinaryOperation
     
-    case object DerefObject extends BinaryOperation
-    case object DerefArray extends BinaryOperation
+    case object DerefObject extends UnfixedBinaryOperation
+    case object DerefArray extends UnfixedBinaryOperation
     
     case object Range
   }

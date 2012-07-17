@@ -1,10 +1,11 @@
 package com.precog
 package daze
 
+import bytecode._
 import yggdrasil._
 
 trait TypeInferencer extends DAG {
-  import instructions.{ DerefArray, DerefObject, Map2Cross, Map2CrossLeft, Map2CrossRight }
+  import instructions.{ BinaryOperation, DerefArray, DerefObject, JoinInstr, Map2, Map2Cross, Map2CrossLeft, Map2CrossRight }
   import dag._
 
   def inferTypes(jtpe: JType)(graph: DepGraph) : DepGraph = {
@@ -27,15 +28,15 @@ trait TypeInferencer extends DAG {
 
       case Morph2(loc, m, left, right) => Morph2(loc, m, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
 
-      case Join(loc, instr, left, right) => (instr, right.value) match {
-        case (Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), Some(SString(str))) =>
-          Join(loc, instr, inferTypes(JObjectFixedT(Map(str -> jtpe)))(left), right)
+      case Join(loc, instr @ (Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject)), left, right @ ConstString(str)) =>
+        Join(loc, instr, inferTypes(JObjectFixedT(Map(str -> jtpe)))(left), right)
 
-        case (Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), Some(SDecimal(d))) =>
-          Join(loc, instr, inferTypes(JArrayFixedT(Map(d.toInt -> jtpe)))(left), right)
+      case Join(loc, instr @ (Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray)), left, right @ ConstDecimal(d)) =>
+        Join(loc, instr, inferTypes(JArrayFixedT(Map(d.toInt -> jtpe)))(left), right)
 
-        case _ => Join(loc, instr, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
-      }
+      case Join(loc, instr @ Map2(BinaryOperationType(lhs, rhs, res)), left, right) => Join(loc, instr, inferTypes(lhs)(left), inferTypes(rhs)(right))
+
+      case Join(loc, instr, left, right) => Join(loc, instr, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
 
       case Filter(loc, cross, target, boolean) => Filter(loc, cross, inferTypes(jtpe)(target), inferTypes(jtpe)(boolean))
 

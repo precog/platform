@@ -1,7 +1,7 @@
 package com.precog
 package daze
 
-import bytecode.Library
+import bytecode.{ Library, UnaryOperationType, JNumberT, JBooleanT }
 
 import yggdrasil._
 import yggdrasil.table._
@@ -14,6 +14,7 @@ trait UnaryLib extends ImplLibrary with GenOpcode {
     val UnaryNamespace = Vector("std", "unary")
 
     object Comp extends Op1(UnaryNamespace, "comp") {
+      val tpe = UnaryOperationType(JBooleanT, JBooleanT)
       def f1: F1 = new CF1P({
         case c: BoolColumn => new Map1Column(c) with BoolColumn {
           def apply(row: Int) = !c(row)
@@ -22,6 +23,7 @@ trait UnaryLib extends ImplLibrary with GenOpcode {
     }
     
     object Neg extends Op1(UnaryNamespace, "neg") {
+      val tpe = UnaryOperationType(JNumberT, JNumberT)
       def f1: F1 = new CF1P({
         case c: LongColumn => new Map1Column(c) with LongColumn {
           def apply(row: Int) = -c(row)

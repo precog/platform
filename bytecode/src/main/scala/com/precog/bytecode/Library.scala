@@ -33,6 +33,7 @@ trait Op1Like {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val tpe: UnaryOperationType
 
   def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
@@ -46,6 +47,7 @@ trait Op2Like {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val tpe: BinaryOperationType
 
   def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn

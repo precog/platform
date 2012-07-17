@@ -1,6 +1,7 @@
 package com.precog
 package daze
 
+import bytecode.{ BinaryOperationType, UnaryOperationType, JNumberT }
 import bytecode.Library
 
 import yggdrasil._
@@ -14,6 +15,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
   override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, IEEEremainder)
 
   object sinh extends Op1(MathNamespace, "sinh") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.sinh(c(row))
@@ -32,6 +34,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object toDegrees extends Op1(MathNamespace, "toDegrees") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.toDegrees(c(row))
@@ -50,6 +53,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object expm1 extends Op1(MathNamespace, "expm1") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.expm1(c(row))
@@ -68,6 +72,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object getExponent extends Op1(MathNamespace, "getExponent") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
@@ -89,6 +94,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object asin extends Op1(MathNamespace, "asin") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
@@ -111,6 +117,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object log10 extends Op1(MathNamespace, "log10") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
@@ -133,6 +140,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object cos extends Op1(MathNamespace, "cos") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.cos(c(row))
@@ -151,6 +159,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object exp extends Op1(MathNamespace, "exp") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.exp(c(row))
@@ -169,6 +178,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object cbrt extends Op1(MathNamespace, "cbrt") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.cbrt(c(row))
@@ -187,6 +197,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object atan extends Op1(MathNamespace, "atan") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.atan(c(row))
@@ -205,6 +216,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object ceil extends Op1(MathNamespace, "ceil") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.ceil(c(row))
@@ -223,6 +235,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object rint extends Op1(MathNamespace, "rint") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.rint(c(row))
@@ -241,6 +254,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object log1p extends Op1(MathNamespace, "log1p") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
@@ -263,6 +277,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object sqrt extends Op1(MathNamespace, "sqrt") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
@@ -285,6 +300,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object floor extends Op1(MathNamespace, "floor") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.floor(c(row))
@@ -303,6 +319,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object toRadians extends Op1(MathNamespace, "toRadians") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.toRadians(c(row))
@@ -321,6 +338,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object tanh extends Op1(MathNamespace, "tanh") {val operandType = Some(SDecimal)
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.tanh(c(row))
@@ -339,6 +357,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object round extends Op1(MathNamespace, "round") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.round(c(row))
@@ -357,6 +376,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object cosh extends Op1(MathNamespace, "cosh") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.cosh(c(row))
@@ -375,6 +395,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object tan extends Op1(MathNamespace, "tan") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (math.Pi / 2) == 0) || (c(row) % (math.Pi) == 0))
@@ -397,6 +418,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object abs extends Op1(MathNamespace, "abs") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.abs(c(row))
@@ -415,6 +437,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object sin extends Op1(MathNamespace, "sin") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.sin(c(row))
@@ -433,6 +456,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object log extends Op1(MathNamespace, "log") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
@@ -455,6 +479,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object signum extends Op1(MathNamespace, "signum") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.signum(c(row))
@@ -473,6 +498,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object acos extends Op1(MathNamespace, "acos") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
@@ -495,6 +521,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object ulp extends Op1(MathNamespace, "ulp") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     def f1: F1 = new CF1P({
       case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
         def apply(row: Int) = math.ulp(c(row))
@@ -513,6 +540,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object min extends Op2(MathNamespace, "min") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.min(c1(row), c2(row))
@@ -549,6 +577,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object hypot extends Op2(MathNamespace, "hypot") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.hypot(c1(row), c2(row))
@@ -585,6 +614,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object pow extends Op2(MathNamespace, "pow") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.pow(c1(row), c2(row))
@@ -621,6 +651,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object max extends Op2(MathNamespace, "max") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.max(c1(row), c2(row))
@@ -657,6 +688,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object atan2 extends Op2(MathNamespace, "atan2") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.atan2(c1(row), c2(row))
@@ -693,6 +725,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object copySign extends Op2(MathNamespace, "copySign") {  //TODO deal with 2's complement; ensure proper column return types for each case
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = {
@@ -756,6 +789,7 @@ trait MathLib extends GenOpcode with ImplLibrary {
     } */
   }
   object IEEEremainder extends Op2(MathNamespace, "IEEEremainder") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
         def apply(row: Int) = math.IEEEremainder(c1(row), c2(row))

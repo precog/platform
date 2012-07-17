@@ -25,3 +25,6 @@ object JType {
   val JPrimitiveUnfixedT = JNumberT | JTextT | JBooleanT | JNullT
   val JUnfixedT = JPrimitiveUnfixedT | JObjectUnfixedT | JArrayUnfixedT
 }
+
+case class UnaryOperationType(arg: JType, result: JType)
+case class BinaryOperationType(arg0: JType, arg1: JType, result: JType)

@@ -1,6 +1,7 @@
 package com.precog
 package daze
 
+import bytecode.{ BinaryOperationType, UnaryOperationType, JTextT, JNumberT, JBooleanT }
 import bytecode.Library
 
 import java.lang.String
@@ -22,6 +23,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   }
 
   object length extends Op1(StringNamespace, "length") {
+    val tpe = UnaryOperationType(JTextT, JNumberT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with LongColumn {
         def apply(row: Int) = c(row).length
@@ -34,6 +36,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object trim extends Op1(StringNamespace, "trim") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
         def apply(row: Int) = c(row).trim
@@ -46,6 +49,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object toUpperCase extends Op1(StringNamespace, "toUpperCase") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
         def apply(row: Int) = c(row).toUpperCase
@@ -58,6 +62,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }  
   object toLowerCase extends Op1(StringNamespace, "toLowerCase") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
         def apply(row: Int) = c(row).toLowerCase
@@ -70,6 +75,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object isEmpty extends Op1(StringNamespace, "isEmpty") {
+    val tpe = UnaryOperationType(JTextT, JBooleanT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with BoolColumn {
         def apply(row: Int) = c(row).isEmpty
@@ -82,6 +88,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object intern extends Op1(StringNamespace, "intern") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
     def f1: F1 = new CF1P({
       case c: StrColumn => new Map1Column(c) with StrColumn {
         def apply(row: Int) = c(row).intern
@@ -100,6 +107,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
   //  }
   //}
   object equalsIgnoreCase extends Op2(StringNamespace, "equalsIgnoreCase") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
         def apply(row: Int) = c1(row).equalsIgnoreCase(c2(row))
@@ -112,6 +120,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object codePointAt extends Op2(StringNamespace, "codePointAt") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn)  => new Map2Column(c1, c2) with LongColumn {  //todo do we need other cases for other numeric input types?
         def apply(row: Int) = {
@@ -133,6 +142,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object startsWith extends Op2(StringNamespace, "startsWith") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
         def apply(row: Int) = c1(row).startsWith(c2(row))
@@ -145,6 +155,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object lastIndexOf extends Op2(StringNamespace, "lastIndexOf") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
         def apply(row: Int) = c1(row).lastIndexOf(c2(row))
@@ -157,6 +168,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object concat extends Op2(StringNamespace, "concat") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
         def apply(row: Int) = c1(row).concat(c2(row))
@@ -169,6 +181,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object endsWith extends Op2(StringNamespace, "endsWith") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
         def apply(row: Int) = c1(row).endsWith(c2(row))
@@ -181,6 +194,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object codePointBefore extends Op2(StringNamespace, "codePointBefore") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
         def apply(row: Int) = {
@@ -202,6 +216,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object substring extends Op2(StringNamespace, "substring") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
         def apply(row: Int) = {
@@ -223,6 +238,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object matches extends Op2(StringNamespace, "matches") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
         def apply(row: Int) = c1(row).matches(c2(row))
@@ -235,6 +251,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object compareTo extends Op2(StringNamespace, "compareTo") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
         def apply(row: Int) = c1(row).compareTo(c2(row))
@@ -247,6 +264,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object compareToIgnoreCase extends Op2(StringNamespace, "compareToIgnoreCase") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
         def apply(row: Int) = c1(row).compareToIgnoreCase(c2(row))
@@ -259,6 +277,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object equals extends Op2(StringNamespace, "equals") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
         def apply(row: Int) = c1(row).equals(c2(row))
@@ -271,6 +290,7 @@ trait StringLib extends GenOpcode with ImplLibrary {
     } */
   }
   object indexOf extends Op2(StringNamespace, "indexOf") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
         def apply(row: Int) = c1(row).indexOf(c2(row))
