@@ -2,7 +2,8 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.Path
-import com.precog.yggdrasil.JType._
+import com.precog.bytecode._
+import Schema._
 
 import akka.dispatch.{ExecutionContext,Future}
 
@@ -40,7 +41,7 @@ trait LevelDBColumnarTableModule extends ColumnarTableModule with YggShardCompon
 
       def loadable(path: Path, prefix: JPath, jtpe: JType): Future[Set[ProjectionDescriptor]] = {
         tpe match {
-          case p: JPrimitiveType => Future.sequence(p.ctypes.map(metadataView.findProjections(path, prefix, _))) map {
+          case p: JPrimitiveType => Future.sequence(ctypes(p).map(metadataView.findProjections(path, prefix, _))) map {
             sources => sources flatMap { source => source.keySet }
           }
 

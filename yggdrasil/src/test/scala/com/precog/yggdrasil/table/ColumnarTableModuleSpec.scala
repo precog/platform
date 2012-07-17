@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package table
 
+import com.precog.bytecode.JType
 import com.precog.common.Path
 import com.precog.common.VectorCase
 

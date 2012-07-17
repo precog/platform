@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 
 import com.precog.common.Path
+import com.precog.bytecode.JType
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 import akka.dispatch.Future
 import scalaz.Monoid

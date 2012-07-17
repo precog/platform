@@ -2,6 +2,7 @@ package com.precog.yggdrasil
 package table
 
 import com.precog.common.{Path, VectorCase}
+import com.precog.bytecode.JType
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
