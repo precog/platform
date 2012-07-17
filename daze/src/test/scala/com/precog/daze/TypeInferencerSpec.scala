@@ -99,19 +99,20 @@ class TypeInferencerSpec extends Specification
     "rewrite loads such that they will restrict the columns loaded" in {
       val line = Line(0, "")
 
-      val input = Join(line, Map2Match(Add),
-        Join(line, Map2Cross(DerefObject), 
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Root(line, PushString("time"))),
-        Join(line, Map2Cross(DerefObject),
-          dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
-          Root(line, PushString("height"))))
+      val input =
+        Join(line, Map2Match(Add),
+          Join(line, Map2Cross(DerefObject), 
+            dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+            Root(line, PushString("time"))),
+          Join(line, Map2Cross(DerefObject),
+            dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
+            Root(line, PushString("height"))))
 
       val result = extractLoads(inferTypes(JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/clicks" -> Map(JPath("time") -> Set(CBoolean, CStringArbitrary, CLong, CDouble, CDecimalArbitrary, CNull)),
-        "/hom/heightWeight" -> Map(JPath("height") -> Set(CBoolean, CStringArbitrary, CLong, CDouble, CDecimalArbitrary, CNull))
+        "/clicks" -> Map(JPath("time") -> Set(CLong, CDouble, CDecimalArbitrary)),
+        "/hom/heightWeight" -> Map(JPath("height") -> Set(CLong, CDouble, CDecimalArbitrary))
       )
 
       result must_== expected

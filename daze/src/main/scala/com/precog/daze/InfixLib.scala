@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import bytecode.Library
+import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, Library }
 
 import yggdrasil._
 import yggdrasil.table._
@@ -33,6 +33,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     val InfixNamespace = Vector("std", "infix")
 
     object Add extends Op2(InfixNamespace, "add") {  //TODO do we need cases for NullColumn?
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) + c2(row)
@@ -65,6 +66,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Sub extends Op2(InfixNamespace, "subtract") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) - c2(row)
@@ -97,6 +99,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Mul extends Op2(InfixNamespace, "multiply") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
           def apply(row: Int) = c1(row) * c2(row)
@@ -129,6 +132,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Div extends Op2(InfixNamespace, "divide") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
           def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
@@ -161,6 +165,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Lt extends Op2(InfixNamespace, "lt") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) < c2(row)
@@ -193,6 +198,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object LtEq extends Op2(InfixNamespace, "lte") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) <= c2(row)
@@ -225,6 +231,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Gt extends Op2(InfixNamespace, "gt") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) > c2(row)
@@ -257,6 +264,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object GtEq extends Op2(InfixNamespace, "gte") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) >= c2(row)
@@ -289,6 +297,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object And extends Op2(InfixNamespace, "and") {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) && c2(row)
@@ -297,6 +306,7 @@ trait InfixLib extends ImplLibrary with GenOpcode {
     }
 
     object Or extends Op2(InfixNamespace, "or") {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
           def apply(row: Int) = c1(row) || c2(row)

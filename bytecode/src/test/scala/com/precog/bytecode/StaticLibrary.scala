@@ -60,14 +60,16 @@ trait StaticLibrary extends Library {
   case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
   
   case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
-    lazy val arity = Arity.One
+    lazy val arity = Arity.One // MS: Why lazy?
+    val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
   
   case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
-    lazy val arity = Arity.Two
+    lazy val arity = Arity.Two // MS: Why lazy?
+    val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
   }
   
   case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
-    lazy val arity = Arity.One
+    lazy val arity = Arity.One // MS: Why lazy?
   }
 }

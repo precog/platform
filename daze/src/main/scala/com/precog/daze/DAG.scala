@@ -361,6 +361,20 @@ trait DAG extends Instructions {
   }
   
   object dag {
+    object ConstString {
+      def unapply(graph : DepGraph) : Option[String] = graph.value match {
+        case Some(SString(str)) => Some(str)
+        case _ => None
+      }
+    }
+
+    object ConstDecimal {
+      def unapply(graph : DepGraph) : Option[BigDecimal] = graph.value match {
+        case Some(SDecimal(d)) => Some(d)
+        case _ => None
+      }
+    }
+    
     //tic variable node
     case class SplitParam(loc: Line, id: Int)(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
