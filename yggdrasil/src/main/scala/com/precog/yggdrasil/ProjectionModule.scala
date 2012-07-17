@@ -17,41 +17,32 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil 
-
-import metadata.StorageMetadata
-import com.precog.common._
-
-import akka.dispatch.Future 
-import akka.util.Timeout
+package com.precog.yggdrasil
 
 import scalaz.effect._
-import scalaz.syntax.bind._
 
-trait YggShardComponent {
+trait ProjectionModule {
   type Projection <: ProjectionLike
-  type Storage <: YggShard[Projection]
-  def storage: Storage
-}
 
-trait YggShardMetadata {
-  def userMetadataView(uid: String): StorageMetadata
-}
+  val Projection: ProjectionCompanion
 
-trait YggShard[+P <: ProjectionLike] extends YggShardMetadata { self =>
-  def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(P, Release)]
-  def store(msg: EventMessage, timeout: Timeout): Future[Unit] = storeBatch(Vector(msg), timeout) 
-  def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit]
-}
+  trait ProjectionCompanion {
+    def open(descriptor: ProjectionDescriptor): IO[Projection]
 
-class Release(private var _release: IO[Unit]) { self => 
-  def release: IO[Unit] = _release
-
-  def += (action: IO[Unit]): self.type = {
-    synchronized {
-      _release = self.release >> action
-    }
-    self
+    def close(p: Projection): IO[Unit]
   }
 }
 
+trait ProjectionLike {
+  def descriptor: ProjectionDescriptor
+
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
+}
+
+trait BlockProjectionLike[+Block] extends ProjectionLike {
+  def getBlockAfter(id: Option[Identities]): Option[Block]
+}
+
+trait FullProjectionLike[+Dataset] extends ProjectionLike {
+  def allRecords(expiresAt: Long): Dataset
+}

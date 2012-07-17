@@ -21,7 +21,8 @@ package com.precog.yggdrasil
 
 import com.precog.common.Path
 import com.precog.bytecode.JType
-import blueeyes.json.{JPath,JPathField,JPathIndex}
+import blueeyes.json.{JPath, JPathField, JPathIndex}
+import blueeyes.json.JsonAST._
 import akka.dispatch.Future
 import scalaz.Monoid
 
@@ -247,5 +248,7 @@ trait TableModule extends FNModule {
     def take(n: Long): Table
     
     def takeRight(n: Long): Table
+
+    def toJson: Iterable[JValue]
   }
 }

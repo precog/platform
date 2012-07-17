@@ -40,7 +40,7 @@ trait LevelDBQueryConfig {
   def projectionRetrievalTimeout: akka.util.Timeout
 }
 
-trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsComponent with YggConfigComponent with YggShardComponent {
+trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsComponent with YggConfigComponent with StorageModule {
   type Projection <: FullProjectionLike[Dataset[Seq[CValue]]]
   type YggConfig <: LevelDBQueryConfig
 

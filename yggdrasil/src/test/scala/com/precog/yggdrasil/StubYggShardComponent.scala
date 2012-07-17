@@ -43,7 +43,7 @@ import scalaz.effect._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-trait StubYggShardComponent extends YggShardComponent {
+trait StubStorageModule extends StorageModule {
   type TestDataset
 
   def actorSystem: ActorSystem 
@@ -63,7 +63,7 @@ trait StubYggShardComponent extends YggShardComponent {
     def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
   }
 
-  trait Storage extends YggShard[Projection] {
+  class Storage extends StorageLike[Projection] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
     

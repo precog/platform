@@ -43,7 +43,7 @@ trait DatasetConsumersConfig extends EvaluatorConfig {
 }
 
 // TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer extends Evaluator with ColumnarTableModule with YggConfigComponent {
+trait MemoryDatasetConsumer extends Evaluator with TableModule with YggConfigComponent {
   import JsonAST._
   
   type X = Throwable

@@ -36,10 +36,11 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait ActorYggShardComponent extends YggShardComponent {
-  trait ActorYggShard extends YggShard[Projection] with Logging {
+trait ActorStorageModule extends StorageModule {
+  protected implicit def actorSystem: ActorSystem
+
+  trait ActorStorageLike extends StorageLike[Projection] with Logging {
     def accessControl: AccessControl
-    protected implicit def actorSystem: ActorSystem
     def shardSystemActor: ActorRef
 
     def start(): Future[Boolean]
