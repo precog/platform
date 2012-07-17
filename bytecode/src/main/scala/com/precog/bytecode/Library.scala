@@ -44,6 +44,10 @@ trait MorphismLike {
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
+object MorphismLike {
+  def unapply(m : MorphismLike) : Option[(Vector[String], String, Int, Arity)] = Some(m.namespace, m.name, m.opcode, m.arity)
+}
+
 trait Op1Like {
   val namespace: Vector[String]
   val name: String
@@ -51,6 +55,10 @@ trait Op1Like {
 
   def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
+}
+
+object Op1Like {
+  def unapply(op1 : Op1Like) : Option[(Vector[String], String, Int)] = Some(op1.namespace, op1.name, op1.opcode)
 }
 
 trait Op2Like {
@@ -62,6 +70,10 @@ trait Op2Like {
   override def toString = "[0x%06x]".format(opcode) + fqn
 }
 
+object Op2Like {
+  def unapply(op2 : Op2Like) : Option[(Vector[String], String, Int)] = Some(op2.namespace, op2.name, op2.opcode)
+}
+
 trait ReductionLike {
   val namespace: Vector[String]
   val name: String
@@ -69,6 +81,10 @@ trait ReductionLike {
 
   def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
+}
+
+object ReductionLike {
+  def unapply(red : ReductionLike) : Option[(Vector[String], String, Int)] = Some(red.namespace, red.name, red.opcode)
 }
 
 trait Library {
