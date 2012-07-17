@@ -44,6 +44,7 @@ import blueeyes.json.{JPathField, JPathIndex}
 import scalaz.{NonEmptyList => NEL, _}
 import scalaz.effect._
 import scalaz.syntax.traverse._
+import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.std.partialFunction._
 
@@ -94,15 +95,95 @@ trait Evaluator extends DAG
   
   def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): Future[Table] = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
+  
+    def resolveTopLevelGroup(spec: BucketSpec, assume: Map[DepGraph, Table], splits: Map[dag.Split, (Table, Int => Table)]): Future[GroupingSpec[Int]] = spec match {
+      case UnionBucketSpec(left, right) => {
+        for {
+          leftRes <- resolveTopLevelGroup(left, assume, splits)
+          rightRes <- resolveTopLevelGroup(right, assume, splits)
+          
+          val commonIds = findCommonIds(left, right)
+          val keySpec = buildKeySpec(commonIds)
+        } yield GroupingUnion(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+      }
+      
+      case IntersectBucketSpec(left, right) => {
+        for {
+          leftRes <- resolveTopLevelGroup(left, assume, splits)
+          rightRes <- resolveTopLevelGroup(right, assume, splits)
+          
+          val commonIds = findCommonIds(left, right)
+          val keySpec = buildKeySpec(commonIds)
+        } yield GroupingIntersect(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+      }
+      
+      case dag.Group(id, target, forest) => {
+        val common = findCommonality(enumerateGraphs(forest) + target)
+        
+        common match {
+          case Some(reducedTarget) => {
+            val PendingTable(reducedTargetTableF, _, reducedTargetTrans) = loop(reducedTarget, assume, splits)
+            
+            for {
+              reducedTargetTable <- reducedTargetTableF
+              val resultTargetTable = reducedTargetTable transform liftToValues(reducedTargetTrans)
+              
+              // FIXME if the target has forcing points, targetTrans is insufficient
+              val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
+              
+              val subSpec = resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, assume, splits)
+            } yield resultTargetTable.group(targetTrans, id, subSpec)
+          }
+          
+          case None => sys.error("O NOES!!!")
+        }
+      }
+      
+      case UnfixedSolution(_, _) | dag.Extra(_) => sys.error("assertion error")
+    }
+    
+    def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, assume: Map[DepGraph, Table], splits: Map[dag.Split, (Table, Int => Table)]): GroupKeySpec = forest match {
+      case UnionBucketSpec(left, right) => {
+        val leftRes = resolveLowLevelGroup(commonTable, commonGraph, left, assume, splits)
+        val rightRes = resolveLowLevelGroup(commonTable, commonGraph, right, assume, splits)
+        GroupKeySpecOr(leftRes, rightRes)
+      }
+      
+      case IntersectBucketSpec(left, right) => {
+        val leftRes = resolveLowLevelGroup(commonTable, commonGraph, left, assume, splits)
+        val rightRes = resolveLowLevelGroup(commonTable, commonGraph, right, assume, splits)
+        GroupKeySpecAnd(leftRes, rightRes)
+      }
+      
+      case UnfixedSolution(id, solution) => {
+        val PendingTable(_, _, solutionTrans) = loop(solution, assume + (commonGraph -> commonTable), splits)
+        GroupKeySpecSource(JPathField(id.toString), solutionTrans)
+      }
+      
+      case dag.Extra(graph) => {
+        val PendingTable(_, _, solutionTrans) = loop(graph, assume + (commonGraph -> commonTable), splits)
+        GroupKeySpecSource(JPathField("extra"), trans.Filter(solutionTrans, solutionTrans))     // TODO constantify -1
+      }
+      
+      case dag.Group(_, _, _) => sys.error("assertion error")
+    }
 
-    def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Unit): PendingTable = graph match {
+    def loop(graph: DepGraph, assume: Map[DepGraph, Table], splits: Map[dag.Split, (Table, Int => Table)]): PendingTable = graph match {
       case g if assume contains g => PendingTable(Future(assume(g)), graph, TransSpec1.Id)
       
-      case s @ SplitParam(_, index) =>
-        PendingTable(Future(ops.empty), graph, TransSpec1.Id)     // TODO
+      case s @ SplitParam(_, index) => {
+        val (key, _) = splits(s.parent)
+        
+        val source = trans.DerefObjectStatic(Leaf(Source), JPathField(index.toString))
+        val spec = buildConstantWrapSpec(source)
+        
+        PendingTable(Future(key transform spec), graph, TransSpec1.Id)
+      }
       
-      case s @ SplitGroup(_, index, _) =>
-        PendingTable(Future(ops.empty), graph, TransSpec1.Id)     // TODO
+      case s @ SplitGroup(_, index, _) => {
+        val (_, map) = splits(s.parent)
+        PendingTable(Future(map(index)), graph, TransSpec1.Id)
+      }
       
       case Root(_, instr) => {
         val table = graph.value collect {
@@ -114,8 +195,7 @@ trait Evaluator extends DAG
           case SArray(Vector()) => ops.constEmptyArray
         }
         
-        val bottomWrapped = trans.WrapObject(trans.Map1(Leaf(Source), ConstantEmptyArray), constants.Key.name)
-        val spec = trans.ObjectConcat(bottomWrapped, trans.WrapObject(Leaf(Source), constants.Value.name))
+        val spec = buildConstantWrapSpec(Leaf(Source))
         
         PendingTable(Future(table.get.transform(spec)), graph, TransSpec1.Id)
       }
@@ -181,8 +261,18 @@ trait Evaluator extends DAG
         PendingTable(result, graph, TransSpec1.Id)
       }
       
-      case s @ dag.Split(line, specs, child) =>
-        PendingTable(Future(ops.empty), graph, TransSpec1.Id)     // TODO
+      case s @ dag.Split(line, spec, child) => {
+        val back = for {
+          grouping <- resolveTopLevelGroup(spec, assume, splits)
+          
+          result <- grouper.merge(grouping) { (key: Table, map: Int => Table) =>
+            val PendingTable(tableF, _, trans) = loop(child, assume, splits + (s -> (key, map)))
+            tableF map { _ transform liftToValues(trans) }
+          }
+        } yield result
+        
+        PendingTable(back, graph, TransSpec1.Id)
+      }
       
       // VUnion and VIntersect removed, TODO: remove from bytecode
       
@@ -425,8 +515,72 @@ trait Evaluator extends DAG
       (memoize _) andThen
       (if (optimize) inferTypes(JType.JUnfixedT) else identity)
     
-    val PendingTable(table, _, spec) = loop(rewrite(graph), Map(), ())
+    val PendingTable(table, _, spec) = loop(rewrite(graph), Map(), Map())
     table map { _ transform liftToValues(spec) }
+  }
+  
+  private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
+    val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
+      left zip right takeWhile { case (a, b) => a == b } map { _._1 }
+    }
+    
+    sharedPrefixReversed flatMap { _.lastOption }
+  }
+  
+  private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =
+    enumerateSolutionIds(left) & enumerateSolutionIds(right)
+  
+  private def enumerateSolutionIds(spec: BucketSpec): Set[Int] = spec match {
+    case UnionBucketSpec(left, right) =>
+      enumerateSolutionIds(left) ++ enumerateSolutionIds(right)
+    
+    case IntersectBucketSpec(left, right) =>
+      enumerateSolutionIds(left) ++ enumerateSolutionIds(right)
+    
+    case dag.Group(_, _, forest) => enumerateSolutionIds(forest)
+    
+    case UnfixedSolution(id, _) => Set(id)
+    case dag.Extra(_) => Set()
+  }
+  
+  private def buildKeySpec(commonIds: Set[Int]): TransSpec1 = {
+    val parts: Set[TransSpec1] = commonIds map { id =>
+      trans.WrapObject(DerefObjectStatic(Leaf(Source), JPathField(id.toString)), id.toString)
+    }
+    
+    parts reduce { (left, right) => trans.ObjectConcat(left, right) }
+  }
+  
+  private def buildChains(graph: DepGraph): Set[List[DepGraph]] =
+    enumerateParents(graph) flatMap buildChains map { graph :: _ }
+  
+  private def enumerateParents(graph: DepGraph): Set[DepGraph] = graph match {
+    case SplitParam(_, _) => Set()
+    case SplitGroup(_, _, _) => Set()
+    case Root(_, _) => Set()
+    case dag.New(_, parent) => Set(parent)
+    case dag.Morph1(_, _, parent) => Set(parent)
+    case dag.Morph2(_, _, left, right) => Set(left, right)
+    case dag.Distinct(_, parent) => Set(parent)
+    case dag.LoadLocal(_, parent, _) => Set(parent)
+    case Operate(_, _, parent) => Set(parent)
+    case dag.Reduce(_, _, parent) => Set(parent)
+    case dag.Split(_, spec, _) => enumerateGraphs(spec)
+    case Join(_, _, left, right) => Set(left, right)
+    case dag.Filter(_, _, target, boolean) => Set(target, boolean)
+    case dag.Sort(parent, _) => Set(parent)
+    case Memoize(parent, _) => Set(parent)
+  }
+  
+  private def enumerateGraphs(forest: BucketSpec): Set[DepGraph] = forest match {
+    case UnionBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
+    case IntersectBucketSpec(left, right) => enumerateGraphs(left) ++ enumerateGraphs(right)
+    
+    case dag.Group(_, target, subForest) =>
+      enumerateGraphs(subForest) + target
+    
+    case UnfixedSolution(_, graph) => Set(graph)
+    case dag.Extra(graph) => Set(graph)
   }
   
   private def op1(op: UnaryOperation): Op1 = op match {
@@ -491,6 +645,11 @@ trait Evaluator extends DAG
     val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
     val result = left.cogroup(key, key, right)(emptySpec, emptySpec, trans.WrapArray(spec))
     result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+  }
+  
+  private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+    val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), constants.Key.name)
+    trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, constants.Value.name))
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {

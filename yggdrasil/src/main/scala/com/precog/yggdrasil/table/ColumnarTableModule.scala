@@ -23,6 +23,8 @@ package table
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
 
+import akka.dispatch.Future
+
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
@@ -93,6 +95,13 @@ trait ColumnarTableModule extends TableModule {
 
     def constEmptyArray: Table = 
       table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1)))
+  }
+  
+  object grouper extends trans.Grouper {
+    import trans._
+    
+    def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => Future[Table]): Future[Table] =
+      sys.error("todo")
   }
 
   implicit def liftF1(f: F1) = new F1Like {
