@@ -18,15 +18,13 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait LevelDBActorYggShardModule extends ActorYggShardComponent with ShardSystemActorModule {
-  abstract class LevelDBActorYggShard(storage: MetadataStorage)(implicit val actorSystem: ActorSystem) extends ActorYggShard {
-    def this(storage: MetadataStorage, systemName: String) = this(storage)(ActorSystem(systemName))
-
+trait SystemActorStorageModule extends ShardSystemActorModule with ActorStorageModule {
+  abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
     private var shardSystemActor0: ActorRef = _
     def shardSystemActor = shardSystemActor0
     
     def start() = Future {
-      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(storage)), "shardSystem")
+      shardSystemActor0 = actorSystem.actorOf(Props(new ShardSystemActor(metadataStorage)), "shardSystem")
       true
     }
 

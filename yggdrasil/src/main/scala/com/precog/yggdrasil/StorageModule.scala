@@ -9,17 +9,17 @@ import akka.util.Timeout
 import scalaz.effect._
 import scalaz.syntax.bind._
 
-trait YggShardComponent {
+trait StorageModule {
   type Projection <: ProjectionLike
-  type Storage <: YggShard[Projection]
+  type Storage <: StorageLike[Projection]
   def storage: Storage
 }
 
-trait YggShardMetadata {
+trait StorageMetadataSource {
   def userMetadataView(uid: String): StorageMetadata
 }
 
-trait YggShard[+P <: ProjectionLike] extends YggShardMetadata { self =>
+trait StorageLike[+P <: ProjectionLike] extends StorageMetadataSource { self =>
   def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(P, Release)]
   def store(msg: EventMessage, timeout: Timeout): Future[Unit] = storeBatch(Vector(msg), timeout) 
   def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit]

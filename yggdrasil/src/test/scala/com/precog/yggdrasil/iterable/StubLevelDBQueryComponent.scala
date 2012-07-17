@@ -18,7 +18,7 @@ import SValue._
 
 import java.io.File
 
-trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubYggShardComponent with IterableDatasetOpsComponent {
+trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubStorageModule with IterableDatasetOpsComponent {
   type TestDataset = Dataset[Seq[CValue]]
 
   trait YggConfig extends LevelDBQueryConfig with IterableDatasetOpsConfig {

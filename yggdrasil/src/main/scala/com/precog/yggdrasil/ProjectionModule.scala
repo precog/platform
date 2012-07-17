@@ -2,12 +2,6 @@ package com.precog.yggdrasil
 
 import scalaz.effect._
 
-trait ProjectionLike {
-  def descriptor: ProjectionDescriptor
-
-  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
-}
-
 trait ProjectionModule {
   type Projection <: ProjectionLike
 
@@ -18,6 +12,12 @@ trait ProjectionModule {
 
     def close(p: Projection): IO[Unit]
   }
+}
+
+trait ProjectionLike {
+  def descriptor: ProjectionDescriptor
+
+  def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
 }
 
 trait BlockProjectionLike[+Block] extends ProjectionLike {

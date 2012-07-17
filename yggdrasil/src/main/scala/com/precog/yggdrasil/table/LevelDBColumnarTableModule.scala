@@ -16,15 +16,13 @@ import scalaz.syntax.monoid._
 trait LevelDBTableConfig {
 }
 
-trait LevelDBColumnarTableModule extends ColumnarTableModule with YggShardComponent {
+trait LevelDBColumnarTableModule extends ColumnarTableModule with StorageModule {
   type Projection <: BlockProjectionLike[Slice]
   type YggConfig <: LevelDBTableConfig
 
   protected implicit def executionContext: ExecutionContext
 
-  type Table = ColumnarTable
-
-  def table(slices: Iterable[Slice]) = new ColumnarTable(slices) {
+  class Table(slices: Iterable[Slice]) extends ColumnarTable(slices) {
     def load(tpe: JType): Future[Table] = {
       val paths: Set[String] = reduce {
         new CReducer[Set[String]] {
@@ -85,7 +83,7 @@ trait LevelDBColumnarTableModule extends ColumnarTableModule with YggShardCompon
                                if (subsumes(coveringSchema(coveringProjections), tpe))
       } yield {
         val loadableProjections = minimalCover(coveringProjections)
-        table(
+        new Table(
           new Iterable[Slice] {
             def iterator = new Iterator[Slice] {
               def hasNext: Boolean = sys.error("todo")
@@ -96,6 +94,8 @@ trait LevelDBColumnarTableModule extends ColumnarTableModule with YggShardCompon
       }
     }
   }
+
+  def table(slices: Iterable[Slice]) = new Table(slices)
 }
 
 // vim: set ts=4 sw=4 et:

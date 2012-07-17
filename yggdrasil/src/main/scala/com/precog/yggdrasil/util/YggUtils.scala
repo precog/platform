@@ -4,6 +4,7 @@ package util
 import actor._
 import iterable._
 import leveldb._
+import metadata.MetadataStorage
 import metadata.FileMetadataStorage
 import com.precog.common._
 import com.precog.util._
@@ -690,21 +691,25 @@ object ImportTools extends Command with Logging {
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
-      object shardModule extends LevelDBActorYggShardModule 
-      with LevelDBProjectionModule
-      with ProductionShardSystemActorModule {
-        type Storage = LevelDBActorYggShard
+      object shardModule extends SystemActorStorageModule
+                            with LevelDBProjectionModule
+                            with ProductionShardSystemActorModule {
+
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
+
+        val actorSystem = ActorSystem("yggutilImport")
 
         object Projection extends LevelDBProjectionCompanion {
           def fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
         }
 
-        object storage extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
+        class Storage extends SystemActorStorageLike(ms) {
           val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
         }
+
+        val storage = new Storage
       }
 
       import shardModule._
