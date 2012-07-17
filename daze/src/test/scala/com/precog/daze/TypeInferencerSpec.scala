@@ -41,11 +41,11 @@ class TypeInferencerSpec extends Specification
     Add, DerefArray, DerefObject, Line, Map2Cross,
     Map2CrossLeft, Map2CrossRight, Map2Match, PushString
   }
-  import JType._
+  import bytecode._
 
   def flattenType(jtpe : JType) : Map[JPath, Set[CType]] = {
     def flattenAux(jtpe : JType) : Set[(JPath, CType)] = jtpe match {
-      case p : JPrimitiveType => p.ctypes.map((JPath.Identity, _))
+      case p : JPrimitiveType => Schema.ctypes(p).map((JPath.Identity, _))
 
       case JArrayFixedT(elems) =>
         for((i, jtpe) <- elems.toSet; (path, ctpes) <- flattenAux(jtpe)) yield (JPathIndex(i) \ path, ctpes)
@@ -108,7 +108,7 @@ class TypeInferencerSpec extends Specification
             dag.LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 
-      val result = extractLoads(inferTypes(JPrimitiveUnfixedT)(input))
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
         "/clicks" -> Map(JPath("time") -> Set(CLong, CDouble, CDecimalArbitrary)),
