@@ -29,7 +29,9 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
-case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) {
+  def toJValue: JValue = sys.error("todo")
+}
 
 trait RoutingTable {
   def route(msg: EventMessage): Seq[ProjectionData]
