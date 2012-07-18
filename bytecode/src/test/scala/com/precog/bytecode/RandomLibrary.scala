@@ -84,5 +84,6 @@ trait RandomLibrary extends Library {
 
   case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
     lazy val arity = Arity.One // MS: Why lazy?
+    val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
 }
