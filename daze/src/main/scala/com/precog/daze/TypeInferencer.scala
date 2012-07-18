@@ -20,9 +20,9 @@ trait TypeInferencer extends DAG {
 
       case LoadLocal(loc, parent, _) => LoadLocal(loc, parent, jtpe)
 
-      case Operate(loc, op, parent) => Operate(loc, op, inferTypes(jtpe)(parent))
+      case Operate(loc, op, parent) => Operate(loc, op, inferTypes(op.tpe.arg)(parent))
 
-      case Reduce(loc, red, parent) => Reduce(loc, red, inferTypes(jtpe)(parent))
+      case Reduce(loc, red, parent) => Reduce(loc, red, inferTypes(red.tpe.arg)(parent))
 
       case Morph1(loc, m, parent) => Morph1(loc, m, inferTypes(jtpe)(parent))
 

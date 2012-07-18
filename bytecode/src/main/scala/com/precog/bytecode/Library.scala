@@ -61,6 +61,7 @@ trait ReductionLike {
   val namespace: Vector[String]
   val name: String
   val opcode: Int
+  val tpe: UnaryOperationType
 
   def fqn: String
   override def toString = "[0x%06x]".format(opcode) + fqn
