@@ -184,11 +184,11 @@ trait Instructions extends Library {
     }
 
     trait EqualityOperation extends BinaryOperation {
-      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JBooleanT)
     }
     
     trait UnfixedBinaryOperation extends BinaryOperation {
-      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JBooleanT)
+      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
     }
     
     case class BuiltInFunction1Op(op: Op1) extends UnaryOperation {
