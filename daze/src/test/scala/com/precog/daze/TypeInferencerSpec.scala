@@ -52,8 +52,8 @@ class TypeInferencerSpec extends Specification
   import bytecode._
 
   def flattenType(jtpe : JType) : Map[JPath, Set[CType]] = {
-    def flattenAux(jtpe : JType) : Set[(JPath, CType)] = jtpe match {
-      case p : JPrimitiveType => Schema.ctypes(p).map((JPath.Identity, _))
+    def flattenAux(jtpe : JType) : Set[(JPath, Option[CType])] = jtpe match {
+      case p : JPrimitiveType => Schema.ctypes(p).map(tpe => (JPath.Identity, Some(tpe)))
 
       case JArrayFixedT(elems) =>
         for((i, jtpe) <- elems.toSet; (path, ctpes) <- flattenAux(jtpe)) yield (JPathIndex(i) \ path, ctpes)
@@ -63,10 +63,10 @@ class TypeInferencerSpec extends Specification
 
       case JUnionT(left, right) => flattenAux(left) ++ flattenAux(right)
 
-      case _ => sys.error("TODO") // JArrayUnfixedT & JObjectUnfixedT
+      case u @ (JArrayUnfixedT | JObjectUnfixedT) => Set((JPath.Identity, None))
     }
 
-    flattenAux(jtpe).groupBy(_._1).mapValues(_.map(_._2))
+    flattenAux(jtpe).groupBy(_._1).mapValues(_.flatMap(_._2))
   }
 
   def extractLoads(graph : DepGraph) : Map[String, Map[JPath, Set[CType]]] = {
@@ -153,7 +153,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull))
       )
 
       result must_== expected
