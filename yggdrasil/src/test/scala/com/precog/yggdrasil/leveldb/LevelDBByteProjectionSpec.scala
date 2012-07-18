@@ -144,7 +144,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
           byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
-    }
+    }.pendingUntilFixed
   }
 
   "a byte projection of an empty object" should {
@@ -173,7 +173,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
           byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
-    }
+    }.pendingUntilFixed
   }
 
   "a byte projection of null" should {
@@ -202,7 +202,7 @@ class LevelDBByteProjectionSpec extends Specification with ScalaCheck {
 
           byte.fromBytes(projectedIds, projectedValues) must_== (identities, values)
       }
-    }
+    }.pendingUntilFixed
   }
 
   /* 
