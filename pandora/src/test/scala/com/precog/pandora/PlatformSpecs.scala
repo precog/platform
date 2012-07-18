@@ -6,7 +6,6 @@ import common.kafka._
 import common.security._
 
 import daze._
-import daze.memoization._
 import daze.util._
 
 import pandora._
@@ -18,16 +17,21 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.leveldb._
 import yggdrasil.metadata._
+import yggdrasil.memoization._
 import yggdrasil.serialization._
+import yggdrasil.table._
 import muspelheim._
 
 import com.precog.util.FilesystemFileOps
 
 import org.specs2.mutable._
   
+import akka.actor.ActorSystem
 import akka.dispatch.Await
-import akka.util.Duration
+import akka.dispatch.ExecutionContext
+import akka.util.duration._
 
 import java.io.File
 
@@ -37,16 +41,25 @@ import scalaz.effect.IO
 import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
-import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
+class PlatformSpecs 
+    extends ParseEvalStackSpecs 
+    with BlockStoreColumnarTableModule 
+    with LevelDBProjectionModule 
+    with SystemActorStorageModule 
+    with StandaloneShardSystemActorModule { platformSpecs =>
 
-class PlatformSpecs extends ParseEvalStackSpecs with LevelDBActorYggShardModule with StandaloneShardSystemActorModule[IterableDataset] { platformSpecs =>
-  type Storage = LevelDBActorYggShard
-                                               
-  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
+  class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig 
+  object yggConfig  extends YggConfig
 
-  object storage extends LevelDBActorYggShard(metadataStorage) {
-    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+  class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+    val accessControl = new UnlimitedAccessControl()(asyncContext)
+  }
+
+  val storage = new Storage
+
+  object Projection extends LevelDBProjectionCompanion {
+    val fileOps = FilesystemFileOps
+    def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }
 
   override def startup() {

@@ -18,9 +18,11 @@ import com.precog.common.kafka._
 import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.leveldb._
+import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
-import yggdrasil.memoization._
+import yggdrasil.table._
 
 import daze._
 
@@ -211,11 +213,7 @@ object Console extends App {
   val controlTimeout = Duration(120, "seconds")
   class REPLConfig(dataDir: Option[String]) extends 
       BaseConfig with 
-      YggEnumOpsConfig with 
-      LevelDBQueryConfig with 
-      DiskMemoizationConfig with 
       DatasetConsumersConfig with 
-      IterableDatasetOpsConfig with 
       StandaloneShardSystemConfig {
     val defaultConfig = Configuration.loadResource("/default_ingest.conf", BlockFormat)
     val config = dataDir map { defaultConfig.set("precog.storage.root", _) } getOrElse { defaultConfig }
@@ -250,27 +248,27 @@ object Console extends App {
     fileMetadataStorage <- FileMetadataStorage.load(replConfig.dataDir, FilesystemFileOps)
   } yield {
       scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
-          with IterableDatasetOpsComponent
-          with LevelDBQueryComponent
-          with DiskIterableMemoizationComponent 
           with Lifecycle 
-          with LevelDBActorYggShardModule
+          with BlockStoreColumnarTableModule
+          with LevelDBProjectionModule
+          with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
-        override type Dataset[A] = IterableDataset[A]
-        override type Memoable[A] = Iterable[A]
 
-        implicit lazy val actorSystem = ActorSystem("replActorSystem")
-        implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+        val actorSystem = ActorSystem("replActorSystem")
+        implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
-        type Storage = LevelDBActorYggShard
-
-        object ops extends Ops 
-        object query extends QueryAPI 
-        object storage extends LevelDBActorYggShard(fileMetadataStorage) {
+        class Storage extends SystemActorStorageLike(fileMetadataStorage) {
           val accessControl = new UnlimitedAccessControl()(asyncContext)
+        }
+
+        val storage = new Storage
+
+        object Projection extends LevelDBProjectionCompanion {
+          val fileOps = FilesystemFileOps
+          def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
 
         def startup = IO { Await.result(storage.start(), controlTimeout) }

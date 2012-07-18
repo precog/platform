@@ -1,15 +1,22 @@
-package com.precog.shard.util
+package com.precog.shard
+package util
 
-import com.precog.common._
 import com.precog.util._
+import com.precog.common._
 import com.precog.common.security._
+
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.leveldb._
 import com.precog.yggdrasil.metadata._
+import com.precog.yggdrasil.memoization._
+import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.table._
 
-import com.precog.util.FilesystemFileOps
-
-import java.io.File
+import blueeyes.json.JPath
+import blueeyes.json.Printer
+import blueeyes.json.JsonParser
+import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
 import akka.dispatch.Await
@@ -17,18 +24,14 @@ import akka.dispatch.ExecutionContext
 import akka.util.Timeout
 import akka.util.Duration
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import org.streum.configrity.Configuration
 
-import blueeyes.json.JPath
-import blueeyes.json.Printer
-import blueeyes.json.JsonParser
-import blueeyes.json.JsonAST._
+import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 import scalaz.effect.IO
 
-object ShardTestInit extends App with LevelDBActorYggShardModule with StandaloneShardSystemActorModule[IterableDataset] {
+object ShardTestInit extends App with LevelDBProjectionModule with SystemActorStorageModule with StandaloneShardSystemActorModule {
 
   val dir = new File("./data") 
   dir.mkdirs
@@ -36,10 +39,21 @@ object ShardTestInit extends App with LevelDBActorYggShardModule with Standalone
   class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
 
   val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + dir.getName))
-  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO
 
-  object shard extends LevelDBActorYggShard(metadataStorage, "ShardTestInit") {
-    val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+  val metadataStorage = FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO
+
+  val actorSystem = ActorSystem("shard-test-init")
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+  class Storage extends SystemActorStorageLike(metadataStorage) {
+    val accessControl = new UnlimitedAccessControl()(asyncContext)
+  }
+
+  val storage = new Storage
+
+  object Projection extends LevelDBProjectionCompanion {
+    val fileOps = FilesystemFileOps
+    def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }
 
   def usage() {
@@ -50,10 +64,10 @@ object ShardTestInit extends App with LevelDBActorYggShardModule with Standalone
   private val seqId = new AtomicInteger(0) 
 
   def run(loads: Array[String]) {
-    Await.result(shard.start(), Duration(30, "seconds"))
+    Await.result(storage.start(), Duration(30, "seconds"))
     val timeout = Timeout(30000) 
     loads.foreach{ insert(_, timeout) }
-    Await.result(shard.stop(), Duration(30, "seconds"))
+    Await.result(storage.stop(), Duration(30, "seconds"))
   }
 
   def insert(load: String, timeout: Timeout) {
@@ -69,13 +83,13 @@ object ShardTestInit extends App with LevelDBActorYggShardModule with Standalone
 
       json match {
         case JArray(elements) => 
-          val fut = shard.storeBatch(elements.map{ value =>
+          val fut = storage.storeBatch(elements.map{ value =>
             println(Printer.compact(Printer.render(value)))
             EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", value, emptyMetadata))
           }, timeout)
           Await.result(fut, Duration(30, "seconds")) 
         case single           =>
-          val fut = shard.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", single, emptyMetadata)), timeout)
+          val fut = storage.store(EventMessage(EventId(0, seqId.getAndIncrement), Event(Path(path), "root", single, emptyMetadata)), timeout)
           Await.result(fut, Duration(30, "seconds")) 
       }
     } except {

@@ -16,9 +16,11 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
+import yggdrasil.leveldb._
+import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
-import yggdrasil.memoization._
+import yggdrasil.table._
 
 import com.precog.util.FilesystemFileOps
 
@@ -30,24 +32,15 @@ import com.codecommit.gll.LineStream
 object SBTConsole {
   
   trait Platform  extends muspelheim.ParseEvalStack 
-                  with IterableDatasetOpsComponent
-                  with LevelDBQueryComponent 
-                  with DiskIterableMemoizationComponent 
                   with MemoryDatasetConsumer
-                  with DAGPrinter 
-                  with LevelDBActorYggShardModule
+                  with BlockStoreColumnarTableModule
+                  with LevelDBProjectionModule
+                  with SystemActorStorageModule
                   with StandaloneShardSystemActorModule {
 
     trait YggConfig extends BaseConfig 
-                    with YggEnumOpsConfig 
-                    with LevelDBQueryConfig 
-                    with DiskMemoizationConfig 
                     with DatasetConsumersConfig 
-                    with IterableDatasetOpsConfig 
                     with StandaloneShardSystemConfig
-
-    override type Dataset[A] = IterableDataset[A]
-    override type Memoable[A] = Iterable[A]
   }
 
   val platform = new Platform { console =>
@@ -93,12 +86,15 @@ object SBTConsole {
       }
     }
 
-    type Storage = LevelDBActorYggShard
-
-    object ops extends Ops 
-    object query extends QueryAPI 
-    object storage extends LevelDBActorYggShard(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
+    class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
       val accessControl = new UnlimitedAccessControl()(asyncContext)
+    }
+
+    val storage = new Storage
+
+    object Projection extends LevelDBProjectionCompanion {
+      val fileOps = FilesystemFileOps
+      def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
     }
 
     def eval(str: String): Set[SValue] = evalE(str)  match {
