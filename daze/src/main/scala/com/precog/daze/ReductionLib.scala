@@ -42,7 +42,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Max extends Reduction(ReductionNamespace, "max") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit def monoid = new Monoid[Result] {
+      def zero = None
+      def append(left: Result, right: => Result): Result = {
+        for (l <- left; r <- right) yield l max r
+      }
+    }
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
@@ -80,7 +85,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Min extends Reduction(ReductionNamespace, "min") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit def monoid = new Monoid[Result] {
+      def zero = None
+      def append(left: Result, right: => Result): Result = {
+        for (l <- left; r <- right) yield l min r
+      }
+    }
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
