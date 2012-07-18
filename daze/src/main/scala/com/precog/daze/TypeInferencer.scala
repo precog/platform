@@ -5,7 +5,10 @@ import bytecode._
 import yggdrasil._
 
 trait TypeInferencer extends DAG {
-  import instructions.{ BinaryOperation, DerefArray, DerefObject, JoinInstr, Map2, Map2Cross, Map2CrossLeft, Map2CrossRight }
+  import instructions.{
+    BinaryOperation, ArraySwap, WrapArray, WrapObject, DerefArray, DerefObject,
+    JoinInstr, Map2, Map2Cross, Map2CrossLeft, Map2CrossRight
+  }
   import dag._
 
   def inferTypes(jtpe: JType)(graph: DepGraph) : DepGraph = {
@@ -34,11 +37,14 @@ trait TypeInferencer extends DAG {
       case Join(loc, instr @ (Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray)), left, right @ ConstDecimal(d)) =>
         Join(loc, instr, inferTypes(JArrayFixedT(Map(d.toInt -> jtpe)))(left), right)
 
+      case Join(loc, instr @ (Map2Cross(ArraySwap | WrapObject) | Map2CrossLeft(ArraySwap | WrapObject) | Map2CrossRight(ArraySwap | WrapObject)), left, right) =>
+        Join(loc, instr, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
+
       case Join(loc, instr @ Map2(BinaryOperationType(lhs, rhs, res)), left, right) => Join(loc, instr, inferTypes(lhs)(left), inferTypes(rhs)(right))
 
       case Join(loc, instr, left, right) => Join(loc, instr, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
 
-      case Filter(loc, cross, target, boolean) => Filter(loc, cross, inferTypes(jtpe)(target), inferTypes(jtpe)(boolean))
+      case Filter(loc, cross, target, boolean) => Filter(loc, cross, inferTypes(jtpe)(target), inferTypes(JBooleanT)(boolean))
 
       case Sort(parent, indices) => Sort(inferTypes(jtpe)(parent), indices)
 
