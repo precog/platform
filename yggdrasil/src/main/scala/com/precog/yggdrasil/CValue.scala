@@ -18,19 +18,19 @@ import scalaz.std.AllInstances._
 
 sealed trait CValue {
   @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
-    case CString(v) => 0
+    case CString(v)  => 0
     case CBoolean(v) => 1
-    case CLong(v) => 3
-    case CDouble(v) => 5
-    case CNum(v) => 6
+    case CLong(v)    => 3
+    case CDouble(v)  => 5
+    case CNum(v)     => 6
   }
 
   @inline final def toSValue: SValue = (this : @unchecked) match {
-    case CString(v) => SString(v)
+    case CString(v)  => SString(v)
     case CBoolean(v) => if (v) STrue else SFalse
-    case CLong(v) => SDecimal(v)
-    case CDouble(v) => SDecimal(v)
-    case CNum(v) => SDecimal(v)
+    case CLong(v)    => SDecimal(v)
+    case CDouble(v)  => SDecimal(v)
+    case CNum(v)     => SDecimal(v)
   }
 }
 
@@ -62,33 +62,33 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
   @inline 
   private[CType] final def typeIndex = this match {
-    case CBoolean => 0
+    case CBoolean     => 0
 
-    case CStringFixed(_) => 1
-    case CStringArbitrary => 2
+    case CString      => 2
     
-    case CLong => 4
-    case CDouble => 6
-    case CDecimalArbitrary => 7
+    case CLong        => 4
+    case CDouble      => 6
+    case CNum         => 7
     
     case CEmptyObject => 8
-    case CEmptyArray => 9
-    case CNull => 10
+    case CEmptyArray  => 9
+    case CNull        => 10
+
+    case CDate        => 11
   }
   
   def =~(tpe: SType): Boolean = (this, tpe) match {
-    case (CBoolean, SBoolean) => true  
+    case (CBoolean, SBoolean)    => true  
 
-    case (CStringFixed(_), SString) => true
-    case (CStringArbitrary, SString) => true
+    case (CString, SString)      => true
     
-    case (CLong, SDecimal) => true
-    case (CDouble, SDecimal) => true
-    case (CDecimalArbitrary, SDecimal) => true
+    case (CLong, SDecimal)       => true
+    case (CDouble, SDecimal)     => true
+    case (CNum, SDecimal)        => true
     
     case (CEmptyObject, SObject) => true
-    case (CEmptyArray, SArray) => true
-    case (CNull, SNull) => true
+    case (CEmptyArray, SArray)   => true
+    case (CNull, SNull)          => true
 
     case _ => false
   }
@@ -96,31 +96,28 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
 
 trait CTypeSerialization {
   def nameOf(c: CType): String = c match {
-    case CStringFixed(width)    => "String("+width+")"
-    case CStringArbitrary       => "String"
+    case CString                => "String"
     case CBoolean               => "Boolean"
     case CLong                  => "Long"
     case CDouble                => "Double"
-    case CDecimalArbitrary      => "Decimal"
+    case CNum                   => "Decimal"
     case CNull                  => "Null"
     case CEmptyObject           => "EmptyObject"
     case CEmptyArray            => "EmptyArray"
+    case CDate                  => "Timestamp"
   } 
 
-  def fromName(n: String): Option[CType] = {
-    val FixedStringR = """String\(\d+\)""".r
-    n match {
-      case FixedStringR(w) => Some(CStringFixed(w.toInt))
-      case "String"        => Some(CStringArbitrary)
-      case "Boolean"       => Some(CBoolean)
-      case "Long"          => Some(CLong)
-      case "Double"        => Some(CDouble)
-      case "Decimal"       => Some(CDecimalArbitrary)
-      case "Null"          => Some(CNull)
-      case "EmptyObject"   => Some(CEmptyObject)
-      case "EmptyArray"    => Some(CEmptyArray)
-      case _ => None
-    }
+  def fromName(n: String): Option[CType] = n match {
+    case "String"        => Some(CString)
+    case "Boolean"       => Some(CBoolean)
+    case "Long"          => Some(CLong)
+    case "Double"        => Some(CDouble)
+    case "Decimal"       => Some(CNum)
+    case "Null"          => Some(CNull)
+    case "EmptyObject"   => Some(CEmptyObject)
+    case "EmptyArray"    => Some(CEmptyArray)
+    case "Timestamp"     => Some(CDate)
+    case _ => None
   }
     
   implicit val PrimtitiveTypeDecomposer : Decomposer[CType] = new Decomposer[CType] {
@@ -140,35 +137,28 @@ trait CTypeSerialization {
 object CType extends CTypeSerialization {
 
   // CStringFixed(width)
-  // CStringArbitrary
+  // CString
   // CBoolean
   // CLong
   // CDouble
-  // CDecimalArbitrary
+  // CNum
   // CNull
   // CEmptyObject
   // CEmptyArray
 
   def unify(t1: CType, t2: CType): Option[CType] = {
     (t1, t2) match {
-      case (CLong, CLong) => Some(CLong)
-      case (CLong, CDouble) => Some(CDouble)
-      case (CLong, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CDouble, CLong) => Some(CDouble)
+      case (CLong, CLong)     => Some(CLong)
+      case (CLong, CDouble)   => Some(CDouble)
+      case (CLong, CNum)      => Some(CNum)
+      case (CDouble, CLong)   => Some(CDouble)
       case (CDouble, CDouble) => Some(CDouble)
-      case (CDouble, CDecimalArbitrary) => Some(CDecimalArbitrary)
-      case (CDecimalArbitrary, CLong) => Some(CDecimalArbitrary)
-      case (CDecimalArbitrary, CDouble) => Some(CDecimalArbitrary)
-      case (CDecimalArbitrary, CDecimalArbitrary) => Some(CDecimalArbitrary)
+      case (CDouble, CNum)    => Some(CNum)
+      case (CNum, CLong)      => Some(CNum)
+      case (CNum, CDouble)    => Some(CNum)
+      case (CNum, CNum)       => Some(CNum)
 
-      // The following (with the conditional nested in the Some() causes an explosive bytecode
-      // warning with 2.9.1. Try again with 2.9.2 or later.
-      //case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => Some(if (w1 > w2) f1 else f2) 
-      case (f1 @ CStringFixed(w1), f2 @ CStringFixed(w2)) => if (w1 > w2) Some(f1) else Some(f2)
-
-      case (CStringFixed(_), CStringArbitrary) => Some(CStringArbitrary)
-      case (CStringArbitrary, CStringArbitrary) => Some(CStringArbitrary)
-      case (CStringArbitrary, CStringFixed(_)) => Some(CStringArbitrary)
+      case (CString, CString) => Some(CString)
 
       case _ => None
     }
@@ -176,10 +166,10 @@ object CType extends CTypeSerialization {
   @inline
   final def toCValue(jval: JValue): CValue = jval match {
     case JString(s) => CString(s)
-    case JInt(i) => sizedIntCValue(i)
+    case JInt(i)    => sizedIntCValue(i)
     case JDouble(d) => CDouble(d)
-    case JBool(b) => CBoolean(b)
-    case _ => null
+    case JBool(b)   => CBoolean(b)
+    case _          => null
   }
 
   @inline
@@ -187,7 +177,7 @@ object CType extends CTypeSerialization {
     case JBool(_)     => Some(CBoolean)
     case JInt(bi)     => Some(sizedIntCType(bi))
     case JDouble(_)   => Some(CDouble)
-    case JString(_)   => Some(CStringArbitrary)
+    case JString(_)   => Some(CString)
     case JNull        => Some(CNull)
     case JArray(Nil)  => Some(CEmptyArray)
     case JObject(Nil) => Some(CEmptyObject)
@@ -208,7 +198,7 @@ object CType extends CTypeSerialization {
    if(bi.isValidInt || isValidLong(bi)) {
       CLong
     } else {
-      CDecimalArbitrary
+      CNum
     }   
   }
 
@@ -217,21 +207,12 @@ object CType extends CTypeSerialization {
   }
 }
 
-// vim: set ts=4 sw=4 et:
 //
 // Strings
 //
 case class CString(value: String) extends CValue 
 
-case class CStringFixed(width: Int) extends CType(FixedWidth(width), SString) {
-  type CA = String
-  val CC = classOf[String]
-  def order(s1: String, s2: String) = stringInstance.order(s1, s2)
-  def jvalueFor(s: String) = JString(s)
-  implicit val manifest = implicitly[Manifest[String]]
-}
-
-case object CStringArbitrary extends CType(LengthEncoded, SString) {
+case object CString extends CType(LengthEncoded, SString) {
   type CA = String
   val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
@@ -275,7 +256,7 @@ case object CDouble extends CType(FixedWidth(8), SDecimal) {
 }
 
 case class CNum(value: BigDecimal) extends CValue 
-case object CDecimalArbitrary extends CType(LengthEncoded, SDecimal) {
+case object CNum extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
   override def isNumeric: Boolean = true
@@ -321,3 +302,5 @@ case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with
   def jvalueFor(v: Null) = JArray(Nil)
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
+
+// vim: set ts=4 sw=4 et:

@@ -194,7 +194,7 @@ object LevelDBSlice {
         // CStringFixed will be departing soon, so we're not handling it now
 
         //// Variable width types
-        case CStringArbitrary => new StrColumn with BaseColumn {
+        case CString => new StrColumn with BaseColumn {
           def apply(row: Int): String = {
             computeColumnInfo(row)
             val work = new Array[Byte](length(index))
@@ -203,7 +203,7 @@ object LevelDBSlice {
           }
         }
 
-        case CDecimalArbitrary => new NumColumn with BaseColumn {
+        case CNum => new NumColumn with BaseColumn {
           def apply(row: Int): BigDecimal = {
             computeColumnInfo(row)
             val work = new Array[Byte](length(index))

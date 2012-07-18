@@ -19,12 +19,11 @@ trait ArbitrarySlice extends ArbitraryProjectionDescriptor {
   def genColumn(col: ColumnDescriptor, size: Int): Gen[Column] = {
     val bs = fullBitSet(size)
     col.valueType match {
-      case CStringArbitrary   => containerOfN[Array, String](size, arbitrary[String]) map { strs => ArrayStrColumn(bs, strs) }
-      case CStringFixed(w)    => containerOfN[Array, String](size, arbitrary[String].filter(_.length < w)) map { strs => ArrayStrColumn(fullBitSet(strs.length), strs) }
+      case CString            => containerOfN[Array, String](size, arbitrary[String]) map { strs => ArrayStrColumn(bs, strs) }
       case CBoolean           => containerOfN[Array, Boolean](size, arbitrary[Boolean]) map { bools => ArrayBoolColumn(bs, bools) }
       case CLong              => containerOfN[Array, Long](size, arbitrary[Long]) map { longs => ArrayLongColumn(bs, longs) }
       case CDouble            => containerOfN[Array, Double](size, arbitrary[Double]) map { doubles => ArrayDoubleColumn(bs, doubles) }
-      case CDecimalArbitrary  => containerOfN[List, Double](size, arbitrary[Double]) map { arr => ArrayNumColumn(bs, arr.map(v => BigDecimal(v)).toArray) }
+      case CNum               => containerOfN[List, Double](size, arbitrary[Double]) map { arr => ArrayNumColumn(bs, arr.map(v => BigDecimal(v)).toArray) }
       case CNull              => arbitraryBitSet(size) map { s => new BitsetColumn(s) with NullColumn }
       case CEmptyObject       => arbitraryBitSet(size) map { s => new BitsetColumn(s) with EmptyObjectColumn }
       case CEmptyArray        => arbitraryBitSet(size) map { s => new BitsetColumn(s) with EmptyArrayColumn }

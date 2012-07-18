@@ -50,6 +50,8 @@ trait TestColumnarTableModule extends ColumnarTableModule {
                       val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
                       col(sliceIndex) = v
                       (defined + sliceIndex, col)
+
+                    case invalid => sys.error("Invalid size Int type: " + invalid)
                   }
   
                   case JDouble(d) => 
@@ -90,14 +92,14 @@ trait TestColumnarTableModule extends ColumnarTableModule {
       val slice = new Slice {
         val (cols, size) = buildColArrays(prefix.toStream, Map.empty[ColumnRef, (BitSet, Array[_])], 0) 
         val columns = cols map {
-          case (ref @ ColumnRef(_, CBoolean), (defined, values))          => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
-          case (ref @ ColumnRef(_, CLong), (defined, values))             => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
-          case (ref @ ColumnRef(_, CDouble), (defined, values))           => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
-          case (ref @ ColumnRef(_, CDecimalArbitrary), (defined, values)) => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
-          case (ref @ ColumnRef(_, CStringArbitrary), (defined, values))  => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
-          case (ref @ ColumnRef(_, CEmptyArray), (defined, values))       => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
-          case (ref @ ColumnRef(_, CEmptyObject), (defined, values))      => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
-          case (ref @ ColumnRef(_, CNull), (defined, values))             => (ref, new BitsetColumn(defined) with NullColumn)
+          case (ref @ ColumnRef(_, CBoolean), (defined, values))     => (ref, ArrayBoolColumn(defined, values.asInstanceOf[Array[Boolean]]))
+          case (ref @ ColumnRef(_, CLong), (defined, values))        => (ref, ArrayLongColumn(defined, values.asInstanceOf[Array[Long]]))
+          case (ref @ ColumnRef(_, CDouble), (defined, values))      => (ref, ArrayDoubleColumn(defined, values.asInstanceOf[Array[Double]]))
+          case (ref @ ColumnRef(_, CNum), (defined, values))         => (ref, ArrayNumColumn(defined, values.asInstanceOf[Array[BigDecimal]]))
+          case (ref @ ColumnRef(_, CString), (defined, values))      => (ref, ArrayStrColumn(defined, values.asInstanceOf[Array[String]]))
+          case (ref @ ColumnRef(_, CEmptyArray), (defined, values))  => (ref, new BitsetColumn(defined) with EmptyArrayColumn)
+          case (ref @ ColumnRef(_, CEmptyObject), (defined, values)) => (ref, new BitsetColumn(defined) with EmptyObjectColumn)
+          case (ref @ ColumnRef(_, CNull), (defined, values))        => (ref, new BitsetColumn(defined) with NullColumn)
         }
       }
   

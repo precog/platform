@@ -49,7 +49,7 @@ trait DoubleColumn extends Column with (Int => Double) {
 trait NumColumn extends Column with (Int => BigDecimal) {
   def apply(row: Int): BigDecimal
 
-  override val tpe = CDecimalArbitrary
+  override val tpe = CNum
   override def jValue(row: Int) = JDouble(this(row).toDouble)
   override def strValue(row: Int): String = this(row).toString
 }
@@ -57,7 +57,7 @@ trait NumColumn extends Column with (Int => BigDecimal) {
 trait StrColumn extends Column with (Int => String) {
   def apply(row: Int): String
 
-  override val tpe = CStringArbitrary
+  override val tpe = CString
   override def jValue(row: Int) = JString(this(row))
   override def strValue(row: Int): String = this(row)
 }

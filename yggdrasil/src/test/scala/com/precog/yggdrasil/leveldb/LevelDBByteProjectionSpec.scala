@@ -33,13 +33,12 @@ object LevelDBByteProjectionSpec {
   val cvEmptyObject = CEmptyObject
   val cvNull = CNull
 
-  val colDesStringFixed: ColumnDescriptor = ColumnDescriptor(Path("path5"), JPath("key5"), CStringFixed(1), Authorities(Set()))
-  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CStringArbitrary, Authorities(Set()))
+  val colDesStringArbitrary: ColumnDescriptor = ColumnDescriptor(Path("path6"), JPath("key6"), CString, Authorities(Set()))
   val colDesBoolean: ColumnDescriptor = ColumnDescriptor(Path("path0"), JPath("key0"), CBoolean, Authorities(Set()))
   val colDesLong: ColumnDescriptor = ColumnDescriptor(Path("path2"), JPath("key2"), CLong, Authorities(Set()))
   val colDesDouble: ColumnDescriptor = ColumnDescriptor(Path("path4"), JPath("key4"), CDouble, Authorities(Set()))
   val colDesDouble2: ColumnDescriptor = ColumnDescriptor(Path("path8"), JPath("key8"), CDouble, Authorities(Set()))  
-  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), CDecimalArbitrary, Authorities(Set()))
+  val colDesDecimal: ColumnDescriptor = ColumnDescriptor(Path("path7"), JPath("key7"), CNum, Authorities(Set()))
 
 /*
   def byteProjectionInstance(indexedColumns: ListMap[ColumnDescriptor, Int], sorting: Seq[(ColumnDescriptor, SortBy)]) = { 
@@ -77,8 +76,8 @@ object LevelDBByteProjectionSpec {
       case (seq, CBoolean) => seq :+ cvBoolean
       case (seq, CDouble) => seq :+ cvDouble
       case (seq, CLong) => seq :+ cvLong
-      case (seq, CDecimalArbitrary) => seq :+ cvNum
-      case (seq, CStringArbitrary) => seq :+ cvString
+      case (seq, CNum) => seq :+ cvNum
+      case (seq, CString) => seq :+ cvString
       case (seq, CEmptyArray) => seq :+ cvEmptyArray
       case (seq, CEmptyObject) => seq :+ cvEmptyObject
       case (seq, CNull) => seq :+ cvNull

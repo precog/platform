@@ -8,8 +8,8 @@ import com.precog.bytecode._
 
 object Schema {
   def ctypes(primitive : JPrimitiveType): Set[CType] = primitive match {
-    case JNumberT => Set(CLong, CDouble, CDecimalArbitrary)
-    case JTextT => Set(CStringArbitrary)
+    case JNumberT => Set(CLong, CDouble, CNum)
+    case JTextT => Set(CString)
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
   }
@@ -19,8 +19,8 @@ object Schema {
    */
   def mkType(ctpes: Seq[(JPath, CType)]): Option[JType] = {
     val primitives = ctpes.collect {
-      case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => JNumberT
-      case (JPath.Identity, CStringFixed(_) | CStringArbitrary) => JTextT
+      case (JPath.Identity, CLong | CDouble | CNum) => JNumberT
+      case (JPath.Identity, CString) => JTextT
       case (JPath.Identity, CBoolean) => JBooleanT
       case (JPath.Identity, CNull) => JNullT
       case (JPath.Identity, CEmptyArray) => JArrayFixedT(Map())
@@ -58,9 +58,9 @@ object Schema {
    * Tests whether the supplied JType includes the supplied JPath and CType.
    */
   def includes(jtpe: JType, path: JPath, ctpe: CType): Boolean = (jtpe, (path, ctpe)) match {
-    case (JNumberT, (JPath.Identity, CLong | CDouble | CDecimalArbitrary)) => true
+    case (JNumberT, (JPath.Identity, CLong | CDouble | CNum)) => true
 
-    case (JTextT, (JPath.Identity, CStringFixed(_) | CStringArbitrary)) => true
+    case (JTextT, (JPath.Identity, CString)) => true
 
     case (JBooleanT, (JPath.Identity, CBoolean)) => true
 
@@ -89,12 +89,12 @@ object Schema {
    */
   def subsumes(ctpes: Seq[(JPath, CType)], jtpe: JType): Boolean = (jtpe, ctpes) match {
     case (JNumberT, ctpes) => ctpes.exists {
-      case (JPath.Identity, CLong | CDouble | CDecimalArbitrary) => true
+      case (JPath.Identity, CLong | CDouble | CNum) => true
       case _ => false
     }
 
     case (JTextT, ctpes) => ctpes.exists {
-      case (JPath.Identity, CStringFixed(_) | CStringArbitrary) => true
+      case (JPath.Identity, CString) => true
       case _ => false
     }
 
