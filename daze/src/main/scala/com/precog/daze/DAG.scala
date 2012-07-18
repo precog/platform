@@ -86,7 +86,7 @@ trait DAG extends Instructions {
         
         case instr: JoinInstr => processJoinInstr(instr)
 
-        case instr @ instructions.Morph1(BuiltInMorphism(m1)) => {
+        case instr @ instructions.Morph1(BuiltInMorphism1(m1)) => {
           val eitherRoots = roots match {
             case Right(hd) :: tl => Right(Right(Morph1(loc, m1, hd)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
@@ -96,7 +96,7 @@ trait DAG extends Instructions {
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
         }
 
-        case instr @ instructions.Morph2(BuiltInMorphism(m2)) => {
+        case instr @ instructions.Morph2(BuiltInMorphism2(m2)) => {
           val eitherRoots = roots match {
             case Right(right) :: Right(left) :: tl => Right(Right(Morph2(loc, m2, left, right)) :: tl)
             case Left(_) :: _ => Left(OperationOnBucket(instr))
@@ -437,7 +437,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph1(loc: Line, m: Morphism, parent: DepGraph) extends DepGraph {
+    case class Morph1(loc: Line, m: Morphism1, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       lazy val isSingleton = false
@@ -453,7 +453,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph2(loc: Line, m: Morphism, left: DepGraph, right: DepGraph) extends DepGraph {
+    case class Morph2(loc: Line, m: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
       lazy val isSingleton = false

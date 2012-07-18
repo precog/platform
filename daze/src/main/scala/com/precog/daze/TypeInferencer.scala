@@ -43,9 +43,9 @@ trait TypeInferencer extends DAG {
 
       case Reduce(loc, red, parent) => Reduce(loc, red, inferTypes(red.tpe.arg)(parent))
 
-      case Morph1(loc, m, parent) => Morph1(loc, m, inferTypes(jtpe)(parent))
+      case Morph1(loc, m, parent) => Morph1(loc, m, inferTypes(m.tpe.arg)(parent))
 
-      case Morph2(loc, m, left, right) => Morph2(loc, m, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
+      case Morph2(loc, m, left, right) => Morph2(loc, m, inferTypes(m.tpe.arg0)(left), inferTypes(m.tpe.arg1)(right))
 
       case Join(loc, instr @ (Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject)), left, right @ ConstString(str)) =>
         Join(loc, instr, inferTypes(JObjectFixedT(Map(str -> jtpe)))(left), right)

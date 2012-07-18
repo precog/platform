@@ -53,13 +53,14 @@ trait StatsLib extends GenOpcode
   val StatsNamespace = Vector("std", "stats")
   val EmptyNamespace = Vector()
 
-  override def _libMorphism = super._libMorphism ++ Set(Median, Mode, Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
+  override def _libMorphism1 = super._libMorphism1 ++ Set(Median, Mode, Rank, DenseRank) 
+  override def _libMorphism2 = super._libMorphism2 ++ Set(Covariance, LinearCorrelation, LinearRegression, LogarithmicRegression) 
   
-  object Median extends Morphism(EmptyNamespace, "median", Arity.One) {
+  object Median extends Morphism1(EmptyNamespace, "median") {
     
     import Mean._
     
-
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
 
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
@@ -97,8 +98,6 @@ trait StatsLib extends GenOpcode
       }
     } */
    
-    lazy val alignment = None
-    
     def apply(table: Table): Table = {  //TODO write tests for the empty table case
       val compactedTable = table.compact(Leaf(Source))
 
@@ -118,7 +117,7 @@ trait StatsLib extends GenOpcode
     }
   }
   
-  object Mode extends Morphism(EmptyNamespace, "mode", Arity.One) {
+  object Mode extends Morphism1(EmptyNamespace, "mode") {
     /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
       val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
 
@@ -146,9 +145,10 @@ trait StatsLib extends GenOpcode
       Some(SArray(Vector(modes: _*))) 
     } */
     
-    lazy val alignment = None
     type Result = Set[BigDecimal]  //(currentRunValue, curentCount, listOfModes, maxCount)
     
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+
     implicit def monoid = new Monoid[BigDecimal] {  
       def zero = BigDecimal(0)
       def append(left: BigDecimal, right: => BigDecimal) = left + right
@@ -208,8 +208,10 @@ trait StatsLib extends GenOpcode
     }
   }
  
-  object LinearCorrelation extends Morphism(StatsNamespace, "corr", Arity.Two) {
-    lazy val alignment = Some(MorphismAlignment.Match)
+  object LinearCorrelation extends Morphism2(StatsNamespace, "corr") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    
+    lazy val alignment = MorphismAlignment.Match
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, sumsq2, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)] // (count, sum1, sum2, sumsq1, sumsq2, productSum)
@@ -287,8 +289,10 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object Covariance extends Morphism(StatsNamespace, "cov", Arity.Two) {
-    lazy val alignment = Some(MorphismAlignment.Match)
+  object Covariance extends Morphism2(StatsNamespace, "cov") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+
+    lazy val alignment = MorphismAlignment.Match
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal)] // (count, sum1, sum2, productSum)
@@ -352,8 +356,10 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object LinearRegression extends Morphism(StatsNamespace, "linReg", Arity.Two) {
-    lazy val alignment = Some(MorphismAlignment.Match)
+  object LinearRegression extends Morphism2(StatsNamespace, "linReg") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+
+    lazy val alignment = MorphismAlignment.Match
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)] // (count, sum1, sum2, sumsq1, productSum)
@@ -430,8 +436,10 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object LogarithmicRegression extends Morphism(StatsNamespace, "logReg", Arity.Two) {
-    lazy val alignment = Some(MorphismAlignment.Match)
+  object LogarithmicRegression extends Morphism2(StatsNamespace, "logReg") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+
+    lazy val alignment = MorphismAlignment.Match
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, productSum)
     type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)] // (count, sum1, sum2, sumsq1, productSum)
@@ -518,8 +526,8 @@ trait StatsLib extends GenOpcode
     } */
   }
 
-  object DenseRank extends Morphism(StatsNamespace, "denseRank", Arity.One) {
-    lazy val alignment = None
+  object DenseRank extends Morphism1(StatsNamespace, "denseRank") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
 
     def rankScanner: CScanner = {
       new CScanner {
@@ -591,8 +599,8 @@ trait StatsLib extends GenOpcode
 
   }
 
-  object Rank extends Morphism(StatsNamespace, "rank", Arity.One) {  //TODO what happens across slices??
-    lazy val alignment = None
+  object Rank extends Morphism1(StatsNamespace, "rank") {  //TODO what happens across slices??
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
     
     def rankScanner: CScanner = {
       new CScanner {

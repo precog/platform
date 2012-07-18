@@ -33,10 +33,8 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
-  val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }  //todo is this okay? 
-
-  private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism] = libMorphism1.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
-  private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism] = libMorphism2.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
+  private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism1] = libMorphism1.map(op => op.opcode -> BuiltInMorphism1(op))(collection.breakOut)
+  private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism2] = libMorphism2.map(op => op.opcode -> BuiltInMorphism2(op))(collection.breakOut)
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
   private lazy val stdlibReductionOps: Map[Int, BuiltInReduction] = libReduction.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)

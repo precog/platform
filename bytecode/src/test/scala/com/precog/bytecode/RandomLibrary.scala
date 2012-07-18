@@ -25,12 +25,17 @@ import Gen._
 
 trait RandomLibrary extends Library {
 
-  private lazy val genMorphism = for {
+  private lazy val genMorphism1 = for {
     op <- choose(0, 1000)
-    a  <- choose(1, 2) map { case 1 => Arity.One; case 2 => Arity.Two }
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield Morphism(Vector(ns: _*), n, op, a)
+  } yield Morphism1(Vector(ns: _*), n, op)
+
+  private lazy val genMorphism2 = for {
+    op <- choose(0, 1000)
+    n  <- identifier
+    ns <- listOfN(2, identifier)
+  } yield Morphism2(Vector(ns: _*), n, op)
 
   private lazy val genOp1 = for {
     op <- choose(0, 1000)
@@ -64,26 +69,30 @@ trait RandomLibrary extends Library {
     Reduction(Vector(), "mode", 0x2009))
 
     
-  lazy val libMorphism = containerOfN[Set, Morphism](30, genMorphism).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val libMorphism1 = containerOfN[Set, Morphism1](30, genMorphism1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val libMorphism2 = containerOfN[Set, Morphism2](30, genMorphism2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val lib1 = containerOfN[Set, Op1](30, genOp1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val lib2 = containerOfN[Set, Op2](30, genOp2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   lazy val libReduction = reductions ++ containerOfN[Set, Reduction](30, genReduction).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
   
   
-  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
-  
-  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
-    lazy val arity = Arity.One // MS: Why lazy?
+  case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
   
-  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
-    lazy val arity = Arity.Two // MS: Why lazy?
+  case class Morphism2(namespace: Vector[String], name: String, opcode: Int) extends Morphism2Like {
+    val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
+  }
+  
+  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with Morphism1Like {
+    val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+  }
+  
+  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with Morphism2Like {
     val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
   }
 
-  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
-    lazy val arity = Arity.One // MS: Why lazy?
+  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
 }
