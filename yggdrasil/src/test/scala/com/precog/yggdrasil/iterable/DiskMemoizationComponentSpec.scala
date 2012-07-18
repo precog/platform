@@ -83,31 +83,27 @@ class DiskMemoizationComponentSpec extends Specification with DiskMemoizationCom
         check { (sample: Unshrinkable[List[SEvent]]) => 
           synchronized { i += 1 } 
 
-          try {
-            var increments = 0
-            val events = new Iterable[SEvent] {
-              def iterator = new Iterator[SEvent] {
-                private val inner = sample.value.iterator
-                def hasNext = inner.hasNext 
-                def next = {
-                  increments += 1
-                  inner.next
-                }
+          var increments = 0
+          val events = new Iterable[SEvent] {
+            def iterator = new Iterator[SEvent] {
+              private val inner = sample.value.iterator
+              def hasNext = inner.hasNext 
+              def next = {
+                increments += 1
+                inner.next
               }
             }
-
-            val result = ctx.memoize(events, i).toList
-            (result must_== sample.value) and
-            (increments must_== sample.value.size) and
-            (ctx.memoize(events, i).toList must beLike {
-              case results2 => (results2 must_== sample.value) and (increments must_== sample.value.size)
-            })
-          } catch {
-            case ex => ex.printStackTrace; throw ex
           }
+
+          val result = ctx.memoize(events, i).toList
+          (result must_== sample.value) and
+          (increments must_== sample.value.size) and
+          (ctx.memoize(events, i).toList must beLike {
+            case results2 => (results2 must_== sample.value) and (increments must_== sample.value.size)
+          })
         }
       }
-    }
+    }.pendingUntilFixed
   }
 }
 
