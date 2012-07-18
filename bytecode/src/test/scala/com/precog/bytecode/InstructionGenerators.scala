@@ -13,8 +13,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbBinaryOp: Arbitrary[BinaryOperation] = Arbitrary(genBinaryOp)
   
   implicit lazy val arbReduction: Arbitrary[BuiltInReduction] = Arbitrary(genReduction)
-  implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism1)
-  implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism2)
+  implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism1] = Arbitrary(genMorphism1)
+  implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism2] = Arbitrary(genMorphism2)
   
   private lazy val genInstruction: Gen[Instruction] = oneOf(
     genMap1,
@@ -160,15 +160,13 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     res <- BuiltInReduction(red)
   } yield res
 
-  private lazy val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }
-
   private lazy val genMorphism1 = for {
     m <- oneOf(libMorphism1.toSeq)
-    res <- BuiltInMorphism(m)
+    res <- BuiltInMorphism1(m)
   } yield res
 
   private lazy val genMorphism2 = for {
     m <- oneOf(libMorphism2.toSeq)
-    res <- BuiltInMorphism(m)
+    res <- BuiltInMorphism2(m)
   } yield res
 }

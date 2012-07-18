@@ -66,12 +66,12 @@ trait BytecodeWriter extends Writer with Version {
   
   @tailrec
   private[this] def writeInstructions(stream: Vector[Instruction], table: Map[DataInstr, Int], buffer: ByteBuffer, written: Int): Int = {
-    def morph1Num(m1: BuiltInMorphism) = m1 match {
-      case BuiltInMorphism(m) => 0xC1 | (m.opcode << 8)
+    def morph1Num(m1: BuiltInMorphism1) = m1 match {
+      case BuiltInMorphism1(m) => 0xC1 | (m.opcode << 8)
     }
 
-    def morph2Num(m2: BuiltInMorphism) = m2 match {
-      case BuiltInMorphism(m) => 0xC2 | (m.opcode << 8)
+    def morph2Num(m2: BuiltInMorphism2) = m2 match {
+      case BuiltInMorphism2(m) => 0xC2 | (m.opcode << 8)
     }
 
     def unaryOpNum(op: UnaryOperation) = op match {

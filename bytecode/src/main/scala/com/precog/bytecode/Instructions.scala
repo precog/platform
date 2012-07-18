@@ -77,8 +77,8 @@ trait Instructions extends Library {
     case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
     case class Reduce(red: BuiltInReduction) extends Instruction
-    case class Morph1(m1: BuiltInMorphism) extends Instruction
-    case class Morph2(m2: BuiltInMorphism) extends Instruction
+    case class Morph1(m1: BuiltInMorphism1) extends Instruction
+    case class Morph2(m2: BuiltInMorphism2) extends Instruction
     
     case object VUnion extends Instruction with JoinInstr
     case object VIntersect extends Instruction with JoinInstr
@@ -175,11 +175,22 @@ trait Instructions extends Library {
     case class BuiltInFunction1Op(op: Op1) extends UnaryOperation {
       val tpe = op.tpe
     }
+    
     case class BuiltInFunction2Op(op: Op2) extends BinaryOperation {
       val tpe = op.tpe
     }
-    case class BuiltInMorphism(mor: Morphism)
-    case class BuiltInReduction(red: Reduction)
+    
+    case class BuiltInMorphism1(mor: Morphism1) extends UnaryOperation {
+      val tpe = mor.tpe
+    }
+    
+    case class BuiltInMorphism2(mor: Morphism2) extends BinaryOperation {
+      val tpe = mor.tpe
+    }
+    
+    case class BuiltInReduction(red: Reduction) extends UnaryOperation {
+      val tpe = red.tpe
+    }
 
     case object Add extends NumericBinaryOperation
     case object Sub extends NumericBinaryOperation

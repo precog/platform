@@ -31,27 +31,31 @@ trait StaticLibrary extends Library {
     Op2(Vector(), "bar2", 0x0002),
     Op2(Vector("std", "lib"), "baz2", 0x0003))
   
-  lazy val libMorphism = Set(
-    Morphism(Vector(), "bin5", 0x0000, Arity.One),
-    Morphism(Vector("std"), "bin9", 0x0001, Arity.Two),
-    Morphism(Vector(), "bar33", 0x0002, Arity.One),
-    Morphism(Vector("std", "lib9"), "baz2", 0x0003, Arity.Two))
+  lazy val libMorphism1 = Set(
+    Morphism1(Vector(), "bin5", 0x0000),
+    Morphism1(Vector(), "bar33", 0x0002))
+
+  lazy val libMorphism2 = Set(
+    Morphism2(Vector("std"), "bin9", 0x0001),
+    Morphism2(Vector("std", "lib9"), "baz2", 0x0003))
   
-  
-  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
-  
-  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
-    lazy val arity = Arity.One // MS: Why lazy?
+  case class Morphism1(namespace: Vector[String], name: String, opcode: Int) extends Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
   
-  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
-    lazy val arity = Arity.Two // MS: Why lazy?
+  case class Morphism2(namespace: Vector[String], name: String, opcode: Int) extends Morphism2Like {
     val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
   }
   
-  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
-    lazy val arity = Arity.One // MS: Why lazy?
+  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with Morphism1Like {
+    val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+  }
+  
+  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with Morphism2Like {
+    val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
+  }
+  
+  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with Morphism1Like {
     val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
   }
 }
