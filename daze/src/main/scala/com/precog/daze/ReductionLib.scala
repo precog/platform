@@ -176,7 +176,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     implicit val monoid = MeanMonoid
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
-    
+
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
         val result = cols(JNumberT) flatMap {
