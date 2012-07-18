@@ -355,9 +355,9 @@ trait TransformSpec extends TableModuleSpec {
           case (path @ JPath(JPathField("value"), tail @ _*), value) if included.contains(JPath(tail : _*)) => {
             (included(JPath(tail : _*)), value) match {
               case (CBoolean, JBool(_)) => true
-              case (CStringFixed(_) | CStringArbitrary, JString(_)) => true
+              case (CString, JString(_)) => true
               case (CLong, JInt(_)) => true
-              case (CDouble | CDecimalArbitrary, JDouble(_)) => true
+              case (CDouble | CNum, JDouble(_)) => true
               case (CEmptyObject, JObject.empty) => true
               case (CEmptyArray, JArray.empty) => true
               case (CNull, JNull) => true

@@ -74,12 +74,12 @@ trait ColumnarTableModule extends TableModule {
 
     def constDecimal(v: Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CDecimalArbitrary) -> column), v.size)))
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size)))
     }
 
     def constString(v: Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CStringArbitrary) -> column), 1)))
+      table(List(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), 1)))
     }
 
     def constDate(v: Set[CDate]): Table =  {
@@ -249,9 +249,9 @@ trait ColumnarTableModule extends TableModule {
                 // In the following fold, we compute all paired columns, and the columns on the left that
                 // have no counterpart on the right.
                 val (paired, excludedLeft) = sl.columns.foldLeft((Map.empty[JPath, Column], Set.empty[Column])) {
-                  case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CDecimalArbitrary), col)) => 
+                  case ((paired, excluded), (ref @ ColumnRef(selector, CLong | CDouble | CNum), col)) => 
                     val numEq = for {
-                                  ctype <- CLong :: CDouble :: CDecimalArbitrary :: Nil
+                                  ctype <- CLong :: CDouble :: CNum :: Nil
                                   col0  <- sr.columns.get(ColumnRef(selector, ctype)) 
                                   boolc <- cf.std.Eq(col, col0)
                                 } yield boolc
@@ -287,8 +287,8 @@ trait ColumnarTableModule extends TableModule {
                 }
 
                 val excluded = excludedLeft ++ sr.columns.collect({
-                  case (ColumnRef(selector, CLong | CDouble | CDecimalArbitrary), col) 
-                    if !(CLong :: CDouble :: CDecimalArbitrary :: Nil).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
+                  case (ColumnRef(selector, CLong | CDouble | CNum), col) 
+                    if !(CLong :: CDouble :: CNum :: Nil).exists(ctype => sl.columns.contains(ColumnRef(selector, ctype))) => col
 
                   case (ref, col) if !sl.columns.contains(ref) => col
                 })
@@ -412,7 +412,7 @@ trait ColumnarTableModule extends TableModule {
           composeSliceTransform(source).zip(composeSliceTransform(ref)) { (slice, derefBy) => 
             assert(derefBy.columns.size <= 1)
             derefBy.columns.headOption collect {
-              case (ColumnRef(JPath.Identity, CStringArbitrary | CStringFixed(_)), c: StrColumn) => 
+              case (ColumnRef(JPath.Identity, CString), c: StrColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathField(c(row)) })
             } getOrElse {
               slice
@@ -434,7 +434,7 @@ trait ColumnarTableModule extends TableModule {
               case (ColumnRef(JPath.Identity, CDouble), c: DoubleColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
 
-              case (ColumnRef(JPath.Identity, CDecimalArbitrary), c: NumColumn) => 
+              case (ColumnRef(JPath.Identity, CNum), c: NumColumn) => 
                 new DerefSlice(slice, { case row: Int if c.isDefinedAt(row) => JPathIndex(c(row).toInt) })
             } getOrElse {
               slice

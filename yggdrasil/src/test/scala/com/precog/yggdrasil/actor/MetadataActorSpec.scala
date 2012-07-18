@@ -89,7 +89,7 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 
       val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
 
-      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
+      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CString, Authorities(Set("me")))
 
       val descriptor = ProjectionDescriptor(1, colDesc :: Nil)
       val values = Vector[CValue](CString("Test123"))
@@ -133,9 +133,9 @@ object MetadataActorStateSpec extends Specification {
   val data: Map[ProjectionDescriptor, ColumnMetadata] = {
     projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1) ++
     projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1) ++
     projectionDescriptor(Path("/abc/"), JPath(".foo.bar"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CString, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo.bar"), CBoolean, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo.bar.baz.buz"), CBoolean, token1)
@@ -145,12 +145,12 @@ object MetadataActorStateSpec extends Specification {
     PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1)),
     PathField("foo", Set(
       PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
-      PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+      PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1)),
       PathField("bar", Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
       )),
       PathIndex(0, Set(
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
       ))
     ))
   ))
@@ -208,12 +208,12 @@ object MetadataActorStateSpec extends Specification {
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1)),
         PathField("bar", Set(
           PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
         )),
         PathIndex(0, Set(
-          PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+          PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
         ))
       ))
 
@@ -242,7 +242,7 @@ object MetadataActorStateSpec extends Specification {
       val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo[0]")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
       ))
 
       result must_== expected

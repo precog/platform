@@ -226,12 +226,7 @@ private[leveldb] object CValueReader {
 
   final def readValue(buf: ByteBuffer, valueType: CType): CValue = {
     valueType match {
-      case CStringFixed(width)    => 
-        val sstringbuffer: Array[Byte] = new Array(width)
-        buf.get(sstringbuffer)
-        CString(new String(sstringbuffer, "UTF-8"))
-      
-      case CStringArbitrary       => 
+      case CString                => 
         val length: Int = buf.getInt
         val sstringarb: Array[Byte] = new Array(length)
         buf.get(sstringarb)
@@ -247,11 +242,11 @@ private[leveldb] object CValueReader {
       case CLong                  => CLong(buf.getLong)
       //case CFloat                 => CFloat(buf.getFloat)
       case CDouble                => CDouble(buf.getDouble)
-      case CDecimalArbitrary      => 
+      case CNum                   => 
         val length: Int = buf.getInt
-        val sdecimalarb: Array[Byte] = new Array(length)
-        buf.get(sdecimalarb)
-        CNum(sdecimalarb.as[BigDecimal])
+        val snum: Array[Byte] = new Array(length)
+        buf.get(snum)
+        CNum(snum.as[BigDecimal])
 
       case CEmptyArray            => null
       case CEmptyObject           => null

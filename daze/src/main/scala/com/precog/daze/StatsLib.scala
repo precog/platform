@@ -196,7 +196,7 @@ trait StatsLib extends GenOpcode
     }
 
     def extract(res: Result): Table = {
-      val setC = res map CNum 
+      val setC = res map CNum.apply
       ops.constDecimal(setC)
     }
 

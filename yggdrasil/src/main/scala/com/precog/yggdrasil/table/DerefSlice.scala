@@ -94,7 +94,7 @@ class DerefSlice(source: Slice, derefBy: PartialFunction[Int, JPathNode]) extend
             }
           }
 
-        case CDecimalArbitrary =>
+        case CNum =>
           new NumColumn {
             private var row0: Int = -1
             private var refCol0: NumColumn = _
@@ -112,7 +112,7 @@ class DerefSlice(source: Slice, derefBy: PartialFunction[Int, JPathNode]) extend
           }
 
 
-        case CStringFixed(_) | CStringArbitrary =>
+        case CString =>
           new StrColumn {
             private var row0: Int = -1
             private var refCol0: StrColumn = _
@@ -182,9 +182,8 @@ derefBy.columns.headOption collect {
               case CBoolean     => ArrayBoolColumn()
               case CLong        => ArrayLongColumn(slice.size)
               case CDouble      => ArrayDoubleColumn(slice.size)
-              case CDecimalArbitrary         => ArrayNumColumn(slice.size)
-              case CStringArbitrary      => ArrayStrColumn(slice.size)
-              case CStringFixed(_)      => ArrayStrColumn(slice.size)
+              case CNum         => ArrayNumColumn(slice.size)
+              case CString      => ArrayStrColumn(slice.size)
               case CDate        => ArrayDateColumn(slice.size)
               case CEmptyObject => MutableEmptyObjectColumn()
               case CEmptyArray  => MutableEmptyArrayColumn()

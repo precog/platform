@@ -117,9 +117,9 @@ sealed trait SValue {
           }
         }
       
-      case SString(_)     => List((JPath(), CStringArbitrary))
+      case SString(_)     => List((JPath(), CString))
       case STrue | SFalse => List((JPath(), CBoolean))
-      case SDecimal(_)    => List((JPath(), CDecimalArbitrary))
+      case SDecimal(_)    => List((JPath(), CNum))
       case SNull          => List((JPath(), CNull)) 
     }
 

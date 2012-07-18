@@ -78,24 +78,22 @@ trait CValueGenerators {
   def leafSchema: Gen[JSchema] = ctype map { t => (JPath.Identity -> t) :: Nil }
 
   def ctype: Gen[CType] = oneOf(
-    chooseNum(10, 1000).map(CStringFixed(_)),
-    CStringArbitrary,
+    CString,
     CBoolean,
     CLong,
     CDouble,
-    CDecimalArbitrary,
+    CNum,
     CNull,
     CEmptyObject,
     CEmptyArray
   )
 
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
-    case CStringFixed(width) => alphaStr map (JString(_))
-    case CStringArbitrary => alphaStr map (JString(_))
+    case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
     case CLong => arbitrary[Long] map (JInt(_))
     case CDouble => arbitrary[Double] map (JDouble(_))
-    case CDecimalArbitrary => arbitrary[Double] map (JDouble(_))
+    case CNum => arbitrary[Double] map (JDouble(_))
     case CNull => JNull
     case CEmptyObject => JObject.empty 
     case CEmptyArray => JArray.empty

@@ -129,13 +129,13 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
   private def readColumn(in: DataInputStream, ctype: CType): CValue = {
     (ctype : @unchecked) match {
   //    case CStringFixed(_)   => CString(in.readUTF())
-      case CStringArbitrary  => CString(in.readUTF())
+      case CString           => CString(in.readUTF())
       case CBoolean          => CBoolean(in.readBoolean())
   //    case CInt              => CInt(in.readInt())
   //    case CLong             => CLong(in.readLong())
   //    case CFloat            => CFloat(in.readFloat())
   //    case CDouble           => CDouble(in.readDouble())
-      case CLong | CDouble | CDecimalArbitrary => 
+      case CLong | CDouble | CNum => 
         val length = in.readInt()
         assert(length > 0)
 
