@@ -56,8 +56,11 @@ trait TypeInferencer extends DAG {
       case Join(loc, instr @ (Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray)), left, right @ ConstDecimal(d)) =>
         Join(loc, instr, inferTypes(JArrayFixedT(Map(d.toInt -> jtpe)))(left), right)
 
-      case Join(loc, instr @ (Map2Cross(ArraySwap | WrapObject) | Map2CrossLeft(ArraySwap | WrapObject) | Map2CrossRight(ArraySwap | WrapObject)), left, right) =>
-        Join(loc, instr, inferTypes(jtpe)(left), inferTypes(jtpe)(right))
+      case Join(loc, instr @ (Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject)), left, right) =>
+        Join(loc, instr, inferTypes(jtpe)(left), inferTypes(JTextT)(right))
+
+      case Join(loc, instr @ (Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap)), left, right) =>
+        Join(loc, instr, inferTypes(jtpe)(left), inferTypes(JNumberT)(right))
 
       case Join(loc, instr @ Map2(BinaryOperationType(lhs, rhs, res)), left, right) => Join(loc, instr, inferTypes(lhs)(left), inferTypes(rhs)(right))
 
