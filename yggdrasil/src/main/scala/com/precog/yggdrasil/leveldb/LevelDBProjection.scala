@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 package leveldb
 
 import iterable._
+import table._
 import com.precog.common._ 
 import com.precog.util._ 
 import com.precog.util.Bijection._
@@ -83,7 +84,7 @@ object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 }
 
-abstract class LevelDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with FullProjectionLike[IterableDataset[Seq[CValue]]] {
+abstract class LevelDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
   import LevelDBProjection._
 
   val chunkSize = 32000 // bytes

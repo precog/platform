@@ -73,24 +73,20 @@ trait ParseEvalStackSpecs extends Specification
 
   implicit def asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-  trait YggConfig 
-    extends BaseConfig 
-    with DatasetConsumersConfig 
-
-  object yggConfig extends YggConfig {
+  class ParseEvalStackSpecConfig extends BaseConfig with DatasetConsumersConfig {
     logger.trace("Init yggConfig")
-    lazy val config = Configuration parse {
+    val config = Configuration parse {
       Option(System.getProperty("precog.storage.root")) map { "precog.storage.root = " + _ } getOrElse { "" }
     }
 
-    lazy val sortWorkDir = scratchDir
-    lazy val memoizationBufferSize = sortBufferSize
-    lazy val memoizationWorkDir = scratchDir
+    val sortWorkDir = scratchDir
+    val memoizationBufferSize = sortBufferSize
+    val memoizationWorkDir = scratchDir
 
-    lazy val flatMapTimeout = Duration(100, "seconds")
-    lazy val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
-    lazy val maxEvalDuration = controlTimeout
-    lazy val clock = blueeyes.util.Clock.System
+    val flatMapTimeout = Duration(100, "seconds")
+    val projectionRetrievalTimeout = akka.util.Timeout(Duration(10, "seconds"))
+    val maxEvalDuration = controlTimeout
+    val clock = blueeyes.util.Clock.System
 
     object valueSerialization extends SortSerialization[SValue] with SValueRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
     object eventSerialization extends SortSerialization[SEvent] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
@@ -138,5 +134,8 @@ trait ParseEvalStackSpecs extends Specification
   def shutdown() = ()
 }
 
-object RawJsonStackSpecs extends ParseEvalStackSpecs with RawJsonColumnarTableStorageModule 
+object RawJsonStackSpecs extends ParseEvalStackSpecs with RawJsonColumnarTableStorageModule {
+  type YggConfig = ParseEvalStackSpecConfig
+  object yggConfig extends ParseEvalStackSpecConfig
+}
 // vim: set ts=4 sw=4 et:

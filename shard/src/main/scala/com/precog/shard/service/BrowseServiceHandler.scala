@@ -38,7 +38,6 @@ import com.weiglewilczek.slf4s.Logging
 import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
-import com.precog.yggdrasil.metadata.MetadataView
 
 class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessControl)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {

@@ -18,9 +18,10 @@
  *
  */
 package com.precog.yggdrasil
-package iterable
+package leveldb
 
-import leveldb._
+import iterable._
+import table._
 import com.precog.util.FileOps
 
 import org.iq80.leveldb._
@@ -158,6 +159,8 @@ trait LevelDBProjectionModule extends ProjectionModule {
     })
 
     @inline final def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
+
+    def getBlockAfter(id: Option[Identities]): Option[Slice] = sys.error("todo")
   }  
   
   

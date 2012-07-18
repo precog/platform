@@ -18,9 +18,8 @@
  *
  */
 package com.precog.yggdrasil
-package iterable
+package actor
 
-import actor._
 import metadata._
 
 import com.precog.common._
@@ -38,6 +37,8 @@ import scalaz.effect._
 import com.weiglewilczek.slf4s.Logging
 
 trait SystemActorStorageModule extends ShardSystemActorModule with ActorStorageModule {
+  type Storage <: SystemActorStorageLike
+
   abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
     private var shardSystemActor0: ActorRef = _
     def shardSystemActor = shardSystemActor0

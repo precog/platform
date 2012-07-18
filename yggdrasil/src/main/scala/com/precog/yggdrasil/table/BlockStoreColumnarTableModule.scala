@@ -32,14 +32,10 @@ import scalaz.std.set._
 import scalaz.syntax.monoid._
 
 
-trait LevelDBTableConfig {
-}
-
-trait LevelDBColumnarTableModule extends ColumnarTableModule with StorageModule {
+trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModule {
   type Projection <: BlockProjectionLike[Slice]
-  type YggConfig <: LevelDBTableConfig
 
-  protected implicit def executionContext: ExecutionContext
+  implicit def asyncContext: ExecutionContext
 
   class Table(slices: Iterable[Slice]) extends ColumnarTable(slices) {
     def load(tpe: JType): Future[Table] = {
