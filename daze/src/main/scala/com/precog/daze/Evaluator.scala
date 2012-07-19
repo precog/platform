@@ -84,7 +84,7 @@ trait Evaluator extends DAG
   
   //private type State[S, T] = StateT[Id, S, T]
   
-  private case class EvaluatorState(assume: Map[DepGraph, Table])
+  private case class EvaluatorState(assume: Map[DepGraph, Future[Table]])
 
   private implicit val EvaluatorStateMonoid: Monoid[EvaluatorState] = new Monoid[EvaluatorState] {
     val zero = EvaluatorState(Map())
@@ -146,29 +146,20 @@ trait Evaluator extends DAG
           case Some(reducedTarget) => {
             for {
               pendingTargetTable <- loop(reducedTarget, splits)
-            } yield {
             //val PendingTable(reducedTargetTableF, _, reducedTargetTrans) = loop(reducedTarget, assume, splits)
-            
-              for {
-                reducedTargetTable <- pendingTargetTable.table
-                val resultTargetTable = reducedTargetTable transform liftToValues(pendingTargetTable.trans)
+           
+              resultTargetTable = pendingTargetTable.table map { _.transform { liftToValues(pendingTargetTable.trans) } }
+              
+              // FIXME if the target has forcing points, targetTrans is insufficient
+              //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
                 
-                // FIXME if the target has forcing points, targetTrans is insufficient
-                //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
-
-                _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (reducedTarget -> resultTargetTable)) }: State[EvaluatorState, Unit]
-                pendingTable <- loop(target, splits)
-                _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - reducedTarget) }  //TODO what if we were overwriting reducedTarget in the first place?
-
-              } yield {
-                for {
-                  subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
-                } yield {
-                  resultTargetTable.group(pendingTable.trans, id, subSpec)
-                }
-              }
+              _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (reducedTarget -> resultTargetTable)) }: State[EvaluatorState, Unit]
+              trans = loop(target, splits).evalZero.trans
+              subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
+            } yield {
+              resultTargetTable map { resultTargetTable => resultTargetTable.group(trans, id, subSpec) }
             }
-          }: StateT[Id, EvaluatorState, Future[GroupingSpec[Int]]]
+          }
           
           case None => sys.error("O NOES!!!")
         }
@@ -178,7 +169,7 @@ trait Evaluator extends DAG
     }
 
     //** only used in resolveTopLevelGroup **/
-    def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
+    def resolveLowLevelGroup(commonTable: Future[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
       case UnionBucketSpec(left, right) => {
         for {
           leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -215,7 +206,7 @@ trait Evaluator extends DAG
     }
 
     def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
-      val assumptionCheck: StateT[Id, EvaluatorState, Option[Table]] = for {
+      val assumptionCheck: StateT[Id, EvaluatorState, Option[Future[Table]]] = for {
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
       
@@ -330,17 +321,20 @@ trait Evaluator extends DAG
         case s @ dag.Split(line, spec, child) => {
           val table = for {
             grouping <- resolveTopLevelGroup(spec, splits)
+          } yield {
+            for {
+              grouping2 <- grouping
             
-            result <- grouper.merge(grouping) { (key: Table, map: Int => Table) =>
-              val back = for {
-                pendingTable <- loop(child, splits + (s -> (key, map)))
-              } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
-              
-              back(state)   // TODO we can discard function body state
-            }
-          } yield result
-          
-          PendingTable(table, graph, TransSpec1.Id)
+              result <- grouper.merge(grouping2) { (key: Table, map: Int => Table) =>
+                val back = for {
+                  pendingTable <- loop(child, splits + (s -> (key, map)))
+                } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
+                
+                back.evalZero: Future[Table]   // TODO we can discard function body state; is this correct????
+              }
+            } yield result
+          } 
+          state(PendingTable(table.evalZero, graph, TransSpec1.Id))  //TODO can we call evalZero here and above????
         }
         
         // VUnion and VIntersect removed, TODO: remove from bytecode
@@ -602,10 +596,10 @@ trait Evaluator extends DAG
           loop(parent, splits)     // TODO
       }
       
-      assumptionCheck flatMap { assumedResult: Option[Table] =>  //the result of calling loop: StateT[Id, EvaluatorState, PendingTable]
+      assumptionCheck flatMap { assumedResult: Option[Future[Table]] =>  //the result of calling loop: StateT[Id, EvaluatorState, PendingTable]
         val liftedAssumption = assumedResult map { table =>
           state[EvaluatorState, PendingTable](
-            PendingTable(Future(table), graph, TransSpec1.Id))
+            PendingTable(table, graph, TransSpec1.Id))
         }
         
         liftedAssumption getOrElse result
