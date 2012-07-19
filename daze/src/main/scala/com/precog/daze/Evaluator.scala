@@ -89,25 +89,35 @@ trait Evaluator extends DAG
   def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): Future[Table] = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
   
-    def resolveTopLevelGroup(spec: BucketSpec, assume: Map[DepGraph, Table], splits: Map[dag.Split, (Table, Int => Table)]): Future[GroupingSpec[Int]] = spec match {
+    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, Future[GroupingSpec[Int]]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
-          leftRes <- resolveTopLevelGroup(left, assume, splits)
-          rightRes <- resolveTopLevelGroup(right, assume, splits)
+          leftSpec <- resolveTopLevelGroup(left, splits) 
+          rightSpec <- resolveTopLevelGroup(right, splits)
           
           val commonIds = findCommonIds(left, right)
           val keySpec = buildKeySpec(commonIds)
-        } yield GroupingUnion(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+        } yield {
+          for {
+            leftRes <- leftSpec
+            rightRes <- rightSpec
+          } yield GroupingUnion(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+        }
       }
       
       case IntersectBucketSpec(left, right) => {
         for {
-          leftRes <- resolveTopLevelGroup(left, assume, splits)
-          rightRes <- resolveTopLevelGroup(right, assume, splits)
+          leftSpec <- resolveTopLevelGroup(left, splits)
+          rightSpec <- resolveTopLevelGroup(right, splits)
           
           val commonIds = findCommonIds(left, right)
           val keySpec = buildKeySpec(commonIds)
-        } yield GroupingIntersect(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+        } yield {
+          for {
+            leftRes <- leftSpec
+            rightRes <- rightSpec
+          } yield GroupingIntersect(keySpec, keySpec, leftRes, rightRes, GroupKeyAlign.Eq)
+        }
       }
       
       case dag.Group(id, target, forest) => {
@@ -115,18 +125,31 @@ trait Evaluator extends DAG
         
         common match {
           case Some(reducedTarget) => {
-            val PendingTable(reducedTargetTableF, _, reducedTargetTrans) = loop(reducedTarget, assume, splits)
-            
             for {
-              reducedTargetTable <- reducedTargetTableF
-              val resultTargetTable = reducedTargetTable transform liftToValues(reducedTargetTrans)
-              
-              // FIXME if the target has forcing points, targetTrans is insufficient
-              val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
-              
-              val subSpec = resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, assume, splits)
-            } yield resultTargetTable.group(targetTrans, id, subSpec)
-          }
+              pendingTargetTable <- loop(reducedTarget, splits)
+            } yield {
+            //val PendingTable(reducedTargetTableF, _, reducedTargetTrans) = loop(reducedTarget, assume, splits)
+            
+              for {
+                reducedTargetTable <- pendingTargetTable.table
+                val resultTargetTable = reducedTargetTable transform liftToValues(pendingTargetTable.trans)
+                
+                // FIXME if the target has forcing points, targetTrans is insufficient
+                //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
+
+                _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (reducedTarget -> resultTargetTable)) }: State[EvaluatorState, Unit]
+                pendingTable <- loop(target, splits)
+                _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - reducedTarget) }  //TODO what if we were overwriting reducedTarget in the first place?
+
+              } yield {
+                for {
+                  subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
+                } yield {
+                  resultTargetTable.group(pendingTable.trans, id, subSpec)
+                }
+              }
+            }
+          }: StateT[Id, EvaluatorState, Future[GroupingSpec[Int]]]
           
           case None => sys.error("O NOES!!!")
         }
@@ -136,27 +159,37 @@ trait Evaluator extends DAG
     }
 
     //** only used in resolveTopLevelGroup **/
-    def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, assume: Map[DepGraph, Table], splits: Map[dag.Split, (Table, Int => Table)]): GroupKeySpec = forest match {
+    def resolveLowLevelGroup(commonTable: Table, commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
       case UnionBucketSpec(left, right) => {
-        val leftRes = resolveLowLevelGroup(commonTable, commonGraph, left, assume, splits)
-        val rightRes = resolveLowLevelGroup(commonTable, commonGraph, right, assume, splits)
-        GroupKeySpecOr(leftRes, rightRes)
+        for {
+          leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
+          rightRes <- resolveLowLevelGroup(commonTable, commonGraph, right, splits)
+        } yield GroupKeySpecOr(leftRes, rightRes)
       }
       
       case IntersectBucketSpec(left, right) => {
-        val leftRes = resolveLowLevelGroup(commonTable, commonGraph, left, assume, splits)
-        val rightRes = resolveLowLevelGroup(commonTable, commonGraph, right, assume, splits)
-        GroupKeySpecAnd(leftRes, rightRes)
+        for {
+          leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
+          rightRes <- resolveLowLevelGroup(commonTable, commonGraph, right, splits)
+        } yield GroupKeySpecAnd(leftRes, rightRes)
       }
       
       case UnfixedSolution(id, solution) => {
-        val PendingTable(_, _, solutionTrans) = loop(solution, assume + (commonGraph -> commonTable), splits)
-        GroupKeySpecSource(JPathField(id.toString), solutionTrans)
+        for {
+          _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (commonGraph -> commonTable)) }
+          pendingTable <- loop(solution, splits)
+          _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - commonGraph) }
+
+        } yield GroupKeySpecSource(JPathField(id.toString), pendingTable.trans)
       }
       
       case dag.Extra(graph) => {
-        val PendingTable(_, _, solutionTrans) = loop(graph, assume + (commonGraph -> commonTable), splits)
-        GroupKeySpecSource(JPathField("extra"), trans.Filter(solutionTrans, solutionTrans))     // TODO constantify -1
+        for {
+          _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (commonGraph -> commonTable)) }
+          pendingTable <- loop(graph, splits)
+          _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - commonGraph) }
+
+        } yield GroupKeySpecSource(JPathField("extra"), trans.Filter(pendingTable.trans, pendingTable.trans))     // TODO constantify -1
       }
       
       case dag.Group(_, _, _) => sys.error("assertion error")
@@ -277,7 +310,7 @@ trait Evaluator extends DAG
         
         case s @ dag.Split(line, spec, child) => {
           val table = for {
-            grouping <- resolveTopLevelGroup(spec, assume, splits)
+            grouping <- resolveTopLevelGroup(spec, splits)
             
             result <- grouper.merge(grouping) { (key: Table, map: Int => Table) =>
               val back = for {
