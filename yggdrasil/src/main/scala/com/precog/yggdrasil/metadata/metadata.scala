@@ -38,13 +38,12 @@ trait StorageMetadata {
     }
   }
 
-  def findProjections(path: Path, selector: JPath, valueType: SType): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
+  def findProjections(path: Path, selector: JPath, valueType: CType): Future[Map[ProjectionDescriptor, ColumnMetadata]] = 
     findProjections(path, selector) map { m => m.filter(typeFilter(path, selector, valueType) _ ) }
 
-  def typeFilter(path: Path, selector: JPath, valueType: SType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
-    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType =~ valueType )
+  def typeFilter(path: Path, selector: JPath, valueType: CType)(t: (ProjectionDescriptor, ColumnMetadata)): Boolean = {
+    t._1.columns.exists( col => col.path == path && col.selector == selector && col.valueType == valueType )
   }
-
 }
 
 sealed trait PathMetadata 
@@ -57,17 +56,7 @@ case class PathValue(valueType: CType, authorities: Authorities, descriptors: Ma
     PathValue(valueType, authorities, descriptors + (desc -> meta))
 }
 
-trait MetadataView extends StorageMetadata
-
-class IdentityMetadataView(metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView {
-  def findChildren(path: Path) = metadata.findChildren(path)
-  def findSelectors(path: Path) = metadata.findSelectors(path)
-  def findProjections(path: Path, selector: JPath) = metadata.findProjections(path, selector)
-  def findPathMetadata(path: Path, selector: JPath) = metadata.findPathMetadata(path, selector)
-}
-
-class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends MetadataView { 
- 
+class UserMetadataView(uid: String, accessControl: AccessControl, metadata: StorageMetadata)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata { 
   def findChildren(path: Path): Future[Set[Path]] = {
     metadata.findChildren(path) flatMap { paths =>
       Future.traverse(paths) { p =>
@@ -122,14 +111,16 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
       }
     }
 
-    def filter2(children: Set[PathMetadata]): Set[PathMetadata] = {
+    def removeAllEmpty(children: Set[PathMetadata]): Set[PathMetadata] = {
        children.foldLeft(Set.empty[PathMetadata]){
          case (acc, PathField(name, children)) =>
-           val fc = filter2(children)
+           val fc = removeAllEmpty(children)
            if(fc.size > 0) { acc + PathField(name, fc) } else { acc }
+
          case (acc, PathIndex(index, children)) => 
-           val fc = filter2(children)
+           val fc = removeAllEmpty(children)
            if(fc.size > 0) { acc + PathIndex(index, fc) } else { acc }
+
          case (acc, p @ PathValue(_, _, _)) => acc + p
        }
     }
@@ -137,7 +128,7 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
     accessControl.mayAccessPath(uid, path, PathRead).flatMap {
       case true =>
         metadata.findPathMetadata(path, selector).flatMap{ pr => 
-          restrictAccess(pr.children).map{ filter2 }.map{ PathRoot }
+          restrictAccess(pr.children) map removeAllEmpty map { PathRoot }
         }
       case false =>
         Future(PathRoot(Set.empty))
@@ -156,22 +147,27 @@ class UserMetadataView(uid: String, accessControl: AccessControl, metadata: Stor
 }
 
 class ActorStorageMetadata(actor: ActorRef)(implicit val dispatcher: MessageDispatcher) extends StorageMetadata with Logging {
-  logger.debug("ActorStorageMetadata init. Sends to " + actor + " via " + dispatcher)
-
-  implicit val serviceTimeout: Timeout = 10 seconds
+  implicit val serviceTimeout: Timeout = 10 seconds //TODO: CONFIGURATION!!!
  
-  def findChildren(path: Path) = actor ? FindChildren(path) map { _.asInstanceOf[Set[Path]] } onFailure { case e => logger.error("Error finding children for " + path, e) }
+  def findChildren(path: Path) = (actor ? FindChildren(path)).mapTo[Set[Path]] onFailure { 
+    case e => logger.error("Error finding children for " + path, e) 
+  }
 
-  def findSelectors(path: Path) = actor ? FindSelectors(path) map { _.asInstanceOf[Seq[JPath]] } onFailure { case e => logger.error("Error finding selectors for " + path, e) }
+  def findSelectors(path: Path) = (actor ? FindSelectors(path)).mapTo[Seq[JPath]] onFailure { 
+    case e => logger.error("Error finding selectors for " + path, e) 
+  }
 
   def findProjections(path: Path, selector: JPath) = 
-    actor ? FindDescriptors(path, selector) map { _.asInstanceOf[Map[ProjectionDescriptor, ColumnMetadata]] } onFailure { case e => logger.error("Error finding projections for " + (path, selector), e) }
+    (actor ? FindDescriptors(path, selector)).mapTo[Map[ProjectionDescriptor, ColumnMetadata]] onFailure { 
+      case e => logger.error("Error finding projections for " + (path, selector), e) 
+    }
   
   def findPathMetadata(path: Path, selector: JPath) = {
     logger.debug("Querying actor for path metadata")
-    actor ? FindPathMetadata(path, selector) map { _.asInstanceOf[PathRoot] } onFailure { case e => logger.error("Error finding pathmetadata for " + (path, selector), e) }
+    (actor ? FindPathMetadata(path, selector)).mapTo[PathRoot] onFailure { 
+      case e => logger.error("Error finding pathmetadata for " + (path, selector), e) 
+    }
   }
 
   def close(): Future[Unit] = actor ? PoisonPill map { _ => () } onFailure { case e => logger.error("Error closing ActorStorageMetadata", e) }
-
 }

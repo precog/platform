@@ -15,6 +15,8 @@ import com.codecommit.gll.LineStream
 
 import typer._
 
+import bytecode.Arity._
+
 import scalaz.Success
 import scalaz.Scalaz._
 
@@ -37,10 +39,12 @@ object EmitterSpecs extends Specification
     emit(tree)
   }
 
-  def testEmit(v: String)(head: Vector[Instruction], streams: Vector[Instruction]*) =
+  def testEmit(v: String)(head: Vector[Instruction],
+          streams: Vector[Instruction]*) =
     compileEmit(v).filter { case _ : Line => false; case _ => true } must beOneOf((head +: streams): _*)
 
-  def testEmitLine(v: String)(head: Vector[Instruction], streams: Vector[Instruction]*) =
+  def testEmitLine(v: String)(head: Vector[Instruction],
+          streams: Vector[Instruction]*) =
     compileEmit(v) must beOneOf((head +: streams): _*)
 
   "emitter" should {
@@ -78,7 +82,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushNum("5"),
             PushNum("2"),
-            FilterCross(0, None)))
+            FilterCross))
       }
 
       "which are null and string" >> {
@@ -86,7 +90,7 @@ object EmitterSpecs extends Specification
           Vector(
             PushNull,
             PushString("foo"),
-            FilterCross(0, None)))
+            FilterCross))
       }
 
     }
@@ -103,9 +107,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") union load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           IUnion))
     }    
     
@@ -113,9 +117,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") intersect load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           IIntersect))
     }    
 
@@ -123,9 +127,9 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo") difference load("bar")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("bar"),
-          LoadLocal(Het),
+          LoadLocal,
           SetDifference))
     }
 
@@ -212,7 +216,7 @@ object EmitterSpecs extends Specification
       testEmit("load(\"foo\") * 2")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("2"),
           Map2Cross(Mul)))
     }
@@ -222,7 +226,7 @@ object EmitterSpecs extends Specification
         Vector(
           Line(1,"load(\"foo\") * 2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("2"),
           Map2Cross(Mul)))
     }
@@ -232,7 +236,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Map2Cross(Mul)))
     }
 
@@ -293,7 +297,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("foo"),
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Map2Cross(WrapObject)))
     }    
     
@@ -302,7 +306,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("foo"),
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -342,8 +346,8 @@ object EmitterSpecs extends Specification
       testEmit("foo := //foo bar := //bar foo ~ bar [foo.a, bar.a, foo.b, bar.b]")(
         Vector(
           PushString("/foo"),
-          LoadLocal(Het),
-          Dup, 
+          LoadLocal,
+          Dup,
           PushString("a"),
           Map2Cross(DerefObject),
           Map1(WrapArray),
@@ -353,7 +357,7 @@ object EmitterSpecs extends Specification
           Map1(WrapArray),
           Map2Match(JoinArray),
           PushString("/bar"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -375,7 +379,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicks.foo")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("foo"),
           Map2Cross(DerefObject)))
     }
@@ -384,7 +388,7 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks clicks[1]")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushNum("1"),
           Map2Cross(DerefArray)))
     }
@@ -393,7 +397,7 @@ object EmitterSpecs extends Specification
       testEmit("""load("foo")""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het))
+          LoadLocal)
       )
     }
 
@@ -402,28 +406,28 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("1"),
           PushTrue,
-          FilterCross(0, None)))
+          FilterCross))
     }
 
     "emit filter cross for where loads from value provenance" in {
       testEmit("""//clicks where //clicks.foo = null""")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("foo"),
           Map2Cross(DerefObject),
           PushNull,
           Map2Cross(Eq),
-          FilterMatch(0, None)))
+          FilterMatch))
     }
 
     "emit descent for array load with non-constant indices" in {
       testEmit("clicks := //clicks clicks[clicks]")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           Map2Match(DerefArray)))
@@ -433,31 +437,31 @@ object EmitterSpecs extends Specification
       testEmit("""foo := load("foo") foo where foo""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
-          FilterMatch(0, None)))
+          FilterMatch))
     }
 
     "emit filter match for loads from same provenance when performing equality filter" in {
       testEmit("foo := //foo foo where foo.id = 2")(
         Vector(
           PushString("/foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           PushString("id"),
           Map2Cross(DerefObject),
           PushNum("2"),
           Map2Cross(Eq),
-          FilterMatch(0, None)))
+          FilterMatch))
     }
 
     "use dup bytecode to duplicate the same load" in {
       testEmit("""clicks := load("foo") clicks + clicks""")(
         Vector(
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(1),
           Map2Match(Add)))
@@ -468,7 +472,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushNum("2"),
           PushString("foo"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -477,22 +481,32 @@ object EmitterSpecs extends Specification
           Map2Match(Add)))
     }
 
-    "emit distinct set-reduction" in {
-      testEmit("distinct(1)")(
-        Vector(
-          PushNum("1"),
-          SetReduce(Distinct)))
+    "emit morphism" in {
+      forall(libMorphism) { f =>
+        if (f.arity == One) {
+          testEmit("""%s(4224)""".format(f.fqn))(
+            Vector(
+              PushNum("4224"),
+              Morph1(BuiltInMorphism(f))))
+        } else if (f.arity == Two) {
+          testEmit("""%s(4224, 17)""".format(f.fqn))(
+            Vector(
+              PushNum("4224"),
+              PushNum("17"),
+              Morph2(BuiltInMorphism(f))))
+        } else sys.error("unreachable case")
+      }
     } 
 
     "emit count reduction" in {
       testEmit("count(1)")(
         Vector(
           PushNum("1"),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
     }
 
     "emit arbitrary reduction" in {
-      forall(libReduct) { f =>
+      forall(libReduction) { f => 
         testEmit("""%s(4224)""".format(f.fqn))(
           Vector(
             PushNum("4224"),
@@ -501,11 +515,11 @@ object EmitterSpecs extends Specification
     }    
 
     "emit unary non-reduction with object deref" in {
-      forall(lib1) { f =>
+      forall(lib1) { f => 
         testEmit("""%s(//foobar.baz)""".format(f.fqn))(
           Vector(
             PushString("/foobar"),
-            LoadLocal(Het),
+            LoadLocal,
             PushString("baz"),
             Map2Cross(DerefObject),
             Map1(BuiltInFunction1Op(f))))
@@ -513,7 +527,7 @@ object EmitterSpecs extends Specification
     }    
     
     "emit unary non-reduction" in {
-      forall(lib1) { f =>
+      forall(lib1) { f => 
         testEmit("""%s("2012-02-29T00:44:52.599+08:00")""".format(f.fqn))(
           Vector(
             PushString("2012-02-29T00:44:52.599+08:00"),
@@ -525,14 +539,14 @@ object EmitterSpecs extends Specification
       forall(lib2) { f =>
         testEmit("""%s(//foo.time, //foo.timeZone)""".format(f.fqn))(
           Vector(
-            PushString("/foo"), 
-            LoadLocal(Het), 
-            PushString("time"), 
-            Map2Cross(DerefObject), 
-            PushString("/foo"), 
-            LoadLocal(Het), 
-            PushString("timeZone"), 
-            Map2Cross(DerefObject), 
+            PushString("/foo"),
+            LoadLocal,
+            PushString("time"),
+            Map2Cross(DerefObject),
+            PushString("/foo"),
+            LoadLocal,
+            PushString("timeZone"),
+            Map2Cross(DerefObject),
             Map2Match(BuiltInFunction2Op(f))))
       }
     }
@@ -540,81 +554,56 @@ object EmitterSpecs extends Specification
     "emit body of fully applied characteristic function" in {
       testEmit("clicks := //clicks clicksFor('userId) := clicks where clicks.userId = 'userId clicksFor(\"foo\")")(
         Vector(
-          PushString("foo"),
-          Dup,
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
-          Swap(2),
           Swap(1),
-          Swap(1),
-          Swap(2),
           PushString("userId"),
           Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
+          PushString("foo"),
           Map2Cross(Eq),
-          FilterMatch(0, None),
-          Swap(1),
-          Drop))
+          FilterMatch))
     }
     
     "emit body of a fully applied characteristic function with two variables" in {
       testEmit("""
         | fun('a, 'b) := 
         |   //campaigns where //campaigns.ageRange = 'a & //campaigns.gender = 'b
-        | fun([25,36], "female")""".stripMargin)(Vector(
+        | fun([25,36],
+          "female")""".stripMargin)(
+        Vector(
+          PushString("/campaigns"),
+          LoadLocal,
+          PushString("/campaigns"),
+          LoadLocal,
+          PushString("ageRange"),
+          Map2Cross(DerefObject),
           PushNum("25"),
           Map1(WrapArray),
           PushNum("36"),
           Map1(WrapArray),
           Map2Cross(JoinArray),
-          Dup,
-          PushString("female"),
-          Dup,
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          PushString("/campaigns"),
-          LoadLocal(Het),
-          PushString("/campaigns"),
-          LoadLocal(Het),
-          PushString("ageRange"),
-          Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
           Map2Cross(Eq),
           PushString("/campaigns"),
-          LoadLocal(Het),
+          LoadLocal,
           PushString("gender"),
           Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
-          Swap(5),
+          PushString("female"),
           Map2Cross(Eq),
           Map2Match(And),
-          FilterMatch(0, None),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop))
+          FilterMatch))
     }
 
     "emit match for first-level union provenance" in {
       testEmit("a := //a b := //b a ~ b (b.x - a.x) * (a.y - b.y)")(
         Vector(
           PushString("/b"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -632,18 +621,18 @@ object EmitterSpecs extends Specification
           Map2Match(Mul)),
         Vector(
           PushString("/b"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
           Swap(1),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0, None),
+          FilterMatch,
           PushString("x"),
           Map2Cross(DerefObject),
           PushString("/a"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
@@ -657,7 +646,7 @@ object EmitterSpecs extends Specification
           Swap(2),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0, None),
+          FilterMatch,
           PushString("x"),
           Map2Cross(DerefObject),
           Map2Cross(Sub),
@@ -666,7 +655,7 @@ object EmitterSpecs extends Specification
           Swap(2),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0, None),
+          FilterMatch,
           PushString("y"),
           Map2Cross(DerefObject),
           Swap(1),
@@ -676,7 +665,7 @@ object EmitterSpecs extends Specification
           Swap(3),
           Dup,
           Map2Match(Eq),
-          FilterMatch(0, None),
+          FilterMatch,
           PushString("y"),
           Map2Cross(DerefObject),
           Map2Cross(Sub),
@@ -687,25 +676,15 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
-          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
-          Bucket,
-          Split(1, 2),
+          KeyPart(1),
           Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
+          Group(0),
+          Split,
+          PushGroup(0),
           Merge))
     }
 
@@ -713,34 +692,21 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
-          Dup,
-          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
           Swap(1),
-          Swap(1),
-          Swap(2),
           PushString("din"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(2),
           MergeBuckets(true),
-          Split(1, 2),
           Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
+          Group(0),
+          Split,
+          PushGroup(0),
           Merge))
     }
 
@@ -748,34 +714,21 @@ object EmitterSpecs extends Specification
       testEmit("clicks := //clicks onDay('day) := clicks where clicks.day = 'day | clicks.din = 'day onDay")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
-          Dup,
-          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
           Swap(1),
-          Swap(1),
-          Swap(2),
           PushString("din"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(2),
           MergeBuckets(false),
-          Split(1, 2),
           Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
+          Group(0),
+          Split,
+          PushGroup(0),
           Merge))
     }
     
@@ -788,36 +741,23 @@ object EmitterSpecs extends Specification
         | foo""")(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
-          Dup,
-          Dup,
-          Swap(1),
           PushString("time"),
           Map2Cross(DerefObject),
+          KeyPart(1),
           Swap(1),
-          Swap(2),
-          PushString("time"),
-          Map2Cross(DerefObject),
-          Split(0, 0),
-          Map2Cross(Eq),
-          Swap(1),
-          Swap(2),
           PushString("pageId"),
           Map2Cross(DerefObject),
+          KeyPart(2),
+          MergeBuckets(true),
           Swap(1),
-          Swap(2),
-          Swap(3),
-          PushString("pageId"),
-          Map2Cross(DerefObject),
-          Split(0, 0),
-          Map2Cross(Eq),
-          Map2Match(And),
-          FilterMatch(0, None),
-          Merge,
+          Group(0),
+          Split,
+          PushGroup(0),
           Merge))
-    }.pendingUntilFixed
+    }
     
     "emit split and merge for cf example with consecutively-constrained paired tic variables on a single set" in {
       testEmit("""
@@ -841,58 +781,34 @@ object EmitterSpecs extends Specification
         |
         |   bar.a + baz.b
         |
-        | foo""".stripMargin)(Vector(
+        | foo""".stripMargin)(
+        Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
-          Swap(1),
           PushString("a"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
           Swap(1),
+          Group(0),
           Swap(1),
-          Swap(2),
           PushString("b"),
           Map2Cross(DerefObject),
-          Bucket,
-          ZipBuckets,
-          Split(1, 3),
+          KeyPart(3),
           Swap(1),
           Swap(2),
-          Dup,
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(3),
+          Group(2),
+          MergeBuckets(true),
+          Split,
+          PushGroup(0),
           PushString("a"),
           Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
+          PushGroup(2),
           PushString("b"),
           Map2Cross(DerefObject),
           Map2Match(Add),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
           Merge))
     }
     
@@ -906,65 +822,34 @@ object EmitterSpecs extends Specification
         |
         |   bar.a + baz.b
         |
-        | foo""".stripMargin)(Vector(
+        | foo""".stripMargin)(
+        Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
           Dup,
-          Swap(1),
           PushString("a"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
           Swap(1),
+          Group(0),
           Swap(1),
-          Swap(2),
           PushString("b"),
           Map2Cross(DerefObject),
-          Bucket,
-          Split(2, 4),
+          KeyPart(3),
           Swap(1),
           Swap(2),
-          Swap(3),
-          Dup,
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
+          Group(2),
+          MergeBuckets(true),
+          Split,
+          PushGroup(0),
           PushString("a"),
           Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
-          Swap(5),
+          PushGroup(2),
           PushString("b"),
           Map2Cross(DerefObject),
           Map2Match(Add),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
           Merge))
     }
     
@@ -980,67 +865,36 @@ object EmitterSpecs extends Specification
         |   bar ~ baz
         |     bar.a + baz.b
         |
-        | foo""".stripMargin)(Vector(
+        | foo""".stripMargin)(
+        Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
-          Swap(1),
           PushString("a"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
+          Swap(1),
+          Group(0),
           PushString("/impressions"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
-          Swap(1),
-          Swap(2),
           PushString("b"),
           Map2Cross(DerefObject),
-          Bucket,
-          Split(2, 4),
+          KeyPart(3),
           Swap(1),
           Swap(2),
-          Swap(3),
-          Dup,
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(4),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
+          Group(2),
+          MergeBuckets(true),
+          Split,
+          PushGroup(0),
           PushString("a"),
           Map2Cross(DerefObject),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
-          Swap(5),
+          PushGroup(2),
           PushString("b"),
           Map2Cross(DerefObject),
           Map2Cross(Add),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
           Merge))
     }
     
@@ -1048,34 +902,24 @@ object EmitterSpecs extends Specification
       testEmit("""
         | clicks := //clicks
         | foo('a) := clicks where clicks = 'a & clicks.b = 42
-        | foo""".stripMargin)(Vector(
+        | foo""".stripMargin)(
+        Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Dup,
+          KeyPart(1),
           Swap(1),
-          Bucket,
-          Split(1, 2),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(3),
           PushString("b"),
           Map2Cross(DerefObject),
           PushNum("42"),
           Map2Cross(Eq),
-          FilterMatch(0, None),
+          Extra,
+          MergeBuckets(true),
           Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
+          Group(0),
+          Split,
+          PushGroup(0),
           Merge))
     }
 
@@ -1098,56 +942,31 @@ object EmitterSpecs extends Specification
         | ctr""".stripMargin)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
-          Swap(1),
           PushString("day"),
           Map2Cross(DerefObject),
-          Bucket,
+          KeyPart(1),
+          Swap(1),
+          Group(0),
           PushString("/impressions"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           Swap(2),
           Swap(1),
-          Swap(1),
-          Swap(2),
           PushString("day"),
           Map2Cross(DerefObject),
-          Bucket,
-          ZipBuckets,
-          Split(1, 3),
+          KeyPart(3),
           Swap(1),
           Swap(2),
-          Dup,
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(3),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
-          Swap(1),
-          Swap(2),
-          Swap(3),
-          Swap(4),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+          Group(2),
+          MergeBuckets(false),
+          Split,
+          PushGroup(0),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
+          PushGroup(2),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Map2Cross(Div),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
           Merge))
     }
     
@@ -1160,24 +979,14 @@ object EmitterSpecs extends Specification
       testEmit(input)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
+          KeyPart(1),
           Swap(1),
-          Bucket,
-          Split(1, 2),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Swap(1),
-          Swap(2),
-          Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
-          Swap(1),
-          Drop,
-          Swap(1),
-          Drop,
+          Group(0),
+          Split,
+          PushGroup(0),
+          Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
           Merge,
           Dup,
           PushString("a"),
@@ -1198,57 +1007,34 @@ object EmitterSpecs extends Specification
         | sums""".stripMargin
 
       testEmit(input)(Vector(
-        PushString("/campaigns"), 
-        LoadLocal(Het), 
-        Dup, 
-        PushString("cpm"), 
-        Map2Cross(DerefObject), 
-        Swap(1), 
-        PushString("cpm"), 
-        Map2Cross(DerefObject), 
-        PushNum("10"), 
-        Map2Cross(Lt), 
-        FilterMatch(0,None), 
-        SetReduce(Distinct), 
-        Dup, 
-        Dup, 
-        Dup, 
-        Swap(1), 
-        Bucket, 
-        Split(1,2), 
-        Dup, 
-        Swap(4), 
-        Swap(3), 
-        Swap(2), 
-        Swap(1), 
-        Swap(1), 
-        Dup, 
-        Swap(2), 
-        Swap(1), 
-        Swap(2), 
-        Swap(1), 
-        Swap(1), 
-        Swap(2), 
-        Swap(1), 
-        Swap(2), 
-        Swap(3), 
-        Swap(1), 
-        Swap(2), 
-        Swap(3), 
-        Swap(4), 
-        Swap(1), 
-        Swap(2), 
-        Swap(3), 
-        Swap(4), 
-        Swap(5), 
-        Map2Cross(Lt), 
-        FilterMatch(0,None), 
-        Reduce(BuiltInReduction(BIR(Vector(), "max", 0x2001))), 
-        Map2Cross(Add), 
-        Swap(1), 
-        Drop, 
-        Swap(1), 
-        Drop, 
+        PushString("/campaigns"),
+        LoadLocal,
+        Dup,
+        PushString("cpm"),
+        Map2Cross(DerefObject),
+        Swap(1),
+        PushString("cpm"),
+        Map2Cross(DerefObject),
+        PushNum("10"),
+        Map2Cross(Lt),
+        FilterMatch,
+        Distinct,
+        Dup,
+        Dup,
+        Dup,
+        KeyPart(1),
+        Swap(1),
+        Group(0),
+        Split,
+        PushGroup(0),
+        Swap(1),
+        Swap(1),
+        Swap(2),
+        PushKey(1),
+        Map2Cross(Lt),
+        FilterMatch,
+        Reduce(BuiltInReduction(Reduction(Vector(), "max", 0x2001))),
+        Map2Cross(Add),
         Merge))
     }
 
@@ -1266,65 +1052,41 @@ object EmitterSpecs extends Specification
       testEmit(input)(
         Vector(
           PushString("/clicks"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
           PushString("time"),
           Map2Cross(DerefObject),
+          KeyPart(1),
           Swap(1),
           PushString("time"),
           Map2Cross(DerefObject),
-          Bucket,
-          Split(1,2),
-          Swap(1), 
-          Dup, 
-          Swap(2),
-          Swap(1),
-          Swap(2),
-          Swap(1),
-          Dup,
-          Swap(2),
-          Swap(1), 
+          Group(0),
+          Split,
           PushString("jay"),
           PushString("/views"),
-          LoadLocal(Het),
+          LoadLocal,
           Dup,
-          Swap(4),
-          Swap(3),
-          Swap(2), 
-          Swap(1), 
+          Swap(2),
+          Swap(1),
           PushString("time"),
           Map2Cross(DerefObject),
-          Swap(1), 
-          Swap(2), 
-          Swap(3), 
-          Swap(4), 
-          PushString("time"), 
-          Map2Cross(DerefObject), 
-          Swap(1), 
-          Swap(2), 
-          Swap(3), 
-          Swap(4), 
-          Swap(5), 
-          Map2Cross(Gt), 
-          FilterMatch(0,None), 
-          Map2Cross(WrapObject), 
-          PushString("kay"), 
-          Swap(1), 
-          Swap(2), 
-          Swap(3),
-          Swap(4), 
-          Map2Cross(WrapObject), 
-          Map2Cross(JoinObject), 
-          Swap(1), 
-          Drop, 
-          Swap(1), 
-          Drop, 
+          Swap(1),
+          Swap(2),
+          PushString("time"),
+          Map2Cross(DerefObject),
+          PushKey(1),
+          Map2Cross(Gt),
+          FilterMatch,
+          Map2Cross(WrapObject),
+          PushString("kay"),
+          PushGroup(0),
+          Map2Cross(WrapObject),
+          Map2Cross(JoinObject),
           Merge))
     }
     
     "emit code for examples" in {
       "deviant-durations.qrl" >> {
-        // TODO: Verify match/cross for tic variable solution fragmentsA
         testEmit("""
           | interactions := //interactions
           | 
@@ -1343,50 +1105,53 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/interactions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
+            Dup,
+            Dup,
+            PushString("userId"),
+            Map2Cross(DerefObject),
+            KeyPart(1),
+            Swap(1),
+            Group(0),
             Swap(1),
             PushString("userId"),
             Map2Cross(DerefObject),
-            Bucket,
-            Split(1, 2),
-            Swap(1),
-            Dup,
-            Swap(2),
+            KeyPart(3),
             Swap(1),
             Swap(2),
-            Swap(1),
-            Dup,
-            Swap(2),
-            Swap(1),
+            Group(2),
+            MergeBuckets(false),
+            Split,
             PushString("userId"),
-            Swap(1),
-            Swap(2),
-            Swap(3),
+            PushKey(3),
             Map2Cross(WrapObject),
             PushString("interaction"),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
+            PushGroup(2),
             Dup,
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Dup,
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Dup,
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
+            Swap(1),
+            Swap(2),
+            Swap(3),
+            PushString("duration"),
+            Map2Cross(DerefObject),
+            Swap(1),
+            Swap(2),
+            Swap(3),
+            Swap(4),
+            PushString("duration"),
+            Map2Cross(DerefObject),
+            Reduce(BuiltInReduction(Reduction(Vector(), "mean", 0x2013))),
             Swap(1),
             Swap(2),
             Swap(3),
@@ -1394,36 +1159,14 @@ object EmitterSpecs extends Specification
             Swap(5),
             PushString("duration"),
             Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            PushString("duration"),
-            Map2Cross(DerefObject),
-            Reduce(BuiltInReduction(BIR(Vector(), "mean", 0x2013))),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
-            PushString("duration"),
-            Map2Cross(DerefObject),
-            Reduce(BuiltInReduction(BIR(Vector(), "stdDev", 0x2007))),
+            Reduce(BuiltInReduction(Reduction(Vector(), "stdDev", 0x2007))),
             PushNum("3"),
             Map2Cross(Mul),
             Map2Cross(Add),
             Map2Cross(Gt),
-            FilterMatch(0, None),
+            FilterMatch,
             Map2Cross(WrapObject),
             Map2Cross(JoinObject),
-            Swap(1),
-            Drop,
-            Swap(1),
-            Drop,
             Merge))
       }
       
@@ -1450,151 +1193,88 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/conversions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
-            Swap(1),
+            Dup,
+            Dup,
             PushString("userId"),
             Map2Cross(DerefObject),
-            Bucket,
+            KeyPart(1),
+            Swap(1),
+            Group(0),
             PushString("/impressions"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
             Swap(2),
             Swap(1),
-            Swap(1),
-            Swap(2),
             PushString("userId"),
             Map2Cross(DerefObject),
-            Bucket,
-            ZipBuckets,
-            Split(1, 3),
+            KeyPart(3),
             Swap(1),
+            Swap(2),
+            Group(2),
+            MergeBuckets(true),
+            Swap(1),
+            PushString("userId"),
+            Map2Cross(DerefObject),
+            KeyPart(5),
+            Swap(1),
+            Swap(2),
+            Group(4),
+            MergeBuckets(false),
+            Split,
+            PushGroup(2),
             Dup,
-            Swap(2),
-            Swap(1),
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Swap(1),
-            Swap(2),
             Dup,
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Dup,
-            Swap(4),
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Dup,
-            Swap(4),
-            Swap(3),
-            Swap(2),
+            PushString("time"),
+            Map2Cross(DerefObject),
+            KeyPart(7),
             Swap(1),
             PushString("time"),
             Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Bucket,
-            Split(1, 2),
-            Dup,
-            Swap(7),
-            Swap(6),
-            Swap(5),
-            Swap(4),
-            Swap(3),
-            Swap(2),
-            Swap(1),
-            Swap(1),
-            Dup,
-            Swap(2),
-            Swap(1),
-            Swap(6),
-            Swap(5),
-            Swap(4),
-            Swap(3),
-            Swap(2),
-            Swap(1),
+            Group(6),
+            Split,
             PushString("impression"),
             Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
+            PushGroup(6),
             Dup,
             Map2Match(Eq),
-            FilterMatch(0, None),
+            FilterMatch,
             Map2Cross(WrapObject),
             PushString("nextConversion"),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
+            PushGroup(4),
             Dup,
-            Swap(8),
-            Swap(7),
-            Swap(6),
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Dup,
-            Swap(8),
-            Swap(7),
-            Swap(6),
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Dup,
-            Swap(8),
-            Swap(7),
-            Swap(6),
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Dup,
-            Swap(8),
-            Swap(7),
-            Swap(6),
-            Swap(5),
-            Swap(4),
             Swap(3),
             Swap(2),
             Swap(1),
             Swap(1),
             Swap(2),
             Swap(3),
+            PushString("time"),
+            Map2Cross(DerefObject),
+            Swap(1),
+            Swap(2),
+            Swap(3),
+            Swap(4),
+            PushString("time"),
+            Map2Cross(DerefObject),
+            Swap(1),
+            Swap(2),
+            Swap(3),
             Swap(4),
             Swap(5),
-            Swap(6),
-            Swap(7),
-            Swap(8),
             PushString("time"),
             Map2Cross(DerefObject),
             Swap(1),
@@ -1603,69 +1283,20 @@ object EmitterSpecs extends Specification
             Swap(4),
             Swap(5),
             Swap(6),
-            Swap(7),
-            Swap(8),
-            Swap(9),
             PushString("time"),
             Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
-            Swap(8),
-            Swap(9),
-            Swap(10),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
-            Swap(8),
-            Swap(9),
-            Swap(10),
-            Swap(11),
-            PushString("time"),
-            Map2Cross(DerefObject),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
-            Swap(5),
-            Swap(6),
-            Swap(7),
-            Swap(8),
-            Swap(9),
-            Swap(10),
-            Swap(11),
-            Swap(12),
+            PushKey(7),
             Map2Cross(Gt),
-            FilterMatch(0, None),
-            Reduce(BuiltInReduction(BIR(Vector(), "min", 0x2004))),
+            FilterMatch,
+            Reduce(BuiltInReduction(Reduction(Vector(), "min", 0x2004))),
             Map2Cross(Eq),
-            FilterMatch(0, None),
+            FilterMatch,
             Dup,
             Map2Match(Eq),
-            FilterMatch(0, None),
+            FilterMatch,
             Map2Cross(WrapObject),
             Map2Cross(JoinObject),
-            Swap(1),
-            Drop,
-            Swap(1),
-            Drop,
             Merge,
-            Swap(1),
-            Drop,
-            Swap(1),
-            Drop,
-            Swap(1),
-            Drop,
             Merge))
       }
 
@@ -1680,37 +1311,20 @@ object EmitterSpecs extends Specification
           """.stripMargin)(
           Vector(
             PushString("/clicks"),
-            LoadLocal(Het),
+            LoadLocal,
             Dup,
+            KeyPart(1),
             Swap(1),
-            Bucket,
-            Split(1, 2),
-            Dup,
-            Swap(2),
-            Swap(1),
-            Swap(1),
-            Dup,
-            Swap(2),
-            Swap(1),
-            Swap(2),
-            Swap(1),
+            Group(0),
+            Split,
             PushString("cnt"),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000))),
+            PushGroup(0),
+            Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000))),
             Map2Cross(WrapObject),
             PushString("value"),
-            Swap(1),
-            Swap(2),
-            Swap(3),
-            Swap(4),
+            PushKey(1),
             Map2Cross(WrapObject),
             Map2Cross(JoinObject),
-            Swap(1),
-            Drop,
-            Swap(1),
-            Drop,
             Merge))
       }
       
@@ -1719,10 +1333,12 @@ object EmitterSpecs extends Specification
         val input = """
           | interactions := //interactions
           | 
-          | hourOfDay('time) := 'time / 3600000           -- timezones, anyone?
+          | hourOfDay('time) := 'time / 3600000           -- timezones,
+          anyone?
           | dayOfWeek('time) := 'time / 604800000         -- not even slightly correct
           | 
-          | total('hour, 'day) :=
+          | total('hour,
+          'day) :=
           |   dayAndHour := dayOfWeek(interactions.time) = 'day & hourOfDay(interactions.time) = 'hour
           |   sum(interactions where dayAndHour)
           |   
@@ -1736,12 +1352,14 @@ object EmitterSpecs extends Specification
         val input = """
           | interactions := //interactions
           | 
-          | relativeDurations('userId, 'value) :=
+          | relativeDurations('userId,
+          'value) :=
           |   userInteractions := interactions where interactions.userId = 'userId
           |   interactionDurations := (userInteractions where userInteractions = 'value).duration
           |   totalDurations := sum(userInteractions.duration)
           | 
-          |   { userId: 'userId, ratio: interactionDurations / totalDurations }
+          |   { userId: 'userId,
+          ratio: interactionDurations / totalDurations }
           | 
           | relativeDurations
           """.stripMargin

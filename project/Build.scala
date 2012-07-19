@@ -26,16 +26,16 @@ object PlatformBuild extends Build {
   
   val commonSettings = Seq(
     organization := "com.precog",
-    version := "1.1.3-SNAPSHOT",
+    version := "2.0.0-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     scalaVersion := "2.9.1",
     libraryDependencies ++= Seq(
-      "com.weiglewilczek.slf4s"     %  "slf4s_2.9.1"        % "1.0.7",
+      "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
-      "org.scala-tools.testing"     %  "scalacheck_2.9.1"   % "1.9" % "test",
-      "org.specs2"                  %  "specs2_2.9.1"       % "1.8" % "test",
+      "org.scala-tools.testing"     %% "scalacheck"         % "1.9" % "test",
+      "org.specs2"                  %% "specs2"             % "1.11" % "test",
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test"
     )
   )
@@ -48,7 +48,7 @@ object PlatformBuild extends Build {
   lazy val bytecode = Project(id = "bytecode", base = file("bytecode")).settings(nexusSettings ++ commonSettings: _*)
   lazy val quirrel  = Project(id = "quirrel", base = file("quirrel")).settings(nexusSettings ++ commonSettings: _*) dependsOn (bytecode % "compile->compile;test->test", util)
   
-  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test", util)
+  lazy val yggdrasil  = Project(id = "yggdrasil", base = file("yggdrasil")).settings(nexusSettings ++ commonSettings: _*).dependsOn(common % "compile->compile;test->test", bytecode, util)
   
   lazy val daze     = Project(id = "daze", base = file("daze")).settings(nexusSettings ++ commonSettings: _*) dependsOn (common, bytecode % "compile->compile;test->test", yggdrasil % "compile->compile;test->test", util)
   

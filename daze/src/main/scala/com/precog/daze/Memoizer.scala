@@ -14,14 +14,20 @@ trait Memoizer extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
     def memoizedSpec(spec: BucketSpec, splits: => Map[Split, Split]): BucketSpec = spec match {
-      case MergeBucketSpec(left, right, and) =>
-        MergeBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits), and)
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case ZipBucketSpec(left, right) =>
-        ZipBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case SingleBucketSpec(target, solution) =>
-        SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
+      case dag.Group(id, target, child) =>
+        dag.Group(id, memoized(target, splits), memoizedSpec(child, splits))
+      
+      case UnfixedSolution(id, target) =>
+        UnfixedSolution(id, memoized(target, splits))
+      
+      case dag.Extra(target) =>
+        dag.Extra(memoized(target, splits))
     }
     
     // TODO rewrite!
@@ -41,8 +47,8 @@ trait Memoizer extends DAG {
           case New(loc, parent) =>
             New(loc, memoized(parent, splits))
           
-          case LoadLocal(loc, range, parent, tpe) =>
-            LoadLocal(loc, range, memoized(parent, splits), tpe)
+          case LoadLocal(loc, parent, tpe) =>
+            LoadLocal(loc, memoized(parent, splits), tpe)
           
           case Operate(loc, op, parent) =>
             Operate(loc, op, memoized(parent, splits))
@@ -50,8 +56,26 @@ trait Memoizer extends DAG {
           case Reduce(loc, red, parent) =>
             Reduce(loc, red, memoized(parent, splits))
 
-          case SetReduce(loc, red, parent) => {
-            val back = SetReduce(loc, red, memoized(parent, splits))
+          case Morph1(loc, m, parent) => {
+            val back = Morph1(loc, m, memoized(parent, splits))
+            
+            if (refs > 1)
+              Memoize(back, refs)
+            else
+              back
+          }
+
+          case Morph2(loc, m, left, right) => {
+            val back = Morph2(loc, m, memoized(left, splits), memoized(right, splits))
+            
+            if (refs > 1)
+              Memoize(back, refs)
+            else
+              back
+          }
+
+          case Distinct(loc, parent) => {
+            val back = Distinct(loc, memoized(parent, splits))
             
             if (refs > 1)
               Memoize(back, refs)
@@ -59,11 +83,11 @@ trait Memoizer extends DAG {
               back
           }
           
-          case s @ Split(loc, specs, child) => {
+          case s @ Split(loc, spec, child) => {
             lazy val splits2 = splits + (s -> result)
-            lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
+            lazy val spec2 = memoizedSpec(spec, splits2)
             lazy val child2 = memoized(child, splits2)
-            lazy val result: Split = Split(loc, specs2, child2)
+            lazy val result: Split = Split(loc, spec2, child2)
             
             if (refs > 1)
               Memoize(result, refs)
@@ -78,11 +102,11 @@ trait Memoizer extends DAG {
             Join(loc, instr, left2, right2)
           }
           
-          case Filter(loc, cross, range, target, boolean) => {
+          case Filter(loc, cross, target, boolean) => {
             val target2 = memoized(target, splits)
             val boolean2 = memoized(boolean, splits)
             
-            Filter(loc, cross, range, target2, boolean2)
+            Filter(loc, cross, target2, boolean2)
           }
           
           case Sort(parent, indexes) =>
@@ -103,21 +127,27 @@ trait Memoizer extends DAG {
   }
   
   def countSpecRefs(spec: BucketSpec): Map[DepGraph, Int] = spec match {
-    case MergeBucketSpec(left, right, _) =>
+    case UnionBucketSpec(left, right) =>
       merge(countSpecRefs(left), countSpecRefs(right))
     
-    case ZipBucketSpec(left, right) =>
+    case IntersectBucketSpec(left, right) =>
       merge(countSpecRefs(left), countSpecRefs(right))
     
-    case SingleBucketSpec(target, solution) =>
-      merge(increment(countRefs(target), target, 1), increment(countRefs(solution), solution, 1))
+    case dag.Group(_, target, child) =>
+      merge(increment(countRefs(target), target, 1), countSpecRefs(child))
+    
+    case UnfixedSolution(_, target) =>
+      increment(countRefs(target), target, 1)
+    
+    case dag.Extra(target) =>
+      increment(countRefs(target), target, 1)
   }
   
   def countRefs(graph: DepGraph): Map[DepGraph, Int] = graph match {
     case New(_, parent) =>
       increment(countRefs(parent), parent, 1)
     
-    case LoadLocal(_, _, parent, _) =>
+    case LoadLocal(_, parent, _) =>
       increment(countRefs(parent), parent, 1)
     
     case Operate(_, _, parent) =>
@@ -126,18 +156,26 @@ trait Memoizer extends DAG {
     case Reduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
         
-    case SetReduce(_, _, parent) =>
+    case Morph1(_, _, parent) =>
+      increment(countRefs(parent), parent, 1)
+        
+    case Morph2(_, _, left, right) => {
+      val rec = merge(countRefs(left), countRefs(right))
+      increment(increment(rec, left, 1), right, 1)
+    }
+        
+    case Distinct(_, parent) =>
       increment(countRefs(parent), parent, 1)
     
-    case Split(_, specs, child) =>
-      merge(countRefs(child), specs map countSpecRefs reduce merge[DepGraph])
+    case Split(_, spec, child) =>
+      merge(countRefs(child), countSpecRefs(spec))
     
     case Join(_, _, left, right) => {
       val rec = merge(countRefs(left), countRefs(right))
       increment(increment(rec, left, 1), right, 1)
     }
     
-    case Filter(_, _, _, target, boolean) => {
+    case Filter(_, _, target, boolean) => {
       val rec = merge(countRefs(target), countRefs(boolean))
       increment(increment(rec, boolean, 1), target, 1)
     }

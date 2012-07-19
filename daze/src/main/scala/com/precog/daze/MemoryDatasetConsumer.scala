@@ -1,9 +1,14 @@
 package com.precog
 package daze
 
+import common.VectorCase
+
 import yggdrasil._
+import yggdrasil.table._
 
 import akka.dispatch.Await
+import akka.util.Duration
+
 import scalaz.Validation
 import scalaz.effect.IO
 import scalaz.iteratee._
@@ -12,30 +17,57 @@ import scalaz.std.set._
 import Validation._
 import Iteratee._
 
+import blueeyes.json._
+
 trait DatasetConsumersConfig extends EvaluatorConfig {
-  def maxEvalDuration: akka.util.Duration
+  def maxEvalDuration: Duration
 }
 
 // TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer extends Evaluator with YggConfigComponent {
+trait MemoryDatasetConsumer extends Evaluator with TableModule with YggConfigComponent {
+  import JsonAST._
+  
   type X = Throwable
-  type Dataset[E] <: IterableDataset[E]
-  type YggConfig <: DatasetConsumersConfig 
-
-  def error(msg: String, ex: Throwable): X = new RuntimeException(msg, ex)
-
-  def consumeEval(userUID: String, graph: DepGraph, ctx: Context): Validation[X, Set[SEvent]] = {
+  type YggConfig <: DatasetConsumersConfig
+  type SEvent = (VectorCase[Long], SValue)
+  
+  def consumeEval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
-      eval(userUID, graph, ctx).iterable.toSet
-    } 
+      val resultF = eval(userUID, graph, ctx, optimize)
+      val result = Await.result(resultF, yggConfig.maxEvalDuration)
+      
+      val json = result.toJson filterNot { jvalue =>
+        (jvalue \ "value") == JNothing
+      }
+      
+      val events = json map { jvalue =>
+        (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JInt(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
+      }
+      
+      events.toSet
+    }
   }
   
-  def consumeEvalNotToSet(userUID: String, graph: DepGraph, ctx: Context) = {
-    implicit val bind = Validation.validationMonad[Throwable]
-    Validation.fromTryCatch {
-      eval(userUID, graph, ctx).iterable.toList
-    } 
+  private def jvalueToSValue(value: JValue): SValue = value match {
+    case JNothing => sys.error("don't use jnothing; doh!")
+    case JField(_, _) => sys.error("seriously?!")
+    case JNull => SNull
+    case JBool(value) => SBoolean(value)
+    case JInt(bi) => SDecimal(BigDecimal(bi))
+    case JDouble(d) => SDecimal(d)
+    case JString(str) => SString(str)
+    
+    case JObject(fields) => {
+      val map: Map[String, SValue] = fields.map({
+        case JField(name, value) => (name, jvalueToSValue(value))
+      })(collection.breakOut)
+      
+      SObject(map)
+    }
+    
+    case JArray(values) =>
+      SArray(Vector(values map jvalueToSValue: _*))
   }
 }
 

@@ -12,7 +12,7 @@ object PhasesSpecs extends Specification
     with StubPhases
     with Compiler
     with ProvenanceChecker
-    with CriticalConditionSolver
+    with GroupSolver
     with RawErrors 
     with RandomLibrary {
   

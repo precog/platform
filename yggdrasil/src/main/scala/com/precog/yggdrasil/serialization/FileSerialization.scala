@@ -1,5 +1,4 @@
-package com.precog
-package yggdrasil
+package com.precog.yggdrasil
 package serialization
 
 import java.io._

@@ -37,30 +37,25 @@ trait BytecodeWriter extends Writer with Version {
   private def writeTable(table: Map[DataInstr, Int], buffer: ByteBuffer) = {
     val lengths = for ((instr, id) <- table) yield {
       buffer.putInt(id)
-      
+
       val pred = instr match {
-        case FilterMatch(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCross(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCrossLeft(_, Some(pred)) => writePredicate(pred, buffer)
-        case FilterCrossRight(_, Some(pred)) => writePredicate(pred, buffer)
-        
-        case FilterMatch(_, None) => 0
-        case FilterCross(_, None) => 0
-        case FilterCrossLeft(_, None) => 0
-        case FilterCrossRight(_, None) => 0
+        case FilterMatch => 0
+        case FilterCross => 0
+        case FilterCrossLeft => 0
+        case FilterCrossRight => 0
         
         case Swap(depth) => {
           writeInt(4, buffer)
           writeInt(depth, buffer)
           8
         }
-        
+
         case Line(num, text) => writeLineInfo(num, text, buffer)
         
         case PushString(str) => writeString(str, buffer)
         case PushNum(num) => writeNum(num, buffer)
       }
-      
+
       4 + pred
     }
     
@@ -71,8 +66,12 @@ trait BytecodeWriter extends Writer with Version {
   
   @tailrec
   private[this] def writeInstructions(stream: Vector[Instruction], table: Map[DataInstr, Int], buffer: ByteBuffer, written: Int): Int = {
-    def setReductionNum(red: SetReduction) = red match {
-      case Distinct => 0x00
+    def morph1Num(m1: BuiltInMorphism) = m1 match {
+      case BuiltInMorphism(m) => 0xC1 | (m.opcode << 8)
+    }
+
+    def morph2Num(m2: BuiltInMorphism) = m2 match {
+      case BuiltInMorphism(m) => 0xC2 | (m.opcode << 8)
     }
 
     def unaryOpNum(op: UnaryOperation) = op match {
@@ -116,14 +115,10 @@ trait BytecodeWriter extends Writer with Version {
       case BuiltInFunction2Op(op) => 0xB1 | (op.opcode << 8)
     }
     
-    def reductionNum(red: Reduction) = red match {
+    def reductionNum(red: BuiltInReduction) = red match {
       case BuiltInReduction(red) => 0xC0 | (red.opcode << 8)
     }
     
-    def typeNum(tpe: Type) = tpe match {
-      case Het => 0x00
-    }
-
     if (!stream.isEmpty) {
       val (opcode, pad, arg) = stream.head match {
         case Map1(op) => (0x00, 0.toShort, unaryOpNum(op))
@@ -133,7 +128,8 @@ trait BytecodeWriter extends Writer with Version {
         case Map2CrossRight(op) => (0x06, 0.toShort, binaryOpNum(op))
         
         case Reduce(red) => (0x08, 0.toShort, reductionNum(red))
-        case SetReduce(red) => (0x09, 0.toShort, setReductionNum(red))
+        case Morph1(m1) => (0x09, 0.toShort, morph1Num(m1))
+        case Morph2(m2) => (0x19, 0.toShort, morph2Num(m2))
         
         case VUnion => (0x10, 0.toShort, 0)
         case VIntersect => (0x11, 0.toShort, 0)
@@ -143,22 +139,20 @@ trait BytecodeWriter extends Writer with Version {
 
         case SetDifference => (0x15, 0.toShort, 0)
         
-        case i @ FilterMatch(depth, Some(_)) => (0x14, depth, table(i))
-        case i @ FilterCross(depth, Some(_)) => (0x16, depth, table(i))
-        case i @ FilterCrossLeft(depth, Some(_)) => (0x17, depth, table(i))
-        case i @ FilterCrossRight(depth, Some(_)) => (0x18, depth, table(i))
+        case FilterMatch => (0x14, 0.toShort, 0)
+        case FilterCross => (0x16, 0.toShort, 0)
+        case FilterCrossLeft => (0x17, 0.toShort, 0)
+        case FilterCrossRight => (0x18, 0.toShort, 0)
         
-        case FilterMatch(depth, None) => (0x14, depth, 0)
-        case FilterCross(depth, None) => (0x16, depth, 0)
-        case FilterCrossLeft(depth, None) => (0x17, depth, 0)
-        case FilterCrossRight(depth, None) => (0x18, depth, 0)
-        
-        case Bucket => (0x1A, 0.toShort, 0)
+        case Group(id) => (0x1A, 0.toShort, id)
         case MergeBuckets(and) => (0x1B, 0.toShort, if (and) 0x01 else 0x00)
-        case ZipBuckets => (0x1C, 0.toShort, 0)
+        case KeyPart(id) => (0x1C, 0.toShort, id)
+        case Extra => (0x1D, 0.toShort, 0)
         
-        case Split(n, k) => (0x1D, n, k.toInt)
-        case Merge => (0x1E, 0.toShort, 0)
+        case Split => (0x1E, 0.toShort, 0)
+        case Merge => (0x1F, 0.toShort, 0)
+
+        case Distinct => (0x03, 0.toShort, 0)
         
         case Dup => (0x20, 0.toShort, 0)
         case Drop => (0x21, 0.toShort, 0)
@@ -166,7 +160,7 @@ trait BytecodeWriter extends Writer with Version {
         
         case i @ Line(_, _) => (0x2A, 0.toShort, table(i))
         
-        case LoadLocal(tpe) => (0x40, 0.toShort, typeNum(tpe))
+        case LoadLocal => (0x40, 0.toShort, 0)
         
         case i @ PushString(_) => (0x80, 0.toShort, table(i))
         case i @ PushNum(_) => (0x81, 0.toShort, table(i))
@@ -175,6 +169,9 @@ trait BytecodeWriter extends Writer with Version {
         case PushObject => (0x84, 0.toShort, 0)
         case PushArray => (0x85, 0.toShort, 0)
         case PushNull => (0x86, 0.toShort, 0)
+        
+        case PushGroup(id) => (0x90, 0.toShort, id)
+        case PushKey(id) => (0x91, 0.toShort, id)
       }
       
       buffer.put(opcode.toByte)
@@ -186,39 +183,6 @@ trait BytecodeWriter extends Writer with Version {
       buffer.putInt(arg)
       
       writeInstructions(stream.tail, table, buffer, written + 8)
-    } else {
-      written
-    }
-  }
-  
-  private def writePredicate(pred: Predicate, buffer: ByteBuffer) = {
-    writeInt(pred.length, buffer)
-    writePredicateStream(pred, buffer, 4)
-  }
-  
-  private[this] def writePredicateStream(stream: Vector[PredicateInstr], buffer: ByteBuffer, written: Int): Int = {
-    if (!stream.isEmpty) {
-      val opcode = stream.head match {
-        case Add => 0x00
-        case Sub => 0x01
-        case Mul => 0x02
-        case Div => 0x03
-        
-        case Neg => 0x41
-        
-        case Or => 0x30
-        case And => 0x31
-        
-        case Comp => 0x40
-        
-        case DerefObject => 0xA0
-        case DerefArray => 0xA1
-        
-        case Range => 0xFF
-      }
-      
-      buffer.put(opcode.toByte)
-      writePredicateStream(stream.tail, buffer, written + 4)
     } else {
       written
     }
@@ -253,11 +217,6 @@ trait BytecodeWriter extends Writer with Version {
     }
     
     instructions.collect({
-      case i @ FilterMatch(_, Some(_)) => i -> currentInt()
-      case i @ FilterCross(_, Some(_)) => i -> currentInt()
-      case i @ FilterCrossLeft(_, Some(_)) => i -> currentInt()
-      case i @ FilterCrossRight(_, Some(_)) => i -> currentInt()
-      
       case i: Swap => i -> currentInt()
       
       case i: Line => i -> currentInt()

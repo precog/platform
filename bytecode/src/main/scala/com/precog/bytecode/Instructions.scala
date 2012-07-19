@@ -14,7 +14,8 @@ trait Instructions extends Library {
       case Map2CrossRight(_) => (2, 1)
         
       case Reduce(_) => (1, 1)
-      case SetReduce(_) => (1, 1)
+      case Morph1(_) => (1, 1)
+      case Morph2(_) => (2, 1)
       
       case VUnion => (2, 1)
       case VIntersect => (2, 1)
@@ -23,21 +24,22 @@ trait Instructions extends Library {
       case IIntersect => (2, 1)
       case SetDifference => (2, 1)
       
-      case FilterMatch(depth, Some(_)) => (2 + depth, 1)
-      case FilterCross(depth, Some(_)) => (2 + depth, 1)
-      case FilterCrossLeft(depth, Some(_)) => (2 + depth, 1)
-      case FilterCrossRight(depth, Some(_)) => (2 + depth, 1)
+      case FilterMatch => (2, 1)
+      case FilterCross => (2, 1)
+      case FilterCrossLeft => (2, 1)
+      case FilterCrossRight => (2, 1)
       
-      case FilterMatch(_, None) => (2, 1)
-      case FilterCross(_, None) => (2, 1)
-      case FilterCrossLeft(_, None) => (2, 1)
-      case FilterCrossRight(_, None) => (2, 1)
+      case FilterMatch => (2, 1)
+      case FilterCross => (2, 1)
+      case FilterCrossLeft => (2, 1)
+      case FilterCrossRight => (2, 1)
       
-      case Bucket => (2, 1)
+      case Group(_) => (2, 1)
       case MergeBuckets(_) => (2, 1)
-      case ZipBuckets => (2, 1)
+      case KeyPart(_) => (1, 1)
+      case Extra => (1, 1)
       
-      case Split(n, k) => (n, k)
+      case Split => (1, 0)
       case Merge => (1, 1)
       
       case Dup => (1, 2)
@@ -46,7 +48,8 @@ trait Instructions extends Library {
       
       case Line(_, _) => (0, 0)
       
-      case LoadLocal(_) => (1, 1)
+      case LoadLocal => (1, 1)
+      case Distinct => (1, 1)
       
       case PushString(_) => (0, 1)
       case PushNum(_) => (0, 1)
@@ -55,19 +58,14 @@ trait Instructions extends Library {
       case PushNull => (0, 1)
       case PushObject => (0, 1)
       case PushArray => (0, 1)
-    }
-
-    def predicateStackDelta: (Int, Int) = self match {
-      case FilterMatch(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
-      case FilterCross(_, Some(predicate)) => predicate.foldLeft((0, 0))(_ |+| _.predicateStackDelta)
-      case _ => (0, 0)
+      
+      case PushGroup(_) => (0, 1)
+      case PushKey(_) => (0, 1)
     }
   }
   
   // namespace
   object instructions {
-    type Predicate = Vector[PredicateInstr]
-    
     sealed trait DataInstr extends Instruction
     
     sealed trait JoinInstr extends Instruction
@@ -78,8 +76,9 @@ trait Instructions extends Library {
     case class Map2CrossLeft(op: BinaryOperation) extends Instruction with JoinInstr
     case class Map2CrossRight(op: BinaryOperation) extends Instruction with JoinInstr
     
-    case class Reduce(red: Reduction) extends Instruction
-    case class SetReduce(red: SetReduction) extends Instruction
+    case class Reduce(red: BuiltInReduction) extends Instruction
+    case class Morph1(m1: BuiltInMorphism) extends Instruction
+    case class Morph2(m2: BuiltInMorphism) extends Instruction
     
     case object VUnion extends Instruction with JoinInstr
     case object VIntersect extends Instruction with JoinInstr
@@ -88,17 +87,18 @@ trait Instructions extends Library {
     case object IIntersect extends Instruction with JoinInstr
     case object SetDifference extends Instruction with JoinInstr
     
-    case object Bucket extends Instruction
+    case class Group(id: Int) extends Instruction
     case class MergeBuckets(and: Boolean) extends Instruction
-    case object ZipBuckets extends Instruction
+    case class KeyPart(id: Int) extends Instruction
+    case object Extra extends Instruction
     
-    case class Split(n: Short, k: Short) extends Instruction
+    case object Split extends Instruction
     case object Merge extends Instruction
     
-    case class FilterMatch(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCross(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCrossLeft(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
-    case class FilterCrossRight(depth: Short, pred: Option[Predicate]) extends Instruction with DataInstr
+    case object FilterMatch extends Instruction with DataInstr
+    case object FilterCross extends Instruction with DataInstr
+    case object FilterCrossLeft extends Instruction with DataInstr
+    case object FilterCrossRight extends Instruction with DataInstr
     
     case object Dup extends Instruction
     case object Drop extends Instruction
@@ -106,7 +106,8 @@ trait Instructions extends Library {
     
     case class Line(num: Int, text: String) extends Instruction with DataInstr
     
-    case class LoadLocal(tpe: Type) extends Instruction
+    case object LoadLocal extends Instruction
+    case object Distinct extends Instruction
     
     sealed trait RootInstr extends Instruction
     
@@ -118,76 +119,99 @@ trait Instructions extends Library {
     case object PushObject extends Instruction with RootInstr
     case object PushArray extends Instruction with RootInstr
     
-    sealed trait Reduction
-    sealed trait SetReduction
-    sealed trait UnaryOperation
-    sealed trait BinaryOperation
+    case class PushGroup(id: Int) extends Instruction
+    case class PushKey(id: Int) extends Instruction
     
-    sealed trait PredicateInstr { self =>
-      def predicateStackDelta: (Int, Int) = self match {
-        case Add => (2, 1)
-        case Sub => (2, 1)
-        case Mul => (2, 1)
-        case Div => (2, 1)
-        
-        case Neg => (1, 1)
-        
-        case Or => (2, 1)
-        case And => (2, 1)
-        
-        case Comp => (1, 1)
-        
-        case DerefObject => (1, 1)
-        case DerefArray => (1, 1)
-        
-        case Range => (2, 1)
+    object Map2 {
+      def unapply(instr: JoinInstr): Option[BinaryOperationType] = instr match {
+        case Map2Match(op) => Some(op.tpe)
+        case Map2Cross(op) => Some(op.tpe) 
+        case Map2CrossLeft(op) => Some(op.tpe)
+        case Map2CrossRight(op) => Some(op.tpe)
+        case _ => None
       }
     }
     
-    sealed trait PredicateOp
+    sealed trait UnaryOperation {
+      val tpe : UnaryOperationType
+    }
+    
+    trait NumericUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JNumberT, JNumberT)
+    }
 
-    case class BuiltInReduction(red: BIR) extends Reduction
+    trait BooleanUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JBooleanT, JBooleanT)
+    }
 
-    case object Distinct extends SetReduction
+    trait UnfixedUnaryOperation extends UnaryOperation {
+      val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+    }
 
-    case class BuiltInFunction1Op(op: BIF1) extends UnaryOperation
-    case class BuiltInFunction2Op(op: BIF2) extends BinaryOperation
+    sealed trait BinaryOperation {
+      val tpe : BinaryOperationType
+    }
+    
+    trait NumericBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    }
+    
+    trait NumericComparisonOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+    }
 
-    case object Add extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Sub extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Mul extends BinaryOperation with PredicateInstr with PredicateOp
-    case object Div extends BinaryOperation with PredicateInstr with PredicateOp
-    
-    case object Lt extends BinaryOperation
-    case object LtEq extends BinaryOperation
-    case object Gt extends BinaryOperation
-    case object GtEq extends BinaryOperation
-    
-    case object Eq extends BinaryOperation
-    case object NotEq extends BinaryOperation
-    
-    case object Or extends BinaryOperation with PredicateInstr
-    case object And extends BinaryOperation with PredicateInstr
-    
-    case object New extends UnaryOperation
-    case object Comp extends UnaryOperation with PredicateInstr
-    case object Neg extends UnaryOperation with PredicateInstr with PredicateOp
-    
-    case object WrapObject extends BinaryOperation
-    case object WrapArray extends UnaryOperation
-    
-    case object JoinObject extends BinaryOperation
-    case object JoinArray extends BinaryOperation
-    
-    case object ArraySwap extends BinaryOperation
-    
-    case object DerefObject extends BinaryOperation with PredicateInstr
-    case object DerefArray extends BinaryOperation with PredicateInstr
-    
-    case object Range extends PredicateInstr
+    trait BooleanBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+    }
 
-    sealed trait Type
+    trait EqualityOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+    }
     
-    case object Het extends Type
+    trait UnfixedBinaryOperation extends BinaryOperation {
+      val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JBooleanT)
+    }
+    
+    case class BuiltInFunction1Op(op: Op1) extends UnaryOperation {
+      val tpe = op.tpe
+    }
+    case class BuiltInFunction2Op(op: Op2) extends BinaryOperation {
+      val tpe = op.tpe
+    }
+    case class BuiltInMorphism(mor: Morphism)
+    case class BuiltInReduction(red: Reduction)
+
+    case object Add extends NumericBinaryOperation
+    case object Sub extends NumericBinaryOperation
+    case object Mul extends NumericBinaryOperation
+    case object Div extends NumericBinaryOperation
+    
+    case object Lt extends NumericComparisonOperation
+    case object LtEq extends NumericComparisonOperation
+    case object Gt extends NumericComparisonOperation
+    case object GtEq extends NumericComparisonOperation
+    
+    case object Eq extends EqualityOperation
+    case object NotEq extends EqualityOperation
+    
+    case object Or extends BooleanBinaryOperation
+    case object And extends BooleanBinaryOperation
+    
+    case object New extends UnfixedUnaryOperation
+    case object Comp extends BooleanUnaryOperation
+    case object Neg extends NumericUnaryOperation
+    
+    case object WrapObject extends UnfixedBinaryOperation
+    case object WrapArray extends UnfixedUnaryOperation
+    
+    case object JoinObject extends UnfixedBinaryOperation
+    case object JoinArray extends UnfixedBinaryOperation
+    
+    case object ArraySwap extends UnfixedBinaryOperation
+    
+    case object DerefObject extends UnfixedBinaryOperation
+    case object DerefArray extends UnfixedBinaryOperation
+    
+    case object Range
   }
 }

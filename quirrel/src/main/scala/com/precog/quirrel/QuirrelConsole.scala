@@ -11,19 +11,20 @@ import typer._
 
 object QuirrelConsole {
   trait EmptyLibrary extends Library {
-    type BIR = BuiltInRed
-    type BIF1 = BuiltInFunc1
-    type BIF2 = BuiltInFunc2
+    type Morphism = MorphismLike
+    type Op1 = Op1Like with Morphism
+    type Op2 = Op2Like with Morphism
+    type Reduction = ReductionLike with Morphism
 
-    def libReduct = Set()
+    def libMorphism = Set()
     def lib1 = Set()
     def lib2 = Set()
+    def libReduction = Set()
   }
 
   val compiler = new Parser
     with Binder
     with ProvenanceChecker
-    with CriticalConditionSolver
     with GroupSolver
     with Compiler
     with Emitter
@@ -32,12 +33,12 @@ object QuirrelConsole {
 
   trait StubPhases extends Phases with RawErrors {
     protected def LoadId = Identifier(Vector(), "load")
+    protected def DistinctId = Identifier(Vector(), "distinct")
     
     def bindNames(tree: Expr) = Set()
     def checkProvenance(tree: Expr) = Set()
     def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]] = Map()
-    def findGroups(expr: Expr): Map[String, Set[GroupTree]] = Map()
-    def solveCriticalConditions(expr: Expr) = Set()
+    def findGroups(expr: Expr): Set[GroupTree] = Set()
     def inferBuckets(expr: Expr) = Set()
   }
 

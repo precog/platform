@@ -35,7 +35,7 @@ import scalaz.syntax.std.option._
 // MESSAGES //
 //////////////
 
-// To simplify routing, tag all messages for the Projection actor
+// To simplify routing, tag all messages for the ProjectionLike actor
 sealed trait ShardProjectionAction
 
 case class AcquireProjection(descriptor: ProjectionDescriptor) extends ShardProjectionAction
@@ -51,21 +51,30 @@ case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMeta
 
 // projection retrieval result messages
 sealed trait ProjectionResult
-case class ProjectionAcquired[Dataset[_]](projection: Projection[Dataset]) extends ProjectionResult
+case class ProjectionAcquired(projection: ProjectionLike) extends ProjectionResult
 case class ProjectionError(descriptor: ProjectionDescriptor, error: Throwable) extends ProjectionResult
 
-trait ProjectionsActorModule[Dataset[_]] {
+trait ProjectionsActorModule extends ProjectionModule {
   ////////////
   // ACTORS //
   ////////////
 
-  def newProjectionsActor(metadataActor: ActorRef, metadataTimeout: Timeout): ProjectionsActor
-
   /**
    * The responsibilities of
    */
-  abstract class ProjectionsActor(metadataActor: ActorRef, metadataTimeout: Timeout) extends Actor with Logging { self =>
-    implicit val metadataTO = metadataTimeout
+  class ProjectionsActor extends Actor with Logging { self =>
+    private val projectionCacheSettings = CacheSettings(
+      expirationPolicy = ExpirationPolicy(Some(2), Some(2), TimeUnit.MINUTES), 
+      evict = (descriptor: ProjectionDescriptor, projection: Projection) => Projection.close(projection).unsafePerformIO
+    )
+
+    // Cache control map that stores reference counts for projection descriptors managed by the cache
+    private val outstandingReferences = mutable.Map.empty[ProjectionDescriptor, Int]
+
+    // Cache for active projections
+    private val projections = Cache.concurrentWithCheckedEviction[ProjectionDescriptor, Projection](projectionCacheSettings) {
+      (descriptor, _) => outstandingReferences.get(descriptor) forall { _ == 0 }
+    }
 
     def receive = {
       case Status =>
@@ -76,16 +85,13 @@ trait ProjectionsActorModule[Dataset[_]] {
       case AcquireProjection(descriptor) =>
         logger.debug("Acquiring projection for " + descriptor)
         val mySender = sender
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, false)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          (projection(dir, descriptor) map {
-            p => {
-              reserved(p.descriptor)
-              mySender ! ProjectionAcquired(p)
-            }
-          } except {
-            error: Throwable => logger.error("Error acquiring projection for " + descriptor, error); IO { mySender ! ProjectionError(descriptor, error) }
-          }).unsafePerformIO
-        } 
+
+        cacheLookup(descriptor) map { p =>
+          reserved(p.descriptor)
+          mySender ! ProjectionAcquired(p)
+        } except {
+          error => IO(mySender ! ProjectionError(descriptor, error))
+        } unsafePerformIO
       
       // Decrement the outstanding reference count for the specified descriptor
       case ReleaseProjection(descriptor) =>
@@ -95,37 +101,54 @@ trait ProjectionsActorModule[Dataset[_]] {
       case ProjectionInsert(descriptor, inserts) =>
         val coordinator = sender
         logger.debug(coordinator + " is inserting into projection for " + descriptor)
-        for (dir <- (metadataActor ? FindDescriptorRoot(descriptor, true)).mapTo[Option[File]].onFailure { case e => logger.error("Error finding descriptor root for " + descriptor, e) }) {
-          (projection(dir, descriptor) map {
-            p => {
-              logger.debug("Reserving " + descriptor + " in " + dir)
-              reserved(p.descriptor)
-              // Spawn a new short-lived insert actor for the projection and send a batch insert
-              // request to it so that any IO involved doesn't block queries from obtaining projection
-              // references. This could alternately be a single actor, but this design conforms more closely
-              // to 'error kernel' or 'let it crash' style.
-              context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, coordinator)
-            }
-          } except {
-            error: Throwable => {
-              logger.error("Could not load projection for " + descriptor, error)
-              IO { coordinator ! ProjectionError(descriptor, error) }
-            }
-          }).unsafePerformIO
-        }
+
+        cacheLookup(descriptor) map { p =>
+          logger.debug("Reserving " + descriptor)
+          reserved(p.descriptor)
+          // Spawn a new short-lived insert actor for the projection and send a batch insert
+          // request to it so that any IO involved doesn't block queries from obtaining projection
+          // references. This could alternately be a single actor, but this design conforms more closely
+          // to 'error kernel' or 'let it crash' style.
+          context.actorOf(Props(new ProjectionInsertActor(p))) ! BatchInsert(inserts, coordinator)
+        } except {
+          error => IO(coordinator ! ProjectionError(descriptor, error))
+        } unsafePerformIO
     }
 
     override def postStop(): Unit = {
       logger.info("Stopped ProjectionsActor")
     }
 
-    protected def status: JValue
+    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JInt(projections.size)) :: 
+                                                                  JField("outstandingReferences", JInt(outstandingReferences.size)) :: Nil)) :: Nil)
 
-    protected def projection(base: Option[File], descriptor: ProjectionDescriptor): IO[Projection[Dataset]]
+    private def cacheLookup(descriptor: ProjectionDescriptor): IO[Projection] = {
+      projections.get(descriptor) map { IO(_) } getOrElse {
+        for (p <- Projection.open(descriptor)) yield {
+          // funkiness due to putIfAbsent semantics of returning Some(v) only if k already exists in the map
+          projections.putIfAbsent(descriptor, p) getOrElse p 
+        }
+      }
+    }
 
-    protected def reserved(descriptor: ProjectionDescriptor): Unit 
+    private def reserved(descriptor: ProjectionDescriptor): Unit = {
+      val current = outstandingReferences.getOrElse(descriptor, 0)
+      outstandingReferences += (descriptor -> (current + 1))
+    }
 
-    protected def released(descriptor: ProjectionDescriptor): Unit
+    private def released(descriptor: ProjectionDescriptor): Unit = {
+      outstandingReferences.get(descriptor) match {
+        case Some(current) if current > 1 => 
+          outstandingReferences += (descriptor -> (current - 1))
+
+        case Some(current) if current == 1 => 
+          outstandingReferences -= descriptor
+
+        case None =>
+          logger.warn("Extraneous request to release reference to projection descriptor " + descriptor + 
+                      "; no outstanding references for this descriptor recorded.")
+      }
+    }
 
     @inline @tailrec private def releaseAll(descriptors: Iterator[ProjectionDescriptor]): Unit = {
       if (descriptors.hasNext) {
@@ -140,7 +163,7 @@ trait ProjectionsActorModule[Dataset[_]] {
    * an insert on a projection. Replies to the sender of ingest messages when
    * it is done with an insert.
    */
-  class ProjectionInsertActor(projection: Projection[Dataset]) extends Actor with Logging {
+  class ProjectionInsertActor(projection: Projection) extends Actor with Logging {
     override def preStart(): Unit = {
       logger.debug("Preparing for insert on " + projection)
     }

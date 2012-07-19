@@ -1,6 +1,17 @@
 package com.precog.yggdrasil
 package util
 
+import actor._
+import iterable._
+import leveldb._
+import metadata.MetadataStorage
+import metadata.FileMetadataStorage
+import com.precog.common._
+import com.precog.util._
+import com.precog.common.kafka._
+import com.precog.common.security._
+
+
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
 import akka.dispatch.ExecutionContext
@@ -10,14 +21,6 @@ import akka.util.Duration
 import akka.pattern.gracefulStop
 
 import org.joda.time._
-
-import com.precog.util._
-import com.precog.common._
-import com.precog.common.kafka._
-import com.precog.common.security._
-import com.precog.yggdrasil.leveldb._
-import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.metadata._
 
 import org.iq80.leveldb._
 import org.fusesource.leveldbjni.JniDBFactory._
@@ -279,23 +282,16 @@ object ChownTools extends Command with YggUtilsCommon {
   }
 
   private def changeOwners(path: Option[Path], selector: Option[JPath], owners: Set[String], proj: ProjectionDescriptor): ProjectionDescriptor = {
-    val ics = proj.indexedColumns.map {
-      case (col, idx) => (updateColumnDescriptor(path, selector, owners, col), idx)
-    }
-    val srt = proj.sorting.map {
-      case (col, sort) => (updateColumnDescriptor(path, selector, owners, col), sort)
-    }
-
-    ProjectionDescriptor(ics, srt).toOption.get
-  }
-
-  private def updateColumnDescriptor(path: Option[Path], selector: Option[JPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
+    def updateColumnDescriptor(path: Option[Path], selector: Option[JPath], owners: Set[String], col: ColumnDescriptor): ColumnDescriptor = {
       if(path.map { _ == col.path }.getOrElse(true) &&
          selector.map { _ == col.selector }.getOrElse(true)) {
         ColumnDescriptor(col.path, col.selector, col.valueType, Authorities(owners))
       } else { 
         col
       }
+    }
+
+    proj.copy(columns = proj.columns.map { col => updateColumnDescriptor(path, selector, owners, col) })
   }
 
   def save(descs: Array[(File, ProjectionDescriptor)], dryrun: Boolean) {
@@ -694,20 +690,32 @@ object ImportTools extends Command with Logging {
     val stopTimeout = Duration(310, "seconds")
 
     // This uses an empty checkpoint because there is no support for insertion/metadata
-    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, new FilesystemFileOps {})) yield {
-      object shardModule extends LevelDBActorYggShardModule with ProductionShardSystemActorModule[IterableDataset] {
+    val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
+      object shardModule extends SystemActorStorageModule
+                            with LevelDBProjectionModule
+                            with ProductionShardSystemActorModule {
+
         class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
-        object shard extends LevelDBActorYggShard(ms)(ActorSystem("yggutilImport")) {
+        val actorSystem = ActorSystem("yggutilImport")
+
+        object Projection extends LevelDBProjectionCompanion {
+          def fileOps = FilesystemFileOps
+          def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
+        }
+
+        class Storage extends SystemActorStorageLike(ms) {
           val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
         }
+
+        val storage = new Storage
       }
 
       import shardModule._
 
       logger.info("Starting shard input")
-      Await.result(shard.start(), Duration(60, "seconds"))
+      Await.result(storage.start(), Duration(60, "seconds"))
       logger.info("Shard input started")
       config.input.foreach {
         case (db, input) =>
@@ -721,14 +729,14 @@ object ImportTools extends Command with Logging {
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(shard.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
               logger.info("Batch saved")
             }
           }
       }
 
       logger.info("Waiting for shard shutdown")
-      Await.result(shard.stop(), stopTimeout)
+      Await.result(storage.stop(), stopTimeout)
 
       logger.info("Shutdown")
       sys.exit(0)

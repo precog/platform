@@ -1,238 +1,828 @@
 package com.precog
 package daze
 
+import bytecode.{ BinaryOperationType, UnaryOperationType, JNumberT }
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
-
-import java.lang.Math
 
 import yggdrasil._
-
-object MathLib extends MathLib
+import yggdrasil.table._
 
 trait MathLib extends GenOpcode with ImplLibrary {
   val MathNamespace = Vector("std", "math")
 
-  override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, nextUp, log, signum, acos, ulp)
+  override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)
 
-  override def _lib2 = super._lib2 ++ Set(nextAfter, min, hypot, pow, max, atan2, copySign, IEEEremainder)
+  override def _lib2 = super._lib2 ++ Set(min, hypot, pow, max, atan2, copySign, IEEEremainder)
 
-  object sinh extends BIF1(MathNamespace, "sinh") {
-    val operandType = Some(SDecimal)
+  object sinh extends Op1(MathNamespace, "sinh") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sinh(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sinh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sinh(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.sinh(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.sinh(num.toDouble))
+    } */
   }
-  object toDegrees extends BIF1(MathNamespace, "toDegrees") {
-    val operandType = Some(SDecimal)
+  object toDegrees extends Op1(MathNamespace, "toDegrees") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toDegrees(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toDegrees(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toDegrees(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.toDegrees(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.toDegrees(num.toDouble))
+    } */
   }
-  object expm1 extends BIF1(MathNamespace, "expm1") {
-    val operandType = Some(SDecimal)
+  object expm1 extends Op1(MathNamespace, "expm1") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.expm1(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.expm1(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.expm1(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.expm1(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.expm1(num.toDouble))
+    } */
   }
-  object getExponent extends BIF1(MathNamespace, "getExponent") {
-    val operandType = Some(SDecimal)
+  object getExponent extends Op1(MathNamespace, "getExponent") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.floor(math.log(c(row)) / math.log(2))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.floor(math.log(c(row).toDouble) / math.log(2))
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.floor(math.log(c(row).toDouble) / math.log(2))
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.getExponent(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.getExponent(num.toDouble))
+    } */
   }
-  object asin extends BIF1(MathNamespace, "asin") {
-    val operandType = Some(SDecimal)
+  object asin extends Op1(MathNamespace, "asin") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.asin(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.asin(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.asin(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if ((-1 <= num) && (num <= 1)) => 
-        SDecimal(Math.asin(num.toDouble))
-    }
+        SDecimal(math.asin(num.toDouble))
+    } */
   }
-  object log10 extends BIF1(MathNamespace, "log10") {
-    val operandType = Some(SDecimal)
+  object log10 extends Op1(MathNamespace, "log10") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log10(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log10(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log10(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if (num > 0) => 
-        SDecimal(Math.log10(num.toDouble))
-    }
+        SDecimal(math.log10(num.toDouble))
+    } */
   }
-  object cos extends BIF1(MathNamespace, "cos") {
-    val operandType = Some(SDecimal)
+  object cos extends Op1(MathNamespace, "cos") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cos(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cos(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cos(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.cos(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.cos(num.toDouble))
+    } */
   }
-  object exp extends BIF1(MathNamespace, "exp") {
-    val operandType = Some(SDecimal)
+  object exp extends Op1(MathNamespace, "exp") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.exp(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.exp(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.exp(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.exp(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.exp(num.toDouble))
+    } */
   }
-  object cbrt extends BIF1(MathNamespace, "cbrt") {
-    val operandType = Some(SDecimal)
+  object cbrt extends Op1(MathNamespace, "cbrt") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cbrt(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cbrt(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cbrt(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.cbrt(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.cbrt(num.toDouble))
+    } */
   }
-  object atan extends BIF1(MathNamespace, "atan") {
-    val operandType = Some(SDecimal)
+  object atan extends Op1(MathNamespace, "atan") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.atan(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.atan(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.atan(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.atan(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.atan(num.toDouble))
+    } */
   }
-  object ceil extends BIF1(MathNamespace, "ceil") {
-    val operandType = Some(SDecimal)
+  object ceil extends Op1(MathNamespace, "ceil") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ceil(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ceil(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ceil(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.ceil(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.ceil(num.toDouble))
+    } */
   }
-  object rint extends BIF1(MathNamespace, "rint") {
-    val operandType = Some(SDecimal)
+  object rint extends Op1(MathNamespace, "rint") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.rint(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.rint(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.rint(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.rint(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.rint(num.toDouble))
+    } */
   }
-  object log1p extends BIF1(MathNamespace, "log1p") {
-    val operandType = Some(SDecimal)
+  object log1p extends Op1(MathNamespace, "log1p") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
+        def apply(row: Int) = math.log1p(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
+        def apply(row: Int) = math.log1p(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > -1
+        def apply(row: Int) = math.log1p(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if (num > -1) => 
-        SDecimal(Math.log1p(num.toDouble))
-    }
+        SDecimal(math.log1p(num.toDouble))
+    } */
   }
-  object sqrt extends BIF1(MathNamespace, "sqrt") {
-    val operandType = Some(SDecimal)
+  object sqrt extends Op1(MathNamespace, "sqrt") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
+        def apply(row: Int) = math.sqrt(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
+        def apply(row: Int) = math.sqrt(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) >= 0
+        def apply(row: Int) = math.sqrt(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if (num >= 0) => 
-        SDecimal(Math.sqrt(num.toDouble))
-    }
+        SDecimal(math.sqrt(num.toDouble))
+    } */
   }
-  object floor extends BIF1(MathNamespace, "floor") {
-    val operandType = Some(SDecimal)
+  object floor extends Op1(MathNamespace, "floor") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.floor(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.floor(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.floor(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.floor(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.floor(num.toDouble))
+    } */
   }
-  object toRadians extends BIF1(MathNamespace, "toRadians") {
-    val operandType = Some(SDecimal)
+  object toRadians extends Op1(MathNamespace, "toRadians") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toRadians(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toRadians(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.toRadians(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.toRadians(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.toRadians(num.toDouble))
+    } */
   }
-  object tanh extends BIF1(MathNamespace, "tanh") {
-    val operandType = Some(SDecimal)
+  object tanh extends Op1(MathNamespace, "tanh") {val operandType = Some(SDecimal)
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.tanh(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.tanh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.tanh(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.tanh(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.tanh(num.toDouble))
+    } */
   }
-  object round extends BIF1(MathNamespace, "round") {
-    val operandType = Some(SDecimal)
+  object round extends Op1(MathNamespace, "round") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.round(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.round(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.round(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.round(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.round(num.toDouble))
+    } */
   }
-  object cosh extends BIF1(MathNamespace, "cosh") {
-    val operandType = Some(SDecimal)
+  object cosh extends Op1(MathNamespace, "cosh") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cosh(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cosh(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.cosh(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.cosh(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.cosh(num.toDouble))
+    } */
   }
-  object tan extends BIF1(MathNamespace, "tan") {
-    val operandType = Some(SDecimal)
+  object tan extends Op1(MathNamespace, "tan") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (math.Pi / 2) == 0) || (c(row) % (math.Pi) == 0))
+        def apply(row: Int) = math.tan(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (math.Pi / 2) == 0) || (c(row) % (math.Pi) == 0))
+        def apply(row: Int) = math.tan(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (!(c(row) % (math.Pi / 2) == 0) || (c(row) % (math.Pi) == 0))
+        def apply(row: Int) = math.tan(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) if (!(num % (Math.PI / 2) == 0) || (num % (Math.PI) == 0)) => 
-        SDecimal(Math.tan(num.toDouble))
-    }
+      case SDecimal(num) if (!(num % (math.Pi / 2) == 0) || (num % (math.Pi) == 0)) => 
+        SDecimal(math.tan(num.toDouble))
+    } */
   }
-  object abs extends BIF1(MathNamespace, "abs") {
-    val operandType = Some(SDecimal)
+  object abs extends Op1(MathNamespace, "abs") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.abs(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.abs(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.abs(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.abs(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.abs(num.toDouble))
+    } */
   }
-  object sin extends BIF1(MathNamespace, "sin") {
-    val operandType = Some(SDecimal)
+  object sin extends Op1(MathNamespace, "sin") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sin(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sin(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.sin(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.sin(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.sin(num.toDouble))
+    } */
   }
-  object nextUp extends BIF1(MathNamespace, "nextUp") {
-    val operandType = Some(SDecimal)
-    val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.nextUp(num.toDouble))
-    }
-  }
-  object log extends BIF1(MathNamespace, "log") {
-    val operandType = Some(SDecimal)
+  object log extends Op1(MathNamespace, "log") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && c(row) > 0
+        def apply(row: Int) = math.log(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if (num > 0) => 
-        SDecimal(Math.log(num.toDouble))
-    }
+        SDecimal(math.log(num.toDouble))
+    } */
   }
-  object signum extends BIF1(MathNamespace, "signum") {
-    val operandType = Some(SDecimal)
+  object signum extends Op1(MathNamespace, "signum") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.signum(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.signum(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.signum(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.signum(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.signum(num.toDouble))
+    } */
   }
-  object acos extends BIF1(MathNamespace, "acos") {
-    val operandType = Some(SDecimal)
+  object acos extends Op1(MathNamespace, "acos") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.acos(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.acos(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        override def isDefinedAt(row: Int) = c.isDefinedAt(row) && (-1 <= c(row)) && (c(row) <= 1)
+        def apply(row: Int) = math.acos(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
       case SDecimal(num) if ((-1 <= num) && (num <= 1))=> 
-        SDecimal(Math.acos(num.toDouble))
-    }
+        SDecimal(math.acos(num.toDouble))
+    } */
   }
-  object ulp extends BIF1(MathNamespace, "ulp") {
-    val operandType = Some(SDecimal)
+  object ulp extends Op1(MathNamespace, "ulp") {
+    val tpe = UnaryOperationType(JNumberT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: DoubleColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ulp(c(row))
+      }
+      case c: LongColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ulp(c(row).toDouble)
+      }
+      case c: NumColumn => new Map1Column(c) with DoubleColumn {
+        def apply(row: Int) = math.ulp(c(row).toDouble)
+      }
+    })
+    
+    /* val operandType = Some(SDecimal)
     val operation: PartialFunction[SValue, SValue] = {
-      case SDecimal(num) => SDecimal(Math.ulp(num.toDouble))
-    }
+      case SDecimal(num) => SDecimal(math.ulp(num.toDouble))
+    } */
   }
-  object nextAfter extends BIF2(MathNamespace, "nextAfter") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object min extends Op2(MathNamespace, "min") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.min(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.nextAfter(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.min(num1.toDouble, num2.toDouble))
+    } */
   }
-  object min extends BIF2(MathNamespace, "min") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object hypot extends Op2(MathNamespace, "hypot") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.hypot(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.min(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.hypot(num1.toDouble, num2.toDouble))
+    } */
   }
-  object hypot extends BIF2(MathNamespace, "hypot") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object pow extends Op2(MathNamespace, "pow") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.pow(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.hypot(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.pow(num1.toDouble, num2.toDouble))
+    } */
   }
-  object pow extends BIF2(MathNamespace, "pow") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object max extends Op2(MathNamespace, "max") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.max(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.pow(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.max(num1.toDouble, num2.toDouble))
+    } */
   }
-  object max extends BIF2(MathNamespace, "max") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object atan2 extends Op2(MathNamespace, "atan2") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.atan2(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.max(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.atan2(num1.toDouble, num2.toDouble))
+    } */
   }
-  object atan2 extends BIF2(MathNamespace, "atan2") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object copySign extends Op2(MathNamespace, "copySign") {  //TODO deal with 2's complement; ensure proper column return types for each case
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row)) == math.signum(c2(row))) c1(row)
+          else -1 * c1(row)
+        }
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row)
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row)
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row)
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row).toDouble
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row)
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row)
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row).toDouble
+          else -1 * c1(row).toDouble
+        }
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = {
+          if (math.signum(c1(row).toDouble) == math.signum(c2(row).toDouble)) c1(row).toDouble
+          else -1 * c1(row).toDouble
+        }
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.atan2(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.copySign(num1.toDouble, num2.toDouble))
+    } */
   }
-  object copySign extends BIF2(MathNamespace, "copySign") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
+  object IEEEremainder extends Op2(MathNamespace, "IEEEremainder") {
+    val tpe = BinaryOperationType(JNumberT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row), c2(row))
+      }
+      case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+      case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with DoubleColumn {
+        def apply(row: Int) = math.IEEEremainder(c1(row).toDouble, c2(row).toDouble)
+      }
+    })
+    
+    /* val operandType = (Some(SDecimal), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.copySign(num1.toDouble, num2.toDouble))
-    }
-  }
-  object IEEEremainder extends BIF2(MathNamespace, "IEEEremainder") {
-    val operandType = (Some(SDecimal), Some(SDecimal))
-    val operation: PartialFunction[(SValue, SValue), SValue] = {
-      case (SDecimal(num1), SDecimal(num2)) => SDecimal(Math.IEEEremainder(num1.toDouble, num2.toDouble))
-    }
+      case (SDecimal(num1), SDecimal(num2)) => SDecimal(math.IEEEremainder(num1.toDouble, num2.toDouble))
+    } */
   }
 }

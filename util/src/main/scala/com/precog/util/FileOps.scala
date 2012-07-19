@@ -6,7 +6,7 @@ import scalaz.Validation
 import scalaz.effect._
 
 trait FileOps {
-  def exists(src: File): Boolean
+  def exists(src: File): IO[Boolean]
 
   def rename(src: File, dest: File): IO[Boolean]
   def copy(src: File, dest: File): IO[Unit]
@@ -17,8 +17,8 @@ trait FileOps {
   def mkdir(dir: File): IO[Boolean]
 }
 
-trait FilesystemFileOps extends FileOps {
-  def exists(src: File) = src.exists()
+object FilesystemFileOps extends FileOps {
+  def exists(src: File) = IO { src.exists() }
 
   def rename(src: File, dest: File) = IO { src.renameTo(dest) }
   def copy(src: File, dest: File) = IOUtils.copyFile(src, dest) 

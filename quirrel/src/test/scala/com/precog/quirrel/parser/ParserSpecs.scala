@@ -883,6 +883,20 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     "associate where to the left" in {
       parse("a where b where c") must beLike { case Where(_, Where(_, Dispatch(_, Identifier(Vector(), "a"), Vector()), Dispatch(_, Identifier(Vector(), "b"), Vector())), Dispatch(_, Identifier(Vector(), "c"), Vector())) => ok }
     }
+    
+    "apply within the body of a let" in {
+      parse("a := 1 + 2 + 3 4") must beLike {
+        case Let(_, Identifier(Vector(), "a"), _, 
+          Add(_, Add(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3")), NumLit(_, "4")) => ok
+      }
+    }
+    
+    "apply within the scope of a let" in {
+      parse("a := 4 1 + 2 + 3") must beLike {
+        case Let(_, Identifier(Vector(), "a"), _, 
+          NumLit(_, "4"), Add(_, Add(_, NumLit(_, "1"), NumLit(_, "2")), NumLit(_, "3"))) => ok
+      }
+    }
   }
   
   "whitespace processing" should {

@@ -70,12 +70,9 @@ object MetadataActorSpec extends Specification with FutureMatchers with Mockito 
 
       val actorRef = TestActorRef(new MetadataActor("test", storage, coord, None))
 
-      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CStringArbitrary, Authorities(Set("me")))
+      val colDesc = ColumnDescriptor(Path("/"), JPath(".test"), CString, Authorities(Set("me")))
 
-      val indexedColumns = ListMap((colDesc -> 0))
-      val sorting = Vector((colDesc -> ById))
-
-      val descriptor = ProjectionDescriptor(indexedColumns, sorting).toOption.get
+      val descriptor = ProjectionDescriptor(1, colDesc :: Nil)
       val values = Vector[CValue](CString("Test123"))
       val metadata = Vector(Set[Metadata]())
 
@@ -107,7 +104,7 @@ object MetadataActorStateSpec extends Specification {
 
   def projectionDescriptor(path: Path, selector: JPath, cType: CType, token: String) = {
     val colDesc = ColumnDescriptor(path, selector, cType, Authorities(Set(token)))
-    val desc = ProjectionDescriptor(ListMap() + (colDesc -> 0), List[(ColumnDescriptor, SortBy)]() :+ (colDesc, ById)).toOption.get
+    val desc = ProjectionDescriptor(1, colDesc :: Nil)
     val metadata = Map[ColumnDescriptor, Map[MetadataType, Metadata]]() + (colDesc -> Map[MetadataType, Metadata]())
     Map((desc -> metadata))
   }
@@ -117,9 +114,9 @@ object MetadataActorStateSpec extends Specification {
   val data: Map[ProjectionDescriptor, ColumnMetadata] = {
     projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1) ++
     projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1) ++
     projectionDescriptor(Path("/abc/"), JPath(".foo.bar"), CBoolean, token1) ++
-    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CStringArbitrary, token1) ++
+    projectionDescriptor(Path("/abc/"), JPath(".foo[0]"), CString, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo.bar"), CBoolean, token1) ++
     projectionDescriptor(Path("/def/"), JPath(".foo.bar.baz.buz"), CBoolean, token1)
@@ -129,12 +126,12 @@ object MetadataActorStateSpec extends Specification {
     PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(""), CBoolean, token1)),
     PathField("foo", Set(
       PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
-      PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+      PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1)),
       PathField("bar", Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
       )),
       PathIndex(0, Set(
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
       ))
     ))
   ))
@@ -192,12 +189,12 @@ object MetadataActorStateSpec extends Specification {
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CStringArbitrary, token1)),
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CString, token1)),
         PathField("bar", Set(
           PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo.bar"), CBoolean, token1))
         )),
         PathIndex(0, Set(
-          PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+          PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
         ))
       ))
 
@@ -226,7 +223,7 @@ object MetadataActorStateSpec extends Specification {
       val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo[0]")).unsafePerformIO
      
       val expected = PathRoot(Set(
-        PathValue(CStringArbitrary, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CStringArbitrary, token1))
+        PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
       ))
 
       result must_== expected
@@ -244,13 +241,13 @@ object MetadataActorStateSpec extends Specification {
   }
 
   "helper methods" should {
-    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CInt, Authorities(Set()))
-    val descriptor1 = ProjectionDescriptor(ListMap[ColumnDescriptor, Int]((colDesc1 -> 0)), Seq[(ColumnDescriptor, SortBy)]((colDesc1 -> ById))).toOption.get
+    val colDesc1 = ColumnDescriptor(Path("/"), JPath(".foo"), CLong, Authorities(Set()))
+    val descriptor1 = ProjectionDescriptor(1, colDesc1 :: Nil)
 
     def emptyProjections = Map[ProjectionDescriptor, ColumnMetadata]()
 
     "add initial metadata for the first value inserted" in {
-      val value = CInt(10)
+      val value = CLong(10)
    
       val valueStats = ProjectionMetadata.valueStats(value).get
       val expectedMetadata = Map((colDesc1 -> Map[MetadataType, Metadata]((valueStats.metadataType, valueStats))))
@@ -261,13 +258,13 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "update existing metadata for values other than the first inserted" in {
-      val initialValue = CInt(10)
+      val initialValue = CLong(10)
    
       val initialValueStats = ProjectionMetadata.valueStats(initialValue).get
       val initialMetadata = Map[MetadataType, Metadata]((initialValueStats.metadataType -> initialValueStats))
       val initialColumnMetadata = Map[ColumnDescriptor, MetadataMap]((colDesc1 -> initialMetadata))
       
-      val value = CInt(20)
+      val value = CLong(20)
    
       val valueStats = ProjectionMetadata.valueStats(value).flatMap{ _.merge(initialValueStats) }.get
 
@@ -279,12 +276,12 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "metadata is correctly combined" in {
-      val firstValue = CInt(10)
+      val firstValue = CLong(10)
       val firstValueStats = ProjectionMetadata.valueStats(firstValue).get
       val firstMetadata = Map[MetadataType, Metadata](firstValueStats.metadataType -> firstValueStats)
       val firstColumnMetadata = Map(colDesc1 -> firstMetadata)
 
-      val secondValue = CInt(20)
+      val secondValue = CLong(20)
    
       val secondValueStats = ProjectionMetadata.valueStats(secondValue).get
       val secondMetadata = Map[MetadataType, Metadata]((secondValueStats.metadataType -> secondValueStats))

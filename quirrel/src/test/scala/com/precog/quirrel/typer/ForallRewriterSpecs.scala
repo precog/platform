@@ -24,7 +24,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
       val results2 @ Let(_, _, _, t: TicVar, _) = results
       
-      t.binding mustEqual UserDef(results2)
+      t.binding mustEqual LetBinding(results2)
     }    
 
     "rewrite expression with two non-adjacent foralls" in {
@@ -45,8 +45,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
       val results2 @ Union(_, l1 @ Let(_, _, _, t1: TicVar, _), l2 @ Let(_, _, _, t2: TicVar, _)) = results
       
-      t1.binding mustEqual UserDef(l1)
-      t2.binding mustEqual UserDef(l2)
+      t1.binding mustEqual LetBinding(l1)
+      t2.binding mustEqual LetBinding(l2)
     }    
 
     "leave non-foralls unchanged" in {
@@ -390,7 +390,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Let(_, _, _, _, Add(_, _, t: TicVar)), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }      
       
       "new" >> {
@@ -407,7 +407,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, New(_, t: TicVar), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }      
 
       "import" >> {
@@ -424,7 +424,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Import(_, _, t: TicVar), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "relate" >> {
@@ -441,7 +441,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Relate(_, t: TicVar, _, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "object def" >> {
@@ -458,7 +458,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, ObjectDef(_, Vector((_, t: TicVar), (_))), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "array def" >> {
@@ -475,7 +475,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, ArrayDef(_, Vector(_, t: TicVar)), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "descent" >> {
@@ -492,7 +492,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Descent(_, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "deref" >> {
@@ -509,7 +509,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Deref(_, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "dispatch" >> {
@@ -526,7 +526,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Dispatch(_, _, Vector(t: TicVar, _)), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
 
       "where" >> {
@@ -543,7 +543,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Where(_, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "with" >> {
@@ -560,7 +560,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, With(_, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
       
       "union" >> {
@@ -577,7 +577,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Union(_, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }      
 
       "intersect" >> {
@@ -594,8 +594,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Intersect(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "difference" >> {
@@ -612,8 +612,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Difference(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "addition" >> {
@@ -630,8 +630,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Add(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "subtraction" >> {
@@ -648,8 +648,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Sub(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "multiplication" >> {
@@ -666,8 +666,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Mul(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "division" >> {
@@ -684,8 +684,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Div(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "less than" >> {
@@ -702,8 +702,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Lt(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "less than equal" >> {
@@ -720,8 +720,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, LtEq(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "greater than" >> {
@@ -738,8 +738,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Gt(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "greater than equal" >> {
@@ -756,8 +756,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, GtEq(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "equal" >> {
@@ -774,8 +774,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Eq(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "not equal" >> {
@@ -792,8 +792,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, NotEq(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "boolean and" >> {
@@ -810,8 +810,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, And(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "boolean or" >> {
@@ -828,8 +828,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Or(_, t1: TicVar, t2: TicVar), _) = results
 
-        t1.binding mustEqual UserDef(results2)
-        t2.binding mustEqual UserDef(results2)
+        t1.binding mustEqual LetBinding(results2)
+        t2.binding mustEqual LetBinding(results2)
       }
 
       "complementation" >> {
@@ -846,7 +846,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Comp(_, t: TicVar), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
 
       "negation" >> {
@@ -863,7 +863,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Neg(_, t: TicVar), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
 
       "parentheticalization" >> {
@@ -880,7 +880,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, Paren(_, t: TicVar), _) = results
 
-        t.binding mustEqual UserDef(results2)
+        t.binding mustEqual LetBinding(results2)
       }
     }
 
@@ -903,7 +903,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Let(_, _, _, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }      
       
       "new" >> {
@@ -921,7 +921,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ New(_, l @ Let(_, _, _, t: TicVar, _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }      
 
       "import" >> {
@@ -939,7 +939,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Import(_, _, l @ Let(_, _, _, t: TicVar, _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
       "relate" >> {
@@ -957,7 +957,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Relate(_, _, _, l @ Let(_, _, _, t: TicVar, _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
       "object def" >> {
@@ -975,7 +975,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ ObjectDef(_, Vector((_, l @ Let(_, _, _, t: TicVar, _)), (_))) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }      
 
       "array def" >> {
@@ -993,7 +993,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ ArrayDef(_, Vector(l @ Let(_, _, _, t: TicVar, _), _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
       
@@ -1013,7 +1013,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Descent(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
       "deref" >> {
@@ -1032,7 +1032,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Deref(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
       "dispatch" >> {
@@ -1051,7 +1051,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Dispatch(_, _, Vector(l @ Let(_, _, _, t: TicVar, _), _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "where" >> {
@@ -1070,7 +1070,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Where(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "with" >> {
@@ -1089,7 +1089,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ With(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "union" >> {
@@ -1108,7 +1108,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Union(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "intersect" >> {
@@ -1127,7 +1127,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Intersect(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "difference" >> {
@@ -1146,7 +1146,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Difference(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "addition" >> {
@@ -1165,7 +1165,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Add(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "subtraction" >> {
@@ -1184,7 +1184,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Sub(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "multiplication" >> {
@@ -1203,7 +1203,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Mul(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "division" >> {
@@ -1222,7 +1222,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Div(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "less than" >> {
@@ -1241,7 +1241,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Lt(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "less than equal" >> {
@@ -1260,7 +1260,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ LtEq(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "greater than" >> {
@@ -1279,7 +1279,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Gt(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "greater than equal" >> {
@@ -1298,7 +1298,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ GtEq(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "equal" >> {
@@ -1317,7 +1317,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Eq(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "not equal" >> {
@@ -1336,7 +1336,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ NotEq(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "boolean and" >> {
@@ -1355,7 +1355,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ And(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "boolean or" >> {
@@ -1374,7 +1374,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Or(_, l @ Let(_, _, _, t: TicVar, _), _) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "complementation" >> {
@@ -1392,7 +1392,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Comp(_, l @ Let(_, _, _, t: TicVar, _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
 
       "negation" >> {
@@ -1412,8 +1412,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Neg(_, l @ Let(_, _, _, Add(_, t1: TicVar, t2: TicVar), _)) = results
 
-        t1.binding mustEqual UserDef(l)
-        t2.binding mustEqual UserDef(l)
+        t1.binding mustEqual LetBinding(l)
+        t2.binding mustEqual LetBinding(l)
       }
 
       "parentheticalization" >> {
@@ -1431,7 +1431,7 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
 
         val results2 @ Paren(_, l @ Let(_, _, _, t: TicVar, _)) = results
 
-        t.binding mustEqual UserDef(l)
+        t.binding mustEqual LetBinding(l)
       }
       
     }

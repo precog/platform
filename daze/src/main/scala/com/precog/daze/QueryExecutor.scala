@@ -1,8 +1,6 @@
 package com.precog
 package daze
 
-import yggdrasil.metadata.MetadataView
-
 import com.precog.common._
 
 import blueeyes.json.JsonAST._

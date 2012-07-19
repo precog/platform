@@ -7,6 +7,7 @@ import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import parser._
+import bytecode.Arity._
 
 import java.io.File
 import scala.io.Source
@@ -17,7 +18,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   "let binding" should {
     "bind name in resulting scope" in {
       val e @ Let(_, _, _, _, d: Dispatch) = parse("a := 42 a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
@@ -29,40 +30,19 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
       left.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "a")))
     }
     
-    "bind tic variable in forall" in {
-      {
-        val e @ Forall(_, _, Add(_, t: TicVar, NumLit(_, _))) = parse("forall 'a 'a + 42")
-        t.binding mustEqual ForallDef(e)
-        t.errors must beEmpty
-      }
-      {
-        val e1 @ Forall(_, _, e2 @ Forall(_, _, Add(_, t1: TicVar, t2: TicVar))) = parse("forall 'a forall 'b 'a + 'b")
-        t1.binding mustEqual ForallDef(e1)
-        t2.binding mustEqual ForallDef(e2)
-
-        t1.errors must beEmpty
-        t2.errors must beEmpty
-      }
-      {
-        val e @ Forall(_, _, Forall(_, _, Add(_, t1: TicVar, _))) = parse("forall 'a forall 'b 'a + 42")
-        t1.binding mustEqual ForallDef(e)
-        t1.errors must beEmpty
-      }
-    }
-    
     "bind all tic-variables in expression scope" in {
       {
         val e @ Let(_, _, _, t: TicVar, _) = parse("a('b) := 'b a")
-        t.binding mustEqual UserDef(e)
+        t.binding mustEqual LetBinding(e)
         t.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, Add(_, Add(_, tb: TicVar, tc: TicVar), td: TicVar), _) = parse("a('b, 'c, 'd) := 'b + 'c + 'd a")
         
-        tb.binding mustEqual UserDef(e)
-        tc.binding mustEqual UserDef(e)
-        td.binding mustEqual UserDef(e)
+        tb.binding mustEqual LetBinding(e)
+        tc.binding mustEqual LetBinding(e)
+        td.binding mustEqual LetBinding(e)
         
         tb.errors must beEmpty
         tc.errors must beEmpty
@@ -79,7 +59,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind name in inner scope" in {
       val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, _, d: Dispatch)) = parse("a := 42 b := 24 b")
       
-      d.binding mustEqual UserDef(e2)
+      d.binding mustEqual LetBinding(e2)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
@@ -87,7 +67,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind tic-variable in inner scope" in {
       val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, t: TicVar, _)) = parse("a := 42 b('b) := 'b 24")
       
-      t.binding mustEqual UserDef(e2)
+      t.binding mustEqual LetBinding(e2)
       t.errors must beEmpty
     }
     
@@ -156,7 +136,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         tree.errors must beEmpty
       }
     }
-
+    
     "reject multiple definitions of tic-variables" in {
       {
         val tree = parse("f('a, 'a) := 1 2")
@@ -189,112 +169,112 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "allow shadowing of user-defined bindings" in {
       val Let(_, _, _, _, e @ Let(_, _, _, _, d: Dispatch)) = parse("a := 1 a := 2 a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "allow shadowing of tic-variables" in {
       val Let(_, _, _, _, e @ Let(_, _, _, t: TicVar, _)) = parse("a('c) := 1 b('c) := 'c 2")
-      t.binding mustEqual UserDef(e)
+      t.binding mustEqual LetBinding(e)
       t.errors must beEmpty
     }
     
     "allow shadowing of built-in bindings" in {
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("count := 1 count")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("geometricMean := 1 geometricMean")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("load := 1 load")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("max := 1 max")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("mean := 1 mean")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("median := 1 median")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("mean := 1 mean")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("min := 1 min")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("mode := 1 mode")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("stdDev := 1 stdDev")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("sum := 1 sum")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }      
 
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("sumSq := 1 sumSq")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("variance := 1 variance")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, d: Dispatch) = parse("distinct := 1 distinct")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -302,16 +282,16 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "not leak shadowing into an adjacent scope" in {
       val e @ Let(_, _, _, _, Add(_, _, d: Dispatch)) = parse("a := 1 (a := 2 3) + a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
   }
   
-  "inherited scoping in let" should {
+  "inherited scoping" should {
     "forward direct binding" in {
       val e @ Let(_, _, _, _, d: Dispatch) = parse("a := 42 a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
@@ -319,26 +299,18 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through let" in {
       val e1 @ Let(_, _, _, _, e2 @ Let(_, _, _, d1: Dispatch, d2: Dispatch)) = parse("a := 42 b := a a")
       
-      d1.binding mustEqual UserDef(e1)
+      d1.binding mustEqual LetBinding(e1)
       d1.isReduction mustEqual false
       d1.errors must beEmpty
       
-      d2.binding mustEqual UserDef(e1)
+      d2.binding mustEqual LetBinding(e1)
       d2.isReduction mustEqual false
       d2.errors must beEmpty
-    }    
-
-    "forward binding through forall" in {
-      val e1 @ Let(_, _, _, _, Forall(_, _, d: Dispatch)) = parse("a := 42 forall 'b a")
-      
-      d.binding mustEqual UserDef(e1)
-      d.isReduction mustEqual false
-      d.errors must beEmpty
     }
     
     "forward binding through new" in {
       val e @ Let(_, _, _, _, New(_, d: Dispatch)) = parse("a := 42 new a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
@@ -346,21 +318,21 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through relate" in {
       {
         val e @ Let(_, _, _, _, Relate(_, d: Dispatch, _, _)) = parse("a := 42 a ~ 1 2")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Relate(_, _, d: Dispatch, _)) = parse("a := 42 1 ~ a 2")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Relate(_, _, _, d: Dispatch)) = parse("a := 42 1 ~ 2 a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -368,36 +340,36 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "forward binding through object definition" in {
       val e @ Let(_, _, _, _, ObjectDef(_, Vector((_, d: Dispatch)))) = parse("a := 42 { a: a }")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through array definition" in {
       val e @ Let(_, _, _, _, ArrayDef(_, Vector(d: Dispatch))) = parse("a := 42 [a]")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through descent" in {
       val e @ Let(_, _, _, _, Descent(_, d: Dispatch, _)) = parse("a := 42 a.b")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through dereference" in {
       val e @ Let(_, _, _, _, Deref(_, _, d: Dispatch)) = parse("a := 42 1[a]")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through dispatch" in {
-      forall(libReduct) { f => 
+      forall(libReduction) { f => 
         val e @ Let(_, _, _, _, Dispatch(_, _, Vector(d: Dispatch))) = parse("a := 42 %s(a)".format(f.fqn))
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -406,14 +378,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through where" in {
       {
         val e @ Let(_, _, _, _, Where(_, d: Dispatch, _)) = parse("a := 42 a where 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Where(_, _, d: Dispatch)) = parse("a := 42 1 where a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -422,14 +394,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through with" in {
       {
         val e @ Let(_, _, _, _, With(_, d: Dispatch, _)) = parse("a := 42 a with 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, With(_, _, d: Dispatch)) = parse("a := 42 1 with a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -438,14 +410,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through union" in {
       {
         val e @ Let(_, _, _, _, Union(_, d: Dispatch, _)) = parse("a := 42 a union 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Union(_, _, d: Dispatch)) = parse("a := 42 1 union a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -454,14 +426,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through intersect" in {
       {
         val e @ Let(_, _, _, _, Intersect(_, d: Dispatch, _)) = parse("a := 42 a intersect 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Intersect(_, _, d: Dispatch)) = parse("a := 42 1 intersect a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -470,14 +442,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through difference" in {
       {
         val e @ Let(_, _, _, _, Difference(_, d: Dispatch, _)) = parse("a := 42 a difference 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Difference(_, _, d: Dispatch)) = parse("a := 42 1 difference a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -486,14 +458,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through addition" in {
       {
         val e @ Let(_, _, _, _, Add(_, d: Dispatch, _)) = parse("a := 42 a + 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Add(_, _, d: Dispatch)) = parse("a := 42 1 + a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -502,14 +474,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through subtraction" in {
       {
         val e @ Let(_, _, _, _, Sub(_, d: Dispatch, _)) = parse("a := 42 a - 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Sub(_, _, d: Dispatch)) = parse("a := 42 1 - a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -518,14 +490,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through multiplication" in {
       {
         val e @ Let(_, _, _, _, Mul(_, d: Dispatch, _)) = parse("a := 42 a * 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Mul(_, _, d: Dispatch)) = parse("a := 42 1 * a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -534,14 +506,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through division" in {
       {
         val e @ Let(_, _, _, _, Div(_, d: Dispatch, _)) = parse("a := 42 a / 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Div(_, _, d: Dispatch)) = parse("a := 42 1 / a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -550,14 +522,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through less-than" in {
       {
         val e @ Let(_, _, _, _, Lt(_, d: Dispatch, _)) = parse("a := 42 a < 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Lt(_, _, d: Dispatch)) = parse("a := 42 1 < a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -566,14 +538,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through less-than-equal" in {
       {
         val e @ Let(_, _, _, _, LtEq(_, d: Dispatch, _)) = parse("a := 42 a <= 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, LtEq(_, _, d: Dispatch)) = parse("a := 42 1 <= a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -582,14 +554,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through greater-than" in {
       {
         val e @ Let(_, _, _, _, Gt(_, d: Dispatch, _)) = parse("a := 42 a > 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Gt(_, _, d: Dispatch)) = parse("a := 42 1 > a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -598,14 +570,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through greater-than-equal" in {
       {
         val e @ Let(_, _, _, _, GtEq(_, d: Dispatch, _)) = parse("a := 42 a >= 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, GtEq(_, _, d: Dispatch)) = parse("a := 42 1 >= a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -614,14 +586,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through equality" in {
       {
         val e @ Let(_, _, _, _, Eq(_, d: Dispatch, _)) = parse("a := 42 a = 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Eq(_, _, d: Dispatch)) = parse("a := 42 1 = a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -630,14 +602,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through not-equality" in {
       {
         val e @ Let(_, _, _, _, NotEq(_, d: Dispatch, _)) = parse("a := 42 a != 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, NotEq(_, _, d: Dispatch)) = parse("a := 42 1 != a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -646,14 +618,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through boolean and" in {
       {
         val e @ Let(_, _, _, _, And(_, d: Dispatch, _)) = parse("a := 42 a & 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, And(_, _, d: Dispatch)) = parse("a := 42 1 & a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -662,14 +634,14 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "forward binding through boolean or" in {
       {
         val e @ Let(_, _, _, _, Or(_, d: Dispatch, _)) = parse("a := 42 a | 1")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
       
       {
         val e @ Let(_, _, _, _, Or(_, _, d: Dispatch)) = parse("a := 42 1 | a")
-        d.binding mustEqual UserDef(e)
+        d.binding mustEqual LetBinding(e)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -677,437 +649,60 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "forward binding through complement" in {
       val e @ Let(_, _, _, _, Comp(_, d: Dispatch)) = parse("a := 42 !a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through negation" in {
       val e @ Let(_, _, _, _, Neg(_, d: Dispatch)) = parse("a := 42 neg a")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "forward binding through parentheses" in {
       val e @ Let(_, _, _, _, Paren(_, d: Dispatch)) = parse("a := 42 (a)")
-      d.binding mustEqual UserDef(e)
+      d.binding mustEqual LetBinding(e)
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
   }
-
-  "inherited scoping in forall" should {
-    "forward direct binding" in {
-      val e @ Forall(_, _, d: TicVar) = parse("forall 'a 'a")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through let" in {
-      val e1 @ Forall(_, _, e2 @ Let(_, _, _, d1: TicVar, d2: Dispatch)) = parse("forall 'a foo := 'a foo")
-      
-      d1.binding mustEqual ForallDef(e1)
-      d1.errors must beEmpty
-      
-      d2.binding mustEqual UserDef(e2)
-      d2.isReduction mustEqual false
-      d2.errors must beEmpty
-    }    
-
-    "forward binding through forall" in {
-      val e1 @ Forall(_, _, Forall(_, _, d: TicVar)) = parse("forall 'a forall 'b 'a")
-      
-      d.binding mustEqual ForallDef(e1)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through new" in {
-      val e @ Forall(_, _, New(_, d: TicVar)) = parse("forall 'a new 'a")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through relate" in {
-      {
-        val e @ Forall(_, _, Relate(_, d: TicVar, _, _)) = parse("forall 'a 'a ~ 1 2")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Relate(_, _, d: TicVar, _)) = parse("forall 'a 1 ~ 'a 2")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Relate(_, _, _, d: TicVar)) = parse("forall 'a 1 ~ 2 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through object definition" in {
-      val e @ Forall(_, _, ObjectDef(_, Vector((_, d: TicVar)))) = parse("forall 'a { a: 'a }")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through array definition" in {
-      val e @ Forall(_, _, ArrayDef(_, Vector(d: TicVar))) = parse("forall 'a ['a]")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through descent" in {
-      val e @ Forall(_, _, Descent(_, d: TicVar, _)) = parse("forall 'a 'a.b")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through dereference" in {
-      val e @ Forall(_, _, Deref(_, _, d: TicVar)) = parse("forall 'a 1['a]")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through dispatch" in {
-      forall(libReduct) { f => 
-        val e @ Forall(_, _, Dispatch(_, _, Vector(d: TicVar))) = parse("forall 'a %s('a)".format(f.fqn))
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through where" in {
-      {
-        val e @ Forall(_, _, Where(_, d: TicVar, _)) = parse("forall 'a 'a where 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Where(_, _, d: TicVar)) = parse("forall 'a 1 where 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through with" in {
-      {
-        val e @ Forall(_, _, With(_, d: TicVar, _)) = parse("forall 'a 'a with 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, With(_, _, d: TicVar)) = parse("forall 'a 1 with 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through union" in {
-      {
-        val e @ Forall(_, _, Union(_, d: TicVar, _)) = parse("forall 'a 'a union 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Union(_, _, d: TicVar)) = parse("forall 'a 1 union 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through intersect" in {
-      {
-        val e @ Forall(_, _, Intersect(_, d: TicVar, _)) = parse("forall 'a 'a intersect 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Intersect(_, _, d: TicVar)) = parse("forall 'a 1 intersect 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through difference" in {
-      {
-        val e @ Forall(_, _, Difference(_, d: TicVar, _)) = parse("forall 'a 'a difference 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Difference(_, _, d: TicVar)) = parse("forall 'a 1 difference 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through addition" in {
-      {
-        val e @ Forall(_, _, Add(_, d: TicVar, _)) = parse("forall 'a 'a + 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Add(_, _, d: TicVar)) = parse("forall 'a 1 + 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through subtraction" in {
-      {
-        val e @ Forall(_, _, Sub(_, d: TicVar, _)) = parse("forall 'a 'a - 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Sub(_, _, d: TicVar)) = parse("forall 'a 1 - 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through multiplication" in {
-      {
-        val e @ Forall(_, _, Mul(_, d: TicVar, _)) = parse("forall 'a 'a * 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Mul(_, _, d: TicVar)) = parse("forall 'a 1 * 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through division" in {
-      {
-        val e @ Forall(_, _, Div(_, d: TicVar, _)) = parse("forall 'a 'a / 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Div(_, _, d: TicVar)) = parse("forall 'a 1 / 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through less-than" in {
-      {
-        val e @ Forall(_, _, Lt(_, d: TicVar, _)) = parse("forall 'a 'a < 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Lt(_, _, d: TicVar)) = parse("forall 'a 1 < 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through less-than-equal" in {
-      {
-        val e @ Forall(_, _, LtEq(_, d: TicVar, _)) = parse("forall 'a 'a <= 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, LtEq(_, _, d: TicVar)) = parse("forall 'a 1 <= 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through greater-than" in {
-      {
-        val e @ Forall(_, _, Gt(_, d: TicVar, _)) = parse("forall 'a 'a > 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Gt(_, _, d: TicVar)) = parse("forall 'a 1 > 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through greater-than-equal" in {
-      {
-        val e @ Forall(_, _, GtEq(_, d: TicVar, _)) = parse("forall 'a 'a >= 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, GtEq(_, _, d: TicVar)) = parse("forall 'a 1 >= 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through equality" in {
-      {
-        val e @ Forall(_, _, Eq(_, d: TicVar, _)) = parse("forall 'a 'a = 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Eq(_, _, d: TicVar)) = parse("forall 'a 1 = 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through not-equality" in {
-      {
-        val e @ Forall(_, _, NotEq(_, d: TicVar, _)) = parse("forall 'a 'a != 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, NotEq(_, _, d: TicVar)) = parse("forall 'a 1 != 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through boolean and" in {
-      {
-        val e @ Forall(_, _, And(_, d: TicVar, _)) = parse("forall 'a 'a & 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, And(_, _, d: TicVar)) = parse("forall 'a 1 & 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through boolean or" in {
-      {
-        val e @ Forall(_, _, Or(_, d: TicVar, _)) = parse("forall 'a 'a | 1")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-      
-      {
-        val e @ Forall(_, _, Or(_, _, d: TicVar)) = parse("forall 'a 1 | 'a")
-        d.binding mustEqual ForallDef(e)
-        
-        d.errors must beEmpty
-      }
-    }
-    
-    "forward binding through complement" in {
-      val e @ Forall(_, _, Comp(_, d: TicVar)) = parse("forall 'a !'a")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through negation" in {
-      val e @ Forall(_, _, Neg(_, d: TicVar)) = parse("forall 'a neg 'a")
-      d.binding mustEqual ForallDef(e)
-      
-      d.errors must beEmpty
-    }
-    
-    "forward binding through parentheses" in {
-      val e @ Forall(_, _, Paren(_, d: TicVar)) = parse("forall 'a ('a)")
-      d.binding mustEqual ForallDef(e)
-
-      d.errors must beEmpty
-    }
-  }
   
-  "pre-binding of BuiltIns" should {
+  "pre-binding of load and distinct" should {
     "bind load" in {
       val d @ Dispatch(_, _, _) = parse("load")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "load"), 1, false)
+      d.binding mustEqual LoadBinding(Identifier(Vector(), "load"))
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
     
     "bind distinct" in {
       val d @ Dispatch(_, _, _) = parse("distinct")
-      d.binding mustEqual BuiltIn(Identifier(Vector(), "distinct"), 1, false)
+      d.binding mustEqual DistinctBinding(Identifier(Vector(), "distinct"))
       d.isReduction mustEqual false
       d.errors must beEmpty
     }
   }
 
   "pre-binding of built-in functions" should {
-    "bind reductions" in {
-      libReduct must not(beEmpty)
+    "bind morphisms" in {
+      libMorphism must not(beEmpty)
 
-      forall(libReduct) { f =>
+      forall(libMorphism) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual RedLibBuiltIn(f)
+        d.binding mustEqual MorphismBinding(f)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }    
+    
+    "bind reductions" in {
+      libReduction must not(beEmpty)
+
+      forall(libReduction) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual ReductionBinding(f)
         d.isReduction mustEqual true
         d.errors must beEmpty
       }
@@ -1116,7 +711,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind unary functions" in {
       forall(lib1) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual StdLibBuiltIn1(f)
+        d.binding mustEqual Op1Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -1125,7 +720,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "bind binary functions" in {
       forall(lib2) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual StdLibBuiltIn2(f)
+        d.binding mustEqual Op2Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
@@ -1140,7 +735,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1152,7 +747,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1163,7 +758,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1185,7 +780,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, false))
+      d.binding mustEqual Op1Binding(Op1(Vector("std"), "lib", 0x0004))
       d.errors must beEmpty
     }
     
@@ -1196,7 +791,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std"), "bin", 0x0001))
       d.errors must beEmpty
     }
     
@@ -1208,10 +803,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector(), "bin", 0x0000, true))
+      d1.binding mustEqual Op1Binding(Op1(Vector(), "bin", 0x0000))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001, true))
+      d2.binding mustEqual Op1Binding(Op1(Vector("std"), "bin", 0x0001))
       d2.errors must beEmpty
     }
   }
@@ -1224,7 +819,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1235,10 +830,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d1.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdLibBuiltIn2(BIF2(Vector("std", "lib"), "baz2", 0x0003, false))
+      d2.binding mustEqual Op2Binding(Op2(Vector("std", "lib"), "baz2", 0x0003))
       d2.errors must beEmpty
     }
     
@@ -1250,7 +845,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1261,7 +856,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std", "lib"), "baz", 0x0003, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std", "lib"), "baz", 0x0003))
       d.errors must beEmpty
     }
     
@@ -1272,7 +867,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "lib", 0x0004, false))
+      d.binding mustEqual Op1Binding(Op1(Vector("std"), "lib", 0x0004))
       d.errors must beEmpty
     }
     
@@ -1283,7 +878,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Import(_, _, d: Dispatch) = parse(input)
       
-      d.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001, true))
+      d.binding mustEqual Op1Binding(Op1(Vector("std"), "bin", 0x0001))
       d.errors must beEmpty
     }
     
@@ -1295,10 +890,10 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)
       
-      d1.binding mustEqual StdLibBuiltIn1(BIF1(Vector(), "bin", 0x0000, true))
+      d1.binding mustEqual Op1Binding(Op1(Vector(), "bin", 0x0000))
       d1.errors must beEmpty
       
-      d2.binding mustEqual StdLibBuiltIn1(BIF1(Vector("std"), "bin", 0x0001, true))
+      d2.binding mustEqual Op1Binding(Op1(Vector("std"), "bin", 0x0001))
       d2.errors must beEmpty
     }
   }

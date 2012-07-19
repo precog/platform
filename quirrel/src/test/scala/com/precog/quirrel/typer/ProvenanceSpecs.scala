@@ -25,9 +25,7 @@ object ProvenanceSpecs extends Specification
           foo('a) := %s('a) 
           foo(clicks)""".format(f.fqn))
 
-        if (f.isOperation == true) { tree.provenance mustEqual StaticProvenance("/clicks") }
-        else tree.provenance mustEqual ValueProvenance
-
+        tree.provenance mustEqual StaticProvenance("/clicks")
         tree.errors must beEmpty
       }
     }       
@@ -39,15 +37,13 @@ object ProvenanceSpecs extends Specification
           foo('a, 'b) := %s('a, 'b) 
           foo(clicks.a, clicks.b)""".format(f.fqn))
 
-        if (f.isOperation == true) { tree.provenance mustEqual StaticProvenance("/clicks") }
-        else tree.provenance mustEqual ValueProvenance
-
+        tree.provenance mustEqual StaticProvenance("/clicks")
         tree.errors must beEmpty
       }
     }     
 
     "compute result provenance correctly in a BIR" in {
-      forall(libReduct) { f =>
+      forall(libReduction) { f =>
         val tree = parse("""
           clicks := //clicks
           foo('a) := %s('a) 
@@ -363,7 +359,7 @@ object ProvenanceSpecs extends Specification
       }
     }
 
-    "identify built-in set-reduce dispatch" in {
+    "identify distinct dispatch" in {
       {
         val tree = compile("distinct(//foo)")
         tree.provenance must beLike { case DynamicProvenance(_) => ok }
@@ -372,32 +368,44 @@ object ProvenanceSpecs extends Specification
       }
     }
 
-    "identify built-in non-reduce dispatch of arity 1 according to its child" in {
-      val f = lib1.head
-      val tree = compile("%s(//foo)".format(f.fqn))
-      tree.provenance mustEqual StaticProvenance("/foo")
-      tree.errors must beEmpty
+    "identify op1 dispatch according to its child" in {
+      forall(lib1) { f =>
+        val tree = compile("%s(//foo)".format(f.fqn))
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
     }
 
-    "identify built-in reduce dispatch of arity 1 given incorrect number of parameters" in {
-      val f = lib1.head
-      val tree = compile("%s(//foo, //bar)".format(f.fqn))
-      tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(IncorrectArity(1, 2))
+    "identify op1 dispatch given incorrect number of parameters" in {
+      forall(lib1) { f =>
+        val tree = compile("%s(//foo, //bar)".format(f.fqn))
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(IncorrectArity(1, 2))
+      }
     }
 
-    "identify built-in non-reduce dispatch of arity 2 according to its children given unrelated sets" in {
-      val f = lib2.head
-      val tree = compile("%s(//foo, //bar)".format(f.fqn))
-      tree.provenance mustEqual NullProvenance
-      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    "identify op2 dispatch according to its children given unrelated sets" in {
+      forall(lib2) { f => 
+        val tree = compile("%s(//foo, //bar)".format(f.fqn))
+        tree.provenance mustEqual NullProvenance
+        tree.errors mustEqual Set(OperationOnUnrelatedSets)
+      }
     }
 
-    "identify built-in non-reduce dispatch of arity 2 according to its children given related sets" in {
-      val f = lib2.head
-      val tree = compile("""%s(//foo, "bar")""".format(f.fqn))
-      tree.provenance mustEqual StaticProvenance("/foo")
-      tree.errors must beEmpty
+    "identify op2 dispatch according to its children given a load and a value" in {
+      forall(lib2) { f =>
+        val tree = compile("""%s(//foo, "bar")""".format(f.fqn))
+        tree.provenance mustEqual StaticProvenance("/foo")
+        tree.errors must beEmpty
+      }
+    }
+
+    "identify op2 dispatch according to its children given set related by ~" in {
+      forall(lib2) { f =>
+        val tree = compile("""//foo ~ //bar %s(//foo, //bar)""".format(f.fqn))
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
     }
     
     "identify load dispatch with static params according to its path" in {
@@ -1090,52 +1098,60 @@ object ProvenanceSpecs extends Specification
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(5)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
-          tree.errors must beEmpty
+          forall(lib1) { f =>
+            val tree = compile("%s(5)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(//faz)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
-          tree.errors must beEmpty
+          forall(lib1) { f =>
+            val tree = compile("%s(//faz)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(//faz, //baz)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case None => ok }
-          tree.errors mustEqual Set(IncorrectArity(1, 2))
+          forall(lib1) { f =>
+            val tree = compile("%s(//faz, //baz)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case None => ok }
+            tree.errors mustEqual Set(IncorrectArity(1, 2))
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(5, 6)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(5, 6)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//faz.a, //faz.b)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(//faz.a, //faz.b)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+            tree.errors must beEmpty
+          }
         }        
         {
-          val f = lib2.head
-          val tree = compile("%s(//faz.a, //baz.a)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"), StaticProvenance("/baz"))) => ok }
-          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+          forall(lib2) { f =>
+            val tree = compile("%s(//faz.a, //baz.a)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"), StaticProvenance("/baz"))) => ok }
+            tree.errors mustEqual Set(OperationOnUnrelatedSets)
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//faz.a, 55)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(//faz.a, 55)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/faz"))) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//faz)".format(f.fqn))
-          tree.accumulatedProvenance must beLike { case None => ok }
-          tree.errors mustEqual Set(IncorrectArity(2, 1))
+          forall(lib2) { f =>
+            val tree = compile("%s(//faz)".format(f.fqn))
+            tree.accumulatedProvenance must beLike { case None => ok }
+            tree.errors mustEqual Set(IncorrectArity(2, 1))
+         }
         }
         {
           val tree = compile("""bar("baz")""")
@@ -1625,16 +1641,18 @@ object ProvenanceSpecs extends Specification
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(10) union {a: 33}".format(f.fqn))
-          tree.provenance must beLike { case DynamicProvenance(_) => ok }
-          tree.errors must beEmpty
+          forall(lib1) { f =>
+            val tree = compile("%s(10) union {a: 33}".format(f.fqn))
+            tree.provenance must beLike { case DynamicProvenance(_) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//bar.foo, //bar.ack) union //bar".format(f.fqn))
-          tree.provenance must beLike { case DynamicProvenance(_) => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(//bar.foo, //bar.ack) union //bar".format(f.fqn))
+            tree.provenance must beLike { case DynamicProvenance(_) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
           val tree = compile("f := true union false f")
@@ -1932,16 +1950,18 @@ object ProvenanceSpecs extends Specification
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(10) intersect {a: 33}".format(f.fqn))
-          tree.provenance must beLike { case DynamicProvenance(_) => ok }
-          tree.errors must beEmpty
+          forall(lib1) { f =>
+            val tree = compile("%s(10) intersect {a: 33}".format(f.fqn))
+            tree.provenance must beLike { case DynamicProvenance(_) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//bar.foo, //bar.ack) intersect //bar".format(f.fqn))
-          tree.provenance must beLike { case DynamicProvenance(_) => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(//bar.foo, //bar.ack) intersect //bar".format(f.fqn))
+            tree.provenance must beLike { case DynamicProvenance(_) => ok }
+            tree.errors must beEmpty
+          }
         }
         {
           val tree = compile("f := true intersect false f")
@@ -2239,16 +2259,18 @@ object ProvenanceSpecs extends Specification
           tree.errors mustEqual Set(IncorrectArity(1, 2))
         }
         {
-          val f = lib1.head
-          val tree = compile("%s(10) difference {a: //foo}".format(f.fqn))
-          tree.provenance must beLike { case ValueProvenance => ok }
-          tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+          forall(lib1) { f =>
+            val tree = compile("%s(10) difference {a: //foo}".format(f.fqn))
+            tree.provenance must beLike { case ValueProvenance => ok }
+            tree.errors mustEqual Set(DifferenceProvenanceDifferentLength)
+          }
         }
         {
-          val f = lib2.head
-          val tree = compile("%s(//bar.foo, //bar.ack) difference //baz".format(f.fqn))
-          tree.provenance must beLike { case StaticProvenance("/bar") => ok }
-          tree.errors must beEmpty
+          forall(lib2) { f =>
+            val tree = compile("%s(//bar.foo, //bar.ack) difference //baz".format(f.fqn))
+            tree.provenance must beLike { case StaticProvenance("/bar") => ok }
+            tree.errors must beEmpty
+          }
         }
         {
           val tree = compile("f := //foo difference //bar f")

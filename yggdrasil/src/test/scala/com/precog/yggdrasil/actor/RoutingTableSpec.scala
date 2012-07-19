@@ -15,8 +15,7 @@ class RoutingTableSpec extends Specification {
   
   "SingleColumnProjectionRoutingTable" should {
 
-    def toProjDesc(colDescs: List[ColumnDescriptor]) = 
-      ProjectionDescriptor( colDescs.foldRight( ListMap[ColumnDescriptor, Int]() ) { (el, acc) => acc + (el->0) }, colDescs.map { (_, ById) } ).toOption.get
+    def toProjDesc(colDescs: List[ColumnDescriptor]) = ProjectionDescriptor(1, colDescs)
 
     "project an event with one property to a single projection action" in {
       val rt = new SingleColumnProjectionRoutingTable
@@ -30,7 +29,7 @@ class RoutingTableSpec extends Specification {
       
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
       
-      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CStringArbitrary, Authorities(Set("token")))
+      val colDesc = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CString, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 
@@ -53,14 +52,14 @@ class RoutingTableSpec extends Specification {
 
       val msg = EventMessage(EventId(0,0), Event(Path("/a/b"), "token", jval, metadata))
 
-      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CStringArbitrary, Authorities(Set("token")))
-      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), CInt, Authorities(Set("token")))
+      val colDesc1 = ColumnDescriptor(Path("/a/b/"),JPath(".selector"), CString, Authorities(Set("token")))
+      val colDesc2 = ColumnDescriptor(Path("/a/b/"),JPath(".foo.bar"), CLong, Authorities(Set("token")))
 
       val actions = rt.route(msg)
 
       val expected = Seq(
         ProjectionData(toProjDesc(colDesc1 :: Nil), List[CValue](CString("Test")), List(Set.empty)),
-        ProjectionData(toProjDesc(colDesc2 :: Nil), List[CValue](CInt(123)), List(Set.empty))
+        ProjectionData(toProjDesc(colDesc2 :: Nil), List[CValue](CLong(123)), List(Set.empty))
       )
 
       actions must containAllOf(expected).only

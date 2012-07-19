@@ -11,14 +11,20 @@ trait CrossOrdering extends DAG {
     val memotable = mutable.Map[DepGraph, DepGraph]()
     
     def memoizedSpec(spec: BucketSpec, splits: => Map[dag.Split, dag.Split]): BucketSpec = spec match {
-      case MergeBucketSpec(left, right, and) =>
-        MergeBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits), and)
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case ZipBucketSpec(left, right) =>
-        ZipBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
       
-      case SingleBucketSpec(target, solution) =>
-        SingleBucketSpec(memoized(target, splits), memoized(solution, splits))
+      case dag.Group(id, target, child) =>
+        dag.Group(id, memoized(target, splits), memoizedSpec(child, splits))
+      
+      case UnfixedSolution(id, target) =>
+        UnfixedSolution(id, memoized(target, splits))
+      
+      case dag.Extra(target) =>
+        dag.Extra(memoized(target, splits))
     }
     
     def memoized(node: DepGraph, _splits: => Map[dag.Split, dag.Split]): DepGraph = {
@@ -34,23 +40,29 @@ trait CrossOrdering extends DAG {
         case dag.New(loc, parent) =>
           dag.New(loc, memoized(parent, splits))
         
-        case dag.LoadLocal(loc, range, parent, tpe) =>
-          dag.LoadLocal(loc, range, memoized(parent, splits), tpe)
-        
+        case dag.LoadLocal(loc, parent, tpe) =>
+          dag.LoadLocal(loc, memoized(parent, splits), tpe)
+
         case Operate(loc, op, parent) =>
           Operate(loc, op, memoized(parent, splits))
         
-        case dag.SetReduce(loc, red, parent) =>
-          dag.SetReduce(loc, red, memoized(parent, splits))
+        case dag.Morph1(loc, m, parent) =>
+          dag.Morph1(loc, m, memoized(parent, splits))
+        
+        case dag.Morph2(loc, m, left, right) =>
+          dag.Morph2(loc, m, memoized(left, splits), memoized(right, splits))
+        
+        case dag.Distinct(loc, parent) =>
+          dag.Distinct(loc, memoized(parent, splits))
                 
         case dag.Reduce(loc, red, parent) =>
           dag.Reduce(loc, red, memoized(parent, splits))
         
-        case s @ dag.Split(loc, specs, child) => {
+        case s @ dag.Split(loc, spec, child) => {
           lazy val splits2 = splits + (s -> result)
-          lazy val specs2 = specs map { s => memoizedSpec(s, splits2) }
+          lazy val spec2 = memoizedSpec(spec, splits2)
           lazy val child2 = memoized(child, splits2)
-          lazy val result: dag.Split = dag.Split(loc, specs2, child2)
+          lazy val result: dag.Split = dag.Split(loc, spec2, child2)
           result
         }
         
@@ -85,7 +97,7 @@ trait CrossOrdering extends DAG {
         case Join(loc, instr, left, right) =>
           Join(loc, instr, memoized(left, splits), memoized(right, splits))
         
-        case Filter(loc, None, range, target, boolean) => {
+        case Filter(loc, None, target, boolean) => {
           val target2 = memoized(target, splits)
           val boolean2 = memoized(boolean, splits)
           
@@ -95,17 +107,17 @@ trait CrossOrdering extends DAG {
           val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
           if (targetPrefix && booleanPrefix)
-            Filter(loc, None, range, target2, boolean2)
+            Filter(loc, None, target2, boolean2)
           else if (targetPrefix && !booleanPrefix)
-            Filter(loc, None, range, target2, Sort(boolean2, booleanIndexes))
+            Filter(loc, None, target2, Sort(boolean2, booleanIndexes))
           else if (!targetPrefix && booleanPrefix)
-            Filter(loc, None, range, Sort(target2, targetIndexes), boolean2)
+            Filter(loc, None, Sort(target2, targetIndexes), boolean2)
           else  
-            Filter(loc, None, range, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+            Filter(loc, None, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
         }
         
-        case Filter(loc, cross, range, target, boolean) =>
-          Filter(loc, cross, range, memoized(target, splits), memoized(boolean, splits))
+        case Filter(loc, cross, target, boolean) =>
+          Filter(loc, cross, memoized(target, splits), memoized(boolean, splits))
         
         case Sort(parent, _) => memoized(parent, splits)
         
