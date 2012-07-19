@@ -32,7 +32,7 @@ import org.specs2.mutable._
 
 trait TestConfigComponent extends table.StubColumnarTableModule {
   
-  def asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
+  val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
   
   object yggConfig extends YggConfig
   
