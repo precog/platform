@@ -27,7 +27,6 @@ import org.scalacheck.Arbitrary._
 class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with TestColumnarTableModule with TransformSpec { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
-  val sliceSize = 10
   val testPath = Path("/tableOpsSpec")
 
   def debugPrint(dataset: Table): Unit = {
@@ -79,9 +78,6 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
     lib(name)
   }
 
-  def fromJson(sampleData: SampleData): Table = fromJson(sampleData.data)
-  def toJson(dataset: Table): Stream[JValue] = dataset.toJson.toStream
-
   type Table = UnloadableTable
   class UnloadableTable(slices: Iterable[Slice]) extends ColumnarTable(slices) {
     def load(jtpe: JType): Future[Table] = sys.error("todo")
@@ -111,7 +107,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
         )
       )
 
-      val dataset = fromJson(SampleData(sample.toStream))
+      val dataset = fromJson(sample.toStream)
       //dataset.slices.foreach(println)
       val results = dataset.toJson.toList
       results must containAllOf(sample).only

@@ -75,8 +75,8 @@ trait CogroupSpec extends TableModuleSpec {
 
   def testCogroup(l: SampleData, r: SampleData) = {
     try {
-      val ltable = fromJson(l)
-      val rtable = fromJson(r)
+      val ltable = fromSample(l)
+      val rtable = fromSample(r)
 
       val expected = computeCogroup(l.data, r.data, Stream()) map {
         case Left3(jv) => jv

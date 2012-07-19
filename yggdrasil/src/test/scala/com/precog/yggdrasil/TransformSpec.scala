@@ -19,7 +19,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkTransformLeaf = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform(Leaf(Source)))
 
       results must_== sample.data
@@ -28,7 +28,7 @@ trait TransformSpec extends TableModuleSpec {
 
   def testMap1IntLeaf = {
     val sample = (-10 to 10).map(JInt(_)).toStream
-    val table = fromJson(SampleData(sample))
+    val table = fromSample(SampleData(sample))
     val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Nil, "negate")) })
 
     results must_== (-10 to 10).map(x => JInt(-x))
@@ -38,7 +38,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkTrivialFilter = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Filter(
           Leaf(Source), 
@@ -54,7 +54,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkTrueFilter = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Filter(
           Leaf(Source), 
@@ -69,7 +69,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkFilter = {
     implicit val gen = sample(_ => Gen.value(Seq(JPath.Identity -> CLong)))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Filter(
           Leaf(Source), 
@@ -96,7 +96,7 @@ trait TransformSpec extends TableModuleSpec {
     check { (sample: SampleData) =>
       val (field, _) = sample.schema.get.head
       val fieldHead = field.head.get
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         DerefObjectStatic(Leaf(Source), fieldHead.asInstanceOf[JPathField])
       })
@@ -112,7 +112,7 @@ trait TransformSpec extends TableModuleSpec {
     check { (sample: SampleData) =>
       val (field, _) = sample.schema.get.head
       val fieldHead = field.head.get
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         DerefArrayStatic(Leaf(Source), fieldHead.asInstanceOf[JPathIndex])
       })
@@ -126,7 +126,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkMap2 = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Map2(
           DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
@@ -149,7 +149,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkEqualSelf = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Equal(Leaf(Source), Leaf(Source))
       })
@@ -181,7 +181,7 @@ trait TransformSpec extends TableModuleSpec {
     }
 
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Equal(
           DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")),
@@ -205,7 +205,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkWrapObject = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         WrapObject(Leaf(Source), "foo")
       })
@@ -219,7 +219,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkObjectConcatSelf = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         ObjectConcat(Leaf(Source), Leaf(Source))
       })
@@ -231,7 +231,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkObjectConcat = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         ObjectConcat(
           WrapObject(WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"), "value"), 
@@ -246,7 +246,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkObjectConcatOverwrite = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         ObjectConcat(
           WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("value1")), "value1"),
@@ -259,19 +259,24 @@ trait TransformSpec extends TableModuleSpec {
   }
 
   def testObjectConcatOverwrite = {
-    val sample = SampleData(Stream(JsonParser.parse("""{ "key": [], "value": 42 }""")))
-    val table = fromJson(sample)
+    // 
+    import JsonParser.parse
+    val sample = SampleData(Stream(parse("""{ "key": [], "value": 42 }"""), parse("""{ "key": [], "value": [] }""")))
+    val table = fromSample(sample, Some(1))
     val results = toJson(table.transform {
-      ObjectConcat(Leaf(Source),WrapObject(WrapObject(DerefObjectStatic(Leaf(Source), JPathField("value")), "answer"),"value"))
+      ObjectConcat(
+        Leaf(Source),
+        WrapObject(Map1(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupF1(Nil, "negate")),"value")
+      )
     })
 
-    results must_== Stream(JsonParser.parse("""{ "key": [], "value": { "answer": 42 } }"""))
+    results must containAllOf(Stream(parse("""{ "key": [], "value": -42 }"""))).only.inOrder
   }
 
   def checkArrayConcat = {
     implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         WrapObject(
           ArrayConcat(
@@ -289,7 +294,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkTypedTrivial = {
     implicit val gen = sample(_ => Seq(JPath("value1") -> CLong, JPath("value2") -> CBoolean, JPath("value3") -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
 
       val results = toJson(table.transform {
         Typed(Leaf(Source),
@@ -323,7 +328,7 @@ trait TransformSpec extends TableModuleSpec {
         "key" -> JArrayUnfixedT
       ))
 
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform(
         Typed(Leaf(Source), jtpe)
       ))
@@ -356,7 +361,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkScan = {
     implicit val gen = sample(_ => Seq(JPath.Identity -> CLong))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
       })
@@ -376,7 +381,7 @@ trait TransformSpec extends TableModuleSpec {
                 JObject(JField("bar", JInt(2)) :: JField("ref", JString("bar")) :: Nil) #::
                 JObject(JField("baz", JInt(3)) :: JField("ref", JString("baz")) :: Nil) #:: Stream.empty[JValue]
 
-    val table = fromJson(SampleData(data))
+    val table = fromSample(SampleData(data))
     val results = toJson(table.transform {
       DerefObjectDynamic(
         Leaf(Source),
@@ -392,7 +397,7 @@ trait TransformSpec extends TableModuleSpec {
   def checkArraySwap = {
     implicit val gen = sample(arraySchema(_, 3))
     check { (sample: SampleData) =>
-      val table = fromJson(sample)
+      val table = fromSample(sample)
       val results = toJson(table.transform {
         ArraySwap(DerefObjectStatic(Leaf(Source), JPathField("value")), 2)
       })

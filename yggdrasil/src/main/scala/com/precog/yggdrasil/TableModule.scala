@@ -92,7 +92,7 @@ trait TableModule extends FNModule {
     case class GroupKeySpecAnd(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     case class GroupKeySpecOr(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     
-    sealed trait GroupingSpec[A]
+    sealed trait GroupingSpec[GroupId]
     
     /**
      * Definition for a single group set and its associated composite key part.
@@ -101,18 +101,10 @@ trait TableModule extends FNModule {
      * @param a The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
-    final case class GroupingSource[A: scalaz.Equal](table: Table, targetTrans: TransSpec1, a: A, groupKeySpec: GroupKeySpec) extends GroupingSpec[A]
+    final case class GroupingSource[GroupId: scalaz.Equal](table: Table, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId]
     
-    final case class GroupingUnion[A: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[A], right: GroupingSpec[A], align: GroupKeyAlign) extends GroupingSpec[A]
-    final case class GroupingIntersect[A: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[A], right: GroupingSpec[A], align: GroupKeyAlign) extends GroupingSpec[A]
-    
-    trait Grouper {
-      /**
-       * @param grouping The group spec
-       * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
-       */
-      def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => Future[Table]): Future[Table]
-    }
+    final case class GroupingUnion[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
+    final case class GroupingIntersect[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
     
     sealed trait GroupKeyAlign
     
@@ -176,10 +168,20 @@ trait TableModule extends FNModule {
   }
   
   def ops: TableOps
-  def grouper: trans.Grouper
+  def grouper: Grouper
   
   type Table <: TableLike
   
+  trait Grouper {
+    import trans._
+
+    /**
+     * @param grouping The group spec
+     * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
+     */
+    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => Future[Table]): Future[Table]
+  }
+    
   trait TableLike { this: Table =>
     import trans._
 
@@ -226,7 +228,7 @@ trait TableModule extends FNModule {
      */
     def sort(sortKey: TransSpec1, sortOrder: SortOrder): Table
     
-    def group[A: scalaz.Equal](trans: TransSpec1, a: A, groupKeySpec: GroupKeySpec): GroupingSpec[A] = GroupingSource[A](this, trans, a, groupKeySpec)
+    def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     
     def drop(n: Long): Table
     
