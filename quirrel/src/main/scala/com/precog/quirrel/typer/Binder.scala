@@ -27,13 +27,7 @@ trait Binder extends parser.AST with Library {
   import ast._
   
   protected override lazy val LoadId = Identifier(Vector(), "load")
-
-  object BuiltIns {
-    val Load           = BuiltIn(LoadId, 1, false)
-    val Distinct       = BuiltIn(Identifier(Vector(), "distinct"), 1, false)
-
-    val all = Set(Load, Distinct)
-  }
+  protected override lazy val DistinctId = Identifier(Vector(), "distinct")
 
   override def bindNames(tree: Expr) = {
     def loop(tree: Expr, env: Map[Either[TicId, Identifier], Binding]): Set[Error] = tree match {
@@ -46,8 +40,8 @@ trait Binder extends parser.AST with Library {
         if (!dups.isEmpty) {
           dups map { id => Error(b, MultiplyDefinedTicVariable(id)) }
         } else {
-          val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> UserDef(b)) }
-          loop(left, env2) ++ loop(right, env + (Right(id) -> UserDef(b)))
+          val env2 = formals.foldLeft(env) { (m, s) => m + (Left(s) -> LetBinding(b)) }
+          loop(left, env2) ++ loop(right, env + (Right(id) -> LetBinding(b)))
         }
       }
 
@@ -116,7 +110,7 @@ trait Binder extends parser.AST with Library {
       
       case t @ TicVar(_, name) => {
         env get Left(name) match {
-          case Some(b @ UserDef(_)) => {
+          case Some(b @ LetBinding(_)) => {
             t.binding = b
             Set()
           }
@@ -163,10 +157,7 @@ trait Binder extends parser.AST with Library {
           d.binding = env(Right(name))
           
           d.isReduction = env(Right(name)) match {
-            case RedLibBuiltIn(_) => true
-            case BuiltIn(BuiltIns.Load.name, _, _) => false
-            case BuiltIn(_, _, true) => true
-            case BuiltIn(_, _, false) => false
+            case ReductionBinding(_) => true
             case _ => false
           }
           
@@ -236,7 +227,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (lib1.map(StdLibBuiltIn1) ++ lib2.map(StdLibBuiltIn2) ++ libReduct.map(RedLibBuiltIn) ++ BuiltIns.all).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism.map(MorphismBinding) ++ Set(LoadBinding(LoadId), DistinctBinding(DistinctId))).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
@@ -246,26 +237,37 @@ trait Binder extends parser.AST with Library {
   }
 
   // TODO arity and types
-  case class BuiltIn(name: Identifier, arity: Int, reduction: Boolean) extends FunctionBinding {
-    override val toString = "<native: %s(%d)>".format(name, arity)
+  case class ReductionBinding(red: Reduction) extends FunctionBinding {
+    val name = Identifier(red.namespace, red.name)
+    override val toString = "<native: %s(%d)>".format(red.name, 1)   //assumes all reductions are arity 1
   }  
   
-  case class RedLibBuiltIn(f: BIR) extends FunctionBinding {
-    val name = Identifier(f.namespace, f.name)
-    override val toString = "<native: %s(%d)>".format(f.name, 1)   //assumes all reductions are arity 1
+  case class DistinctBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
+    val name = Identifier(id.namespace, id.id)
+    override val toString = "<native: %s(%d)>".format(id.id, 1)
+  }  
+
+  case class LoadBinding(id: Identifier) extends FunctionBinding {  //TODO do we need the `id` parameter? for `name`?
+    val name = Identifier(id.namespace, id.id)
+    override val toString = "<native: %s(%d)>".format(id.id, 1)
   }
 
-  case class StdLibBuiltIn1(f: BIF1) extends FunctionBinding {
-    val name = Identifier(f.namespace, f.name)
-    override val toString = "<native: %s(%d)>".format(f.name, 1)
+  case class MorphismBinding(mor: Morphism) extends FunctionBinding {
+    val name = Identifier(mor.namespace, mor.name)
+    override val toString = "<native: %s(%d)>".format(mor.name, 1)
+  }
+
+  case class Op1Binding(op1: Op1) extends FunctionBinding {
+    val name = Identifier(op1.namespace, op1.name)
+    override val toString = "<native: %s(%d)>".format(op1.name, 1)
   }
   
-  case class StdLibBuiltIn2(f: BIF2) extends FunctionBinding {
-    val name = Identifier(f.namespace, f.name)
-    override val toString = "<native: %s(%d)>".format(f.name, 2)
+  case class Op2Binding(op2: Op2) extends FunctionBinding {
+    val name = Identifier(op2.namespace, op2.name)
+    override val toString = "<native: %s(%d)>".format(op2.name, 2)
   }
   
-  case class UserDef(b: Let) extends Binding with FormalBinding {
+  case class LetBinding(b: Let) extends Binding with FormalBinding {
     override val toString = "@%d".format(b.nodeId)
   }  
 

@@ -308,9 +308,9 @@ object ProjectionMetadata {
   def valueStats(cval: CValue): Option[Metadata] = cval match { 
     case CString(s)  => Some(StringValueStats(1, s, s))
     case CBoolean(b) => Some(BooleanValueStats(1, if(b) 1 else 0))
-    case CInt(i)     => Some(LongValueStats(1, i, i))
+    //case CInt(i)     => Some(LongValueStats(1, i, i))
     case CLong(l)    => Some(LongValueStats(1, l, l))
-    case CFloat(f)   => Some(DoubleValueStats(1, f, f))
+    //case CFloat(f)   => Some(DoubleValueStats(1, f, f))
     case CDouble(d)  => Some(DoubleValueStats(1, d, d))
     case CNum(bd)    => Some(BigDecimalValueStats(1, bd, bd))
     case _           => None

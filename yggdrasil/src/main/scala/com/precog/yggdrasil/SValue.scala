@@ -61,35 +61,38 @@ sealed trait SValue {
     }
   }
 
-  def set(selector: JPath, cv: CValue): Option[SValue] = this match {
+  def set(selector: JPath, value: SValue): Option[SValue] = this match {
     case SObject(obj) => 
       (selector.nodes : @unchecked) match {
-        case JPathField(name) :: Nil => Some(SObject(obj + (name -> cv.toSValue))) 
+        case JPathField(name) :: Nil => Some(SObject(obj + (name -> value))) 
         case JPathField(name) :: xs  => 
           val child = xs.head match { 
             case JPathField(_) => SObject.Empty
             case JPathIndex(_) => SArray.Empty
           }
 
-          obj.getOrElse(name, child).set(JPath(xs), cv).map(sv => (SObject(obj + (name -> sv)))) 
+          obj.getOrElse(name, child).set(JPath(xs), value).map(sv => (SObject(obj + (name -> sv)))) 
       }
 
     case SArray(arr) => 
       (selector.nodes : @unchecked) match {
-        case JPathIndex(i) :: Nil => Some(SArray(arr.padTo(i + 1, SNull).updated(i, cv.toSValue))) 
+        case JPathIndex(i) :: Nil => Some(SArray(arr.padTo(i + 1, SNull).updated(i, value))) 
         case JPathIndex(i) :: xs  => 
           val child = xs.head match { 
             case JPathField(_) => SObject.Empty
             case JPathIndex(_) => SArray.Empty
           }
 
-          arr.lift(i).getOrElse(child).set(JPath(xs), cv).map(sv => SArray(arr.padTo(i + 1, SNull).updated(i, sv))) 
+          arr.lift(i).getOrElse(child).set(JPath(xs), value).map(sv => SArray(arr.padTo(i + 1, SNull).updated(i, sv))) 
       }
 
-    case SNull if (selector == JPath.Identity) => Some(cv.toSValue)
+    case SNull if (selector == JPath.Identity) => Some(value)
 
     case _ => None
   }
+  
+  def set(selector: JPath, cv: CValue): Option[SValue] =
+    if (cv eq null) None else set(selector, cv.toSValue)
   
   def structure: Seq[(JPath, CType)] = {
     import SValue._
@@ -114,9 +117,9 @@ sealed trait SValue {
           }
         }
       
-      case SString(_)     => List((JPath(), CStringArbitrary))
+      case SString(_)     => List((JPath(), CString))
       case STrue | SFalse => List((JPath(), CBoolean))
-      case SDecimal(_)    => List((JPath(), CDecimalArbitrary))
+      case SDecimal(_)    => List((JPath(), CNum))
       case SNull          => List((JPath(), CNull)) 
     }
 
@@ -234,7 +237,7 @@ trait SValueInstances {
 object SValue extends SValueInstances {
   // Note this conversion has a peer for CValues that should always be changed
   // in conjunction with this mapping.
-  @inline
+   @inline
   def fromJValue(jv: JValue): SValue = jv match {
     case JObject(fields) => SObject(fields.map{ case JField(name, v) => (name, fromJValue(v)) }(collection.breakOut))
     case JArray(elements) => SArray((elements map fromJValue)(collection.breakOut))
@@ -260,7 +263,6 @@ object SValue extends SValueInstances {
   }
 
   def asJSON(sv: SValue): String = pretty(render(sv.toJValue))
-
 }
 
 

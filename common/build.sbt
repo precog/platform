@@ -29,7 +29,7 @@ libraryDependencies ++= Seq(
 
 ivyXML :=
   <dependencies>
-    <dependency org="org.apache" name="kafka-core_2.9.2" rev="0.7.5">
+    <dependency org="org.apache" name="kafka-core_2.9.1" rev="0.7.5">
       <exclude org="com.sun.jdmk"/>
       <exclude org="com.sun.jmx"/>
       <exclude org="javax.jms"/>

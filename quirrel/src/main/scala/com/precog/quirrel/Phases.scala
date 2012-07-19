@@ -29,17 +29,17 @@ trait Phases {
   type Phase = Expr => Set[Error]
   
   private val Phases: List[Phase] =
-    bindNames _ :: checkProvenance _ :: solveCriticalConditions _ :: inferBuckets _ :: Nil
+    bindNames _ :: checkProvenance _ :: inferBuckets _ :: Nil
   
   protected def LoadId: Identifier
+  protected def DistinctId: Identifier
   
   def bindNames(expr: Expr): Set[Error]
   def checkProvenance(expr: Expr): Set[Error]
-  def solveCriticalConditions(expr: Expr): Set[Error]
   def inferBuckets(expr: Expr): Set[Error]
   
   def findCriticalConditions(expr: Expr): Map[String, Set[ConditionTree]]
-  def findGroups(expr: Expr): Map[String, Set[GroupTree]]
+  def findGroups(expr: Expr): Set[GroupTree]
   
   private[quirrel] def runPhasesInSequence(tree: Expr): Set[Error] =
     Phases.foldLeft(Set[Error]()) { _ ++ _(tree) }

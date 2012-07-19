@@ -31,13 +31,9 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   implicit lazy val arbUnaryOp: Arbitrary[UnaryOperation] = Arbitrary(genUnaryOp)
   implicit lazy val arbBinaryOp: Arbitrary[BinaryOperation] = Arbitrary(genBinaryOp)
   
-  implicit lazy val arbPredicate: Arbitrary[Predicate] = Arbitrary(genPredicate)
-  implicit lazy val arbPredicateInstr: Arbitrary[PredicateInstr] = Arbitrary(genPredicateInstr)
-  
-  implicit lazy val arbReduction: Arbitrary[Reduction] = Arbitrary(genReduction)
-  implicit lazy val arbSetReduction: Arbitrary[SetReduction] = Arbitrary(genSetReduction)
-  
-  implicit lazy val arbType: Arbitrary[Type] = Arbitrary(genType)
+  implicit lazy val arbReduction: Arbitrary[BuiltInReduction] = Arbitrary(genReduction)
+  implicit lazy val arbMorphism1: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism1)
+  implicit lazy val arbMorphism2: Arbitrary[BuiltInMorphism] = Arbitrary(genMorphism2)
   
   private lazy val genInstruction: Gen[Instruction] = oneOf(
     genMap1,
@@ -47,7 +43,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genMap2CrossRight,
     
     genReduce,
-    genSetReduce,
+    genMorph1,
+    genMorph2,
     
     genVUnion,
     genVIntersect,
@@ -55,9 +52,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genIUnion,
     genIIntersect,
     
-    genBucket,
+    genGroup,
     genMergeBuckets,
-    genZipBuckets,
+    genKeyPart,
+    genExtra,
     
     genSplit,
     genMerge,
@@ -74,6 +72,7 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genLine,
     
     genLoadLocal,
+    genDistinct,
     
     genPushString,
     genPushNum,
@@ -81,7 +80,10 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     genPushFalse,
     genPushNull,
     genPushObject,
-    genPushArray)
+    genPushArray,
+    
+    genPushGroup,
+    genPushKey)
     
   private lazy val genMap1 = genUnaryOp map Map1
   private lazy val genMap2Match = genBinaryOp map Map2Match
@@ -90,7 +92,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genMap2CrossRight = genBinaryOp map Map2CrossRight
   
   private lazy val genReduce = genReduction map Reduce
-  private lazy val genSetReduce = genSetReduction map SetReduce
+  private lazy val genMorph1 = genMorphism1 map Morph1
+  private lazy val genMorph2 = genMorphism2 map Morph2
   
   private lazy val genVUnion = VUnion
   private lazy val genVIntersect = VIntersect
@@ -98,36 +101,18 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genIUnion = IUnion
   private lazy val genIIntersect = IIntersect
   
-  private lazy val genBucket = Bucket
+  private lazy val genGroup = arbitrary[Int] map Group
   private lazy val genMergeBuckets = arbitrary[Boolean] map MergeBuckets
-  private lazy val genZipBuckets = ZipBuckets
+  private lazy val genKeyPart = arbitrary[Int] map KeyPart
+  private lazy val genExtra = Extra
   
-  private lazy val genSplit = for {
-    n <- arbitrary[Short]
-    k <- arbitrary[Short]
-  } yield Split(n, k)
-  
+  private lazy val genSplit = Split
   private lazy val genMerge = Merge
   
-  private lazy val genFilterMatch = for {
-    depth <- arbitrary[Short]
-    pred <- genPredicate
-    optPred <- oneOf(Some(pred), None)
-  } yield FilterMatch(depth, optPred)
-  
-  private lazy val genFilterCross = for {
-    depth <- arbitrary[Short]
-    pred <- genPredicate
-    optPred <- oneOf(Some(pred), None)
-  } yield FilterCross(depth, optPred)
-  
-  private lazy val genFilterCrossLeft = genFilterCross map {
-    case FilterCross(depth, pred) => FilterCrossLeft(depth, pred)
-  }
-  
-  private lazy val genFilterCrossRight = genFilterCross map {
-    case FilterCross(depth, pred) => FilterCrossRight(depth, pred)
-  }
+  private lazy val genFilterMatch = FilterMatch
+  private lazy val genFilterCross = FilterCross
+  private lazy val genFilterCrossLeft = FilterCrossLeft
+  private lazy val genFilterCrossRight = FilterCrossRight
   
   private lazy val genDup = Dup
   private lazy val genDrop = Drop
@@ -138,7 +123,8 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
     text <- arbitrary[String]
   } yield Line(num, text)
   
-  private lazy val genLoadLocal = genType map LoadLocal
+  private lazy val genLoadLocal = LoadLocal
+  private lazy val genDistinct = Distinct
   
   private lazy val genPushString = arbitrary[String] map PushString
   private lazy val genPushNum = arbitrary[String] map PushNum
@@ -148,68 +134,60 @@ trait InstructionGenerators extends Instructions with RandomLibrary {
   private lazy val genPushObject = PushObject
   private lazy val genPushArray = PushArray
   
+  private lazy val genPushGroup = arbitrary[Int] map PushGroup
+  private lazy val genPushKey = arbitrary[Int] map PushKey
+  
   private lazy val genUnaryOp = for {
-    op  <- oneOf(lib1.toSeq)
+    op <- oneOf(lib1.toSeq)
     res <- oneOf(Comp, New, Neg, WrapArray, BuiltInFunction1Op(op))
   } yield res
   
   private lazy val genBinaryOp = for {
-    op  <- oneOf(lib2.toSeq)
+    op <- oneOf(lib2.toSeq)
     res <- oneOf(
-    Add,
-    Sub,
-    Mul,
-    Div,
+      Add,
+      Sub,
+      Mul,
+      Div,
+      
+      Lt,
+      LtEq,
+      Gt,
+      GtEq,
+      
+      Eq,
+      NotEq,
+      
+      Or,
+      And,
+      
+      WrapObject,
+      
+      JoinObject,
+      JoinArray,
+      
+      ArraySwap,
+      
+      DerefObject,
+      DerefArray,
     
-    Lt,
-    LtEq,
-    Gt,
-    GtEq,
-    
-    Eq,
-    NotEq,
-    
-    Or,
-    And,
-    
-    WrapObject,
-    
-    JoinObject,
-    JoinArray,
-    
-    ArraySwap,
-    
-    DerefObject,
-    DerefArray,
-  
-    BuiltInFunction2Op(op))
+      BuiltInFunction2Op(op))
   } yield res
 
   private lazy val genReduction = for {
-    red <- oneOf(libReduct.toSeq)
+    red <- oneOf(libReduction.toSeq)
     res <- BuiltInReduction(red)
   } yield res
 
-  private lazy val genSetReduction = Distinct
-    
-  private lazy val genPredicate = listOf(genPredicateInstr) map { xs => Vector(xs: _*) }
-  
-  private lazy val genPredicateInstr = oneOf(
-    Add,
-    Sub,
-    Mul,
-    Div,
-    
-    Or,
-    And,
-    
-    Comp,
-    Neg,
-    
-    DerefObject,
-    DerefArray,
-    
-    Range)
-    
-  private lazy val genType = Het
+  private lazy val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }
+
+  private lazy val genMorphism1 = for {
+    m <- oneOf(libMorphism1.toSeq)
+    res <- BuiltInMorphism(m)
+  } yield res
+
+  private lazy val genMorphism2 = for {
+    m <- oneOf(libMorphism2.toSeq)
+    res <- BuiltInMorphism(m)
+  } yield res
 }

@@ -1582,7 +1582,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       
       result must beLike {
         case Let(LineStream(), Identifier(Vector(), "a"), Vector("'a"), t @ TicVar(LineStream(), "'a"), Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
-          t.binding must beLike { case UserDef(`result`) => ok }
+          t.binding must beLike { case LetBinding(`result`) => ok }
       }
     }
 
@@ -1608,7 +1608,7 @@ object TreeShakerSpecs extends Specification with StubPhases with TreeShaker wit
       
       result must beLike {
         case Let(LineStream(), Identifier(Vector(), "a"), Vector("'a"), TicVar(LineStream(), "'a"), d @ Dispatch(LineStream(), Identifier(Vector(), "a"), Vector())) =>
-          d.binding must beLike { case UserDef(`result`) => ok }
+          d.binding must beLike { case LetBinding(`result`) => ok }
       }
     }
   }

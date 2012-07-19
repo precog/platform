@@ -24,44 +24,65 @@ import Arbitrary.arbitrary
 import Gen._
 
 trait RandomLibrary extends Library {
-  case class BIR(namespace: Vector[String], name: String, opcode: Int) extends BuiltInRed
-  case class BIF1(namespace: Vector[String], name: String, opcode: Int, isOperation: Boolean) extends BuiltInFunc1
-  case class BIF2(namespace: Vector[String], name: String, opcode: Int, isOperation: Boolean) extends BuiltInFunc2
 
-  private lazy val genRed = for {
+  private lazy val genMorphism = for {
+    op <- choose(0, 1000)
+    a  <- choose(1, 2) map { case 1 => Arity.One; case 2 => Arity.Two }
+    n  <- identifier
+    ns <- listOfN(2, identifier)
+  } yield Morphism(Vector(ns: _*), n, op, a)
+
+  private lazy val genOp1 = for {
     op <- choose(0, 1000)
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield BIR(Vector(ns: _*), n, op)
+  } yield Op1(Vector(ns: _*), n, op)
 
-  private lazy val genBuiltIn1 = for {
-    isOp <- oneOf(true, false)
+  private lazy val genOp2 = for {
     op <- choose(0, 1000)
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield BIF1(Vector(ns: _*), n, op, isOp)
+  } yield Op2(Vector(ns: _*), n, op)
 
-  private lazy val genBuiltIn2 = for {
-    isOp <- oneOf(true, false)
+  private lazy val genReduction = for {
     op <- choose(0, 1000)
     n  <- identifier
     ns <- listOfN(2, identifier)
-  } yield BIF2(Vector(ns: _*), n, op, isOp)
+  } yield Reduction(Vector(ns: _*), n, op)
 
   val reductions = Set(
-    BIR(Vector(), "count", 0x2000),
-    BIR(Vector(), "max", 0x2001),
-    BIR(Vector(), "min", 0x2004), 
-    BIR(Vector(), "sum", 0x2002),
-    BIR(Vector(), "mean", 0x2013),
-    BIR(Vector(), "geometricMean", 0x2003),
-    BIR(Vector(), "sumSq", 0x2005),
-    BIR(Vector(), "variance", 0x2006),
-    BIR(Vector(), "stdDev", 0x2007),
-    BIR(Vector(), "median", 0x2008),
-    BIR(Vector(), "mode", 0x2009))
+    Reduction(Vector(), "count", 0x2000),
+    Reduction(Vector(), "max", 0x2001),
+    Reduction(Vector(), "min", 0x2004), 
+    Reduction(Vector(), "sum", 0x2002),
+    Reduction(Vector(), "mean", 0x2013),
+    Reduction(Vector(), "geometricMean", 0x2003),
+    Reduction(Vector(), "sumSq", 0x2005),
+    Reduction(Vector(), "variance", 0x2006),
+    Reduction(Vector(), "stdDev", 0x2007),
+    Reduction(Vector(), "median", 0x2008),
+    Reduction(Vector(), "mode", 0x2009))
+
     
-  lazy val libReduct = reductions ++ containerOfN[Set, BIR](30, genRed).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
-  lazy val lib1 = containerOfN[Set, BIF1](30, genBuiltIn1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
-  lazy val lib2 = containerOfN[Set, BIF2](30, genBuiltIn2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val libMorphism = containerOfN[Set, Morphism](30, genMorphism).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val lib1 = containerOfN[Set, Op1](30, genOp1).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val lib2 = containerOfN[Set, Op2](30, genOp2).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  lazy val libReduction = reductions ++ containerOfN[Set, Reduction](30, genReduction).sample.get.map(op => (op.opcode, op)).toMap.values.toSet //make sure no duplicate opcodes
+  
+  
+  case class Morphism(namespace: Vector[String], name: String, opcode: Int, arity: Arity) extends MorphismLike
+  
+  case class Op1(namespace: Vector[String], name: String, opcode: Int) extends Op1Like with MorphismLike {
+    lazy val arity = Arity.One // MS: Why lazy?
+    val tpe = UnaryOperationType(JType.JUnfixedT, JType.JUnfixedT)
+  }
+  
+  case class Op2(namespace: Vector[String], name: String, opcode: Int) extends Op2Like with MorphismLike {
+    lazy val arity = Arity.Two // MS: Why lazy?
+    val tpe = BinaryOperationType(JType.JUnfixedT, JType.JUnfixedT, JType.JUnfixedT)
+  }
+
+  case class Reduction(namespace: Vector[String], name: String, opcode: Int) extends ReductionLike with MorphismLike {
+    lazy val arity = Arity.One // MS: Why lazy?
+  }
 }

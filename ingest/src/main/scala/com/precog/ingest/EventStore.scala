@@ -52,23 +52,7 @@ trait Messaging {
   def close: Future[Unit]
 }
 
-trait IngestMessageReceivers {
-  def find(address: MailboxAddress): List[IngestMessageReceiver]
-}
-
 case class MailboxAddress(id: Long)
-//
-//class SyncMessages(producerId: Int, initialId: Int = 1) {
-//  private val nextId = new AtomicInteger(initialId)
-//  
-//  val start: SyncMessage = SyncMessage(producerId, 0, List.empty)
-//  def next(eventIds: List[Int]): SyncMessage = SyncMessage(producerId, nextId.getAndIncrement(), eventIds)
-//  def stop(eventIds: List[Int] = List.empty) = SyncMessage(producerId, Int.MaxValue, eventIds)
-//}
-//
-trait IngestMessageReceiver extends Iterator[IngestMessage] {
-  def sync(): Unit
-}
 
 class EventRouter(routeTable: RouteTable, messaging: Messaging) {
   def route(msg: EventMessage)(implicit dispatcher: MessageDispatcher): Future[Boolean] = {

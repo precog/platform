@@ -20,9 +20,9 @@
 package com.precog.daze
 
 import org.specs2.mutable._
-import memoization._
 
 import com.precog.yggdrasil._
+import com.precog.yggdrasil.memoization._
 
 import scalaz._
 import scalaz.effect._
@@ -37,22 +37,16 @@ import org.joda.time._
 import org.joda.time.format._
 
 class TimeLibSpec extends Specification
-  with Evaluator
-  with StubOperationsAPI 
-  with TestConfigComponent 
-  with DiskIterableMemoizationComponent 
-  with TimeLib 
-  with MemoryDatasetConsumer { self =>
-  override type Dataset[α] = IterableDataset[α]
-  override type Memoable[α] = Iterable[α]
-
+    with Evaluator
+    with TestConfigComponent 
+    with TimeLib 
+    with MemoryDatasetConsumer { self =>
+      
   import Function._
   
   import dag._
   import instructions._
 
-  object ops extends Ops 
-  
   val testUID = "testUID"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
@@ -119,7 +113,7 @@ class TimeLibSpec extends Specification
 
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
         Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
-          dag.LoadLocal(line, None, Root(line, PushString("/hom/timeString")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/hom/timeString"))),
           Root(line, PushString("MMM dd yyyy k:mm:ss.SSS"))))
         
       val result = testEval(input) collect {
@@ -135,7 +129,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
 
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ParseDateTime)),
-          dag.LoadLocal(line, None, Root(line, PushString("/het/timeString")), Het),
+          dag.LoadLocal(line, Root(line, PushString("/het/timeString"))),
           Root(line, PushString("MMM dd yyyy k:mm:ss.SSS")))
         
       val result = testEval(input) collect {
@@ -369,7 +363,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input) collect {
@@ -383,7 +377,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input)
@@ -403,7 +397,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("-10:30")))
         
       val result = testEval(input)
@@ -423,7 +417,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input)
@@ -441,7 +435,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input)
@@ -461,7 +455,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(ChangeTimeZone)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("-10:30")))
         
       val result = testEval(input)
@@ -481,7 +475,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -500,7 +494,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(GetMillis),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -519,7 +513,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisToISO)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/millisSinceEpoch")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/millisSinceEpoch"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input)
@@ -542,7 +536,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisToISO)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/millisSinceEpoch")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/millisSinceEpoch"))),
         Root(line, PushString("-10:00")))
         
       val result = testEval(input)
@@ -565,7 +559,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -587,7 +581,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("-5")))
         
       val result = testEval(input)
@@ -609,7 +603,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("0")))
         
       val result = testEval(input)
@@ -632,7 +626,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -655,7 +649,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -677,7 +671,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -699,7 +693,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -721,7 +715,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -743,7 +737,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -765,7 +759,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -790,7 +784,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -813,7 +807,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -836,7 +830,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -858,7 +852,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -880,7 +874,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -902,7 +896,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -924,7 +918,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -946,7 +940,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisPlus)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushNum("5")))
         
       val result = testEval(input)
@@ -971,7 +965,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -988,7 +982,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1005,7 +999,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1022,7 +1016,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1039,7 +1033,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1056,7 +1050,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1073,7 +1067,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1090,7 +1084,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1110,7 +1104,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(YearsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1127,7 +1121,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MonthsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1144,7 +1138,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(WeeksBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1161,7 +1155,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(DaysBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1178,7 +1172,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(HoursBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1195,7 +1189,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MinutesBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1212,7 +1206,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(SecondsBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1229,7 +1223,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = Join(line, Map2Cross(BuiltInFunction2Op(MillisBetween)),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het),
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))),
         Root(line, PushString("2010-09-23T18:33:22.520-10:00")))
         
       val result = testEval(input)
@@ -1250,7 +1244,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1267,7 +1261,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1284,7 +1278,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1301,7 +1295,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1318,7 +1312,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1335,7 +1329,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1351,7 +1345,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1367,7 +1361,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1383,7 +1377,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1399,7 +1393,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1415,7 +1409,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1431,7 +1425,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1447,7 +1441,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1463,7 +1457,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1482,7 +1476,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1499,7 +1493,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Season),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1516,7 +1510,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Year),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1533,7 +1527,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(QuarterOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1550,7 +1544,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1567,7 +1561,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1583,7 +1577,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(WeekOfMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1599,7 +1593,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1615,7 +1609,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1631,7 +1625,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DayOfWeek),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1647,7 +1641,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourOfDay),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1663,7 +1657,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MinuteOfHour),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1679,7 +1673,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(SecondOfMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1695,7 +1689,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MillisOfSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1714,7 +1708,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1730,7 +1724,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1746,7 +1740,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1762,7 +1756,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1778,7 +1772,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1794,7 +1788,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1810,7 +1804,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1826,7 +1820,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1842,7 +1836,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1858,7 +1852,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1874,7 +1868,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1890,7 +1884,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/hom/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/hom/iso8601"))))
         
       val result = testEval(input)
       
@@ -1909,7 +1903,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(Date),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1925,7 +1919,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearMonth),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1941,7 +1935,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(YearDayOfYear),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1957,7 +1951,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(MonthDay),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1973,7 +1967,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHour),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -1989,7 +1983,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2005,7 +1999,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2021,7 +2015,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(DateHourMinuteSecondMillis),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2037,7 +2031,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2053,7 +2047,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(TimeWithoutZone),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2069,7 +2063,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinute),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       
@@ -2085,7 +2079,7 @@ class TimeLibSpec extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(HourMinuteSecond),
-        dag.LoadLocal(line, None, Root(line, PushString("/het/iso8601")), Het))
+        dag.LoadLocal(line, Root(line, PushString("/het/iso8601"))))
         
       val result = testEval(input)
       

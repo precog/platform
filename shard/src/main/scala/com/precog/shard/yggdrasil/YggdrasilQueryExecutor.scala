@@ -25,7 +25,6 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 
 import daze._
-import daze.memoization._
 
 import muspelheim.ParseEvalStack
 
@@ -33,9 +32,11 @@ import com.precog.common._
 import com.precog.common.security._
 
 import com.precog.yggdrasil._
-import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.actor._
+import com.precog.yggdrasil.leveldb._
+import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.table._
 
 import com.precog.util.FilesystemFileOps
 
@@ -56,11 +57,7 @@ import org.streum.configrity.Configuration
 
 trait YggdrasilQueryExecutorConfig extends 
     BaseConfig with 
-    YggEnumOpsConfig with 
-    LevelDBQueryConfig with 
-    DiskMemoizationConfig with 
     DatasetConsumersConfig with 
-    IterableDatasetOpsConfig with 
     ProductionShardSystemConfig {
   lazy val flatMapTimeout: Duration = config[Int]("precog.evaluator.timeout.fm", 30) seconds
   lazy val projectionRetrievalTimeout: Timeout = Timeout(config[Int]("precog.evaluator.timeout.projection", 30) seconds)
@@ -95,18 +92,20 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with LevelDBActorYggShardModule with ProductionShardSystemActorModule[IterableDataset] {
-      type Storage = LevelDBActorYggShard
-
+    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule with LevelDBProjectionModule with ProductionShardSystemActorModule {
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
-      object ops extends Ops 
-      object query extends QueryAPI 
-
-      val storage = new LevelDBActorYggShard(FileMetadataStorage.load(yggConfig.dataDir, new FilesystemFileOps {}).unsafePerformIO) {
+      class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
+      }
+
+      val storage = new Storage
+
+      object Projection extends LevelDBProjectionCompanion {
+        val fileOps = FilesystemFileOps
+        def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
       }
     }
   }
@@ -115,16 +114,11 @@ trait YggdrasilQueryExecutorComponent {
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
     with ParseEvalStack
-    with IterableDatasetOpsComponent
-    with LevelDBQueryComponent 
+    with SystemActorStorageModule
     with MemoryDatasetConsumer
-    with DiskIterableMemoizationComponent
     with Logging  { self =>
-  override type Dataset[E] = IterableDataset[E]
-  override type Memoable[E] = Iterable[E]
 
   type YggConfig = YggdrasilQueryExecutorConfig
-  type Storage <: ActorYggShard[IterableDataset]
 
   def startup() = storage.start.onComplete {
     case Left(error) => logger.error("Startup of actor ecosystem failed!", error)
@@ -202,7 +196,8 @@ trait YggdrasilQueryExecutor
     withContext { ctx =>
       logger.debug("Evaluating DAG for " + userUID)
       val result = consumeEval(userUID, dag, ctx) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
-      ctx.release.release.unsafePerformIO
+      sys.error("todo: uncomment the next line (and make it work)")
+      //ctx.release.release.unsafePerformIO
       logger.debug("DAG evaluated to " + result)
       result
     }

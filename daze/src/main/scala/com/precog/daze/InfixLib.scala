@@ -20,161 +20,298 @@
 package com.precog
 package daze
 
-import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
-import yggdrasil._
+import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, Library }
 
-object InfixLib extends InfixLib
+import yggdrasil._
+import yggdrasil.table._
 
 trait InfixLib extends ImplLibrary with GenOpcode {
+  
+  def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
+  
   object Infix {
     val InfixNamespace = Vector("std", "infix")
 
-    object Add extends BIF2(InfixNamespace, "add") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SDecimal(l + r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Add extends Op2(InfixNamespace, "add") {  //TODO do we need cases for NullColumn?
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {   //TODO why is c1(row) type BigDecimal?
+          def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) + c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) + c2(row)
+        }
+      })
     }
 
-    object Sub extends BIF2(InfixNamespace, "subtract") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SDecimal(l - r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Sub extends Op2(InfixNamespace, "subtract") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) - c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) - c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) - c2(row)
+        }
+      })
     }
 
-    object Mul extends BIF2(InfixNamespace, "multiply") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SDecimal(l * r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Mul extends Op2(InfixNamespace, "multiply") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) * c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) * c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) * c2(row)
+        }
+      })
     }
 
-    object Div extends BIF2(InfixNamespace, "divide") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) if r != BigDecimal(0) => SDecimal(l / r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Div extends Op2(InfixNamespace, "divide") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          def apply(row: Int) = c1(row) / c2(row)
+        }
+      })
     }
 
-    object Lt extends BIF2(InfixNamespace, "lt") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SBoolean(l < r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Lt extends Op2(InfixNamespace, "lt") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) < c2(row)
+        }
+      })
     }
 
-    object LtEq extends BIF2(InfixNamespace, "lte") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SBoolean(l <= r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object LtEq extends Op2(InfixNamespace, "lte") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) <= c2(row)
+        }
+      })
     }
 
-    object Gt extends BIF2(InfixNamespace, "gt") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SBoolean(l > r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object Gt extends Op2(InfixNamespace, "gt") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) > c2(row)
+        }
+      })
     }
 
-    object GtEq extends BIF2(InfixNamespace, "gte") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SDecimal(l), SDecimal(r)) => SBoolean(l >= r)
-      }
-
-      val operandType = (Some(SDecimal), Some(SDecimal))
+    object GtEq extends Op2(InfixNamespace, "gte") {
+      val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+        case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) >= c2(row)
+        }
+      })
     }
 
-    object Eq extends BIF2(InfixNamespace, "eq") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (a, b) => SBoolean(a == b)
-      }
-
-      val operandType = (None, None)
+    object And extends Op2(InfixNamespace, "and") {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) && c2(row)
+        }
+      })
     }
 
-    object NotEq extends BIF2(InfixNamespace, "ne") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (a, b) => SBoolean(a != b)
-      }
-
-      val operandType = (None, None)
-    }
-
-    object And extends BIF2(InfixNamespace, "and") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (v1: SBooleanValue, v2: SBooleanValue) => v1 && v2
-      }
-
-      val operandType = (Some(SBoolean), Some(SBoolean))
-    }
-
-    object Or extends BIF2(InfixNamespace, "or") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (v1: SBooleanValue, v2: SBooleanValue) => v1 || v2
-      }
-
-      val operandType = (Some(SBoolean), Some(SBoolean))
-    }
-
-    object WrapObject extends BIF2(InfixNamespace, "wrap") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SString(key), value) => SObject(Map(key -> value))
-      }
-
-      val operandType = (Some(SString), None)
-    }
-
-    object JoinObject extends BIF2(InfixNamespace, "merge") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SObject(left), SObject(right)) => SObject(left ++ right)
-      }
-
-      val operandType = (Some(SObject), Some(SObject))
-    }
-
-    object JoinArray extends BIF2(InfixNamespace, "concat") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SArray(left), SArray(right)) => SArray(left ++ right)
-      }
-
-      val operandType = (Some(SArray), Some(SArray))
-    }
-
-    object ArraySwap extends BIF2(InfixNamespace, "swap") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SArray(arr), SDecimal(i)) if i.isValidInt && (i.toInt >= 0 && i.toInt < arr.length) => 
-          val (left, right) = arr splitAt i.toInt
-          SArray(left.init ++ Vector(right.head, left.last) ++ right.tail)
-      }
-
-      val operandType = (Some(SArray), Some(SDecimal))
-    }
-
-    object DerefObject extends BIF2(InfixNamespace, "get") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SObject(obj), SString(key)) if obj.contains(key) => obj(key)
-      }
-
-      val operandType = (Some(SObject), Some(SString))
-    }
-
-    object DerefArray extends BIF2(InfixNamespace, "valueAt") {
-      val operation: PartialFunction[(SValue, SValue), SValue] = {
-        case (SArray(arr), SDecimal(i)) if i.isValidInt && arr.length < i.toInt => arr(i.toInt)
-      }
-
-      val operandType = (Some(SArray), Some(SDecimal))
+    object Or extends Op2(InfixNamespace, "or") {
+      val tpe = BinaryOperationType(JBooleanT, JBooleanT, JBooleanT)
+      def f2: F2 = new CF2P({
+        case (c1: BoolColumn, c2: BoolColumn) => new Map2Column(c1, c2) with BoolColumn {
+          def apply(row: Int) = c1(row) || c2(row)
+        }
+      })
     }
   }
 }

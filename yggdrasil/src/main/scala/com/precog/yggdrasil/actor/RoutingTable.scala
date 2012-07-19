@@ -29,7 +29,9 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
-case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]])
+case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) {
+  def toJValue: JValue = sys.error("todo")
+}
 
 trait RoutingTable {
   def route(msg: EventMessage): Seq[ProjectionData]
@@ -76,13 +78,11 @@ class SingleColumnProjectionRoutingTable extends RoutingTable {
 
   @inline
   private final def toProjectionData(msg: EventMessage, selector: JPath, value: JValue): ProjectionData = {
-    val authorities = Set(msg.event.tokenId)
-    val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forValue(value).get, Authorities(authorities))
+    val authorities = Set.empty + msg.event.tokenId
+    val colDesc = ColumnDescriptor(msg.event.path, selector, CType.forJValue(value).get, Authorities(authorities))
 
-    val columnDescriptors = ListMap[ColumnDescriptor, Int](colDesc -> 0)
-    val sorting: Seq[(ColumnDescriptor, SortBy)] = (colDesc -> ById) :: Nil
+    val projDesc = ProjectionDescriptor(1, List(colDesc))
 
-    val projDesc = ProjectionDescriptor.trustedApply(1, columnDescriptors, sorting)
     val values = Vector1(CType.toCValue(value))
     val metadata = msg.event.metadata.get(selector).getOrElse(Set.empty).asInstanceOf[Set[Metadata]] :: Nil
 

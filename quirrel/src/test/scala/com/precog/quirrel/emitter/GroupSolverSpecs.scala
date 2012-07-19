@@ -42,31 +42,36 @@ object GroupSolverSpecs extends Specification
     with RandomLibrary {
       
   import ast._
+  import buckets._
       
   "group solver" should {
     "identify and solve group set for trivial cf example" in {
       val input = "clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day onDay"
       
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _, 
-          origin @ Where(_, target, Eq(_, solution, _)), d: Dispatch)) = compile(input)
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _, 
+          origin @ Where(_, target, Eq(_, solution, _)), _)) = compile(input)
+          
+      val expected = Group(origin, target, UnfixedSolution("'day", solution))
         
-      d.buckets must contain("'day" -> Group(origin, target, Definition(solution), Set()))
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify composite bucket for trivial cf example with conjunction" in {
       val input = "clicks := load(//clicks) onDay('day) := clicks where clicks.day = 'day & clicks.din = 'day onDay"
       
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _, 
-          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), d: Dispatch)) = compile(input)
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _, 
+          origin @ Where(_, target, And(_, Eq(_, leftSol, _), Eq(_, rightSol, _))), _)) = compile(input)
       
-      val bucket = Group(origin, target,
-        Conjunction(Definition(leftSol), Definition(rightSol)), Set())
+      val expected = Group(origin, target,
+        IntersectBucketSpec(
+          UnfixedSolution("'day", leftSol),
+          UnfixedSolution("'day", rightSol)))
       
-      d.buckets must contain("'day" -> bucket)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify separate buckets for independent tic variables on same set" in {
@@ -81,17 +86,20 @@ object GroupSolverSpecs extends Specification
         |
         | foo""".stripMargin
         
-      val tree @ Let(_, _, _, _,
-        Let(_, _, _,
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _,
           Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
             Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
-          d: Dispatch)) = compile(input)
+          _)) = compile(input)
       
-      val bucketA = Group(originA, targetA, Definition(solA), Set())
-      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      val expected = IntersectBucketSpec(
+        Group(originA, targetA,
+          UnfixedSolution("'a", solA)),
+        Group(originB, targetB,
+          UnfixedSolution("'b", solB)))
       
-      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
     }
     
     "identify separate buckets for independent tic variables on different sets" in {
@@ -108,18 +116,91 @@ object GroupSolverSpecs extends Specification
         |
         | foo""".stripMargin
         
-      val tree @ Let(_, _, _, _,
+      val Let(_, _, _, _,
         Let(_, _, _, _,
-          Let(_, _, _,
+          tree @ Let(_, _, _,
             Let(_, _, _, originA @ Where(_, targetA, Eq(_, solA, _)),
               Let(_, _, _, originB @ Where(_, targetB, Eq(_, solB, _)), _)),
-          d: Dispatch))) = compile(input)
+          _))) = compile(input)
       
-      val bucketA = Group(originA, targetA, Definition(solA), Set())
-      val bucketB = Group(originB, targetB, Definition(solB), Set())
+      val expected = IntersectBucketSpec(
+        Group(originA, targetA,
+          UnfixedSolution("'a", solA)),
+        Group(originB, targetB,
+          UnfixedSolution("'b", solB)))
       
-      d.buckets mustEqual Map("'a" -> bucketA, "'b" -> bucketB)
       tree.errors must beEmpty
+      tree.buckets must beSome(expected)
+    }
+    
+    "produce an error when a single tic-variable lacks a defining set" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a) := foo where foo.a < 'a
+        | f""".stripMargin
+        
+      compile(input).errors must not(beEmpty)
+    }
+    
+    "produce an error when a single tic-variable lacks a defining set with extras" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a) := foo where foo.a < 'a & foo.b = 42
+        | f""".stripMargin
+        
+      compile(input).errors must not(beEmpty)
+    }
+    
+    "produce an error when one of several tic-variables lacks a defining set" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a, 'b) :=
+        |   foo' := foo where foo.a < 'a
+        |   foo'' := foo where foo.b = 'b
+        |   foo' + foo''
+        | 
+        | f""".stripMargin
+        
+      compile(input).errors must not(beEmpty)
+    }
+    
+    "produce an error when one of two reductions cannot be solved in the absence of an outer definition" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a) :=
+        |   count(foo where foo.a = 'a) + count(foo where foo.a = min('a + 1))
+        | f""".stripMargin
+        
+      compile(input).errors must not(beEmpty)
+    }
+    
+    "accept a function when a reduction cannot be solved in the presence of an outer definition" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a) :=
+        |   (foo where foo.a = 'a) + count(foo where foo.a = min('a + 1))
+        | f""".stripMargin
+        
+      compile(input).errors must beEmpty
+    }
+    
+    "accept a function when an optional defining set cannot be solved for a single tic-variable" in {
+      val input = """
+        | foo := //foo
+        |
+        | f('a) :=
+        |   foo' := foo where foo.a < 'a
+        |   foo'' := foo where foo.b = 'a
+        |   foo' + foo''
+        | 
+        | f""".stripMargin
+        
+      compile(input).errors must beEmpty
     }
 
     "reject bucketing for indirect failed solution through reduction" in {
@@ -137,40 +218,38 @@ object GroupSolverSpecs extends Specification
     }
     
     "reject shared buckets for dependent tic variables on the same set" in {
-      {
-        val input = """
-          | organizations := load(//organizations)
-          | 
-          | hist('revenue, 'campaign) :=
-          |   organizations' := organizations where organizations.revenue = 'revenue
-          |   organizations'' := organizations' where organizations'.campaign = 'campaign
-          |   
-          |   organizations''
-          |   
-          | hist""".stripMargin
-          
-        val tree = compile(input)
-        tree.errors must not(beEmpty)
-      }
-      
-      {
-        val input = """
-          | campaigns := load(//campaigns)
-          | organizations := load(//organizations)
-          | 
-          | hist('revenue, 'campaign) :=
-          |   organizations' := organizations where organizations.revenue = 'revenue
-          |   campaigns' := campaigns where campaigns.campaign = 'campaign
-          |   organizations'' := organizations' where organizations'.campaign = 'campaign
-          |   
-          |   campaigns' ~ organizations''
-          |     { revenue: 'revenue, num: count(campaigns') }
-          |   
-          | hist""".stripMargin
-          
-        val tree = compile(input)
-        tree.errors must not(beEmpty)
-      }
+      val input = """
+        | organizations := load(//organizations)
+        | 
+        | hist('revenue, 'campaign) :=
+        |   organizations' := organizations where organizations.revenue = 'revenue
+        |   organizations'' := organizations' where organizations'.campaign = 'campaign
+        |   
+        |   organizations''
+        |   
+        | hist""".stripMargin
+        
+      val tree = compile(input)
+      tree.errors must not(beEmpty)
+    }
+    
+    "accept shared buckets for dependent tic variables on the same set when at least one can be solved" in {
+      val input = """
+        | campaigns := load(//campaigns)
+        | organizations := load(//organizations)
+        | 
+        | hist('revenue, 'campaign) :=
+        |   organizations' := organizations where organizations.revenue = 'revenue
+        |   campaigns' := campaigns where campaigns.campaign = 'campaign
+        |   organizations'' := organizations' where organizations'.campaign = 'campaign
+        |   
+        |   campaigns' ~ organizations''
+        |     { revenue: 'revenue, num: count(campaigns') }
+        |   
+        | hist""".stripMargin
+        
+      val tree = compile(input)
+      tree.errors must beEmpty
     }
   }
 }

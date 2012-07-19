@@ -101,7 +101,19 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
 
   def readValue(in: DataInputStream, structure: Seq[(JPath, CType)]): SValue = {
     structure.foldLeft(Option.empty[SValue]) {
-      case (None     , (JPath.Identity, ctype)) => Some(readColumn(in, ctype).toSValue)
+      case (None     , (JPath.Identity, ctype)) => {
+        val back = readColumn(in, ctype)
+        if (back eq null) {
+          ctype match {
+            case CEmptyObject => Some(SObject.Empty)
+            case CEmptyArray => Some(SArray.Empty)
+            case _ => Some(SNull)
+          }
+        } else {
+          Some(back.toSValue)
+        }
+      }
+    
       case (None     , (jpath, ctype))          => 
         (jpath.nodes : @unchecked) match {
           case JPathIndex(_) :: xs => SArray(Vector()).set(jpath, readColumn(in, ctype))
@@ -117,13 +129,13 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
   private def readColumn(in: DataInputStream, ctype: CType): CValue = {
     (ctype : @unchecked) match {
   //    case CStringFixed(_)   => CString(in.readUTF())
-      case CStringArbitrary  => CString(in.readUTF())
+      case CString           => CString(in.readUTF())
       case CBoolean          => CBoolean(in.readBoolean())
   //    case CInt              => CInt(in.readInt())
   //    case CLong             => CLong(in.readLong())
   //    case CFloat            => CFloat(in.readFloat())
   //    case CDouble           => CDouble(in.readDouble())
-      case CInt | CLong | CFloat | CDouble | CDecimalArbitrary => 
+      case CLong | CDouble | CNum => 
         val length = in.readInt()
         assert(length > 0)
 
@@ -133,15 +145,15 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
 
       case CNull => 
         assert(in.readInt() == 0)
-        CNull
+        null
       
       case CEmptyObject => 
         assert(in.readInt() == 0)
-        CEmptyObject
+        null
       
       case CEmptyArray => 
         assert(in.readInt() == 0)
-        CEmptyArray
+        null
     }
   }
 

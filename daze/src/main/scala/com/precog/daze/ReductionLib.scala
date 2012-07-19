@@ -20,189 +20,442 @@
 package com.precog
 package daze
 
-import bytecode.Library
+import bytecode._
 
 import yggdrasil._
+import yggdrasil.table._
 
-trait ReductionLib extends GenOpcode with ImplLibrary with DatasetOpsComponent with BigDecimalOperations with Evaluator {  
+import com.precog.util._
+
+import scalaz._
+import scalaz.std.anyVal._
+import scalaz.std.option._
+import scalaz.std.set._
+import scalaz.std.tuple._
+import scalaz.syntax.foldable._
+import scalaz.syntax.std.option._
+import scalaz.syntax.std.boolean._
+
+trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
   val ReductionNamespace = Vector()
 
-  override def _libReduct = super._libReduct ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev, Median, Mode)
+  override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
 
-  import yggConfig._
-
-  object Count extends BIR(ReductionNamespace, "count") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      Some(SDecimal(BigDecimal(enum.count))) 
+  // TODO swap to Reduction
+  val CountMonoid = implicitly[Monoid[Count.Result]]
+  object Count extends Reduction(ReductionNamespace, "count") {
+    type Result = Long
+    
+    implicit val monoid = CountMonoid
+    
+    def reducer: Reducer[Result] = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range) = {
+        val cx = cols(JType.JUnfixedT)
+        val colSeq = range.view filter { i => cx.exists(_.isDefinedAt(i)) }
+        colSeq.size
+      }
     }
+
+    def extract(res: Result): Table = ops.constLong(Set(CLong(res)))
   }
 
-  object Max extends BIR(ReductionNamespace, "max") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val max: Option[BigDecimal] = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(v1), SDecimal(v2)) if v1 >= v2 => Some(v1)
-        case (Some(v1), SDecimal(v2)) if v1 < v2 => Some(v2)
-        case (acc, _) => acc
-      }
+  object Max extends Reduction(ReductionNamespace, "max") {
+    type Result = Option[BigDecimal]
 
-      if (max.isDefined) max map { v => SDecimal(v) }
-      else None
+    implicit val monoid = new Monoid[Result] {
+      def zero = None
+      def append(left: Result, right: => Result): Result = {
+        for (l <- left; r <- right) yield l max r
+      }
     }
-  }
+    
+    def reducer: Reducer[Result] = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val max = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.max: BigDecimal)
 
-  object Min extends BIR(ReductionNamespace, "min") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val min = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(v1), SDecimal(v2)) if v1 <= v2 => Some(v1)
-        case (Some(v1), SDecimal(v2)) if v1 > v2 => Some(v2)
-        case (acc, _) => acc
-      }
-      
-      if (min.isDefined) min map { v => SDecimal(v) }
-      else None
-    }
-  }
-  
-  object Sum extends BIR(ReductionNamespace, "sum") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val sum = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v)
-        case (Some(sum), SDecimal(v)) => Some(sum + v)
-        case (acc, _) => acc
-      }
-
-      if (sum.isDefined) sum map { v => SDecimal(v) }
-      else None
-    }
-  }
-  
-  object Mean extends BIR(ReductionNamespace, "mean") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(0))) {
-        case ((count, total), SDecimal(v)) => (count + 1, total + v)
-        case (total, _) => total
-      }
-      
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal(total / count))
-    }
-  }
-  
-  object GeometricMean extends BIR(ReductionNamespace, "geometricMean") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val (count, total) = enum.reduce((BigDecimal(0), BigDecimal(1))) {
-        case ((count, acc), SDecimal(v)) => (count + 1, acc * v)
-        case (acc, _) => acc
-      }
-      
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal(scala.math.pow(total.toDouble, 1 / count.toDouble)))
-    }
-  }
-  
-  object SumSq extends BIR(ReductionNamespace, "sumSq") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val sumsq = enum.reduce(Option.empty[BigDecimal]) {
-        case (None, SDecimal(v)) => Some(v * v)
-        case (Some(sumsq), SDecimal(v)) => Some(sumsq + (v * v))
-        case (acc, _) => acc
-      }
-
-      if (sumsq.isDefined) sumsq map { v => SDecimal(v) }
-      else None
-    }
-  }
-  
-  object Variance extends BIR(ReductionNamespace, "variance") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-        case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-        case (acc, _) => acc
-      }
-
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal((sumsq - (sum * (sum / count))) / count))
-    }
-  }
-  
-  object StdDev extends BIR(ReductionNamespace, "stdDev") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val (count, sum, sumsq) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-        case ((count, sum, sumsq), SDecimal(v)) => (count + 1, sum + v, sumsq + (v * v))
-        case (acc, _) => acc
-      }
-      
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal(sqrt(count * sumsq - sum * sum) / count))
-    }
-  }
-  
-  object Median extends BIR(ReductionNamespace, "median") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-
-      val count = enum.reduce(BigDecimal(0)) {
-        case (count, SDecimal(v)) => count + 1
-        case (acc, _) => acc
-      }
-      
-      if (count == BigDecimal(0)) None
-      else {
-        val (c, median) = if (count.toInt % 2 == 0) {
-          val index = (count.toInt / 2, (count.toInt / 2) + 1)
+          case _ => None
+        } 
         
-          enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
-            case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
-            case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
-              (count + 1, 
-                if (prev.isDefined) prev map { x => (x + v) / 2 } 
-                else None)  
+        (max.isEmpty).option(max.suml)
+      }
+    }
+
+    def extract(res: Result): Table =
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+  }
+
+  object Min extends Reduction(ReductionNamespace, "min") {
+    type Result = Option[BigDecimal]
+
+    implicit val monoid = new Monoid[Result] {
+      def zero = None
+      def append(left: Result, right: => Result): Result = {
+        for (l <- left; r <- right) yield l min r
+      }
+    }
+    
+    def reducer: Reducer[Result] = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val min = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.min: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            (mapped.isEmpty).option(mapped.min: BigDecimal)
+
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            (mapped.isEmpty).option(mapped.min: BigDecimal)
+
+          case _ => None
+        } 
+        
+        (min.isEmpty).option(min.suml)
+      } 
+    }
+
+    def extract(res: Result): Table =
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+  }
+
+  val SumMonoid = implicitly[Monoid[Sum.Result]]
+  object Sum extends Reduction(ReductionNamespace, "sum") {
+    type Result = Option[BigDecimal]
+
+    implicit val monoid = SumMonoid
+
+    def reducer: Reducer[Result] = new CReducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range) = {
+        val sum = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty)
+              None
+            else
+              Some(mapped.sum: BigDecimal)
+
+          case _ => None
+        } 
+
+        (sum.isEmpty).option(sum.suml)
+      }
+    }
+
+    def extract(res: Result): Table =
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+  }
+  
+  val MeanMonoid = implicitly[Monoid[Mean.Result]]
+  object Mean extends Reduction(ReductionNamespace, "mean") {
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal)   // (sum, count)
+
+    implicit val monoid = MeanMonoid
+    
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
             }
-            case (acc, _) => acc
-          } 
-        } else {
-          val index = (count.toInt / 2) + 1
-        
-          enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
-            case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
-            case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
-            case (acc, _) => acc
-          }
-        }
-        if (median.isDefined) median map { v => SDecimal(v) }
-        else None
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((sum, count), value) => (sum + value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+
+          case _ => None
+        } 
+
+        (result.isEmpty).option(result.suml)
       }
+    }
+
+    def extract(res: Result): Table =
+      res map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
+  }
+  
+  object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal)
+    
+    implicit val monoid = new Monoid[Result] {    //(product, count)
+      def zero = None
+      def append(left: Result, right: => Result) = {
+        val both = for ((l1, l2) <- left; (r1, r2) <- right) yield (l1 * r1, l2 + r2)
+        both orElse left orElse right
+      }
+    }
+
+    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+                case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+
+          case _ => None
+        }
+
+        (result.isEmpty).option(result.suml)
+      }
+    }
+
+    def extract(res: Result): Table = { //TODO division by zero 
+      val nonzeroRes = res filter { case (_, count) => count != 0 }
+
+      nonzeroRes map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
     }
   }
   
-  object Mode extends BIR(ReductionNamespace, "mode") {
-    def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
+  val SumSqMonoid = implicitly[Monoid[SumSq.Result]]
+  object SumSq extends Reduction(ReductionNamespace, "sumSq") {
+    type Result = Option[BigDecimal]
 
-      val (_, _, modes, _) = enum2.reduce(Option.empty[SValue], BigDecimal(0), List.empty[SValue], BigDecimal(0)) {
-        case ((None, count, modes, maxCount), sv) => ((Some(sv), count + 1, List(sv), maxCount + 1))
-        case ((Some(currentRun), count, modes, maxCount), sv) => {
-          if (currentRun == sv) {
-            if (count >= maxCount)
-              (Some(sv), count + 1, List(sv), maxCount + 1)
-            else if (count + 1 == maxCount)
-              (Some(sv), count + 1, modes :+ sv, maxCount)
-            else
-              (Some(sv), count + 1, modes, maxCount)
-          } else {
-            if (maxCount == 1)
-              (Some(sv), 1, modes :+ sv, maxCount)
-            else
-              (Some(sv), 1, modes, maxCount)
-          }
+    implicit val monoid = SumSqMonoid
+    
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
+                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
+                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: BigDecimal = mapped.foldLeft(BigDecimal(0)) {
+                case (sumsq, value) => (sumsq + (value * value): BigDecimal)
+              }
+
+              Some(foldedMapped)
+            }
+
+          case _ => None
+        }
+          
+        (result.isEmpty).option(result.suml)
+      }
+    }
+
+    def extract(res: Result): Table =
+      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+  }
+  
+  val VarianceMonoid = implicitly[Monoid[Variance.Result]]
+  object Variance extends Reduction(ReductionNamespace, "variance") {
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
+
+    implicit val monoid = VarianceMonoid
+    
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case _ => None
         }
 
-        case(acc, _) => acc
+        (result.isEmpty).option(result.suml)
       }
-      
-      Some(SArray(Vector(modes: _*))) 
     }
+
+    def extract(res: Result): Table =
+      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
+  }
+  
+  val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
+  object StdDev extends Reduction(ReductionNamespace, "stdDev") {
+    type Result = Option[InitialResult]
+    type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
+    
+    implicit val monoid = StdDevMonoid
+
+    def reducer: Reducer[Result] = new Reducer[Result] {
+      def reduce(cols: JType => Set[Column], range: Range): Result = {
+        val result = cols(JNumberT) flatMap {
+          case col: LongColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: DoubleColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case col: NumColumn => 
+            val mapped = range filter col.isDefinedAt map { x => col(x) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum, sumsq), value) => (count + 1: BigDecimal, sum + value: BigDecimal, sumsq + (value * value))
+              }
+
+              Some(foldedMapped)
+            }
+          case _ => None
+        }
+
+        (result.isEmpty).option(result.suml)
+      }
+    }
+
+    def extract(res: Result): Table =
+      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
   }
 }

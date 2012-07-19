@@ -24,10 +24,10 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
   import Utils._
   import ast._
   
-  override def findGroups(expr: Expr): Map[String, Set[GroupTree]] = {
+  override def findGroups(expr: Expr): Set[GroupTree] = {
     import group._
     
-    def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Map[String, Set[GroupTree]] = expr match {
+    def loop(root: Let, expr: Expr, currentWhere: Option[Where]): Set[GroupTree] = expr match {
       case Let(_, _, _, left, right) => loop(root, right, currentWhere)
       
       case Import(_, _, child) => loop(root, child, currentWhere)
@@ -38,106 +38,106 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
         val first = loop(root, from, currentWhere)
         val second = loop(root, to, currentWhere)
         val third = loop(root, in, currentWhere)
-        merge(merge(first, second), third)
+        first ++ second
       }
       
       case t @ TicVar(_, id) => t.binding match {
-        case UserDef(`root`) => currentWhere map { where => Map(id -> Set(Condition(where): GroupTree)) } getOrElse Map()
-        case _ => Map()
+        case LetBinding(`root`) => currentWhere map { where => Set(GroupCondition(where): GroupTree) } getOrElse Set()
+        case _ => Set()
       }
       
-      case StrLit(_, _) => Map()
-      case NumLit(_, _) => Map()
-      case BoolLit(_, _) => Map()
-      case NullLit(_) => Map()
+      case StrLit(_, _) => Set()
+      case NumLit(_, _) => Set()
+      case BoolLit(_, _) => Set()
+      case NullLit(_) => Set()
       
       case ObjectDef(_, props) => {
-        val maps = props map { case (_, expr) => loop(root, expr, currentWhere) }
-        maps.fold(Map())(merge)
+        val sets = props map { case (_, expr) => loop(root, expr, currentWhere) }
+        sets.fold(Set()) { _ ++ _ }
       }
       
       case ArrayDef(_, values) => {
-        val maps = values map { expr => loop(root, expr, currentWhere) }
-        maps.fold(Map())(merge)
+        val sets = values map { expr => loop(root, expr, currentWhere) }
+        sets.fold(Set()) { _ ++ _ }
       }
       
       case Descent(_, child, _) => loop(root, child, currentWhere)
       
       case Deref(loc, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case d @ Dispatch(_, _, actuals) => {
-        val maps = actuals map { expr => loop(root, expr, currentWhere) }
-        val merged = maps.fold(Map())(merge)
+        val sets = actuals map { expr => loop(root, expr, currentWhere) }
+        val merged = sets.fold(Set()) { _ ++ _ }
         
         val fromDef = d.binding match {
-          case UserDef(e) => loop(root, e.left, currentWhere)
-          case _ => Map[String, Set[GroupTree]]()
+          case LetBinding(e) => loop(root, e.left, currentWhere)
+          case _ => Set[GroupTree]()
         }
         
-        val back = merge(merged, fromDef)
+        val back: Set[GroupTree] = merged ++ fromDef
         
         d.binding match {
-          case b: RedLibBuiltIn if d.isReduction =>
-            back map { case (key, value) => key -> Set(Reduction(b, value): GroupTree) }
+          case b: ReductionBinding if d.isReduction =>
+            Set(GroupReduction(b, back): GroupTree)
           
           case _ => back
         }
       }
       
       case op @ Where(_, left, right) => {
-        val leftMap = loop(root, left, currentWhere)
-        val rightMap = loop(root, right, Some(op))
-        merge(leftMap, rightMap)
+        val leftSet = loop(root, left, currentWhere)
+        val rightSet = loop(root, right, Some(op))
+        leftSet ++ rightSet
       }
       
       case With(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Union(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Intersect(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
             
       case Difference(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Add(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Sub(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Mul(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Div(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Lt(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case LtEq(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Gt(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case GtEq(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Eq(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case NotEq(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case And(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Or(_, left, right) =>
-        merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
+        loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
       case Comp(_, child) => loop(root, child, currentWhere)
       
@@ -148,7 +148,7 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
     
     expr match {
       case root @ Let(_, _, _, left, _) => loop(root, left, None)
-      case _ => Map()
+      case _ => Set()
     }
   }
   
@@ -156,7 +156,7 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
   sealed trait GroupTree
   
   object group {
-    case class Condition(op: Where) extends GroupTree
-    case class Reduction(b: RedLibBuiltIn, children: Set[GroupTree]) extends GroupTree
+    case class GroupCondition(op: Where) extends GroupTree
+    case class GroupReduction(b: ReductionBinding, children: Set[GroupTree]) extends GroupTree
   }
 }

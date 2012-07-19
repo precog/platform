@@ -33,9 +33,13 @@ trait BytecodeReader extends Reader {
   import instructions._
   import Function._
 
-  private lazy val stdlibReductOps: Map[Int, BuiltInReduction] = libReduct.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
+  val (libMorphism1, libMorphism2) = libMorphism partition { m => m.arity == Arity.One }  //todo is this okay? 
+
+  private lazy val stdlibMorphism1Ops: Map[Int, BuiltInMorphism] = libMorphism1.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
+  private lazy val stdlibMorphism2Ops: Map[Int, BuiltInMorphism] = libMorphism2.map(op => op.opcode -> BuiltInMorphism(op))(collection.breakOut)
   private lazy val stdlib1Ops: Map[Int, BuiltInFunction1Op] = lib1.map(op => op.opcode -> BuiltInFunction1Op(op))(collection.breakOut)
   private lazy val stdlib2Ops: Map[Int, BuiltInFunction2Op] = lib2.map(op => op.opcode -> BuiltInFunction2Op(op))(collection.breakOut)
+  private lazy val stdlibReductionOps: Map[Int, BuiltInReduction] = libReduction.map(red => red.opcode -> BuiltInReduction(red))(collection.breakOut)
   
   def read(buffer: ByteBuffer): Vector[Instruction] = {
     val version = buffer.getInt()
@@ -63,8 +67,6 @@ trait BytecodeReader extends Reader {
       
       lazy val tableEntry = table get parameter
       
-      lazy val predicate = tableEntry map { b => readPredicate(b, Vector()) }
-      
       lazy val lineInfo = tableEntry flatMap readLineInfo
       
       lazy val string = tableEntry flatMap readString
@@ -73,10 +75,6 @@ trait BytecodeReader extends Reader {
       
       lazy val tableInt = tableEntry flatMap readInt
 
-      lazy val setReduction: Option[SetReduction] = (code & 0xFF) match {
-        case 0x00 => Some(Distinct)
-      }
-      
       lazy val unOp: Option[UnaryOperation] = (code & 0xFF) match {
         case 0x40 => Some(Comp)
         case 0x41 => Some(Neg)
@@ -122,15 +120,23 @@ trait BytecodeReader extends Reader {
       }
       
       lazy val reduction = (code & 0xFF) match {
-        case 0xC0 => stdlibReductOps.get(((code >> 8) & 0xFFFFFF).toInt)
+        case 0xC0 => stdlibReductionOps.get(((code >> 8) & 0xFFFFFF).toInt)
+
+        case _ => None
+      }      
+
+      lazy val morphism1 = (code & 0xFF) match {
+        case 0xC1 => stdlibMorphism1Ops.get(((code >> 8) & 0xFFFFFF).toInt)
 
         case _ => None
       }
 
-      lazy val tpe = (code & 0xFF) match {
-        case 0x00 => Some(Het)
+      lazy val morphism2 = (code & 0xFF) match {
+        case 0xC2 => stdlibMorphism2Ops.get(((code >> 8) & 0xFFFFFF).toInt) 
+
+        case _ => None
       }
-      
+
       lazy val depth = ((code >> 32) & 0xFFFFFF).toShort
       
       lazy val instruction = ((code >> 56) & 0xFF) match {
@@ -143,7 +149,8 @@ trait BytecodeReader extends Reader {
         case 0x06 => binOp map Map2CrossRight
         
         case 0x08 => reduction map Reduce
-        case 0x09 => setReduction map SetReduce
+        case 0x09 => morphism1 map Morph1
+        case 0x19 => morphism2 map Morph2
         
         case 0x10 => Some(VUnion)
         case 0x11 => Some(VIntersect)
@@ -153,17 +160,20 @@ trait BytecodeReader extends Reader {
 
         case 0x15 => Some(SetDifference)
         
-        case 0x14 => Some(FilterMatch(depth, predicate))
-        case 0x16 => Some(FilterCross(depth, predicate))
-        case 0x17 => Some(FilterCrossLeft(depth, predicate))
-        case 0x18 => Some(FilterCrossRight(depth, predicate))
+        case 0x14 => Some(FilterMatch)
+        case 0x16 => Some(FilterCross)
+        case 0x17 => Some(FilterCrossLeft)
+        case 0x18 => Some(FilterCrossRight)
         
-        case 0x1A => Some(Bucket)
+        case 0x1A => Some(Group(parameter))
         case 0x1B => Some(MergeBuckets((code & 0x01) == 1))
-        case 0x1C => Some(ZipBuckets)
+        case 0x1C => Some(KeyPart(parameter))
+        case 0x1D => Some(Extra)
         
-        case 0x1D => Some(Split(depth, parameter.toShort))
-        case 0x1E => Some(Merge)
+        case 0x1E => Some(Split)
+        case 0x1F => Some(Merge)
+
+        case 0x03 => Some(Distinct)
         
         // manipulative instructions
         
@@ -175,7 +185,7 @@ trait BytecodeReader extends Reader {
         
         // introductive instructions
         
-        case 0x40 => tpe map LoadLocal
+        case 0x40 => Some(LoadLocal)
         
         case 0x80 => string map PushString
         case 0x81 => num map PushNum
@@ -184,6 +194,9 @@ trait BytecodeReader extends Reader {
         case 0x84 => Some(PushObject)
         case 0x85 => Some(PushArray)
         case 0x86 => Some(PushNull)
+        
+        case 0x90 => Some(PushGroup(parameter))
+        case 0x91 => Some(PushKey(parameter))
         
         case _ => None
       }
@@ -194,42 +207,6 @@ trait BytecodeReader extends Reader {
     instr match {
       case Some(i) => readStream(buffer, table, acc :+ i)
       case None => acc
-    }
-  }
-  
-  @tailrec
-  private[this] def readPredicate(buffer: ByteBuffer, acc: Vector[PredicateInstr]): Predicate = {
-    val opcode = try {
-      Some(buffer.get & 0xFF)     // promote the *unsigned* byte to int
-    } catch {
-      case _: BufferUnderflowException => None
-    }
-    
-    val instr = opcode collect {
-      case 0x00 => Add
-      case 0x01 => Sub
-      case 0x02 => Mul
-      case 0x03 => Div
-     
-      case 0x41 => Neg
-      
-      case 0x30 => Or
-      case 0x31 => And
-      
-      case 0x40 => Comp
-      
-      case 0xA0 => DerefObject
-      case 0xA1 => DerefArray
-      
-      case 0xFF => Range
-    }
-    
-    instr match {
-      case Some(i) => readPredicate(buffer, acc :+ i)
-      case None => {
-        buffer.rewind()
-        acc
-      }
     }
   }
   

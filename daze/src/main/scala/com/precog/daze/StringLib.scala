@@ -20,15 +20,13 @@
 package com.precog
 package daze
 
+import bytecode.{ BinaryOperationType, UnaryOperationType, JTextT, JNumberT, JBooleanT }
 import bytecode.Library
-import bytecode.BuiltInFunc1
-import bytecode.BuiltInFunc2
 
 import java.lang.String
 
 import yggdrasil._
-
-object StringLib extends StringLib
+import yggdrasil.table._
 
 trait StringLib extends GenOpcode with ImplLibrary {
   val StringNamespace = Vector("std", "string")
@@ -43,41 +41,83 @@ trait StringLib extends GenOpcode with ImplLibrary {
     }
   }
 
-  object length extends BIF1(StringNamespace, "length") {
-    val operandType = Some(SString)
+  object length extends Op1(StringNamespace, "length") {
+    val tpe = UnaryOperationType(JTextT, JNumberT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with LongColumn {
+        def apply(row: Int) = c(row).length
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SDecimal(str.length)
-    }
+    } */
   }
-  object trim extends BIF1(StringNamespace, "trim") {
-    val operandType = Some(SString)
+  object trim extends Op1(StringNamespace, "trim") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = c(row).trim
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.trim)
-    }
+    } */
   }
-  object toUpperCase extends BIF1(StringNamespace, "toUpperCase") {
-    val operandType = Some(SString)
+  object toUpperCase extends Op1(StringNamespace, "toUpperCase") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = c(row).toUpperCase
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.toUpperCase)
-    }
+    } */
   }  
-  object toLowerCase extends BIF1(StringNamespace, "toLowerCase") {
-    val operandType = Some(SString)
+  object toLowerCase extends Op1(StringNamespace, "toLowerCase") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = c(row).toLowerCase
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.toLowerCase)
-    }
+    } */
   }
-  object isEmpty extends BIF1(StringNamespace, "isEmpty") {
-    val operandType = Some(SString)
+  object isEmpty extends Op1(StringNamespace, "isEmpty") {
+    val tpe = UnaryOperationType(JTextT, JBooleanT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with BoolColumn {
+        def apply(row: Int) = c(row).isEmpty
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SBoolean(str.isEmpty)
-    }
+    } */
   }
-  object intern extends BIF1(StringNamespace, "intern") {
-    val operandType = Some(SString)
+  object intern extends Op1(StringNamespace, "intern") {
+    val tpe = UnaryOperationType(JTextT, JTextT)
+    def f1: F1 = new CF1P({
+      case c: StrColumn => new Map1Column(c) with StrColumn {
+        def apply(row: Int) = c(row).intern
+      }
+    })
+    
+    /* val operandType = Some(SString)
     val operation: PartialFunction[SValue, SValue] = {
       case SString(str) => SString(str.intern)
-    }
+    } */
   }
   //object hashCode extends BIF1(StringNamespace, "hashCode") {   //mysterious case - java.lang.ClassCastException
   //  val operandType = Some(SString)
@@ -85,85 +125,200 @@ trait StringLib extends GenOpcode with ImplLibrary {
   //    case SString(str) => SDecimal(str.hashCode)
   //  }
   //}
-  object equalsIgnoreCase extends BIF2(StringNamespace, "equalsIgnoreCase") {
-    val operandType = (Some(SString), Some(SString))
+  object equalsIgnoreCase extends Op2(StringNamespace, "equalsIgnoreCase") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
+        def apply(row: Int) = c1(row).equalsIgnoreCase(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.equalsIgnoreCase(v2))
-    }
+    } */
   }
-  object codePointAt extends BIF2(StringNamespace, "codePointAt") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object codePointAt extends Op2(StringNamespace, "codePointAt") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: LongColumn)  => new Map2Column(c1, c2) with LongColumn {  //todo do we need other cases for other numeric input types?
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+
+          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
+            str.codePointAt(num.toInt)
+          else
+            sys.error("todo: null?")
+        }
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
         SDecimal(str.codePointAt(v2.toInt))
-    }
+    } */
   }
-  object startsWith extends BIF2(StringNamespace, "startsWith") {
-    val operandType = (Some(SString), Some(SString))
+  object startsWith extends Op2(StringNamespace, "startsWith") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
+        def apply(row: Int) = c1(row).startsWith(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.startsWith(v2))
-    }
+    } */
   }
-  object lastIndexOf extends BIF2(StringNamespace, "lastIndexOf") {
-    val operandType = (Some(SString), Some(SString))
+  object lastIndexOf extends Op2(StringNamespace, "lastIndexOf") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = c1(row).lastIndexOf(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.lastIndexOf(v2))
-    }
+    } */
   }
-  object concat extends BIF2(StringNamespace, "concat") {
-    val operandType = (Some(SString), Some(SString))
+  object concat extends Op2(StringNamespace, "concat") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JTextT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        def apply(row: Int) = c1(row).concat(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SString(str.concat(v2))
-    }
+    } */
   }
-  object endsWith extends BIF2(StringNamespace, "endsWith") {
-    val operandType = (Some(SString), Some(SString))
+  object endsWith extends Op2(StringNamespace, "endsWith") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
+        def apply(row: Int) = c1(row).endsWith(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.endsWith(v2))
-    }
+    } */
   }
-  object codePointBefore extends BIF2(StringNamespace, "codePointBefore") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object codePointBefore extends Op2(StringNamespace, "codePointBefore") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+
+          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
+            str.codePointBefore(num.toInt)
+          else 
+            sys.error("todo")
+        }
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 > 0) && (str.length >= v2) && isValidInt(v2)) => 
         SDecimal(str.codePointBefore(v2.toInt))
-    }
+    } */
   }
-  object substring extends BIF2(StringNamespace, "substring") {
-    val operandType = (Some(SString), Some(SDecimal))
+  object substring extends Op2(StringNamespace, "substring") {
+    val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+
+          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
+            str.substring(num.toInt)
+          else
+            sys.error("todo")
+        }
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SDecimal))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SDecimal(v2)) if ((v2 >= 0) && (str.length >= v2 + 1) && isValidInt(v2)) => 
         SString(str.substring(v2.toInt))
-    }
+    } */
   }
-  object matches extends BIF2(StringNamespace, "matches") {
-    val operandType = (Some(SString), Some(SString))
+  object matches extends Op2(StringNamespace, "matches") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
+        def apply(row: Int) = c1(row).matches(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.matches(v2))
-    }
+    } */
   }
-  object compareTo extends BIF2(StringNamespace, "compareTo") {
-    val operandType = (Some(SString), Some(SString))
+  object compareTo extends Op2(StringNamespace, "compareTo") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = c1(row).compareTo(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.compareTo(v2))
-    }
+    } */
   }
-  object compareToIgnoreCase extends BIF2(StringNamespace, "compareToIgnoreCase") {
-    val operandType = (Some(SString), Some(SString))
+  object compareToIgnoreCase extends Op2(StringNamespace, "compareToIgnoreCase") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = c1(row).compareToIgnoreCase(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.compareToIgnoreCase(v2))
-    }
+    } */
   }
-  object equals extends BIF2(StringNamespace, "equals") {
-    val operandType = (Some(SString), Some(SString))
+  object equals extends Op2(StringNamespace, "equals") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JBooleanT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with BoolColumn {
+        def apply(row: Int) = c1(row).equals(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SBoolean(str.equals(v2))
-    }
+    } */
   }
-  object indexOf extends BIF2(StringNamespace, "indexOf") {
-    val operandType = (Some(SString), Some(SString))
+  object indexOf extends Op2(StringNamespace, "indexOf") {
+    val tpe = BinaryOperationType(JTextT, JTextT, JNumberT)
+    def f2: F2 = new CF2P({
+      case (c1: StrColumn, c2: StrColumn) => new Map2Column(c1, c2) with LongColumn {
+        def apply(row: Int) = c1(row).indexOf(c2(row))
+      }
+    })
+    
+    /* val operandType = (Some(SString), Some(SString))
     val operation: PartialFunction[(SValue, SValue), SValue] = {
       case (SString(str), SString(v2)) => SDecimal(str.indexOf(v2))
-    }
+    } */
   }
 }

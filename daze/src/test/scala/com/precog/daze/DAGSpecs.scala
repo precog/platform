@@ -63,8 +63,8 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     }
     
     "parse out load_local" in {
-      val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal(Het)))
-      result mustEqual Right(dag.LoadLocal(Line(0, ""), None, Root(Line(0, ""), PushString("/foo")), Het))
+      val result = decorate(Vector(Line(0, ""), PushString("/foo"), instructions.LoadLocal))
+      result mustEqual Right(dag.LoadLocal(Line(0, ""), Root(Line(0, ""), PushString("/foo"))))
     }
     
     "parse out map1" in {
@@ -73,14 +73,16 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     }
     
     "parse out reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))))
-      result mustEqual Right(dag.Reduce(Line(0, ""), BuiltInReduction(BIR(Vector(), "count", 0x2000)), Root(Line(0, ""), PushFalse)))
+      val result = decorate(Vector(Line(0, ""), PushFalse, instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))))
+      result mustEqual Right(dag.Reduce(Line(0, ""), Reduction(Vector(), "count", 0x2000), Root(Line(0, ""), PushFalse)))
     }
 
-    "parse out set-reduce" in {
-      val result = decorate(Vector(Line(0, ""), PushNull, instructions.SetReduce(Distinct)))
-      result mustEqual Right(dag.SetReduce(Line(0, ""), Distinct, Root(Line(0, ""), PushNull)))
+    "parse out distinct" in {
+      val result = decorate(Vector(Line(0, ""), PushNull, instructions.Distinct))
+      result mustEqual Right(dag.Distinct(Line(0, ""), Root(Line(0, ""), PushNull)))
     }
+    
+    // TODO morphisms
     
     "parse a single-level split" in {
       val line = Line(0, "")
@@ -89,20 +91,24 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         line,
         PushTrue,
         Dup,
-        Bucket,
-        instructions.Split(1, 2),
+        KeyPart(1),
+        Swap(1),
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
+        PushKey(1),
         VUnion,
         Merge))
         
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            Vector(SingleBucketSpec(
+            dag.Group(2,
               Root(`line`, PushTrue),
-              Root(`line`, PushTrue))),
+              UnfixedSolution(1, Root(`line`, PushTrue))),
             Join(`line`, VUnion, 
-              sg @ SplitGroup(`line`, 1, Vector()),
-              sp @ SplitParam(`line`, 0)))) => {
+              sg @ SplitGroup(`line`, 2, Vector()),
+              sp @ SplitParam(`line`, 1)))) => {
               
           sp.parent mustEqual s
           sg.parent mustEqual s
@@ -116,11 +122,17 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(
         line,
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
+        KeyPart(3),
+        PushKey(1),
+        instructions.Group(4),
+        instructions.Split,
+        PushGroup(4),
+        PushKey(3),
         VUnion,
         Merge,
         Merge))
@@ -128,12 +140,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            dag.Group(2, Root(`line`, PushFalse), UnfixedSolution(1, Root(`line`, PushTrue))),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(sg1 @ SplitGroup(`line`, 1, Vector()), sp1 @ SplitParam(`line`, 0))),
+              dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Vector()))),
               Join(`line`, VUnion,
-                sg2 @ SplitGroup(`line`, 1, Vector()),
-                sp2 @ SplitParam(`line`, 0))))) => {
+                sg2 @ SplitGroup(`line`, 4, Vector()),
+                sp2 @ SplitParam(`line`, 3))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
@@ -150,15 +162,19 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(
         line,
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
+        PushKey(1),
         Map2Cross(Add),
         PushNum("42"),
+        KeyPart(3),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
-        Drop,
+        instructions.Group(4),
+        instructions.Split,
+        PushGroup(4),
         VUnion,
         Merge,
         Merge))
@@ -166,21 +182,21 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s1 @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushFalse))),
+            dag.Group(2, Root(`line`, PushFalse), UnfixedSolution(1, Root(`line`, PushTrue))),
             s2 @ dag.Split(`line`,
-              Vector(SingleBucketSpec(Root(`line`, PushNum("42")), Root(`line`, PushFalse))),
+              dag.Group(4, Root(`line`, PushFalse), UnfixedSolution(3, Root(`line`, PushNum("42")))),
               Join(`line`, VUnion,
                 Join(`line`, Map2Cross(Add),
-                  sg1 @ SplitGroup(`line`, 1, Vector()),
-                  sp1 @ SplitParam(`line`, 0)),
-                sg2 @ SplitGroup(`line`, 1, Vector()))))) => {
+                  sg1 @ SplitGroup(`line`, 2, Vector()),
+                  sp1 @ SplitParam(`line`, 1)),
+                sg2 @ SplitGroup(`line`, 4, Vector()))))) => {
           
           sp1.parent mustEqual s1
           sg1.parent mustEqual s1
           
           sg2.parent mustEqual s2
         }
-      } 
+      }
     }
     
     "parse a split with merged buckets" >> {
@@ -190,25 +206,29 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         val result = decorate(Vector(
           line,
           PushNum("1"),
-          PushNum("2"),
-          Bucket,
+          KeyPart(1),
           PushNum("3"),
-          PushNum("4"),
-          Bucket,
+          KeyPart(1),
           MergeBuckets(false),
-          instructions.Split(1, 2),
+          PushNum("2"),
+          instructions.Group(3),
+          instructions.Split,
+          PushGroup(3),
+          PushKey(1),
           IUnion,
           Merge))
           
         result must beLike {
           case Right(
             s @ dag.Split(`line`,
-              Vector(MergeBucketSpec(
-                SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
-                SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))), false)),
+              dag.Group(3,
+                Root(`line`, PushNum("2")),
+                UnionBucketSpec(
+                  UnfixedSolution(1, Root(`line`, PushNum("1"))),
+                  UnfixedSolution(1, Root(`line`, PushNum("3"))))),
               Join(`line`, IUnion,
-                sg @ SplitGroup(`line`, 1, Vector()),
-                sp @ SplitParam(`line`, 0)))) => {
+                sg @ SplitGroup(`line`, 3, Vector()),
+                sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
             sp.parent mustEqual s
@@ -222,25 +242,29 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         val result = decorate(Vector(
           line,
           PushNum("1"),
-          PushNum("2"),
-          Bucket,
+          KeyPart(1),
           PushNum("3"),
-          PushNum("4"),
-          Bucket,
+          KeyPart(1),
           MergeBuckets(true),
-          instructions.Split(1, 2),
+          PushNum("2"),
+          instructions.Group(3),
+          instructions.Split,
+          PushGroup(3),
+          PushKey(1),
           IUnion,
           Merge))
           
         result must beLike {
           case Right(
             s @ dag.Split(`line`,
-              Vector(MergeBucketSpec(
-                SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
-                SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))), true)),
+              dag.Group(3,
+                Root(`line`, PushNum("2")),
+                IntersectBucketSpec(
+                  UnfixedSolution(1, Root(`line`, PushNum("1"))),
+                  UnfixedSolution(1, Root(`line`, PushNum("3"))))),
               Join(`line`, IUnion,
-                sg @ SplitGroup(`line`, 1, Vector()),
-                sp @ SplitParam(`line`, 0)))) => {
+                sg @ SplitGroup(`line`, 3, Vector()),
+                sp @ SplitParam(`line`, 1)))) => {
             
             sg.parent mustEqual s
             sp.parent mustEqual s
@@ -249,19 +273,25 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
     }
     
+    // TODO union zip and zip with multiple keys
     "parse a split with zipped buckets" in {
       val line = Line(0, "")
       
       val result = decorate(Vector(
         line,
         PushNum("1"),
+        KeyPart(1),
         PushNum("2"),
-        Bucket,
+        instructions.Group(2),
         PushNum("3"),
+        KeyPart(1),
         PushNum("4"),
-        Bucket,
-        ZipBuckets,
-        instructions.Split(1, 3),
+        instructions.Group(3),
+        MergeBuckets(true),
+        instructions.Split,
+        PushGroup(2),
+        PushGroup(3),
+        PushKey(1),
         IUnion,
         IUnion,
         Merge))
@@ -269,14 +299,14 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            Vector(ZipBucketSpec(
-              SingleBucketSpec(Root(`line`, PushNum("1")), Root(`line`, PushNum("2"))),
-              SingleBucketSpec(Root(`line`, PushNum("3")), Root(`line`, PushNum("4"))))),
+            IntersectBucketSpec(
+              dag.Group(2, Root(`line`, PushNum("2")), UnfixedSolution(1, Root(`line`, PushNum("1")))),
+              dag.Group(3, Root(`line`, PushNum("4")), UnfixedSolution(1, Root(`line`, PushNum("3"))))),
             Join(`line`, IUnion,
               sg2 @ SplitGroup(`line`, 2, Vector()),
               Join(`line`, IUnion,
-                sg1 @ SplitGroup(`line`, 1, Vector()),
-                sp1 @ SplitParam(`line`, 0))))) => {
+                sg1 @ SplitGroup(`line`, 3, Vector()),
+                sp1 @ SplitParam(`line`, 1))))) => {
           
           sg1.parent mustEqual s
           sp1.parent mustEqual s
@@ -292,20 +322,21 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         line,
         PushNum("42"),
         PushTrue,
+        KeyPart(1),
         PushNull,
-        Bucket,
-        instructions.Split(1, 2),
-        Drop,
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
         Map2Match(Add),
         Merge))
         
       result must beLike {
         case Right(
           s @ dag.Split(`line`,
-            Vector(SingleBucketSpec(Root(`line`, PushTrue), Root(`line`, PushNull))),
+            dag.Group(2, Root(`line`, PushNull), UnfixedSolution(1, Root(`line`, PushTrue))),
             Join(`line`, Map2Match(Add),
               Root(`line`, PushNum("42")),
-              sg @ SplitGroup(`line`, 1, Vector())))) => {
+              sg @ SplitGroup(`line`, 2, Vector())))) => {
           
           sg.parent mustEqual s
         }
@@ -358,95 +389,34 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     
     "parse a filter with null predicate" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch(0, None)))
-      result mustEqual Right(Filter(line, None, None, Root(line, PushFalse), Root(line, PushTrue)))
-    }
-    
-    "parse a filter with a non-null predicate" in {
-      val line = Line(0, "")
-      
-      "simple range" >> {
-        val result = decorate(Vector(line, PushNum("12"), PushNum("42"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Range)))))
-        result mustEqual Right(Filter(line, None, Some(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42"))))), Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      "complemented range" >> {
-        val result = decorate(Vector(line, PushNum("12"), PushNum("42"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Range, Comp)))))
-        result mustEqual Right(Filter(line, None, Some(Complementation(Contiguous(ValueOperand(Root(line, PushNum("12"))), ValueOperand(Root(line, PushNum("42")))))), Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      "range with addend" >> {
-        val result = decorate(Vector(line, PushNum("42"), PushNum("10"), PushNum("12"), PushFalse, PushTrue, FilterMatch(3, Some(Vector(Add, Range)))))
-        result mustEqual Right(
-          Filter(line, None, Some(
-            Contiguous(
-              ValueOperand(Root(line, PushNum("42"))),
-              BinaryOperand(
-                ValueOperand(Root(line, PushNum("10"))),
-                Add,
-                ValueOperand(Root(line, PushNum("12")))))),
-            Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      "range with negation" >> {
-        val result = decorate(Vector(line, PushNum("42"), PushNum("12"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(Neg, Range)))))
-        result mustEqual Right(
-          Filter(line, None, Some(
-            Contiguous(
-              ValueOperand(Root(line, PushNum("42"))),
-              UnaryOperand(
-                Neg,
-                ValueOperand(Root(line, PushNum("12")))))),
-            Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      "range with object selector" >> {
-        val result = decorate(Vector(line, PushNum("42"), PushString("foo"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(DerefObject, Range)))))
-        result mustEqual Right(
-          Filter(line, None, Some(
-            Contiguous(
-              ValueOperand(Root(line, PushNum("42"))),
-              PropertyOperand(Root(line, PushString("foo"))))),
-            Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      "range with array selector" >> {
-        val result = decorate(Vector(line, PushNum("42"), PushNum("12"), PushFalse, PushTrue, FilterMatch(2, Some(Vector(DerefArray, Range)))))
-        result mustEqual Right(
-          Filter(line, None, Some(
-            Contiguous(
-              ValueOperand(Root(line, PushNum("42"))),
-              IndexOperand(Root(line, PushNum("12"))))),
-            Root(line, PushFalse), Root(line, PushTrue)))
-      }
-      
-      // TODO more complicated stuff requires swap and dup
+      val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch))
+      result mustEqual Right(Filter(line, None, Root(line, PushFalse), Root(line, PushTrue)))
     }
     
     "parse a filter_cross" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross(0, None)))
-      result mustEqual Right(Filter(line, Some(CrossNeutral), None, Root(line, PushTrue), Root(line, PushFalse)))
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross))
+      result mustEqual Right(Filter(line, Some(CrossNeutral), Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "parse a filter_crossl" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft(0, None)))
-      result mustEqual Right(Filter(line, Some(CrossLeft), None, Root(line, PushTrue), Root(line, PushFalse)))
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
+      result mustEqual Right(Filter(line, Some(CrossLeft), Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "parse a filter_crossr" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight(0, None)))
-      result mustEqual Right(Filter(line, Some(CrossRight), None, Root(line, PushTrue), Root(line, PushFalse)))
+      val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
+      result mustEqual Right(Filter(line, Some(CrossRight), Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "continue processing beyond a filter" in {
       val line = Line(0, "")
-      val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch(0, None), Map1(Neg)))
+      val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch, Map1(Neg)))
       result mustEqual Right(
         Operate(line, Neg,
-          Filter(line, None, None,
+          Filter(line, None,
             Root(line, PushFalse),
             Root(line, PushTrue))))
     }
@@ -538,12 +508,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "reduce" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.Reduce(BuiltInReduction(BIR(Vector(), "count", 0x2000)))
+        val instr = instructions.Reduce(BuiltInReduction(Reduction(Vector(), "count", 0x2000)))
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }  
 
       "set-reduce" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.SetReduce(Distinct)
+        val instr = instructions.Distinct
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       
@@ -573,7 +543,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "split" >> {     // similar to map1, only one underflow case!
-        val instr = instructions.Split(1, 2)
+        val instr = instructions.Split
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       
@@ -581,34 +551,34 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       
       "filter_match" >> {
         {
-          val instr = FilterMatch(0, None)
+          val instr = FilterMatch
           decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
         }
         
         {
-          val instr = FilterMatch(0, None)
+          val instr = FilterMatch
           decorate(Vector(Line(0, ""), PushTrue, instr)) mustEqual Left(StackUnderflow(instr))
         }
         
         {
-          val instr = FilterMatch(0, None)
+          val instr = FilterMatch
           decorate(Vector(Line(0, ""), PushTrue, PushTrue, Map2Match(Add), instr)) mustEqual Left(StackUnderflow(instr))
         }
       }
       
       "filter_cross" >> {
         {
-          val instr = FilterCross(0, None)
+          val instr = FilterCross
           decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
         }
         
         {
-          val instr = FilterCross(0, None)
+          val instr = FilterCross
           decorate(Vector(Line(0, ""), PushTrue, instr)) mustEqual Left(StackUnderflow(instr))
         }
         
         {
-          val instr = FilterCross(0, None)
+          val instr = FilterCross
           decorate(Vector(Line(0, ""), PushTrue, PushTrue, Map2Match(Add), instr)) mustEqual Left(StackUnderflow(instr))
         }
       }
@@ -640,7 +610,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       }
       
       "load_local" >> {
-        val instr = instructions.LoadLocal(Het)
+        val instr = instructions.LoadLocal
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
     }
@@ -650,150 +620,6 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"))) mustEqual Left(MultipleStackValuesAtEnd)
       decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), PushString("foo"))) mustEqual Left(MultipleStackValuesAtEnd)
     }
-    
-    "reject a negative predicate depth" in {
-      "filter_match" >> {
-        {
-          val instr = FilterMatch(-1, None)
-          decorate(Vector(Line(0, ""), PushTrue, PushFalse, instr)) mustEqual Left(NegativePredicateDepth(instr))
-        }
-        
-        {
-          val instr = FilterMatch(-255, None)
-          decorate(Vector(Line(0, ""), PushTrue, PushFalse, instr)) mustEqual Left(NegativePredicateDepth(instr))
-        }
-      }
-      
-      "filter_cross" >> {
-        {
-          val instr = FilterCross(-1, None)
-          decorate(Vector(Line(0, ""), PushTrue, PushFalse, instr)) mustEqual Left(NegativePredicateDepth(instr))
-        }
-        
-        {
-          val instr = FilterCross(-255, None)
-          decorate(Vector(Line(0, ""), PushTrue, PushFalse, instr)) mustEqual Left(NegativePredicateDepth(instr))
-        }
-      }
-    }
-    
-    "detect predicate stack underflow" in {
-      "add" >> {
-        val instr = FilterMatch(1, Some(Vector(Add)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "sub" >> {
-        val instr = FilterMatch(1, Some(Vector(Sub)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "mul" >> {
-        val instr = FilterMatch(1, Some(Vector(Mul)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "div" >> {
-        val instr = FilterMatch(1, Some(Vector(Div)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "or" >> {
-        val instr = FilterMatch(1, Some(Vector(Or)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "and" >> {
-        val instr = FilterMatch(1, Some(Vector(And)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "comp" >> {
-        val instr = FilterMatch(0, Some(Vector(Comp)))
-        decorate(Vector(Line(0, ""), PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "neg" >> {
-        val instr = FilterMatch(0, Some(Vector(Comp)))
-        decorate(Vector(Line(0, ""), PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "deref_object" >> {
-        val instr = FilterMatch(0, Some(Vector(DerefObject)))
-        decorate(Vector(Line(0, ""), PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "deref_array" >> {
-        val instr = FilterMatch(0, Some(Vector(DerefArray)))
-        decorate(Vector(Line(0, ""), PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-      
-      "range" >> {
-        val instr = FilterMatch(1, Some(Vector(Range)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(PredicateStackUnderflow(instr))
-      }
-    }
-    
-    "reject multiple predicate stack values at end" in {
-      val instr = FilterMatch(3, Some(Vector(Range)))
-      decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(MultiplePredicateStackValuesAtEnd(instr))
-    }
-    
-    "reject non-range value at end" in {
-      val instr = FilterMatch(2, Some(Vector(Add)))
-      decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(NonRangePredicateStackAtEnd(instr))
-    }
-    
-    "reject an operand operation applied to a range" in {
-      "add" >> {
-        val instr = FilterMatch(3, Some(Vector(Range, Add)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-      
-      "sub" >> {
-        val instr = FilterMatch(3, Some(Vector(Range, Sub)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-      
-      "mul" >> {
-        val instr = FilterMatch(3, Some(Vector(Range, Mul)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-      
-      "div" >> {
-        val instr = FilterMatch(3, Some(Vector(Range, Div)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-      
-      "range" >> {
-        val instr = FilterMatch(3, Some(Vector(Range, Range)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-      
-      "neg" >> {
-        val instr = FilterMatch(2, Some(Vector(Range, Neg)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(OperandOpAppliedToRange(instr))
-      }
-    }
-    
-    "reject a range operation applied to an operand" in {
-      "or" >> {
-        val instr = FilterMatch(2, Some(Vector(Or)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(RangeOpAppliedToOperand(instr))
-      }
-      
-      "and" >> {
-        val instr = FilterMatch(2, Some(Vector(And)))
-        decorate(Vector(Line(0, ""), PushTrue, PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(RangeOpAppliedToOperand(instr))
-      }
-      
-      "comp" >> {
-        val instr = FilterMatch(1, Some(Vector(Comp)))
-        decorate(Vector(Line(0, ""), PushTrue, PushFalse, PushNum("42"), instr)) mustEqual Left(RangeOpAppliedToOperand(instr))
-      }
-    }
-    
-    // TODO predicate typing
     
     "reject negative swap depth" in {
       {
@@ -816,9 +642,12 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       decorate(Vector(
         Line(0, ""),
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushKey(1),
+        PushGroup(2),
         PushFalse,
         Merge,
         Drop,
@@ -833,10 +662,11 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushTrue,
         PushFalse,
         PushNum("42"),
+        KeyPart(1),
         PushNum("12"),
-        Bucket,
-        instructions.Split(1, 2),
-        Drop,
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
         Swap(1),
         Swap(2),
         VUnion,
@@ -844,9 +674,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         VIntersect))
       
       lazy val split: dag.Split = dag.Split(line,
-        Vector(SingleBucketSpec(Root(line, PushNum("42")), Root(line, PushNum("12")))),
+        dag.Group(2, Root(line, PushNum("12")), UnfixedSolution(1, Root(line, PushNum("42")))),
         Join(line, VUnion,
-          SplitGroup(line, 1, Vector())(split),
+          SplitGroup(line, 2, Vector())(split),
           Root(line, PushTrue)))
       
       val expect = Join(line, VIntersect, Root(line, PushFalse), split)
@@ -861,9 +691,10 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     "reject split without corresponding merge" in {
       decorate(Vector(Line(0, ""),
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2))) mustEqual Left(UnmatchedSplit)
+        instructions.Group(2),
+        instructions.Split)) mustEqual Left(UnmatchedSplit)
     }
     
     "reject split which increases the stack" in {
@@ -872,9 +703,11 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(
         line,
         PushTrue,
+        KeyPart(1),
         PushFalse,
-        Bucket,
-        instructions.Split(1, 2),
+        instructions.Group(2),
+        instructions.Split,
+        PushGroup(2),
         PushTrue,
         Merge))
         

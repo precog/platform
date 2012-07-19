@@ -43,8 +43,8 @@ trait TreeShaker extends Phases with parser.AST with Binder {
       lazy val (left2, leftBindings, leftErrors) = performShake(left)
       val (right2, rightBindings, rightErrors) = performShake(right)
       
-      if (rightBindings contains (Right(id) -> UserDef(b))) {
-        val unusedParamBindings = Set(params zip (Stream continually (UserDef(b): Binding)): _*) &~ leftBindings.collect { 
+      if (rightBindings contains (Right(id) -> LetBinding(b))) {
+        val unusedParamBindings = Set(params zip (Stream continually (LetBinding(b): Binding)): _*) &~ leftBindings.collect { 
           case (Left(id), b) => (id, b)
         }  
 

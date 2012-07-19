@@ -56,14 +56,14 @@ trait ShardConfig extends BaseConfig {
   def batchShutdownCheckInterval: Duration = config[Int]("actors.store.shutdown_check_seconds", 1) seconds
 }
 
-trait ShardSystemActorModule[Dataset[_]] extends ProjectionsActorModule[Dataset] with YggConfigComponent {
+trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
   type YggConfig <: ShardConfig
 
   protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef): Option[Actor]
 
   protected def checkpointCoordination: CheckpointCoordination
 
-  class ShardSystemActor[Dataset[_]](storage: MetadataStorage) extends Actor with Logging {
+  class ShardSystemActor(storage: MetadataStorage) extends Actor with Logging {
 
     // The ingest system consists of the ingest supervisor and ingest actor(s)
     private[this] var ingestSystem: Option[ActorRef]    = None
@@ -71,26 +71,28 @@ trait ShardSystemActorModule[Dataset[_]] extends ProjectionsActorModule[Dataset]
     private[this] var projectionsActor: ActorRef        = _
     private[this] var metadataSync: Option[Cancellable] = None
 
-    private def loadCheckpoint() : Option[YggCheckpoint] = yggConfig.ingestEnabled.option(YggCheckpoint.Empty) flatMap { 
-      _ =>
-      checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
-        case Some(Failure(errors)) =>
-          logger.error("Unable to load Kafka checkpoint: " + errors)
-          sys.error("Unable to load Kafka checkpoint: " + errors)
+    private def loadCheckpoint() : Option[YggCheckpoint] = 
+      if (yggConfig.ingestEnabled) {
+        checkpointCoordination.loadYggCheckpoint(yggConfig.shardId) match {
+          case Some(Failure(errors)) =>
+            logger.error("Unable to load Kafka checkpoint: " + errors)
+            sys.error("Unable to load Kafka checkpoint: " + errors)
 
-        case Some(Success(checkpoint)) => Some(checkpoint)
-        case None => None
+          case Some(Success(checkpoint)) => Some(checkpoint)
+          case None => None
+        }
+      } else {
+        None
       }
-    }
 
     override def preStart() {
       val initialCheckpoint = loadCheckpoint()
 
       logger.info("Initializing MetadataActor with storage = " + storage)
-      metadataActor    = context.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
+      metadataActor = context.actorOf(Props(new MetadataActor(yggConfig.shardId, storage, checkpointCoordination, initialCheckpoint)), "metadata")
 
       logger.debug("Initializing ProjectionsActor")
-      projectionsActor = context.actorOf(Props(newProjectionsActor(metadataActor, yggConfig.metadataTimeout)), "projections")
+      projectionsActor = context.actorOf(Props(new ProjectionsActor), "projections")
 
       ingestSystem     = initialCheckpoint map {
         checkpoint =>
@@ -148,6 +150,5 @@ trait ShardSystemActorModule[Dataset[_]] extends ProjectionsActorModule[Dataset]
     } recover { 
       case e => logger.error("Error stopping " + name + " actor", e)  
     }   
-
   }
 }

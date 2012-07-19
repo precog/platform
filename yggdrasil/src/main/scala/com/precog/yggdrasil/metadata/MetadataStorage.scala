@@ -180,12 +180,9 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     metadataLocations.get(desc) match {
       case Some(dir) =>
         val file = new File(dir, curFilename)
-        if (fileOps.exists(file)) {
-          fileOps.read(file) map {
-            json => JsonParser.parse(json).deserialize[MetadataRecord] 
-          }
-        } else {
-          IO(defaultMetadata(desc))
+        fileOps.exists(file) flatMap {
+          case true  => fileOps.read(file) map { json => JsonParser.parse(json).deserialize[MetadataRecord] }
+          case false => IO(defaultMetadata(desc))
         }
 
       case None =>
@@ -227,17 +224,19 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
     }
   }
 
-  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = IO {
+  private def writeDescriptor(desc: ProjectionDescriptor, baseDir: File): IO[Unit] = {
     val df = new File(baseDir, descriptorName)
-    if (df.exists) {
-      throw new java.io.IOException("Serialized projection descriptor already exists for " + desc + " in " + baseDir)
-    } else {
-      val writer = new FileWriter(df)
-      try {
-        writer.write(Printer.pretty(Printer.render(desc.serialize)))
-      } finally {
-        writer.close()
-      }
+    fileOps.exists(df) map {
+      case true => 
+        throw new java.io.IOException("Serialized projection descriptor already exists for " + desc + " in " + baseDir)
+
+      case false =>
+        val writer = new FileWriter(df)
+        try {
+          writer.write(Printer.pretty(Printer.render(desc.serialize)))
+        } finally {
+          writer.close()
+        }
     }
   }
 
@@ -250,7 +249,7 @@ class FileMetadataStorage(baseDir: File, fileOps: FileOps, private var metadataL
   private def stagePrev(dir: File): IO[Unit] = {
     val src = new File(dir, curFilename)
     val dest = new File(dir, prevFilename)
-    if (fileOps.exists(src)) fileOps.copy(src, dest) else IO(())
+    fileOps.exists(src) flatMap { exists => if (exists) fileOps.copy(src, dest) else IO(()) }
   }
   
   private def rotateCurrent(dir: File): IO[Unit] = IO {
