@@ -97,7 +97,7 @@ trait ColumnarTableModule extends TableModule {
       table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1)))
   }
   
-  object grouper extends trans.Grouper {
+  object grouper extends Grouper {
     import trans._
     
     def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => Future[Table]): Future[Table] =
@@ -113,7 +113,7 @@ trait ColumnarTableModule extends TableModule {
     def applyl(cv: CValue) = new CF1(f(Column.const(cv), _))
     def applyr(cv: CValue) = new CF1(f(_, Column.const(cv)))
 
-    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1)
+    def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
   }
 
   private case class SliceTransform[A](initial: A, f: (A, Slice) => (A, Slice)) {

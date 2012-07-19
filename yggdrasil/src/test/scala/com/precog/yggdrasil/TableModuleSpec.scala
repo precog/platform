@@ -50,8 +50,10 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
   def lookupF2(namespace: List[String], name: String): F2
   def lookupScanner(namespace: List[String], name: String): Scanner
   
-  def fromJson(sampleData: SampleData): Table
-  def toJson(dataset: Table): Stream[JValue]
+  def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
+  def toJson(dataset: Table): Stream[JValue] = dataset.toJson.toStream
+
+  def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
 
   def debugPrint(dataset: Table): Unit 
 
@@ -85,7 +87,7 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
   def checkMappings = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val dataset = fromJson(sample)
+      val dataset = fromSample(sample)
       toJson(dataset).toList must containAllOf(sample.data.toList).only
     }
   }

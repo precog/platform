@@ -38,9 +38,9 @@ import scala.collection.BitSet
 import scalaz._
 
 trait TestColumnarTableModule extends ColumnarTableModule {
-  def fromJson(values: Iterable[JValue]): Table = {
-    val sliceSize = 10      // ???
-    
+  def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
+    val sliceSize = maxSliceSize.getOrElse(10)
+
     def makeSlice(sampleData: Iterable[JValue]): (Slice, Iterable[JValue]) = {
       val (prefix, suffix) = sampleData.splitAt(sliceSize)
   
@@ -162,7 +162,7 @@ trait StubColumnarTableModule extends TestColumnarTableModule {
     
     override def load(jtpe: JType) = Future {
       fromJson {
-        self.toJson map (_ \ "value") flatMap {
+        self.toJson.toStream map (_ \ "value") flatMap {
           case JString(pathStr) => 
             val path = Path(pathStr)
       
