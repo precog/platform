@@ -205,19 +205,9 @@ trait Slice { source =>
   }
 
   def toJson(row: Int): JValue = {
-    val steps = new scala.collection.mutable.ArrayBuffer[(ColumnRef, JValue, JValue)]()
-
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
-        steps += ((ref, jv, col.jValue(row)))
-        try {
-          jv.unsafeInsert(selector, col.jValue(row))
-        } catch { 
-          case ex => 
-            println("JSON reassembly failed after steps: ")
-            steps.foreach(println)
-            throw ex
-        }
+        jv.unsafeInsert(selector, col.jValue(row))
 
       case (jv, _) => jv
     }

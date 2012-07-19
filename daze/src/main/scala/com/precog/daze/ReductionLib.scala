@@ -42,10 +42,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
 
   // TODO swap to Reduction
+  val CountMonoid = implicitly[Monoid[Count.Result]]
   object Count extends Reduction(ReductionNamespace, "count") {
     type Result = Long
     
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit val monoid = CountMonoid
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
@@ -61,7 +62,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Max extends Reduction(ReductionNamespace, "max") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = new Monoid[Result] {
+    implicit val monoid = new Monoid[Result] {
       def zero = None
       def append(left: Result, right: => Result): Result = {
         for (l <- left; r <- right) yield l max r
@@ -104,7 +105,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Min extends Reduction(ReductionNamespace, "min") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = new Monoid[Result] {
+    implicit val monoid = new Monoid[Result] {
       def zero = None
       def append(left: Result, right: => Result): Result = {
         for (l <- left; r <- right) yield l min r
@@ -138,11 +139,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     def extract(res: Result): Table =
       res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
-  
+
+  val SumMonoid = implicitly[Monoid[Sum.Result]]
   object Sum extends Reduction(ReductionNamespace, "sum") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit val monoid = SumMonoid
 
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range) = {
@@ -177,11 +179,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
   
+  val MeanMonoid = implicitly[Monoid[Mean.Result]]
   object Mean extends Reduction(ReductionNamespace, "mean") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)   // (sum, count)
-    
-    implicit def monoid = implicitly[Monoid[Result]]
+
+    implicit val monoid = MeanMonoid
     
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
@@ -235,7 +238,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)
     
-    implicit def monoid = new Monoid[Result] {    //(product, count)
+    implicit val monoid = new Monoid[Result] {    //(product, count)
       def zero = None
       def append(left: Result, right: => Result) = {
         val both = for ((l1, l2) <- left; (r1, r2) <- right) yield (l1 * r1, l2 + r2)
@@ -294,10 +297,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
   }
   
+  val SumSqMonoid = implicitly[Monoid[SumSq.Result]]
   object SumSq extends Reduction(ReductionNamespace, "sumSq") {
     type Result = Option[BigDecimal]
 
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit val monoid = SumSqMonoid
     
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
@@ -347,11 +351,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
   }
   
+  val VarianceMonoid = implicitly[Monoid[Variance.Result]]
   object Variance extends Reduction(ReductionNamespace, "variance") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
 
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit val monoid = VarianceMonoid
     
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
@@ -400,11 +405,12 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
   }
   
+  val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
     
-    implicit def monoid = implicitly[Monoid[Result]]
+    implicit val monoid = StdDevMonoid
 
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {

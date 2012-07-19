@@ -93,33 +93,18 @@ trait CogroupSpec extends TableModuleSpec {
   }
 
   def testCogroup(l: SampleData, r: SampleData) = {
-    try {
-      val ltable = fromSample(l)
-      val rtable = fromSample(r)
+    val ltable = fromSample(l)
+    val rtable = fromSample(r)
 
-      val expected = computeCogroup(l.data, r.data, Stream()) map {
-        case Left3(jv) => jv
-        case Middle3((jv1, jv2)) => jv1.insertAll(jv2) match { case Success(v) => v; case Failure(ts) => throw ts.head }
-        case Right3(jv) => jv
-      } 
-
-      val result: Table = sys.error("todo")
-      val jsonResult = toJson(result)
-      jsonResult must containAllOf(expected).only
-    } catch {
-      case ex => ex.printStackTrace; throw ex
+    val expected = computeCogroup(l.data, r.data, Stream()) map {
+      case Left3(jv) => jv
+      case Middle3((jv1, jv2)) => jv1.insertAll(jv2) match { case Success(v) => v; case Failure(ts) => throw ts.head }
+      case Right3(jv) => jv
     } 
 
-//    val expected = computeCogroup(l.data, r.data, Stream(), l.idCount min r.idCount) map {
-//      case (ids, Left3(jv)) => (ids, Validation.success[NEL[Throwable], JValue](jv))
-//      case (ids, Middle3((jv1, jv2))) => (ids, jv1.insertAll(jv2))
-//      case (ids, Right3(jv)) => (ids, Validation.success[NEL[Throwable], JValue](jv))
-//    } map {
-//      case (ids, jv) => (VectorCase(ids.padTo(idCount, -1l): _*), jv)
-//    }
-//
-//    val result = toValidatedJson(ltable.cogroup(rtable, ltable.idCount min rtable.idCount)(CogroupMerge.second))
-//    normalizeValidations(result) must containAllOf(normalizeValidations(expected)).only.inOrder
+    val result: Table = sys.error("todo")
+    val jsonResult = toJson(result)
+    jsonResult must containAllOf(expected).only
   }
 
   def testCogroupSliceBoundaries = {

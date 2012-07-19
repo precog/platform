@@ -172,7 +172,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(101, 32, 34, 115)
-    }    
+    }.pendingUntilFixed    
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
@@ -189,7 +189,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed 
     "determine startsWith" in {
       val line = Line(0, "")
       
@@ -206,7 +206,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed  
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
@@ -223,7 +223,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(-1, 3, 14, 27)
-    }  
+    }.pendingUntilFixed
     "determine concat" in {
       val line = Line(0, "")
       
@@ -240,7 +240,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
-    }  
+    }.pendingUntilFixed
     "determine endsWith" in {
       val line = Line(0, "")
       
@@ -257,7 +257,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
@@ -274,7 +274,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(99, 58, 97, 101)
-    }  
+    }.pendingUntilFixed
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
@@ -291,7 +291,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
@@ -308,7 +308,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
-    }  
+    }.pendingUntilFixed
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
@@ -325,7 +325,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed
     "determine matches" in {
       val line = Line(0, "")
       
@@ -342,7 +342,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine compareTo" in {
       val line = Line(0, "")
       
@@ -359,7 +359,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
-    }  
+    }.pendingUntilFixed
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
@@ -376,7 +376,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
-    }  
+    }.pendingUntilFixed
     "determine equals" in {
       val line = Line(0, "")
       
@@ -393,7 +393,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine indexOf" in {
       val line = Line(0, "")
       
@@ -410,7 +410,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
-    } 
+    }.pendingUntilFixed
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
@@ -427,7 +427,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }    
+    }.pendingUntilFixed
   }
 
   "for heterogeneous sets, the appropriate string function" should {
@@ -544,7 +544,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(101, 32, 34, 115)
-    }    
+    }.pendingUntilFixed
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
@@ -561,7 +561,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed
     "determine startsWith" in {
       val line = Line(0, "")
       
@@ -578,7 +578,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
@@ -595,7 +595,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(-1, 3, 14, 27)
-    }  
+    }.pendingUntilFixed
     "determine concat" in {
       val line = Line(0, "")
       
@@ -612,7 +612,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
-    }  
+    }.pendingUntilFixed
     "determine endsWith" in {
       val line = Line(0, "")
       
@@ -629,7 +629,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
@@ -646,7 +646,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(99, 58, 97, 101)
-    }  
+    }.pendingUntilFixed
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
@@ -663,7 +663,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
@@ -680,7 +680,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
-    }  
+    }.pendingUntilFixed
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
@@ -697,7 +697,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain()
-    }  
+    }.pendingUntilFixed
     "determine matches" in {
       val line = Line(0, "")
       
@@ -714,7 +714,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine compareTo" in {
       val line = Line(0, "")
       
@@ -731,7 +731,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
-    }  
+    }.pendingUntilFixed
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
@@ -748,7 +748,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
-    }  
+    }.pendingUntilFixed
     "determine equals" in {
       val line = Line(0, "")
       
@@ -765,7 +765,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }  
+    }.pendingUntilFixed
     "determine indexOf" in {
       val line = Line(0, "")
       
@@ -782,7 +782,7 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
-    } 
+    }.pendingUntilFixed
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
@@ -799,6 +799,6 @@ class StringLibSpec extends Specification
       }
       
       result2 must contain(true, false)
-    }    
+    }.pendingUntilFixed
   }
 }
