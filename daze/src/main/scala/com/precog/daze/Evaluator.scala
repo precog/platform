@@ -311,11 +311,11 @@ trait Evaluator extends DAG
                   pendingTable <- loop(child, splits + (s -> (key, map)))
                 } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
                 
-                back.evalZero: Future[Table]   // TODO we can discard function body state; is this correct????
+                back.evalZero: Future[Table]
               }
             } yield result
           } 
-          state(PendingTable(table.evalZero, graph, TransSpec1.Id))  //TODO can we call evalZero here and above????
+          table map { PendingTable(_, graph, TransSpec1.Id) }  //TODO can we call evalZero here and above????
         }
         
         // VUnion and VIntersect removed, TODO: remove from bytecode
