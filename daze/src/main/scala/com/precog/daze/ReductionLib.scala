@@ -191,7 +191,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   object Mean extends Reduction(ReductionNamespace, "mean") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)   // (sum, count)
-
+    
     implicit val monoid = MeanMonoid
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
