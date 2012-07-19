@@ -92,8 +92,8 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/clicks" -> Map(JPath("time") -> Set(CLong, CDouble, CDecimalArbitrary)),
-        "/hom/heightWeight" -> Map(JPath("height") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/clicks" -> Map(JPath("time") -> Set(CLong, CDouble, CNum)),
+        "/hom/heightWeight" -> Map(JPath("height") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
