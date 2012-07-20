@@ -281,7 +281,7 @@ class EvaluatorSpecs extends Specification
         testEval(input) { result =>
           result must haveSize(5)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate a binary numeric operation mapped over homogeneous numeric set" >> {
@@ -512,7 +512,7 @@ class EvaluatorSpecs extends Specification
 
           result2 must contain(45, 15, 80, 4, 16)
         }
-      }.pendingUntilFixed
+      }
 
       "a root on the left side of the cross" >> {
         val line = Line(0, "")
@@ -530,7 +530,7 @@ class EvaluatorSpecs extends Specification
 
           result2 must contain(45, 15, 80, 4, 16)
         }
-      }.pendingUntilFixed
+      }
     }
 
     "evaluate wrap_object on a single numeric value" in {
@@ -942,7 +942,7 @@ class EvaluatorSpecs extends Specification
         
         result2 must contain(36, 12, 115, -165)
       }
-    }.pendingUntilFixed
+    }
     
     "evaluate matched binary numeric operation dropping undefined result" in {
       val line = Line(0, "")
@@ -1254,7 +1254,7 @@ class EvaluatorSpecs extends Specification
           
           result2 must contain(42, 12, 1)
         }
-      }.pendingUntilFixed
+      }
       
       "or" >> {
         val line = Line(0, "")
@@ -1278,7 +1278,7 @@ class EvaluatorSpecs extends Specification
           
           result2 must contain(77, 13)
         }
-      }.pendingUntilFixed
+      }
       
       "complement of equality" >> {
         val line = Line(0, "")
