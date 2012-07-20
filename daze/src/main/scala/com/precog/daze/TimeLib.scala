@@ -153,6 +153,30 @@ trait TimeLib extends GenOpcode with ImplLibrary {
 
           plus(newTime, incr.toInt)
         }
+      }      
+      case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))   //todo test isValidInt(c2(row))
+
+        def apply(row: Int) = {
+          val time = c1(row)
+          val incr = c2(row)
+
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+
+          plus(newTime, incr.toInt)
+        }
+      }      
+      case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && isValidISO(c1(row))   //todo test isValidInt(c2(row))
+
+        def apply(row: Int) = {
+          val time = c1(row)
+          val incr = c2(row)
+
+          val newTime = ISODateTimeFormat.dateTimeParser().withOffsetParsed.parseDateTime(time)
+
+          plus(newTime, incr.toInt)
+        }
       }
     })
 
@@ -267,6 +291,32 @@ trait TimeLib extends GenOpcode with ImplLibrary {
     val tpe = BinaryOperationType(JNumberT, JTextT, JTextT)
     def f2: F2 = new CF2P({
       case (c1: LongColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
+
+        def apply(row: Int) = { 
+          val time = c1(row)
+          val tz = c2(row)
+
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(time.toLong, timeZone)
+
+          dateTime.toString()
+        }
+      }      
+      case (c1: NumColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
+
+        def apply(row: Int) = { 
+          val time = c1(row)
+          val tz = c2(row)
+
+          val timeZone = DateTimeZone.forID(tz)
+          val dateTime = new DateTime(time.toLong, timeZone)
+
+          dateTime.toString()
+        }
+      }      
+      case (c1: DoubleColumn, c2: StrColumn) => new Map2Column(c1, c2) with StrColumn {
         override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c1(row) >= Long.MinValue && c1(row) <= Long.MaxValue && isValidTimeZone(c2(row))
 
         def apply(row: Int) = { 
