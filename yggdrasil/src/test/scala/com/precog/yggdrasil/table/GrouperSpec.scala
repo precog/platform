@@ -160,30 +160,30 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
   }
   
   "simple multi-key grouping" should {
+    val data = Stream(
+      JObject(
+        JField("a", JInt(12)) ::
+        JField("b", JInt(7)) :: Nil),
+      JObject(
+        JField("a", JInt(42)) :: Nil),
+      JObject(
+        JField("a", JInt(11)) ::
+        JField("c", JBool(true)) :: Nil),
+      JObject(
+        JField("a", JInt(12)) :: Nil),
+      JObject(
+        JField("b", JInt(15)) :: Nil),
+      JObject(
+        JField("b", JInt(-1)) ::
+        JField("c", JBool(false)) :: Nil),
+      JObject(
+        JField("b", JInt(7)) :: Nil),
+      JObject(
+        JField("a", JInt(-7)) ::
+        JField("b", JInt(3)) ::
+        JField("d", JString("testing")) :: Nil))
+    
     "compute a histogram on two keys" >> {
-      val data = Stream(
-        JObject(
-          JField("a", JInt(12)) ::
-          JField("b", JInt(7)) :: Nil),
-        JObject(
-          JField("a", JInt(42)) :: Nil),
-        JObject(
-          JField("a", JInt(11)) ::
-          JField("c", JBool(true)) :: Nil),
-        JObject(
-          JField("a", JInt(12)) :: Nil),
-        JObject(
-          JField("b", JInt(15)) :: Nil),
-        JObject(
-          JField("b", JInt(-1)) ::
-          JField("c", JBool(false)) :: Nil),
-        JObject(
-          JField("b", JInt(7)) :: Nil),
-        JObject(
-          JField("a", JInt(-7)) ::
-          JField("b", JInt(3)) ::
-          JField("d", JString("testing")) :: Nil))
-      
       "and" >> {
         val table = fromJson(data)
         
@@ -300,6 +300,112 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         forall(resultJson) { v =>
           v must beLike {
             case JInt(i) if i == 2 => ok
+            case JInt(i) if i == 1 => ok
+          }
+        }
+      }.pendingUntilFixed
+    }
+    
+    "compute a histogram on one key with an extra" >> {
+      val eq12F1 = new CF1P({
+        case c: NumColumn => new Map1Column(c) with BoolColumn {
+          def apply(row: Int) = c(row) == 12
+        }
+      })
+      
+      "and" >> {
+        val table = fromJson(data)
+        
+        val spec = table.group(
+          TransSpec1.Id,
+          3,
+          GroupKeySpecAnd(
+            GroupKeySpecSource(JPathField("extra"),
+              Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            
+        val result = grouper.merge(spec) { (key, map) =>
+          val keyJson = key.toJson.toSeq
+          keyJson must haveSize(1)
+          
+          keyJson must beLike {
+            case obj: JObject => {
+              val b = obj \ "2"
+              
+              b must beLike {
+                case JInt(i) if i == 7 => ok
+              }
+            }
+          }
+          
+          val gs1Json = map(3).toJson.toSeq
+          
+          gs1Json must haveSize(1)
+          Future(fromJson(Stream(JInt(gs1Json.size))))
+        }
+        
+        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        
+        resultJson must haveSize(1)
+        
+        forall(resultJson) { v =>
+          v must beLike {
+            case JInt(i) if i == 1 => ok
+          }
+        }
+      }.pendingUntilFixed
+      
+      "or" >> {
+        val table = fromJson(data)
+        
+        val spec = table.group(
+          TransSpec1.Id,
+          3,
+          GroupKeySpecOr(
+            GroupKeySpecSource(JPathField("extra"),
+              Filter(Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1), Map1(DerefObjectStatic(Leaf(Source), JPathField("a")), eq12F1))),
+            GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
+            
+        val result = grouper.merge(spec) { (key, map) =>
+          val gs1Json = map(3).toJson.toSeq
+          
+          gs1Json must haveSize(1)
+          
+          val keyJson = key.toJson.toSeq
+          keyJson must haveSize(1)
+          
+          keyJson must beLike {
+            case obj: JObject => {
+              val b = obj \ "2"
+              
+              if (b == JNothing) {
+                gs1Json.head must beLike {
+                  case subObj: JObject => {
+                    (subObj \ "a") must beLike {
+                      case JInt(i) if i == 12 => ok
+                    }
+                  }
+                }
+              } else {
+                b must beLike {
+                  case JInt(i) if i == 7 => gs1Json must haveSize(2)
+                  case JInt(i) if i == 15 => gs1Json must haveSize(1)
+                  case JInt(i) if i == -1 => gs1Json must haveSize(1)
+                  case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                }
+              }
+            }
+          }
+          
+          Future(fromJson(Stream(JInt(gs1Json.size))))
+        }
+        
+        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        
+        resultJson must haveSize(5)
+        
+        forall(resultJson) { v =>
+          v must beLike {
             case JInt(i) if i == 1 => ok
           }
         }
