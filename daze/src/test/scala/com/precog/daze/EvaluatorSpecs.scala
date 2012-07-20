@@ -1051,19 +1051,53 @@ class EvaluatorSpecs extends Specification
       
       val input = Join(line, IIntersect,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
-        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))))
         
       testEval(input) { result =>
-        result must haveSize(0)
+        result must haveSize(2)
         
         val result2 = result collect {
           case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble
         }
         
-        result2 must beEmpty
+        result2 must contain(1, 42)
+      }
+    }.pendingUntilFixed    
+
+    "compute the iintersect of two heterogeneous sets" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, IIntersect,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))))
+        
+      testEval(input) { result =>
+        result must haveSize(7)
+
+        forall(result) {
+          _ must beLike {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble must beOneOf(1, 42)
+            case (ids, SBoolean(d)) if ids.size == 1 => d must beOneOf(true, false)
+            case (ids, SObject(d)) if ids.size == 1 => (d must haveKey("test")) && (d must haveValue("fubar"))
+            case (ids, SString(d)) if ids.size == 1 => d mustEqual "daniel"
+            case (ids, SArray(d)) if ids.size == 1 => d.size must beEmpty
+          }
+        }
       }
     }.pendingUntilFixed
     
+    "compute the iintersect of two nonintersect sets of numbers" in {
+      val line = Line(0, "")
+      
+      val input = Join(line, IIntersect,
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+        dag.LoadLocal(line, Root(line, PushString("/hom/numbers3"))))
+        
+      testEval(input) { result =>
+        result must haveSize(0)
+      }
+    }    
+
     "compute the iintersect of two datasets" in {
       val line = Line(0, "")
       
@@ -1074,7 +1108,7 @@ class EvaluatorSpecs extends Specification
       testEval(input) { result =>
         result must haveSize(0)
       }
-    }.pendingUntilFixed
+    }
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
