@@ -64,10 +64,11 @@ trait ImplLibrary extends Library with ColumnarTableModule {
     def f1: F1
   }
 
-  trait Op2Impl extends Op2Like with Morphism2Impl {
+  trait Op2Impl extends Op2Like {
     lazy val alignment = MorphismAlignment.Match // Was None, which would have blown up in the evaluator
     def apply(table: Table) = sys.error("morphism application of an op2")     // TODO make this actually work
     def f2: F2
+    lazy val fqn = if (namespace.isEmpty) name else namespace.mkString("", "::", "::") + name
   }
 
   trait ReductionImpl extends ReductionLike with Morphism1Impl {
