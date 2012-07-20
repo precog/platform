@@ -827,7 +827,7 @@ trait Evaluator extends DAG
         trans.WrapObject(mapped, fieldName)
       }
       
-      wrapped.foldLeft(Leaf(Source): TransSpec1) { (acc, ts) =>
+      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
         trans.ObjectConcat(acc, ts)
       }
     }
