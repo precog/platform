@@ -240,8 +240,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table =
-      res map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
+    def extract(res: Result): Table = {
+      val filteredResult = res filter { case (_, count) => count != 0 } 
+      filteredResult map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
+    }
   }
   
   object GeometricMean extends Reduction(ReductionNamespace, "geometricMean") {
@@ -303,9 +305,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     }
 
     def extract(res: Result): Table = { //TODO division by zero 
-      val nonzeroRes = res filter { case (_, count) => count != 0 }
-
-      nonzeroRes map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
+      val filteredResult = res filter { case (_, count) => count != 0 }
+      filteredResult map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
     }
   }
   
@@ -417,8 +418,10 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table =
-      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
+    def extract(res: Result): Table = {
+      val filteredResult = res filter { case (count, _, _) => count != 0 }
+      filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
+    }
   }
   
   val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
@@ -473,7 +476,9 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table =
-      res map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
+    def extract(res: Result): Table = {
+      val filteredResult = res filter { case (count, _, _) => count != 0 }
+      filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
+    }
   }
 }
