@@ -155,7 +155,6 @@ trait CTypeSerialization {
 
 object CType extends CTypeSerialization {
 
-  // CStringFixed(width)
   // CString
   // CBoolean
   // CLong
