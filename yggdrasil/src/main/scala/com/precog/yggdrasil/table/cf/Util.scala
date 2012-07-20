@@ -148,6 +148,44 @@ object util {
       def apply(row: Int) = isDefinedAt(row)
     }
   })
+
+  case class FilterComplement(complement: Column) extends CF1P({
+    case c: BoolColumn   => new BoolColumn { 
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+
+    case c: LongColumn   => new LongColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+    case c: DoubleColumn => new DoubleColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+    case c: NumColumn    => new NumColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+    case c: StrColumn    => new StrColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+    case c: DateColumn   => new DateColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+      def apply(row: Int) = c(row)
+    }
+
+    case c: EmptyArrayColumn  => new EmptyArrayColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+    }
+    case c: EmptyObjectColumn => new EmptyObjectColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+    }
+    case c: NullColumn => new NullColumn {
+      def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
+    }
+  })
 }
 
 

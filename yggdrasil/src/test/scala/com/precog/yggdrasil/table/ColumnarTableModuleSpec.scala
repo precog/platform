@@ -140,7 +140,6 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
       "wrap the results of a transform in an object as the specified field" in checkWrapObject
       "give the identity transform for self-object concatenation" in checkObjectConcatSelf
       "use a right-biased overwrite strategy in object concat conflicts" in checkObjectConcatOverwrite
-      "correctly discard fields in object/primitive concat conflicts" in testObjectConcatOverwrite
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
       "delete elements according to a JType" in checkObjectDelete
