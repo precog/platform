@@ -56,6 +56,40 @@ trait Slice { source =>
     }
   }
 
+  def delete(jtype: JType): Slice = new Slice {
+    def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
+      columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[JPathNode], Int], Map.empty[ColumnRef, Column])) {
+        case ((arrayPaths, acc), (ColumnRef(jpath, ctype), col)) => 
+          val (arrayPaths0, nodes) = jpath.nodes.foldLeft((arrayPaths, Vector.empty[JPathNode])) {
+            case ((ap, nodes), JPathIndex(_)) => 
+              val idx = ap.getOrElse(nodes, -1) + 1
+              (ap + (nodes -> idx), nodes :+ JPathIndex(idx))
+
+            case ((ap, nodes), fieldNode) => (ap, nodes :+ fieldNode)
+          }
+
+          (arrayPaths0, acc + (ColumnRef(JPath(nodes: _*), ctype) -> col))
+      }._2
+    }
+    
+    val size = source.size
+    val columns = fixArrays(
+      source.columns.filterNot {
+        case (ColumnRef(selector, ctype), _) => Schema.includes(jtype, selector, ctype)
+      }
+    )
+  }
+
+  def deleteFields(prefixes: scala.collection.Set[JPathField]) = {
+    new Slice {
+      val size = source.size
+      val columns = source.columns filterNot {
+        case (ColumnRef(JPath(head @ JPathField(_), _ @ _*), _), _) => prefixes contains head
+        case _ => false
+      }
+    }
+  }
+
   def typed(jtpe : JType) : Slice = new Slice {
     val size = source.size
     val columns = {

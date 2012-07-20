@@ -143,6 +143,7 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
       "correctly discard fields in object/primitive concat conflicts" in testObjectConcatOverwrite
       "concatenate dissimilar objects" in checkObjectConcat
       "concatenate dissimilar arrays" in checkArrayConcat
+      "delete elements according to a JType" in checkObjectDelete
       "perform a trivial type-based filter" in checkTypedTrivial
       "perform a less trivial type-based filter" in checkTyped
       "perform a summation scan" in checkScan

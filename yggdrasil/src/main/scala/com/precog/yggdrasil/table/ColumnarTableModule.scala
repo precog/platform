@@ -355,6 +355,11 @@ trait ColumnarTableModule extends TableModule {
             }
           }
 
+        case ObjectDelete(source, mask) => 
+          composeSliceTransform(source) andThen {
+            map0 { _ deleteFields mask }
+          }
+
         case Typed(source, tpe) =>
           composeSliceTransform(source) andThen {
             map0 { _ typed tpe }
