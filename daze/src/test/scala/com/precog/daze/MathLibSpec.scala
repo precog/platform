@@ -96,13 +96,13 @@ class MathLibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(6)
+      result must haveSize(3)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
       }
       
-      result2 must contain(-1023, 0, 5, 4)
+      result2 must contain(0, 5)
     }  
     "compute asin" in {
       val line = Line(0, "")
@@ -634,13 +634,13 @@ class MathLibSpec extends Specification
         
       val result = testEval(input)
       
-      result must haveSize(6)
+      result must haveSize(3)
       
       val result2 = result collect {
         case (VectorCase(_), SDecimal(d)) => d
       }
       
-      result2 must contain(-1023, 0, 5, 4)
+      result2 must contain(0, 5)
     }  
     "compute asin" in {
       val line = Line(0, "")
