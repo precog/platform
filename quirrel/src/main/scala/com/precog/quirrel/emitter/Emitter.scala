@@ -5,7 +5,6 @@ package emitter
 import parser.AST
 import typer.{Binder, ProvenanceChecker, CriticalConditionFinder}
 import bytecode.Instructions
-import bytecode.Arity._
 
 import scalaz.{StateT, Id, Bind, Monoid}
 import scalaz.Scalaz._
@@ -376,11 +375,11 @@ trait Emitter extends AST
             case DistinctBinding(_) =>
               emitExpr(actuals.head) >> emitInstr(Distinct)
 
-            case MorphismBinding(m) => m.arity match {
-              case One => emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism(m)))
-              case Two => emitExpr(actuals(0)) >> emitExpr(actuals(1)) >> emitInstr(Morph2(BuiltInMorphism(m)))
-              case _ => notImpl(expr)
-            }
+            case Morphism1Binding(m) => 
+              emitExpr(actuals.head) >> emitInstr(Morph1(BuiltInMorphism1(m)))
+
+            case Morphism2Binding(m) => 
+              emitExpr(actuals(0)) >> emitExpr(actuals(1)) >> emitInstr(Morph2(BuiltInMorphism2(m)))
 
             case ReductionBinding(f) =>
               emitExpr(actuals.head) >> emitInstr(Reduce(BuiltInReduction(f)))

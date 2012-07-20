@@ -208,7 +208,7 @@ trait Binder extends parser.AST with Library {
       case Paren(_, child) => loop(child, env)
     }
 
-    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism.map(MorphismBinding) ++ Set(LoadBinding(LoadId), DistinctBinding(DistinctId))).map({ b => Right(b.name) -> b})(collection.breakOut))
+    loop(tree, (lib1.map(Op1Binding) ++ lib2.map(Op2Binding) ++ libReduction.map(ReductionBinding) ++ libMorphism1.map(Morphism1Binding) ++ libMorphism2.map(Morphism2Binding) ++ Set(LoadBinding(LoadId), DistinctBinding(DistinctId))).map({ b => Right(b.name) -> b})(collection.breakOut))
   } 
 
   sealed trait Binding
@@ -233,7 +233,12 @@ trait Binder extends parser.AST with Library {
     override val toString = "<native: %s(%d)>".format(id.id, 1)
   }
 
-  case class MorphismBinding(mor: Morphism) extends FunctionBinding {
+  case class Morphism1Binding(mor: Morphism1) extends FunctionBinding {
+    val name = Identifier(mor.namespace, mor.name)
+    override val toString = "<native: %s(%d)>".format(mor.name, 1)
+  }
+
+  case class Morphism2Binding(mor: Morphism2) extends FunctionBinding {
     val name = Identifier(mor.namespace, mor.name)
     override val toString = "<native: %s(%d)>".format(mor.name, 1)
   }
