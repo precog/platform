@@ -26,7 +26,6 @@ import com.codecommit.gll.LineStream
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
 import parser._
-import bytecode.Arity._
 
 import java.io.File
 import scala.io.Source
@@ -705,17 +704,28 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   }
 
   "pre-binding of built-in functions" should {
-    "bind morphisms" in {
-      libMorphism must not(beEmpty)
+    "bind unary morphisms" in {
+      libMorphism1 must not(beEmpty)
 
-      forall(libMorphism) { f =>
+      forall(libMorphism1) { f =>
         val d @ Dispatch(_, _, _) = parse(f.fqn)
-        d.binding mustEqual MorphismBinding(f)
+        d.binding mustEqual Morphism1Binding(f)
         d.isReduction mustEqual false
         d.errors must beEmpty
       }
     }    
-    
+
+    "bind binary morphisms" in {
+      libMorphism2 must not(beEmpty)
+
+      forall(libMorphism2) { f =>
+        val d @ Dispatch(_, _, _) = parse(f.fqn)
+        d.binding mustEqual Morphism2Binding(f)
+        d.isReduction mustEqual false
+        d.errors must beEmpty
+      }
+    }
+
     "bind reductions" in {
       libReduction must not(beEmpty)
 

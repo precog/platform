@@ -30,12 +30,14 @@ import typer._
 
 object QuirrelConsole {
   trait EmptyLibrary extends Library {
-    type Morphism = MorphismLike
-    type Op1 = Op1Like with Morphism
-    type Op2 = Op2Like with Morphism
-    type Reduction = ReductionLike with Morphism
+    type Morphism1 = Morphism1Like
+    type Morphism2 = Morphism2Like
+    type Op1 = Op1Like with Morphism1
+    type Op2 = Op2Like
+    type Reduction = ReductionLike with Morphism1
 
-    def libMorphism = Set()
+    def libMorphism1 = Set()
+    def libMorphism2 = Set()
     def lib1 = Set()
     def lib2 = Set()
     def libReduction = Set()

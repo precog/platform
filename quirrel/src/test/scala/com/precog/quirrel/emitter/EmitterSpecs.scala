@@ -34,8 +34,6 @@ import com.codecommit.gll.LineStream
 
 import typer._
 
-import bytecode.Arity._
-
 import scalaz.Success
 import scalaz.Scalaz._
 
@@ -500,20 +498,22 @@ object EmitterSpecs extends Specification
           Map2Match(Add)))
     }
 
-    "emit morphism" in {
-      forall(libMorphism) { f =>
-        if (f.arity == One) {
-          testEmit("""%s(4224)""".format(f.fqn))(
-            Vector(
-              PushNum("4224"),
-              Morph1(BuiltInMorphism(f))))
-        } else if (f.arity == Two) {
-          testEmit("""%s(4224, 17)""".format(f.fqn))(
-            Vector(
-              PushNum("4224"),
-              PushNum("17"),
-              Morph2(BuiltInMorphism(f))))
-        } else sys.error("unreachable case")
+    "emit morphism1" in {
+      forall(libMorphism1) { f =>
+        testEmit("""%s(4224)""".format(f.fqn))(
+          Vector(
+            PushNum("4224"),
+            Morph1(BuiltInMorphism1(f))))
+      }
+    }
+
+    "emit morphism2" in {
+      forall(libMorphism2) { f =>
+        testEmit("""%s(4224, 17)""".format(f.fqn))(
+          Vector(
+            PushNum("4224"),
+            PushNum("17"),
+            Morph2(BuiltInMorphism2(f))))
       }
     } 
 
