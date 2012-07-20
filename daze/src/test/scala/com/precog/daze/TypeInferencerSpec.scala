@@ -392,7 +392,7 @@ class TypeInferencerSpec extends Specification
       result must_== expected
     }
     
-    "propagate structure/type information through Split nodes" in {
+    "propagate structure/type information through Split nodes (1)" in {
       val line = Line(0, "")
 
       def clicks = LoadLocal(line, Root(line, PushString("/file")))
@@ -426,6 +426,79 @@ class TypeInferencerSpec extends Specification
       result must_== expected
     }
     
+    "propagate structure/type information through Split nodes (2)" in {
+      val line = Line(0, "")
+      def clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      
+      // clicks := //clicks forall 'user { user: 'user, num: count(clicks.user where clicks.user = 'user) }
+      lazy val input: Split =
+        Split(line,
+          Group(0,
+            Join(line, Map2Cross(DerefObject), clicks, Root(line, PushString("user"))),
+            UnfixedSolution(1,
+              Join(line, Map2Cross(DerefObject),
+                clicks,
+                Root(line, PushString("user"))))),
+          Join(line, Map2Cross(JoinObject),
+            Join(line, Map2Cross(WrapObject),
+              Root(line, PushString("user")),
+              SplitParam(line, 1)(input)),
+            Join(line, Map2Cross(WrapObject),
+              Root(line, PushString("num")),
+              Reduce(line, Count,
+                SplitGroup(line, 0, clicks.provenance)(input)))))
+
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
+
+      val expected = Map(
+        "/clicks" -> Map(
+          JPath("user") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
+        )
+      )
+
+      result must_== expected
+    }
+
+    "propagate structure/type information through Split nodes (3)" in {
+      val line = Line(0, "")
+      def clicks = LoadLocal(line, Root(line, PushString("/clicks")))
+      
+      // clicks := //clicks forall 'user { user: 'user, age: clicks.age, num: count(clicks.user where clicks.user = 'user) }
+      lazy val input: Split =
+        Split(line,
+          Group(0,
+            Join(line, Map2Cross(DerefObject), clicks, Root(line, PushString("user"))),
+            UnfixedSolution(1,
+              Join(line, Map2Cross(DerefObject),
+                clicks,
+                Root(line, PushString("user"))))),
+          Join(line, Map2Cross(JoinObject),
+            Join(line, Map2Cross(JoinObject),
+              Join(line, Map2Cross(WrapObject),
+                Root(line, PushString("user")),
+                SplitParam(line, 1)(input)),
+              Join(line, Map2Cross(WrapObject),
+                Root(line, PushString("num")),
+                Reduce(line, Count,
+                  SplitGroup(line, 0, clicks.provenance)(input)))),
+            Join(line, Map2Cross(WrapObject),
+              Root(line, PushString("age")),
+              Join(line, Map2Cross(DerefObject),
+                clicks,
+                Root(line, PushString("age"))))))
+
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
+
+      val expected = Map(
+        "/clicks" -> Map(
+          JPath("user") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
+          JPath("age") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
+        )
+      )
+
+      result must_== expected
+    }
+
     "rewrite loads for a trivial but complete DAG such that they will restrict the columns loaded" in {
       val line = Line(0, "")
 
