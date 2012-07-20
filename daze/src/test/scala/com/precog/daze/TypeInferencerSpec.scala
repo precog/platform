@@ -295,8 +295,8 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
-        "/file1" -> Map(JPath("column1") -> Set(CString))
+        "/file0" -> Map(JPath("column0") -> Set(CString)),
+        "/file1" -> Map(JPath("column1") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
       )
 
       result must_== expected

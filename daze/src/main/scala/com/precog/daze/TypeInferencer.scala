@@ -74,7 +74,7 @@ trait TypeInferencer extends DAG {
           Join(loc, instr, inferTypesAux(JArrayFixedT(Map(d.toInt -> jtpe)), splits)(left), right)
   
         case Join(loc, instr @ (Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject)), left, right) =>
-          Join(loc, instr, inferTypesAux(jtpe, splits)(left), inferTypesAux(JTextT, splits)(right))
+          Join(loc, instr, inferTypesAux(JTextT, splits)(left), inferTypesAux(jtpe, splits)(right))
   
         case Join(loc, instr @ (Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap)), left, right) =>
           Join(loc, instr, inferTypesAux(jtpe, splits)(left), inferTypesAux(JNumberT, splits)(right))
