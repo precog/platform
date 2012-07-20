@@ -278,21 +278,6 @@ trait TransformSpec extends TableModuleSpec {
     }
   }
 
-  def testObjectConcatOverwrite = {
-    // 
-    import JsonParser.parse
-    val sample = SampleData(Stream(parse("""{ "key": [], "value": 42 }"""), parse("""{ "key": [], "value": [] }""")))
-    val table = fromSample(sample, Some(1))
-    val results = toJson(table.transform {
-      ObjectConcat(
-        Leaf(Source),
-        WrapObject(Map1(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupF1(Nil, "negate")),"value")
-      )
-    })
-
-    results must containAllOf(Stream(parse("""{ "key": [], "value": -42 }"""))).only.inOrder
-  }
-
   def checkArrayConcat = {
     implicit val gen = sample(_ => Seq(JPath("[0]") -> CLong, JPath("[1]") -> CLong))
     check { (sample: SampleData) =>

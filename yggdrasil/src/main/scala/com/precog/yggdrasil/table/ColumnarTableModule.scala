@@ -335,18 +335,16 @@ trait ColumnarTableModule extends TableModule {
             new Slice {
               val size = sl.size
               val columns = {
-                // select only the columns on the left that are not overwritten by columns on the right
-                val lcols = sl.columns.keys filter {
-                  // TODO: make this better than n^2
-                  case ColumnRef(lpath, _) => ! sr.columns.keySet.exists {
-                    case ColumnRef(rpath, _) => rpath.hasPrefix(lpath) || lpath.hasPrefix(rpath)
-                  }
+                val logicalFilters = sr.columns.groupBy(_._1.selector) mapValues { cols => new BoolColumn {
+                  def isDefinedAt(row: Int) = cols.exists(_._2.isDefinedAt(row))
+                  def apply(row: Int) = !isDefinedAt(row)
+                }}
+
+                val remapped = sl.columns map {
+                  case (ref @ ColumnRef(jpath, ctype), col) => (ref, logicalFilters.get(jpath).flatMap(c => cf.util.FilterComplement(c)(col)).getOrElse(col))
                 }
 
-                (lcols.map(ref => (ref, sl.columns(ref))) ++ sr.columns).foldLeft(Map.empty[ColumnRef, Column]) {
-                  case (acc, (ref, col)) if ref.selector.head.exists(_.isInstanceOf[JPathField]) => acc + (ref -> col)
-                  case (acc, _) => acc
-                }
+                remapped ++ sr.columns
               }
             }
           }
