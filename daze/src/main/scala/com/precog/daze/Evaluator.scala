@@ -253,9 +253,8 @@ trait Evaluator extends DAG
               val rightResult = rightTable.transform(pendingTableRight.trans)
             
               val aligned = m.alignment match {
-                case Some(MorphismAlignment.Cross) => leftResult.cross(rightResult)(spec)
-                case Some(MorphismAlignment.Match) => join(leftResult, rightResult)(key, spec)
-                case None => sys.error("oh the calamity!")
+                case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
+                case MorphismAlignment.Match => join(leftResult, rightResult)(key, spec)
               }
             } yield m(aligned)
           } yield PendingTable(back, graph, TransSpec1.Id)
