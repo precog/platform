@@ -1097,15 +1097,18 @@ class EvaluatorSpecs extends Specification
           _ must beLike {
             case (ids, SDecimal(d)) if ids.size == 1 => d.toDouble must beOneOf(1, 42)
             case (ids, SBoolean(d)) if ids.size == 1 => d must beOneOf(true, false)
-            case (ids, SObject(d)) if ids.size == 1 => (d must haveKey("test")) && (d must haveValue("fubar"))
+            case (ids, SObject(d)) if ids.size == 1 => {
+              d must haveKey("test")
+              d must haveValue("fubar")
+            }
             case (ids, SString(d)) if ids.size == 1 => d mustEqual "daniel"
-            case (ids, SArray(d)) if ids.size == 1 => d.size must beEmpty
+            case (ids, SArray(d)) if ids.size == 1 => d.size mustEqual 0
           }
         }
       }
     }.pendingUntilFixed
     
-    "compute the iintersect of two nonintersect sets of numbers" in {
+    "compute the iintersect of two nonintersecting sets of numbers" in {
       val line = Line(0, "")
       
       val input = Join(line, IIntersect,
