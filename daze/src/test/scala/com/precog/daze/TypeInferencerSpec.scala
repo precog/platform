@@ -119,7 +119,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
       
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull))
+        "/file" -> Map(JPath("column") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull))
       )
 
       result must_== expected
@@ -138,7 +138,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -156,7 +156,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -174,7 +174,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -192,7 +192,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -213,8 +213,8 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CLong, CDouble, CDecimalArbitrary)),
-        "/file1" -> Map(JPath("column1") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file0" -> Map(JPath("column0") -> Set(CLong, CDouble, CNum)),
+        "/file1" -> Map(JPath("column1") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -233,7 +233,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath(0) -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath(0) -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -254,8 +254,8 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull)),
-        "/file1" -> Map(JPath("column1") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
+        "/file1" -> Map(JPath("column1") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -276,8 +276,8 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull)),
-        "/file1" -> Map(JPath("column1") -> Set(CStringArbitrary))
+        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
+        "/file1" -> Map(JPath("column1") -> Set(CString))
       )
 
       result must_== expected
@@ -299,8 +299,8 @@ class TypeInferencerSpec extends Specification
 
       val expected = Map(
         "/file0" -> Map(
-          JPath("column0") -> Set(CLong, CDouble, CDecimalArbitrary),
-          JPath("column1") -> Set(CLong, CDouble, CDecimalArbitrary)
+          JPath("column0") -> Set(CLong, CDouble, CNum),
+          JPath("column1") -> Set(CLong, CDouble, CNum)
         )
       )
 
@@ -322,7 +322,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull)),
+        "/file0" -> Map(JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)),
         "/file1" -> Map(JPath("column1") -> Set(CBoolean))
       )
 
@@ -345,7 +345,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -367,7 +367,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -386,7 +386,7 @@ class TypeInferencerSpec extends Specification
       val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
 
       val expected = Map(
-        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CDecimalArbitrary))
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
       )
 
       result must_== expected
@@ -418,8 +418,8 @@ class TypeInferencerSpec extends Specification
 
       val expected = Map(
         "/file" -> Map(
-          JPath.Identity -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull),
-          JPath("column0") -> Set(CBoolean, CLong, CDouble, CDecimalArbitrary, CStringArbitrary, CNull)
+          JPath.Identity -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull),
+          JPath("column0") -> Set(CBoolean, CLong, CDouble, CNum, CString, CNull)
         )
       )
 
