@@ -247,7 +247,7 @@ trait Evaluator extends DAG
         case dag.Morph1(_, m, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table map { table => m(table.transform(pendingTable.trans)) }
+            val back = pendingTable.table flatMap { table => m(table.transform(pendingTable.trans)) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -270,7 +270,9 @@ trait Evaluator extends DAG
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
                 case MorphismAlignment.Match => join(leftResult, rightResult)(key, spec)
               }
-            } yield m(aligned)
+
+              result <- m(aligned)
+            } yield result 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         

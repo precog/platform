@@ -28,6 +28,7 @@ import akka.dispatch.{ExecutionContext,Future}
 
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 
+import scalaz._
 import scalaz.std.set._
 import scalaz.syntax.monoid._
 
@@ -35,11 +36,9 @@ import scalaz.syntax.monoid._
 trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModule {
   type Projection <: BlockProjectionLike[Slice]
 
-  implicit def asyncContext: ExecutionContext
-
-  class Table(slices: Iterable[Slice]) extends ColumnarTable(slices) {
+  class Table(slices: StreamT[Future, Slice]) extends ColumnarTable(slices) {
     def load(tpe: JType): Future[Table] = {
-      val paths: Set[String] = reduce {
+      val pathsFuture: Future[Set[String]] = reduce {
         new CReducer[Set[String]] {
           def reduce(columns: JType => Set[Column], range: Range): Set[String] = {
             columns(JTextT) flatMap {
@@ -94,23 +93,19 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
       def coveringSchema(descriptors: Set[ProjectionDescriptor]): Seq[(JPath, CType)] = sys.error("todo")
 
       for {
-        coveringProjections <- Future.sequence(paths.map { path => loadable(Path(path), JPath.Identity, tpe) }) map { _.flatten }
+        paths               <- pathsFuture
+        coveringProjections <- Future.sequence(paths map { path => loadable(Path(path), JPath.Identity, tpe) }) map { _.flatten }
                                if (subsumes(coveringSchema(coveringProjections), tpe))
       } yield {
         val loadableProjections = minimalCover(coveringProjections)
-        new Table(
-          new Iterable[Slice] {
-            def iterator = new Iterator[Slice] {
-              def hasNext: Boolean = sys.error("todo")
-              def next: Slice = sys.error("todo")
-            }
-          }
+        table(
+          sys.error("todo")
         )
       }
     }
   }
 
-  def table(slices: Iterable[Slice]) = new Table(slices)
+  def table(slices: StreamT[Future, Slice]) = new Table(slices)
 }
 
 // vim: set ts=4 sw=4 et:

@@ -29,6 +29,8 @@ import yggdrasil.table._
 import com.precog.util.IdGen
 import com.precog.util._
 
+import akka.dispatch.Future
+
 import scala.collection.BitSet
 
 import scalaz._
@@ -98,22 +100,21 @@ trait StatsLib extends GenOpcode
       }
     } */
    
-    def apply(table: Table): Table = {  //TODO write tests for the empty table case
+    def apply(table: Table) = {  //TODO write tests for the empty table case
       val compactedTable = table.compact(Leaf(Source))
 
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = compactedTable.sort(sortKey, SortAscending)
 
-      val count = sortedTable.reduce(Count.reducer)
-      
-      if (count % 2 == 0) {
-        val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
-        Mean(middleValues)
-        //Mean.extract(middleValues.reduce(Mean.reducer))
-
-      } else {
-        sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2)
-      }
+      for {
+        count <- sortedTable.reduce(Count.reducer)
+        median <- if (count % 2 == 0) {
+                    val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
+                    Mean(middleValues)
+                  } else {
+                    Future(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
+                  }
+      } yield median
     }
   }
   
@@ -204,7 +205,7 @@ trait StatsLib extends GenOpcode
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
-      extract(sortedTable.reduce(reducer))
+      sortedTable.reduce(reducer) map extract
     }
   }
  
@@ -264,9 +265,7 @@ trait StatsLib extends GenOpcode
       } getOrElse ops.empty
     }
 
-    def apply(table: Table) = extract(table.reduce(reducer))
-    
-
+    def apply(table: Table) = table.reduce(reducer) map extract
     
     /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {              
       val (count, sum1, sum2, sumsq1, sumsq2, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
@@ -341,8 +340,8 @@ trait StatsLib extends GenOpcode
       } getOrElse ops.empty
     }
 
-    def apply(table: Table) = extract(table.reduce(reducer))
-    
+    def apply(table: Table) = table.reduce(reducer) map extract
+
     /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {             
       val (count, sum1, sum2, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum1, sum2, productSum), SArray(Vector(SDecimal(num1), SDecimal(num2)))) => {
@@ -413,8 +412,8 @@ trait StatsLib extends GenOpcode
       } getOrElse ops.empty
     }
 
-    def apply(table: Table) = extract(table.reduce(reducer))
-    
+    def apply(table: Table) = table.reduce(reducer) map extract
+
     /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {
       val (count, sum1, sum2, sumsq1, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum1, sum2, sumsq1, productSum), SArray(Vector(SDecimal(num1), SDecimal(num2)))) => {
@@ -499,9 +498,8 @@ trait StatsLib extends GenOpcode
       } getOrElse ops.empty
     }
 
-    def apply(table: Table) = extract(table.reduce(reducer))
-    
-    
+    def apply(table: Table) = table.reduce(reducer) map extract
+
     /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {
       val (count, sum1, sum2, sumsq1, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
         case ((count, sum1, sum2, sumsq1, productSum), SArray(Vector(SDecimal(num1), SDecimal(num2)))) => {
@@ -564,7 +562,7 @@ trait StatsLib extends GenOpcode
       }
     }
     
-    def apply(table: Table) = {
+    def apply(table: Table) = Future {
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
@@ -637,7 +635,7 @@ trait StatsLib extends GenOpcode
       }
     }
     
-    def apply(table: Table) = {
+    def apply(table: Table) = Future {
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 

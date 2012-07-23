@@ -24,7 +24,9 @@ import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
 
 import akka.dispatch.Future
+import akka.dispatch.ExecutionContext
 
+import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
@@ -53,48 +55,51 @@ trait ColumnarTableModule extends TableModule {
   type Reducer[α] = CReducer[α]
   type RowId = Int
   type Table <: ColumnarTable
+
+  implicit def asyncContext: ExecutionContext
+  implicit val futureMonad: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
   
   object ops extends TableOps {
-    def empty: Table = table(Iterable.empty[Slice])
+    def empty: Table = table(StreamT.empty[Future, Slice])
     
     def constBoolean(v: Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constLong(v: Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constDouble(v: Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constDecimal(v: Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constString(v: Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), 1)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constDate(v: Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), 1)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[Future, Slice])
     }
 
     def constNull: Table = 
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[Future, Slice])
 
     def constEmptyObject: Table = 
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[Future, Slice])
 
     def constEmptyArray: Table = 
-      table(List(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1)))
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[Future, Slice])
   }
   
   object grouper extends Grouper {
@@ -145,14 +150,14 @@ trait ColumnarTableModule extends TableModule {
     def identity[A](initial: A) = SliceTransform(initial, (a: A, s: Slice) => (a, s))
   }
 
-  def table(slices: Iterable[Slice]): Table
+  def table(slices: StreamT[Future, Slice]): Table
 
-  abstract class ColumnarTable(val slices: Iterable[Slice]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(val slices: StreamT[Future, Slice]) extends TableLike { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): A = {  
-      slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) } suml
+    def reduce[A: Monoid](reducer: Reducer[A]): Future[A] = {  
+      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(Monoid[A].zero)((a, b) => Monoid[A].append(a, b))
     }
 
     def compact(spec: TransSpec1): Table = sys.error("todo")
@@ -160,35 +165,20 @@ trait ColumnarTableModule extends TableModule {
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
     private def transform0[A](sliceTransform: SliceTransform[A]): Table = {
-      table(
-        new Iterable[Slice] {
-          def iterator: Iterator[Slice] = {
-            val baseIter = slices.iterator
-            new Iterator[Slice] {
-              private var state: A = sliceTransform.initial
-              private var next0: Slice = precomputeNext()
-
-              private def precomputeNext(): Slice = {
-                if (baseIter.hasNext) {
-                  val s = baseIter.next
-                  val (nextState, s0) = sliceTransform.f(state, s)
-                  state = nextState
-                  s0
-                } else {
-                  null.asInstanceOf[Slice]
-                }
-              }
-
-              def hasNext: Boolean = next0 != null
-              def next: Slice = {
-                val tmp = next0
-                next0  = precomputeNext()
-                tmp
-              }
-            }
+      def stream(state: A): StreamT[Future, Slice] = StreamT(
+        for {
+          head <- slices.uncons
+        } yield {
+          head map { case (s, sx) =>
+            val (nextState, s0) = sliceTransform.f(state, s)
+            StreamT.Yield(s0, stream(nextState))
+          } getOrElse {
+            StreamT.Done
           }
         }
       )
+
+      table(stream(sliceTransform.initial))
     }
 
     // No transform defined herein may reduce the size of a slice. Be it known!
@@ -488,7 +478,7 @@ trait ColumnarTableModule extends TableModule {
     
     def takeRight(n: Long): Table = sys.error("todo")
 
-    def normalize: Table = table(slices.filterNot(_.isEmpty))
+    def normalize: Table = table(slices.filter(!_.isEmpty))
 
   /*
     def cogroup(other: Table, prefixLength: Int)(merge: CogroupMerge): Table = {

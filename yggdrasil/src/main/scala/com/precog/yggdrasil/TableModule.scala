@@ -215,7 +215,7 @@ trait TableModule extends FNModule {
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): A
+    def reduce[A: Monoid](reducer: Reducer[A]): Future[A]
     
     /**
      * Removes all rows in the table for which all values are undefined. 
