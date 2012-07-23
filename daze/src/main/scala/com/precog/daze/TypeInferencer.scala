@@ -1,6 +1,8 @@
 package com.precog
 package daze
 
+import scala.collection.mutable
+
 import bytecode._
 import yggdrasil._
 
@@ -13,71 +15,125 @@ trait TypeInferencer extends DAG {
 
   def inferTypes(jtpe: JType)(graph: DepGraph) : DepGraph = {
 
-    def inferSpecTypes(jtpe: JType, splits: => Map[Split, Split])(spec: BucketSpec): BucketSpec = spec match {
+    val memotable = mutable.Map[DepGraph, DepGraph]()
+
+    def collectSpecTypes(jtpe: JType, typing: Map[DepGraph, Set[JType]], spec: BucketSpec): Map[DepGraph, Set[JType]] = spec match {
       case UnionBucketSpec(left, right) =>
-        UnionBucketSpec(inferSpecTypes(jtpe, splits)(left), inferSpecTypes(jtpe, splits)(right))
+        collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
       
       case IntersectBucketSpec(left, right) =>
-        IntersectBucketSpec(inferSpecTypes(jtpe, splits)(left), inferSpecTypes(jtpe, splits)(right))
+        collectSpecTypes(jtpe, collectSpecTypes(jtpe, typing, left), right) 
       
       case Group(id, target, child) =>
-        Group(id, inferTypesAux(jtpe, splits)(target), inferSpecTypes(jtpe, splits)(child))
+        collectSpecTypes(jtpe, collectTypes(jtpe, typing, target), child)
       
       case UnfixedSolution(id, target) =>
-        UnfixedSolution(id, inferTypesAux(jtpe, splits)(target))
+        collectTypes(jtpe, typing, target)
       
       case Extra(target) =>
-        Extra(inferTypesAux(jtpe, splits)(target))
+        collectTypes(jtpe, typing, target)
     }
 
-    def inferTypesAux(jtpe: JType, splits0: => Map[Split, Split])(graph: DepGraph) : DepGraph = {
+    def collectTypes(jtpe: JType, typing: Map[DepGraph, Set[JType]], graph: DepGraph): Map[DepGraph, Set[JType]] = {
+      graph match {
+        case _ : Root => typing 
+  
+        case New(_, parent) => collectTypes(jtpe, typing, parent)
+  
+        case l @ LoadLocal(_, parent, _) =>
+          val typing0 = collectTypes(JTextT, typing, parent)
+          typing0.get(l).map { jtpes => typing + (l -> (jtpes + jtpe)) }.getOrElse(typing + (l -> Set(jtpe)))
+
+        case Operate(_, op, parent) => collectTypes(op.tpe.arg, typing, parent)
+  
+        case Reduce(_, red, parent) => collectTypes(red.tpe.arg, typing, parent)
+  
+        case Morph1(_, m, parent) => collectTypes(m.tpe.arg, typing, parent)
+  
+        case Morph2(_, m, left, right) => collectTypes(m.tpe.arg1, collectTypes(m.tpe.arg0, typing, left), right)
+  
+        case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right @ ConstString(str)) =>
+          collectTypes(JObjectFixedT(Map(str -> jtpe)), typing, left)
+  
+        case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right @ ConstDecimal(d)) =>
+          collectTypes(JArrayFixedT(Map(d.toInt -> jtpe)), typing, left)
+  
+        case Join(_, Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject), left, right) =>
+          collectTypes(jtpe, collectTypes(JTextT, typing, left), right)
+  
+        case Join(_, Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap), left, right) =>
+          collectTypes(JNumberT, collectTypes(jtpe, typing, left), right)
+  
+        case Join(_, Map2(BinaryOperationType(lhs, rhs, _)), left, right) =>
+          collectTypes(rhs, collectTypes(lhs, typing, left), right)
+  
+        case Join(_, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
+  
+        case Filter(_, _, target, boolean) =>
+          collectTypes(JBooleanT, collectTypes(jtpe, typing, target), boolean)
+  
+        case Sort(parent, _) => collectTypes(jtpe, typing, parent)
+  
+        case Memoize(parent, _) => collectTypes(jtpe, typing, parent)
+  
+        case Distinct(_, parent) => collectTypes(jtpe, typing, parent)
+  
+        case s @ Split(_, spec, child) => collectTypes(jtpe, collectSpecTypes(jtpe, typing, spec), child)
+  
+        case _ : SplitGroup | _ : SplitParam => typing
+      }
+    }
+
+    def applySpecTypes(typing: Map[DepGraph, JType], splits: => Map[Split, Split], spec: BucketSpec): BucketSpec = spec match {
+      case UnionBucketSpec(left, right) =>
+        UnionBucketSpec(applySpecTypes(typing, splits, left), applySpecTypes(typing, splits, right))
+      
+      case IntersectBucketSpec(left, right) =>
+        IntersectBucketSpec(applySpecTypes(typing, splits, left), applySpecTypes(typing, splits, right))
+      
+      case Group(id, target, child) =>
+        Group(id, applyTypes(typing, splits, target), applySpecTypes(typing, splits, child))
+      
+      case UnfixedSolution(id, target) =>
+        UnfixedSolution(id, applyTypes(typing, splits, target))
+      
+      case Extra(target) =>
+        Extra(applyTypes(typing, splits, target))
+    }
+
+    def applyTypes(typing: Map[DepGraph, JType], splits0: => Map[Split, Split], graph: DepGraph) : DepGraph = {
       lazy val splits = splits0
 
-      graph match {
+      def inner(graph: DepGraph): DepGraph = graph match {
         case r : Root => r
   
-        case New(loc, parent) => New(loc, inferTypesAux(jtpe, splits)(parent))
+        case New(loc, parent) => New(loc, applyTypes(typing, splits, parent))
   
-        case LoadLocal(loc, parent, _) => LoadLocal(loc, parent, jtpe)
+        case l @ LoadLocal(loc, parent, _) => LoadLocal(loc, applyTypes(typing, splits, parent), typing(l))
   
-        case Operate(loc, op, parent) => Operate(loc, op, inferTypesAux(op.tpe.arg, splits)(parent))
+        case Operate(loc, op, parent) => Operate(loc, op, applyTypes(typing, splits, parent))
   
-        case Reduce(loc, red, parent) => Reduce(loc, red, inferTypesAux(red.tpe.arg, splits)(parent))
+        case Reduce(loc, red, parent) => Reduce(loc, red, applyTypes(typing, splits, parent))
   
-        case Morph1(loc, m, parent) => Morph1(loc, m, inferTypesAux(m.tpe.arg, splits)(parent))
+        case Morph1(loc, m, parent) => Morph1(loc, m, applyTypes(typing, splits, parent))
   
-        case Morph2(loc, m, left, right) => Morph2(loc, m, inferTypesAux(m.tpe.arg0, splits)(left), inferTypesAux(m.tpe.arg1, splits)(right))
+        case Morph2(loc, m, left, right) => Morph2(loc, m, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
   
-        case Join(loc, instr @ (Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject)), left, right @ ConstString(str)) =>
-          Join(loc, instr, inferTypesAux(JObjectFixedT(Map(str -> jtpe)), splits)(left), right)
-  
-        case Join(loc, instr @ (Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray)), left, right @ ConstDecimal(d)) =>
-          Join(loc, instr, inferTypesAux(JArrayFixedT(Map(d.toInt -> jtpe)), splits)(left), right)
-  
-        case Join(loc, instr @ (Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject)), left, right) =>
-          Join(loc, instr, inferTypesAux(JTextT, splits)(left), inferTypesAux(jtpe, splits)(right))
-  
-        case Join(loc, instr @ (Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap)), left, right) =>
-          Join(loc, instr, inferTypesAux(jtpe, splits)(left), inferTypesAux(JNumberT, splits)(right))
-  
-        case Join(loc, instr @ Map2(BinaryOperationType(lhs, rhs, res)), left, right) =>
-          Join(loc, instr, inferTypesAux(lhs, splits)(left), inferTypesAux(rhs, splits)(right))
-  
-        case Join(loc, instr, left, right) => Join(loc, instr, inferTypesAux(jtpe, splits)(left), inferTypesAux(jtpe, splits)(right))
+        case Join(loc, instr, left, right) => Join(loc, instr, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
   
         case Filter(loc, cross, target, boolean) =>
-          Filter(loc, cross, inferTypesAux(jtpe, splits)(target), inferTypesAux(JBooleanT, splits)(boolean))
+          Filter(loc, cross, applyTypes(typing, splits, target), applyTypes(typing, splits, boolean))
   
-        case Sort(parent, indices) => Sort(inferTypesAux(jtpe, splits)(parent), indices)
+        case Sort(parent, indices) => Sort(applyTypes(typing, splits, parent), indices)
   
-        case Memoize(parent, priority) => Memoize(inferTypesAux(jtpe, splits)(parent), priority)
+        case Memoize(parent, priority) => Memoize(applyTypes(typing, splits, parent), priority)
   
-        case Distinct(loc, parent) => Distinct(loc, inferTypesAux(jtpe, splits)(parent))
+        case Distinct(loc, parent) => Distinct(loc, applyTypes(typing, splits, parent))
   
         case s @ Split(loc, spec, child) => {
           lazy val splits2 = splits + (s -> s2)
-          lazy val spec2 = inferSpecTypes(jtpe, splits2)(spec)
-          lazy val child2 = inferTypesAux(jtpe, splits2)(child)
+          lazy val spec2 = applySpecTypes(typing, splits2, spec)
+          lazy val child2 = applyTypes(typing, splits2, child)
           lazy val s2: Split = Split(loc, spec2, child2)
           s2
         }
@@ -86,8 +142,15 @@ trait TypeInferencer extends DAG {
   
         case s @ SplitParam(loc, id) => SplitParam(loc, id)(splits(s.parent))
       }
+
+      memotable.get(graph) getOrElse {
+        val result = inner(graph)
+        memotable += (graph -> result)
+        result
+      }
     }
     
-    inferTypesAux(jtpe, Map())(graph)
+    val typing = collectTypes(jtpe, Map(), graph).mapValues(_.reduce(JUnionT)) 
+    applyTypes(typing, Map(), graph)
   }
 }
