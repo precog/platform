@@ -11,6 +11,7 @@ import bytecode.ReductionLike
 import yggdrasil._
 import yggdrasil.table._
 
+import akka.dispatch.Future
 import scalaz.Monoid
 
 trait GenOpcode extends ImplLibrary {
@@ -44,12 +45,12 @@ trait ImplLibrary extends Library with ColumnarTableModule {
   def _libReduction: Set[Reduction] = Set()
 
   trait Morphism1Impl extends Morphism1Like {
-    def apply(input: Table): Table
+    def apply(input: Table): Future[Table]
   }
   
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
-    def apply(input: Table): Table
+    def apply(input: Table): Future[Table]
   }
  
   sealed trait MorphismAlignment
@@ -73,7 +74,7 @@ trait ImplLibrary extends Library with ColumnarTableModule {
 
   trait ReductionImpl extends ReductionLike with Morphism1Impl {
     type Result
-    def apply(table: Table) = extract(table.reduce(reducer))
+    def apply(table: Table) = table.reduce(reducer) map extract
     def reducer: CReducer[Result]
     implicit def monoid: Monoid[Result]
     def extract(res: Result): Table
