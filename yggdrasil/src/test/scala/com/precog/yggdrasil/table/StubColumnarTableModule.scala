@@ -166,6 +166,8 @@ trait StubColumnarTableModule extends TestColumnarTableModule {
         }
       }
     }
+
+    override def toString = toStrings.mkString("\n")
   }
 }
 

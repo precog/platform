@@ -25,7 +25,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
   // TODO swap to Reduction
   val CountMonoid = implicitly[Monoid[Count.Result]]
   object Count extends Reduction(ReductionNamespace, "count") {
-    type Result = Long
+    type Result = BigDecimal
     
     implicit val monoid = CountMonoid
 
@@ -39,7 +39,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
       }
     }
 
-    def extract(res: Result): Table = ops.constLong(Set(CLong(res)))
+    def extract(res: Result): Table = ops.constDecimal(Set(CNum(res)))
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
