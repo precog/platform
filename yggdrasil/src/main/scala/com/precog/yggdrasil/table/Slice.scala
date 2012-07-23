@@ -29,9 +29,8 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 import scala.annotation.tailrec
 import scala.collection.breakOut
-import scalaz.Ordering
+import scalaz._
 import scalaz.Ordering._
-import scalaz.ValidationNEL
 import scalaz.Validation._
 import scalaz.syntax.foldable._
 import scalaz.syntax.semigroup._
@@ -327,4 +326,117 @@ object Slice {
     xs(i) = xs(j);
     xs(j) = temp;
   }
+
+  def rowComparator(s1: Slice, s2: Slice)(keyf: Slice => List[ColumnRef]): (Int, Int) => Ordering = {
+    def compare0(cols: (Column, Column)): (Int, Int) => Ordering = {
+      (cols: @unchecked) match {
+        case (c1: BoolColumn, c2: BoolColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow) 
+            if (thisVal == c2(thatRow)) EQ else if (thisVal) GT else LT
+          }
+
+        case (c1: LongColumn, c2: LongColumn) => 
+          val ord = Order[Long]
+          (thisRow: Int, thatRow: Int) => {
+            ord.order(c1(thisRow), c2(thatRow))
+          }
+
+        case (c1: LongColumn, c2: DoubleColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: LongColumn, c2: NumColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: DoubleColumn, c2: LongColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: DoubleColumn, c2: DoubleColumn) => 
+          val ord = Order[Double]
+          (thisRow: Int, thatRow: Int) => {
+            ord.order(c1(thisRow), c2(thatRow))
+          }
+
+        case (c1: DoubleColumn, c2: NumColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = BigDecimal(c1(thisRow))
+            val thatVal = c2(thatRow)
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: NumColumn, c2: LongColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = BigDecimal(c2(thatRow))
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: NumColumn, c2: DoubleColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = BigDecimal(c2(thatRow))
+            if (thisVal > thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: NumColumn, c2: NumColumn) => 
+          val ord = Order[BigDecimal]
+          (thisRow: Int, thatRow: Int) => {
+            ord.order(c1(thisRow), c2(thatRow))
+          }
+
+
+        case (c1: StrColumn, c2: StrColumn) => 
+          val ord = Order[String]
+          (thisRow: Int, thatRow: Int) => {
+            ord.order(c1(thisRow), c2(thatRow))
+          }
+
+        case (c1: DateColumn, c2: DateColumn) => 
+          (thisRow: Int, thatRow: Int) => {
+            val thisVal = c1(thisRow)
+            val thatVal = c2(thatRow)
+            if (thisVal isAfter thatVal) GT else if (thisVal == thatVal) EQ else LT
+          }
+
+        case (c1: EmptyObjectColumn, c2: EmptyObjectColumn) => 
+          (thisRow: Int, thatRow: Int) => EQ
+
+        case (c1: EmptyArrayColumn, c2: EmptyArrayColumn) => 
+          (thisRow: Int, thatRow: Int) => EQ
+
+        case (c1: NullColumn, c2: NullColumn) => 
+          (thisRow: Int, thatRow: Int) => EQ
+      }
+    }
+
+    val refs1 = keyf(s1).sorted
+    val refs2 = keyf(s2).sorted
+
+    assert (refs1 == refs2)
+
+    val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
+    (i1: Int, i2: Int) => {
+      @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
+        case h :: t => 
+          val intermediateOrder = h(i1, i2)
+          if (intermediateOrder == EQ) compare1(t) else intermediateOrder
+
+        case Nil => EQ
+      }
+
+      compare1(colfs)
+    }
+  } 
 }

@@ -72,7 +72,7 @@ object LevelDBProjectionComparator {
     }
 
     def name = compact(render(_descriptor.serialize))
-    def compare(k1: Array[Byte], k2: Array[Byte]) = projection.keyOrder.order(k1, k2).toInt
+    def compare(k1: Array[Byte], k2: Array[Byte]) = projection.keyByteOrder.order(k1, k2).toInt
 
     // default implementations
     def findShortestSeparator(start: Array[Byte], limit: Array[Byte]) = start

@@ -48,6 +48,10 @@ trait DisabledLevelDBProjectionModule extends ProjectionModule {
   private val readaheadPool = Executors.newCachedThreadPool()
 
   class Projection private[DisabledLevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection(baseDir, descriptor) {
+    type Key = Identities
+
+    implicit val keyOrder = IdentitiesOrder
+
     ///////////////////
     // ID Traversals //
     ///////////////////
@@ -160,7 +164,7 @@ trait DisabledLevelDBProjectionModule extends ProjectionModule {
 
     @inline final def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
 
-    def getBlockAfter(id: Option[Identities]): Option[Slice] = sys.error("todo")
+    def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor]): Option[BlockData] = sys.error("todo")
   }  
   
   

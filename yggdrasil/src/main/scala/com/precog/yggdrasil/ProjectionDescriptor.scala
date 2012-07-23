@@ -227,6 +227,6 @@ trait ByteProjection {
 
   def toBytes(id: Identities, v: Seq[CValue]): (Array[Byte], Array[Byte]) 
   def fromBytes(keyBytes: Array[Byte], valueBytes: Array[Byte]): (Identities,Seq[CValue])
-  def keyOrder: Order[Array[Byte]]
+  def keyByteOrder: Order[Array[Byte]]
 }
 
