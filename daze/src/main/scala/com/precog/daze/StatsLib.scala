@@ -107,12 +107,12 @@ trait StatsLib extends GenOpcode
       val count = sortedTable.reduce(Count.reducer)
       
       if (count % 2 == 0) {
-        val middleValues = sortedTable.take((count / 2) + 1).drop((count / 2) - 1)
+        val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
         Mean(middleValues)
         //Mean.extract(middleValues.reduce(Mean.reducer))
 
       } else {
-        sortedTable.take((count / 2) + 1).drop(count / 2)
+        sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2)
       }
     }
   }

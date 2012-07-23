@@ -86,11 +86,6 @@ trait Evaluator extends DAG
   
   private case class EvaluatorState(assume: Map[DepGraph, Future[Table]])
 
-  private implicit val EvaluatorStateMonoid: Monoid[EvaluatorState] = new Monoid[EvaluatorState] {
-    val zero = EvaluatorState(Map())
-    def append(e1: EvaluatorState, e2: => EvaluatorState): EvaluatorState = EvaluatorState(Map()) //TODO should we overwrite when a given map key already exists? 
-  }
-
   sealed trait Context
 
   implicit def asyncContext: akka.dispatch.ExecutionContext
@@ -154,7 +149,7 @@ trait Evaluator extends DAG
               //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
                 
               _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (reducedTarget -> resultTargetTable)) }: State[EvaluatorState, Unit]
-              trans = loop(target, splits).evalZero.trans
+              trans = loop(target, splits).eval(EvaluatorState(Map())).trans
               subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
             } yield {
               resultTargetTable map { resultTargetTable => resultTargetTable.group(trans, id, subSpec) }
@@ -300,7 +295,10 @@ trait Evaluator extends DAG
           for {
             pendingTable <- loop(parent, splits)
             val result = pendingTable.table map { parentTable => red(parentTable.transform(pendingTable.trans)) }
-          } yield PendingTable(result, graph, TransSpec1.Id)
+          } yield {
+            //result map { r => println(r.toString) }
+            PendingTable(result, graph, TransSpec1.Id)
+          }
         }
 
         //** the original code **//
@@ -329,11 +327,11 @@ trait Evaluator extends DAG
                   pendingTable <- loop(child, splits + (s -> (key, map)))
                 } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
                 
-                back.evalZero: Future[Table]
+                back.eval(EvaluatorState(Map())): Future[Table]
               }
             } yield result
           } 
-          table map { PendingTable(_, graph, TransSpec1.Id) }  //TODO can we call evalZero here and above????
+          table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
         // VUnion and VIntersect removed, TODO: remove from bytecode
@@ -595,7 +593,7 @@ trait Evaluator extends DAG
           loop(parent, splits)     // TODO
       }
       
-      assumptionCheck flatMap { assumedResult: Option[Future[Table]] =>  //the result of calling loop: StateT[Id, EvaluatorState, PendingTable]
+      assumptionCheck flatMap { assumedResult: Option[Future[Table]] =>
         val liftedAssumption = assumedResult map { table =>
           state[EvaluatorState, PendingTable](
             PendingTable(table, graph, TransSpec1.Id))
@@ -612,7 +610,7 @@ trait Evaluator extends DAG
     val resultState: StateT[Id, EvaluatorState, Future[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
-    resultState.evalZero  //the result of calling eval: Future[Table]
+    resultState.eval(EvaluatorState(Map()))
 
     //** original code **//
     //val PendingTable(table, _, spec) = loop(rewrite(graph), Map())
