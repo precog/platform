@@ -40,10 +40,10 @@ import com.weiglewilczek.slf4s.Logging
 import akka.actor.ActorSystem
 import akka.dispatch.ExecutionContext
 
-trait ParseEvalStackSpecs extends Specification 
-    with ParseEvalStack
-    with StorageModule
-    with MemoryDatasetConsumer 
+trait ParseEvalStackSpecs[M[+_]] extends Specification 
+    with ParseEvalStack[M]
+    with StorageModule[M]
+    with MemoryDatasetConsumer[M] 
     with Logging {
 
   val sliceSize = 10
@@ -115,7 +115,7 @@ trait ParseEvalStackSpecs extends Specification
   def shutdown() = ()
 }
 
-object RawJsonStackSpecs extends ParseEvalStackSpecs with RawJsonColumnarTableStorageModule {
+object RawJsonStackSpecs extends ParseEvalStackSpecs[test.YId] with RawJsonColumnarTableStorageModule[test.YId] with test.YIdInstances {
   type YggConfig = ParseEvalStackSpecConfig
   object yggConfig extends ParseEvalStackSpecConfig
 }

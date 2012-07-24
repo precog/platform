@@ -17,11 +17,11 @@ import com.precog.util.IdGen
 import org.joda.time._
 import org.joda.time.format._
 
-class TimeLibSpec extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with TimeLib 
-    with MemoryDatasetConsumer { self =>
+trait TimeLibSpec[M[+_]] extends Specification
+    with Evaluator[M]
+    with TestConfigComponent[M] 
+    with TimeLib[M] 
+    with MemoryDatasetConsumer[M] { self =>
       
   import Function._
   
@@ -2075,4 +2075,5 @@ class TimeLibSpec extends Specification
   }
 }
 
+object TimeLibSpec extends TimeLibSpec[test.YId] with test.YIdInstances
 // vim: set ts=4 sw=4 et:

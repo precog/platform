@@ -14,11 +14,11 @@ import Iteratee._
 import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
-class MathLibSpec extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with MathLib 
-    with MemoryDatasetConsumer { self =>
+trait MathLibSpec[M[+_]] extends Specification
+    with Evaluator[M]
+    with TestConfigComponent[M]
+    with MathLib[M] 
+    with MemoryDatasetConsumer[M] { self =>
       
   import Function._
   
@@ -1116,5 +1116,6 @@ class MathLibSpec extends Specification
   }
 }
 
+object MathLibSpec extends MathLibSpec[test.YId] with test.YIdInstances
 
 // vim: set ts=4 sw=4 et:

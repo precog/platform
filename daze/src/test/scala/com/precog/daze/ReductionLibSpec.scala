@@ -14,13 +14,13 @@ import Iteratee._
 import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
-class ReductionLibSpec extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with ReductionLib 
-    with StatsLib
-    with InfixLib
-    with MemoryDatasetConsumer { self =>
+trait ReductionLibSpec[M[+_]] extends Specification
+    with Evaluator[M]
+    with TestConfigComponent[M]
+    with ReductionLib[M]
+    with StatsLib[M]
+    with InfixLib[M]
+    with MemoryDatasetConsumer[M] { self =>
       
   import Function._
   
@@ -379,3 +379,5 @@ class ReductionLibSpec extends Specification
     }
   }
 }
+
+object ReductionLibSpec extends ReductionLibSpec[test.YId] with test.YIdInstances

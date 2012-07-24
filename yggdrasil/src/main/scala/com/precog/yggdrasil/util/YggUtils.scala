@@ -699,6 +699,7 @@ object ImportTools extends Command with Logging {
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val actorSystem = ActorSystem("yggutilImport")
+        implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
         object Projection extends LevelDBProjectionCompanion {
           def fileOps = FilesystemFileOps
@@ -706,7 +707,7 @@ object ImportTools extends Command with Logging {
         }
 
         class Storage extends SystemActorStorageLike(ms) {
-          val accessControl = new UnlimitedAccessControl()(ExecutionContext.defaultExecutionContext(actorSystem))
+          val accessControl = new UnlimitedAccessControl()
         }
 
         val storage = new Storage
@@ -834,12 +835,12 @@ object TokenTools extends Command with AkkaDefaults with Logging {
     }, Duration(30, "seconds"))
   }
 
-  def tokenManager(config: Config): TokenManager = {
+  def tokenManager(config: Config): TokenManager[Future] = {
     val mongo = RealMongo(config.mongoConfig)
     new MongoTokenManager(mongo, mongo.database(config.database), config.mongoSettings)
   }
 
-  def list(tokenManager: TokenManager) = {
+  def list(tokenManager: TokenManager[Future]) = {
     for (tokens <- tokenManager.listTokens) yield {
       tokens.foreach(printToken)
     }
@@ -863,14 +864,14 @@ object TokenTools extends Command with AkkaDefaults with Logging {
 //    println()
 //  }
 
-//  def listChildren(tokenId: String, tokenManager: TokenManager) = {
+//  def listChildren(tokenId: String, tokenManager: TokenManager[Future]) = {
 //    for (Some(parent) <- tokenManager.findToken(tokenId); children <- tokenManager.listChildren(parent)) yield {
 //      children.foreach(printToken)
 //    }
 //  }
   }
 
-  def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager) = {
+  def create(tokenName: String, path: Path, root: TokenID, tokenManager: TokenManager[Future]) = {
     for {
       token <- tokenManager.newToken(tokenName, Set())
       val ownerGrant = tokenManager.newGrant(None, OwnerPermission(path, None))
@@ -889,7 +890,7 @@ object TokenTools extends Command with AkkaDefaults with Logging {
     }
   }
 
-  def delete(t: String, tokenManager: TokenManager) = sys.error("todo")
+  def delete(t: String, tokenManager: TokenManager[Future]) = sys.error("todo")
 //    for (Some(token) <- tokenManager.findToken(t); t <- tokenManager.deleteToken(token)) yield {
 //      println("Deleted token: ")
 //      printToken(token)

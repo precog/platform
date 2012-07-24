@@ -2,8 +2,7 @@ package com.precog
 package pandora
 
 import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
-import akka.dispatch.Await
+import akka.dispatch._
 import akka.util.Duration
 
 import blueeyes.json.Printer._
@@ -35,6 +34,7 @@ import com.precog.util.FilesystemFileOps
 
 import java.io.{File, PrintStream}
 
+import scalaz._
 import scalaz.effect.IO
 
 import org.streum.configrity.Configuration
@@ -46,7 +46,7 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends muspelheim.ParseEvalStack with MemoryDatasetConsumer {
+trait REPL extends muspelheim.ParseEvalStack[Future] with MemoryDatasetConsumer[Future] {
 
   val dummyUID = "dummyUID"
 
@@ -249,7 +249,7 @@ object Console extends App {
   } yield {
       scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
-          with BlockStoreColumnarTableModule
+          with BlockStoreColumnarTableModule[Future]
           with LevelDBProjectionModule
           with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
@@ -260,8 +260,14 @@ object Console extends App {
         type YggConfig = REPLConfig
         val yggConfig = replConfig
 
+        implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+        implicit val coM = new Copointed[Future] {
+          def map[A, B](m: Future[A])(f: A => B) = m map f
+          def copoint[A](m: Future[A]) = Await.result(m, yggConfig.maxEvalDuration)
+        }
+
         class Storage extends SystemActorStorageLike(fileMetadataStorage) {
-          val accessControl = new UnlimitedAccessControl()(asyncContext)
+          val accessControl = new UnlimitedAccessControl[Future]()
         }
 
         val storage = new Storage

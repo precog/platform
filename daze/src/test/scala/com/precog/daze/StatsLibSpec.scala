@@ -19,12 +19,12 @@ class AlmostEqual(d: Double) {
   def ~=(d2: Double)(implicit p: Precision) = (d - d2).abs <= p.p
 }
 
-class StatsLibSpec extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with StatsLib 
-    with InfixLib
-    with MemoryDatasetConsumer { self =>
+trait StatsLibSpec[M[+_]] extends Specification
+    with Evaluator[M]
+    with TestConfigComponent[M]
+    with StatsLib[M]
+    with InfixLib[M]
+    with MemoryDatasetConsumer[M]{ self =>
       
   import Function._
   
@@ -1053,3 +1053,5 @@ class StatsLibSpec extends Specification
     }
   }
 }
+
+object StatsLibSpec extends StatsLibSpec[test.YId] with test.YIdInstances

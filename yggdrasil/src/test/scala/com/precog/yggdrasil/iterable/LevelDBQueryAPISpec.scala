@@ -17,6 +17,7 @@ import com.precog.util._
 import SValue._
 
 import java.io.File
+import scalaz.Id._
 import scalaz.effect.IO
 
 import org.specs2.mutable._

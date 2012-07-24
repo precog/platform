@@ -125,7 +125,7 @@ class RemoveGrantChildHandler(tokenManagement: TokenManagement)(implicit dispatc
   val metadata = None
 }
 
-class TokenManagement(tokenManager: TokenManager) {
+class TokenManagement(tokenManager: TokenManager[Future]) {
 
   def findTokenAndGrants(tid: TokenID): Future[Option[(Token, Set[Grant])]] = sys.error("todo")
 
@@ -203,7 +203,7 @@ object NewGrantRequest extends NewGrantRequestSerialization
 
 
 
-class CreateTokenHandler(tokenManager: TokenManager, accessControl: AccessControl)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
+class CreateTokenHandler(tokenManager: TokenManager[Future], accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(todo) }
 //      request.content.map { _.flatMap { _.validated[TokenCreate] match {
@@ -228,7 +228,7 @@ class CreateTokenHandler(tokenManager: TokenManager, accessControl: AccessContro
   val metadata = None
 }
 
-class DeleteTokenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
+class DeleteTokenHandler(tokenManager: TokenManager[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token) => Future(todo) } 
 //      request.parameters.get('delete) match {
@@ -245,7 +245,7 @@ class DeleteTokenHandler(tokenManager: TokenManager)(implicit dispatcher: Messag
   val metadata = None
 }
 
-class UpdateTokenHandler(tokenManager: TokenManager)(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
+class UpdateTokenHandler(tokenManager: TokenManager[Future])(implicit dispatcher: MessageDispatcher) extends CustomHttpService[Future[JValue], Token => Future[HttpResponse[JValue]]] with Logging with HandlerHelpers {
 
   val service  = (request: HttpRequest[Future[JValue]]) => {
 //    request.parameters.get('update) match {

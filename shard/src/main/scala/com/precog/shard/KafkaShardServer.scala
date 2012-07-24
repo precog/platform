@@ -16,4 +16,5 @@ object KafkaShardServer extends BlueEyesServer with ShardService with YggdrasilQ
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
 
+  val asyncContext = defaultFutureDispatch
 }
