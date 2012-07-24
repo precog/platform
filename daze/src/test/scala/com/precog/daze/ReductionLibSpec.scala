@@ -56,6 +56,22 @@ class ReductionLibSpec extends Specification
   }
 
   "reduce homogeneous sets" >> {
+    "singleton count" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Count, Root(line, PushString("alpha")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(1)
+    }   
+    
     "count" >> {
       val line = Line(0, "")
       
@@ -158,6 +174,22 @@ class ReductionLibSpec extends Specification
       result2 must contain(27.575351312358652)
     }
     
+    "sum a singleton" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Sum, Root(line, PushNum("18")))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d.toInt
+      }
+      
+      result2 must contain(18)
+    }    
+
     "sum" >> {
       val line = Line(0, "")
       

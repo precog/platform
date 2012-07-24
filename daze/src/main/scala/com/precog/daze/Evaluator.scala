@@ -148,8 +148,8 @@ trait Evaluator extends DAG
               // FIXME if the target has forcing points, targetTrans is insufficient
               //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
                 
-              _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (reducedTarget -> resultTargetTable)) }: State[EvaluatorState, Unit]
-              trans = loop(target, splits).eval(EvaluatorState(Map())).trans
+              state <- get[EvaluatorState]
+              trans = loop(target, splits).eval(state.copy(assume = state.assume + (reducedTarget -> resultTargetTable))).trans
               subSpec <- resolveLowLevelGroup(resultTargetTable, reducedTarget, forest, splits)
             } yield {
               resultTargetTable map { resultTargetTable => resultTargetTable.group(trans, id, subSpec) }
@@ -294,11 +294,10 @@ trait Evaluator extends DAG
         case r @ dag.Reduce(_, red, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            val result = pendingTable.table map { parentTable => red(parentTable.transform(pendingTable.trans)) }
-          } yield {
-            //result map { r => println(r.toString) }
-            PendingTable(result, graph, TransSpec1.Id)
-          }
+            liftedTrans = liftToValues(pendingTable.trans)
+            result = pendingTable.table map { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+            wrapped = result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
+          } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
 
         //** the original code **//

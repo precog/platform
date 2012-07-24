@@ -55,7 +55,7 @@ trait MemoryDatasetConsumer extends Evaluator with TableModule with YggConfigCom
     Validation.fromTryCatch {
       val resultF = eval(userUID, graph, ctx, optimize)
       val result = Await.result(resultF, yggConfig.maxEvalDuration)
-      
+
       val json = result.toJson filterNot { jvalue =>
         (jvalue \ "value") == JNothing
       }

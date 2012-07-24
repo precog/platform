@@ -67,7 +67,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     implicit val monoid = new Monoid[Result] {
       def zero = None
       def append(left: Result, right: => Result): Result = {
-        for (l <- left; r <- right) yield l max r
+        (for (l <- left; r <- right) yield l max r) orElse left orElse right
       }
     }
 
@@ -97,8 +97,11 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
 
           case _ => None
         } 
+
+        if (max.isEmpty) None
+        else Some(max.suml)
         
-        (max.isEmpty).option(max.suml)
+        //(max.isEmpty).option(max.suml)
       }
     }
 
@@ -112,7 +115,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     implicit val monoid = new Monoid[Result] {
       def zero = None
       def append(left: Result, right: => Result): Result = {
-        for (l <- left; r <- right) yield l min r
+        (for (l <- left; r <- right) yield l min r) orElse left orElse right
       }
     }
 
@@ -120,25 +123,28 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     
     def reducer: Reducer[Result] = new CReducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val min = cols(JNumberT) flatMap {
+        val min = cols(JType.JUnfixedT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
               None
             else
-              Some(mapped.min: BigDecimal)
+              Some(BigDecimal(mapped.min))
           case col: DoubleColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
-            (mapped.isEmpty).option(mapped.min: BigDecimal)
+            if (mapped.isEmpty) None
+            else Some(BigDecimal(mapped.min))
 
           case col: NumColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
-            (mapped.isEmpty).option(mapped.min: BigDecimal)
+            if (mapped.isEmpty) None 
+            else Some(mapped.min: BigDecimal)
 
           case _ => None
         } 
-        
-        (min.isEmpty).option(min.suml)
+
+        if (min.isEmpty) None
+        else Some(min.suml)
       } 
     }
 
@@ -155,31 +161,35 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
     def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range) = {
+      def reduce(cols: JType => Set[Column], range: Range) = { 
+
         val sum = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
               None
             else
-              Some(mapped.sum: BigDecimal)
+              Some(BigDecimal(mapped.sum))
           case col: DoubleColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
               None
             else
-              Some(mapped.sum: BigDecimal)
+              Some(BigDecimal(mapped.sum))
           case col: NumColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
             if (mapped.isEmpty)
               None
             else
-              Some(mapped.sum: BigDecimal)
+              Some(mapped.sum)
 
           case _ => None
         } 
 
-        (sum.isEmpty).option(sum.suml)
+        if (sum.isEmpty) None
+        else Some(sum.suml)   
+
+        //(sum.isEmpty).option(sum.suml)
       }
     }
 
@@ -236,7 +246,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
           case _ => None
         } 
 
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
 
@@ -268,7 +279,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
             if (mapped.isEmpty) {
               None
             } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
                 case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
               }
 
@@ -279,7 +290,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
             if (mapped.isEmpty) {
               None
             } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
                 case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
               }
 
@@ -290,7 +301,7 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
             if (mapped.isEmpty) {
               None
             } else {
-              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0))) {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(1), BigDecimal(0))) {
                 case ((prod, count), value) => (prod * value: BigDecimal, count + 1: BigDecimal)
               }
 
@@ -300,7 +311,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
           case _ => None
         }
 
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
 
@@ -358,7 +370,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
           case _ => None
         }
           
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
 
@@ -414,7 +427,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
           case _ => None
         }
 
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
 
@@ -472,7 +486,8 @@ trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations 
           case _ => None
         }
 
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
 
