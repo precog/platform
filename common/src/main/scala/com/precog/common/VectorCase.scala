@@ -51,8 +51,9 @@ import scala.collection.IndexedSeqLike
 import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable.{IndexedSeq, VectorBuilder}
 import scala.collection.mutable.{ArrayBuffer, Builder}
+import scala.math.Ordering
 
-private[precog] sealed trait VectorCase[+A] extends IndexedSeq[A] with IndexedSeqLike[A, VectorCase[A]] {
+private[precog] sealed trait VectorCase[+A] extends IndexedSeq[A] with IndexedSeqLike[A, VectorCase[A]] with Serializable {
   
   override protected[this] def newBuilder: Builder[A, VectorCase[A]] = VectorCase.newBuilder[A]
   

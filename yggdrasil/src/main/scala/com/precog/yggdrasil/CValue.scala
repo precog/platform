@@ -35,7 +35,7 @@ import scalaz.std._
 import scalaz.std.math._
 import scalaz.std.AllInstances._
 
-sealed trait CValue {
+sealed trait CValue extends Serializable {
   @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
     case CString(v)  => 0
     case CBoolean(v) => 1
@@ -51,9 +51,12 @@ sealed trait CValue {
     case CDouble(v)  => SDecimal(v)
     case CNum(v)     => SDecimal(v)
   }
+
+  def toJavaObject: AnyRef
 }
 
 object CValue {
+  @transient
   implicit object order extends Order[CValue] {
     def order(v1: CValue, v2: CValue) = (v1, v2) match {
       case (CString(a), CString(b)) => Order[String].order(a, b)
@@ -78,6 +81,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) {
   def order(a: CA, b: CA): Ordering
 
   def jvalueFor(a: CA): JValue
+
+  def cvalueFor(a: AnyRef): CValue
 
   @inline 
   private[CType] final def typeIndex = this match {
@@ -228,67 +233,108 @@ object CType extends CTypeSerialization {
 //
 // Strings
 //
-case class CString(value: String) extends CValue 
+case class CString(value: String) extends CValue {
+  def toJavaObject = value
+}
 
 case object CString extends CType(LengthEncoded, SString) {
   type CA = String
   val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
   def jvalueFor(s: String) = JString(s)
+  def cvalueFor(a: AnyRef) = a match {
+    case s: String => CString(s)
+    case invalid   => throw new IllegalArgumentException("Invalid CString Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[String]]
 }
 
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CValue 
+case class CBoolean(value: Boolean) extends CValue {
+  def toJavaObject = value
+}
+
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   type CA = Boolean
   val CC = classOf[Boolean]
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
   def jvalueFor(v: Boolean) = JBool(v)
+  def cvalueFor(a: AnyRef) = a match {
+    case b: _root_.java.lang.Boolean => CBoolean(b.booleanValue)
+    case invalid   => throw new IllegalArgumentException("Invalid CBoolean Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[Boolean]]
 }
 
 //
 // Numerics
 //
-case class CLong(value: Long) extends CValue 
+case class CLong(value: Long) extends CValue {
+  def toJavaObject = value
+}
+
 case object CLong extends CType(FixedWidth(8), SDecimal) {
   type CA = Long
   val CC = classOf[Long]
   override def isNumeric: Boolean = true
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
   def jvalueFor(v: Long) = JInt(v)
+  def cvalueFor(a: AnyRef) = a match {
+    case l: _root_.java.lang.Long => CLong(l.longValue)
+    case invalid   => throw new IllegalArgumentException("Invalid CLong Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
-case class CDouble(value: Double) extends CValue 
+case class CDouble(value: Double) extends CValue {
+  def toJavaObject = value
+}
+
 case object CDouble extends CType(FixedWidth(8), SDecimal) {
   type CA = Double
   val CC = classOf[Double]
   override def isNumeric: Boolean = true
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
   def jvalueFor(v: Double) = JDouble(v)
+  def cvalueFor(a: AnyRef) = a match {
+    case d: _root_.java.lang.Double => CDouble(d.doubleValue)
+    case invalid   => throw new IllegalArgumentException("Invalid CDouble Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
-case class CNum(value: BigDecimal) extends CValue 
+case class CNum(value: BigDecimal) extends CValue {
+  def toJavaObject = value.bigDecimal
+}
+
 case object CNum extends CType(LengthEncoded, SDecimal) {
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
   override def isNumeric: Boolean = true
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
   def jvalueFor(v: BigDecimal) = JDouble(v.toDouble)
+  def cvalueFor(a: AnyRef) = a match {
+    case bd: _root_.java.math.BigDecimal => CNum(BigDecimal(bd))
+    case invalid   => throw new IllegalArgumentException("Invalid CNum Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
-case class CDate(value: DateTime) extends CValue
+case class CDate(value: DateTime) extends CValue {
+  def toJavaObject = value
+}
+
 case object CDate extends CType(FixedWidth(8), SString) {
   type CA = DateTime
   val CC = classOf[DateTime]
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
   def jvalueFor(v: DateTime) = JString(v.toString)
+  def cvalueFor(a: AnyRef) = a match {
+    case dt: org.joda.time.DateTime => CDate(dt)
+    case invalid   => throw new IllegalArgumentException("Invalid CDate Java object: " + invalid)
+  }
   implicit val manifest = implicitly[Manifest[DateTime]]
 }
 
@@ -298,6 +344,8 @@ sealed trait CNullType extends CType
 // Nulls
 //
 case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue {
+  def toJavaObject = null
+  def cvalueFor(a: AnyRef) = CNull
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -306,6 +354,8 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue
 }
 
 case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType with CValue {
+  def toJavaObject = null
+  def cvalueFor(a: AnyRef) = CEmptyObject
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -314,6 +364,8 @@ case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType wi
 }
 
 case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with CValue {
+  def toJavaObject = null
+  def cvalueFor(a: AnyRef) = CEmptyArray
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ

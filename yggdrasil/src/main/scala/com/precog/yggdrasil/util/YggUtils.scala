@@ -23,13 +23,13 @@ package util
 import actor._
 import iterable._
 import leveldb._
+import jdbm3._
 import metadata.MetadataStorage
 import metadata.FileMetadataStorage
 import com.precog.common._
 import com.precog.util._
 import com.precog.common.kafka._
 import com.precog.common.security._
-
 
 import akka.actor.{ActorRef,ActorSystem,Props}
 import akka.dispatch.Await
@@ -711,16 +711,16 @@ object ImportTools extends Command with Logging {
     // This uses an empty checkpoint because there is no support for insertion/metadata
     val io = for (ms <- FileMetadataStorage.load(config.storageRoot, FilesystemFileOps)) yield {
       object shardModule extends SystemActorStorageModule
-                            with LevelDBProjectionModule
-                            with ProductionShardSystemActorModule {
+                            with JDBMProjectionModule
+                            with StandaloneShardSystemActorModule {
 
-        class YggConfig(val config: Configuration) extends BaseConfig with ProductionShardSystemConfig
+        class YggConfig(val config: Configuration) extends BaseConfig with StandaloneShardSystemConfig
         val yggConfig = new YggConfig(Configuration.parse("precog.storage.root = " + config.storageRoot.getName))
 
         val actorSystem = ActorSystem("yggutilImport")
         implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(ExecutionContext.defaultExecutionContext(actorSystem))
 
-        object Projection extends LevelDBProjectionCompanion {
+        object Projection extends JDBMProjectionCompanion {
           def fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor): File = ms.findDescriptorRoot(descriptor, true).unsafePerformIO.get
         }

@@ -60,7 +60,7 @@ run <<= inputTask { argTask =>
 extractData <<= (dataDir, streams) map { (dir, s) =>
   val target = new File(dir)
   s.log.info("Extracting LevelDB sample data into %s...".format(dir))
-  IO.copyDirectory(new File("pandora/dist/data/"), target, true, false)
+  IO.copyDirectory(new File("pandora/dist/data-jdbm/"), target, true, false)
   target.getCanonicalPath
 }
 
