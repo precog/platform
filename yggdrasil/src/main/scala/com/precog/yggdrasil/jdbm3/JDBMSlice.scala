@@ -67,19 +67,19 @@ class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescript
     case (ColumnDescriptor(_, selector, ctpe, _),index) => ColumnRef(selector, ctpe) -> (ctpe match {
       //// Fixed width types within the var width row
       case CBoolean => new BoolColumn with BaseColumn {
-        def apply(row: Int): Boolean = backing(row).getValue().apply(index).asInstanceOf[CBoolean].value
+        def apply(row: Int): Boolean = backing(row).getValue().apply(index).asInstanceOf[java.lang.Boolean]
       }
 
       case  CLong  => new LongColumn with BaseColumn {
-        def apply(row: Int): Long = backing(row).getValue().apply(index).asInstanceOf[CLong].value
+        def apply(row: Int): Long = backing(row).getValue().apply(index).asInstanceOf[java.lang.Long]
       }
 
       case CDouble => new DoubleColumn with BaseColumn {
-        def apply(row: Int): Double = backing(row).getValue().apply(index).asInstanceOf[CDouble].value
+        def apply(row: Int): Double = backing(row).getValue().apply(index).asInstanceOf[java.lang.Double]
       }
 
       case CDate => new DateColumn with BaseColumn {
-        def apply(row: Int): DateTime = new DateTime(backing(row).getValue().apply(index).asInstanceOf[CLong].value)
+        def apply(row: Int): DateTime = new DateTime(backing(row).getValue().apply(index).asInstanceOf[java.lang.Long])
       }
 
       case CNull => LNullColumn
@@ -90,11 +90,11 @@ class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescript
 
       //// Variable width types
       case CString => new StrColumn with BaseColumn {
-        def apply(row: Int): String = backing(row).getValue().apply(index).asInstanceOf[CString].value
+        def apply(row: Int): String = backing(row).getValue().apply(index).asInstanceOf[String]
       }
 
       case CNum => new NumColumn with BaseColumn {
-        def apply(row: Int): BigDecimal = backing(row).getValue().apply(index).asInstanceOf[CNum].value
+        def apply(row: Int): BigDecimal = BigDecimal(backing(row).getValue().apply(index).asInstanceOf[java.math.BigDecimal])
       }
 
       case invalid => sys.error("Invalid fixed with CType: " + invalid)
