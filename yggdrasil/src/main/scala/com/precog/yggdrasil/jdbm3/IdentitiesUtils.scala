@@ -35,7 +35,6 @@ class IdentitiesComparator extends Comparator[Identities] with Serializable {
   def readResolve() = IdentitiesComparator
 
   def compare (a: Identities, b: Identities) = {
-    println("Comparing " + a + " to " + b)
     a.zip(b).dropWhile { case (x,y) => x == y }.headOption.map {
       case (x,y) => (x - y).signum
     }.getOrElse(a.length - b.length)
@@ -50,13 +49,11 @@ class IdentitiesSerializer extends Serializer[Identities] with Serializable {
   def readResolve() = IdentitiesSerializer
 
   def serialize(out: DataOutput, ids: Identities) {
-    println("Serializing " + ids)
     out.writeInt(ids.size)
     ids.foreach { i => out.writeLong(i) }
   }
 
   def deserialize(in: DataInput): Identities = {
-    println("Deserializing ids")
     in.readInt() match {
       case 0 => Vector0
       case 1 => Vector1(in.readLong())
