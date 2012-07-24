@@ -65,7 +65,7 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
 
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    Some(new KafkaShardIngestActor(yggConfig.shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled))
+    Some(() => new KafkaShardIngestActor(yggConfig.shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled))
   }
 
   def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 

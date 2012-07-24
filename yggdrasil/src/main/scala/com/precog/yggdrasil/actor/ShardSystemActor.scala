@@ -59,14 +59,14 @@ trait ShardConfig extends BaseConfig {
 trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigComponent {
   type YggConfig <: ShardConfig
 
-  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef): Option[Actor]
+  protected def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef): Option[() => Actor]
 
   protected def checkpointCoordination: CheckpointCoordination
 
   class ShardSystemActor(storage: MetadataStorage) extends Actor with Logging {
 
     // The ingest system consists of the ingest supervisor and ingest actor(s)
-    private[this] var ingestSystem: Option[ActorRef]    = None
+    private[this] var ingestSystem: ActorRef            = _
     private[this] var metadataActor: ActorRef           = _
     private[this] var projectionsActor: ActorRef        = _
     private[this] var metadataSync: Option[Cancellable] = None
@@ -94,14 +94,16 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       logger.debug("Initializing ProjectionsActor")
       projectionsActor = context.actorOf(Props(new ProjectionsActor), "projections")
 
-      ingestSystem     = initialCheckpoint map {
-        checkpoint =>
-
+      val ingestActorInit: Option[() => Actor] = initialCheckpoint flatMap {
+        checkpoint: YggCheckpoint => initIngestActor(checkpoint, metadataActor)
+      }
+ 
+      ingestSystem     = { 
         logger.debug("Initializing ingest system")
         // Ingest implies a metadata sync
         metadataSync = Some(context.system.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))
 
-        context.actorOf(Props(new IngestSupervisor(() => initIngestActor(checkpoint, metadataActor), projectionsActor, new SingleColumnProjectionRoutingTable,
+        context.actorOf(Props(new IngestSupervisor(ingestActorInit, projectionsActor, new SingleColumnProjectionRoutingTable,
                                                    yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval)), "ingestRouter")
       }
     }
@@ -110,7 +112,7 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       // Route subordinate messages
       case pMsg: ShardProjectionAction => projectionsActor.tell(pMsg, sender)
       case mMsg: ShardMetadataAction   => metadataActor.tell(mMsg, sender)
-      case iMsg: ShardIngestAction     => ingestSystem.foreach(_.tell(iMsg, sender))
+      case iMsg: ShardIngestAction     => ingestSystem.tell(iMsg, sender)
 
       case Status => {
         implicit val to = Timeout(yggConfig.statusTimeout)
@@ -126,15 +128,14 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
       }
     }
 
-    protected def actorsWithStatus = ingestSystem.toList ++
-                                     (metadataActor :: projectionsActor :: Nil)
+    protected def actorsWithStatus = ingestSystem :: metadataActor :: projectionsActor :: Nil
 
     protected def onShutdown(): Future[Unit] = {
       implicit val execContext = ExecutionContext.defaultExecutionContext(context.system)
       for {
         _ <- Future(logger.info("Stopping shard system"))
         _ <- metadataSync.map(syncJob => Future{ syncJob.cancel() }).getOrElse(Future(()))
-        _ <- ingestSystem.map(actor => actorStop(actor, "ingest")).getOrElse(Future(()))
+        _ <- actorStop(ingestSystem, "ingest")
         _ <- actorStop(projectionsActor, "projections")
         _ <- actorStop(metadataActor, "metadata")
       } yield ()

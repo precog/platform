@@ -66,17 +66,17 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-class IngestSupervisor(ingestActorInit: () => Option[Actor], projectionsActor: ActorRef, routingTable: RoutingTable, 
+class IngestSupervisor(ingestActorInit: Option[() => Actor], projectionsActor: ActorRef, routingTable: RoutingTable, 
                        idleDelay: Duration, scheduler: Scheduler, shutdownCheck: Duration) extends Actor with Logging {
 
-  private[this] var ingestActor: ActorRef = _
+  private[this] var ingestActor: Option[ActorRef] = None
 
   private var initiated = 0
   private var processed = 0
   private var errors = 0
 
   override def preStart() = {
-    ingestActor = context.actorOf(Props(() => ingestActorInit().getOrElse(sys.error("Could not initialize ingest actor")), "ingestActor"))
+    ingestActor = ingestActorInit.map { actorInit => context.actorOf(Props(actorInit, "ingestActor")) }
     logger.info("Starting IngestSupervisor against IngestActor " + ingestActor)
     scheduleIngestRequest(Duration.Zero)
     logger.info("Initial ingest request scheduled")
@@ -84,7 +84,7 @@ class IngestSupervisor(ingestActorInit: () => Option[Actor], projectionsActor: A
 
   override def postStop() = {
     logger.info("IngestSupervisor shutting down")
-    gracefulStop(ingestActor, shutdownCheck)(context.system)
+    ingestActor.foreach(gracefulStop(_, shutdownCheck)(context.system))
   }
 
   def receive = {
@@ -123,9 +123,9 @@ class IngestSupervisor(ingestActorInit: () => Option[Actor], projectionsActor: A
     for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
   }
 
-  private def scheduleIngestRequest(delay: Duration): Unit = {
+  private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
     initiated += 1
-    scheduler.scheduleOnce(delay, ingestActor, GetMessages(self))
+    scheduler.scheduleOnce(delay, actor, GetMessages(self))
   }
 }
 
