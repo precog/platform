@@ -135,6 +135,11 @@ trait ProjectionsActorModule extends ProjectionModule {
     }
 
     override def postStop(): Unit = {
+      if (projections.size > 0) {
+        logger.info("Stopping remaining (cached) projections")
+        projections.foreach { case (_,projection) => Projection.close(projection).unsafePerformIO }
+      }
+
       logger.info("Stopped ProjectionsActor")
     }
 
