@@ -62,15 +62,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 object JDBMProjection {
-  private[jdbm3] type IndexTree = SortedMap[IdentitiesKey,Array[AnyRef]]
-
-  /** A simple wrapper class to satisfy JDBM3's requirement that K <: Comparable.
-   *  Using java.util.List to permit efficient serialization by JDBM3 */
-  private[jdbm3] class IdentitiesKey(val ids: Identities) extends Comparable[IdentitiesKey] with Serializable {
-    def compareTo(other: IdentitiesKey): Int = ids.zip(other.ids).dropWhile { case (a,b) => a == b }.headOption.map {
-      case (a,b) => (a - b).signum
-    }.getOrElse(ids.length - other.ids.length)
-  }
+  private[jdbm3] type IndexTree = SortedMap[Identities,Seq[CValue]]
 
   val DEFAULT_SLICE_SIZE = 10000
 }
@@ -91,7 +83,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
     if (treeMap == null) {
       logger.debug("Creating new projection store")
-      idIndexFile.createTreeMap(treeMapName)
+      idIndexFile.createTreeMap(treeMapName, IdentitiesComparator, IdentitiesSerializer, CValueSerializer)
     } else {
       treeMap
     }
@@ -105,7 +97,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids, v))
-    treeMap.put(new IdentitiesKey(ids), Array(CString("Foo").toJavaObject))
+    treeMap.put(ids, v.toArray.asInstanceOf[Array[CValue]])
 
     if (shouldSync) {
       idIndexFile.commit()
@@ -113,12 +105,12 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   }
 
   def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
-    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey.ids, kvEntry.getValue.zip(descriptor.columns).map { case (v, col) => col.valueType.cvalueFor(v) }) }
+    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey, kvEntry.getValue) }
   })
 
   def getBlockAfter(id: Option[Identities]): Option[Slice] = {
     try {
-      val constrainedMap = id.map { case id => treeMap.tailMap(new IdentitiesKey(id)) }.getOrElse(treeMap)
+      val constrainedMap = id.map(treeMap.tailMap(_)).getOrElse(treeMap)
 
       constrainedMap.lastKey() // Will throw an exception if the map is empty
 

@@ -50,13 +50,13 @@ class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescript
     def isDefinedAt(row: Int) = row < size
   }
   
-  // This is where we store the full 2d array containing all values
-  private[this] val backing: Array[java.util.Map.Entry[IdentitiesKey,Array[AnyRef]]] = source.entrySet().iterator().asScala.take(size).toArray
+  // This is where we store the full 2d array containing all values. Ugly cast to allow us to use IndexedSeq internally
+  private[this] val backing: Array[java.util.Map.Entry[Identities,IndexedSeq[CValue]]] = source.entrySet().iterator().asScala.take(size).toArray.asInstanceOf[Array[java.util.Map.Entry[Identities,IndexedSeq[CValue]]]]
 
   def size = backing.length
 
   case class IdentColumn(index: Int) extends LongColumn with BaseColumn {
-    def apply(row: Int): Long = backing(row).getKey.ids(index)
+    def apply(row: Int): Long = backing(row).getKey.apply(index)
   }
 
   protected def keyColumns: Map[ColumnRef, Column] = (0 until descriptor.identities).map {
