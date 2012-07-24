@@ -474,7 +474,7 @@ class EvaluatorSpecs extends Specification
 
         result2 must contain(100)
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate cross when one side is a singleton" >> {
       "a reduction on the right side of the cross" >> {
