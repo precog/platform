@@ -106,17 +106,16 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
     new KafkaEventStore(new EventRouter(routeTable, messaging), 0)
   }
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager()
+  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
   lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
-          
+  val asyncContext = defaultFutureDispatch
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
 }
 
 class IngestServiceSpec extends TestIngestService with FutureMatchers {
-
   def track(data: JValue, token: Option[String] = Some(TestTokenUID), path: String = "unittest"): Future[HttpResponse[JValue]] = {
     token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
   }

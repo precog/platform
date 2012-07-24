@@ -169,7 +169,8 @@ object MetadataActorStateSpec extends Specification {
     ))
   ))
 
-  val actor = TestActorRef(new MetadataActor("test", new TestMetadataStorage(data), CheckpointCoordination.Noop, None)).underlyingActor
+  val source = new TestMetadataStorage(data)
+  val actor = TestActorRef(new MetadataActor("test", source, CheckpointCoordination.Noop, None)).underlyingActor
 
   def dump(root: PathRoot, indent: Int = 0) {
     dumpMeta(root.children, indent)
@@ -192,19 +193,19 @@ object MetadataActorStateSpec extends Specification {
 
   "local metadata state" should {
     "query by path with root selector" in {
-      val result = actor.findPathMetadata(Path("/abc/"), JPath("")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/abc/"), JPath("")).unsafePerformIO
     
       result must_== rootAbc
     }
 
     "query other path with root selector" in {
-      val result = actor.findPathMetadata(Path("/def/"), JPath("")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/def/"), JPath("")).unsafePerformIO
       
       result must_== rootDef
     }
 
     "query by path with branch selector" in {
-      val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/abc/"), JPath(".foo")).unsafePerformIO
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/abc/"), JPath(".foo"), CBoolean, token1)),
@@ -221,7 +222,7 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "query other path with branch selector" in {
-      val result = actor.findPathMetadata(Path("/def/"), JPath(".foo")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/def/"), JPath(".foo")).unsafePerformIO
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def/"), JPath(".foo"), CBoolean, token1)),
@@ -239,7 +240,7 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "query by path with array selector" in {
-      val result = actor.findPathMetadata(Path("/abc/"), JPath(".foo[0]")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/abc/"), JPath(".foo[0]")).unsafePerformIO
      
       val expected = PathRoot(Set(
         PathValue(CString, Authorities(Set(token1)), projectionDescriptor(Path("/abc"), JPath(".foo[0]"), CString, token1))
@@ -249,7 +250,7 @@ object MetadataActorStateSpec extends Specification {
     }
 
     "query other path with leaf selector" in {
-      val result = actor.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz")).unsafePerformIO
+      val result = source.findPathMetadata(Path("/def/"), JPath(".foo.bar.baz.buz")).unsafePerformIO
      
       val expected = PathRoot(Set(
         PathValue(CBoolean, Authorities(Set(token1)), projectionDescriptor(Path("/def"), JPath(".foo.bar.baz.buz"), CBoolean, token1))

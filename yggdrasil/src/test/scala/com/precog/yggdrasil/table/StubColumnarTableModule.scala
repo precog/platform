@@ -25,7 +25,6 @@ import com.precog.common.Path
 import com.precog.common.VectorCase
 
 import akka.actor.ActorSystem
-import akka.dispatch.{Future, ExecutionContext}
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -36,12 +35,17 @@ import scala.annotation.tailrec
 import scala.collection.BitSet
 
 import scalaz._
+import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
+import scalaz.syntax.std.boolean._
 
-trait TestColumnarTableModule extends ColumnarTableModule {
+trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
+  implicit def coM: Copointed[M]
+
   def fromJson(values: Stream[JValue], maxSliceSize: Option[Int] = None): Table = {
     val sliceSize = maxSliceSize.getOrElse(10)
 
-    def makeSlice(sampleData: Iterable[JValue]): (Slice, Iterable[JValue]) = {
+    def makeSlice(sampleData: Stream[JValue]): (Slice, Stream[JValue]) = {
       val (prefix, suffix) = sampleData.splitAt(sliceSize)
   
       @tailrec def buildColArrays(from: Stream[JValue], into: Map[ColumnRef, (BitSet, Array[_])], sliceIndex: Int): (Map[ColumnRef, (BitSet, Object)], Int) = {
@@ -125,68 +129,57 @@ trait TestColumnarTableModule extends ColumnarTableModule {
       (slice, suffix)
     }
     
-    val (s, xs) = makeSlice(values)
-    
-    table(new Iterable[Slice] {
-      def iterator = new Iterator[Slice] {
-        private var _next = s
-        private var _rest = xs
-
-        def hasNext = _next != null
-        def next() = {
-          val tmp = _next
-          _next = if (_rest.isEmpty) null else {
-            val (s, xs) = makeSlice(_rest)
-            _rest = xs
-            s
+    table(
+      StreamT.unfoldM(values) { events =>
+        M.point {
+          (!events.isEmpty) option {
+            makeSlice(events.toStream)
           }
-          tmp
         }
       }
-    })
+    )
   }
 }
 
 // vim: set ts=4 sw=4 et:
-trait StubColumnarTableModule extends TestColumnarTableModule {
+trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   type Table = StubTable
 
-  val actorSystem = ActorSystem()
-  implicit def executionContext: ExecutionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+  def table(slices: StreamT[M, Slice]): StubTable = new StubTable(slices)
 
-  def table(slices: Iterable[Slice]): StubTable = new StubTable(slices)
-
-  class StubTable(slices: Iterable[Slice]) extends ColumnarTable(slices) { self: Table => 
+  class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
     private var initialIndices = collection.mutable.Map[Path, Int]()
     private var currentIndex = 0
     
-    override def load(jtpe: JType) = Future {
-      fromJson {
-        self.toJson.toStream map (_ \ "value") flatMap {
-          case JString(pathStr) => 
-            val path = Path(pathStr)
-      
-            val index = initialIndices get path getOrElse {
-              initialIndices += (path -> currentIndex)
-              currentIndex
-            }
-            
-            val target = path.path.replaceAll("/$", ".json")
-            val src = io.Source fromInputStream getClass.getResourceAsStream(target)
-            val parsed = src.getLines map JsonParser.parse toStream
-            
-            currentIndex += parsed.length
-            
-            parsed zip (Stream from index) map {
-              case (value, id) => JObject(JField("key", JArray(JInt(id) :: Nil)) :: JField("value", value) :: Nil)
-            }
+    override def load(jtpe: JType) = {
+      self.toJson map { events =>
+        fromJson {
+          events.toStream map (_ \ "value") flatMap {
+            case JString(pathStr) => 
+              val path = Path(pathStr)
+        
+              val index = initialIndices get path getOrElse {
+                initialIndices += (path -> currentIndex)
+                currentIndex
+              }
+              
+              val target = path.path.replaceAll("/$", ".json")
+              val src = io.Source fromInputStream getClass.getResourceAsStream(target)
+              val parsed = src.getLines map JsonParser.parse toStream
+              
+              currentIndex += parsed.length
+              
+              parsed zip (Stream from index) map {
+                case (value, id) => JObject(JField("key", JArray(JInt(id) :: Nil)) :: JField("value", value) :: Nil)
+              }
 
-          case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+            case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)
+          }
         }
       }
     }
 
-    override def toString = toStrings.mkString("\n")
+    override def toString = toStrings.copoint.mkString("\n")
   }
 }
 

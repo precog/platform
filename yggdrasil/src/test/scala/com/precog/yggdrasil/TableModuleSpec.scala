@@ -21,16 +21,20 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.common.VectorCase
+
+import akka.dispatch.Future
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
+import blueeyes.concurrent.test.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
 import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.copointed._
 import scala.annotation.tailrec
 
 import org.specs2._
@@ -41,17 +45,18 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerators with TableModule {
+trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with CValueGenerators with TableModule[M] {
   import trans.constants._
 
   override val defaultPrettyParams = Pretty.Params(2)
+  implicit def coM : Copointed[M]
 
   def lookupF1(namespace: List[String], name: String): F1
   def lookupF2(namespace: List[String], name: String): F2
   def lookupScanner(namespace: List[String], name: String): Scanner
   
   def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
-  def toJson(dataset: Table): Stream[JValue] = dataset.toJson.toStream
+  def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
 
   def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
 
@@ -88,7 +93,7 @@ trait TableModuleSpec extends Specification with ScalaCheck with CValueGenerator
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
       val dataset = fromSample(sample)
-      toJson(dataset).toList must containAllOf(sample.data.toList).only
+      toJson(dataset).copoint must containAllOf(sample.data.toList).only
     }
   }
 }

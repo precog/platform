@@ -39,6 +39,7 @@ import scalaz._
 object AccessControlSpec extends Specification with TokenManagerTestValues with AccessControlHelpers {
 
   implicit val accessControl = new TokenManagerAccessControl(tokens)
+  implicit val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
   "legacy access control" should {
     "control path access" in {
@@ -174,6 +175,7 @@ object AccessControlSpec extends Specification with TokenManagerTestValues with 
 object AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerTestValues with AccessControlHelpers {
  
   implicit val accessControl = new TokenManagerAccessControl(tokens)
+  implicit val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
   "access control" should {
     "handle proposed use cases" in {
@@ -216,7 +218,7 @@ trait AccessControlHelpers {
 
   val testTimeout = Duration(30, "seconds")
 
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, owners: Set[GrantID] = Set.empty)(implicit ac: AccessControl): Boolean = {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess, owners: Set[GrantID] = Set.empty)(implicit ac: AccessControl[Future]): Boolean = {
     pathAccess match {
       case PathWrite => 
         Await.result(ac.mayAccessPath(uid, path, pathAccess), testTimeout)
@@ -224,7 +226,7 @@ trait AccessControlHelpers {
         Await.result(ac.mayAccessData(uid, path, owners, DataQuery), testTimeout)
     }
   }
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess)(implicit ac: AccessControl): Boolean = {
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess)(implicit ac: AccessControl[Future]): Boolean = {
     Await.result(ac.mayAccessData(uid, path, owners, dataAccess), testTimeout)
   }
 }

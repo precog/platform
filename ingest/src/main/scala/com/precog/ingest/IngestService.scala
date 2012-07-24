@@ -36,7 +36,10 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class IngestState(tokenManager: TokenManager, accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging)
+import scalaz.Monad
+import scalaz.syntax.monad._
+
+case class IngestState(tokenManager: TokenManager[Future], accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging)
 
 trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators with AkkaDefaults { 
   import BijectionsChunkJson._
@@ -45,7 +48,9 @@ trait IngestService extends BlueEyesServiceBuilder with IngestServiceCombinators
 
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
-  def tokenManagerFactory(config: Configuration): TokenManager
+  implicit def M: Monad[Future]
+
+  def tokenManagerFactory(config: Configuration): TokenManager[Future]
   def eventStoreFactory(config: Configuration): EventStore
   def usageLoggingFactory(config: Configuration): UsageLogging 
 

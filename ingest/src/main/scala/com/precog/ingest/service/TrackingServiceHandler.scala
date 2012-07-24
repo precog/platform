@@ -38,7 +38,7 @@ import com.weiglewilczek.slf4s.Logging
 
 import scalaz.{Validation, Success}
 
-class TrackingServiceHandler(accessControl: AccessControl, eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
+class TrackingServiceHandler(accessControl: AccessControl[Future], eventStore: EventStore, usageLogging: UsageLogging, insertTimeout: Timeout)(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => {
     Success { (t: Token, p: Path) =>

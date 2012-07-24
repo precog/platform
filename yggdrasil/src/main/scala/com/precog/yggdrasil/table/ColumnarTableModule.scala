@@ -23,9 +23,6 @@ package table
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
 
-import akka.dispatch.Future
-import akka.dispatch.ExecutionContext
-
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -45,7 +42,7 @@ import scalaz.std.iterable._
 import scalaz.syntax.arrow._
 import scalaz.syntax.traverse._
 
-trait ColumnarTableModule extends TableModule {
+trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   import trans._
   import trans.constants._
 
@@ -56,56 +53,55 @@ trait ColumnarTableModule extends TableModule {
   type RowId = Int
   type Table <: ColumnarTable
 
-  implicit def asyncContext: ExecutionContext
-  implicit val futureMonad: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-  
+  implicit def M: Monad[M]
+
   object ops extends TableOps {
-    def empty: Table = table(StreamT.empty[Future, Slice])
+    def empty: Table = table(StreamT.empty[M, Slice])
     
     def constBoolean(v: Set[CBoolean]): Table = {
       val column = ArrayBoolColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CBoolean) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constLong(v: Set[CLong]): Table = {
       val column = ArrayLongColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CLong) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDouble(v: Set[CDouble]): Table = {
       val column = ArrayDoubleColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CDouble) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDecimal(v: Set[CNum]): Table = {
       val column = ArrayNumColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CNum) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constString(v: Set[CString]): Table = {
       val column = ArrayStrColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CString) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constDate(v: Set[CDate]): Table =  {
       val column = ArrayDateColumn(v.map(_.value).toArray)
-      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CDate) -> column), v.size) :: StreamT.empty[M, Slice])
     }
 
     def constNull: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CNull) -> new InfiniteColumn with NullColumn), 1) :: StreamT.empty[M, Slice])
 
     def constEmptyObject: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyObject) -> new InfiniteColumn with EmptyObjectColumn), 1) :: StreamT.empty[M, Slice])
 
     def constEmptyArray: Table = 
-      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[Future, Slice])
+      table(Slice(Map(ColumnRef(JPath.Identity, CEmptyArray) -> new InfiniteColumn with EmptyArrayColumn), 1) :: StreamT.empty[M, Slice])
   }
   
   object grouper extends Grouper {
     import trans._
     
-    def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => Future[Table]): Future[Table] =
+    def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => M[Table]): M[Table] =
       sys.error("todo")
   }
 
@@ -150,13 +146,13 @@ trait ColumnarTableModule extends TableModule {
     def identity[A](initial: A) = SliceTransform(initial, (a: A, s: Slice) => (a, s))
   }
 
-  def table(slices: StreamT[Future, Slice]): Table
+  def table(slices: StreamT[M, Slice]): Table
 
-  abstract class ColumnarTable(val slices: StreamT[Future, Slice]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): Future[A] = {  
+    def reduce[A: Monoid](reducer: Reducer[A]): M[A] = {  
       (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(Monoid[A].zero)((a, b) => Monoid[A].append(a, b))
     }
 
@@ -165,20 +161,20 @@ trait ColumnarTableModule extends TableModule {
     private def map0(f: Slice => Slice): SliceTransform[Unit] = SliceTransform[Unit]((), Function.untupled(f.second[Unit]))
 
     private def transform0[A](sliceTransform: SliceTransform[A]): Table = {
-      def stream(state: A): StreamT[Future, Slice] = StreamT(
+      def stream(state: A, slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
         for {
           head <- slices.uncons
         } yield {
           head map { case (s, sx) =>
             val (nextState, s0) = sliceTransform.f(state, s)
-            StreamT.Yield(s0, stream(nextState))
+            StreamT.Yield(s0, stream(nextState, sx))
           } getOrElse {
             StreamT.Done
           }
         }
       )
 
-      table(stream(sliceTransform.initial))
+      table(stream(sliceTransform.initial, slices))
     }
 
     // No transform defined herein may reduce the size of a slice. Be it known!
@@ -888,47 +884,17 @@ trait ColumnarTableModule extends TableModule {
     }
     */
 
-    def toStrings: Iterable[String] = {
+    def toStrings: M[Iterable[String]] = {
       toEvents { (slice, row) => slice.toString(row) }
     }
     
-    def toJson: Iterable[JValue] = {
+    def toJson: M[Iterable[JValue]] = {
       toEvents { (slice, row) => slice.toJson(row) }
     }
 
-    private def toEvents[A](f: (Slice, RowId) => A): Iterable[A] = {
-      new Iterable[A] {
-        def iterator = {
-          val normalized = self.normalize.slices.iterator
-
-          new Iterator[A] {
-            private var slice = if (normalized.hasNext) normalized.next else null.asInstanceOf[Slice]
-            private var idx = 0
-            private var next0: A = precomputeNext()
-
-            def hasNext = next0 != null
-
-            def next() = {
-              val tmp = next0
-              next0 = precomputeNext()
-              tmp
-            }
-           
-            @tailrec def precomputeNext(): A = {
-              if (slice == null) {
-                null.asInstanceOf[A]
-              } else if (idx < slice.size) {
-                val result = f(slice, idx)
-                idx += 1
-                result
-              } else {
-                slice = if (normalized.hasNext) normalized.next else null.asInstanceOf[Slice]
-                idx = 0
-                precomputeNext() //recursive call is okay because hasNext must have returned true to get here
-              }
-            }
-          }
-        }
+    private def toEvents[A](f: (Slice, RowId) => A): M[Iterable[A]] = {
+      for (stream <- self.normalize.slices.toStream) yield {
+        for (slice <- stream; i <- 0 until slice.size) yield f(slice, i) 
       }
     }
   }

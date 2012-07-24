@@ -38,8 +38,7 @@ import blueeyes.json.JsonParser
 import blueeyes.json.JsonAST._
 
 import akka.actor.ActorSystem
-import akka.dispatch.Await
-import akka.dispatch.ExecutionContext
+import akka.dispatch._
 import akka.util.Timeout
 import akka.util.Duration
 
@@ -65,7 +64,7 @@ object ShardTestInit extends App with LevelDBProjectionModule with SystemActorSt
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   class Storage extends SystemActorStorageLike(metadataStorage) {
-    val accessControl = new UnlimitedAccessControl()(asyncContext)
+    val accessControl = new UnlimitedAccessControl[Future]()
   }
 
   val storage = new Storage

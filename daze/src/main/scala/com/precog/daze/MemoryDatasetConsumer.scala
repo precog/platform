@@ -28,13 +28,13 @@ import yggdrasil.table._
 import akka.dispatch.Await
 import akka.util.Duration
 
+import scalaz._
 import scalaz.Validation
 import scalaz.effect.IO
-import scalaz.iteratee._
 import scalaz.syntax.monad._
+import scalaz.syntax.copointed._
 import scalaz.std.set._
 import Validation._
-import Iteratee._
 
 import blueeyes.json._
 
@@ -43,20 +43,20 @@ trait DatasetConsumersConfig extends EvaluatorConfig {
 }
 
 // TODO decouple this from the evaluator specifics
-trait MemoryDatasetConsumer extends Evaluator with TableModule with YggConfigComponent {
+trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with YggConfigComponent {
   import JsonAST._
   
   type X = Throwable
   type YggConfig <: DatasetConsumersConfig
   type SEvent = (VectorCase[Long], SValue)
+
+  implicit def coM: Copointed[M]
   
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
-      val resultF = eval(userUID, graph, ctx, optimize)
-      val result = Await.result(resultF, yggConfig.maxEvalDuration)
-
-      val json = result.toJson filterNot { jvalue =>
+      val result = eval(userUID, graph, ctx, optimize)
+      val json = result.flatMap(_.toJson).copoint filterNot { jvalue =>
         (jvalue \ "value") == JNothing
       }
       

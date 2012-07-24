@@ -25,7 +25,7 @@ import bytecode.{ BinaryOperationType, JNumberT, JBooleanT, Library }
 import yggdrasil._
 import yggdrasil.table._
 
-trait InfixLib extends ImplLibrary with GenOpcode {
+trait InfixLib[M[+_]] extends GenOpcode[M] {
   
   def PrimitiveEqualsF2 = yggdrasil.table.cf.std.Eq
   

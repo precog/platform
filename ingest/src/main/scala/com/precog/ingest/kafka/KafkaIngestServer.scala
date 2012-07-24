@@ -49,6 +49,8 @@ object KafkaIngestServer extends
   val clock = Clock.System
 
   def usageLoggingFactory(config: Configuration) = new NullUsageLogging("")
+
+  implicit val asyncContext = defaultFutureDispatch
 }
 
 

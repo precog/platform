@@ -30,15 +30,18 @@ import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import scalaz._
 import scalaz.std.set._
+import scalaz.std.stream._
+import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
+import scalaz.syntax.traverse._
+import scalaz.syntax.std.stream._
 
-
-trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModule {
+trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] {
   type Projection <: BlockProjectionLike[Slice]
 
-  class Table(slices: StreamT[Future, Slice]) extends ColumnarTable(slices) {
-    def load(tpe: JType): Future[Table] = {
-      val pathsFuture: Future[Set[String]] = reduce {
+  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    def load(tpe: JType): M[Table] = {
+      val pathsM: M[Set[String]] = reduce {
         new CReducer[Set[String]] {
           def reduce(columns: JType => Set[Column], range: Range): Set[String] = {
             columns(JTextT) flatMap {
@@ -51,14 +54,14 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
 
       val metadataView = storage.userMetadataView(sys.error("TODO"))
 
-      def loadable(path: Path, prefix: JPath, jtpe: JType): Future[Set[ProjectionDescriptor]] = {
+      def loadable(path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
         tpe match {
-          case p: JPrimitiveType => Future.sequence(ctypes(p).map(metadataView.findProjections(path, prefix, _))) map {
+          case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
             sources => sources flatMap { source => source.keySet }
           }
 
           case JArrayFixedT(elements) =>
-            Future.sequence(elements map { case (i, jtpe) => loadable(path, prefix \ i, jtpe) }) map { _.flatten.toSet }
+            (elements map { case (i, jtpe) => loadable(path, prefix \ i, jtpe) }).toStream.sequence map { _.flatten.toSet }
 
           case JArrayUnfixedT =>
             metadataView.findProjections(path, prefix) map { 
@@ -71,7 +74,7 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
             }
 
           case JObjectFixedT(fields) =>
-            Future.sequence(fields map { case (n, jtpe) => loadable(path, prefix \ n, jtpe) }) map { _.flatten.toSet }
+            (fields map { case (n, jtpe) => loadable(path, prefix \ n, jtpe) }).toStream.sequence map { _.flatten.toSet }
 
           case JObjectUnfixedT =>
             metadataView.findProjections(path, prefix) map { 
@@ -84,7 +87,7 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
             }
 
           case JUnionT(tpe1, tpe2) =>
-            Future.sequence(Set(loadable(path, prefix, tpe1), loadable(path, prefix, tpe2))) map { _.flatten }
+            (Set(loadable(path, prefix, tpe1), loadable(path, prefix, tpe2))).sequence map { _.flatten }
         }
       }
 
@@ -93,9 +96,8 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
       def coveringSchema(descriptors: Set[ProjectionDescriptor]): Seq[(JPath, CType)] = sys.error("todo")
 
       for {
-        paths               <- pathsFuture
-        coveringProjections <- Future.sequence(paths map { path => loadable(Path(path), JPath.Identity, tpe) }) map { _.flatten }
-                               if (subsumes(coveringSchema(coveringProjections), tpe))
+        paths               <- pathsM
+        coveringProjections <- (paths map { path => loadable(Path(path), JPath.Identity, tpe) }).sequence map { _.flatten }
       } yield {
         val loadableProjections = minimalCover(coveringProjections)
         table(
@@ -105,7 +107,7 @@ trait BlockStoreColumnarTableModule extends ColumnarTableModule with StorageModu
     }
   }
 
-  def table(slices: StreamT[Future, Slice]) = new Table(slices)
+  def table(slices: StreamT[M, Slice]) = new Table(slices)
 }
 
 // vim: set ts=4 sw=4 et:

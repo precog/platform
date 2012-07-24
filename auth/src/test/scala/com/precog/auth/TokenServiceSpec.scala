@@ -79,6 +79,8 @@ trait TestTokenService extends BlueEyesServiceSpecification with TokenService wi
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
+
+  val asyncContext = defaultFutureDispatch
 }
 
 class TokenServiceSpec extends TestTokenService with FutureMatchers with Tags {

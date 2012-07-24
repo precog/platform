@@ -39,7 +39,7 @@ import com.precog.daze._
 import com.precog.common._
 import com.precog.common.security._
 
-class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessControl)(implicit dispatcher: MessageDispatcher)
+class BrowseServiceHandler(queryExecutor: QueryExecutor, accessControl: AccessControl[Future])(implicit dispatcher: MessageDispatcher)
 extends CustomHttpService[Future[JValue], (Token, Path) => Future[HttpResponse[JValue]]] with Logging {
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path) => {

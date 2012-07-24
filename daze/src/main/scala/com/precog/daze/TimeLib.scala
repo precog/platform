@@ -31,7 +31,7 @@ import org.joda.time.format._
 //todo instead of using StrColumn, use TimeColumn!
 //todo test is not defined cases when fails at isValidISO(_), etc
 
-trait TimeLib extends GenOpcode with ImplLibrary {    
+trait TimeLib[M[+_]] extends GenOpcode[M] {
   val TimeNamespace = Vector("std", "time")
 
   override def _lib1 = super._lib1 ++ Set(

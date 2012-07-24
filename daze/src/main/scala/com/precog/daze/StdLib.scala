@@ -30,10 +30,10 @@ import bytecode.ReductionLike
 import yggdrasil._
 import yggdrasil.table._
 
-import akka.dispatch.Future
 import scalaz.Monoid
+import scalaz.syntax.monad._
 
-trait GenOpcode extends ImplLibrary {
+trait GenOpcode[M[+_]] extends ImplLibrary[M] {
   private val defaultMorphism1Opcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Morphism1(val namespace: Vector[String], val name: String, val opcode: Int = defaultMorphism1Opcode.getAndIncrement) extends Morphism1Impl 
 
@@ -50,7 +50,7 @@ trait GenOpcode extends ImplLibrary {
   abstract class Reduction(val namespace: Vector[String], val name: String, val opcode: Int = defaultReductionOpcode.getAndIncrement) extends ReductionImpl
 }
 
-trait ImplLibrary extends Library with ColumnarTableModule {
+trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
   lazy val libMorphism1 = _libMorphism1
   lazy val libMorphism2 = _libMorphism2
   lazy val lib1 = _lib1
@@ -64,12 +64,12 @@ trait ImplLibrary extends Library with ColumnarTableModule {
   def _libReduction: Set[Reduction] = Set()
 
   trait Morphism1Impl extends Morphism1Like {
-    def apply(input: Table): Future[Table]
+    def apply(input: Table): M[Table]
   }
   
   trait Morphism2Impl extends Morphism2Like {
     def alignment: MorphismAlignment
-    def apply(input: Table): Future[Table]
+    def apply(input: Table): M[Table]
   }
  
   sealed trait MorphismAlignment
@@ -106,5 +106,5 @@ trait ImplLibrary extends Library with ColumnarTableModule {
   type Reduction <: ReductionImpl
 }
 
-trait StdLib extends InfixLib with ReductionLib with TimeLib with MathLib with StringLib with StatsLib 
+trait StdLib[M[+_]] extends InfixLib[M] with ReductionLib[M] with TimeLib[M] with MathLib[M] with StringLib[M] with StatsLib[M] 
 

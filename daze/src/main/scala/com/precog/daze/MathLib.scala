@@ -26,7 +26,7 @@ import bytecode.Library
 import yggdrasil._
 import yggdrasil.table._
 
-trait MathLib extends GenOpcode with ImplLibrary {
+trait MathLib[M[+_]] extends GenOpcode[M] {
   val MathNamespace = Vector("std", "math")
 
   override def _lib1 = super._lib1 ++ Set(sinh, toDegrees, expm1, getExponent, asin, log10, cos, exp, cbrt, atan, ceil, rint, log1p, sqrt, floor, toRadians, tanh, round, cosh, tan, abs, sin, log, signum, acos, ulp)

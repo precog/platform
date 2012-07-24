@@ -44,15 +44,16 @@ import yggdrasil.table._
 import com.precog.util.FilesystemFileOps
 
 import akka.actor.ActorSystem
-import akka.dispatch.ExecutionContext
+import akka.dispatch._
+import akka.util.Duration
 
 import com.codecommit.gll.LineStream
 
 object SBTConsole {
   
-  trait Platform  extends muspelheim.ParseEvalStack 
-                  with MemoryDatasetConsumer
-                  with BlockStoreColumnarTableModule
+  trait Platform  extends muspelheim.ParseEvalStack[Future] 
+                  with MemoryDatasetConsumer[Future]
+                  with BlockStoreColumnarTableModule[Future]
                   with LevelDBProjectionModule
                   with SystemActorStorageModule
                   with StandaloneShardSystemActorModule {
@@ -61,6 +62,8 @@ object SBTConsole {
                     with DatasetConsumersConfig 
                     with StandaloneShardSystemConfig
   }
+
+  val controlTimeout = Duration(30, "seconds")
 
   val platform = new Platform { console =>
     import akka.dispatch.Await
@@ -74,10 +77,8 @@ object SBTConsole {
     import org.streum.configrity.Configuration
     import org.streum.configrity.io.BlockFormat
 
-    implicit lazy val actorSystem = ActorSystem("sbtConsoleActorSystem")
-    implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-    lazy val controlTimeout = Duration(30, "seconds")
+    implicit val actorSystem = ActorSystem("sbtConsoleActorSystem")
+    implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
     object yggConfig extends YggConfig {
       val config = Configuration parse {
@@ -105,8 +106,14 @@ object SBTConsole {
       }
     }
 
+    implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+    implicit val coM = new Copointed[Future] {
+      def map[A, B](m: Future[A])(f: A => B) = m map f
+      def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+    }
+
     class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
-      val accessControl = new UnlimitedAccessControl()(asyncContext)
+      val accessControl = new UnlimitedAccessControl[Future]()
     }
 
     val storage = new Storage

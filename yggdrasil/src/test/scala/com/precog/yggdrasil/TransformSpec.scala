@@ -19,6 +19,9 @@
  */
 package com.precog.yggdrasil
 
+import akka.dispatch.Await
+import akka.util.Duration
+
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 
@@ -32,9 +35,12 @@ import org.scalacheck.Arbitrary._
 
 import com.precog.bytecode._
 import scala.util.Random
+import scalaz.syntax.copointed._
 
-trait TransformSpec extends TableModuleSpec {
+trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   import trans._
+
+  val resultTimeout = Duration(5, "seconds")
 
   def checkTransformLeaf = {
     implicit val gen = sample(schema)
@@ -42,7 +48,7 @@ trait TransformSpec extends TableModuleSpec {
       val table = fromSample(sample)
       val results = toJson(table.transform(Leaf(Source)))
 
-      results must_== sample.data
+      results.copoint must_== sample.data
     }
   }
 
@@ -51,7 +57,7 @@ trait TransformSpec extends TableModuleSpec {
     val table = fromSample(SampleData(sample))
     val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Nil, "negate")) })
 
-    results must_== (-10 to 10).map(x => JInt(-x))
+    results.copoint must_== (-10 to 10).map(x => JInt(-x))
   }
 
   /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
@@ -66,7 +72,7 @@ trait TransformSpec extends TableModuleSpec {
         )
       })
 
-      results must_== sample.data
+      results.copoint must_== sample.data
     }
   }
   */
@@ -82,7 +88,7 @@ trait TransformSpec extends TableModuleSpec {
         )
       })
 
-      results must_== sample.data
+      results.copoint must_== sample.data
     }
   }
 
@@ -107,7 +113,7 @@ trait TransformSpec extends TableModuleSpec {
         }
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -123,7 +129,7 @@ trait TransformSpec extends TableModuleSpec {
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -139,7 +145,7 @@ trait TransformSpec extends TableModuleSpec {
 
       val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -162,7 +168,7 @@ trait TransformSpec extends TableModuleSpec {
         }
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -174,7 +180,7 @@ trait TransformSpec extends TableModuleSpec {
         Equal(Leaf(Source), Leaf(Source))
       })
 
-      results must_== (Stream.tabulate(sample.data.size) { _ => JBool(true) })
+      results.copoint must_== (Stream.tabulate(sample.data.size) { _ => JBool(true) })
     }
   }
 
@@ -218,7 +224,7 @@ trait TransformSpec extends TableModuleSpec {
         }
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -232,7 +238,7 @@ trait TransformSpec extends TableModuleSpec {
 
       val expected = sample.data map { jv => JObject(JField("foo", jv) :: Nil) }
       
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -244,7 +250,7 @@ trait TransformSpec extends TableModuleSpec {
         ObjectConcat(Leaf(Source), Leaf(Source))
       })
 
-      results must_== sample.data
+      results.copoint must_== sample.data
     }
   }
 
@@ -259,7 +265,7 @@ trait TransformSpec extends TableModuleSpec {
         )
       })
 
-      results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
+      results.copoint must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
     }
   }
 
@@ -274,7 +280,7 @@ trait TransformSpec extends TableModuleSpec {
         )
       })
 
-      results must_== (sample.data map { _ \ "value" } map { case v => JObject(JField("value1", v \ "value2") :: Nil) })
+      results.copoint must_== (sample.data map { _ \ "value" } map { case v => JObject(JField("value1", v \ "value2") :: Nil) })
     }
   }
 
@@ -292,7 +298,7 @@ trait TransformSpec extends TableModuleSpec {
         )
       })
 
-      results must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
+      results.copoint must_== sample.data.map({ case JObject(fields) => JObject(fields.filter(_.name == "value")) })
     }
   }
 
@@ -315,7 +321,7 @@ trait TransformSpec extends TableModuleSpec {
 
         val expected = sample.data.flatMap { jv => (jv \ "value").delete(JPath(field)) }
 
-        result must_== expected
+        result.copoint must_== expected
       }
     }
   }
@@ -483,7 +489,7 @@ trait TransformSpec extends TableModuleSpec {
           Nil)
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -524,7 +530,7 @@ trait TransformSpec extends TableModuleSpec {
         })
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 
@@ -542,7 +548,7 @@ trait TransformSpec extends TableModuleSpec {
           (a + i, s :+ JDouble((a + i).toDouble))
       }
 
-      results must_== expected.toStream
+      results.copoint must_== expected.toStream
     }
   }
 
@@ -561,7 +567,7 @@ trait TransformSpec extends TableModuleSpec {
 
     val expected = JInt(1) #:: JInt(2) #:: JInt(3) #:: Stream.empty[JValue]
 
-    results must_== expected
+    results.copoint must_== expected
   }
 
   def checkArraySwap = {
@@ -578,7 +584,7 @@ trait TransformSpec extends TableModuleSpec {
         }
       }
 
-      results must_== expected
+      results.copoint must_== expected
     }
   }
 }

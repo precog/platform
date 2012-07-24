@@ -29,8 +29,6 @@ import yggdrasil.table._
 import com.precog.util.IdGen
 import com.precog.util._
 
-import akka.dispatch.Future
-
 import scala.collection.BitSet
 
 import scalaz._
@@ -39,17 +37,13 @@ import scalaz.std.option._
 import scalaz.std.set._
 import scalaz.std.tuple._
 import scalaz.syntax.foldable._
+import scalaz.syntax.monad._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
 import org.apache.commons.collections.primitives.ArrayIntList
 
-trait StatsLib extends GenOpcode
-    with ReductionLib
-    with ImplLibrary
-    with BigDecimalOperations
-    with Evaluator {
-
+trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalOperations with Evaluator[M] {
   import trans._
   
   val StatsNamespace = Vector("std", "stats")
@@ -112,7 +106,7 @@ trait StatsLib extends GenOpcode
                     val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
                     Mean(middleValues)
                   } else {
-                    Future(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
+                    M.point(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
                   }
       } yield median
     }
@@ -562,7 +556,7 @@ trait StatsLib extends GenOpcode
       }
     }
     
-    def apply(table: Table) = Future {
+    def apply(table: Table) = M.point {
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
@@ -635,7 +629,7 @@ trait StatsLib extends GenOpcode
       }
     }
     
-    def apply(table: Table) = Future {
+    def apply(table: Table) = M.point {
       val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 

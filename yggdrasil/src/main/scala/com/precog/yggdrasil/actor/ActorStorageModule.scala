@@ -32,25 +32,27 @@ import akka.pattern.gracefulStop
 import akka.util.Timeout
 import akka.util.duration._
 
+import scalaz._
 import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait ActorStorageModule extends StorageModule {
+trait ActorStorageModule extends StorageModule[Future] {
   protected implicit def actorSystem: ActorSystem
 
-  trait ActorStorageLike extends StorageLike[Projection] with Logging {
-    def accessControl: AccessControl
+  trait ActorStorageLike extends StorageLike[Projection, Future] with Logging {
+    def accessControl: AccessControl[Future]
     def shardSystemActor: ActorRef
 
     def start(): Future[Boolean]
     def stop(): Future[Boolean]
 
-    private lazy implicit val dispatcher = actorSystem.dispatcher
-    private lazy val metadata: StorageMetadata = new ActorStorageMetadata(shardSystemActor)
+    implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+
+    private lazy val metadata: StorageMetadata[Future] = new ActorStorageMetadata(shardSystemActor)
     
-    def userMetadataView(uid: String): StorageMetadata = {
-      implicit val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    def userMetadataView(uid: String): StorageMetadata[Future] = {
       new UserMetadataView(uid, accessControl, metadata)
     }
     

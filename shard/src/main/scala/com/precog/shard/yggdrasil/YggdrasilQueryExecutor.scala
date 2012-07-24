@@ -48,7 +48,7 @@ import akka.util.Timeout
 
 import com.weiglewilczek.slf4s.Logging
 
-import scalaz.{Success, Failure, Validation}
+import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
@@ -89,14 +89,20 @@ trait YggdrasilQueryExecutorComponent {
     }
   }
     
-  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl): QueryExecutor = {
+  def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule with LevelDBProjectionModule with ProductionShardSystemActorModule {
+    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with LevelDBProjectionModule with ProductionShardSystemActorModule {
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
       
+      implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+      implicit val coM = new Copointed[Future] {
+        def map[A, B](m: Future[A])(f: A => B) = m map f
+        def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+      }
+
       class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
         val accessControl = extAccessControl
       }
@@ -113,9 +119,9 @@ trait YggdrasilQueryExecutorComponent {
 
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
-    with ParseEvalStack
+    with ParseEvalStack[Future]
     with SystemActorStorageModule
-    with MemoryDatasetConsumer
+    with MemoryDatasetConsumer[Future]
     with Logging  { self =>
 
   type YggConfig = YggdrasilQueryExecutorConfig

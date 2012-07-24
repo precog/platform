@@ -34,7 +34,7 @@ import blueeyes.health.metrics.{eternity}
 
 import org.streum.configrity.Configuration
 
-case class TokenServiceState(tokenManager: TokenManager, tokenManagement: TokenManagement)
+case class TokenServiceState(tokenManager: TokenManager[Future], tokenManagement: TokenManagement)
 
 trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenServiceCombinators {
   import BijectionsChunkJson._
@@ -44,7 +44,7 @@ trait TokenService extends BlueEyesServiceBuilder with AkkaDefaults with TokenSe
   val insertTimeout = akka.util.Timeout(10000)
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def tokenManagerFactory(config: Configuration): TokenManager
+  def tokenManagerFactory(config: Configuration): TokenManager[Future]
 
   val tokenService = service("auth", "1.0") {
     requestLogging(timeout) {

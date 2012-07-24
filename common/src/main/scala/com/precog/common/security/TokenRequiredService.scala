@@ -39,7 +39,7 @@ import com.weiglewilczek.slf4s.Logging
 import scalaz.Scalaz._
 import scalaz.{Validation, Success, Failure}
 
-class TokenRequiredService[A, B](tokenManager: TokenManager, val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
+class TokenRequiredService[A, B](tokenManager: TokenManager[Future], val delegate: HttpService[A, Token => Future[B]])(implicit err: (HttpFailure, String) => B, dispatcher: MessageDispatcher) 
 extends DelegatingService[A, Future[B], A, Token => Future[B]] with Logging {
   val service = (request: HttpRequest[A]) => {
     request.parameters.get('tokenId) match {

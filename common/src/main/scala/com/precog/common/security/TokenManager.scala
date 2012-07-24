@@ -21,7 +21,7 @@ package com.precog.common
 package security
 
 import blueeyes._
-import blueeyes.bkka.AkkaDefaults
+import blueeyes.bkka._
 import blueeyes.json.JsonAST._
 import blueeyes.persistence.mongo._
 import blueeyes.persistence.cache._
@@ -46,13 +46,13 @@ import scala.collection.mutable
 
 import scalaz._
 import scalaz.Validation._
-import Scalaz._
+import scalaz.syntax.monad._
 
-trait TokenManagerComponent {
-  def tokenManager: TokenManager
+trait TokenManagerComponent[M[+_]] {
+  def tokenManager: TokenManager[M]
 }
 
-trait TokenManager {
+trait TokenManager[M[+_]] {
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
 
   // 256 bit token ID
@@ -64,31 +64,31 @@ trait TokenManager {
   // 384 bit grant ID
   private[security] def newGrantID(): String = (newUUID() + newUUID() + newUUID()).toLowerCase.replace("-","")
  
-  def newToken(name: String, grants: Set[GrantID]): Future[Token]
-  def newGrant(issuer: Option[GrantID], permission: Permission): Future[Grant]
+  def newToken(name: String, grants: Set[GrantID]): M[Token]
+  def newGrant(issuer: Option[GrantID], permission: Permission): M[Grant]
 
-  def listTokens(): Future[Seq[Token]]
-  def listGrants(): Future[Seq[Grant]]
+  def listTokens(): M[Seq[Token]]
+  def listGrants(): M[Seq[Grant]]
   
-  def findToken(tid: TokenID): Future[Option[Token]]
-  def findGrant(gid: GrantID): Future[Option[Grant]]
-  def findGrantChildren(gid: GrantID): Future[Set[Grant]]
+  def findToken(tid: TokenID): M[Option[Token]]
+  def findGrant(gid: GrantID): M[Option[Grant]]
+  def findGrantChildren(gid: GrantID): M[Set[Grant]]
  
 
-  def listDeletedTokens(): Future[Seq[Token]]
-  def listDeletedGrants(): Future[Seq[Grant]]
+  def listDeletedTokens(): M[Seq[Token]]
+  def listDeletedGrants(): M[Seq[Grant]]
 
-  def findDeletedToken(tid: TokenID): Future[Option[Token]]
-  def findDeletedGrant(gid: GrantID): Future[Option[Grant]]
-  def findDeletedGrantChildren(gid: GrantID): Future[Set[Grant]]
+  def findDeletedToken(tid: TokenID): M[Option[Token]]
+  def findDeletedGrant(gid: GrantID): M[Option[Grant]]
+  def findDeletedGrantChildren(gid: GrantID): M[Set[Grant]]
 
-  def addGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[Token]]
-  def removeGrants(tid: TokenID, grants: Set[GrantID]): Future[Option[Token]]
+  def addGrants(tid: TokenID, grants: Set[GrantID]): M[Option[Token]]
+  def removeGrants(tid: TokenID, grants: Set[GrantID]): M[Option[Token]]
 
-  def deleteToken(tid: TokenID): Future[Option[Token]]
-  def deleteGrant(gid: GrantID): Future[Set[Grant]]
+  def deleteToken(tid: TokenID): M[Option[Token]]
+  def deleteGrant(gid: GrantID): M[Set[Grant]]
 
-  def close(): Future[Unit]
+  def close(): M[Unit]
 } 
 
 
@@ -103,12 +103,13 @@ object MongoTokenManagerSettings {
   val defaults = MongoTokenManagerSettings()
 }
 
-trait MongoTokenManagerComponent extends Logging {
-  def defaultActorSystem: ActorSystem
+trait MongoTokenManagerComponent extends TokenManagerComponent[Future] with Logging {
+  implicit val asyncContext: ExecutionContext
+  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
-  implicit def execContext = ExecutionContext.defaultExecutionContext(defaultActorSystem)
+  val tokenManager = sys.error("todo")
 
-  def tokenManagerFactory(config: Configuration): TokenManager = {
+  def tokenManagerFactory(config: Configuration): TokenManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))
     
     val database = config[String]("mongo.database", "auth_v1")
@@ -123,7 +124,7 @@ trait MongoTokenManagerComponent extends Logging {
     )
 
     val mongoTokenManager = 
-      new MongoTokenManager(mongo, mongo.database(database), settings)(execContext)
+      new MongoTokenManager(mongo, mongo.database(database), settings)
 
     val cached = config[Boolean]("cached", false)
 
@@ -138,7 +139,7 @@ trait MongoTokenManagerComponent extends Logging {
 class MongoTokenManager(
     mongo: Mongo,
     database: Database,
-    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager with Logging {
+    settings: MongoTokenManagerSettings = MongoTokenManagerSettings.defaults)(implicit val execContext: ExecutionContext) extends TokenManager[Future] with Logging {
 
   private implicit val impTimeout = settings.timeout
 
@@ -247,7 +248,7 @@ case class CachingTokenManagerSettings(
   tokenCacheSettings: CacheSettings[TokenID, Token],
   grantCacheSettings: CacheSettings[GrantID, Grant])
 
-class CachingTokenManager(manager: TokenManager, settings: CachingTokenManagerSettings = CachingTokenManager.defaultSettings)(implicit execContext: ExecutionContext) extends TokenManager {
+class CachingTokenManager[M[+_]: Monad](manager: TokenManager[M], settings: CachingTokenManagerSettings = CachingTokenManager.defaultSettings) extends TokenManager[M] {
 
   private val tokenCache = Cache.concurrent[TokenID, Token](settings.tokenCacheSettings)
   private val grantCache = Cache.concurrent[GrantID, Grant](settings.grantCacheSettings)
@@ -265,11 +266,11 @@ class CachingTokenManager(manager: TokenManager, settings: CachingTokenManagerSe
 
   def findToken(tid: TokenID) = tokenCache.get(tid) match {
     case None => manager.findToken(tid).map { _.map { _ ->- add } }
-    case t    => Future(t)
+    case t    => Monad[M].point(t)
   }
   def findGrant(gid: GrantID) = grantCache.get(gid) match {
     case None        => manager.findGrant(gid).map { _.map { _ ->- add } }
-    case s @ Some(_) => Future(s)
+    case s @ Some(_) => Monad[M].point(s)
   }
   def findGrantChildren(gid: GrantID) = manager.findGrantChildren(gid)
 

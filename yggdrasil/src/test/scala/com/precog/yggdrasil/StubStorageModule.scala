@@ -38,17 +38,16 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonParser
 
+import scalaz._
 import scalaz.effect._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-trait StubStorageModule extends StorageModule {
+trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
   type TestDataset
 
-  def actorSystem: ActorSystem 
-  implicit def asyncContext: ExecutionContext
-  implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
+  implicit def M: Monad[M]
 
   val dataPath = Path("/test")
   def sampleSize: Int
@@ -63,7 +62,7 @@ trait StubStorageModule extends StorageModule {
     def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
   }
 
-  class Storage extends StorageLike[Projection] {
+  class Storage extends StorageLike[Projection, M] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
     
@@ -81,17 +80,24 @@ trait StubStorageModule extends StorageModule {
     def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
 
-    lazy val metadataActor = {
-      implicit val system = actorSystem
-      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop, None))
+    def metadata = new StorageMetadata[M] {
+      val M = self.M
+      val source = new TestMetadataStorage(projectionMetadata)
+      def findChildren(path: Path) = M.point(source.findChildren(path))
+      def findSelectors(path: Path) = M.point(source.findSelectors(path))
+      def findProjections(path: Path, selector: JPath) = M.point {
+        projections.collect {
+          case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
+            (descriptor, ColumnMetadata.Empty)
+        }
+      }
+
+      def findPathMetadata(path: Path, selector: JPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
-    def metadata = new ActorStorageMetadata(metadataActor)
+    def userMetadataView(uid: String) = new UserMetadataView[M](uid, new UnlimitedAccessControl(), metadata)
 
-    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
-
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection, Release)] =
-      Future((projections(descriptor), new Release(IO(()))))
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout) = M.point(projections(descriptor) -> new Release(IO(())))
   }
 }
 

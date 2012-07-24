@@ -23,14 +23,17 @@ import com.precog.common.Path
 import com.precog.bytecode.JType
 import blueeyes.json.{JPath, JPathField, JPathIndex}
 import blueeyes.json.JsonAST._
-import akka.dispatch.Future
-import scalaz.Monoid
 
 import collection.Set
 
-trait TableModule extends FNModule {
+import scalaz.Monoid
+import scalaz.Monad
+
+trait TableModule[M[+_]] extends FNModule {
   type Scanner
   type Reducer[α]
+
+  implicit def M: Monad[M]
 
   object trans {
     sealed trait TransSpec[+A <: SourceType]
@@ -200,7 +203,7 @@ trait TableModule extends FNModule {
      * @param grouping The group spec
      * @param body The evaluator, taking a ''map'' from a key to some table (representing a tic variable or group set)
      */
-    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => Future[Table]): Future[Table]
+    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table]
   }
     
   trait TableLike { this: Table =>
@@ -210,12 +213,12 @@ trait TableModule extends FNModule {
      * For each distinct path in the table, load all columns identified by the specified
      * jtype and concatenate the resulting slices into a new table.
      */
-    def load(tpe: JType): Future[Table]
+    def load(tpe: JType): M[Table]
     
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): Future[A]
+    def reduce[A: Monoid](reducer: Reducer[A]): M[A]
     
     /**
      * Removes all rows in the table for which all values are undefined. 
@@ -257,6 +260,6 @@ trait TableModule extends FNModule {
     
     def takeRight(n: Long): Table
 
-    def toJson: Iterable[JValue]
+    def toJson: M[Iterable[JValue]]
   }
 }

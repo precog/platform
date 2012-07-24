@@ -48,15 +48,7 @@ import scalaz.std.list._
 import scalaz.std.map._
 import scalaz.std.set._
 
-object MetadataActor {
-  case class ResolvedSelector(selector: JPath, authorities: Authorities, descriptor: ProjectionDescriptor, metadata: ColumnMetadata) {
-    def columnType: CType = descriptor.columns.find(_.selector == selector).map(_.valueType).get
-  }
-}
-
-//class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination) extends Actor with Logging { metadataActor =>
 class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordination: CheckpointCoordination, initialCheckpoint: Option[YggCheckpoint]) extends Actor with Logging { metadataActor =>
-  import MetadataActor._
   import ProjectionMetadata._
   
   private var messageClock: VectorClock = initialCheckpoint map { _.messageClock } getOrElse { VectorClock.empty }
@@ -117,7 +109,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
 
     case msg @ FindPathMetadata(path, selector) => 
       logger.trace(msg.toString)
-      sender ! findPathMetadata(path, selector).unsafePerformIO
+      sender ! storage.findPathMetadata(path, selector, columnMetadataFor).unsafePerformIO
 
     case msg @ FindDescriptorRoot(descriptor, createOk) => 
       logger.trace(msg.toString)
@@ -176,7 +168,7 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
     projs.map(descriptor => columnMetadataFor(descriptor) map (descriptor -> _)).sequence.map(_.toMap)
   }
 
-  private def columnMetadataFor(descriptor: ProjectionDescriptor): IO[ColumnMetadata] = 
+  private def columnMetadataFor(descriptor: ProjectionDescriptor): IO[ColumnMetadata] = {
     projections.get(descriptor).map(IO(_)).getOrElse {
       storage.getMetadata(descriptor) map {
         case MetadataRecord(metadata, clock) => 
@@ -184,89 +176,6 @@ class MetadataActor(shardId: String, storage: MetadataStorage, checkpointCoordin
           metadata
       }
     }
-
-  def findPathMetadata(path: Path, selector: JPath): IO[PathRoot] = {
-    logger.debug("Locating path metadata for " + path + " and " + selector)
-
-    @inline def isLeaf(ref: JPath, test: JPath) = {
-      (test.nodes startsWith ref.nodes) && 
-      test.nodes.length - 1 == ref.nodes.length
-    }
-    
-    @inline def isObjectBranch(ref: JPath, test: JPath) = {
-      (test.nodes startsWith ref.nodes) && 
-      test.nodes.length > ref.nodes.length &&
-      (test.nodes(ref.nodes.length) match {
-        case JPathField(_) => true
-        case _             => false
-      })
-    }
-    
-    @inline def isArrayBranch(ref: JPath, test: JPath) = {
-      (test.nodes startsWith ref.nodes) && 
-      test.nodes.length > ref.nodes.length &&
-      (test.nodes(ref.nodes.length) match {
-        case JPathIndex(_) => true
-        case _             => false
-      })
-    }
-
-    def extractIndex(base: JPath, child: JPath): Int = child.nodes(base.length) match {
-      case JPathIndex(i) => i
-      case _             => sys.error("assertion failed") 
-    }
-
-    def extractName(base: JPath, child: JPath): String = child.nodes(base.length) match {
-      case JPathField(n) => n 
-      case _             => sys.error("unpossible")
-    }
-
-    def newIsLeaf(ref: JPath, test: JPath): Boolean = ref == test 
-
-    def selectorPartition(sel: JPath, rss: Set[ResolvedSelector]): (Set[ResolvedSelector], Set[ResolvedSelector], Set[Int], Set[String]) = {
-      val (values, nonValues) = rss.partition(rs => newIsLeaf(sel, rs.selector))
-      val (indexes, fields) = rss.foldLeft( (Set.empty[Int], Set.empty[String]) ) {
-        case (acc @ (is, fs), rs) => if(isArrayBranch(sel, rs.selector)) {
-          (is + extractIndex(sel, rs.selector), fs)
-        } else if(isObjectBranch(sel, rs.selector)) {
-          (is, fs + extractName(sel, rs.selector))
-        } else {
-          acc
-        }
-      }
-
-      (values, nonValues, indexes, fields)
-    }
-
-    def convertValues(values: Set[ResolvedSelector]): Set[PathMetadata] = {
-      values.foldLeft(Map[(JPath, CType), (Authorities, Map[ProjectionDescriptor, ColumnMetadata])]()) {
-        case (acc, rs @ ResolvedSelector(sel, auth, desc, meta)) => 
-          val key = (sel, rs.columnType)
-          val update = acc.get(key).map(_._2).getOrElse( Map.empty[ProjectionDescriptor, ColumnMetadata] ) + (desc -> meta)
-          acc + (key -> (auth, update))
-      }.map {
-        case ((sel, colType), (auth, meta)) => PathValue(colType, auth, meta) 
-      }(collection.breakOut)
-    }
-
-    def buildTree(branch: JPath, rs: Set[ResolvedSelector]): Set[PathMetadata] = {
-      val (values, nonValues, indexes, fields) = selectorPartition(branch, rs)
-
-      val oval = convertValues(values)
-      val oidx = indexes.map { idx => PathIndex(idx, buildTree(branch \ idx, nonValues)) }
-      val ofld = fields.map { fld => PathField(fld, buildTree(branch \ fld, nonValues)) }
-
-      oval ++ oidx ++ ofld
-    }
-
-    val matching: Set[IO[ResolvedSelector]] = storage.findDescriptors(_ => true) flatMap { descriptor => 
-      descriptor.columns.collect {
-        case ColumnDescriptor(cpath, csel, _, auth) if cpath == path && (csel.nodes startsWith selector.nodes) =>
-          columnMetadataFor(descriptor) map { cm => ResolvedSelector(csel, auth, descriptor, cm) }
-      }
-    }
-
-    matching.sequence[IO, ResolvedSelector].map(s => PathRoot(buildTree(selector, s)))
   }
 }
 
@@ -331,16 +240,3 @@ case object GetCurrentCheckpoint
 
 case class IngestBatchMetadata(metadata: Map[ProjectionDescriptor, ColumnMetadata], messageClock: VectorClock, kafkaOffset: Option[Long]) extends ShardMetadataAction
 case object FlushMetadata extends ShardMetadataAction
-
-/*
-// Sort of a replacement for LocalMetadata that really uses the underlying machinery
-class TestMetadataActorish(initial: Map[ProjectionDescriptor,ColumnMetadata], storage: MetadataStorage)(implicit val dispatcher: MessageDispatcher, context: ExecutionContext) extends StorageMetadata {
-  private val state = new MetadataActor.State(storage, VectorClock.empty, None, initial)
-
-  def findChildren(path: Path): Future[Set[Path]] = Future(storage.findChildren(path))
-  def findSelectors(path: Path): Future[Seq[JPath]] = Future(storage.findSelectors(path))
-  def findProjections(path: Path, selector: JPath): Future[Map[ProjectionDescriptor, ColumnMetadata]] = Future(state.findDescriptors(path, selector))
-  def findPathMetadata(path: Path, selector: JPath): Future[PathRoot] = Future(state.findPathMetadata(path, selector))
-
-}
-*/

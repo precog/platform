@@ -36,8 +36,9 @@ import blueeyes.health.metrics.{eternity}
 import org.streum.configrity.Configuration
 
 import com.weiglewilczek.slf4s.Logging
+import scalaz._
 
-case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager, accessControl: AccessControl)
+case class ShardState(queryExecutor: QueryExecutor, tokenManager: TokenManager[Future], accessControl: AccessControl[Future])
 
 trait ShardService extends 
     BlueEyesServiceBuilder with 
@@ -50,9 +51,11 @@ trait ShardService extends
 
   implicit val timeout = akka.util.Timeout(120000) //for now
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl): QueryExecutor
+  implicit def M: Monad[Future]
 
-  def tokenManagerFactory(config: Configuration): TokenManager
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]): QueryExecutor
+
+  def tokenManagerFactory(config: Configuration): TokenManager[Future]
 
   val analyticsService = this.service("quirrel", "1.0") {
     requestLogging(timeout) {

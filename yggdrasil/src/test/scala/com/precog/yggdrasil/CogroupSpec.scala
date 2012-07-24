@@ -33,6 +33,7 @@ import scalaz.std.tuple._
 import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
+import scalaz.syntax.copointed._
 import scala.annotation.tailrec
 
 import org.specs2._
@@ -43,7 +44,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait CogroupSpec extends TableModuleSpec {
+trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
   import trans.constants._
 
   implicit val cogroupData = Arbitrary(
@@ -104,7 +105,7 @@ trait CogroupSpec extends TableModuleSpec {
 
     val result: Table = sys.error("todo")
     val jsonResult = toJson(result)
-    jsonResult must containAllOf(expected).only
+    jsonResult.copoint must containAllOf(expected).only
   }
 
   def testCogroupSliceBoundaries = {

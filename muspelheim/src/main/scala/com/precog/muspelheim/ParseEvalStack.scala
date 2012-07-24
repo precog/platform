@@ -28,11 +28,11 @@ import quirrel.emitter._
 import quirrel.parser._
 import quirrel.typer._
 
-trait ParseEvalStack extends Compiler
+trait ParseEvalStack[M[+_]] extends Compiler
     with LineErrors
     with ProvenanceChecker
     with CriticalConditionFinder
     with Emitter
-    with Evaluator
-    with StdLib
-    with TableModule
+    with Evaluator[M]
+    with StdLib[M]
+    with TableModule[M]

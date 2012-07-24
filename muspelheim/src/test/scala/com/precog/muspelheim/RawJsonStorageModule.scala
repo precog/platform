@@ -45,16 +45,15 @@ import SValue._
 
 import java.io._
 import org.reflections._
+import scalaz._
 import scalaz.effect.IO
 import scalaz.std.AllInstances._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
-trait RawJsonStorageModule extends StorageModule {
-  def actorSystem: ActorSystem 
-  implicit def asyncContext: ExecutionContext
-  implicit def messagedispatcher: MessageDispatcher = MessageDispatcher.defaultDispatcher(actorSystem)
+trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
+  implicit def M: Monad[M]
 
   trait ProjectionCompanion {
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection
@@ -62,7 +61,7 @@ trait RawJsonStorageModule extends StorageModule {
 
   val Projection: ProjectionCompanion
 
-  trait Storage extends StorageLike[Projection] {
+  trait Storage extends StorageLike[Projection, M] {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
@@ -101,17 +100,25 @@ trait RawJsonStorageModule extends StorageModule {
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
     }
 
-    lazy val metadataActor = {
-      implicit val system = actorSystem
-      TestActorRef(new MetadataActor("JSONTest", new TestMetadataStorage(projectionMetadata), CheckpointCoordination.Noop, None))
+    def metadata = new StorageMetadata[M] {
+      val M = self.M
+      val source = new TestMetadataStorage(projectionMetadata)
+      def findChildren(path: Path) = M.point(source.findChildren(path))
+      def findSelectors(path: Path) = M.point(source.findSelectors(path))
+      def findProjections(path: Path, selector: JPath) = M.point {
+        projections.collect {
+          case (descriptor, _) if descriptor.columns.exists { case ColumnDescriptor(p, s, _, _) => p == path && s == selector } => 
+            (descriptor, ColumnMetadata.Empty)
+        }
+      }
+
+      def findPathMetadata(path: Path, selector: JPath) = M.point(source.findPathMetadata(path, selector).unsafePerformIO)
     }
 
-    def metadata = new ActorStorageMetadata(metadataActor)
+    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
 
-    def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl(), metadata)(actorSystem.dispatcher)
-
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection, Release)] = {
-      Future {
+    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): M[(Projection, Release)] = {
+      M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
         (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
       }
@@ -119,10 +126,9 @@ trait RawJsonStorageModule extends StorageModule {
   }
 }
 
-trait RawJsonColumnarTableStorageModule extends RawJsonStorageModule with ColumnarTableModule {
-
-  class Table(slices: Iterable[Slice]) extends ColumnarTable(slices) {
-    def load(tpe: JType): Future[Table] = {
+trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] {
+  class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    def load(tpe: JType): M[Table] = {
       sys.error("todo")
     }
   }
@@ -135,7 +141,7 @@ trait RawJsonColumnarTableStorageModule extends RawJsonStorageModule with Column
     def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = sys.error("todo")
   }
 
-  def table(slices: Iterable[Slice]) = new Table(slices)
+  def table(slices: StreamT[M, Slice]) = new Table(slices)
 
   object storage extends Storage
 }

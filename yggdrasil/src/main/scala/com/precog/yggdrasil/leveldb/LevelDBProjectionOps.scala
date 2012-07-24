@@ -34,7 +34,7 @@ import blueeyes.util.Clock
 
 import scalaz._
 
-abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: StorageMetadataSource)(implicit asyncContext: ExecutionContext) {
+abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: StorageMetadataSource[Future])(implicit asyncContext: ExecutionContext) {
   type Sources = Set[(JPath, SType, ProjectionDescriptor)]
 
   /**

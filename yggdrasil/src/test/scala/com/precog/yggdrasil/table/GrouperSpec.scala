@@ -20,9 +20,6 @@
 package com.precog.yggdrasil
 package table
 
-import akka.dispatch.{Await, Future, ExecutionContext}
-import akka.util.Duration
-
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
@@ -33,12 +30,15 @@ import org.specs2._
 import org.specs2.mutable.Specification
 import org.specs2.ScalaCheck
 
+import scalaz._
 import scalaz.std.anyVal._
+import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
 
-object GrouperSpec extends Specification with table.StubColumnarTableModule with ScalaCheck {
+trait GrouperSpec[M[+_]] extends Specification with StubColumnarTableModule[M] with ScalaCheck {
   import trans._
-  
-  implicit val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
+
+  implicit val coM: Copointed[M]
   
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
@@ -48,24 +48,25 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
-        val keyIter = key.toJson
+        for {
+          keyIter <- key.toJson
+          setIter <- map(2).toJson
+        } yield {
+          keyIter must haveSize(1)
+          keyIter.head must beLike {
+            case JInt(i) => set must contain(i)
+          }
         
-        keyIter must haveSize(1)
-        keyIter.head must beLike {
-          case JInt(i) => set must contain(i)
+          setIter must not(beEmpty)
+          forall(setIter) { i =>
+            i mustEqual keyIter.head
+          }
+          
+          fromJson(JInt(setIter.size) #:: Stream.empty)
         }
-        
-        val setIter = map(2).toJson
-        
-        setIter must not(beEmpty)
-        forall(setIter) { i =>
-          i mustEqual keyIter.head
-        }
-        
-        Future(fromJson(JInt(setIter.size) #:: Stream.empty))
       }
       
-      val resultIter = Await.result(result, Duration(10, "seconds")).toJson
+      val resultIter = result.flatMap(_.toJson).copoint
       
       resultIter must haveSize(set.distinct.size)
       
@@ -87,27 +88,28 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
-        val keyIter = key.toJson
-        
-        keyIter must haveSize(1)
-        keyIter.head must beLike {
-          case JInt(i) => set must contain(i)
-        }
-        
-        val setIter = map(2).toJson
-        
-        setIter must not(beEmpty)
-        forall(setIter) {
-          case JInt(v1) => {
-            val JInt(v2) = keyIter.head
-            v1 mustEqual (v2 * 2)
+        for {
+          keyIter <- key.toJson
+          setIter <- map(2).toJson
+        } yield {
+          keyIter must haveSize(1)
+          keyIter.head must beLike {
+            case JInt(i) => set must contain(i)
           }
+          
+          setIter must not(beEmpty)
+          forall(setIter) {
+            case JInt(v1) => {
+              val JInt(v2) = keyIter.head
+              v1 mustEqual (v2 * 2)
+            }
+          }
+          
+          fromJson(JInt(setIter.size) #:: Stream.empty)
         }
-        
-        Future(fromJson(JInt(setIter.size) #:: Stream.empty))
       }
       
-      val resultIter = Await.result(result, Duration(10, "seconds")).toJson
+      val resultIter = result.flatMap(_.toJson).copoint
       
       resultIter must haveSize(set.distinct.size)
       
@@ -129,27 +131,29 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         GroupKeySpecSource(JPathField("1"), Map1(Leaf(Source), mod2)))
         
       val result = grouper.merge(spec) { (key: Table, map: Int => Table) =>
-        val keyIter = key.toJson
-        
-        keyIter must haveSize(1)
-        keyIter.head must beLike {
-          case JInt(i) => set must contain(i)
-        }
-        
-        val setIter = map(2).toJson
-        
-        setIter must not(beEmpty)
-        forall(setIter) {
-          case JInt(v1) => {
-            val JInt(v2) = keyIter.head
-            (v1 % 2) mustEqual v2
+        for {
+          keyIter <- key.toJson
+          setIter <- map(2).toJson
+        } yield {
+          keyIter must haveSize(1)
+          keyIter.head must beLike {
+            case JInt(i) => set must contain(i)
           }
+          
+          
+          setIter must not(beEmpty)
+          forall(setIter) {
+            case JInt(v1) => {
+              val JInt(v2) = keyIter.head
+              (v1 % 2) mustEqual v2
+            }
+          }
+          
+          fromJson(JInt(setIter.size) #:: Stream.empty)
         }
-        
-        Future(fromJson(JInt(setIter.size) #:: Stream.empty))
       }
       
-      val resultIter = Await.result(result, Duration(10, "seconds")).toJson
+      val resultIter = result.flatMap(_.toJson).copoint
       
       resultIter must haveSize((set map { _ % 2 } distinct) size)
       
@@ -195,37 +199,39 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
         val result = grouper.merge(spec) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-              
-              a must beLike {
-                case JInt(i) if i == 12 => {
-                  b must beLike {
-                    case JInt(i) if i == 7 => ok
-                  }
-                }
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
+              case obj: JObject => {
+                val a = obj \ "1"
+                val b = obj \ "2"
                 
-                case JInt(i) if i == -7 => {
-                  b must beLike {
-                    case JInt(i) if i == 3 => ok
+                a must beLike {
+                  case JInt(i) if i == 12 => {
+                    b must beLike {
+                      case JInt(i) if i == 7 => ok
+                    }
+                  }
+                  
+                  case JInt(i) if i == -7 => {
+                    b must beLike {
+                      case JInt(i) if i == 3 => ok
+                    }
                   }
                 }
               }
             }
+            
+            gs1Json must haveSize(1)
+            fromJson(Stream(JInt(gs1Json.size)))
           }
-          
-          val gs1Json = map(3).toJson.toSeq
-          
-          gs1Json must haveSize(1)
-          Future(fromJson(Stream(JInt(gs1Json.size))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(2)
         
@@ -247,60 +253,61 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
         val result = grouper.merge(spec) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          val gs1Json = map(3).toJson.toSeq
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-          
-              if (a == JNothing) {
-                b must beLike {
-                  case JInt(i) if i == 7 => gs1Json must haveSize(2)
-                  case JInt(i) if i == 15 => gs1Json must haveSize(1)
-                  case JInt(i) if i == -1 => gs1Json must haveSize(1)
-                  case JInt(i) if i == 3 => gs1Json must haveSize(1)
-                }
-              } else if (b == JNothing) {
-                a must beLike {
-                  case JInt(i) if i == 12 => gs1Json must haveSize(2)
-                  case JInt(i) if i == 42 => gs1Json must haveSize(1)
-                  case JInt(i) if i == 11 => gs1Json must haveSize(1)
-                  case JInt(i) if i == -7 => gs1Json must haveSize(1)
-                }
-              } else {
-                a must beLike {
-                  case JInt(i) if i == 12 => {
-                    b must beLike {
-                      case JInt(i) if i == 7 => ok
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
+              case obj: JObject => {
+                val a = obj \ "1"
+                val b = obj \ "2"
+            
+                if (a == JNothing) {
+                  b must beLike {
+                    case JInt(i) if i == 7 => gs1Json must haveSize(2)
+                    case JInt(i) if i == 15 => gs1Json must haveSize(1)
+                    case JInt(i) if i == -1 => gs1Json must haveSize(1)
+                    case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                  }
+                } else if (b == JNothing) {
+                  a must beLike {
+                    case JInt(i) if i == 12 => gs1Json must haveSize(2)
+                    case JInt(i) if i == 42 => gs1Json must haveSize(1)
+                    case JInt(i) if i == 11 => gs1Json must haveSize(1)
+                    case JInt(i) if i == -7 => gs1Json must haveSize(1)
+                  }
+                } else {
+                  a must beLike {
+                    case JInt(i) if i == 12 => {
+                      b must beLike {
+                        case JInt(i) if i == 7 => ok
+                      }
+                    }
+                      
+                    case JInt(i) if i == -7 => {
+                      b must beLike {
+                        case JInt(i) if i == 3 => ok
+                      }
                     }
                   }
-                    
-                  case JInt(i) if i == -7 => {
-                    b must beLike {
-                      case JInt(i) if i == 3 => ok
-                    }
-                  }
+                  
+                  gs1Json must haveSize(1)
                 }
-                
-                gs1Json must haveSize(1)
               }
             }
+            
+            fromJson(Stream(JInt(gs1Json.size)))
           }
-          
-          Future(fromJson(Stream(JInt(gs1Json.size))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         resultJson must haveSize(10)
         
         forall(resultJson) { v =>
           v must beLike {
-            case JInt(i) if i == 2 => ok
-            case JInt(i) if i == 1 => ok
+            case JInt(i) if i == 2 || i == 1 => ok
           }
         }
       }.pendingUntilFixed
@@ -325,26 +332,28 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
         val result = grouper.merge(spec) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val b = obj \ "2"
-              
-              b must beLike {
-                case JInt(i) if i == 7 => ok
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson must beLike {
+              case obj: JObject => {
+                val b = obj \ "2"
+                
+                b must beLike {
+                  case JInt(i) if i == 7 => ok
+                }
               }
             }
+            
+            gs1Json must haveSize(1)
+            fromJson(Stream(JInt(gs1Json.size)))
           }
-          
-          val gs1Json = map(3).toJson.toSeq
-          
-          gs1Json must haveSize(1)
-          Future(fromJson(Stream(JInt(gs1Json.size))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(1)
         
@@ -367,40 +376,42 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
             GroupKeySpecSource(JPathField("2"), DerefObjectStatic(Leaf(Source), JPathField("b")))))
             
         val result = grouper.merge(spec) { (key, map) =>
-          val gs1Json = map(3).toJson.toSeq
-          
-          gs1Json must haveSize(1)
-          
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val b = obj \ "2"
-              
-              if (b == JNothing) {
-                gs1Json.head must beLike {
-                  case subObj: JObject => {
-                    (subObj \ "a") must beLike {
-                      case JInt(i) if i == 12 => ok
+          for {
+            gs1Json <- map(3).toJson
+            keyJson <- key.toJson
+          } yield {
+            gs1Json must haveSize(1)
+            
+            keyJson must haveSize(1)
+            
+            keyJson must beLike {
+              case obj: JObject => {
+                val b = obj \ "2"
+                
+                if (b == JNothing) {
+                  gs1Json.head must beLike {
+                    case subObj: JObject => {
+                      (subObj \ "a") must beLike {
+                        case JInt(i) if i == 12 => ok
+                      }
                     }
                   }
-                }
-              } else {
-                b must beLike {
-                  case JInt(i) if i == 7 => gs1Json must haveSize(2)
-                  case JInt(i) if i == 15 => gs1Json must haveSize(1)
-                  case JInt(i) if i == -1 => gs1Json must haveSize(1)
-                  case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                } else {
+                  b must beLike {
+                    case JInt(i) if i == 7 => gs1Json must haveSize(2)
+                    case JInt(i) if i == 15 => gs1Json must haveSize(1)
+                    case JInt(i) if i == -1 => gs1Json must haveSize(1)
+                    case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                  }
                 }
               }
             }
+            
+            fromJson(Stream(JInt(gs1Json.size)))
           }
-          
-          Future(fromJson(Stream(JInt(gs1Json.size))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(5)
         
@@ -439,46 +450,48 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         GroupKeyAlign.Eq)
           
       val result = grouper.merge(union) { (key, map) =>
-        val keyJson = key.toJson.toSeq
-        keyJson must haveSize(1)
-        
-        keyJson.head must beLike {
-          case obj: JObject => {
-            val a = obj \ "1"
-            
-            a must beLike {
-              case JInt(_) => ok
+        for {
+          keyJson <- key.toJson
+          gs1Json <- map(2).toJson
+          gs2Json <- map(3).toJson
+        } yield {
+          keyJson must haveSize(1)
+          
+          keyJson.head must beLike {
+            case obj: JObject => {
+              val a = obj \ "1"
+              
+              a must beLike {
+                case JInt(_) => ok
+              }
             }
           }
-        }
-        
-        val JInt(keyBigInt) = keyJson.head \ "1"
-        
-        val gs1Json = map(2).toJson.toSeq
-        val gs2Json = map(3).toJson.toSeq
-        
-        gs1Json must not(beEmpty)
-        gs2Json must not(beEmpty)
-        
-        forall(gs1Json) { row =>
-          row must beLike {
-            case JInt(i) => i mustEqual keyBigInt
+          
+          val JInt(keyBigInt) = keyJson.head \ "1"
+          
+          gs1Json must not(beEmpty)
+          gs2Json must not(beEmpty)
+          
+          forall(gs1Json) { row =>
+            row must beLike {
+              case JInt(i) => i mustEqual keyBigInt
+            }
           }
-        }
-        
-        forall(gs2Json) { row =>
-          row must beLike {
-            case JInt(i) => i mustEqual keyBigInt
+          
+          forall(gs2Json) { row =>
+            row must beLike {
+              case JInt(i) => i mustEqual keyBigInt
+            }
           }
+          
+          fromJson(Stream(
+            JObject(
+              JField("key", keyJson.head \ "1") ::
+              JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
         }
-        
-        Future(fromJson(Stream(
-          JObject(
-            JField("key", keyJson.head \ "1") ::
-            JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil))))
       }
       
-      val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+      val resultJson = result.flatMap(_.toJson).copoint
       
       resultJson must haveSize((rawData1 ++ rawData2).distinct.length)
       
@@ -519,49 +532,51 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
         GroupKeyAlign.Eq)
           
       val result = grouper.merge(union) { (key, map) =>
-        val keyJson = key.toJson.toSeq
-        keyJson must haveSize(1)
-        
-        keyJson.head must beLike {
-          case obj: JObject => {
-            val a = obj \ "1"
-            
-            a must beLike {
-              case JInt(_) => ok
+        for {
+          keyJson <- key.toJson
+          gs1Json <- map(2).toJson
+          gs2Json <- map(3).toJson
+        } yield {
+          keyJson must haveSize(1)
+          
+          keyJson.head must beLike {
+            case obj: JObject => {
+              val a = obj \ "1"
+              
+              a must beLike {
+                case JInt(_) => ok
+              }
             }
           }
-        }
-        
-        val JInt(keyBigInt) = keyJson.head \ "1"
-        
-        val gs1Json = map(2).toJson.toSeq
-        val gs2Json = map(3).toJson.toSeq
-        
-        gs1Json must not(beEmpty)
-        gs2Json must not(beEmpty)
-        
-        forall(gs1Json) { row =>
-          row must beLike {
-            case JInt(i) => i mustEqual keyBigInt
+          
+          val JInt(keyBigInt) = keyJson.head \ "1"
+          
+          gs1Json must not(beEmpty)
+          gs2Json must not(beEmpty)
+          
+          forall(gs1Json) { row =>
+            row must beLike {
+              case JInt(i) => i mustEqual keyBigInt
+            }
           }
-        }
-        
-        forall(gs2Json) { row =>
-          row must beLike {
-            case JInt(i) => i mustEqual keyBigInt
+          
+          forall(gs2Json) { row =>
+            row must beLike {
+              case JInt(i) => i mustEqual keyBigInt
+            }
           }
+          
+          val JInt(v1) = gs1Json.head
+          val JInt(v2) = gs2Json.head
+          
+          fromJson(Stream(
+            JObject(
+              JField("key", keyJson.head \ "1") ::
+              JField("value", JInt(v1 + v2)) :: Nil)))
         }
-        
-        val JInt(v1) = gs1Json.head
-        val JInt(v2) = gs2Json.head
-        
-        Future(fromJson(Stream(
-          JObject(
-            JField("key", keyJson.head \ "1") ::
-            JField("value", JInt(v1 + v2)) :: Nil))))
       }
       
-      val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+      val resultJson = result.flatMap(_.toJson).copoint
       
       resultJson must haveSize((rawData1 ++ rawData2).distinct.length)
       
@@ -617,59 +632,61 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
           GroupKeyAlign.Eq)
             
         val result = grouper.merge(union) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-              
-              a must beLike {
-                case JInt(_) => ok
-              }
-              
-              b must beLike {
-                case JInt(_) => ok
-              }
-            }
-          }
-          
-          val JInt(keyBigInt) = keyJson.head \ "1"
-          
-          val gs1Json = map(2).toJson.toSeq
-          val gs2Json = map(3).toJson.toSeq
-          
-          gs1Json must not(beEmpty)
-          gs2Json must not(beEmpty)
-          
-          forall(gs1Json) { row =>
-            row must beLike {
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(2).toJson
+            gs2Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
               case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+                val a = obj \ "1"
+                val b = obj \ "2"
+                
+                a must beLike {
+                  case JInt(_) => ok
+                }
+                
+                b must beLike {
+                  case JInt(_) => ok
                 }
               }
             }
-          }
-          
-          forall(gs2Json) { row =>
-            row must beLike {
-              case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+            
+            val JInt(keyBigInt) = keyJson.head \ "1"
+            
+            gs1Json must not(beEmpty)
+            gs2Json must not(beEmpty)
+            
+            forall(gs1Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
                 }
               }
             }
+            
+            forall(gs2Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
+                }
+              }
+            }
+            
+            fromJson(Stream(
+              JObject(
+                JField("key", keyJson.head \ "1") ::
+                JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
           }
-          
-          Future(fromJson(Stream(
-            JObject(
-              JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(((rawData1 map { _._1 }) ++ rawData2).distinct.length)
         
@@ -724,60 +741,62 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
           GroupKeyAlign.Eq)
             
         val result = grouper.merge(union) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-              
-              a must beLike {
-                case JInt(_) => ok
-              }
-              
-              b must beLike {
-                case JInt(_) => ok
-                case JNothing => ok
-              }
-            }
-          }
-          
-          val JInt(keyBigInt) = keyJson.head \ "1"
-          
-          val gs1Json = map(2).toJson.toSeq
-          val gs2Json = map(3).toJson.toSeq
-          
-          gs1Json must not(beEmpty)
-          gs2Json must not(beEmpty)
-          
-          forall(gs1Json) { row =>
-            row must beLike {
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(2).toJson
+            gs2Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
               case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+                val a = obj \ "1"
+                val b = obj \ "2"
+                
+                a must beLike {
+                  case JInt(_) => ok
+                }
+                
+                b must beLike {
+                  case JInt(_) => ok
+                  case JNothing => ok
                 }
               }
             }
-          }
-          
-          forall(gs2Json) { row =>
-            row must beLike {
-              case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+            
+            val JInt(keyBigInt) = keyJson.head \ "1"
+            
+            gs1Json must not(beEmpty)
+            gs2Json must not(beEmpty)
+            
+            forall(gs1Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
                 }
               }
             }
+            
+            forall(gs2Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
+                }
+              }
+            }
+            
+            fromJson(Stream(
+              JObject(
+                JField("key", keyJson.head \ "1") ::
+                JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
           }
-          
-          Future(fromJson(Stream(
-            JObject(
-              JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil))))
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(((rawData1 map { _._1 }) ++ rawData2).distinct.length)
         
@@ -834,62 +853,64 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
           GroupKeyAlign.Eq)
             
         val result = grouper.merge(union) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-              
-              a must beLike {
-                case JInt(_) => ok
-              }
-              
-              b must beLike {
-                case JInt(_) => ok
-              }
-            }
-          }
-          
-          val JInt(keyBigInt) = keyJson.head \ "1"
-          
-          val gs1Json = map(2).toJson.toSeq
-          val gs2Json = map(3).toJson.toSeq
-          
-          gs1Json must not(beEmpty)
-          gs2Json must not(beEmpty)
-          
-          forall(gs1Json) { row =>
-            row must beLike {
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(2).toJson
+            gs2Json <- map(3).toJson
+          } yield {
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
               case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+                val a = obj \ "1"
+                val b = obj \ "2"
+                
+                a must beLike {
+                  case JInt(_) => ok
+                }
+                
+                b must beLike {
+                  case JInt(_) => ok
                 }
               }
             }
-          }
-          
-          forall(gs2Json) { row =>
-            row must beLike {
-              case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+            
+            val JInt(keyBigInt) = keyJson.head \ "1"
+            
+            gs1Json must not(beEmpty)
+            gs2Json must not(beEmpty)
+            
+            forall(gs1Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
                 }
               }
             }
-          }
-        
-          val JInt(v1) = gs1Json.head \ "a"
-          val JInt(v2) = gs2Json.head \ "a"
+            
+            forall(gs2Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
+                }
+              }
+            }
           
-          Future(fromJson(Stream(
-            JObject(
-              JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(v1 + v2)) :: Nil))))
+            val JInt(v1) = gs1Json.head \ "a"
+            val JInt(v2) = gs2Json.head \ "a"
+            
+            fromJson(Stream(
+              JObject(
+                JField("key", keyJson.head \ "1") ::
+                JField("value", JInt(v1 + v2)) :: Nil)))
+          }
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(((rawData1 map { _._1 }) ++ rawData2).distinct.length)
         
@@ -944,63 +965,66 @@ object GrouperSpec extends Specification with table.StubColumnarTableModule with
           GroupKeyAlign.Eq)
             
         val result = grouper.merge(union) { (key, map) =>
-          val keyJson = key.toJson.toSeq
-          keyJson must haveSize(1)
-          
-          keyJson.head must beLike {
-            case obj: JObject => {
-              val a = obj \ "1"
-              val b = obj \ "2"
-              
-              a must beLike {
-                case JInt(_) => ok
-              }
-              
-              b must beLike {
-                case JInt(_) => ok
-                case JNothing => ok
-              }
-            }
-          }
-          
-          val JInt(keyBigInt) = keyJson.head \ "1"
-          
-          val gs1Json = map(2).toJson.toSeq
-          val gs2Json = map(3).toJson.toSeq
-          
-          gs1Json must not(beEmpty)
-          gs2Json must not(beEmpty)
-          
-          forall(gs1Json) { row =>
-            row must beLike {
+          for {
+            keyJson <- key.toJson
+            gs1Json <- map(2).toJson
+            gs2Json <- map(3).toJson
+          } yield {
+            
+            keyJson must haveSize(1)
+            
+            keyJson.head must beLike {
               case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+                val a = obj \ "1"
+                val b = obj \ "2"
+                
+                a must beLike {
+                  case JInt(_) => ok
+                }
+                
+                b must beLike {
+                  case JInt(_) => ok
+                  case JNothing => ok
                 }
               }
             }
-          }
-          
-          forall(gs2Json) { row =>
-            row must beLike {
-              case obj: JObject => {
-                (obj \ "a") must beLike {
-                  case JInt(i) => i mustEqual keyBigInt
+            
+            val JInt(keyBigInt) = keyJson.head \ "1"
+            
+            gs1Json must not(beEmpty)
+            gs2Json must not(beEmpty)
+            
+            forall(gs1Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
                 }
               }
             }
-          }
-        
-          val JInt(v1) = gs1Json.head \ "a"
-          val JInt(v2) = gs2Json.head \ "a"
+            
+            forall(gs2Json) { row =>
+              row must beLike {
+                case obj: JObject => {
+                  (obj \ "a") must beLike {
+                    case JInt(i) => i mustEqual keyBigInt
+                  }
+                }
+              }
+            }
           
-          Future(fromJson(Stream(
-            JObject(
-              JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(v1 + v2)) :: Nil))))
+            val JInt(v1) = gs1Json.head \ "a"
+            val JInt(v2) = gs2Json.head \ "a"
+            
+            fromJson(Stream(
+              JObject(
+                JField("key", keyJson.head \ "1") ::
+                JField("value", JInt(v1 + v2)) :: Nil)))
+          }
         }
         
-        val resultJson = Await.result(result, Duration(10, "seconds")).toJson.toSeq
+        val resultJson = result.flatMap(_.toJson).copoint
         
         resultJson must haveSize(((rawData1 map { _._1 }) ++ rawData2).distinct.length)
         

@@ -29,11 +29,6 @@ import blueeyes.json.xschema.{ ValidatedExtraction, Extractor, Decomposer }
 import blueeyes.json.xschema.DefaultSerialization._
 import blueeyes.json.xschema.Extractor._
 
-import akka.actor.ActorSystem
-import akka.util.Timeout
-import akka.dispatch.Future
-import akka.dispatch.ExecutionContext
-
 import org.joda.time.DateTime
 
 import java.util.concurrent.TimeUnit._
@@ -45,39 +40,39 @@ import org.streum.configrity.Configuration
 import scala.collection.mutable
 
 import scalaz._
+import scalaz.Id._
 import scalaz.Validation._
-import Scalaz._
 
 
-class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.empty, 
-                           grants: mutable.Map[GrantID, Grant] = mutable.Map.empty)(implicit val execContext: ExecutionContext) extends TokenManager {
+class InMemoryTokenManager[M[+_]: Monad](tokens: mutable.Map[TokenID, Token] = mutable.Map.empty, 
+                           grants: mutable.Map[GrantID, Grant] = mutable.Map.empty) extends TokenManager[M] {
 
   private val deletedTokens = mutable.Map.empty[TokenID, Token]
   private val deletedGrants = mutable.Map.empty[GrantID, Grant]
 
-  def newToken(name: String, grants: Set[GrantID]) = Future {
+  def newToken(name: String, grants: Set[GrantID]) = Monad[M].point {
     val newToken = Token(newTokenID, name, grants)
     tokens.put(newToken.tid, newToken)
     newToken
   }
 
-  def newGrant(issuer: Option[GrantID], perm: Permission) = Future {
+  def newGrant(issuer: Option[GrantID], perm: Permission) = Monad[M].point {
     val newGrant = Grant(newGrantID, issuer, perm)
     grants.put(newGrant.gid, newGrant)
     newGrant
   }
 
-  def listTokens() = Future[Seq[Token]] { tokens.values.toList }
-  def listGrants() = Future[Seq[Grant]] { grants.values.toList }
+  def listTokens() = Monad[M].point(tokens.values.toList) 
+  def listGrants() = Monad[M].point( grants.values.toList)
 
-  def findToken(tid: TokenID) = Future { tokens.get(tid) }
+  def findToken(tid: TokenID) = Monad[M].point(tokens.get(tid))
 
-  def findGrant(gid: GrantID) = Future { grants.get(gid) }
-  def findGrantChildren(gid: GrantID) = Future[Set[Grant]] {
+  def findGrant(gid: GrantID) = Monad[M].point(grants.get(gid))
+  def findGrantChildren(gid: GrantID) = Monad[M].point {
     grants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
-  def addGrants(tid: TokenID, add: Set[GrantID]) = Future {
+  def addGrants(tid: TokenID, add: Set[GrantID]) = Monad[M].point {
     tokens.get(tid).map { t =>
       val updated = t.addGrants(add)
       tokens.put(tid, updated)
@@ -85,17 +80,27 @@ class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.emp
     }
   }
 
-  def listDeletedTokens() = Future[Seq[Token]] { deletedTokens.values.toList }
-  def listDeletedGrants() = Future[Seq[Grant]] { deletedGrants.values.toList }
+  def listDeletedTokens() = Monad[M].point {
+    deletedTokens.values.toList 
+  }
 
-  def findDeletedToken(tid: TokenID) = Future { deletedTokens.get(tid) }
+  def listDeletedGrants() = Monad[M].point {
+    deletedGrants.values.toList 
+  }
 
-  def findDeletedGrant(gid: GrantID) = Future { deletedGrants.get(gid) }
-  def findDeletedGrantChildren(gid: GrantID) = Future[Set[Grant]] {
+  def findDeletedToken(tid: TokenID) = Monad[M].point {
+    deletedTokens.get(tid) 
+  }
+
+  def findDeletedGrant(gid: GrantID) = Monad[M].point {
+    deletedGrants.get(gid) 
+  }
+
+  def findDeletedGrantChildren(gid: GrantID) = Monad[M].point {
     deletedGrants.values.toSet.filter{ _.issuer.map { _ == gid }.getOrElse(false) }
   }
 
- def removeGrants(tid: TokenID, remove: Set[GrantID]) = Future {
+ def removeGrants(tid: TokenID, remove: Set[GrantID]) = Monad[M].point {
     tokens.get(tid).map { t =>
       val updated = t.removeGrants(remove)
       tokens.put(tid, updated)
@@ -103,24 +108,26 @@ class InMemoryTokenManager(tokens: mutable.Map[TokenID, Token] = mutable.Map.emp
     }
   }
 
-  def deleteToken(tid: TokenID) = Future {
+  def deleteToken(tid: TokenID) = Monad[M].point {
     tokens.get(tid).flatMap { t =>
       deletedTokens.put(tid, t)
       tokens.remove(tid)
     }
   }
-  def deleteGrant(gid: GrantID) = Future { grants.remove(gid) match {
-    case Some(x) =>
-      deletedGrants.put(gid, x)
-      Set(x)
-    case _       =>
-      Set.empty
-  }}
+  def deleteGrant(gid: GrantID) =  Monad[M].point {
+    grants.remove(gid) match {
+      case Some(x) =>
+        deletedGrants.put(gid, x)
+        Set(x)
+      case _       =>
+        Set.empty
+    }
+  }
 
-  def close() = Future(())
+  def close() = Monad[M].point(())
 }
 
-object TestTokenManager extends AkkaDefaults {
+object TestTokenManager {
   val rootUID = "root"
 
   val testUID = "unittest"
@@ -179,8 +186,7 @@ object TestTokenManager extends AkkaDefaults {
     Token("expired", "expired", (grantList(5) ++ grantList(6)).map{ _.gid}(collection.breakOut))
   ).map { t => (t.tid -> t) }(collection.breakOut)
 
-  def testTokenManager(): TokenManager = new InMemoryTokenManager(tokens, grants)
-
+  def testTokenManager[M[+_]: Monad]: TokenManager[M] = new InMemoryTokenManager[M](tokens, grants)
 }
 
 // vim: set ts=4 sw=4 et:

@@ -25,6 +25,7 @@ import com.precog.common.Path
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
+import com.precog.yggdrasil.test._
 import com.precog.common.VectorCase
 import com.precog.util.IOUtils
 import com.precog.util.IdGen
@@ -49,8 +50,7 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait TestConfigComponent extends table.StubColumnarTableModule {
-  
+trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
   
   object yggConfig extends YggConfig
@@ -76,11 +76,11 @@ trait TestConfigComponent extends table.StubColumnarTableModule {
   }
 }
 
-class EvaluatorSpecs extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with StdLib
-    with MemoryDatasetConsumer { self =>
+trait EvaluatorSpecs[M[+_]] extends Specification
+    with Evaluator[M]
+    with StdLib[M]
+    with TestConfigComponent[M] 
+    with MemoryDatasetConsumer[M] { self =>
   
   import Function._
   
@@ -1857,3 +1857,9 @@ class EvaluatorSpecs extends Specification
     }.pendingUntilFixed
   }
 }
+
+object EvaluatorSpecs extends EvaluatorSpecs[YId] {
+  val M = test.YId.M
+  val coM = test.YId.M
+}
+

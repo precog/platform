@@ -20,8 +20,6 @@
 package com.precog
 package daze
 
-import akka.dispatch.Future
-import akka.util.duration._
 import blueeyes.json.JPath
 
 import com.precog.yggdrasil._
@@ -37,19 +35,18 @@ import org.joda.time.DateTimeZone
 import java.lang.Math._
 import collection.immutable.ListSet
 
-import akka.dispatch.{Await, Future}
-import akka.util.duration._
 import blueeyes.json.{JPathField, JPathIndex}
 
 import scalaz.{NonEmptyList => NEL, _}
-import scalaz.effect._
-import scalaz.syntax.traverse._
+import scalaz.Id._
+import scalaz.State._
+import scalaz.StateT._
 import scalaz.std.anyVal._
 import scalaz.std.list._
 import scalaz.std.map._
 import scalaz.std.partialFunction._
-import scalaz.{StateT, Id, Monoid}
-import scalaz.Scalaz._
+import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
 
 import com.weiglewilczek.slf4s.Logging
 
@@ -62,14 +59,14 @@ trait EvaluatorConfig {
   def idSource: IdSource
 }
 
-trait Evaluator extends DAG
+trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
     with Memoizer
     with TypeInferencer
-    with TableModule        // TODO specific implementation
-    with ImplLibrary
-    with InfixLib
-    with UnaryLib
+    with TableModule[M]        // TODO specific implementation
+    with ImplLibrary[M]
+    with InfixLib[M]
+    with UnaryLib[M]
     with BigDecimalOperations
     with YggConfigComponent 
     with Logging { self =>
@@ -84,7 +81,7 @@ trait Evaluator extends DAG
   
   //private type State[S, T] = StateT[Id, S, T]
   
-  private case class EvaluatorState(assume: Map[DepGraph, Future[Table]])
+  private case class EvaluatorState(assume: Map[DepGraph, M[Table]])
 
   sealed trait Context
 
@@ -100,10 +97,10 @@ trait Evaluator extends DAG
   def PrimitiveEqualsF2: F2
   def ConstantEmptyArray: F1
   
-  def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): Future[Table] = {
+  def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
   
-    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, Future[GroupingSpec[Int]]] = spec match {
+    def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, M[GroupingSpec[Int]]] = spec match {
       case UnionBucketSpec(left, right) => {
         for {
           leftSpec <- resolveTopLevelGroup(left, splits) 
@@ -164,7 +161,7 @@ trait Evaluator extends DAG
     }
 
     //** only used in resolveTopLevelGroup **/
-    def resolveLowLevelGroup(commonTable: Future[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
+    def resolveLowLevelGroup(commonTable: M[Table], commonGraph: DepGraph, forest: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, GroupKeySpec] = forest match {
       case UnionBucketSpec(left, right) => {
         for {
           leftRes <- resolveLowLevelGroup(commonTable, commonGraph, left, splits)
@@ -201,7 +198,7 @@ trait Evaluator extends DAG
     }
 
     def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
-      val assumptionCheck: StateT[Id, EvaluatorState, Option[Future[Table]]] = for {
+      val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
       } yield state.assume.get(graph)
       
@@ -212,12 +209,12 @@ trait Evaluator extends DAG
           val source = trans.DerefObjectStatic(Leaf(Source), JPathField(index.toString))
           val spec = buildConstantWrapSpec(source)
           
-          state(PendingTable(Future(key transform spec), graph, TransSpec1.Id))
+          state(PendingTable(M.point(key transform spec), graph, TransSpec1.Id))
         }
         
         case s @ SplitGroup(_, index, _) => {
           val (_, map) = splits(s.parent)
-          state(PendingTable(Future(map(index)), graph, TransSpec1.Id))
+          state(PendingTable(M.point(map(index)), graph, TransSpec1.Id))
         }
         
         case Root(_, instr) => {
@@ -232,7 +229,7 @@ trait Evaluator extends DAG
           
           val spec = buildConstantWrapSpec(Leaf(Source))
           
-          state(PendingTable(Future(table.get.transform(spec)), graph, TransSpec1.Id))
+          state(PendingTable(M.point(table.get.transform(spec)), graph, TransSpec1.Id))
         }
         
         case dag.New(_, parent) => loop(parent, splits)   // TODO John swears this part is easy
@@ -277,7 +274,7 @@ trait Evaluator extends DAG
         }
         
         case dag.Distinct(_, parent) =>
-          state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))     // TODO
+          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
         
         case Operate(_, instructions.WrapArray, parent) => {
           for {
@@ -297,7 +294,7 @@ trait Evaluator extends DAG
           for {
             pendingTable <- loop(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = pendingTable.table map { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
             wrapped = result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
@@ -329,7 +326,7 @@ trait Evaluator extends DAG
                   pendingTable <- loop(child, splits + (s -> (key, map)))
                 } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
                 
-                back.eval(state): Future[Table]
+                back.eval(state): M[Table]
               }
             } yield result
           } 
@@ -339,7 +336,7 @@ trait Evaluator extends DAG
         // VUnion and VIntersect removed, TODO: remove from bytecode
         
         case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) =>
-            state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))     // TODO
+            state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
         
         case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if right.value.isDefined => {
           for {
@@ -382,7 +379,7 @@ trait Evaluator extends DAG
             }
             
             case _ =>
-              state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -395,7 +392,7 @@ trait Evaluator extends DAG
             }
             
             case _ =>
-              state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -410,7 +407,7 @@ trait Evaluator extends DAG
             // TODO other numeric types
             
             case _ =>
-              state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
           }
         }
         
@@ -423,7 +420,7 @@ trait Evaluator extends DAG
             }
             
             case _ =>
-              state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))
+              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
           }
         }
   
@@ -589,13 +586,13 @@ trait Evaluator extends DAG
         }
         
         case s @ Sort(parent, indexes) =>
-          state(PendingTable(Future(ops.empty), graph, TransSpec1.Id))     // TODO
+          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
         
         case m @ Memoize(parent, _) =>
           loop(parent, splits)     // TODO
       }
       
-      assumptionCheck flatMap { assumedResult: Option[Future[Table]] =>
+      assumptionCheck flatMap { assumedResult: Option[M[Table]] =>
         val liftedAssumption = assumedResult map { table =>
           state[EvaluatorState, PendingTable](
             PendingTable(table, graph, TransSpec1.Id))
@@ -609,7 +606,7 @@ trait Evaluator extends DAG
       (memoize _) andThen
       (if (optimize) inferTypes(JType.JUnfixedT) else identity)
 
-    val resultState: StateT[Id, EvaluatorState, Future[Table]] = 
+    val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
     resultState.eval(EvaluatorState(Map()))
@@ -853,5 +850,5 @@ trait Evaluator extends DAG
     }
   }
   
-  private case class PendingTable(table: Future[Table], graph: DepGraph, trans: TransSpec1)
+  private case class PendingTable(table: M[Table], graph: DepGraph, trans: TransSpec1)
 }

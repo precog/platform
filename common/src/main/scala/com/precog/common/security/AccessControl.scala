@@ -20,10 +20,6 @@
 package com.precog.common
 package security
 
-import akka.dispatch.ExecutionContext
-import akka.dispatch.Future
-import akka.util.Timeout
-
 import blueeyes._
 import blueeyes.bkka.AkkaDefaults
 import blueeyes.json.JPath
@@ -43,46 +39,47 @@ import blueeyes.json.xschema.Extractor._
 
 import java.util.concurrent.TimeUnit._
 
-trait AccessControl {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean]
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean]
-  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType): Future[Boolean]
+import scalaz._
+import scalaz.std.set._
+import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
+
+trait AccessControl[M[+_]] {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): M[Boolean]
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): M[Boolean]
+  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType): M[Boolean]
 }
 
-class UnlimitedAccessControl(implicit executionContext: ExecutionContext) extends AccessControl {
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess) = Future(true)
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess) = Future(true)
-  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Future(true)
+class UnlimitedAccessControl[M[+_]: Pointed] extends AccessControl[M] {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess) = Pointed[M].point(true)
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess) = Pointed[M].point(true)
+  def mayAccess(uid: UID, path: Path, ownders: Set[UID], accessType: AccessType) = Pointed[M].point(true)
 }
 
-class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: ExecutionContext) extends AccessControl with Logging {
-
-  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): Future[Boolean] = 
+class TokenManagerAccessControl[M[+_]](tokens: TokenManager[M])(implicit M: Monad[M]) extends AccessControl[M] with Logging {
+  def mayAccessPath(uid: UID, path: Path, pathAccess: PathAccess): M[Boolean] = 
     pathAccess match {
       case PathRead => mayAccess(uid, path, Set(uid), ReadPermission) 
       case PathWrite => mayAccess(uid, path, Set.empty, WritePermission)
     }
 
-  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): Future[Boolean] = 
+  def mayAccessData(uid: UID, path: Path, owners: Set[UID], dataAccess: DataAccess): M[Boolean] = 
     mayAccess(uid, path, owners, ReadPermission)
  
-  def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
+  def mayAccess(uid: TokenID, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
     tokens.findToken(uid).flatMap{ _.map { t => 
       logger.debug("Checking %s access to %s from token %s with owners: %s".format(accessType, path, uid, owners))
        hasValidPermissions(t, path, owners, accessType)
-    }.getOrElse(Future(false)) }
+    }.getOrElse(M.point(false)) }
   }
 
-  def hasValidPermissions(t: Token, path: Path, owners: Set[UID], accessType: AccessType): Future[Boolean] = {
-
-    def exists(fs: Iterable[Future[Boolean]]): Future[Boolean] = {
-      if(fs.size == 0) Future(false)
-      else Future.reduce(fs){ case (a,b) => a || b }
+  def hasValidPermissions(t: Token, path: Path, owners: Set[UID], accessType: AccessType): M[Boolean] = {
+    def exists(fs: Set[M[Boolean]]): M[Boolean] = {
+      fs.sequence map { _ reduceOption { _ || _ } getOrElse false }
     }
     
-    def forall(fs: Iterable[Future[Boolean]]): Future[Boolean] = {
-      if(fs.size == 0) Future(false)
-      else Future.reduce(fs){ case (a,b) => a && b }
+    def forall(fs: Set[M[Boolean]]): M[Boolean] = {
+      fs.sequence map { _ reduceOption { _ && _ } getOrElse true }
     }
 
     accessType match {
@@ -91,19 +88,19 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
           tokens.findGrant(gid).flatMap( _.map { 
             case g @ Grant(_, _, WritePermission(p, _)) =>
               isValid(g).map { _ && p.equalOrChild(path) }
-            case _ => Future(false)
-          }.getOrElse(Future(false))
+            case _ => M.point(false)
+          }.getOrElse(M.point(false))
         )})
       case OwnerPermission =>
         exists(t.grants.map{ gid =>
           tokens.findGrant(gid).flatMap( _.map { 
             case g @ Grant(_, _, OwnerPermission(p, _)) =>
               isValid(g).map { _ && p.equalOrChild(path) }
-            case _ => Future(false)
-          }.getOrElse(Future(false))
+            case _ => M.point(false)
+          }.getOrElse(M.point(false))
         )})
       case ReadPermission =>
-        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); Future(false) }
+        if(owners.isEmpty) { logger.debug("Empty owners == no read permission"); M.point(false) }
         else forall(owners.map { owner =>
           exists(t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map {
@@ -114,52 +111,52 @@ class TokenManagerAccessControl(tokens: TokenManager)(implicit execContext: Exec
                   logger.debug("Got grant %s > valid: %s, equalOrChild: %s, goodOwnership: %s".format(gid.take(10) + "...", valid, equalOrChild, goodOwnership))
                   valid && equalOrChild && goodOwnership
                 }
-              case _ => Future(false)
-            }.getOrElse { logger.debug("Could not locate grant " + gid); Future(false) }
+              case _ => M.point(false)
+            }.getOrElse { logger.debug("Could not locate grant " + gid); M.point(false) }
           )})
         })
       case ReducePermission =>
-        if(owners.isEmpty) Future(false)
+        if(owners.isEmpty) M.point(false)
         else forall( owners.map { owner =>
           exists( t.grants.map{ gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, ReducePermission(p, o, _)) =>
                 isValid(g).map { _ && p.equalOrChild(path) && owner == o }
-              case _ => Future(false)
-            }.getOrElse(Future(false))
+              case _ => M.point(false)
+            }.getOrElse(M.point(false))
           )})
         })
       case ModifyPermission =>
-        if(owners.isEmpty) Future(false)
+        if(owners.isEmpty) M.point(false)
         else forall(owners.map { owner =>
           exists(t.grants.map { gid =>
             tokens.findGrant(gid).flatMap( _.map {
               case g @ Grant(_, _, ModifyPermission(p, o, _)) =>
                 isValid(g).map { _ && p.equalOrChild(path) && owner == o }
-              case _ => Future(false)
-            }.getOrElse(Future(false))
+              case _ => M.point(false)
+            }.getOrElse(M.point(false))
           )})
         })
       case TransformPermission =>
-        if(owners.isEmpty) Future(false)
+        if(owners.isEmpty) M.point(false)
         else forall(owners.map { owner =>
           exists(t.grants.map { gid =>
             tokens.findGrant(gid).flatMap( _.map { 
               case g @ Grant(_, _, TransformPermission(p, o, _)) =>
                 isValid(g).map { _ && p.equalOrChild(path) && owner == o }
-              case _ => Future(false)
-            }.getOrElse(Future(false))
+              case _ => M.point(false)
+            }.getOrElse(M.point(false))
           )})
         })
     }
   }
 
-  def isValid(grant: Grant): Future[Boolean] = {
+  def isValid(grant: Grant): M[Boolean] = {
     (grant.issuer.map {
       tokens.findGrant(_).flatMap { _.map { parentGrant => 
         isValid(parentGrant).map { _ && grant.permission.accessType == parentGrant.permission.accessType }
-      }.getOrElse { logger.warn("Could not locate issuer for grant: " + grant); Future(false) } } 
-    }.getOrElse { logger.debug("No issuer, parent grant == true"); Future(true) }).map { _ && !grant.permission.isExpired(new DateTime()) }
+      }.getOrElse { logger.warn("Could not locate issuer for grant: " + grant); M.point(false) } } 
+    }.getOrElse { logger.debug("No issuer, parent grant == true"); M.point(true) }).map { _ && !grant.permission.isExpired(new DateTime()) }
   }
 }
 

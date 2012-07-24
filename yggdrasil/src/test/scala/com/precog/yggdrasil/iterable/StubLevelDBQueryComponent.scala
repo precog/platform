@@ -35,9 +35,11 @@ import com.precog.yggdrasil.util._
 import com.precog.util._
 import SValue._
 
+import scalaz.Id._
+
 import java.io.File
 
-trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubStorageModule with IterableDatasetOpsComponent {
+trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubStorageModule[Future] with IterableDatasetOpsComponent {
   type TestDataset = Dataset[Seq[CValue]]
 
   trait YggConfig extends LevelDBQueryConfig with IterableDatasetOpsConfig {
@@ -49,6 +51,8 @@ trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubStorageMo
 
   implicit val actorSystem: ActorSystem = ActorSystem("leveldb-query-api-spec")
   implicit def asyncContext = ExecutionContext.defaultExecutionContext
+  implicit def M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+
   def sampleSize = 1 
 
   val testUID = "testUID"

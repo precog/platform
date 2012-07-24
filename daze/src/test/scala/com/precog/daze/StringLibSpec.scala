@@ -33,11 +33,11 @@ import Iteratee._
 import com.precog.common.VectorCase
 import com.precog.util.IdGen
 
-class StringLibSpec extends Specification
-    with Evaluator
-    with TestConfigComponent 
-    with StringLib 
-    with MemoryDatasetConsumer { self =>
+trait StringLibSpec[M[+_]] extends Specification
+    with Evaluator[M]
+    with TestConfigComponent[M] 
+    with StringLib[M] 
+    with MemoryDatasetConsumer[M] { self =>
       
   import Function._
   
@@ -802,3 +802,5 @@ class StringLibSpec extends Specification
     }.pendingUntilFixed
   }
 }
+
+object StringLibSpec extends StringLibSpec[test.YId] with test.YIdInstances

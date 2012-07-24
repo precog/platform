@@ -24,7 +24,8 @@ import com.precog.common.Path
 import com.precog.common.VectorCase
 import com.precog.bytecode.JType
 
-import akka.dispatch.Future
+import akka.actor.ActorSystem
+import akka.dispatch._
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
@@ -33,6 +34,7 @@ import scala.annotation.tailrec
 import scala.collection.BitSet
 
 import scalaz._
+import scalaz.syntax.copointed._
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -43,14 +45,18 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with TestColumnarTableModule with TransformSpec { spec =>
+trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val testPath = Path("/tableOpsSpec")
+  val actorSystem = ActorSystem("columnar-table-specs")
+  implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
   def debugPrint(dataset: Table): Unit = {
     println("\n\n")
-    for (slice <- dataset.slices; i <- 0 until slice.size) println(slice.toString(i))
+    dataset.slices.foreach { slice => {
+      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
+    }}
   }
 
   def lookupF1(namespace: List[String], name: String): F1 = {
@@ -98,11 +104,11 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
   }
 
   type Table = UnloadableTable
-  class UnloadableTable(slices: Iterable[Slice]) extends ColumnarTable(slices) {
-    def load(jtpe: JType): Future[Table] = sys.error("todo")
+  class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    def load(jtpe: JType): M[Table] = sys.error("todo")
   }
 
-  def table(slices: Iterable[Slice]) = new UnloadableTable(slices)
+  def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
 
   "a table dataset" should {
     "verify bijection from static JSON" in {
@@ -128,8 +134,8 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
 
       val dataset = fromJson(sample.toStream)
       //dataset.slices.foreach(println)
-      val results = dataset.toJson.toList
-      results must containAllOf(sample).only
+      val results = dataset.toJson
+      results.copoint must containAllOf(sample).only 
     }
 
     "verify bijection from JSON" in checkMappings
@@ -171,5 +177,10 @@ class ColumnarTableModuleSpec extends TableModuleSpec with CogroupSpec with Test
   }
 }
 
+import test.YId
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[YId] {
+  implicit val M = YId.M
+  implicit val coM = YId.M
+}
 
 // vim: set ts=4 sw=4 et:

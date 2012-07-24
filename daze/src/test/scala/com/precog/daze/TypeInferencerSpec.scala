@@ -31,13 +31,13 @@ import org.specs2.mutable._
 
 import scalaz._
 
-class TypeInferencerSpec extends Specification
-  with TestConfigComponent 
-  with ReductionLib 
-  with StatsLib
-  with MathLib
-  with InfixLib
-  with MemoryDatasetConsumer {
+trait TypeInferencerSpec[M[+_]] extends Specification
+  with TestConfigComponent[M] 
+  with ReductionLib[M] 
+  with StatsLib[M]
+  with MathLib[M]
+  with InfixLib[M]
+  with MemoryDatasetConsumer[M] {
 
   import dag._
   import instructions.{
@@ -540,6 +540,11 @@ class TypeInferencerSpec extends Specification
       result must_== expected
     }
   }
+}
+
+object TypeInferencerSpec extends TypeInferencerSpec[test.YId] {
+  val M = test.YId.M
+  val coM = test.YId.M
 }
 
 // vim: set ts=4 sw=4 et:

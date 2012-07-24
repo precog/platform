@@ -37,10 +37,10 @@ import com.precog.util._
 import SValue._
 
 import java.io.File
+import scalaz._
+import scalaz.Id._
 import scalaz.effect._
-import scalaz.iteratee._
 import scalaz.std.list._
-import Iteratee._
 
 import org.specs2.mutable._
 import org.specs2.ScalaCheck
@@ -49,10 +49,11 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubStorageModule with ScalaCheck with ArbitrarySValue {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubStorageModule[Id] with ScalaCheck with ArbitrarySValue {
   override val defaultPrettyParams = Pretty.Params(2)
   type TestDataset = IterableDataset[Seq[CValue]]
 
+  implicit val M = Monad[Id]
   implicit val actorSystem: ActorSystem = ActorSystem("leveldbMemoizationSpec")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
 

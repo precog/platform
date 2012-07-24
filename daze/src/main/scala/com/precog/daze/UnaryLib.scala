@@ -25,7 +25,7 @@ import bytecode.{ Library, UnaryOperationType, JNumberT, JBooleanT }
 import yggdrasil._
 import yggdrasil.table._
 
-trait UnaryLib extends ImplLibrary with GenOpcode {
+trait UnaryLib[M[+_]] extends GenOpcode[M] {
   def ConstantEmptyArray =
     new CF1(Function.const(Some(new InfiniteColumn with EmptyArrayColumn {})))
   

@@ -70,7 +70,7 @@ trait TestTokens {
   val ExpiredTokenUID = expiredUID
 }
 
-trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
+trait TestShardService extends BlueEyesServiceSpecification with ShardService with TestTokens with AkkaDefaults with MongoTokenManagerComponent { self =>
 
   import BijectionsChunkJson._
 
@@ -86,13 +86,16 @@ trait TestShardService extends BlueEyesServiceSpecification with ShardService wi
 
   override val configuration = "services { quirrel { v1 { " + config + " } } }"
 
-  def queryExecutorFactory(config: Configuration, accessControl: AccessControl) = new TestQueryExecutor {
-    lazy val actorSystem = ActorSystem("ingestServiceSpec")
-    implicit lazy val executionContext = ExecutionContext.defaultExecutionContext(actorSystem)
-    lazy val allowedUID = TestTokenUID
+  val actorSystem = ActorSystem("ingestServiceSpec")
+  val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+  def queryExecutorFactory(config: Configuration, accessControl: AccessControl[Future]) = new TestQueryExecutor {
+    val actorSystem = self.actorSystem
+    val executionContext = self.asyncContext
+    val allowedUID = TestTokenUID
   }
 
-  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager()
+  override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
   lazy val shardService = service.contentType[JValue](application/(MimeTypes.json))
                                  .path("/vfs/")

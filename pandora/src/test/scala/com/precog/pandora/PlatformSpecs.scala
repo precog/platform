@@ -48,8 +48,7 @@ import com.precog.util.FilesystemFileOps
 import org.specs2.mutable._
   
 import akka.actor.ActorSystem
-import akka.dispatch.Await
-import akka.dispatch.ExecutionContext
+import akka.dispatch._
 import akka.util.duration._
 
 import java.io.File
@@ -61,8 +60,8 @@ import org.streum.configrity.Configuration
 import org.streum.configrity.io.BlockFormat
 
 class PlatformSpecs 
-    extends ParseEvalStackSpecs 
-    with BlockStoreColumnarTableModule 
+    extends ParseEvalStackSpecs[Future] 
+    with BlockStoreColumnarTableModule[Future] 
     with LevelDBProjectionModule 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule { platformSpecs =>
@@ -70,8 +69,14 @@ class PlatformSpecs
   class YggConfig extends ParseEvalStackSpecConfig with StandaloneShardSystemConfig 
   object yggConfig  extends YggConfig
 
+  implicit val M = blueeyes.bkka.AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit val coM = new Copointed[Future] {
+    def map[A, B](m: Future[A])(f: A => B) = m map f
+    def copoint[A](f: Future[A]) = Await.result(f, yggConfig.maxEvalDuration)
+  }
+
   class Storage extends SystemActorStorageLike(FileMetadataStorage.load(yggConfig.dataDir, FilesystemFileOps).unsafePerformIO) {
-    val accessControl = new UnlimitedAccessControl()(asyncContext)
+    val accessControl = new UnlimitedAccessControl[Future]()
   }
 
   val storage = new Storage

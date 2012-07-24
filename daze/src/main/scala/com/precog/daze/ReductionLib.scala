@@ -36,7 +36,7 @@ import scalaz.syntax.foldable._
 import scalaz.syntax.std.option._
 import scalaz.syntax.std.boolean._
 
-trait ReductionLib extends GenOpcode with ImplLibrary with BigDecimalOperations with Evaluator {  
+trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Evaluator[M] {  
   val ReductionNamespace = Vector()
 
   override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
