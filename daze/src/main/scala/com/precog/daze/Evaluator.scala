@@ -317,6 +317,7 @@ trait Evaluator extends DAG
         case s @ dag.Split(line, spec, child) => {
           val table = for {
             grouping <- resolveTopLevelGroup(spec, splits)
+            state <- get[EvaluatorState]
           } yield {
             for {
               grouping2 <- grouping
@@ -326,7 +327,7 @@ trait Evaluator extends DAG
                   pendingTable <- loop(child, splits + (s -> (key, map)))
                 } yield pendingTable.table map { _ transform liftToValues(pendingTable.trans) }
                 
-                back.eval(EvaluatorState(Map())): Future[Table]
+                back.eval(state): Future[Table]
               }
             } yield result
           } 
