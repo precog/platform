@@ -118,6 +118,14 @@ object NullColumn {
   def apply(definedAt: BitSet) = new BitsetColumn(definedAt) with NullColumn
 }
 
+object UndefinedColumn {
+  def apply(col: Column) = new Column {
+    def isDefinedAt(row: Int) = false
+    val tpe = col.tpe
+    def jValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+    def strValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+  }
+}
 
 object Column {
   @inline def const(cv: CValue): Column = cv match {

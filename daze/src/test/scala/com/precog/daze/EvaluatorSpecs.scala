@@ -453,7 +453,30 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
-    "reduce a filtered dataset" in {
+    "sum a filtered dataset" in {
+      val line = Line(0, "")
+
+      val input = dag.Reduce(line, Sum,
+        Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Join(line, Map2Cross(Gt),
+            Join(line, Map2Cross(DerefObject),
+              dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+              Root(line, PushString("time"))),
+            Root(line, PushNum("0")))))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
+        }
+
+        result2 must contain(100)
+      }
+    }
+
+    "count a filtered dataset" in {
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Count,
@@ -464,6 +487,45 @@ trait EvaluatorSpecs[M[+_]] extends Specification
               dag.LoadLocal(line, Root(line, PushString("/clicks"))),
               Root(line, PushString("time"))),
             Root(line, PushNum("0")))))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
+        }
+
+        result2 must contain(100)
+      }
+    }
+
+    "filter a dataset to return a set of boolean" in {
+      val line = Line(0, "")
+
+      val input = Join(line, Map2Cross(Gt),
+            Join(line, Map2Cross(DerefObject),
+              dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+              Root(line, PushString("time"))),
+            Root(line, PushNum("0")))
+
+      testEval(input) { result =>
+        result must haveSize(100)
+
+        val result2 = result collect {
+          case (ids, SBoolean(d)) if ids.size == 1 => d
+        }
+
+        result2 must contain(true).only
+      }
+    }
+
+    "reduce a derefed object" in {
+      val line = Line(0, "")
+
+      val input = dag.Reduce(line, Count,
+        Join(line, Map2Cross(DerefObject),
+          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
+          Root(line, PushString("time"))))
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -1231,6 +1293,24 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(13)
         }
+      }      
+
+      "equal without a filter" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/hom/numbers"))),
+            Root(line, PushNum("13")))
+          
+        testEval(input) { result =>
+          result must haveSize(5)
+          
+          val result2 = result collect {
+            case (ids, SBoolean(d)) if ids.size == 1 => d
+          }
+          
+          result2 must contain(true, false)
+        }
       }
       
       "not-equal" >> {
@@ -1402,11 +1482,13 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       
-      "equal" >> {
+      "equal with boolean set as the source" >> {
         val line = Line(0, "")
         
         val input = Filter(line, None,
-          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+          Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+            Root(line, PushNum("13"))),
           Join(line, Map2Cross(Eq),
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
             Root(line, PushNum("13"))))
@@ -1415,10 +1497,59 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result must haveSize(1)
           
           val result2 = result collect {
-            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+            case (ids, SBoolean(d)) if ids.size == 1 => d
           }
           
-          result2 must contain(13)
+          result2 must contain(true)
+        }
+      }      
+
+      "equal" >> {
+        import yggdrasil.TableModule._
+        enableTestPrint(true)
+        println("Starting our test")
+        try {
+          val line = Line(0, "")
+          
+          val input = Filter(line, None,
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+            Join(line, Map2Cross(Eq),
+              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+              Root(line, PushNum("13"))))
+            
+          testEval(input) { result =>
+            println("Test complete")
+            result must haveSize(1)
+            
+            val result2 = result collect {
+              case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
+            }
+            
+            result2 must contain(13)
+          }
+        } finally {
+          enableTestPrint(false)
+        }
+      }      
+
+      "equal without a filter" >> { //TODO need to ensure that if we have a heterogeneous set as our source, that we end up with a *single* Boolean Column
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+            Root(line, PushNum("13")))
+          
+        testEval(input) { result =>
+          result must haveSize(10)
+          
+          val result2 = result.groupBy {
+            case (ids, SBoolean(d)) if ids.size == 1 => Some(d)
+            case _                                   => None
+          }
+          
+          result2.keySet must contain(Some(true), Some(false))
+          result2(Some(true)).size mustEqual 1
+          result2(Some(false)).size mustEqual 9
         }
       }
       

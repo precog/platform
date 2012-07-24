@@ -35,6 +35,8 @@ import org.joda.time.DateTimeZone
 import java.lang.Math._
 import collection.immutable.ListSet
 
+import akka.dispatch.Future
+
 import blueeyes.json.{JPathField, JPathIndex}
 
 import scalaz.{NonEmptyList => NEL, _}
@@ -72,6 +74,7 @@ trait Evaluator[M[+_]] extends DAG
     with Logging { self =>
   
   import Function._
+  import TableModule._
   
   import instructions._
   import dag._
@@ -515,13 +518,14 @@ trait Evaluator[M[+_]] extends DAG
         
         case dag.Filter(_, None, target, boolean) => {
           // TODO binary typing
-          
+
           for {
             pendingTableTarget <- loop(target, splits)
             pendingTableBoolean <- loop(boolean, splits)
           } yield {
-            if (pendingTableTarget.graph == pendingTableBoolean.graph)
+            if (pendingTableTarget.graph == pendingTableBoolean.graph) {
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
+            }
             else {
               val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
               
@@ -536,7 +540,7 @@ trait Evaluator[M[+_]] extends DAG
                 parentBooleanTable <- pendingTableBoolean.table
                 val booleanResult = parentBooleanTable.transform(pendingTableBoolean.trans)
               } yield join(targetResult, booleanResult)(key, spec)
-              
+
               PendingTable(result, graph, TransSpec1.Id)
             }
           }
@@ -607,7 +611,9 @@ trait Evaluator[M[+_]] extends DAG
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
-    resultState.eval(EvaluatorState(Map()))
+    val resultFinal = resultState.eval(EvaluatorState(Map()))
+    resultFinal map { r => ifTesting { println("TABLE = " + r.toString) } }
+    resultFinal
 
     //** original code **//
     //val PendingTable(table, _, spec) = loop(rewrite(graph), Map())

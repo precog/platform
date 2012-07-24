@@ -164,6 +164,12 @@ object CType extends CTypeSerialization {
   // CEmptyObject
   // CEmptyArray
 
+  def canCompare(t1: CType, t2: CType): Boolean = (t1, t2) match {
+    case (n1: CNumeric, n2: CNumeric) => true
+    case (a, b) if a.getClass() == b.getClass() => true
+    case _ => false
+  }
+
   def unify(t1: CType, t2: CType): Option[CType] = {
     (t1, t2) match {
       case (CLong, CLong)     => Some(CLong)
@@ -253,8 +259,10 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 //
 // Numerics
 //
+sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CType(format, stype)
+
 case class CLong(value: Long) extends CValue 
-case object CLong extends CType(FixedWidth(8), SDecimal) {
+case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   type CA = Long
   val CC = classOf[Long]
   override def isNumeric: Boolean = true
@@ -264,7 +272,7 @@ case object CLong extends CType(FixedWidth(8), SDecimal) {
 }
 
 case class CDouble(value: Double) extends CValue 
-case object CDouble extends CType(FixedWidth(8), SDecimal) {
+case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   type CA = Double
   val CC = classOf[Double]
   override def isNumeric: Boolean = true
@@ -274,7 +282,7 @@ case object CDouble extends CType(FixedWidth(8), SDecimal) {
 }
 
 case class CNum(value: BigDecimal) extends CValue 
-case object CNum extends CType(LengthEncoded, SDecimal) {
+case object CNum extends CNumeric(LengthEncoded, SDecimal) {
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
   override def isNumeric: Boolean = true

@@ -56,7 +56,9 @@ trait Slice { source =>
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
-      case (ref, col) => f(col) map { (ref, _ ) }
+      case (ref, col) => 
+        if (ref.selector == JPath.Identity) f(col) map { (ref, _ ) }  
+        else None
     }
   }
 

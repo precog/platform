@@ -58,6 +58,44 @@ trait MathLibSpec[M[+_]] extends Specification
     "return failing validations for bad input" in todo
   }
 
+  "for sets with numeric values inside arrays and objects" should {
+    "compute cos only of the numeric value" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(cos),
+        Join(line, Map2Cross(JoinArray), 
+          dag.Operate(line, WrapArray, Root(line, PushNum("0"))),
+          dag.Operate(line, WrapArray, Root(line, PushString("foo")))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+      
+      result2 must contain(1)
+    }.pendingUntilFixed    
+    
+    "compute cos only of the numeric value" in {
+      val line = Line(0, "")
+      
+      val input = dag.Operate(line, BuiltInFunction1Op(cos),
+        dag.LoadLocal(line, Root(line, PushString("/het/numbers7"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(_), SDecimal(d)) => d
+      }
+      
+      result2 must contain(1)
+    }
+  }
+
   "for homogeneous sets, the appropriate math function" should {   //todo test in particular cases when functions are not defined!!
     "compute sinh" in {
       val line = Line(0, "")

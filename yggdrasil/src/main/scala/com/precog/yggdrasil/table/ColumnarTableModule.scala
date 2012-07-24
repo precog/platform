@@ -206,12 +206,22 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           }
 
         case Filter(source, predicate) => 
-          composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s, filter) => 
+          composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s: Slice, filter: Slice) => 
+            assert(filter.size == s.size)
+            import TableModule._
+            ifTesting { println("Filter slice has %d columns:\n".format(filter.columns.size)); println("filter contents = \n" + filter.toString) }
+
             if (s.columns.isEmpty) {
               s
             } else {
-              val definedAt = filter.columns.values.foldLeft(BitSet(0 until s.size: _*)) { (acc, col) =>
-                cf.util.isSatisfied(col).map(_.definedAt(0, s.size) & acc).getOrElse(BitSet.empty) 
+              val definedAt: BitSet = filter.columns.values.foldLeft(BitSet.empty) { (acc, col) =>
+                col match {
+                  case c: BoolColumn => {
+                    ifTesting { println(cf.util.isSatisfied(col)) }
+                    cf.util.isSatisfied(col).map(_.definedAt(0, s.size) ++ acc).getOrElse(BitSet.empty) 
+                  }
+                  case _ => acc
+                }
               }
 
               s mapColumns { cf.util.filter(0, s.size, definedAt) }
