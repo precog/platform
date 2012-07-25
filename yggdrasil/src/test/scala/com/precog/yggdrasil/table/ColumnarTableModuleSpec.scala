@@ -105,7 +105,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
 
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    def load(jtpe: JType): M[Table] = sys.error("todo")
+    def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
   }
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)

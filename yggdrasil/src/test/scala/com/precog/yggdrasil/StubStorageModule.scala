@@ -62,7 +62,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
     def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
   }
 
-  class Storage extends StorageLike[Projection, M] {
+  class Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
     
@@ -75,7 +75,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
       }
     }
 
-    def storeBatch(ems: Seq[EventMessage], timeout: Timeout) = sys.error("Feature not implemented in test stub.")
+    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
     def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
@@ -97,7 +97,7 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
 
     def userMetadataView(uid: String) = new UserMetadataView[M](uid, new UnlimitedAccessControl(), metadata)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout) = M.point(projections(descriptor) -> new Release(IO(())))
+    def projection(descriptor: ProjectionDescriptor) = M.point(projections(descriptor) -> new Release(IO(())))
   }
 }
 

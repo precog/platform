@@ -53,8 +53,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   type RowId = Int
   type Table <: ColumnarTable
 
-  implicit def M: Monad[M]
-
   object ops extends TableOps {
     def empty: Table = table(StreamT.empty[M, Slice])
     

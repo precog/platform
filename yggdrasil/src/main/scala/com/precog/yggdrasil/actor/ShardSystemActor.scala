@@ -49,7 +49,7 @@ trait ShardConfig extends BaseConfig {
 
   def statusTimeout: Long = config[Long]("actors.status.timeout", 30000)
   def metadataTimeout: Timeout = config[Long]("actors.metadata.timeout", 30) seconds
-  implicit def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
+  def stopTimeout: Timeout = config[Long]("actors.stop.timeout", 300) seconds
 
   def metadataSyncPeriod: Duration = config[Int]("actors.metadata.sync_minutes", 1) minutes
   def batchStoreDelay: Duration    = config[Long]("actors.store.idle_millis", 1000) millis

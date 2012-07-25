@@ -151,7 +151,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
     private var initialIndices = collection.mutable.Map[Path, Int]()
     private var currentIndex = 0
     
-    override def load(jtpe: JType) = {
+    override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
           events.toStream map (_ \ "value") flatMap {

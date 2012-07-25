@@ -35,9 +35,13 @@ import scalaz.syntax.monoid._
 import scalaz.syntax.traverse._
 import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
+import scala.collection.mutable
 
 trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] {
+  type UserId = String
   type Projection <: BlockProjectionLike[Slice]
+
+  type BD = Projection#BlockData
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
     /** 
@@ -91,52 +95,121 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         if (uncovered.isEmpty) {
           covers
         } else {
-          val (d0, covered) = unused map { case (d, dcols) => (d, dcols & uncovered) } maxBy { _._2.size } 
-          cover0(uncovered &~ covered, unused - d0, covers + (d0 -> covered))
+          val (b0, covered) = unused map { case (b, dcols) => (b, dcols & uncovered) } maxBy { _._2.size } 
+          cover0(uncovered &~ covered, unused - b0, covers + (b0 -> covered))
         }
       }
 
       cover0(
         descriptors.flatMap(_.columns.toSet) filter { cd => includes(tpe, cd.selector, cd.valueType) }, 
-        descriptors map { d => (d, d.columns.toSet) } toMap, 
+        descriptors map { b => (b, b.columns.toSet) } toMap, 
         Map.empty)
     }
 
-    class Cell(val index: Int, var position: Int, var slice: Slice)
+    /**
+     * A wrapper for a slice, and the function required to get the subsequent
+     * block of data.
+     */
+    case class Cell(index: Int, block: BD)(succ0: BD => M[Option[BD]]) {
+      var position: Int = 0
 
-    trait CellMatrix { matrix => 
-      def compare(cl: Cell, cr: Cell): Ordering
-
-      lazy val toJavaComparator = new java.util.Comparator[Cell] {
-        def compare(c1: Cell, c2: Cell) = matrix.compare(c1, c2).toInt
+      def succ: M[Option[Cell]] = {
+        for (blockOpt <- succ0(block)) yield {
+          blockOpt map { block => Cell(index, block)(succ0) }
+        }
       }
     }
 
-    def cellMatrix(slices: Set[Slice])(keyf: Slice => List[ColumnRef]): CellMatrix = {
-      // fill the upper triangle of the matrix, since that is all that will be used
-      type ComparatorMatrix = Array[Array[(Int, Int) => Ordering]]
-      @inline @tailrec def fillMatrix(l: Vector[(Slice, Int)], comparatorMatrix: ComparatorMatrix): ComparatorMatrix = {
-        if (l.isEmpty) comparatorMatrix else {
-          for ((s, i) <- l; (s0, i0) <- l.tail) { 
-            comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
-            comparatorMatrix(i0)(i) = Slice.rowComparator(s0, s)(keyf)
+    sealed trait CellMatrix { self => 
+      def compare(cl: Cell, cr: Cell): Ordering
+      def refresh(cell: Cell): M[CellMatrix]
+
+      implicit lazy val ordering = new scala.math.Ordering[Cell] {
+        def compare(c1: Cell, c2: Cell) = self.compare(c1, c2).toInt
+      }
+    }
+
+    object CellMatrix {
+      def apply(cells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
+        val size = cells.size
+
+        type ComparatorMatrix = Array[Array[(Int, Int) => Ordering]]
+        def fillMatrix(cells: Set[Cell]): ComparatorMatrix = {
+          val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](cells.size, cells.size)
+
+          for (Cell(i, b) <- cells; Cell(i0, b0) <- cells if i != i0) { 
+            comparatorMatrix(i)(i0) = Slice.rowComparator(b.data, b0.data)(keyf) 
           }
 
-          fillMatrix(l.tail, comparatorMatrix)
+          comparatorMatrix
         }
-      }
 
-      new CellMatrix {
-        private[this] val comparatorMatrix = fillMatrix(Vector(slices.toSeq: _*).zipWithIndex, Array.ofDim[(Int, Int) => Ordering](slices.size, slices.size))
+        new CellMatrix { self =>
+          private[this] val allCells: mutable.Map[Int, Cell] = cells.map(c => (c.index, c))(collection.breakOut)
+          private[this] val comparatorMatrix = fillMatrix(cells)
 
-        def compare(cl: Cell, cr: Cell): Ordering = {
-          comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
+          def compare(cl: Cell, cr: Cell): Ordering = {
+            comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
+          }
+
+          def refresh(cell: Cell): M[CellMatrix] = {
+            cell.succ map {
+              case Some(c @ Cell(i, b)) => 
+                allCells += (i -> c)
+
+                for ((_, Cell(i0, b0)) <- allCells if i0 != i) {
+                  comparatorMatrix(i)(i0) = Slice.rowComparator(b.data, b0.data)(keyf) 
+                  comparatorMatrix(i0)(i) = Slice.rowComparator(b0.data, b.data)(keyf)
+                }
+
+                self
+                
+              case None => 
+                allCells -= cell.index
+
+                // this is basically so that we'll fail fast if something screwy happens
+                for ((_, Cell(i0, b0)) <- allCells if i0 != cell.index) {
+                  comparatorMatrix(cell.index)(i0) = null
+                  comparatorMatrix(i0)(cell.index) = null
+                }
+
+                self
+            }
+          }
         }
       }
     }
 
-    def load(tpe: JType): M[Table] = {
-      val metadataView = storage.userMetadataView(sys.error("TODO"))
+    def load(uid: UserId, tpe: JType): M[Table] = {
+      def load0(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): M[Table] = {
+        val cellsM: Set[M[Option[Cell]]] = for (((desc, cols), i) <- projections.toSeq.zipWithIndex.toSet) yield {
+          val succ: Option[BD] => M[Option[BD]] = (block: Option[BD]) => storage.projection(desc) map {
+            case (projection, release) => 
+              val result = projection.getBlockAfter(block.map(_.maxKey.asInstanceOf[projection.Key]), cols)  //todo: remove asInstanceOf
+              release.release.unsafePerformIO
+              result
+          }
+
+          succ(None) map { 
+            _ map { nextBlock => Cell(i, nextBlock) { b => succ(Some(b)) } }
+          }
+        }
+
+        for (cells <- cellsM.sequence.map(_.flatten)) yield {
+          val cellMatrix = CellMatrix(cells) {
+            //todo: How do we actually determine the correct function for retrieving the key?
+            slice => slice.columns.keys.filter { case ColumnRef(selector, ctype) => sys.error("todo") } toList
+          }
+
+          table(
+            StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(cellMatrix.ordering)) { queue =>
+              sys.error("todo")
+            }
+          )
+        }
+      }
+
+      val metadataView = storage.userMetadataView(uid)
 
       // Reduce this table to obtain the in-memory set of strings representing the vfs paths
       // to be loaded.
@@ -154,12 +227,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       for {
         paths               <- pathsM
         coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
-      } yield {
-        val loadableProjections = minimalCover(tpe, coveringProjections)
-        table(
-          sys.error("todo")
-        )
-      }
+        result              <- load0(minimalCover(tpe, coveringProjections))
+      } yield result
     }
   }
 
