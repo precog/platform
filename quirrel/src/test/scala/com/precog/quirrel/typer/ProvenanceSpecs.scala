@@ -3536,6 +3536,17 @@ object ProvenanceSpecs extends Specification
       tree.provenance mustEqual NullProvenance
       tree.errors mustEqual Set(OperationOnUnrelatedSets)
     }
+
+    "reject operations on different loads through where" in {
+      val rawInput = """
+        | a := //users
+        | b := //heightWeight
+        | { name: a.name, height: b.height } where a.userId = b.userId """.stripMargin
+        
+      val tree = compile(rawInput)
+      tree.provenance mustEqual NullProvenance
+      tree.errors mustEqual Set(OperationOnUnrelatedSets)
+    }
     
     "reject where on static and dynamic provenances" in {
       val tree = compile("//foo where new 1")
