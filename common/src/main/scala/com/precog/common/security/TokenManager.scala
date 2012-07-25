@@ -29,10 +29,6 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.syntax.monad._
 
-trait TokenManagerComponent[M[+_]] {
-  def tokenManager: TokenManager[M]
-}
-
 trait TokenManager[M[+_]] {
   private[security] def newUUID() = java.util.UUID.randomUUID.toString
 
@@ -84,11 +80,9 @@ object MongoTokenManagerSettings {
   val defaults = MongoTokenManagerSettings()
 }
 
-trait MongoTokenManagerComponent extends TokenManagerComponent[Future] with Logging {
+trait MongoTokenManagerComponent extends Logging {
   implicit val asyncContext: ExecutionContext
   implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
-
-  val tokenManager = sys.error("todo")
 
   def tokenManagerFactory(config: Configuration): TokenManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))
