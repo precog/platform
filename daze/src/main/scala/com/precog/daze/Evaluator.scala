@@ -85,8 +85,6 @@ trait Evaluator[M[+_]] extends DAG
 
   sealed trait Context
 
-  implicit def asyncContext: akka.dispatch.ExecutionContext
-
   def withContext[A](f: Context => A): A = 
     f(new Context {})
 
