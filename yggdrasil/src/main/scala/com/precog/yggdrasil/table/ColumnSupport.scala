@@ -21,6 +21,7 @@ package com.precog.yggdrasil.table
 
 import org.joda.time.DateTime
 import scala.collection.BitSet
+import scala.annotation.tailrec
 
 class BitsetColumn(definedAt: BitSet) { this: Column =>
   def isDefinedAt(row: Int): Boolean = definedAt(row)
@@ -60,6 +61,19 @@ class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
 
 class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this: T =>
   def isDefinedAt(row: Int) = f.isDefinedAt(row) && delegate.isDefinedAt(f(row))
+}
+
+class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>
+  @inline @tailrec private def fill(a: Array[Int], i: Int): Array[Int] = {
+    if (i < idx.length) {
+      a(idx(i)) = i
+      fill(a, i+1)
+    } else a
+  }
+
+  val remap: Array[Int] = fill(new Array[Int](toSize), 0)
+
+  def isDefinedAt(row: Int) = delegate.isDefinedAt(remap(row))
 }
 
 class InfiniteColumn { this: Column =>

@@ -30,6 +30,7 @@ import blueeyes.json.{JPath,JPathField,JPathIndex}
 import scalaz._
 import scalaz.Ordering._
 import scalaz.std.set._
+import scalaz.std.list._
 import scalaz.std.stream._
 import scalaz.syntax.monad._
 import scalaz.syntax.monoid._
@@ -111,23 +112,34 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
      * A wrapper for a slice, and the function required to get the subsequent
      * block of data.
      */
-    case class Cell(index: Int, block: BD)(succ0: BD => M[Option[BD]]) {
-      private val remap = new Array[Int](block.data.size)
+    case class Cell(index: Int, maxKey: Key, slice0: Slice)(succ0: Key => M[Option[BD]]) {
+      private val remap = new Array[Int](slice0.size)
       var position: Int = -1
 
       def succ: M[Option[Cell]] = {
-        for (blockOpt <- succ0(block)) yield {
-          blockOpt map { block => Cell(index, block)(succ0) }
+        for (blockOpt <- succ0(maxKey)) yield {
+          blockOpt map { block => Cell(index, block.maxKey, block.data)(succ0) }
         }
       }
 
       def advance(i: Int): Boolean = {
         position += 1
-        if (position < block.data.size) {
+        if (position < slice0.size) {
           remap(position) = i
           true
         } else {
           false
+        }
+      }
+
+      def slice = slice0.sparsen(remap, remap(position) + 1)
+
+      def split: (Option[Slice], Cell) = {
+        if (position == -1) {
+          (None, this)
+        } else {
+          val (finished, continuing) = slice.split(position)
+          (Some(finished.sparsen(remap, remap(position) + 1)), Cell(index, maxKey, continuing)(succ0))
         }
       }
     }
@@ -149,8 +161,8 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         def fillMatrix(cells: Set[Cell]): ComparatorMatrix = {
           val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](cells.size, cells.size)
 
-          for (Cell(i, b) <- cells; Cell(i0, b0) <- cells if i != i0) { 
-            comparatorMatrix(i)(i0) = Slice.rowComparator(b.data, b0.data)(keyf) 
+          for (Cell(i, _, s) <- cells; Cell(i0, _, s0) <- cells if i != i0) { 
+            comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
           }
 
           comparatorMatrix
@@ -166,12 +178,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
           def refresh(cell: Cell): M[CellMatrix] = {
             cell.succ map {
-              case Some(c @ Cell(i, b)) => 
+              case Some(c @ Cell(i, _, s)) => 
                 allCells += (i -> c)
 
-                for ((_, Cell(i0, b0)) <- allCells if i0 != i) {
-                  comparatorMatrix(i)(i0) = Slice.rowComparator(b.data, b0.data)(keyf) 
-                  comparatorMatrix(i0)(i) = Slice.rowComparator(b0.data, b.data)(keyf)
+                for ((_, Cell(i0, _, s0)) <- allCells if i0 != i) {
+                  comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
+                  comparatorMatrix(i0)(i) = Slice.rowComparator(s0, s)(keyf)
                 }
 
                 self
@@ -180,7 +192,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 allCells -= cell.index
 
                 // this is basically so that we'll fail fast if something screwy happens
-                for ((_, Cell(i0, b0)) <- allCells if i0 != cell.index) {
+                for ((_, Cell(i0, _, s0)) <- allCells if i0 != cell.index) {
                   comparatorMatrix(cell.index)(i0) = null
                   comparatorMatrix(i0)(cell.index) = null
                 }
@@ -195,15 +207,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
     def load(uid: UserId, tpe: JType): M[Table] = {
       def load0(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): M[Table] = {
         val cellsM: Set[M[Option[Cell]]] = for (((desc, cols), i) <- projections.toSeq.zipWithIndex.toSet) yield {
-          val succ: Option[BD] => M[Option[BD]] = (block: Option[BD]) => storage.projection(desc) map {
+          val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
             case (projection, release) => 
-              val result = projection.getBlockAfter(block.map(_.maxKey), cols)  //todo: remove asInstanceOf
+              val result = projection.getBlockAfter(key, cols)  
               release.release.unsafePerformIO
               result
           }
 
           succ(None) map { 
-            _ map { nextBlock => Cell(i, nextBlock) { b => succ(Some(b)) } }
+            _ map { nextBlock => Cell(i, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
           }
         }
 
@@ -215,17 +227,45 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
           table(
             StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(cellMatrix.ordering)) { queue =>
+              // dequeues all equal elements in a prefix of the queue
               @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
                 if (queue.isEmpty) cells
                 else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: Nil)
                 else cells
               }
 
-              var sliceIndex = 0
+              // consume as many records as possible
+              @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
+                val cellBlock = dequeueEqual(Nil)
+                if (cellBlock.isEmpty) {
+                  (idx, Nil)
+                } else {
+                  val (continuing, expired) = cellBlock partition { _.advance(idx) }
+                  queue.enqueue(continuing: _*)
 
-              val cellBlock = dequeueEqual(Nil)
+                  if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx, expired)
+                }
+              }
 
-              sys.error("todo")
+              val (finishedSize, expired) = consumeToBoundary(0)
+              if (expired.isEmpty) {
+                M.point(None)
+              } else {
+                val completeSlices = expired.map(_.slice)              
+                
+                val (prefixes, suffixes) = queue.dequeueAll.map(_.split).unzip
+                queue.enqueue(suffixes: _*)
+
+                val emission = new Slice {
+                  val size = finishedSize
+                  val columns: Map[ColumnRef, Column] = completeSlices.flatMap(_.columns).toMap ++ prefixes.flatten.flatMap(_.columns)
+                }
+
+                expired.map(_.succ).sequence map { cells =>
+                  queue.enqueue(cells.flatten: _*)
+                  Some((emission, queue))
+                }
+              }
             }
           )
         }

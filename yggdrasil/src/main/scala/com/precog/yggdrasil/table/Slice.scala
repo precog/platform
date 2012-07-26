@@ -145,9 +145,20 @@ trait Slice { source =>
     }
   }
 
+  // Takes an array where the indices correspond to indices in this slice,
+  // and the values give the indices in the sparsened slice.
+  def sparsen(index: Array[Int], toSize: Int): Slice = new Slice {
+    val size = toSize
+    val columns = source.columns mapValues { col => 
+      cf.util.Sparsen(index, toSize)(col).get //sparsen is total
+    }
+  }
+
   def remap(pf: PartialFunction[Int, Int]) = new Slice {
     val size = source.size
-    val columns: Map[ColumnRef, Column] = source.columns.mapValues(v => (v |> cf.util.Remap(pf)).get) //Remap is total
+    val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
+      cf.util.Remap(pf).apply(col).get //Remap is total
+    }
   }
 
   def map(from: JPath, to: JPath)(f: CF1): Slice = new Slice {
