@@ -453,29 +453,6 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
-    "sum a filtered dataset" in {
-      val line = Line(0, "")
-
-      val input = dag.Reduce(line, Sum,
-        Filter(line, None,
-          dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-          Join(line, Map2Cross(Gt),
-            Join(line, Map2Cross(DerefObject),
-              dag.LoadLocal(line, Root(line, PushString("/clicks"))),
-              Root(line, PushString("time"))),
-            Root(line, PushNum("0")))))
-
-      testEval(input) { result =>
-        result must haveSize(1)
-
-        val result2 = result collect {
-          case (ids, SDecimal(d)) if ids.isEmpty => d.toInt
-        }
-
-        result2 must contain(100)
-      }
-    }
-
     "count a filtered dataset" in {
       val line = Line(0, "")
 
@@ -1532,7 +1509,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }      
 
-      "equal without a filter" >> { //TODO need to ensure that if we have a heterogeneous set as our source, that we end up with a *single* Boolean Column
+      "equal without a filter" >> {
         val line = Line(0, "")
         
         val input = Join(line, Map2Cross(Eq),
@@ -1550,6 +1527,27 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           result2.keySet must contain(Some(true), Some(false))
           result2(Some(true)).size mustEqual 1
           result2(Some(false)).size mustEqual 9
+        }
+      }
+      
+      "not equal without a filter" >> {
+        val line = Line(0, "")
+        
+        val input = Join(line, Map2Cross(NotEq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+            Root(line, PushNum("13")))
+          
+        testEval(input) { result =>
+          result must haveSize(10)
+          
+          val result2 = result.groupBy {
+            case (ids, SBoolean(d)) if ids.size == 1 => Some(d)
+            case _                                   => None
+          }
+          
+          result2.keySet must contain(Some(true), Some(false))
+          result2(Some(true)).size mustEqual 9
+          result2(Some(false)).size mustEqual 1
         }
       }
       
@@ -1868,7 +1866,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate filter on the results of a histogram function" in {
       val line = Line(0, "")

@@ -62,6 +62,13 @@ trait Slice { source =>
     }
   }
 
+  def filterColumns(f: CF1): Slice = new Slice {
+    val size = source.size
+    val columns = source.columns flatMap {
+      case (ref, col) => f(col) map { (ref, _ ) }  
+    }
+  }
+
   def deref(node : JPathNode) : Slice = new Slice {
     val size = source.size
     val columns = source.columns.collect {

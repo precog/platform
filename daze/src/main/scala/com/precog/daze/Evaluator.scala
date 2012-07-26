@@ -342,31 +342,25 @@ trait Evaluator[M[+_]] extends DAG
         case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if right.value.isDefined => {
           for {
             pendingTable <- loop(left, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get))))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false))
         }
         
         case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if left.value.isDefined => {
           for {
             pendingTable <- loop(right, splits)
-          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, PrimitiveEqualsF2.partialLeft(svalueToCValue(left.value.get))))
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), false))
         }
         
         case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if right.value.isDefined => {
           for {
             pendingTable <- loop(left, splits)
-          } yield {
-            val eqTrans = trans.Map1(pendingTable.trans, PrimitiveEqualsF2.partialRight(svalueToCValue(right.value.get)))
-            PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(eqTrans, op1(Comp).f1))
-          }
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), true))
         }
         
         case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if left.value.isDefined => {
           for {
             pendingTable <- loop(right, splits)
-          } yield {
-            val eqTrans = trans.Map1(pendingTable.trans, PrimitiveEqualsF2.partialRight(svalueToCValue(left.value.get)))
-            PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(eqTrans, op1(Comp).f1))
-          }
+          } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), true))
         }
         
         case Join(_, Map2Cross(instructions.WrapObject) | Map2CrossLeft(instructions.WrapObject) | Map2CrossRight(instructions.WrapObject), left, right) if left.value.isDefined => {
@@ -851,6 +845,7 @@ trait Evaluator[M[+_]] extends DAG
       case trans.ArraySwap(source, index) => trans.ArraySwap(deepMap(source)(f), index)
       case Typed(source, tpe) => Typed(deepMap(source)(f), tpe)
       case trans.Equal(left, right) => trans.Equal(deepMap(left)(f), deepMap(right)(f))
+      case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
     }
   }
   

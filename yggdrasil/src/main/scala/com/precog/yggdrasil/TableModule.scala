@@ -99,6 +99,8 @@ trait TableModule[M[+_]] extends FNModule {
     case class Typed[+A <: SourceType](source: TransSpec[A], tpe: JType) extends TransSpec[A] // done
     
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
+
+    case class EqualLiteral[+A <: SourceType](left: TransSpec[A], right: CValue, invert: Boolean) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
     

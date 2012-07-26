@@ -164,6 +164,18 @@ object CType extends CTypeSerialization {
   // CEmptyObject
   // CEmptyArray
 
+  def of(v: CValue): CType = v match {
+    case c: CString    => CString
+    case c: CBoolean   => CBoolean
+    case c: CLong      => CLong
+    case c: CDouble    => CDouble
+    case c: CNum       => CNum
+    case c: CDate       => CDate
+    case CNull         => CNull
+    case CEmptyObject  => CEmptyObject
+    case CEmptyArray   => CEmptyArray
+  }
+
   def canCompare(t1: CType, t2: CType): Boolean = (t1, t2) match {
     case (n1: CNumeric, n2: CNumeric) => true
     case (a, b) if a.getClass() == b.getClass() => true
