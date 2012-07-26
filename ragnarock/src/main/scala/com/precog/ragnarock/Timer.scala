@@ -44,6 +44,9 @@ trait Timer {
    * Wrap it in an `Option` to make it a `Monoid`.
    */
   implicit def TimeSpanSemigroup: Semigroup[TimeSpan]
+
+  // TODO: We can create the semigroup in here if we have a way to extract the
+  // end points from a TimeSpan and have an ordering for Time.
 }
 
 
