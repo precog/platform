@@ -84,7 +84,10 @@ object LevelDBProjection {
   private final val comparatorMetadataFilename = "comparator"
 }
 
-abstract class LevelDBProjection(val baseDir: File, val descriptor: ProjectionDescriptor) extends LevelDBByteProjection with FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
+abstract class LevelDBProjection[Key](val baseDir: File, val descriptor: ProjectionDescriptor) 
+    extends LevelDBByteProjection 
+    with FullProjectionLike[IterableDataset[Seq[CValue]]] 
+    with BlockProjectionLike[Key, Slice] {
   import LevelDBProjection._
 
   val chunkSize = 32000 // bytes

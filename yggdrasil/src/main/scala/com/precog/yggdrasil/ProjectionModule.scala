@@ -40,8 +40,7 @@ trait ProjectionLike {
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
 }
 
-trait BlockProjectionLike[Block] extends ProjectionLike {
-  type Key
+trait BlockProjectionLike[Key, Block] extends ProjectionLike {
   implicit def keyOrder: Order[Key]
 
   case class BlockData(minKey: Key, maxKey: Key, data: Block)

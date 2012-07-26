@@ -47,9 +47,7 @@ trait DisabledLevelDBProjectionModule extends ProjectionModule {
   // pool for readahead threads
   private val readaheadPool = Executors.newCachedThreadPool()
 
-  class Projection private[DisabledLevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection(baseDir, descriptor) {
-    type Key = Identities
-
+  class Projection private[DisabledLevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection[Identities](baseDir, descriptor) {
     implicit val keyOrder = IdentitiesOrder
 
     ///////////////////

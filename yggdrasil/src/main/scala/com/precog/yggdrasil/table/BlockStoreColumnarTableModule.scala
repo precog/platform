@@ -28,6 +28,7 @@ import metadata._
 import blueeyes.json.{JPath,JPathField,JPathIndex}
 
 import scalaz._
+import scalaz.Ordering._
 import scalaz.std.set._
 import scalaz.std.stream._
 import scalaz.syntax.monad._
@@ -37,10 +38,10 @@ import scalaz.syntax.std.stream._
 import scala.annotation.tailrec
 import scala.collection.mutable
 
-trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] {
+trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] { self =>
   type UserId = String
-  type Projection <: BlockProjectionLike[Slice]
-
+  type Key
+  type Projection <: BlockProjectionLike[Key, Slice]
   type BD = Projection#BlockData
 
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
@@ -111,11 +112,22 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
      * block of data.
      */
     case class Cell(index: Int, block: BD)(succ0: BD => M[Option[BD]]) {
-      var position: Int = 0
+      private val remap = new Array[Int](block.data.size)
+      var position: Int = -1
 
       def succ: M[Option[Cell]] = {
         for (blockOpt <- succ0(block)) yield {
           blockOpt map { block => Cell(index, block)(succ0) }
+        }
+      }
+
+      def advance(i: Int): Boolean = {
+        position += 1
+        if (position < block.data.size) {
+          remap(position) = i
+          true
+        } else {
+          false
         }
       }
     }
@@ -185,7 +197,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val cellsM: Set[M[Option[Cell]]] = for (((desc, cols), i) <- projections.toSeq.zipWithIndex.toSet) yield {
           val succ: Option[BD] => M[Option[BD]] = (block: Option[BD]) => storage.projection(desc) map {
             case (projection, release) => 
-              val result = projection.getBlockAfter(block.map(_.maxKey.asInstanceOf[projection.Key]), cols)  //todo: remove asInstanceOf
+              val result = projection.getBlockAfter(block.map(_.maxKey), cols)  //todo: remove asInstanceOf
               release.release.unsafePerformIO
               result
           }
@@ -196,13 +208,23 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         }
 
         for (cells <- cellsM.sequence.map(_.flatten)) yield {
-          val cellMatrix = CellMatrix(cells) {
+          val cellMatrix = CellMatrix(cells) { slice => 
             //todo: How do we actually determine the correct function for retrieving the key?
-            slice => slice.columns.keys.filter { case ColumnRef(selector, ctype) => sys.error("todo") } toList
+            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
           }
 
           table(
             StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(cellMatrix.ordering)) { queue =>
+              @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
+                if (queue.isEmpty) cells
+                else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: Nil)
+                else cells
+              }
+
+              var sliceIndex = 0
+
+              val cellBlock = dequeueEqual(Nil)
+
               sys.error("todo")
             }
           )
