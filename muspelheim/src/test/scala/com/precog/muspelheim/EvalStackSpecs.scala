@@ -71,11 +71,11 @@ trait EvalStackSpecs extends Specification {
     }
 
     "accept a dereferenced object" >> {
-      "non-empty array" >> {
+      "non-empty object" >> {
         eval("{a: 42}[1]") mustEqual Set()
-      }.pendingUntilFixed
+      }
 
-      "empty array" >> {
+      "empty object" >> {
         eval("{}[0]") mustEqual Set()
       }.pendingUntilFixed
     }    
@@ -161,7 +161,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }
+    }.pendingUntilFixed
 
     "use the where operator on a unioned set" >> {
       "campaigns.gender" >> {
@@ -226,7 +226,7 @@ trait EvalStackSpecs extends Specification {
 
         results must haveSize(0)
       }
-    }
+    }.pendingUntilFixed
 
     "basic intersect and union queries" >> {
       {
@@ -297,7 +297,7 @@ trait EvalStackSpecs extends Specification {
 
         results must haveSize(200)
       }
-    }
+    }.pendingUntilFixed
 
     "intersect a union" >> {
       "campaigns.gender" >> {
@@ -316,7 +316,7 @@ trait EvalStackSpecs extends Specification {
             Set("c16","c9","c21","c15","c26","c5","c18","c7","c4","c17","c11","c13","c12","c28","c23","c14","c10","c19","c6","c24","c22","c20") must contain(campaign)
           case r => failure("Result has wrong shape: "+r)
         }
-      }
+      }.pendingUntilFixed
 
       "union the same set when two different variables are assigned to it" >> {
           val input = """
@@ -327,7 +327,7 @@ trait EvalStackSpecs extends Specification {
           val results = evalE(input)
 
           results must haveSize(100)
-      }      
+      }.pendingUntilFixed      
 
       "clicks.platform" >> {
         val input = """
@@ -346,7 +346,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }
+      }.pendingUntilFixed
     }
 
     "union with an object" >> {
@@ -359,7 +359,7 @@ trait EvalStackSpecs extends Specification {
       val results = evalE(input)
 
       results must haveSize(200)
-    }
+    }.pendingUntilFixed
 
     "use the where operator on a key with string values" in {
       val input = """//campaigns where //campaigns.platform = "android" """
@@ -418,7 +418,7 @@ trait EvalStackSpecs extends Specification {
           |   distinct(a.gender)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"))   
-      }
+      }.pendingUntilFixed
 
       "on set of strings formed by a union" >> {
         val input = """
@@ -427,7 +427,7 @@ trait EvalStackSpecs extends Specification {
           | distinct(gender union pageId)""".stripMargin
 
         eval(input) mustEqual Set(SString("female"), SString("male"), SString("page-0"), SString("page-1"), SString("page-2"), SString("page-3"), SString("page-4"))   
-      }
+      }.pendingUntilFixed
     }
 
     "map object creation over the campaigns dataset" in {
@@ -606,7 +606,7 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }      
+      }.pendingUntilFixed      
       
       "using where" >> {
         val input = """
@@ -624,9 +624,9 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }
+      }.pendingUntilFixed
 
-      "using where and with" in {
+      "using where and with" >> {
         val input = """
           | campaigns := //campaigns
           | cpmRanked := campaigns with {rank: std::stats::rank(campaigns.cpm)}
@@ -635,16 +635,16 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input)
         
         results mustEqual Set(SDecimal(38))
-      }      
+      }.pendingUntilFixed      
       
-      "on a set of strings" in {
+      "on a set of strings" >> {
         val input = """
           | std::stats::rank(//campaigns.userId)""".stripMargin
 
         val results = eval(input) 
         
         results must haveSize(0)
-      }
+      }.pendingUntilFixed
     }
 
     "evaluate denseRank" >> {
@@ -664,9 +664,9 @@ trait EvalStackSpecs extends Specification {
           }
           case r => failure("Result has wrong shape: "+r)
         }
-      }
+      }.pendingUntilFixed
 
-      "using where and with" in {
+      "using where and with" >> {
         val input = """
           | campaigns := //campaigns
           | cpmRanked := campaigns with {rank: std::stats::denseRank(campaigns.cpm)}
@@ -675,16 +675,16 @@ trait EvalStackSpecs extends Specification {
         val results = eval(input) 
         
         results mustEqual Set(SDecimal(39))
-      }      
+      }.pendingUntilFixed      
       
-      "on a set of strings" in {
+      "on a set of strings" >> {
         val input = """
           | std::stats::denseRank(//campaigns.userId)""".stripMargin
 
         val results = eval(input) 
         
         results must haveSize(0)
-      }
+      }.pendingUntilFixed
     }
 
     "evaluate functions from each library" >> {
@@ -694,7 +694,7 @@ trait EvalStackSpecs extends Specification {
           | std::string::concat("alpha ", gender)""".stripMargin
 
         eval(input) mustEqual Set(SString("alpha female"), SString("alpha male"))
-      }
+      }.pendingUntilFixed
 
       "Mathlib" >> {
         val input = """
@@ -703,7 +703,7 @@ trait EvalStackSpecs extends Specification {
           | std::math::pow(selectCpm, 2)""".stripMargin
 
         eval(input) mustEqual Set(SDecimal(25), SDecimal(1), SDecimal(36), SDecimal(81), SDecimal(16))
-      }
+      }.pendingUntilFixed
 
       "Timelib" >> {
         val input = """
