@@ -148,12 +148,9 @@ object util {
     def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i > 0 && i < indices.size) => indices.get(i) })
   }
 
-  import TableModule._
-  def printColumn(c: Column, from: Int, to: Int) = (from.to(to)).foreach { i => if (c.isDefinedAt(i)) { println("Row %d = %s".format(i, c.strValue(i))) } }
-
   case class filter(from: Int, to: Int, definedAt: BitSet) extends CF1P ({
-    case c: BoolColumn   => { ifTesting { printColumn(c, from, to); println("new bc definedAt " + c.definedAt(from, to) + " and filtered to " + definedAt) }; new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) } }
-    case c: LongColumn   => { ifTesting { printColumn(c, from, to); println("new lc definedAt " + c.definedAt(from, to) + " and filtered to " + definedAt) }; new BitsetColumn(definedAt & c.definedAt(from, to)) with LongColumn { def apply(row: Int) = c(row) } }
+    case c: BoolColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with BoolColumn { def apply(row: Int) = c(row) }
+    case c: LongColumn   => new BitsetColumn(definedAt & c.definedAt(from, to)) with LongColumn { def apply(row: Int) = c(row) }
     case c: DoubleColumn => new BitsetColumn(definedAt & c.definedAt(from, to)) with DoubleColumn { def apply(row: Int) = c(row) }
     case c: NumColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with NumColumn { def apply(row: Int) = c(row) }
     case c: StrColumn    => new BitsetColumn(definedAt & c.definedAt(from, to)) with StrColumn { def apply(row: Int) = c(row) }

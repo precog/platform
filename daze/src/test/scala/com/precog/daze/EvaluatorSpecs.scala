@@ -1482,30 +1482,22 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }      
 
       "equal" >> {
-        import yggdrasil.TableModule._
-        enableTestPrint(true)
-        println("Starting our test")
-        try {
-          val line = Line(0, "")
-          
-          val input = Filter(line, None,
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+          Join(line, Map2Cross(Eq),
             dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-            Join(line, Map2Cross(Eq),
-              dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
-              Root(line, PushNum("13"))))
-            
-          testEval(input) { result =>
-            println("Test complete")
-            result must haveSize(1)
-            
-            val result2 = result collect {
-              case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
-            }
-            
-            result2 must contain(13)
+            Root(line, PushNum("13"))))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SDecimal(d)) if ids.size == 1 => d.toInt
           }
-        } finally {
-          enableTestPrint(false)
+          
+          result2 must contain(13)
         }
       }      
 

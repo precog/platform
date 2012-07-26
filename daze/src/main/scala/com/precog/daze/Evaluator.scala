@@ -74,7 +74,6 @@ trait Evaluator[M[+_]] extends DAG
     with Logging { self =>
   
   import Function._
-  import TableModule._
   
   import instructions._
   import dag._
@@ -605,9 +604,7 @@ trait Evaluator[M[+_]] extends DAG
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
-    val resultFinal = resultState.eval(EvaluatorState(Map()))
-    resultFinal map { r => ifTesting { println("TABLE = " + r.toString) } }
-    resultFinal
+    resultState.eval(EvaluatorState(Map()))
 
     //** original code **//
     //val PendingTable(table, _, spec) = loop(rewrite(graph), Map())

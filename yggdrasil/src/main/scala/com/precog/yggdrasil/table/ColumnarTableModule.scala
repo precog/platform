@@ -218,8 +218,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         case Filter(source, predicate) => 
           composeSliceTransform(source).zip(composeSliceTransform(predicate)) { (s: Slice, filter: Slice) => 
             assert(filter.size == s.size)
-            import TableModule._
-            ifTesting { println("Filter slice has %d columns:\n".format(filter.columns.size)); println("filter contents = \n" + filter.toString) }
 
             if (s.columns.isEmpty) {
               s
@@ -227,7 +225,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               val definedAt: BitSet = filter.columns.values.foldLeft(BitSet.empty) { (acc, col) =>
                 col match {
                   case c: BoolColumn => {
-                    ifTesting { println(cf.util.isSatisfied(col)) }
                     cf.util.isSatisfied(col).map(_.definedAt(0, s.size) ++ acc).getOrElse(BitSet.empty) 
                   }
                   case _ => acc
@@ -337,10 +334,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
           }
 
           def boolId: (BoolColumn => BoolColumn) = {
-            (b: BoolColumn) => new BoolColumn {
-              def isDefinedAt(row: Int) = b.isDefinedAt(row)
-              def apply(row: Int) = b(row)
-            }
+            (b: BoolColumn) => b
           }
 
           val transform: (BoolColumn => BoolColumn)  = if (invert) comp else boolId
@@ -354,14 +348,12 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                   case _ => false
                 }
 
-                val remappedComp: Seq[(ColumnRef,BoolColumn)] = comparable.flatMap { case (ref, col) => Eq.partialRight(value)(col).map((ref, _)) }.asInstanceOf[Seq[(ColumnRef,BoolColumn)]]
-                val remappedOther: Seq[(ColumnRef,BoolColumn)] = other.map { case (ref, col) => (ref.copy(selector = JPath.Identity), new Map1Column(col) with BoolColumn { def apply(row: Int) = false }) }.asInstanceOf[Seq[(ColumnRef,BoolColumn)]]
-
-                val grouped: Map[ColumnRef, Seq[(ColumnRef, BoolColumn)]] = (remappedComp ++ remappedOther).map { 
-                  case (ref, col) => (ref, transform(col)) }.groupBy { 
-                    case (ref, col) => ref }
-
-                grouped.map {
+                (comparable.flatMap { case (ref, col) => Eq.partialRight(value)(col).map { col => (ref, col.asInstanceOf[BoolColumn]) } } ++
+                 other.map { case (ref, col) => (ref.copy(selector = JPath.Identity), new Map1Column(col) with BoolColumn { def apply(row: Int) = false }) }).map {
+                  case (ref, col) => (ref, transform(col)) 
+                }.groupBy { 
+                  case (ref, col) => ref 
+                }.map {
                   case (ref, columns) => (ref, new BoolColumn {
                     def isDefinedAt(row: Int) = columns.exists { case (_, col) => col.isDefinedAt(row) }
                     def apply(row: Int)       = columns.exists { case (_, col) => col(row) }

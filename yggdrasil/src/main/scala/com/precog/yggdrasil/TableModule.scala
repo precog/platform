@@ -29,17 +29,7 @@ import collection.Set
 import scalaz.Monoid
 import scalaz.Monad
 
-object TableModule {
-  val testingBack = new ThreadLocal[Boolean]() {
-    override def initialValue() = false
-  }
-  def enableTestPrint(b: Boolean) = testingBack.set(b)
-  def ifTesting(f: => Unit) = if (testingBack.get()) { f }
-}
-
 trait TableModule[M[+_]] extends FNModule {
-  import TableModule._
-
   type Scanner
   type Reducer[α]
 
