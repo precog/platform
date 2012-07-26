@@ -91,7 +91,7 @@ class MetadataStorageSpec extends Specification {
       }
 
       io.unsafePerformIO
-    }.pendingUntilFixed
+    }
 
     "safely update metadata not current" in new metadataStore {
 
@@ -109,7 +109,7 @@ class MetadataStorageSpec extends Specification {
       }
 
       io.unsafePerformIO
-    }.pendingUntilFixed
+    }
 
     "correctly read metadata" in new metadataStore {
       val io = for {
@@ -121,7 +121,7 @@ class MetadataStorageSpec extends Specification {
       }
 
       io.unsafePerformIO
-    }.pendingUntilFixed
+    }
   }
 }
 

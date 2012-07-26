@@ -84,7 +84,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       val results = toJson(table.transform {
         Filter(
           Leaf(Source), 
-          Map1(Leaf(Source), lookupF1(Nil, "true"))
+          Equal(Leaf(Source), Leaf(Source))   //Map1 now makes undefined all columns not a the root-identity level
         )
       })
 
