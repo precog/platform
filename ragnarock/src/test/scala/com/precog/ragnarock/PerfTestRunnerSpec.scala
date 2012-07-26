@@ -22,6 +22,7 @@ package com.precog.ragnarock
 import org.specs2.mutable.Specification
 
 import scalaz._
+import scalaz.std.option._
 
 
 class PerfTestRunnerSpec extends Specification {
@@ -29,16 +30,20 @@ class PerfTestRunnerSpec extends Specification {
     "run in order, with disjoint timespans" in {
       import Id._
 
-      val t = SequenceTests(TimeQuery(".") :: TimeQuery(".") :: Nil)
+      val t = Tree.node(RunSequential, Stream(
+        Tree.leaf[PerfTest](RunQuery(".")),
+        Tree.leaf[PerfTest](RunQuery("."))))
       val r = new MockPerfTestRunner[Id](50)
-      val s = r.TimeSpanSemigroup
 
-      r.run(t) must beLike { case GroupedResult(_, results) =>
-        results must have size(2)
-        (results sliding 2 map (_ map (_.timeOption(s))) forall {
-          case Some((_, t1)) :: Some((t2, _)) :: Nil => t1 <= t2
-          case _ => false
-        }) must_== true
+      implicit val s = r.TimeSpanSemigroup
+
+      r.runAll(t, 1)(identity) must beLike {
+        case Tree.Node((RunSequential, _), results) =>
+          results must have size(2)
+          results map { case Tree.Node((_, time), _) => time } sliding 2 forall {
+            case Stream(Some((_, t1)), Some((t2, _))) => t1 <= t2
+            case _ => false
+          } must_== true
       }
     }
   }

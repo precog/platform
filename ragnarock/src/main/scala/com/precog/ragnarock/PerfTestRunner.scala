@@ -25,6 +25,7 @@ import scalaz._
 
 trait PerfTestRunner[M[+_]] { self: Timer =>
   import scalaz.syntax.monad._
+  import scalaz.syntax.monoid._
   import scalaz.syntax.copointed._
 
   implicit def M: Monad[M]
@@ -37,40 +38,63 @@ trait PerfTestRunner[M[+_]] { self: Timer =>
   def eval(query: String): M[Result]
 
 
-  def run(test: PerfTest)(implicit M: Copointed[M]) = runM(test).copoint
+  type RunResult[A] = Tree[(PerfTest, A, Option[TimeSpan])]
 
-  def runM(test: PerfTest): M[PerfTestResult[TimeSpan]] = test match {
-    case TimeQuery(query) =>
-      timeQuery(query) map { case (t, _) => QueryResult(query, t) }
 
-    case GroupedTest(name, test) =>
-      runM(test) map {
-        case GroupedResult(None, rs) =>
-          GroupedResult(Some(name), rs)
-
-        case r @ (GroupedResult(_, _) | QueryResult(_, _)) =>
-          GroupedResult(Some(name), r :: Nil)
-      }
-
-    case ConcurrentTests(tests) =>
-      (tests map (runM(_))).foldLeft(GroupedResult[TimeSpan](None, Nil).pure[M]) { (acc, testRun) =>
-        acc flatMap { case GroupedResult(_, rs) =>
-          testRun map { r => GroupedResult(None, r :: rs) }
-        }
-      } map {
-        case GroupedResult(_, rs) => GroupedResult(None, rs.reverse)
-      }
-
-    case SequenceTests(tests) =>
-      tests.foldLeft(GroupedResult[TimeSpan](None, Nil).pure[M]) { (result, test) =>
-        result flatMap { case GroupedResult(_, rs) =>
-          runM(test) map { r => GroupedResult(None, r :: rs) }
-        }
-      } map {
-        case GroupedResult(_, rs) => GroupedResult(None, rs.reverse)
-      }
+  private def merge[A: Monoid](run: RunResult[A], f: Option[TimeSpan] => A): Tree[(PerfTest, A)] = {
+    run match { case Tree.Node((test, a, time), children) =>
+      Tree.node((test, a |+| f(time)), children map (merge(_, f)))
+    }
   }
 
+  def runAll[A](test: Tree[PerfTest], n: Int)(f: Option[TimeSpan] => A)(implicit
+    A: Monoid[A], M: Copointed[M]) = runAllM(test, n)(f).copoint
+
+  /**
+   * Runs `test` `n` times, merging the times for queries together by converting
+   * the times to `A`s, then appending them.
+   */
+  def runAllM[A: Monoid](test: Tree[PerfTest], n: Int)(f: Option[TimeSpan] => A) = {
+    require(n > 0)
+
+    (1 to n).foldLeft((test map (_ -> Monoid[A].zero)).pure[M]) { (acc, _) =>
+      acc flatMap (runM(_)) map (merge(_, f))
+    }
+  }
+
+  def runM[A](test: Tree[(PerfTest, A)]): M[RunResult[A]] = {
+    test match {
+      case Tree.Node((test @ RunQuery(q), a), _) =>
+        timeQuery(q) map { case (t, _) =>
+          Tree.leaf((test, a, Some(t)))
+        }
+
+      case Tree.Node((RunSequential, a), tests) =>
+        tests.foldLeft(List[RunResult[A]]().pure[M]) { (acc, test) =>
+            acc flatMap { rs =>
+              runM(test) map (_ :: rs)
+            }
+        } map { children =>
+          Tree.node((RunSequential, a, None), children.reverse.toStream)
+        }
+
+      case Tree.Node((RunConcurrent, a), tests) =>
+        (tests map (runM(_))).foldLeft(List[RunResult[A]]().pure[M]) { (acc, run) =>
+          acc flatMap { rs =>
+            run map { _ :: rs }
+          }
+        } map { children =>
+          Tree.node((RunConcurrent, a, None), children.reverse.toStream)
+        }
+
+      case Tree.Node((g: Group, a), tests) =>
+        // tests really should only have size 1 in this case...
+        runM(Tree.node((RunConcurrent, a), tests)) map {
+          case Tree.Node((_, a, t), tests) =>
+            Tree.node((g, a, t), tests)
+        }
+    }
+  }
 
   private def time[A](f: => A): (TimeSpan, A) = {
     val start = now()
@@ -91,8 +115,10 @@ class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) exte
   type Result = Unit
 
   def eval(query: String): M[Result] = {
-    Thread.sleep(evalTime)
-    (()).pure[M]
+    (()).pure[M] map { _ =>
+      Thread.sleep(evalTime)
+      ()
+    }
   }
 }
 
