@@ -36,7 +36,7 @@ import quirrel.typer._
 
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.leveldb._
+import yggdrasil.jdbm3._
 import yggdrasil.metadata._
 import yggdrasil.memoization._
 import yggdrasil.serialization._
@@ -62,7 +62,7 @@ import org.streum.configrity.io.BlockFormat
 class PlatformSpecs 
     extends ParseEvalStackSpecs[Future] 
     with BlockStoreColumnarTableModule[Future] 
-    with LevelDBProjectionModule 
+    with JDBMProjectionModule 
     with SystemActorStorageModule 
     with StandaloneShardSystemActorModule { platformSpecs =>
 
@@ -81,7 +81,7 @@ class PlatformSpecs
 
   val storage = new Storage
 
-  object Projection extends LevelDBProjectionCompanion {
+  object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }

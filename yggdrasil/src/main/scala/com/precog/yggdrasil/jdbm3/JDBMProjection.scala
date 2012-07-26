@@ -77,7 +77,11 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   private[this] final val treeMapName = "byIdentityMap"
 
-  protected lazy val idIndexFile: DB = DBMaker.openFile(baseDir.getCanonicalPath + "/jdbm").make()
+  private[this] final val indexDir = new File(baseDir, "jdbm")
+
+  indexDir.mkdirs()
+
+  protected lazy val idIndexFile: DB = DBMaker.openFile((new File(indexDir, "byIdentity")).getCanonicalPath).make()
   
   protected lazy val treeMap: IndexTree = {
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)

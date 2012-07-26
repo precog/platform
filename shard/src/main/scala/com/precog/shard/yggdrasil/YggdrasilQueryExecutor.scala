@@ -33,7 +33,7 @@ import com.precog.common.security._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.leveldb._
+import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.serialization._
 import com.precog.yggdrasil.table._
@@ -92,7 +92,7 @@ trait YggdrasilQueryExecutorComponent {
   def queryExecutorFactory(config: Configuration, extAccessControl: AccessControl[Future]): QueryExecutor = {
     val yConfig = wrapConfig(config)
     
-    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with LevelDBProjectionModule with ProductionShardSystemActorModule {
+    new YggdrasilQueryExecutor with BlockStoreColumnarTableModule[Future] with JDBMProjectionModule with ProductionShardSystemActorModule {
       implicit lazy val actorSystem = ActorSystem("yggdrasilExecutorActorSystem")
       implicit lazy val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
       val yggConfig = yConfig
@@ -109,7 +109,7 @@ trait YggdrasilQueryExecutorComponent {
 
       val storage = new Storage
 
-      object Projection extends LevelDBProjectionCompanion {
+      object Projection extends JDBMProjectionCompanion {
         val fileOps = FilesystemFileOps
         def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
       }

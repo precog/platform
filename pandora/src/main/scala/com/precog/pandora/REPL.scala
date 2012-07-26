@@ -36,7 +36,7 @@ import com.precog.common.kafka._
 import com.precog.common.security._
 import yggdrasil._
 import yggdrasil.actor._
-import yggdrasil.leveldb._
+import yggdrasil.jdbm3._
 import yggdrasil.memoization._
 import yggdrasil.metadata._
 import yggdrasil.serialization._
@@ -269,7 +269,7 @@ object Console extends App {
       scalaz.Success[blueeyes.json.xschema.Extractor.Error, Lifecycle](new REPL 
           with Lifecycle 
           with BlockStoreColumnarTableModule[Future]
-          with LevelDBProjectionModule
+          with JDBMProjectionModule
           with SystemActorStorageModule
           with StandaloneShardSystemActorModule { self =>
 
@@ -291,7 +291,7 @@ object Console extends App {
 
         val storage = new Storage
 
-        object Projection extends LevelDBProjectionCompanion {
+        object Projection extends JDBMProjectionCompanion {
           val fileOps = FilesystemFileOps
           def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
         }
