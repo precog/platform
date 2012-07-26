@@ -737,12 +737,14 @@ object ImportTools extends Command with Logging {
       logger.info("Starting shard input")
       Await.result(storage.start(), Duration(60, "seconds"))
       logger.info("Shard input started")
+      val pid: Int = System.currentTimeMillis.toInt & 0x7fffffff
+      logger.info("Using PID: " + pid)
       config.input.foreach {
         case (db, input) =>
           logger.debug("Inserting batch: %s:%s".format(db, input))
           val reader = new FileReader(new File(input))
           val events = JsonParser.parse(reader).children.map { child =>
-            EventMessage(EventId(0, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
+            EventMessage(EventId(pid, sid.getAndIncrement), Event(Path(db), config.token, child, Map.empty))
           }
           
           logger.debug(events.size + " total inserts")
