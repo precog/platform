@@ -60,3 +60,5 @@ ivyXML :=
 seq(assemblySettings: _*)
 
 mainClass := Some("com.precog.yggdrasil.util.YggUtils")
+
+test in assembly := {}

@@ -16,7 +16,7 @@ import scalaz.std._
 import scalaz.std.math._
 import scalaz.std.AllInstances._
 
-sealed trait CValue {
+sealed trait CValue extends Serializable {
   @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
     case CString(v)  => 0
     case CBoolean(v) => 1
@@ -35,6 +35,7 @@ sealed trait CValue {
 }
 
 object CValue {
+  @transient
   implicit object order extends Order[CValue] {
     def order(v1: CValue, v2: CValue) = (v1, v2) match {
       case (CString(a), CString(b)) => Order[String].order(a, b)
@@ -227,7 +228,7 @@ object CType extends CTypeSerialization {
 //
 // Strings
 //
-case class CString(value: String) extends CValue 
+case class CString(value: String) extends CValue
 
 case object CString extends CType(LengthEncoded, SString) {
   type CA = String
@@ -240,7 +241,8 @@ case object CString extends CType(LengthEncoded, SString) {
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CValue 
+case class CBoolean(value: Boolean) extends CValue
+
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   type CA = Boolean
   val CC = classOf[Boolean]
@@ -285,6 +287,7 @@ case object CNum extends CNumeric(LengthEncoded, SDecimal) {
 }
 
 case class CDate(value: DateTime) extends CValue
+
 case object CDate extends CType(FixedWidth(8), SString) {
   type CA = DateTime
   val CC = classOf[DateTime]
