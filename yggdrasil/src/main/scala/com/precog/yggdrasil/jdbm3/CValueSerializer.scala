@@ -27,8 +27,8 @@ import org.joda.time.DateTime
 
 import java.io.{DataInput,DataOutput}
 
-object CValueSerializer extends CValueSerializer {
-  final val serialVersionUID = 20120724l
+object CValueSerializer {
+  def apply(format: Seq[CType]) = new CValueSerializer(format.toArray)
 }
 
 object CValueSerializerUtil {
@@ -37,61 +37,46 @@ object CValueSerializerUtil {
   private[jdbm3] val logger = Logger(classOf[CValueSerializer])
 }
 
-class CValueSerializer extends Serializer[Array[CValue]] with Serializable {
+class CValueSerializer private[CValueSerializer] (val format: Array[CType]) extends Serializer[Array[CValue]] with Serializable {
+  final val serialVersionUID = 20120727l
+
   import CValueSerializerUtil._
-
-  def readResolve() = CValueSerializer
-
-  // Flag to indicate CValue type. DO NOT EDIT if you don't know what you're doing
-  private[this] final def flagFor(c: CValue): Int = c match {
-    case c: CString      => 0   
-    case c: CBoolean     => 1  
-    case c: CLong        => 2     
-    case c: CDouble      => 3   
-    case c: CNum         => 4      
-    case c: CDate        => 5
-    case CNull           => 6
-    case CEmptyObject    => 7
-    case CEmptyArray     => 8
-  }
 
   def serialize(out: DataOutput, seq: Array[CValue]) {
     try {
-      out.writeInt(seq.size)
-      seq.foreach { v => {
-        out.write(flagFor(v))
+      var i = 0
 
-        v match {
-          case CString(v)   => out.writeUTF(v)
-          case CBoolean(v)  => out.writeBoolean(v)
-          case CLong(v)     => defaultSerializer.serialize(out, v.asInstanceOf[java.lang.Long])
-          case CDouble(v)   => defaultSerializer.serialize(out, v.asInstanceOf[java.lang.Double])
-          case CNum(v)      => defaultSerializer.serialize(out, v.bigDecimal)
-          case CDate(v)     => defaultSerializer.serialize(out, v.getMillis.asInstanceOf[java.lang.Long])
+      while (i < format.length) {
+        format(i) match {
+          case CString   => out.writeUTF(seq(i).asInstanceOf[CString].value)
+          case CBoolean  => out.writeBoolean(seq(i).asInstanceOf[CBoolean].value)
+          case CLong     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CLong].value)
+          case CDouble   => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDouble].value.asInstanceOf[java.lang.Double])
+          case CNum      => defaultSerializer.serialize(out, seq(i).asInstanceOf[CNum].value.bigDecimal)
+          case CDate     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
           case CNull | CEmptyObject | CEmptyArray => // No value to serialize
         }
-      }}
+      }
     } catch {
       case t: Throwable => logger.error("Error during serialization", t)
     }
   }
 
   def deserialize(in: DataInput): Array[CValue] = {
-    val length = in.readInt()
-    val values = new Array[CValue](length)
+    val values = new Array[CValue](format.length)
     
     var i = 0
-    while (i < length) {
-      values(i) = in.readByte() match {
-        case 0 => CString(in.readUTF())
-        case 1 => CBoolean(in.readBoolean())
-        case 2 => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
-        case 3 => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
-        case 4 => CNum(BigDecimal(defaultSerializer.deserialize(in).asInstanceOf[java.math.BigDecimal]))
-        case 5 => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
-        case 6 => CNull
-        case 7 => CEmptyObject
-        case 8 => CEmptyArray
+    while (i < format.length) {
+      values(i) = format(i) match {
+        case CString      => CString(in.readUTF())
+        case CBoolean     => CBoolean(in.readBoolean())
+        case CLong        => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
+        case CDouble      => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
+        case CNum         => CNum(BigDecimal(defaultSerializer.deserialize(in).asInstanceOf[java.math.BigDecimal]))
+        case CDate        => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
+        case CNull        => CNull
+        case CEmptyObject => CEmptyObject
+        case CEmptyArray  => CEmptyArray
       }
       i += 1
     }

@@ -41,20 +41,20 @@ class IdentitiesComparator extends Comparator[Identities] with Serializable {
   }
 }
 
-object IdentitiesSerializer extends IdentitiesSerializer {
-  final val serialVersionUID = 20120724l
+object IdentitiesSerializer {
+  def apply(count: Int) = new IdentitiesSerializer(count)
 }
 
-class IdentitiesSerializer extends Serializer[Identities] with Serializable {
-  def readResolve() = IdentitiesSerializer
+class IdentitiesSerializer private[IdentitiesSerializer](val count: Int) extends Serializer[Identities] with Serializable {
+  final val serialVersionUID = 20120727l
 
   def serialize(out: DataOutput, ids: Identities) {
-    out.writeInt(ids.size)
+    assert(ids.length == count)
     ids.foreach { i => out.writeLong(i) }
   }
 
   def deserialize(in: DataInput): Identities = {
-    in.readInt() match {
+    count match {
       case 0 => Vector0
       case 1 => Vector1(in.readLong())
       case 2 => Vector2(in.readLong(), in.readLong())

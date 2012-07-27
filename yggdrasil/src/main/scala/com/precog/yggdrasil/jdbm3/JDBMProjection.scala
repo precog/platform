@@ -90,7 +90,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
     if (treeMap == null) {
       logger.debug("Creating new projection store")
-      idIndexFile.createTreeMap(treeMapName, IdentitiesComparator, IdentitiesSerializer, CValueSerializer)
+      idIndexFile.createTreeMap(treeMapName, IdentitiesComparator, IdentitiesSerializer(descriptor.identities), CValueSerializer(descriptor.columns.map(_.valueType)))
     } else {
       treeMap
     }

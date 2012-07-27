@@ -67,7 +67,7 @@ object CValue {
   }
 }
 
-sealed abstract class CType(val format: StorageFormat, val stype: SType) {
+sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable {
   type CA
 
   val CC: Class[CA]
@@ -250,6 +250,7 @@ object CType extends CTypeSerialization {
 case class CString(value: String) extends CValue
 
 case object CString extends CType(LengthEncoded, SString) {
+  def readResolve() = CString
   type CA = String
   val CC = classOf[String]
   def order(s1: String, s2: String) = stringInstance.order(s1, s2)
@@ -263,6 +264,7 @@ case object CString extends CType(LengthEncoded, SString) {
 case class CBoolean(value: Boolean) extends CValue
 
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
+  def readResolve() = CBoolean
   type CA = Boolean
   val CC = classOf[Boolean]
   def order(v1: Boolean, v2: Boolean) = booleanInstance.order(v1, v2)
@@ -277,6 +279,7 @@ sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CTyp
 
 case class CLong(value: Long) extends CValue 
 case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
+  def readResolve() = CLong
   type CA = Long
   val CC = classOf[Long]
   override def isNumeric: Boolean = true
@@ -287,6 +290,7 @@ case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
 
 case class CDouble(value: Double) extends CValue 
 case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
+  def readResolve() = CDouble
   type CA = Double
   val CC = classOf[Double]
   override def isNumeric: Boolean = true
@@ -297,6 +301,7 @@ case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
 
 case class CNum(value: BigDecimal) extends CValue 
 case object CNum extends CNumeric(LengthEncoded, SDecimal) {
+  def readResolve() = CNum
   type CA = BigDecimal
   val CC = classOf[BigDecimal]
   override def isNumeric: Boolean = true
@@ -308,6 +313,7 @@ case object CNum extends CNumeric(LengthEncoded, SDecimal) {
 case class CDate(value: DateTime) extends CValue
 
 case object CDate extends CType(FixedWidth(8), SString) {
+  def readResolve() = CDate
   type CA = DateTime
   val CC = classOf[DateTime]
   def order(v1: DateTime, v2: DateTime) = sys.error("todo")
@@ -321,6 +327,7 @@ sealed trait CNullType extends CType
 // Nulls
 //
 case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue {
+  def readResolve() = CNull
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -329,6 +336,7 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue
 }
 
 case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType with CValue {
+  def readResolve() = CEmptyObject
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
@@ -337,6 +345,7 @@ case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType wi
 }
 
 case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with CValue {
+  def readResolve() = CEmptyArray
   type CA = Null
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
