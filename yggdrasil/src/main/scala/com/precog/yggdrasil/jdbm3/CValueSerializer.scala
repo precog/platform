@@ -56,6 +56,7 @@ class CValueSerializer private[CValueSerializer] (val format: Array[CType]) exte
           case CDate     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
           case CNull | CEmptyObject | CEmptyArray => // No value to serialize
         }
+        i += 1
       }
     } catch {
       case t: Throwable => logger.error("Error during serialization", t)
