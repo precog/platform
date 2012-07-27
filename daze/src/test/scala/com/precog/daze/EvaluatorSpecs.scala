@@ -1252,7 +1252,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       
-      "equal" >> {
+      "equal with a number literal" >> {
         val line = Line(0, "")
         
         val input = Filter(line, None,
@@ -1270,7 +1270,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           
           result2 must contain(13)
         }
-      }      
+      }       
 
       "equal without a filter" >> {
         val line = Line(0, "")
@@ -1501,6 +1501,96 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }      
 
+      "equal with empty array" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers9"))),
+          Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers9"))),
+            Root(line, PushArray)))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+          
+          result2 must contain(Vector())
+        }
+      }       
+
+      "equal with empty object" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers9"))),
+          Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers9"))),
+            Root(line, PushObject)))
+          
+        testEval(input) { result =>
+          result must haveSize(1)
+          
+          val result2 = result collect {
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+          }
+          
+          result2 must contain(Map())
+        }
+      } 
+
+      "equal with an array" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+          Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+            Join(line, Map2Cross(JoinArray),
+              Join(line, Map2Cross(JoinArray),
+                Operate(line, WrapArray, Root(line, PushNum("9"))),
+                Operate(line, WrapArray, Root(line, PushNum("10")))),
+              Operate(line, WrapArray, Root(line, PushNum("11"))))))
+
+
+        testEval(input) { result =>
+          result must haveSize(1)
+
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+          }
+
+          result2 must contain(Vector(8, 9, 10))
+        }
+      }.pendingUntilFixed  
+      
+      "equal with an object" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+          Join(line, Map2Cross(Eq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers"))),
+              Join(line, Map2Cross(WrapObject),
+                Root(line, PushString("foo")),
+                Root(line, PushString("bar")))))
+
+        testEval(input) { result =>
+          result must haveSize(1)
+
+          forall(result) {
+            _ must beLike {
+              case (ids, SObject(obj)) if ids.size == 1 => {
+                obj must haveKey("foo")
+                obj must haveValue("bar")
+              }
+            }
+          }
+        }
+      }.pendingUntilFixed 
+
       "equal without a filter" >> {
         val line = Line(0, "")
         
@@ -1568,6 +1658,97 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
       }
       
+      "not-equal with empty array" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+          Join(line, Map2Cross(NotEq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+            Root(line, PushArray)))
+          
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+          }
+          
+          result2 must contain(Vector(SDecimal(9), SDecimal(10)), Map.empty[String, SValue], Map("foo" -> SNull))
+        }
+      }       
+
+      "not-equal with empty object" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+          Join(line, Map2Cross(NotEq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+            Root(line, PushObject)))
+          
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+          }
+          
+          result2 must contain(Vector.empty[SValue], Vector(SDecimal(9), SDecimal(10)), Map("foo" -> SNull))
+        }
+      } 
+
+      "not-equal with an array" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+          Join(line, Map2Cross(NotEq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+            Join(line, Map2Cross(JoinArray),
+              Operate(line, WrapArray, Root(line, PushNum("9"))),
+              Operate(line, WrapArray, Root(line, PushNum("10"))))))
+
+
+        testEval(input) { result =>
+          result must haveSize(3)
+          
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+          }
+          
+          result2 must contain(Map.empty[String, SValue], Vector.empty[SValue], Map("foo" -> SNull))
+ 
+        }
+      }.pendingUntilFixed  
+      
+      "not-equal with an object" >> {
+        val line = Line(0, "")
+        
+        val input = Filter(line, None,
+          dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+          Join(line, Map2Cross(NotEq),
+            dag.LoadLocal(line, Root(line, PushString("/het/numbers10"))),
+              Join(line, Map2Cross(WrapObject),
+                Root(line, PushString("foo")),
+                Root(line, PushString("bar")))))
+
+        testEval(input) { result =>
+          result must haveSize(3)
+
+          val result2 = result collect {
+            case (ids, SArray(arr)) if ids.size == 1 => arr
+            case (ids, SObject(obj)) if ids.size == 1 => obj
+          }
+          
+          result2 must contain(Vector.empty[SValue], Vector(SDecimal(9), SDecimal(10)), Map.empty[String, SValue])
+
+        }
+      }.pendingUntilFixed 
+
       "and" >> {
         val line = Line(0, "")
         
