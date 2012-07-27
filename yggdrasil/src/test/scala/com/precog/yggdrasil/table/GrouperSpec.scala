@@ -35,11 +35,9 @@ import scalaz.std.anyVal._
 import scalaz.syntax.copointed._
 import scalaz.syntax.monad._
 
-trait GrouperSpec[M[+_]] extends Specification with StubColumnarTableModule[M] with ScalaCheck {
+object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] with ScalaCheck with test.YIdInstances {
   import trans._
 
-  implicit val coM: Copointed[M]
-  
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
       val data = set map { JInt(_) }
@@ -1035,6 +1033,366 @@ trait GrouperSpec[M[+_]] extends Specification with StubColumnarTableModule[M] w
               val JInt(v) = obj \ "value"
               
               v mustEqual (k * 2)
+            }
+          }
+        }
+      }.pendingUntilFixed
+    }
+    
+    /*
+     forall 'a forall 'b
+       foo where foo.a = 'a & foo.b = 'b
+       bar where bar.a = 'a
+       baz where baz.b = 'b
+       
+       -- note: intersect, not union!  (inexpressible in Quirrel)
+       { a: 'a, b: 'b, foo: count(foo'), bar: count(bar'), baz: count(baz') }
+     */
+     
+    "handle non-trivial group alignment with composite key" in {
+      val foo = Stream(
+        JObject(
+          JField("a", JInt(42)) ::    // 1
+          JField("b", JInt(12)) :: Nil),
+        JObject(
+          JField("a", JInt(42)) :: Nil),
+        JObject(
+          JField("a", JInt(77)) :: Nil),
+        JObject(
+          JField("c", JInt(-3)) :: Nil),
+        JObject(
+          JField("b", JInt(7)) :: Nil),
+        JObject(
+          JField("a", JInt(42)) ::    // 1
+          JField("b", JInt(12)) :: Nil),
+        JObject(
+          JField("a", JInt(7)) ::     // 2
+          JField("b", JInt(42)) :: Nil),
+        JObject(
+          JField("a", JInt(17)) ::    // 3
+          JField("b", JInt(6)) :: Nil),
+        JObject(
+          JField("b", JInt(1)) :: Nil),
+        JObject(
+          JField("a", JInt(21)) ::    // 4
+          JField("b", JInt(12)) :: Nil),
+        JObject(
+          JField("a", JInt(42)) ::    // 5
+          JField("b", JInt(-2)) :: Nil),
+        JObject(
+          JField("c", JInt(-3)) :: Nil),
+        JObject(
+          JField("a", JInt(7)) ::     // 2
+          JField("b", JInt(42)) :: Nil),
+        JObject(
+          JField("a", JInt(42)) ::    // 1
+          JField("b", JInt(12)) :: Nil))
+          
+      val bar = Stream(
+        JObject(
+          JField("a", JInt(42)) :: Nil),    // 1
+        JObject(
+          JField("a", JInt(42)) :: Nil),    // 1
+        JObject(
+          JField("a", JInt(77)) :: Nil),    // 6
+        JObject(
+          JField("c", JInt(-3)) :: Nil),
+        JObject(
+          JField("b", JInt(7)) :: Nil),
+        JObject(
+          JField("b", JInt(12)) :: Nil),
+        JObject(
+          JField("a", JInt(7)) ::           // 2
+          JField("b", JInt(42)) :: Nil),
+        JObject(
+          JField("a", JInt(17)) ::          // 3
+          JField("c", JInt(77)) :: Nil),
+        JObject(
+          JField("b", JInt(1)) :: Nil),
+        JObject(
+          JField("b", JInt(12)) :: Nil),
+        JObject(
+          JField("b", JInt(-2)) :: Nil),
+        JObject(
+          JField("c", JInt(-3)) :: Nil),
+        JObject(
+          JField("a", JInt(7)) :: Nil),     // 2
+        JObject(
+          JField("a", JInt(42)) :: Nil))    // 1
+          
+      val baz = Stream(
+        JObject(
+          JField("b", JInt(12)) :: Nil),    // 1
+        JObject(
+          JField("b", JInt(6)) :: Nil),     // 3
+        JObject(
+          JField("a", JInt(42)) :: Nil),
+        JObject(
+          JField("b", JInt(1)) :: Nil),     // 7
+        JObject(
+          JField("b", JInt(12)) :: Nil),    // 1
+        JObject(
+          JField("c", JInt(-3)) :: Nil),
+        JObject(
+          JField("b", JInt(42)) :: Nil),    // 2
+        JObject(
+          JField("d", JInt(0)) :: Nil))
+          
+      val fooSpec = fromJson(foo).group(
+        TransSpec1.Id,
+        3,
+        GroupKeySpecAnd(
+          GroupKeySpecSource(
+            JPathField("1"),
+            DerefObjectStatic(Leaf(Source), JPathField("a"))),
+          GroupKeySpecSource(
+            JPathField("2"),
+            DerefObjectStatic(Leaf(Source), JPathField("b")))))
+          
+      val barSpec = fromJson(bar).group(
+        TransSpec1.Id,
+        4,
+        GroupKeySpecSource(
+          JPathField("1"),
+          DerefObjectStatic(Leaf(Source), JPathField("a"))))
+          
+      val bazSpec = fromJson(baz).group(
+        TransSpec1.Id,
+        5,
+        GroupKeySpecSource(
+          JPathField("2"),
+          DerefObjectStatic(Leaf(Source), JPathField("b"))))
+          
+      "intersect" >> {
+        val spec = GroupingIntersect(
+          DerefObjectStatic(Leaf(Source), JPathField("2")),
+          DerefObjectStatic(Leaf(Source), JPathField("2")),
+          GroupingIntersect(
+            DerefObjectStatic(Leaf(Source), JPathField("1")),
+            DerefObjectStatic(Leaf(Source), JPathField("1")),
+            fooSpec,
+            barSpec,
+            GroupKeyAlign.Eq),
+          bazSpec,
+          GroupKeyAlign.Eq)
+          
+        val forallResult = grouper.merge(spec) { (key, map) =>
+          val keyJson = key.toJson.copoint
+          
+          keyJson must not(beEmpty)
+          
+          val a = keyJson.head \ "1"
+          val b = keyJson.head \ "2"
+          
+          a mustNotEqual JNothing
+          b mustNotEqual JNothing
+          
+          val fooPJson = map(3).toJson.copoint
+          val barPJson = map(4).toJson.copoint
+          val bazPJson = map(5).toJson.copoint
+          
+          fooPJson must not(beEmpty)
+          barPJson must not(beEmpty)
+          bazPJson must not(beEmpty)
+          
+          val result = Stream(
+            JObject(
+              JField("a", a) ::
+              JField("b", b) ::
+              JField("foo", JInt(fooPJson.size)) ::
+              JField("bar", JInt(barPJson.size)) ::
+              JField("baz", JInt(bazPJson.size)) :: Nil))
+              
+          implicitly[Pointed[test.YId]].point(fromJson(result))
+        }
+        
+        val forallJson = forallResult flatMap { _.toJson } copoint
+        
+        forallJson must not(beEmpty)
+        forallJson must haveSize(2)
+        
+        forall(forallJson) { row =>
+          row must beLike {
+            case obj: JObject if (obj \ "a") == JInt(42) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              ai mustEqual 42
+              bi mustEqual 12
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 3
+              bari mustEqual 3
+              bazi mustEqual 2
+            }
+            
+            case obj: JObject if (obj \ "a") == JInt(7) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              ai mustEqual 7
+              bi mustEqual 42
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 2
+              bari mustEqual 2
+              bazi mustEqual 1
+            }
+          }
+        }
+      }.pendingUntilFixed
+          
+      "union" >> {
+        val spec = GroupingUnion(
+          DerefObjectStatic(Leaf(Source), JPathField("2")),
+          DerefObjectStatic(Leaf(Source), JPathField("2")),
+          GroupingUnion(
+            DerefObjectStatic(Leaf(Source), JPathField("1")),
+            DerefObjectStatic(Leaf(Source), JPathField("1")),
+            fooSpec,
+            barSpec,
+            GroupKeyAlign.Eq),
+          bazSpec,
+          GroupKeyAlign.Eq)
+          
+        val forallResult = grouper.merge(spec) { (key, map) =>
+          val keyJson = key.toJson.copoint
+          
+          keyJson must not(beEmpty)
+          
+          val a = keyJson.head \ "1"
+          val b = keyJson.head \ "2"
+          
+          (a mustNotEqual JNothing) or (b mustNotEqual JNothing)
+          
+          val fooPJson = map(3).toJson.copoint
+          val barPJson = map(4).toJson.copoint
+          val bazPJson = map(5).toJson.copoint
+          
+          (fooPJson must not(beEmpty)) or
+            (barPJson must not(beEmpty)) or
+            (bazPJson must not(beEmpty))
+          
+          val result = Stream(
+            JObject(
+              JField("a", a) ::
+              JField("b", b) ::
+              JField("foo", JInt(fooPJson.size)) ::
+              JField("bar", JInt(barPJson.size)) ::
+              JField("baz", JInt(bazPJson.size)) :: Nil))
+              
+          implicitly[Pointed[test.YId]].point(fromJson(result))
+        }
+        
+        val forallJson = forallResult flatMap { _.toJson } copoint
+        
+        forallJson must not(beEmpty)
+        forallJson must haveSize(7)
+        
+        forall(forallJson) { row =>
+          row must beLike {
+            // 1
+            case obj: JObject if (obj \ "a") == JInt(42) && (obj \ "b") == JInt(12) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 3
+              bari mustEqual 3
+              bazi mustEqual 2
+            }
+            
+            // 2
+            case obj: JObject if (obj \ "a") == JInt(7) && (obj \ "b") == JInt(42) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 2
+              bari mustEqual 2
+              bazi mustEqual 1
+            }
+            
+            // 3
+            case obj: JObject if (obj \ "a") == JInt(17) && (obj \ "b") == JInt(6) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 1
+              bari mustEqual 1
+              bazi mustEqual 1
+            }
+            
+            // 4
+            case obj: JObject if (obj \ "a") == JInt(21) && (obj \ "b") == JInt(12) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 1
+              bari mustEqual 0
+              bazi mustEqual 0
+            }
+            
+            // 5
+            case obj: JObject if (obj \ "a") == JInt(42) && (obj \ "b") == JInt(-2) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 1
+              bari mustEqual 0
+              bazi mustEqual 0
+            }
+            
+            // 6
+            case obj: JObject if (obj \ "a") == JInt(77) && (obj \ "b") == JNothing => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 0
+              bari mustEqual 1
+              bazi mustEqual 0
+            }
+            
+            // 7
+            case obj: JObject if (obj \ "a") == JNothing && (obj \ "b") == JInt(1) => {
+              val JInt(ai) = obj \ "a"
+              val JInt(bi) = obj \ "b"
+              
+              val JInt(fooi) = obj \ "foo"
+              val JInt(bari) = obj \ "bar"
+              val JInt(bazi) = obj \ "baz"
+              
+              fooi mustEqual 0
+              bari mustEqual 0
+              bazi mustEqual 1
             }
           }
         }
