@@ -23,6 +23,8 @@ import Scalaz._
 class MetadataStorageSpec extends Specification {
   import FileMetadataStorage._
 
+  sequential
+
   val inputMetadata = """{
   "metadata":[],
   "checkpoint":[[1,1]]
