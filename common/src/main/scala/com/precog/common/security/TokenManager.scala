@@ -100,8 +100,8 @@ object MongoTokenManagerSettings {
 }
 
 trait MongoTokenManagerComponent extends Logging {
-  implicit val asyncContext: ExecutionContext
-  implicit val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
+  implicit def asyncContext: ExecutionContext
+  implicit lazy val M: Monad[Future] = AkkaTypeClasses.futureApplicative(asyncContext)
 
   def tokenManagerFactory(config: Configuration): TokenManager[Future] = {
     val mongo = RealMongo(config.detach("mongo"))

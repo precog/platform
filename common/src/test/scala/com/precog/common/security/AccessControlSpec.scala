@@ -38,8 +38,8 @@ import scalaz._
 
 object AccessControlSpec extends Specification with TokenManagerTestValues with AccessControlHelpers {
 
-  implicit val accessControl = new TokenManagerAccessControl(tokens)
-  implicit val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
+  implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
+  implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
   "legacy access control" should {
     "control path access" in {
@@ -174,8 +174,8 @@ object AccessControlSpec extends Specification with TokenManagerTestValues with 
 
 object AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerTestValues with AccessControlHelpers {
  
-  implicit val accessControl = new TokenManagerAccessControl(tokens)
-  implicit val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
+  implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
+  implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
 
   "access control" should {
     "handle proposed use cases" in {
