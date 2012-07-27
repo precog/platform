@@ -54,6 +54,7 @@ trait TestTokens {
 }
 
 trait TestIngestService extends BlueEyesServiceSpecification with IngestService with TestTokens with AkkaDefaults with MongoTokenManagerComponent {
+  val asyncContext = defaultFutureDispatch
 
   import BijectionsChunkJson._
 
@@ -90,7 +91,6 @@ trait TestIngestService extends BlueEyesServiceSpecification with IngestService 
   override def tokenManagerFactory(config: Configuration) = TestTokenManager.testTokenManager[Future]
 
   lazy val ingestService = service.contentType[JValue](application/(MimeTypes.json)).path("/vfs/")
-  val asyncContext = defaultFutureDispatch
 
   override implicit val defaultFutureTimeouts: FutureTimeouts = FutureTimeouts(20, Duration(1, "second"))
   val shortFutureTimeouts = FutureTimeouts(5, Duration(50, "millis"))
