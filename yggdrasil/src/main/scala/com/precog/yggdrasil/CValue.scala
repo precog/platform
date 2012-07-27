@@ -16,6 +16,8 @@ import scalaz.std._
 import scalaz.std.math._
 import scalaz.std.AllInstances._
 
+import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
+
 sealed trait CValue extends Serializable {
   @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
     case CString(v)  => 0
@@ -48,7 +50,7 @@ object CValue {
   }
 }
 
-sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable {
+sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable with Externalizable {
   type CA
 
   val CC: Class[CA]
@@ -93,6 +95,10 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) extends
 
     case _ => false
   }
+  
+  // CTypes are all objects, so we'll readResolve the right instance later
+  def readExternal(in: ObjectInput) {}
+  def writeExternal(out: ObjectOutput) {}
 }
 
 trait CTypeSerialization {
@@ -136,6 +142,7 @@ trait CTypeSerialization {
 }
 
 object CType extends CTypeSerialization {
+  def readResolve() = CType
 
   // CString
   // CBoolean
