@@ -42,20 +42,15 @@ import scala.collection.immutable.ListMap
 
 import org.specs2._
 import org.specs2.mutable.Specification
-import org.specs2.specification.AfterExample
-import org.specs2.specification.BeforeExample
+import org.specs2.specification.Scope
 import org.scalacheck._
 import org.scalacheck.Gen._
 
 
-class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with AfterExample with BeforeExample with FutureMatchers {
-  implicit var actorSystem: ActorSystem = null 
-  def before() {
-    actorSystem = ActorSystem("test")
-  }
-
-  def after() {
-    actorSystem.shutdown
+class ActorMetadataSpec extends Specification with ScalaCheck with RealisticIngestMessage with FutureMatchers {
+  trait WithActorSystem extends mutable.Before {
+    def before {}
+    implicit val actorSystem = ActorSystem("test" + System.nanoTime)
   }
 
   def buildMetadata(sample: List[Event]): Map[ProjectionDescriptor, ColumnMetadata] = {
@@ -184,7 +179,7 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
   }
     
   "ShardMetadata" should {
-    "return all children for the root path" ! check { (sample: List[Event]) =>
+    "return all children for the root path" ! new WithActorSystem { check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
       
@@ -194,9 +189,9 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       (actor ? FindChildren(Path.Root)) must whenDelivered {
         be_==(expected)
       }
-    }
+    }}
     
-    "return all children for the an arbitrary path" ! check { (sample: List[Event]) =>
+    "return all children for the an arbitrary path" ! new WithActorSystem { check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -208,9 +203,9 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       (actor ? FindChildren(testPath)) must whenDelivered {
         be_==(expected)
       }
-    }.pendingUntilFixed
+    }}
 
-    "return all selectors for a given path" ! check { (sample: List[Event]) =>
+    "return all selectors for a given path" ! new WithActorSystem { check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -220,9 +215,9 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       (actor ? FindSelectors(event.path)) must whenDelivered {
         be_==(expected)
       }
-    }
+    }}
 
-    "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
+    "return all metadata for a given (path, selector)" ! new WithActorSystem { check { (sample: List[Event]) =>
       val metadata = buildMetadata(sample)
       val event = sample(0)
 
@@ -232,18 +227,6 @@ class ActorMetadataSpec extends Specification with ScalaCheck with RealisticInge
       (actor ? FindDescriptors(event.path, event.data.flattenWithPath.head._1)) must whenDelivered {
         be_==(expected)
       }
-    }
-   
-    "return all metadata for a given (path, selector)" ! check { (sample: List[Event]) =>
-      val metadata = buildMetadata(sample)
-      val event = sample(0)
-
-      val actor = TestActorRef(new MetadataActor("ActorMetadataSpec", new TestMetadataStorage(metadata), CheckpointCoordination.Noop, None))
-      val expected = extractPathMetadataFor(event.path, event.data.flattenWithPath.head._1)(sample)
-
-      (actor ? FindPathMetadata(event.path, event.data.flattenWithPath.head._1)) must whenDelivered {
-        be_==(expected)
-      }
-    }.pendingUntilFixed
+    }}
   }
 }
