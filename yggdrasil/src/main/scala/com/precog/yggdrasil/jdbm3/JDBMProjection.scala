@@ -64,7 +64,10 @@ import blueeyes.json.xschema.DefaultSerialization._
 object JDBMProjection {
   private[jdbm3] type IndexTree = SortedMap[Identities,Seq[CValue]]
 
-  val DEFAULT_SLICE_SIZE = 10000
+  final val DEFAULT_SLICE_SIZE = 10000
+  final val INDEX_SUBDIR = "jdbm"
+
+  def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
 abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
@@ -77,7 +80,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   private[this] final val treeMapName = "byIdentityMap"
 
-  private[this] final val indexDir = new File(baseDir, "jdbm")
+  private[this] final val indexDir = new File(baseDir, INDEX_SUBDIR)
 
   indexDir.mkdirs()
 
