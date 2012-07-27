@@ -37,7 +37,7 @@ object CValueSerializerUtil {
   private[jdbm3] val logger = Logger(classOf[CValueSerializer])
 }
 
-class CValueSerializer extends Serializer[Seq[CValue]] with Serializable {
+class CValueSerializer extends Serializer[Array[CValue]] with Serializable {
   import CValueSerializerUtil._
 
   def readResolve() = CValueSerializer
@@ -55,7 +55,7 @@ class CValueSerializer extends Serializer[Seq[CValue]] with Serializable {
     case CEmptyArray     => 8
   }
 
-  def serialize(out: DataOutput, seq: Seq[CValue]) {
+  def serialize(out: DataOutput, seq: Array[CValue]) {
     try {
       out.writeInt(seq.size)
       seq.foreach { v => {
@@ -76,7 +76,7 @@ class CValueSerializer extends Serializer[Seq[CValue]] with Serializable {
     }
   }
 
-  def deserialize(in: DataInput): Seq[CValue] = {
+  def deserialize(in: DataInput): Array[CValue] = {
     val length = in.readInt()
     val values = new Array[CValue](length)
     

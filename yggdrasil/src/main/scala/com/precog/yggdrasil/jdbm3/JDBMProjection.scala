@@ -62,7 +62,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 object JDBMProjection {
-  private[jdbm3] type IndexTree = SortedMap[Identities,Seq[CValue]]
+  private[jdbm3] type IndexTree = SortedMap[Identities,Array[CValue]]
 
   final val DEFAULT_SLICE_SIZE = 10000
   final val INDEX_SUBDIR = "jdbm"
@@ -104,7 +104,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids, v))
-    treeMap.put(ids, v.toArray.asInstanceOf[Array[CValue]])
+    treeMap.put(ids, v.toArray[CValue])
 
     if (shouldSync) {
       idIndexFile.commit()
