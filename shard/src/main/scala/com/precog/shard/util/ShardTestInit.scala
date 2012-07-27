@@ -26,7 +26,7 @@ import com.precog.common.security._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.actor._
-import com.precog.yggdrasil.leveldb._
+import com.precog.yggdrasil.jdbm3._
 import com.precog.yggdrasil.metadata._
 import com.precog.yggdrasil.memoization._
 import com.precog.yggdrasil.serialization._
@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scalaz.effect.IO
 
-object ShardTestInit extends App with LevelDBProjectionModule with SystemActorStorageModule with StandaloneShardSystemActorModule {
+object ShardTestInit extends App with JDBMProjectionModule with SystemActorStorageModule with StandaloneShardSystemActorModule {
 
   val dir = new File("./data") 
   dir.mkdirs
@@ -69,7 +69,7 @@ object ShardTestInit extends App with LevelDBProjectionModule with SystemActorSt
 
   val storage = new Storage
 
-  object Projection extends LevelDBProjectionCompanion {
+  object Projection extends JDBMProjectionCompanion {
     val fileOps = FilesystemFileOps
     def baseDir(descriptor: ProjectionDescriptor) = sys.error("todo")
   }

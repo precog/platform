@@ -43,11 +43,11 @@ import scalaz.effect._
 import scalaz.syntax.validation._
 import scalaz.iteratee.Input //todo: Get rid of!
 
-trait LevelDBProjectionModule extends ProjectionModule {
+trait DisabledLevelDBProjectionModule extends ProjectionModule {
   // pool for readahead threads
   private val readaheadPool = Executors.newCachedThreadPool()
 
-  class Projection private[LevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection(baseDir, descriptor) {
+  class Projection private[DisabledLevelDBProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends LevelDBProjection(baseDir, descriptor) {
     ///////////////////
     // ID Traversals //
     ///////////////////
