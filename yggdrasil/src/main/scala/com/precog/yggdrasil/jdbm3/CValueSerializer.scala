@@ -27,8 +27,41 @@ import org.joda.time.DateTime
 
 import java.io.{DataInput,DataOutput}
 
+/* I really hate using this, but the custom serialization code in JDBM3 is choking in
+ * very weird ways when using "CType" as the format type. It appears that it "registers"
+ * the CType class in the serializer, but on read it blows up because the new serializer
+ * hasn't registered the same class and I can't figure out how to properly register it.
+ * Using Byte values to indicate CType is somewhat of a hack, but it works
+ *
+ * DCB - 2012-07-27
+ */
+private[jdbm3] object CTypeMappings {
+  final val FSTRING      = 0.toByte
+  final val FBOOLEAN     = 1.toByte
+  final val FLONG        = 2.toByte
+  final val FDOUBLE      = 3.toByte
+  final val FNUM         = 4.toByte
+  final val FDATE        = 5.toByte
+  final val FNULL        = 6.toByte
+  final val FEMPTYOBJECT = 7.toByte
+  final val FEMPTYARRAY  = 8.toByte
+
+  def flagFor(tpe: CType): Byte = tpe match {
+    case CString      => FSTRING
+    case CBoolean     => FBOOLEAN
+    case CLong        => FLONG
+    case CDouble      => FDOUBLE
+    case CNum         => FNUM
+    case CDate        => FDATE
+    case CNull        => FNULL
+    case CEmptyObject => FEMPTYOBJECT
+    case CEmptyArray  => FEMPTYARRAY
+  }
+}
+
 object CValueSerializer {
-  def apply(format: Seq[CType]) = new CValueSerializer(format.toArray)
+  import CTypeMappings._
+  def apply(format: Seq[CType]) = new CValueSerializer(format.map(flagFor).toArray)
 }
 
 object CValueSerializerUtil {
@@ -37,7 +70,8 @@ object CValueSerializerUtil {
   private[jdbm3] val logger = Logger(classOf[CValueSerializer])
 }
 
-class CValueSerializer private[CValueSerializer] (val format: Array[CType]) extends Serializer[Array[CValue]] with Serializable {
+class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) extends Serializer[Array[CValue]] with Serializable {
+  import CTypeMappings._
   final val serialVersionUID = 20120727l
 
   import CValueSerializerUtil._
@@ -48,13 +82,17 @@ class CValueSerializer private[CValueSerializer] (val format: Array[CType]) exte
 
       while (i < format.length) {
         format(i) match {
-          case CString   => out.writeUTF(seq(i).asInstanceOf[CString].value)
-          case CBoolean  => out.writeBoolean(seq(i).asInstanceOf[CBoolean].value)
-          case CLong     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CLong].value)
-          case CDouble   => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDouble].value.asInstanceOf[java.lang.Double])
-          case CNum      => defaultSerializer.serialize(out, seq(i).asInstanceOf[CNum].value.bigDecimal)
-          case CDate     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
-          case CNull | CEmptyObject | CEmptyArray => // No value to serialize
+          case FSTRING   => out.writeUTF(seq(i).asInstanceOf[CString].value)
+          case FBOOLEAN  => out.writeBoolean(seq(i).asInstanceOf[CBoolean].value)
+          case FLONG     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CLong].value)
+          case FDOUBLE   => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDouble].value.asInstanceOf[java.lang.Double])
+          case FNUM      => {
+            val backing: java.math.BigDecimal = seq(i).asInstanceOf[CNum].value.bigDecimal
+            out.writeUTF(backing.toString)
+          }
+          case FDATE     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
+          case FNULL | FEMPTYOBJECT | FEMPTYARRAY => out.write(0) // TODO: No value to serialize, but JDBM3 *requires* a value to be written. Can we avoid this?
+          case invalid => sys.error("Invalid format flag: " + invalid)
         }
         i += 1
       }
@@ -69,15 +107,16 @@ class CValueSerializer private[CValueSerializer] (val format: Array[CType]) exte
     var i = 0
     while (i < format.length) {
       values(i) = format(i) match {
-        case CString      => CString(in.readUTF())
-        case CBoolean     => CBoolean(in.readBoolean())
-        case CLong        => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
-        case CDouble      => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
-        case CNum         => CNum(BigDecimal(defaultSerializer.deserialize(in).asInstanceOf[java.math.BigDecimal]))
-        case CDate        => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
-        case CNull        => CNull
-        case CEmptyObject => CEmptyObject
-        case CEmptyArray  => CEmptyArray
+        case FSTRING      => CString(in.readUTF())
+        case FBOOLEAN     => CBoolean(in.readBoolean())
+        case FLONG        => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
+        case FDOUBLE      => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
+        case FNUM         => CNum(BigDecimal(new java.math.BigDecimal(in.readUTF())))
+        case FDATE        => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
+        case FNULL        => in.skipBytes(1); CNull        // JDBM requires that we write a value, so we have to read one byte back
+        case FEMPTYOBJECT => in.skipBytes(1); CEmptyObject // JDBM requires that we write a value, so we have to read one byte back 
+        case FEMPTYARRAY  => in.skipBytes(1); CEmptyArray  // JDBM requires that we write a value, so we have to read one byte back
+        case invalid      => sys.error("Invalid format flag: " + invalid)
       }
       i += 1
     }

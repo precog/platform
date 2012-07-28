@@ -69,7 +69,7 @@ object CValue {
   }
 }
 
-sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable with Externalizable {
+sealed abstract class CType(val format: StorageFormat, val stype: SType) extends Serializable {
   type CA
 
   val CC: Class[CA]
@@ -113,11 +113,7 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) extends
     case (CNull, SNull)          => true
 
     case _ => false
-  }
-  
-  // CTypes are all objects, so we'll readResolve the right instance later
-  def readExternal(in: ObjectInput) {}
-  def writeExternal(out: ObjectOutput) {}
+  }  
 }
 
 trait CTypeSerialization {
