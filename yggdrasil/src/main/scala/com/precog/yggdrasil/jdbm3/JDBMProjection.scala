@@ -65,7 +65,12 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   indexDir.mkdirs()
 
-  protected lazy val idIndexFile: DB = DBMaker.openFile((new File(indexDir, "byIdentity")).getCanonicalPath).make()
+  protected lazy val idIndexFile: DB = try {
+    logger.debug("Opening index file for " + toString)
+    DBMaker.openFile((new File(indexDir, "byIdentity")).getCanonicalPath).make()
+  } catch {
+    case t: Throwable => logger.error("Error on DB open", t); throw t
+  }
   
   protected lazy val treeMap: IndexTree = {
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
@@ -73,6 +78,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       logger.debug("Creating new projection store")
       idIndexFile.createTreeMap(treeMapName, IdentitiesComparator, IdentitiesSerializer(descriptor.identities), CValueSerializer(descriptor.columns.map(_.valueType)))
     } else {
+      logger.debug("Opening existing projection store")
       treeMap
     }
   }
@@ -81,6 +87,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     logger.info("Closing column index files")
     idIndexFile.commit()
     idIndexFile.close()
+    logger.debug("Closed column index files")
   }
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
