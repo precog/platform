@@ -54,7 +54,7 @@ parallelExecution in test := false
 
 libraryDependencies ++= Seq(
   "commons-primitives"          %  "commons-primitives" % "1.0",
-  "net.sf.opencsv"              % "opencsv"             % "2.0",
+  "net.sf.opencsv"              %  "opencsv"             % "2.0",
   "ch.qos.logback"              %  "logback-classic"    % "1.0.0",
   "com.typesafe.akka"           %  "akka-actor"         % "2.0",
   "com.typesafe.akka"           %  "akka-testkit"       % "2.0" % "test",
@@ -63,6 +63,7 @@ libraryDependencies ++= Seq(
   "com.github.scopt"            %  "scopt_2.9.1"        % "2.0.1",
   "org.fusesource.leveldbjni"   %  "leveldbjni-osx"     % "1.2-SNAPSHOT" changing(),
   "org.fusesource.leveldbjni"   %  "leveldbjni-linux64" % "1.2-SNAPSHOT" changing(),
+  "com.google.guava"            %  "guava"              % "12.0" % "test",
   "org.apfloat"                 %  "apfloat"            % "1.6.3"
 )
 

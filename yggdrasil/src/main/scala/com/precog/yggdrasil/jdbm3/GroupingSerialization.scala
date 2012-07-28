@@ -63,20 +63,25 @@ class GroupingKeyComparator extends Comparator[GroupingKey] with Serializable {
   }
 }
     
-object GroupingKeySerializer extends GroupingKeySerializer {
-  final val serialVersionUID = 20120724l
+object GroupingKeySerializer {
+  def apply(keyFormat: Array[CType], idCount: Int) = new GroupingKeySerializer(keyFormat, idCount)
 }
 
-class GroupingKeySerializer extends Serializer[GroupingKey] with Serializable {
-  def readResolve() = GroupingKeySerializer
+class GroupingKeySerializer private[GroupingKeySerializer](val keyFormat: Array[CType], val idCount: Int) extends Serializer[GroupingKey] with Serializable {
+  final val serialVersionUID = 20120724l
+
+  @transient
+  private val keySerializer = CValueSerializer(keyFormat)
+  @transient
+  private val idSerializer  = IdentitiesSerializer(idCount)
 
   def serialize(out: DataOutput, gk: GroupingKey) {
-    CValueSerializer.serialize(out, gk.columns)
-    IdentitiesSerializer.serialize(out, gk.ids)
+    keySerializer.serialize(out, gk.columns)
+    idSerializer.serialize(out, gk.ids)
   }
 
   def deserialize(in: DataInput): GroupingKey = {
-    GroupingKey(CValueSerializer.deserialize(in), IdentitiesSerializer.deserialize(in))
+    GroupingKey(keySerializer.deserialize(in), idSerializer.deserialize(in))
   }
 }
  
