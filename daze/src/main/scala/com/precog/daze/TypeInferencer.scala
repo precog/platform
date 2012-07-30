@@ -71,28 +71,34 @@ trait TypeInferencer extends DAG {
   
         case Morph2(_, m, left, right) => collectTypes(m.tpe.arg1, collectTypes(m.tpe.arg0, typing, left), right)
   
-        case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right @ ConstString(str)) =>
+        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right @ ConstString(str)) =>
           collectTypes(JObjectFixedT(Map(str -> jtpe)), typing, left)
   
-        case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right @ ConstDecimal(d)) =>
+        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right @ ConstDecimal(d)) =>
           collectTypes(JArrayFixedT(Map(d.toInt -> jtpe)), typing, left)
   
-        case Join(_, Map2Cross(WrapObject) | Map2CrossLeft(WrapObject) | Map2CrossRight(WrapObject), left, right) =>
+        case Join(_, WrapObject, CrossLeftSort | CrossRightSort, left, right) =>
           collectTypes(jtpe, collectTypes(JTextT, typing, left), right)
   
-        case Join(_, Map2Cross(ArraySwap) | Map2CrossLeft(ArraySwap) | Map2CrossRight(ArraySwap), left, right) =>
+        case Join(_, ArraySwap, CrossLeftSort | CrossRightSort, left, right) =>
           collectTypes(JNumberT, collectTypes(jtpe, typing, left), right)
   
-        case Join(_, Map2(BinaryOperationType(lhs, rhs, _)), left, right) =>
-          collectTypes(rhs, collectTypes(lhs, typing, left), right)
+        case Join(_, op : BinaryOperation, _, left, right) =>
+          collectTypes(op.tpe.arg1, collectTypes(op.tpe.arg0, typing, left), right)
   
-        case Join(_, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
+        case Join(_, _, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
+
+        case IUI(_, _, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
+
+        case Diff(_, left, right) => collectTypes(jtpe, collectTypes(jtpe, typing, left), right)
   
         case Filter(_, _, target, boolean) =>
           collectTypes(JBooleanT, collectTypes(jtpe, typing, target), boolean)
   
         case Sort(parent, _) => collectTypes(jtpe, typing, parent)
   
+        case SortBy(parent, _, _, _) => collectTypes(jtpe, typing, parent)
+
         case Memoize(parent, _) => collectTypes(jtpe, typing, parent)
   
         case Distinct(_, parent) => collectTypes(jtpe, typing, parent)
@@ -138,12 +144,18 @@ trait TypeInferencer extends DAG {
   
         case Morph2(loc, m, left, right) => Morph2(loc, m, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
   
-        case Join(loc, instr, left, right) => Join(loc, instr, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
+        case Join(loc, op, joinSort, left, right) => Join(loc, op, joinSort, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
+
+        case IUI(loc, union, left, right) => IUI(loc, union, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
+
+        case Diff(loc, left, right) => Diff(loc, applyTypes(typing, splits, left), applyTypes(typing, splits, right))
   
         case Filter(loc, cross, target, boolean) =>
           Filter(loc, cross, applyTypes(typing, splits, target), applyTypes(typing, splits, boolean))
   
         case Sort(parent, indices) => Sort(applyTypes(typing, splits, parent), indices)
+        
+        case SortBy(parent, sortField, valueField, id) => SortBy(applyTypes(typing, splits, parent), sortField, valueField, id)
   
         case Memoize(parent, priority) => Memoize(applyTypes(typing, splits, parent), priority)
   

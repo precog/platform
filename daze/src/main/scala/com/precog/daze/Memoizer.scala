@@ -114,22 +114,39 @@ trait Memoizer extends DAG {
               result
           }
           
-          case Join(loc, instr, left, right) => {
+          case Join(loc, op, joinSort, left, right) => {
             val left2 = memoized(left, splits)
             val right2 = memoized(right, splits)
             
-            Join(loc, instr, left2, right2)
+            Join(loc, op, joinSort, left2, right2)
           }
           
-          case Filter(loc, cross, target, boolean) => {
+          case IUI(loc, union, left, right) => {
+            val left2 = memoized(left, splits)
+            val right2 = memoized(right, splits)
+            
+            IUI(loc, union, left2, right2)
+          }
+          
+          case Diff(loc, left, right) => {
+            val left2 = memoized(left, splits)
+            val right2 = memoized(right, splits)
+            
+            Diff(loc, left2, right2)
+          }
+          
+          case Filter(loc, joinSort, target, boolean) => {
             val target2 = memoized(target, splits)
             val boolean2 = memoized(boolean, splits)
             
-            Filter(loc, cross, target2, boolean2)
+            Filter(loc, joinSort, target2, boolean2)
           }
           
           case Sort(parent, indexes) =>
             Sort(memoized(parent, splits), indexes)
+          
+          case SortBy(parent, sortField, valueField, id) =>
+            SortBy(memoized(parent, splits), sortField, valueField, id)
           
           case Memoize(parent, _) => memoized(parent, splits)
         }
@@ -189,7 +206,7 @@ trait Memoizer extends DAG {
     case Split(_, spec, child) =>
       merge(countRefs(child), countSpecRefs(spec))
     
-    case Join(_, _, left, right) => {
+    case Join(_, _, _, left, right) => {
       val rec = merge(countRefs(left), countRefs(right))
       increment(increment(rec, left, 1), right, 1)
     }
@@ -200,6 +217,9 @@ trait Memoizer extends DAG {
     }
     
     case Sort(parent, _) =>
+      increment(countRefs(parent), parent, 1)
+    
+    case SortBy(parent, _, _, _) =>
       increment(countRefs(parent), parent, 1)
     
     case Memoize(parent, _) =>

@@ -98,29 +98,31 @@ trait TypeInferencerSpec[M[+_]] extends Specification
     graph match {
       case _ : Root => Map()
 
-      case New(loc, parent) => extractLoads(parent)
+      case New(_, parent) => extractLoads(parent)
 
-      case LoadLocal(loc, Root(_, PushString(path)), jtpe) => Map(path -> flattenType(jtpe))
+      case LoadLocal(_, Root(_, PushString(path)), jtpe) => Map(path -> flattenType(jtpe))
 
-      case Operate(loc, op, parent) => extractLoads(parent)
+      case Operate(_, _, parent) => extractLoads(parent)
 
-      case Reduce(loc, red, parent) => extractLoads(parent)
+      case Reduce(_, _, parent) => extractLoads(parent)
 
-      case Morph1(loc, m, parent) => extractLoads(parent)
+      case Morph1(_, _, parent) => extractLoads(parent)
 
-      case Morph2(loc, m, left, right) => merge(extractLoads(left), extractLoads(right))
+      case Morph2(_, _, left, right) => merge(extractLoads(left), extractLoads(right))
 
-      case Join(loc, instr, left, right) => merge(extractLoads(left), extractLoads(right))
+      case Join(_, _, joinSort, left, right) => merge(extractLoads(left), extractLoads(right))
 
-      case Filter(loc, cross, target, boolean) => merge(extractLoads(target), extractLoads(boolean))
+      case Filter(_, _, target, boolean) => merge(extractLoads(target), extractLoads(boolean))
 
-      case Sort(parent, indices) => extractLoads(parent)
+      case Sort(parent, _) => extractLoads(parent)
 
-      case Memoize(parent, priority) => extractLoads(parent)
+      case SortBy(parent, _, _, _) => extractLoads(parent)
 
-      case Distinct(loc, parent) => extractLoads(parent)
+      case Memoize(parent, _) => extractLoads(parent)
 
-      case Split(loc, spec, child) => merge(extractSpecLoads(spec), extractLoads(child))
+      case Distinct(_, parent) => extractLoads(parent)
+
+      case Split(_, spec, child) => merge(extractSpecLoads(spec), extractLoads(child))
       
       case SplitGroup(_, _, _) | SplitParam(_, _) => Map() 
     }
@@ -131,7 +133,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           LoadLocal(line, Root(line, PushString("/file"))),
           Root(line, PushString("column")))
 
@@ -150,7 +152,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           New(line,
-            Join(line, Map2Cross(DerefObject), 
+            Join(line, DerefObject, CrossLeftSort, 
               LoadLocal(line, Root(line, PushString("/file"))),
               Root(line, PushString("column")))))
 
@@ -168,7 +170,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       val input =
         Operate(line, Neg,
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file"))),
             Root(line, PushString("column"))))
 
@@ -186,7 +188,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       val input =
         Reduce(line, Mean,
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file"))),
             Root(line, PushString("column"))))
 
@@ -204,7 +206,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       val input =
         Morph1(line, Median,
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file"))),
             Root(line, PushString("column"))))
 
@@ -222,10 +224,10 @@ trait TypeInferencerSpec[M[+_]] extends Specification
 
       val input =
         Morph2(line, Covariance,
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column0"))),
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file1"))),
             Root(line, PushString("column1"))))
 
@@ -245,7 +247,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           New(line,
-            Join(line, Map2Cross(DerefArray), 
+            Join(line, DerefArray, CrossLeftSort, 
               LoadLocal(line, Root(line, PushString("/file"))),
               Root(line, PushNum("0")))))
 
@@ -262,11 +264,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Join(line, Map2Cross(ArraySwap),
-          Join(line, Map2Cross(DerefObject), 
+        Join(line, ArraySwap, CrossLeftSort,
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column0"))),
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file1"))),
             Root(line, PushString("column1"))))
 
@@ -284,11 +286,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Join(line, Map2Cross(WrapObject),
-          Join(line, Map2Cross(DerefObject), 
+        Join(line, WrapObject, CrossLeftSort,
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column0"))),
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file1"))),
             Root(line, PushString("column1"))))
 
@@ -306,11 +308,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Join(line, Map2Match(BuiltInFunction2Op(min)),
-          Join(line, Map2Cross(DerefObject), 
+        Join(line, BuiltInFunction2Op(min), IdentitySort,
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column0"))),
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column1"))))
 
@@ -330,11 +332,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Filter(line, None,
-          Join(line, Map2Cross(DerefObject), 
+        Filter(line, IdentitySort,
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file0"))),
             Root(line, PushString("column0"))),
-          Join(line, Map2Cross(DerefObject), 
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/file1"))),
             Root(line, PushString("column1"))))
 
@@ -354,10 +356,32 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           Sort(
-            Join(line, Map2Cross(DerefObject), 
+            Join(line, DerefObject, CrossLeftSort, 
               LoadLocal(line, Root(line, PushString("/file"))),
               Root(line, PushString("column"))),
             Vector()
+          )
+        )
+
+      val result = extractLoads(inferTypes(JType.JPrimitiveUnfixedT)(input))
+
+      val expected = Map(
+        "/file" -> Map(JPath("column") -> Set(CLong, CDouble, CNum))
+      )
+
+      result must_== expected
+    }
+
+    "propagate structure/type information through SortBy nodes" in {
+      val line = Line(0, "")
+
+      val input =
+        Operate(line, Neg,
+          SortBy(
+            Join(line, DerefObject, CrossLeftSort, 
+              LoadLocal(line, Root(line, PushString("/file"))),
+              Root(line, PushString("column"))),
+            "foo", "bar", 23
           )
         )
 
@@ -376,7 +400,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           Memoize(
-            Join(line, Map2Cross(DerefObject), 
+            Join(line, DerefObject, CrossLeftSort, 
               LoadLocal(line, Root(line, PushString("/file"))),
               Root(line, PushString("column"))),
             23
@@ -398,7 +422,7 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val input =
         Operate(line, Neg,
           Distinct(line,
-            Join(line, Map2Cross(DerefObject), 
+            Join(line, DerefObject, CrossLeftSort, 
               LoadLocal(line, Root(line, PushString("/file"))),
               Root(line, PushString("column")))))
 
@@ -422,14 +446,14 @@ trait TypeInferencerSpec[M[+_]] extends Specification
             1,
             clicks,
             UnfixedSolution(0, 
-              Join(line, Map2Cross(DerefObject),
+              Join(line, DerefObject, CrossLeftSort,
                 clicks,
                 Root(line, PushString("column0"))))),
-          Join(line, Map2Match(Add),
-            Join(line, Map2Cross(DerefObject),
+          Join(line, Add, IdentitySort,
+            Join(line, DerefObject, CrossLeftSort,
               SplitParam(line, 0)(input),
               Root(line, PushString("column1"))),
-            Join(line, Map2Cross(DerefObject),
+            Join(line, DerefObject, CrossLeftSort,
               SplitGroup(line, 1, clicks.provenance)(input),
               Root(line, PushString("column2")))))
 
@@ -453,16 +477,16 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       lazy val input: Split =
         Split(line,
           Group(0,
-            Join(line, Map2Cross(DerefObject), clicks, Root(line, PushString("user"))),
+            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("user"))),
             UnfixedSolution(1,
-              Join(line, Map2Cross(DerefObject),
+              Join(line, DerefObject, CrossLeftSort,
                 clicks,
                 Root(line, PushString("user"))))),
-          Join(line, Map2Cross(JoinObject),
-            Join(line, Map2Cross(WrapObject),
+          Join(line, JoinObject, CrossLeftSort,
+            Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("user")),
               SplitParam(line, 1)(input)),
-            Join(line, Map2Cross(WrapObject),
+            Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("num")),
               Reduce(line, Count,
                 SplitGroup(line, 0, clicks.provenance)(input)))))
@@ -486,23 +510,23 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       lazy val input: Split =
         Split(line,
           Group(0,
-            Join(line, Map2Cross(DerefObject), clicks, Root(line, PushString("user"))),
+            Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("user"))),
             UnfixedSolution(1,
-              Join(line, Map2Cross(DerefObject),
+              Join(line, DerefObject, CrossLeftSort,
                 clicks,
                 Root(line, PushString("user"))))),
-          Join(line, Map2Cross(JoinObject),
-            Join(line, Map2Cross(JoinObject),
-              Join(line, Map2Cross(WrapObject),
+          Join(line, JoinObject, CrossLeftSort,
+            Join(line, JoinObject, CrossLeftSort,
+              Join(line, WrapObject, CrossLeftSort,
                 Root(line, PushString("user")),
                 SplitParam(line, 1)(input)),
-              Join(line, Map2Cross(WrapObject),
+              Join(line, WrapObject, CrossLeftSort,
                 Root(line, PushString("num")),
                 Reduce(line, Count,
                   SplitGroup(line, 0, clicks.provenance)(input)))),
-            Join(line, Map2Cross(WrapObject),
+            Join(line, WrapObject, CrossLeftSort,
               Root(line, PushString("age")),
-              Join(line, Map2Cross(DerefObject),
+              Join(line, DerefObject, CrossLeftSort,
                 clicks,
                 Root(line, PushString("age"))))))
 
@@ -522,11 +546,11 @@ trait TypeInferencerSpec[M[+_]] extends Specification
       val line = Line(0, "")
 
       val input =
-        Join(line, Map2Match(Add),
-          Join(line, Map2Cross(DerefObject), 
+        Join(line, Add, IdentitySort,
+          Join(line, DerefObject, CrossLeftSort, 
             LoadLocal(line, Root(line, PushString("/clicks"))),
             Root(line, PushString("time"))),
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             LoadLocal(line, Root(line, PushString("/hom/heightWeight"))),
             Root(line, PushString("height"))))
 

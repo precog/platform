@@ -63,7 +63,7 @@ trait MathLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Operate(line, BuiltInFunction1Op(cos),
-        Join(line, Map2Cross(JoinArray), 
+        Join(line, JoinArray, CrossLeftSort, 
           dag.Operate(line, WrapArray, Root(line, PushNum("0"))),
           dag.Operate(line, WrapArray, Root(line, PushString("foo")))))
         
@@ -516,7 +516,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute min" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(min)),
+      val input = Join(line, BuiltInFunction2Op(min), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -533,7 +533,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute hypot" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(hypot)),
+      val input = Join(line, BuiltInFunction2Op(hypot), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -550,7 +550,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute pow" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(pow)),
+      val input = Join(line, BuiltInFunction2Op(pow), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -567,7 +567,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute max" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(max)),
+      val input = Join(line, BuiltInFunction2Op(max), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -584,7 +584,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute atan2" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(atan2)),
+      val input = Join(line, BuiltInFunction2Op(atan2), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -601,7 +601,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute copySign" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(copySign)),
+      val input = Join(line, BuiltInFunction2Op(copySign), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -618,7 +618,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute IEEEremainder" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(IEEEremainder)),
+      val input = Join(line, BuiltInFunction2Op(IEEEremainder), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1054,7 +1054,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute min" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(min)),
+      val input = Join(line, BuiltInFunction2Op(min), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1071,7 +1071,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute hypot" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(hypot)),
+      val input = Join(line, BuiltInFunction2Op(hypot), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1088,7 +1088,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute pow" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(pow)),
+      val input = Join(line, BuiltInFunction2Op(pow), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1105,7 +1105,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute max" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(max)),
+      val input = Join(line, BuiltInFunction2Op(max), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1122,7 +1122,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute atan2" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(atan2)),
+      val input = Join(line, BuiltInFunction2Op(atan2), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1139,7 +1139,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute copySign" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(copySign)),
+      val input = Join(line, BuiltInFunction2Op(copySign), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1156,7 +1156,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute IEEEremainder" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(IEEEremainder)),
+      val input = Join(line, BuiltInFunction2Op(IEEEremainder), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         

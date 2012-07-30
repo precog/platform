@@ -335,34 +335,37 @@ trait Evaluator[M[+_]] extends DAG
         
         // VUnion and VIntersect removed, TODO: remove from bytecode
         
-        case Join(_, instr @ (IUnion | IIntersect | SetDifference), left, right) =>
+        case IUI(_, union, left, right) =>
             state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
         
-        case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if right.value.isDefined => {
+        case Diff(_, left, right) =>
+            state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           for {
             pendingTable <- loop(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), false))
         }
         
-        case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) if left.value.isDefined => {
+        case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
           for {
             pendingTable <- loop(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), false))
         }
         
-        case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if right.value.isDefined => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           for {
             pendingTable <- loop(left, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(right.value.get), true))
         }
         
-        case Join(_, Map2Cross(NotEq) | Map2CrossLeft(NotEq) | Map2CrossRight(NotEq), left, right) if left.value.isDefined => {
+        case Join(_, NotEq, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
           for {
             pendingTable <- loop(right, splits)
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.EqualLiteral(pendingTable.trans, svalueToCValue(left.value.get), true))
         }
         
-        case Join(_, Map2Cross(instructions.WrapObject) | Map2CrossLeft(instructions.WrapObject) | Map2CrossRight(instructions.WrapObject), left, right) if left.value.isDefined => {
+        case Join(_, instructions.WrapObject, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
           left.value match {
             case Some(value @ SString(str)) => {
               //loop(right, splits) map { pendingTable => PendingTable(pendingTable.table, pendingTable.graph, trans.WrapObject(pendingTable.trans, str)) }
@@ -377,7 +380,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Map2Cross(DerefObject) | Map2CrossLeft(DerefObject) | Map2CrossRight(DerefObject), left, right) if right.value.isDefined => {
+        case Join(_, DerefObject, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           right.value match {
             case Some(value @ SString(str)) => {
               for {
@@ -390,7 +393,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Map2Cross(DerefArray) | Map2CrossLeft(DerefArray) | Map2CrossRight(DerefArray), left, right) if right.value.isDefined => {
+        case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           right.value match {
             case Some(value @ SDecimal(d)) => {
               for {
@@ -405,7 +408,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case Join(_, Map2Cross(instructions.ArraySwap) | Map2CrossLeft(instructions.ArraySwap) | Map2CrossRight(instructions.ArraySwap), left, right) if right.value.isDefined => {
+        case Join(_, instructions.ArraySwap, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           right.value match {
             case Some(value @ SDecimal(d)) => {     // TODO other numeric types
               for {
@@ -423,13 +426,7 @@ trait Evaluator[M[+_]] extends DAG
         // case Join(_, Map2CrossRight(op), left, right) if left.isSingleton =>
         
         // begin: annoyance with Scala's lousy pattern matcher
-        case Join(_, opSpec @ (Map2Cross(_) | Map2CrossRight(_) | Map2CrossLeft(_)), left, right) if right.value.isDefined => {
-          val op = opSpec match {
-            case Map2Cross(op) => op
-            case Map2CrossRight(op) => op
-            case Map2CrossLeft(op) => op
-          }
-          
+        case Join(_, op, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           val cv = svalueToCValue(right.value.get)
           val f1 = op2(op).f2.partialRight(cv)
 
@@ -438,13 +435,7 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, f1))
         }
         
-        case Join(_, opSpec @ (Map2Cross(_) | Map2CrossRight(_) | Map2CrossLeft(_)), left, right) if left.value.isDefined => {
-          val op = opSpec match {
-            case Map2Cross(op) => op
-            case Map2CrossRight(op) => op
-            case Map2CrossLeft(op) => op
-          }
-          
+        case Join(_, op, CrossLeftSort | CrossRightSort, left, right) if left.value.isDefined => {
           val cv = svalueToCValue(left.value.get)
           val f1 = op2(op).f2.partialLeft(cv)
           
@@ -454,7 +445,9 @@ trait Evaluator[M[+_]] extends DAG
         }
         // end: annoyance
         
-        case Join(_, Map2Match(op), left, right) => {
+        // TODO ValueSort
+        
+        case Join(_, op, IdentitySort, left, right) => {
           // TODO binary typing
 
           for {
@@ -480,13 +473,8 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
   
-        // guaranteed: cross, cross_left and cross_right
-        case j @ Join(_, instr, left, right) => {
-          val (op, isLeft) = instr match {
-            case Map2Cross(op) => (op, true)
-            case Map2CrossRight(op) => (op, false)
-            case Map2CrossLeft(op) => (op, true)
-          }
+        case j @ Join(_, op, joinSort @ (CrossLeftSort | CrossRightSort), left, right) => {
+          val isLeft = joinSort == CrossLeftSort
           
           for {
             pendingTableLeft <- loop(left, splits)
@@ -509,7 +497,9 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case dag.Filter(_, None, target, boolean) => {
+        // TODO ValueSort
+        
+        case dag.Filter(_, IdentitySort, target, boolean) => {
           // TODO binary typing
 
           for {
@@ -539,12 +529,8 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case f @ dag.Filter(_, Some(cross), target, boolean) => {
-          val isLeft = cross match {
-            case CrossNeutral => true
-            case CrossRight => false
-            case CrossLeft => true
-          }
+        case f @ dag.Filter(_, joinSort @ (CrossLeftSort | CrossRightSort), target, boolean) => {
+          val isLeft = joinSort == CrossLeftSort
           
           /* target match {
             case Join(_, Map2Cross(Eq) | Map2CrossLeft(Eq) | Map2CrossRight(Eq), left, right) => {
@@ -581,6 +567,9 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ Sort(parent, indexes) =>
+          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        
+        case SortBy(parent, sortField, valueField, id) =>
           state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
         
         case m @ Memoize(parent, _) =>
@@ -658,9 +647,10 @@ trait Evaluator[M[+_]] extends DAG
     case Operate(_, _, parent) => Set(parent)
     case dag.Reduce(_, _, parent) => Set(parent)
     case dag.Split(_, spec, _) => enumerateGraphs(spec)
-    case Join(_, _, left, right) => Set(left, right)
+    case Join(_, _, _, left, right) => Set(left, right)
     case dag.Filter(_, _, target, boolean) => Set(target, boolean)
     case dag.Sort(parent, _) => Set(parent)
+    case dag.SortBy(parent, _, _, _) => Set(parent)
     case Memoize(parent, _) => Set(parent)
   }
   

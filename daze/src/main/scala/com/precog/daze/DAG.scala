@@ -37,16 +37,47 @@ trait DAG extends Instructions {
     
     def loop(loc: Line, roots: List[Either[BucketSpec, DepGraph]], splits: List[OpenSplit], stream: Vector[Instruction]): Either[StackError, DepGraph] = {
       def processJoinInstr(instr: JoinInstr) = {
-        val eitherRoots = roots match {
-          case Right(right) :: Right(left) :: tl => Right(Right(Join(loc, instr, left, right)) :: tl)
-          case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
-          case _ => Left(StackUnderflow(instr))
+        val maybeOpSort = Some(instr) collect {
+          case instructions.Map2Match(op) => (op, IdentitySort)
+          case instructions.Map2Cross(op) => (op, CrossLeftSort)
+          case instructions.Map2CrossLeft(op) => (op, CrossLeftSort)
+          case instructions.Map2CrossRight(op) => (op, CrossRightSort)
         }
+        
+        val eitherRootsOp = maybeOpSort map {
+          case (op, joinSort) => {
+            roots match {
+              case Right(right) :: Right(left) :: tl => Right(Right(Join(loc, op, joinSort, left, right)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          }
+        }
+        
+        val eitherRootsAbom = Some(instr) collect {
+          case instr @ (instructions.IIntersect | instructions.IUnion) => {
+            roots match {
+              case Right(right) :: Right(left) :: tl => Right(Right(IUI(loc, instr == instructions.IUnion, left, right)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          }
+          
+          case instructions.SetDifference => {
+            roots match {
+              case Right(right) :: Right(left) :: tl => Right(Right(Diff(loc, left, right)) :: tl)
+              case Left(_) :: _ | _ :: Left(_) :: _ => Left(OperationOnBucket(instr))
+              case _ => Left(StackUnderflow(instr))
+            }
+          }
+        }
+        
+        val eitherRoots = eitherRootsOp orElse eitherRootsAbom get      // assertion
         
         eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits, stream.tail) }
       }
       
-      def processFilter(instr: Instruction, cross: Option[CrossType]) = {
+      def processFilter(instr: Instruction, joinSort: JoinSort) = {
         val (args, roots2) = roots splitAt 2
         
         if (args.lengthCompare(2) < 0) {
@@ -58,7 +89,7 @@ trait DAG extends Instructions {
             Left(OperationOnBucket(instr))
           } else {
             val (boolean :: target :: predRoots) = rightArgs
-            loop(loc, Right(Filter(loc, cross, target, boolean)) :: roots2, splits, stream.tail)
+            loop(loc, Right(Filter(loc, joinSort, target, boolean)) :: roots2, splits, stream.tail)
           }
         }
       }
@@ -209,10 +240,10 @@ trait DAG extends Instructions {
           eitherRoots.right flatMap { roots2 => loop(loc, roots2, splits2, stream.tail) }
         }
         
-        case instr @ FilterMatch => processFilter(instr, None)
-        case instr @ FilterCross => processFilter(instr, Some(CrossNeutral))
-        case instr @ FilterCrossLeft => processFilter(instr, Some(CrossLeft))
-        case instr @ FilterCrossRight => processFilter(instr, Some(CrossRight))
+        case instr @ FilterMatch => processFilter(instr, IdentitySort)
+        case instr @ FilterCross => processFilter(instr, CrossLeftSort)
+        case instr @ FilterCrossLeft => processFilter(instr, CrossLeftSort)
+        case instr @ FilterCrossRight => processFilter(instr, CrossRightSort)
         
         case Dup => {
           roots match {
@@ -349,6 +380,8 @@ trait DAG extends Instructions {
     
     def provenance: Vector[dag.Provenance]
     
+    def sorting: dag.TableSort
+    
     def value: Option[SValue] = None
     
     def isSingleton: Boolean  //true implies that the node is a singleton; false doesn't imply anything 
@@ -381,6 +414,8 @@ trait DAG extends Instructions {
       
       val provenance = Vector()
       
+      val sorting = IdentitySort
+      
       val isSingleton = true
       
       def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
@@ -392,6 +427,8 @@ trait DAG extends Instructions {
     case class SplitGroup(loc: Line, id: Int, provenance: Vector[Provenance])(_parent: => Split) extends DepGraph {
       lazy val parent = _parent
       
+      val sorting = IdentitySort
+      
       val isSingleton = false
       
       def findMemos(parent: Split) = if (this.parent == parent) Set(memoId) else Set()
@@ -401,6 +438,8 @@ trait DAG extends Instructions {
     
     case class Root(loc: Line, instr: RootInstr) extends DepGraph {
       lazy val provenance = Vector()
+      
+      val sorting = IdentitySort
       
       override lazy val value = Some(instr match {
         case PushString(str) => SString(str)
@@ -422,6 +461,8 @@ trait DAG extends Instructions {
     case class New(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
+      val sorting = IdentitySort
+      
       override lazy val value = parent.value
       
       lazy val isSingleton = parent.isSingleton
@@ -440,6 +481,8 @@ trait DAG extends Instructions {
     case class Morph1(loc: Line, m: Morphism1, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
+      val sorting = IdentitySort
+      
       lazy val isSingleton = false
       
       def findMemos(s: Split) = {
@@ -456,6 +499,8 @@ trait DAG extends Instructions {
     case class Morph2(loc: Line, m: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
       
+      val sorting = IdentitySort
+      
       lazy val isSingleton = false
       
       def findMemos(s: Split) = {
@@ -471,6 +516,8 @@ trait DAG extends Instructions {
 
     case class Distinct(loc: Line, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      
+      val sorting = IdentitySort
       
       lazy val isSingleton = parent.isSingleton
       
@@ -491,6 +538,8 @@ trait DAG extends Instructions {
         case _ => Vector(DynamicProvenance(IdGen.nextInt()))
       }
       
+      val sorting = IdentitySort
+      
       val isSingleton = false
       
       def findMemos(s: Split) = {
@@ -508,6 +557,8 @@ trait DAG extends Instructions {
     case class Operate(loc: Line, op: UnaryOperation, parent: DepGraph) extends DepGraph {
       lazy val provenance = parent.provenance
       
+      lazy val sorting = parent.sorting
+      
       lazy val isSingleton = parent.isSingleton
       
       def findMemos(s: Split) = {
@@ -524,6 +575,8 @@ trait DAG extends Instructions {
     case class Reduce(loc: Line, red: Reduction, parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector()
       
+      val sorting = IdentitySort
+      
       val isSingleton = true
       
       def findMemos(s: Split) = {
@@ -539,6 +592,8 @@ trait DAG extends Instructions {
     
     case class Split(loc: Line, spec: BucketSpec, child: DepGraph) extends DepGraph {
       lazy val provenance = Vector(DynamicProvenance(IdGen.nextInt()))
+      
+      val sorting = IdentitySort
       
       lazy val isSingleton = false
       
@@ -585,18 +640,54 @@ trait DAG extends Instructions {
       }
     }
     
+    case class IUI(loc: Line, union: Boolean, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val provenance = Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take left.provenance.length: _*)
+      
+      val sorting = IdentitySort
+      
+      lazy val isSingleton = left.isSingleton && right.isSingleton
+      
+      def findMemos(s: Split) = {
+        val back = left.findMemos(s) ++ right.findMemos(s)
+        if (back.isEmpty)
+          back
+        else
+          back + memoId
+      }
+      
+      lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
+    }
+    
+    case class Diff(loc: Line, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val provenance = left.provenance
+      
+      val sorting = IdentitySort
+      
+      lazy val isSingleton = left.isSingleton && right.isSingleton
+      
+      def findMemos(s: Split) = {
+        val back = left.findMemos(s) ++ right.findMemos(s)
+        if (back.isEmpty)
+          back
+        else
+          back + memoId
+      }
+      
+      lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
+    }
+    
     // TODO propagate AOT value computation
-    case class Join(loc: Line, instr: JoinInstr, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val provenance = instr match {
-        case IUnion | IIntersect =>
-          Vector(Stream continually DynamicProvenance(IdGen.nextInt()) take left.provenance.length: _*)
-
-        case SetDifference => left.provenance
-
-        case _: Map2CrossRight => right.provenance ++ left.provenance
-        case _: Map2Cross | _: Map2CrossLeft => left.provenance ++ right.provenance
+    case class Join(loc: Line, op: BinaryOperation, joinSort: JoinSort, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val provenance = joinSort match {
+        case CrossRightSort => right.provenance ++ left.provenance
+        case CrossLeftSort => left.provenance ++ right.provenance
         
         case _ => (left.provenance ++ right.provenance).distinct
+      }
+      
+      lazy val sorting = joinSort match {
+        case tbl: TableSort => tbl
+        case _ => IdentitySort
       }
       
       lazy val isSingleton = left.isSingleton && right.isSingleton
@@ -612,11 +703,16 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = left.containsSplitArg || right.containsSplitArg
     }
     
-    case class Filter(loc: Line, cross: Option[CrossType], target: DepGraph, boolean: DepGraph) extends DepGraph {
-      lazy val provenance = cross match {
-        case Some(CrossRight) => boolean.provenance ++ target.provenance
-        case Some(CrossLeft) | Some(CrossNeutral) => target.provenance ++ boolean.provenance
-        case None => (target.provenance ++ boolean.provenance).distinct
+    case class Filter(loc: Line, joinSort: JoinSort, target: DepGraph, boolean: DepGraph) extends DepGraph {
+      lazy val provenance = joinSort match {
+        case CrossRightSort => boolean.provenance ++ target.provenance
+        case CrossLeftSort => target.provenance ++ boolean.provenance
+        case _ => (target.provenance ++ boolean.provenance).distinct
+      }
+      
+      lazy val sorting = joinSort match {
+        case tbl: TableSort => tbl
+        case _ => IdentitySort
       }
       
       lazy val isSingleton = target.isSingleton
@@ -648,6 +744,8 @@ trait DAG extends Instructions {
         back
       }
       
+      val sorting = IdentitySort
+      
       lazy val isSingleton = parent.isSingleton
       
       def findMemos(s: Split) = {
@@ -661,10 +759,36 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
+    /**
+     * Evaluator will deref by `sortField` to get the sort ordering and `valueField`
+     * to get the actual value set that is being sorted.  Thus, `parent` is
+     * assumed to evaluate to a set of objects containing `sortField` and `valueField`.
+     * The identity of the sort should be stable between other sorts that are
+     * ''logically'' the same.  Thus, if one were to sort set `foo` by `userId`
+     * for later joining with set `bar` sorted by `personId`, those two sorts would
+     * be semantically very different, but logically identitical and would thus
+     * share the same identity.  This is very important to ensure correctness in
+     * evaluation of the `Join` node.
+     */
+    case class SortBy(parent: DepGraph, sortField: String, valueField: String, id: Int) extends DepGraph {
+      val loc = parent.loc
+
+      lazy val provenance = parent.provenance
+      
+      val sorting = ValueSort(id)
+      
+      lazy val isSingleton = parent.isSingleton
+      
+      def findMemos(s: Split) = parent.findMemos(s)
+      
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+    
     case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
       val loc = parent.loc
       
       lazy val provenance = parent.provenance
+      lazy val sorting = parent.sorting
       lazy val isSingleton = parent.isSingleton
       
       def findMemos(s: Split) = {
@@ -690,36 +814,20 @@ trait DAG extends Instructions {
     case class Extra(expr: DepGraph) extends BucketSpec
     
     
-    sealed trait CrossType
-    
-    case object CrossNeutral extends CrossType
-    case object CrossLeft extends CrossType
-    case object CrossRight extends CrossType
-    
-    
-    sealed trait IndexRange
-    
-    case class Conjunction(left: IndexRange, right: IndexRange) extends IndexRange
-    case class Disjunction(left: IndexRange, right: IndexRange) extends IndexRange
-    case class Complementation(child: IndexRange) extends IndexRange
-    
-    // [start, end)
-    case class Contiguous(start: RangeOperand, end: RangeOperand) extends IndexRange
-    
-    
-    sealed trait RangeOperand
-    
-    case class ValueOperand(source: DepGraph) extends RangeOperand
-    case class PropertyOperand(source: DepGraph) extends RangeOperand
-    case class IndexOperand(source: DepGraph) extends RangeOperand
-    
-    case class BinaryOperand(left: RangeOperand, op: BinaryOperation, right: RangeOperand) extends RangeOperand
-    case class UnaryOperand(op: UnaryOperation, child: RangeOperand) extends RangeOperand
-  
     sealed trait Provenance
     
     case class StaticProvenance(path: String) extends Provenance
     case class DynamicProvenance(id: Int) extends Provenance
+    
+    
+    sealed trait JoinSort
+    sealed trait TableSort extends JoinSort
+    
+    case object IdentitySort extends TableSort
+    case class ValueSort(id: Int) extends TableSort
+    
+    case object CrossLeftSort extends JoinSort
+    case object CrossRightSort extends JoinSort
   }
   
   

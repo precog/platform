@@ -85,7 +85,13 @@ trait CrossOrdering extends DAG {
           result
         }
         
-        case Join(loc, instr: Map2Match, left, right) => {
+        case IUI(loc, union, left, right) =>
+          IUI(loc, union, memoized(left, splits), memoized(right, splits))
+        
+        case Diff(loc, left, right) =>
+          Diff(loc, memoized(left, splits), memoized(right, splits))
+        
+        case Join(loc, op, IdentitySort, left, right) => {
           val left2 = memoized(left, splits)
           val right2 = memoized(right, splits)
           
@@ -95,28 +101,28 @@ trait CrossOrdering extends DAG {
           val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
           if (leftPrefix && rightPrefix)
-            Join(loc, instr, left2, right2)
+            Join(loc, op, IdentitySort, left2, right2)
           else if (leftPrefix && !rightPrefix)
-            Join(loc, instr, left2, Sort(right2, rightIndexes))
+            Join(loc, op, IdentitySort, left2, Sort(right2, rightIndexes))
           else if (!leftPrefix && rightPrefix)
-            Join(loc, instr, Sort(left2, leftIndexes), right2)
+            Join(loc, op, IdentitySort, Sort(left2, leftIndexes), right2)
           else
-            Join(loc, instr, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+            Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
         }
         
-        case Join(loc, Map2Cross(op), left, right) => {
+        case Join(loc, op, CrossLeftSort | CrossRightSort, left, right) => {
           if (right.isSingleton)
-            Join(loc, Map2CrossLeft(op), memoized(left, splits), memoized(right, splits))
+            Join(loc, op, CrossLeftSort, memoized(left, splits), memoized(right, splits))
           else if (left.isSingleton)
-            Join(loc, Map2CrossRight(op), memoized(left, splits), memoized(right, splits))
+            Join(loc, op, CrossRightSort, memoized(left, splits), memoized(right, splits))
           else
-            Join(loc, Map2CrossLeft(op), memoized(left, splits), Memoize(memoized(right, splits), 100))
+            Join(loc, op, CrossLeftSort, memoized(left, splits), Memoize(memoized(right, splits), 100))
         }
+
+        case Join(loc, op, joinSort, left, right) =>
+          Join(loc, op, joinSort, memoized(left, splits), memoized(right, splits))
         
-        case Join(loc, instr, left, right) =>
-          Join(loc, instr, memoized(left, splits), memoized(right, splits))
-        
-        case Filter(loc, None, target, boolean) => {
+        case Filter(loc, IdentitySort, target, boolean) => {
           val target2 = memoized(target, splits)
           val boolean2 = memoized(boolean, splits)
           
@@ -126,19 +132,22 @@ trait CrossOrdering extends DAG {
           val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
           if (targetPrefix && booleanPrefix)
-            Filter(loc, None, target2, boolean2)
+            Filter(loc, IdentitySort, target2, boolean2)
           else if (targetPrefix && !booleanPrefix)
-            Filter(loc, None, target2, Sort(boolean2, booleanIndexes))
+            Filter(loc, IdentitySort, target2, Sort(boolean2, booleanIndexes))
           else if (!targetPrefix && booleanPrefix)
-            Filter(loc, None, Sort(target2, targetIndexes), boolean2)
+            Filter(loc, IdentitySort, Sort(target2, targetIndexes), boolean2)
           else  
-            Filter(loc, None, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+            Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
         }
         
-        case Filter(loc, cross, target, boolean) =>
-          Filter(loc, cross, memoized(target, splits), memoized(boolean, splits))
+        case Filter(loc, joinSort, target, boolean) =>
+          Filter(loc, joinSort, memoized(target, splits), memoized(boolean, splits))
         
         case Sort(parent, _) => memoized(parent, splits)
+        
+        case SortBy(parent, sortField, valueField, id) =>
+          SortBy(memoized(parent, splits), sortField, valueField, id)
         
         case Memoize(parent, priority) => Memoize(memoized(parent, splits), priority)
       }

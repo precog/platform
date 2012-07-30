@@ -20,7 +20,7 @@
 package com.precog
 package daze
 
-import bytecode.RandomLibrary
+import bytecode._
 import org.specs2.mutable._
 
 object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLibrary {
@@ -35,8 +35,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
         val left = dag.LoadLocal(line, Root(line, PushString("/foo")))
         val right = Root(line, PushNum("42"))
         
-        val input = Join(line, Map2Cross(Eq), left, right)
-        val expected = Join(line, Map2CrossLeft(Eq), left, right)
+        val input = Join(line, Eq, CrossRightSort, left, right)
+        val expected = Join(line, Eq, CrossLeftSort, left, right)
         
         orderCrosses(input) mustEqual expected
       }
@@ -47,8 +47,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
         val left = Root(line, PushNum("42"))
         val right = dag.LoadLocal(line, Root(line, PushString("/foo")))
         
-        val input = Join(line, Map2Cross(Eq), left, right)
-        val expected = Join(line, Map2CrossRight(Eq), left, right)
+        val input = Join(line, Eq, CrossLeftSort, left, right)
+        val expected = Join(line, Eq, CrossRightSort, left, right)
         
         orderCrosses(input) mustEqual expected
       }
@@ -60,8 +60,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       val left = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val right = Root(line, PushNum("42"))
       
-      val input = Join(line, Map2Match(Or), Join(line, Map2Cross(Eq), left, right), left)
-      val expected = Join(line, Map2Match(Or), Join(line, Map2CrossLeft(Eq), left, right), left)
+      val input = Join(line, Or, IdentitySort, Join(line, Eq, CrossRightSort, left, right), left)
+      val expected = Join(line, Or, IdentitySort, Join(line, Eq, CrossLeftSort, left, right), left)
       
       orderCrosses(input) mustEqual expected
     }
@@ -72,8 +72,8 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       val left = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val right = Root(line, PushNum("42"))
       
-      val input = Filter(line, None, Join(line, Map2Cross(Eq), left, right), left)
-      val expected = Filter(line, None, Join(line, Map2CrossLeft(Eq), left, right), left)
+      val input = Filter(line, IdentitySort, Join(line, Eq, CrossRightSort, left, right), left)
+      val expected = Filter(line, IdentitySort, Join(line, Eq, CrossLeftSort, left, right), left)
       
       orderCrosses(input) mustEqual expected
     }
@@ -83,13 +83,18 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "left" >> {
         val line = Line(0, "")
         
-        val left = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val right = Join(line, Map2CrossRight(Add),
-          left,
-          dag.LoadLocal(line, Root(line, PushString("/bar"))))
+        val left = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val right = Join(line, Add, CrossRightSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          left)
         
-        val input = Join(line, Map2Match(Or), left, right)
-        val expected = Join(line, Map2Match(Or), left, Sort(right, Vector(1)))
+        val input = Join(line, Or, IdentitySort, left, right)
+        
+        val expectedRight = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(left, 100))
+
+        val expected = Join(line, Or, IdentitySort, left, Sort(expectedRight, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }
@@ -97,13 +102,18 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "right" >> {
         val line = Line(0, "")
         
-        val right = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val left = Join(line, Map2CrossRight(Add),
-          right,
-          dag.LoadLocal(line, Root(line, PushString("/bar"))))
+        val right = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val left = Join(line, Add, CrossRightSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          right)
         
-        val input = Join(line, Map2Match(Or), left, right)
-        val expected = Join(line, Map2Match(Or), Sort(left, Vector(1)), right)
+        val input = Join(line, Or, IdentitySort, left, right)
+        
+        val expectedLeft = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(right, 100))
+
+        val expected = Join(line, Or, IdentitySort, Sort(expectedLeft, Vector(1)), right)
         
         orderCrosses(input) mustEqual expected
       }
@@ -111,15 +121,23 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "both" >> {
         val line = Line(0, "")
         
-        val foo = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val bar = dag.LoadLocal(line, Root(line, PushString("/bar")))
-        val baz = dag.LoadLocal(line, Root(line, PushString("/baz")))
+        val foo = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val bar = dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT)
+        val baz = dag.LoadLocal(line, Root(line, PushString("/baz")), JTextT)
         
-        val left = Join(line, Map2CrossRight(Add), foo, bar)
-        val right = Join(line, Map2CrossRight(Add), foo, baz)
+        val left = Join(line, Add, CrossRightSort, bar, foo)
+        val right = Join(line, Add, CrossRightSort, baz, foo)
         
-        val input = Join(line, Map2Match(Or), left, right)
-        val expected = Join(line, Map2Match(Or), Sort(left, Vector(1)), Sort(right, Vector(1)))
+        val expectedLeft = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(foo, 100))
+
+        val expectedRight = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/baz")), JTextT),
+          Memoize(foo, 100))
+
+        val input = Join(line, Or, IdentitySort, left, right)
+        val expected = Join(line, Or, IdentitySort, Sort(expectedLeft, Vector(1)), Sort(expectedRight, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }
@@ -127,39 +145,44 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "random-case-without-a-label" >> {
         val line = Line(0, "")
         
-        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-        val numbers3 = dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")))
+        val numbers = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")), JTextT)
+        val numbers3 = dag.LoadLocal(line, Root(line, PushString("/hom/numbers3")), JTextT)
         
-        val input = Join(line, Map2Match(And),
-          Join(line, Map2Cross(And),
-            Join(line, Map2Match(Eq), numbers, numbers),
-            Join(line, Map2Match(Eq), numbers3, numbers3)),
-          Join(line, Map2Match(Eq), numbers3, numbers3))
+        val input = Join(line, Add, IdentitySort,
+          Join(line, Add, CrossRightSort,
+            Join(line, Eq, IdentitySort, numbers, numbers),
+            Join(line, Eq, IdentitySort, numbers3, numbers3)),
+          Join(line, Eq, IdentitySort, numbers3, numbers3))
         
-        val expected = Join(line, Map2Match(And),
+        val expected = Join(line, Add, IdentitySort,
           Sort(
-            Join(line, Map2CrossLeft(And),
-              Join(line, Map2Match(Eq), numbers, numbers),
-              Memoize(Join(line, Map2Match(Eq), numbers3, numbers3), 100)),
+            Join(line, Add, CrossLeftSort,
+              Join(line, Eq, IdentitySort, numbers, numbers),
+              Memoize(Join(line, Eq, IdentitySort, numbers3, numbers3), 100)),
             Vector(1)),
-          Join(line, Map2Match(Eq), numbers3, numbers3))
+          Join(line, Eq, IdentitySort, numbers3, numbers3))
             
         orderCrosses(input) mustEqual expected
       }
     }
-    
+
     // this will eventually be a re-order cross test case
     "insert sorts for filter on out-of-order operand set" >> {
       "left" >> {
         val line = Line(0, "")
         
-        val left = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val right = Join(line, Map2CrossRight(Add),
-          left,
-          dag.LoadLocal(line, Root(line, PushString("/bar"))))
+        val left = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val right = Join(line, Add, CrossRightSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          left)
         
-        val input = Filter(line, None, left, right)
-        val expected = Filter(line, None, left, Sort(right, Vector(1)))
+        val input = Filter(line, IdentitySort, left, right)
+        
+        val expectedRight = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(left, 100))
+
+        val expected = Filter(line, IdentitySort, left, Sort(expectedRight, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }
@@ -167,13 +190,18 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "right" >> {
         val line = Line(0, "")
         
-        val right = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val left = Join(line, Map2CrossRight(Add),
-          right,
-          dag.LoadLocal(line, Root(line, PushString("/bar"))))
+        val right = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val left = Join(line, Add, CrossRightSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          right)
         
-        val input = Filter(line, None, left, right)
-        val expected = Filter(line, None, Sort(left, Vector(1)), right)
+        val input = Filter(line, IdentitySort, left, right)
+        
+        val expectedLeft = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(right, 100))
+        
+        val expected = Filter(line, IdentitySort, Sort(expectedLeft, Vector(1)), right)
         
         orderCrosses(input) mustEqual expected
       }
@@ -181,15 +209,23 @@ object CrossOrderingSpecs extends Specification with CrossOrdering with RandomLi
       "both" >> {
         val line = Line(0, "")
         
-        val foo = dag.LoadLocal(line, Root(line, PushString("/foo")))
-        val bar = dag.LoadLocal(line, Root(line, PushString("/bar")))
-        val baz = dag.LoadLocal(line, Root(line, PushString("/baz")))
+        val foo = dag.LoadLocal(line, Root(line, PushString("/foo")), JTextT)
+        val bar = dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT)
+        val baz = dag.LoadLocal(line, Root(line, PushString("/baz")), JTextT)
         
-        val left = Join(line, Map2CrossRight(Add), foo, bar)
-        val right = Join(line, Map2CrossRight(Add), foo, baz)
+        val left = Join(line, Add, CrossRightSort, bar, foo)
+        val right = Join(line, Add, CrossRightSort, baz, foo)
         
-        val input = Filter(line, None, left, right)
-        val expected = Filter(line, None, Sort(left, Vector(1)), Sort(right, Vector(1)))
+        val expectedLeft = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/bar")), JTextT),
+          Memoize(foo, 100))
+
+        val expectedRight = Join(line, Add, CrossLeftSort,
+          dag.LoadLocal(line, Root(line, PushString("/baz")), JTextT),
+          Memoize(foo, 100))
+
+        val input = Filter(line, IdentitySort, left, right)
+        val expected = Filter(line, IdentitySort, Sort(expectedLeft, Vector(1)), Sort(expectedRight, Vector(1)))
         
         orderCrosses(input) mustEqual expected
       }

@@ -159,7 +159,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
+      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -176,7 +176,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
+      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -193,7 +193,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine startsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(startsWith)),
+      val input = Join(line, BuiltInFunction2Op(startsWith), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
@@ -210,7 +210,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(lastIndexOf)),
+      val input = Join(line, BuiltInFunction2Op(lastIndexOf), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
@@ -227,7 +227,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine concat" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(concat)),
+      val input = Join(line, BuiltInFunction2Op(concat), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("7")))
         
@@ -244,7 +244,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine endsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(endsWith)),
+      val input = Join(line, BuiltInFunction2Op(endsWith), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("y")))
         
@@ -261,7 +261,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -278,7 +278,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -295,7 +295,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
+      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -312,7 +312,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
+      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -329,7 +329,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine matches" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(matches)),
+      val input = Join(line, BuiltInFunction2Op(matches), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
@@ -346,7 +346,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine compareTo" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(compareTo)),
+      val input = Join(line, BuiltInFunction2Op(compareTo), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
@@ -363,7 +363,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(compareToIgnoreCase)),
+      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("QUIRKY")))
         
@@ -380,7 +380,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine equals" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(equals)),
+      val input = Join(line, BuiltInFunction2Op(equals), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
@@ -397,7 +397,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine indexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(indexOf)),
+      val input = Join(line, BuiltInFunction2Op(indexOf), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("e")))
         
@@ -414,7 +414,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(equalsIgnoreCase)),
+      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))), 
         Root(line, PushString("QUIRKY")))
         
@@ -531,7 +531,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
+      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -548,7 +548,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointAt)),
+      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -565,7 +565,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine startsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(startsWith)),
+      val input = Join(line, BuiltInFunction2Op(startsWith), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
@@ -582,7 +582,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(lastIndexOf)),
+      val input = Join(line, BuiltInFunction2Op(lastIndexOf), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
@@ -599,7 +599,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine concat" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(concat)),
+      val input = Join(line, BuiltInFunction2Op(concat), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("7")))
         
@@ -616,7 +616,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine endsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(endsWith)),
+      val input = Join(line, BuiltInFunction2Op(endsWith), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("y")))
         
@@ -633,7 +633,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -650,7 +650,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(codePointBefore)),
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -667,7 +667,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
+      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -684,7 +684,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(substring)),
+      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -701,7 +701,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine matches" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(matches)),
+      val input = Join(line, BuiltInFunction2Op(matches), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
@@ -718,7 +718,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine compareTo" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(compareTo)),
+      val input = Join(line, BuiltInFunction2Op(compareTo), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
@@ -735,7 +735,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(compareToIgnoreCase)),
+      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("QUIRKY")))
         
@@ -752,7 +752,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine equals" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(equals)),
+      val input = Join(line, BuiltInFunction2Op(equals), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
@@ -769,7 +769,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine indexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(indexOf)),
+      val input = Join(line, BuiltInFunction2Op(indexOf), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("e")))
         
@@ -786,7 +786,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, Map2Match(BuiltInFunction2Op(equalsIgnoreCase)),
+      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), IdentitySort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))), 
         Root(line, PushString("QUIRKY")))
         

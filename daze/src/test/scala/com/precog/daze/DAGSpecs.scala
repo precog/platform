@@ -97,7 +97,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         instructions.Split,
         PushGroup(2),
         PushKey(1),
-        VUnion,
+        IUnion,
         Merge))
         
       result must beLike {
@@ -106,7 +106,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
             dag.Group(2,
               Root(`line`, PushTrue),
               UnfixedSolution(1, Root(`line`, PushTrue))),
-            Join(`line`, VUnion, 
+            IUI(`line`, true, 
               sg @ SplitGroup(`line`, 2, Vector()),
               sp @ SplitParam(`line`, 1)))) => {
               
@@ -133,7 +133,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         instructions.Split,
         PushGroup(4),
         PushKey(3),
-        VUnion,
+        IUnion,
         Merge,
         Merge))
         
@@ -143,7 +143,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
             dag.Group(2, Root(`line`, PushFalse), UnfixedSolution(1, Root(`line`, PushTrue))),
             s2 @ dag.Split(`line`,
               dag.Group(4, sp1 @ SplitParam(`line`, 1), UnfixedSolution(3, sg1 @ SplitGroup(`line`, 2, Vector()))),
-              Join(`line`, VUnion,
+              IUI(`line`, true,
                 sg2 @ SplitGroup(`line`, 4, Vector()),
                 sp2 @ SplitParam(`line`, 3))))) => {
           
@@ -175,7 +175,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         instructions.Group(4),
         instructions.Split,
         PushGroup(4),
-        VUnion,
+        IUnion,
         Merge,
         Merge))
       
@@ -185,8 +185,8 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
             dag.Group(2, Root(`line`, PushFalse), UnfixedSolution(1, Root(`line`, PushTrue))),
             s2 @ dag.Split(`line`,
               dag.Group(4, Root(`line`, PushFalse), UnfixedSolution(3, Root(`line`, PushNum("42")))),
-              Join(`line`, VUnion,
-                Join(`line`, Map2Cross(Add),
+              IUI(`line`, true,
+                Join(`line`, Add, CrossLeftSort,
                   sg1 @ SplitGroup(`line`, 2, Vector()),
                   sp1 @ SplitParam(`line`, 1)),
                 sg2 @ SplitGroup(`line`, 4, Vector()))))) => {
@@ -226,7 +226,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
                 UnionBucketSpec(
                   UnfixedSolution(1, Root(`line`, PushNum("1"))),
                   UnfixedSolution(1, Root(`line`, PushNum("3"))))),
-              Join(`line`, IUnion,
+              IUI(`line`, true,
                 sg @ SplitGroup(`line`, 3, Vector()),
                 sp @ SplitParam(`line`, 1)))) => {
             
@@ -262,7 +262,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
                 IntersectBucketSpec(
                   UnfixedSolution(1, Root(`line`, PushNum("1"))),
                   UnfixedSolution(1, Root(`line`, PushNum("3"))))),
-              Join(`line`, IUnion,
+              IUI(`line`, true,
                 sg @ SplitGroup(`line`, 3, Vector()),
                 sp @ SplitParam(`line`, 1)))) => {
             
@@ -302,9 +302,9 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
             IntersectBucketSpec(
               dag.Group(2, Root(`line`, PushNum("2")), UnfixedSolution(1, Root(`line`, PushNum("1")))),
               dag.Group(3, Root(`line`, PushNum("4")), UnfixedSolution(1, Root(`line`, PushNum("3"))))),
-            Join(`line`, IUnion,
+            IUI(`line`, true,
               sg2 @ SplitGroup(`line`, 2, Vector()),
-              Join(`line`, IUnion,
+              IUI(`line`, true,
                 sg1 @ SplitGroup(`line`, 3, Vector()),
                 sp1 @ SplitParam(`line`, 1))))) => {
           
@@ -334,7 +334,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         case Right(
           s @ dag.Split(`line`,
             dag.Group(2, Root(`line`, PushNull), UnfixedSolution(1, Root(`line`, PushTrue))),
-            Join(`line`, Map2Match(Add),
+            Join(`line`, Add, IdentitySort,
               Root(`line`, PushNum("42")),
               sg @ SplitGroup(`line`, 2, Vector())))) => {
           
@@ -347,68 +347,56 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       "map2_match" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Match(Add)))
-        result mustEqual Right(Join(line, Map2Match(Add), Root(line, PushTrue), Root(line, PushFalse)))
+        result mustEqual Right(Join(line, Add, IdentitySort, Root(line, PushTrue), Root(line, PushFalse)))
       }
       
       "map2_cross" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, Map2Cross(Add)))
-        result mustEqual Right(Join(line, Map2Cross(Add), Root(line, PushTrue), Root(line, PushFalse)))
-      }
-      
-      "vunion" >> {
-        val line = Line(0, "")
-        val result = decorate(Vector(line, PushTrue, PushFalse, VUnion))
-        result mustEqual Right(Join(line, VUnion, Root(line, PushTrue), Root(line, PushFalse)))
-      }
-      
-      "vintersect" >> {
-        val line = Line(0, "")
-        val result = decorate(Vector(line, PushTrue, PushFalse, VIntersect))
-        result mustEqual Right(Join(line, VIntersect, Root(line, PushTrue), Root(line, PushFalse)))
+        result mustEqual Right(Join(line, Add, CrossLeftSort, Root(line, PushTrue), Root(line, PushFalse)))
       }
       
       "iunion" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IUnion))
-        result mustEqual Right(Join(line, IUnion, Root(line, PushTrue), Root(line, PushFalse)))
+        result mustEqual Right(IUI(line, true, Root(line, PushTrue), Root(line, PushFalse)))
       }
       
       "iintersect" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, IIntersect))
-        result mustEqual Right(Join(line, IIntersect, Root(line, PushTrue), Root(line, PushFalse)))
+        result mustEqual Right(IUI(line, false, Root(line, PushTrue), Root(line, PushFalse)))
       }      
 
       "set difference" >> {
         val line = Line(0, "")
         val result = decorate(Vector(line, PushTrue, PushFalse, SetDifference))
-        result mustEqual Right(Join(line, SetDifference, Root(line, PushTrue), Root(line, PushFalse)))
+        result mustEqual Right(Diff(line, Root(line, PushTrue), Root(line, PushFalse)))
       }
     }
     
     "parse a filter with null predicate" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch))
-      result mustEqual Right(Filter(line, None, Root(line, PushFalse), Root(line, PushTrue)))
+      result mustEqual Right(Filter(line, IdentitySort, Root(line, PushFalse), Root(line, PushTrue)))
     }
     
     "parse a filter_cross" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCross))
-      result mustEqual Right(Filter(line, Some(CrossNeutral), Root(line, PushTrue), Root(line, PushFalse)))
+      result mustEqual Right(Filter(line, CrossLeftSort, Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "parse a filter_crossl" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossLeft))
-      result mustEqual Right(Filter(line, Some(CrossLeft), Root(line, PushTrue), Root(line, PushFalse)))
+      result mustEqual Right(Filter(line, CrossLeftSort, Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "parse a filter_crossr" in {
       val line = Line(0, "")
       val result = decorate(Vector(line, PushTrue, PushFalse, FilterCrossRight))
-      result mustEqual Right(Filter(line, Some(CrossRight), Root(line, PushTrue), Root(line, PushFalse)))
+      result mustEqual Right(Filter(line, CrossRightSort, Root(line, PushTrue), Root(line, PushFalse)))
     }
     
     "continue processing beyond a filter" in {
@@ -416,7 +404,7 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
       val result = decorate(Vector(line, PushFalse, PushTrue, FilterMatch, Map1(Neg)))
       result mustEqual Right(
         Operate(line, Neg,
-          Filter(line, None,
+          Filter(line, IdentitySort,
             Root(line, PushFalse),
             Root(line, PushTrue))))
     }
@@ -424,33 +412,33 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
     "parse and factor a dup" in {
       {
         val line = Line(0, "")
-        val result = decorate(Vector(line, PushTrue, Dup, VUnion))
-        result mustEqual Right(Join(line, VUnion, Root(line, PushTrue), Root(line, PushTrue)))
+        val result = decorate(Vector(line, PushTrue, Dup, IUnion))
+        result mustEqual Right(IUI(line, true, Root(line, PushTrue), Root(line, PushTrue)))
       }
       
       {
         val line = Line(0, "")
-        val result = decorate(Vector(line, PushNum("42"), Map1(Neg), Dup, VUnion))
-        result mustEqual Right(Join(line, VUnion, Operate(line, Neg, Root(line, PushNum("42"))), Operate(line, Neg, Root(line, PushNum("42")))))
+        val result = decorate(Vector(line, PushNum("42"), Map1(Neg), Dup, IUnion))
+        result mustEqual Right(IUI(line, true, Operate(line, Neg, Root(line, PushNum("42"))), Operate(line, Neg, Root(line, PushNum("42")))))
       }
     }
     
     "parse and factor a swap" in {
       "1" >> {
         val line = Line(0, "")
-        val result = decorate(Vector(line, PushFalse, PushTrue, Swap(1), VUnion))
-        result mustEqual Right(Join(line, VUnion, Root(line, PushTrue), Root(line, PushFalse)))
+        val result = decorate(Vector(line, PushFalse, PushTrue, Swap(1), IUnion))
+        result mustEqual Right(IUI(line, true, Root(line, PushTrue), Root(line, PushFalse)))
       }
       
       "3" >> {
         val line = Line(0, "")
-        val result = decorate(Vector(line, PushTrue, PushString("foo"), PushFalse, PushNum("42"), Swap(3), VUnion, VUnion, VUnion))
+        val result = decorate(Vector(line, PushTrue, PushString("foo"), PushFalse, PushNum("42"), Swap(3), IUnion, IUnion, IUnion))
         result mustEqual Right(
-          Join(line, VUnion,
+          IUI(line, true,
             Root(line, PushNum("42")),
-            Join(line, VUnion,
+            IUI(line, true,
               Root(line, PushString("foo")),
-              Join(line, VUnion, Root(line, PushFalse), Root(line, PushTrue)))))
+              IUI(line, true, Root(line, PushFalse), Root(line, PushTrue)))))
       }
     }
     
@@ -669,17 +657,17 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         PushGroup(2),
         Swap(1),
         Swap(2),
-        VUnion,
+        IUnion,
         Merge,
-        VIntersect))
+        IIntersect))
       
       lazy val split: dag.Split = dag.Split(line,
         dag.Group(2, Root(line, PushNum("12")), UnfixedSolution(1, Root(line, PushNum("42")))),
-        Join(line, VUnion,
+        IUI(line, true,
           SplitGroup(line, 2, Vector())(split),
           Root(line, PushTrue)))
       
-      val expect = Join(line, VIntersect, Root(line, PushFalse), split)
+      val expect = IUI(line, false, Root(line, PushFalse), split)
         
       result mustEqual Right(expect)
     }
