@@ -38,6 +38,7 @@ object GroupSolverSpecs extends Specification
     with StubPhases
     with Compiler
     with GroupSolver
+    with ProvenanceChecker
     with RawErrors 
     with RandomLibrary {
       
@@ -250,6 +251,28 @@ object GroupSolverSpecs extends Specification
         
       val tree = compile(input)
       tree.errors must beEmpty
+    }
+    
+    "produce valid AST nodes when solving" in {
+      val input = """
+        | foo := //foo
+        | forall 'a
+        |   foo where foo.a = 'a + 42""".stripMargin
+        
+      val Let(_, _, _, _,
+        tree @ Let(_, _, _,
+          origin @ Where(_,
+            target,
+            boolean @ Eq(_, fooa, Add(_, TicVar(_, "'a"), n @ NumLit(_, "42")))), _)) = compile(input)
+        
+      tree.errors must beEmpty
+      
+      tree.buckets must beLike {
+        case Some(Group(origin, target, UnfixedSolution("'a", sub @ Sub(_, fooa, n)))) => {
+          sub.provenance mustEqual StaticProvenance("/foo")
+          // anything else?
+        }
+      }
     }
   }
 }
