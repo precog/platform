@@ -37,8 +37,13 @@ import scalaz.Order
 import scalaz.std.list._
 import scalaz.std.anyVal._
 
-trait CValueGenerators {
+object CValueGenerators {
   type JSchema = Seq[(JPath, CType)]
+}
+
+trait CValueGenerators {
+  import CValueGenerators._
+
   def schema(depth: Int): Gen[JSchema] = {
     if (depth <= 0) leafSchema
     else oneOf(1, 2, 3) flatMap {

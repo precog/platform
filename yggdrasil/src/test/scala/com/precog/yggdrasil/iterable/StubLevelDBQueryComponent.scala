@@ -39,7 +39,7 @@ import scalaz.Id._
 
 import java.io.File
 
-trait StubLevelDBQueryComponent extends LevelDBQueryComponent with StubStorageModule[Future] with IterableDatasetOpsComponent {
+trait StubLevelDBQueryComponent extends LevelDBQueryComponent with DistributedSampleStubStorageModule[Future] with IterableDatasetOpsComponent {
   type TestDataset = Dataset[Seq[CValue]]
 
   trait YggConfig extends LevelDBQueryConfig with IterableDatasetOpsConfig {

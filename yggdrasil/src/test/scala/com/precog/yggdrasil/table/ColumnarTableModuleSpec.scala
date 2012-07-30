@@ -45,19 +45,12 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] { spec =>
+trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] with BlockLoadSpec[M] { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val testPath = Path("/tableOpsSpec")
   val actorSystem = ActorSystem("columnar-table-specs")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-  def debugPrint(dataset: Table): Unit = {
-    println("\n\n")
-    dataset.slices.foreach { slice => {
-      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
-    }}
-  }
 
   def lookupF1(namespace: List[String], name: String): F1 = {
     val lib = Map[String, CF1](
@@ -174,13 +167,13 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap
     }
+
+    "in load" >> {
+      "reconstruct a dense dataset" in checkLoadDense
+    }
   }
 }
 
-import test.YId
-object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[YId] {
-  implicit val M = YId.M
-  implicit val coM = YId.M
-}
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[test.YId] with test.YIdInstances
 
 // vim: set ts=4 sw=4 et:

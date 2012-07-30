@@ -44,29 +44,20 @@ import org.scalacheck.Gen
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
+import CValueGenerators.JSchema
 
-trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with CValueGenerators with TableModule[M] {
-  import trans.constants._
+case class SampleData(data: Stream[JValue], schema: Option[(Int, JSchema)] = None) {
+  override def toString = {
+    "\nSampleData: ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n")
+  }
+}
 
-  override val defaultPrettyParams = Pretty.Params(2)
-  implicit def coM : Copointed[M]
-
-  def lookupF1(namespace: List[String], name: String): F1
-  def lookupF2(namespace: List[String], name: String): F2
-  def lookupScanner(namespace: List[String], name: String): Scanner
-  
-  def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
-  def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
-
-  def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
-
-  def debugPrint(dataset: Table): Unit 
+object SampleData extends CValueGenerators {
+  def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {
+    JObject(Nil).set(JPath(".key"), JArray(ids.map(JInt(_)).toList)).set(JPath(".value"), jv)
+  }
 
   implicit def keyOrder[A]: scala.math.Ordering[(Identities, A)] = tupledIdentitiesOrder[A](IdentitiesOrder).toScalaOrdering
-
-  def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {
-    JObject(Nil).set(Key, JArray(ids.map(JInt(_)).toList)).set(Value, jv)
-  }
 
   def sample(schema: Int => Gen[JSchema]) = Arbitrary(
     for {
@@ -83,19 +74,36 @@ trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with CValueGe
           // out here than prevent it from happening in the first place.
           case (ids, jv) => try { Some(toRecord(ids, assemble(jv))) } catch { case _ : RuntimeException => None }
         },
-        Some(jschema)
+        Some((idCount, jschema))
       )
       } catch {
         case ex => println("depth: "+depth) ; throw ex
       }
     }
   )
+}
 
-  case class SampleData(data: Stream[JValue], schema: Option[JSchema] = None) {
-    override def toString = {
-      "\nSampleData: ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n")
-    }
-  }
+trait TestLib[M[+_]] extends TableModule[M] {
+  def lookupF1(namespace: List[String], name: String): F1 
+  def lookupF2(namespace: List[String], name: String): F2
+  def lookupScanner(namespace: List[String], name: String): Scanner 
+}
+
+
+trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
+  implicit def coM : Copointed[M]
+
+  def fromJson(data: Stream[JValue], maxBlockSize: Option[Int] = None): Table
+  def toJson(dataset: Table): M[Stream[JValue]] = dataset.toJson.map(_.toStream)
+
+  def fromSample(sampleData: SampleData, maxBlockSize: Option[Int] = None): Table = fromJson(sampleData.data, maxBlockSize)
+
+  def debugPrint(dataset: Table): Unit
+}
+
+trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with TableModuleTestSupport[M] with TestLib[M]{
+  import SampleData._
+  override val defaultPrettyParams = Pretty.Params(2)
 
   def checkMappings = {
     implicit val gen = sample(schema)

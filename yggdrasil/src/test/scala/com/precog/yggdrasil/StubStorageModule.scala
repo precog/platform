@@ -44,37 +44,15 @@ import scalaz.effect._
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
 
+
 trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
   type TestDataset
 
   implicit def M: Monad[M]
 
-  val dataPath = Path("/test")
-  def sampleSize: Int
-  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
-
-  // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
-  case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends FullProjectionLike[TestDataset] {
-    val chunkSize = 2000
-
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support insert")      
-
-    def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
-  }
+  def projections: Map[ProjectionDescriptor, Projection]
 
   class Storage extends StorageLike {
-    implicit val ordering = IdentitiesOrder.toScalaOrdering
-    def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
-    
-    lazy val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
-
-    val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, Projection]) { 
-      case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
-        case (acc, ProjectionData(descriptor, values, _)) =>
-          acc + (descriptor -> (Projection(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (VectorCase(EventId(0,i).uid) -> values))))
-      }
-    }
-
     def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
     def projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = 
@@ -101,6 +79,34 @@ trait StubStorageModule[M[+_]] extends StorageModule[M] { self =>
   }
 }
 
+
+trait DistributedSampleStubStorageModule[M[+_]] extends StubStorageModule[M] {
+  val dataPath = Path("/test")
+  def sampleSize: Int
+  def dataset(idCount: Int, data: Iterable[(Identities, Seq[CValue])]): TestDataset
+
+  // TODO: This duplicates the same class in com.precog.muspelheim.RawJsonShardComponent
+  case class Projection(descriptor: ProjectionDescriptor, data: SortedMap[Identities, Seq[CValue]]) extends FullProjectionLike[TestDataset] {
+    val chunkSize = 2000
+
+    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Dummy ProjectionLike doesn't support insert")      
+
+    def allRecords(expiresAt: Long): TestDataset = dataset(1, data)
+  }
+
+  implicit val ordering = IdentitiesOrder.toScalaOrdering
+
+  val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+
+  val sampleData: Vector[JValue] = DistributedSampleSet.sample(sampleSize, 0)._1
+
+  val projections: Map[ProjectionDescriptor, Projection] = sampleData.zipWithIndex.foldLeft(Map.empty[ProjectionDescriptor, Projection]) { 
+    case (acc, (jobj, i)) => routingTable.route(EventMessage(EventId(0, i), Event(dataPath, "", jobj, Map()))).foldLeft(acc) {
+      case (acc, ProjectionData(descriptor, values, _)) =>
+        acc + (descriptor -> (Projection(descriptor, acc.get(descriptor).map(_.data).getOrElse(TreeMap.empty(ordering)) + (VectorCase(EventId(0,i).uid) -> values))))
+    }
+  }
+}
 
 
 // vim: set ts=4 sw=4 et:

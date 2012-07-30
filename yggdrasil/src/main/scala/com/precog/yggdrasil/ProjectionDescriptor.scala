@@ -113,7 +113,9 @@ trait AuthoritiesSerialization {
   }
 }
 
-object Authorities extends AuthoritiesSerialization 
+object Authorities extends AuthoritiesSerialization {
+  val None = Authorities(Set())
+}
 
 case class ColumnDescriptor(path: Path, selector: JPath, valueType: CType, authorities: Authorities) {
   lazy val hash = {
