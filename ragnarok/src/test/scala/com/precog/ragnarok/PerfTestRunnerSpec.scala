@@ -17,7 +17,7 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ragnarock
+package com.precog.ragnarok
 
 import org.specs2.mutable.Specification
 
