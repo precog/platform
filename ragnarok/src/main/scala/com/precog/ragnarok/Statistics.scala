@@ -41,12 +41,11 @@ case class Stats private (
         val sprev = vn - (x - mprev) * (x - m)
         (mprev, sprev, n - 1)
     } match {
-      case (m, vn, n) => (m, vn / n, n)
+      case (m, vn, n) => (m, vn / (n - 1), n)
     }
 
   def mean: Double = meanVarCount._1
 
-  // variance is wrong... outliers or no...
   def variance: Double = meanVarCount._2
 
   def stdDev: Double = math.sqrt(variance)
