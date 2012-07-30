@@ -128,7 +128,7 @@ trait TypeInferencer extends DAG {
         Extra(applyTypes(typing, splits, target))
     }
 
-    def applyTypes(typing: Map[DepGraph, JType], splits0: => Map[Split, Split], graph: DepGraph) : DepGraph = {
+    def applyTypes(typing: Map[DepGraph, JType], splits0: => Map[Split, Split], graph: DepGraph): DepGraph = {
       lazy val splits = splits0
 
       def inner(graph: DepGraph): DepGraph = graph match {

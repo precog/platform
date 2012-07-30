@@ -20,6 +20,7 @@
 package com.precog
 package daze
 
+import bytecode._
 import bytecode.Library
 import bytecode.Morphism1Like
 import bytecode.Morphism2Like
@@ -97,6 +98,42 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
     def reducer: CReducer[Result]
     implicit def monoid: Monoid[Result]
     def extract(res: Result): Table
+  }
+
+  def coalesce[CoalescedResult](redl: Reduction, redr: Reduction): Reduction = {
+    val leftRed = redl.reducer
+    val rightRed = redr.reducer
+
+    type CoalescedResult = List[Any]
+  
+    val red = new CReducer[CoalescedResult] {
+      def reduce(cols: JType => Set[Column], range: Range): CoalescedResult =
+        List(leftRed.reduce(cols, range)) ++ List(rightRed.reduce(cols, range))   //TODO need some sort of flatMapping
+    }
+  
+    val leftMon = redl.monoid
+    val rightMon = redr.monoid
+  
+    //implicit val mon = new Monoid[CoalescedResult]
+  
+    def extractImpl(res: CoalescedResult): Table = {
+      val (left, right) = res take redl
+  
+      val leftTable = lhs.extract(left)
+      val rightTable = that.extract(right)
+  
+      leftTable.cross(rightTable)(ArrayConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+    }
+
+    new ReductionImpl {
+      type Result = CoalescedResult
+
+      def reducer = red
+      def monoid = mon
+
+      def extract(res: Result): Table =
+        extractImpl(res)
+    }
   }
 
   type Morphism1 <: Morphism1Impl

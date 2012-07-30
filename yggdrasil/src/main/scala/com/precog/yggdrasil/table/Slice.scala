@@ -68,7 +68,7 @@ trait Slice { source =>
     }
   }
 
-  def deref(node : JPathNode) : Slice = new Slice {
+  def deref(node: JPathNode): Slice = new Slice {
     val size = source.size
     val columns = source.columns.collect {
       // case (ColumnRef(JPath(`node` :: rest), ctype), col) => (ColumnRef(JPath(rest), ctype), col) // TODO: why won't this work?
@@ -76,7 +76,7 @@ trait Slice { source =>
     }
   }
 
-  def wrap(wrapper : JPathNode) : Slice = new Slice {
+  def wrap(wrapper: JPathNode): Slice = new Slice {
     val size = source.size
     val columns = source.columns.map {
       case (ColumnRef(JPath(nodes @ _*), ctype), col) => (ColumnRef(JPath(wrapper +: nodes : _*), ctype), col)

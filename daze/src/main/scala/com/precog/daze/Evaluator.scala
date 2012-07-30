@@ -66,6 +66,7 @@ trait Evaluator[M[+_]] extends DAG
     with Memoizer
     with PathRelativizer[M]
     with TypeInferencer
+    with ReductionFinder
     with TableModule[M]        // TODO specific implementation
     with ImplLibrary[M]
     with InfixLib[M]
@@ -86,6 +87,10 @@ trait Evaluator[M[+_]] extends DAG
   type YggConfig <: EvaluatorConfig
   
   //private type State[S, T] = StateT[Id, S, T]
+  
+  private case class EvaluatorState(assume: Map[DepGraph, M[Table]])
+
+  sealed trait Context
 
   def withContext[A](f: Context => A): A = 
     f(new Context {})
@@ -144,7 +149,7 @@ trait Evaluator[M[+_]] extends DAG
            
               resultTargetTable = pendingTargetTable.table map { _.transform { liftToValues(pendingTargetTable.trans) } }
               
-              // FIXME if the target has forcing points, targetTrans is insufficient
+              // TODO FIXME if the target has forcing points, targetTrans is insufficient
               //val PendingTable(_, _, targetTrans) = loop(target, assume + (reducedTarget -> resultTargetTable), splits)
                 
               state <- get[EvaluatorState]
@@ -202,6 +207,8 @@ trait Evaluator[M[+_]] extends DAG
       case dag.Group(_, _, _) => sys.error("assertion error")
     }
 
+    lazy val reductions: Map[DepGraph, Vector[Reduction]] = findReductions(graph)
+
     def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
         state <- get[EvaluatorState]
@@ -218,8 +225,8 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ SplitGroup(_, index, _) => {
-          val (_, map) = splits(s.parent)
-          state(PendingTable(M.point(map(index)), graph, TransSpec1.Id))
+          val (_, f) = splits(s.parent)
+          state(PendingTable(M.point(f(index)), graph, TransSpec1.Id))
         }
         
         case Root(_, instr) => {
@@ -306,16 +313,30 @@ trait Evaluator[M[+_]] extends DAG
             // TODO unary typing
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, op1(op).f1))
         }
+
+// TODO what should be happening:
+// any Reduce nodes left intact (i.e. that make it to this point) should be read and operated on like normal (i.e. like before coalescence)
+// any MegaReduce nodes should do the reduction coalescence and return a table (i.e. an array) of all the results of the reductions that can later be derefed
+
+
+        case MegaReduce(_, reds, parent) => {
+          for {
+            pendingTable <- loop(parent, splits)
+            red: Reduction = reds.map { _.red }.reduce { (r1, r2) => coalesce(r1, r2) }
+            liftedTrans = liftToValues(pendingTable.trans)
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+          } yield PendingTable(result, graph, TransSpec1.Id)  //TODO do we need to WrapArray?
+        }
         
         case r @ dag.Reduce(_, red, parent) => {
           for {
             pendingTable <- loop(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
             wrapped = result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
-
+        
         case s @ dag.Split(line, spec, child) => {
           val table = for {
             grouping <- resolveTopLevelGroup(spec, splits)
@@ -751,7 +772,8 @@ trait Evaluator[M[+_]] extends DAG
       (orderCrosses _) andThen
       (memoize _) andThen
       (makePathRelative(_, prefix)) andThen //Path Relativizer
-      (if (optimize) inferTypes(JType.JUnfixedT) else identity)
+      (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
+      (g => megaReduce(g, findReductions(g)))
 
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }

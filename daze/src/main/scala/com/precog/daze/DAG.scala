@@ -29,6 +29,8 @@ import scala.collection.mutable
 
 import scalaz.Monoid
 import scalaz.Scalaz._
+import scalaz.std.option._
+import scalaz.std.list._
 
 trait DAG extends Instructions {
   import instructions._
@@ -395,15 +397,97 @@ trait DAG extends Instructions {
     
     def containsSplitArg: Boolean
 
+    def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
+      val memotable = mutable.Map[DepGraph, DepGraph]()
+
+      def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {  //this is the (DepGraph => DepGraph) in original signature
+        lazy val splits = _splits
+        lazy val pf: PartialFunction[DepGraph, DepGraph] = body(memoized(splits))
+
+        def inner(graph: DepGraph): DepGraph = graph match {
+          case x if pf isDefinedAt x => pf(x)
+          
+          case dag.SplitParam(_, _) => graph
+
+          case dag.SplitGroup(_, _, _) => graph
+          
+          case dag.Root(_, _) => graph
+
+          case dag.New(loc, parent) => dag.New(loc, memoized(splits)(parent))
+          
+          case dag.Morph1(loc, m, parent) => dag.Morph1(loc, m, memoized(splits)(parent))
+
+          case dag.Morph2(loc, m, left, right) => dag.Morph2(loc, m, memoized(splits)(left), memoized(splits)(right))
+
+          case dag.Distinct(loc, parent) => dag.Distinct(loc, memoized(splits)(parent))
+
+          case dag.LoadLocal(loc, parent, jtpe) => dag.LoadLocal(loc, memoized(splits)(parent), jtpe)
+
+          case dag.Operate(loc, op, parent) => dag.Operate(loc, op, memoized(splits)(parent))
+
+          case dag.Reduce(loc, red, parent) => dag.Reduce(loc, red, memoized(splits)(parent))
+
+          case dag.MegaReduce(loc, reds, parent) => dag.MegaReduce(loc, reds, memoized(splits)(parent))
+  
+          case s @ dag.Split(loc, spec, child) => {
+            lazy val splits2 = splits + (s -> result)
+            lazy val spec2 = memoizedSpec(spec, splits2)
+            lazy val child2 = memoized(splits2)(child)
+            lazy val result: dag.Split = dag.Split(loc, spec2, child2)
+            result
+          }
+            
+          case dag.IUI(loc, union, left, right) => dag.IUI(loc, union, memoized(splits)(left), memoized(splits)(right))
+
+          case dag.Diff(loc, left, right) => dag.Diff(loc, memoized(splits)(left), memoized(splits)(right))
+
+          case dag.Join(loc, op, joinSort, left, right) => dag.Join(loc, op, joinSort, memoized(splits)(left), memoized(splits)(right))
+
+          case dag.Filter(loc, joinSort, target, boolean) => dag.Filter(loc, joinSort, memoized(splits)(target), memoized(splits)(boolean))
+
+          case dag.Sort(parent, indexes) => dag.Sort(memoized(splits)(parent), indexes)
+
+          case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(splits)(parent), sortField, valueField, id)
+
+          case dag.Memoize(parent, priority) => dag.Memoize(memoized(splits)(parent), priority)
+        }
+
+        def memoizedSpec(spec: dag.BucketSpec, splits: => Map[dag.Split, dag.Split]): dag.BucketSpec = spec match {  //TODO generalize?
+          case dag.UnionBucketSpec(left, right) =>
+            dag.UnionBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+          
+          case dag.IntersectBucketSpec(left, right) =>
+            dag.IntersectBucketSpec(memoizedSpec(left, splits), memoizedSpec(right, splits))
+          
+          case dag.Group(id, target, child) =>
+            dag.Group(id, memoized(splits)(target), memoizedSpec(child, splits))
+          
+          case dag.UnfixedSolution(id, target) =>
+            dag.UnfixedSolution(id, memoized(splits)(target))
+          
+          case dag.Extra(target) =>
+            dag.Extra(memoized(splits)(target))
+        }
+  
+        memotable.get(node) getOrElse {
+          val result = inner(node)
+          memotable += (node -> result)
+          result
+        }
+      }
+
+      memoized(Map())(this)
+    }
+
     def foldDown[Z](f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
       val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
 
       def foldDown0(node: DepGraph, acc: Z)(f: DepGraph => Z): Z = node match {
-        case dag.SplitParam(_, _) => acc |+| monoid.zero
+        case dag.SplitParam(_, _) => acc
 
-        case dag.SplitGroup(_, _, provenance) => acc |+| monoid.zero
+        case dag.SplitGroup(_, _, provenance) => acc
 
-        case node @ dag.Root(_, _) => acc |+| monoid.zero
+        case node @ dag.Root(_, _) => acc
 
         case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
 
@@ -420,6 +504,8 @@ trait DAG extends Instructions {
         case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
 
         case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case node @ dag.MegaReduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
 
         case dag.Split(_, specs, child) => foldDown0(child, acc |+| f(child))(f)
 
@@ -635,6 +721,24 @@ trait DAG extends Instructions {
       val sorting = IdentitySort
       
       val isSingleton = true
+      
+      def findMemos(s: Split) = {
+        val back = parent.findMemos(s)
+        if (back.isEmpty)
+          back
+        else
+          back + memoId
+      }
+
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+    
+    case class MegaReduce(loc: Line, reds: Vector[dag.Reduce], parent: DepGraph) extends DepGraph {
+      lazy val provenance = Vector()
+      
+      val sorting = IdentitySort
+      
+      val isSingleton = false
       
       def findMemos(s: Split) = {
         val back = parent.findMemos(s)
@@ -872,7 +976,6 @@ trait DAG extends Instructions {
       
       lazy val containsSplitArg = parent.containsSplitArg
     }
-    
     
     sealed trait BucketSpec
     
