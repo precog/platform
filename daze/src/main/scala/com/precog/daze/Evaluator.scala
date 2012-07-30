@@ -63,10 +63,6 @@ trait Evaluator[M[+_]] extends DAG
   type YggConfig <: EvaluatorConfig
   
   //private type State[S, T] = StateT[Id, S, T]
-  
-  private case class EvaluatorState(assume: Map[DepGraph, M[Table]])
-
-  sealed trait Context
 
   def withContext[A](f: Context => A): A = 
     f(new Context {})
@@ -171,8 +167,11 @@ trait Evaluator[M[+_]] extends DAG
           _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (commonGraph -> commonTable)) }
           pendingTable <- loop(graph, splits)
           _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume - commonGraph) }
-
-        } yield GroupKeySpecSource(JPathField("extra"), trans.Filter(pendingTable.trans, pendingTable.trans))     // TODO constantify -1
+          
+          state <- get[EvaluatorState]
+          extraId = state.extraCount
+          _ <- modify[EvaluatorState] { _.copy(extraCount = extraId + 1) }
+        } yield GroupKeySpecSource(JPathField("extra" + extraId), trans.Filter(pendingTable.trans, pendingTable.trans))
       }
       
       case dag.Group(_, _, _) => sys.error("assertion error")
@@ -816,6 +815,10 @@ trait Evaluator[M[+_]] extends DAG
       case trans.EqualLiteral(source, value, invert) => trans.EqualLiteral(deepMap(source)(f), value, invert)
     }
   }
+
+  sealed trait Context
+  
+  private case class EvaluatorState(assume: Map[DepGraph, M[Table]] = Map(), extraCount: Int = 0)
   
   private case class PendingTable(table: M[Table], graph: DepGraph, trans: TransSpec1)
 }
