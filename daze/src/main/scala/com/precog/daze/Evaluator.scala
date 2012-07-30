@@ -93,6 +93,8 @@ trait Evaluator[M[+_]] extends DAG
   def PrimitiveEqualsF2: F2
   def ConstantEmptyArray: F1
   
+  def freshIdScanner: Scanner
+  
   def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID, graph))
   
@@ -231,7 +233,19 @@ trait Evaluator[M[+_]] extends DAG
           state(PendingTable(M.point(table.get.transform(spec)), graph, TransSpec1.Id))
         }
         
-        case dag.New(_, parent) => loop(parent, splits)   // TODO John swears this part is easy
+        // TODO technically, we can do this without forcing by pre-lifting PendingTable#trans
+        case dag.New(_, parent) => {
+          for {
+            pendingTable <- loop(parent, splits)
+            spec = TableTransSpec.makeTransSpec(
+              Map(constants.Key -> trans.WrapArray(Scan(DerefArrayStatic(Leaf(Source), JPathIndex(0)), freshIdScanner))))
+            
+            tableM2 = for {
+              table <- pendingTable.table
+              transformed = table.transform(liftToValues(pendingTable.trans))
+            } yield table.transform(spec)
+          } yield PendingTable(tableM2, graph, TransSpec1.Id)
+        }
         
         case dag.LoadLocal(_, parent, jtpe) => {
           for {

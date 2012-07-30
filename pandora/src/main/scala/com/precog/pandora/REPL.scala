@@ -65,7 +65,10 @@ trait Lifecycle {
   def shutdown: IO[Unit]
 }
 
-trait REPL extends muspelheim.ParseEvalStack[Future] with MemoryDatasetConsumer[Future] {
+trait REPL
+    extends muspelheim.ParseEvalStack[Future] 
+    with IdSourceScannerModule[Future]
+    with MemoryDatasetConsumer[Future] {
 
   val dummyUID = "dummyUID"
 

@@ -51,17 +51,20 @@ import com.codecommit.gll.LineStream
 
 object SBTConsole {
   
-  trait Platform  extends muspelheim.ParseEvalStack[Future] 
-                  with PrettyPrinter
-                  with MemoryDatasetConsumer[Future]
-                  with BlockStoreColumnarTableModule[Future]
-                  with JDBMProjectionModule
-                  with SystemActorStorageModule
-                  with StandaloneShardSystemActorModule {
+  trait Platform 
+      extends muspelheim.ParseEvalStack[Future] 
+      with IdSourceScannerModule[Future] 
+      with PrettyPrinter
+      with MemoryDatasetConsumer[Future]
+      with BlockStoreColumnarTableModule[Future]
+      with JDBMProjectionModule
+      with SystemActorStorageModule
+      with StandaloneShardSystemActorModule {
 
-    trait YggConfig extends BaseConfig 
-                    with DatasetConsumersConfig 
-                    with StandaloneShardSystemConfig
+    trait YggConfig
+        extends BaseConfig 
+        with DatasetConsumersConfig 
+        with StandaloneShardSystemConfig
   }
 
   val controlTimeout = Duration(30, "seconds")

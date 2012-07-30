@@ -50,7 +50,7 @@ import org.specs2.specification.Fragments
 import org.specs2.execute.Result
 import org.specs2.mutable._
 
-trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] {
+trait TestConfigComponent[M[+_]] extends table.StubColumnarTableModule[M] with IdSourceScannerModule[M] {
   val asyncContext = ExecutionContext fromExecutor Executors.newCachedThreadPool()
   
   object yggConfig extends YggConfig

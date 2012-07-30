@@ -120,6 +120,7 @@ trait YggdrasilQueryExecutorComponent {
 trait YggdrasilQueryExecutor 
     extends QueryExecutor
     with ParseEvalStack[Future]
+    with IdSourceScannerModule[Future]
     with SystemActorStorageModule
     with MemoryDatasetConsumer[Future]
     with Logging  { self =>
