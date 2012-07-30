@@ -52,6 +52,7 @@ import com.codecommit.gll.LineStream
 object SBTConsole {
   
   trait Platform  extends muspelheim.ParseEvalStack[Future] 
+                  with PrettyPrinter
                   with MemoryDatasetConsumer[Future]
                   with BlockStoreColumnarTableModule[Future]
                   with JDBMProjectionModule
@@ -135,6 +136,15 @@ object SBTConsole {
       }
       val Right(dag) = decorate(emit(tree))
       withContext { ctx => consumeEval("0", dag, ctx) }
+    }
+
+    def printDAG(str: String) = {
+      val tree = compile(str)
+      if (!tree.errors.isEmpty) {
+        sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
+      }
+      val Right(dag) = decorate(emit(tree))
+      prettyPrint(dag)
     }
 
     def startup() {
