@@ -81,18 +81,18 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     }
     
     "accept a wildcard import expression" in {
-      parse("import std::_ 42") must beLike {
+      parse("import std::* 42") must beLike {
         case Import(_, WildcardImport(Vector("std")), NumLit(_, "42")) => ok
       }
       
-      parse("import std::math::alissa::_ 42") must beLike {
+      parse("import std::math::alissa::* 42") must beLike {
         case Import(_, WildcardImport(Vector("std", "math", "alissa")), NumLit(_, "42")) => ok
       }
     }
 
     "accept a wildcard import followed by a let" in {
       parse("""
-        | import std::time::_
+        | import std::time::*
         | foo := //foo
         | foo""".stripMargin) must beLike {
         case Import(_, WildcardImport(Vector("std", "time")), _) => ok
@@ -102,7 +102,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     "accept a let followed by a wildcard import" in {
       parse("""
         | foo :=
-        |   import std::time::_
+        |   import std::time::*
         |   //foo
         | foo""".stripMargin) must beLike {
         case Let(_, _, _, Import(_, WildcardImport(Vector("std", "time")), _), _) => ok
@@ -111,7 +111,7 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
 
     "accept a wildcard import followed by a distinct" in {
       parse("""
-        | import std::time::_
+        | import std::time::*
         | distinct(//foo)""".stripMargin) must beLike {
         case Import(_, WildcardImport(Vector("std", "time")), _) => ok
       }

@@ -843,7 +843,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
   "wildcard hierarchical imports" should {
     "allow use of a unary function unqualified" in {
       val input = """
-        | import std::lib::_
+        | import std::lib::*
         | baz""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
@@ -854,7 +854,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "allow use of more than one unary function unqualified" in {
       val input = """
-        | import std::lib::_
+        | import std::lib::*
         | baz + baz2""".stripMargin
         
       val Import(_, _, Add(_, d1: Dispatch, d2: Dispatch)) = parse(input)
@@ -868,8 +868,8 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "allow use of a unary function unqualified in a hierarchical import" in {
       val input = """
-        | import std::_
-        | import lib::_
+        | import std::*
+        | import lib::*
         | baz""".stripMargin
         
       val Import(_, _, Import(_, _, d: Dispatch)) = parse(input)
@@ -880,7 +880,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "allow the use of a unary function partially-qualified" in {
       val input = """
-        | import std::_
+        | import std::*
         | lib::baz""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
@@ -891,7 +891,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "allow the use of a function that shadows a package" in {
       val input = """
-        | import std::_
+        | import std::*
         | lib""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
@@ -902,7 +902,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     
     "bind most specific import in case of shadowing" in {
       val input = """
-        | import std::_
+        | import std::*
         | bin""".stripMargin
         
       val Import(_, _, d: Dispatch) = parse(input)
@@ -914,7 +914,7 @@ object BinderSpecs extends Specification with ScalaCheck with Parser with StubPh
     "not affect outer scope" in {
       val input = """
         | bin +
-        | import std::_
+        | import std::*
         | bin""".stripMargin
         
       val Add(_, d1: Dispatch, Import(_, _, d2: Dispatch)) = parse(input)

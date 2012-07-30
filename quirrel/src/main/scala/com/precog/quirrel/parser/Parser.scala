@@ -130,7 +130,7 @@ trait Parser extends RegexParsers with Filters with AST {
   ) filter (precedence & associativity)
   
   private lazy val importSpec: Parser[ImportSpec] = (
-      namespace ~ "::" ~ "_" ^^ { (p, _, _) => WildcardImport(p) }
+      namespace ~ "::" ~ "*" ^^ { (p, _, _) => WildcardImport(p) }
     | namespace              ^^ SpecificImport
   )
   
