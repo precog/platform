@@ -166,9 +166,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within a filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossLeft),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
-        Join(line, Map2Cross(Eq),
+        Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, Rank,
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
           Root(line, PushNum("5"))))
@@ -187,7 +187,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within a join" in {
       val line = Line(0, "")
 
-      val input = Join(line, Map2Cross(Add),
+      val input = Join(line, Add, CrossLeftSort,
         dag.Morph1(line, Rank,
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
         Root(line, PushNum("2")))
@@ -276,9 +276,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within an equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossLeft),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
-        Join(line, Map2Cross(Eq),
+        Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, Rank,
             dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("9"))))
@@ -297,9 +297,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within another equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossLeft),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
-        Join(line, Map2Cross(Eq),
+        Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, Rank,
             dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("1"))))
@@ -319,9 +319,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within a less-than filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossLeft),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
-        Join(line, Map2Cross(LtEq),
+        Join(line, LtEq, CrossLeftSort,
           dag.Morph1(line, Rank,
             dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("5"))))
@@ -340,7 +340,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute rank within a join" in {
       val line = Line(0, "")
 
-      val input = Join(line, Map2Cross(Add),
+      val input = Join(line, Add, CrossLeftSort,
         dag.Morph1(line, Rank,
           dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
         Root(line, PushNum("2")))
@@ -378,9 +378,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute denseRank within a filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossLeft),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers6"))),
-        Join(line, Map2Cross(Eq),
+        Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
             dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
           Root(line, PushNum("4"))))
@@ -399,7 +399,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute denseRank within a join" in {
       val line = Line(0, "")
 
-      val input = Join(line, Map2Cross(Add),
+      val input = Join(line, Add, CrossLeftSort,
         dag.Morph1(line, DenseRank,
           dag.LoadLocal(line, Root(line, PushString("/hom/numbers6")))),
         Root(line, PushNum("2")))
@@ -437,9 +437,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute denseRank within an equals filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossRight),
+      val input = Filter(line, CrossRightSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
-        Join(line, Map2Cross(Eq),
+        Join(line, Eq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
             dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("6"))))
@@ -458,9 +458,9 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute denseRank within a less-than filter" in {
       val line = Line(0, "")
 
-      val input = Filter(line, Some(CrossNeutral),
+      val input = Filter(line, CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers6"))),
-        Join(line, Map2Cross(LtEq),
+        Join(line, LtEq, CrossLeftSort,
           dag.Morph1(line, DenseRank,
             dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
           Root(line, PushNum("5"))))
@@ -479,7 +479,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     "compute denseRank within a join" in {
       val line = Line(0, "")
 
-      val input = Join(line, Map2Cross(Add),
+      val input = Join(line, Add, CrossLeftSort,
         dag.Morph1(line, DenseRank,
           dag.LoadLocal(line, Root(line, PushString("/het/numbers6")))),
         Root(line, PushNum("2")))
@@ -501,10 +501,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -523,10 +523,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, Covariance,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -545,10 +545,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -573,10 +573,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LogarithmicRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -603,10 +603,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -625,10 +625,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, Covariance,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -647,10 +647,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -675,10 +675,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LogarithmicRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -705,10 +705,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
@@ -727,10 +727,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, Covariance,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
@@ -749,10 +749,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
@@ -777,10 +777,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LogarithmicRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))))
 
@@ -807,10 +807,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearCorrelation,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -829,10 +829,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, Covariance,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -851,10 +851,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -879,10 +879,10 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LogarithmicRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("height"))),
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("het/heightWeight"))),
           Root(line, PushString("weight"))))
 
@@ -910,7 +910,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = dag.Morph2(line, LinearCorrelation,
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))),
           Root(line, PushNum("5")))
@@ -925,7 +925,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         
         val input = dag.Morph2(line, LinearCorrelation,
           Root(line, PushNum("5")),
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))))
 
@@ -939,7 +939,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, Covariance,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Root(line, PushNum("5")))
@@ -959,7 +959,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       val line = Line(0, "")
       
       val input = dag.Morph2(line, LinearRegression,
-        Join(line, Map2Cross(DerefObject),
+        Join(line, DerefObject, CrossLeftSort,
           dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
           Root(line, PushString("height"))),
         Root(line, PushNum("5")))
@@ -986,7 +986,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = dag.Morph2(line, LogarithmicRegression,
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))),
           Root(line, PushNum("5")))
@@ -1014,7 +1014,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         val input = dag.Morph2(line, LogarithmicRegression,
           Operate(line, Neg, 
             Root(line, PushNum("5"))),
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
             Root(line, PushString("height"))))
 
@@ -1027,10 +1027,10 @@ trait StatsLibSpec[M[+_]] extends Specification
         val line = Line(0, "")
         
         val input = dag.Morph2(line, LogarithmicRegression,
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight_neg"))),
             Root(line, PushString("height"))),
-          Join(line, Map2Cross(DerefObject),
+          Join(line, DerefObject, CrossLeftSort,
             dag.LoadLocal(line, Root(line, PushString("hom/heightWeight_neg"))),
             Root(line, PushString("weight"))))
 
