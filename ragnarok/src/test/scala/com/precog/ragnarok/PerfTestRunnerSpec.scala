@@ -1,4 +1,4 @@
-package com.precog.ragnarock
+package com.precog.ragnarok
 
 import org.specs2.mutable.Specification
 
