@@ -179,6 +179,7 @@ trait Parser extends RegexParsers with Filters with AST {
   private lazy val propertyName = (
       """[a-zA-Z_][a-zA-Z_0-9]*""".r
     | """`([^`\\]|\\.)+`""".r ^^ canonicalizePropertyName
+    | """"([^"\\]|\\.)+"""".r ^^ canonicalizeStr        //"
   )
   
   private lazy val pathLiteral = """/(/[a-zA-Z_\-0-9]+)+""".r ^^ canonicalizePath 

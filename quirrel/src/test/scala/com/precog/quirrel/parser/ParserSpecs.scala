@@ -347,14 +347,20 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
     
     "accept an object definition with one property" in {
       parse("{ x: 1 }") must beLike { case ObjectDef(_, Vector(("x", NumLit(_, "1")))) => ok }
+      parse("{ \"x\": 1 }") must beLike { case ObjectDef(_, Vector(("x", NumLit(_, "1")))) => ok }
     }
     
     "reject an object definition with a trailing delimiter" in {
       parse("{ x: 1, }") must throwA[ParseException]
+      parse("{ \"x\": 1, }") must throwA[ParseException]
     }
     
     "accept an object definition with multiple properties" in {
       parse("{ a: 1, b: 2, cafe: 3, star_BUckS: 4 }") must beLike {
+        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", NumLit(_, "3")), ("star_BUckS", NumLit(_, "4")))) => ok
+      }
+      
+      parse("{ \"a\": 1, \"b\": 2, \"cafe\": 3, \"star_BUckS\": 4 }") must beLike {
         case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", NumLit(_, "3")), ("star_BUckS", NumLit(_, "4")))) => ok
       }
     }    
@@ -363,16 +369,28 @@ object ParserSpecs extends Specification with ScalaCheck with StubPhases with Pa
       parse("{ a: 1, b: 2, cafe: { foo: null }, star_BUckS: null }") must beLike {
         case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", ObjectDef(_, Vector(("foo", NullLit(_))))), ("star_BUckS", NullLit(_)))) => ok
       }
+      
+      parse("{ \"a\": 1, \"b\": 2, \"cafe\": { \"foo\": null }, \"star_BUckS\": null }") must beLike {
+        case ObjectDef(_, Vector(("a", NumLit(_, "1")), ("b", NumLit(_, "2")), ("cafe", ObjectDef(_, Vector(("foo", NullLit(_))))), ("star_BUckS", NullLit(_)))) => ok
+      }
     }
     
     "reject an object definition with undelimited properties" in {
       parse("{ a: 1, b: 2 cafe: 3, star_BUckS: 4 }") must throwA[ParseException]
+      parse("{ \"a\": 1, \"b\": 2 \"cafe\": 3, \"star_BUckS\": 4 }") must throwA[ParseException]
       parse("{ a: 1 b: 2 cafe: 3 star_BUckS: 4 }") must throwA[ParseException]
+      parse("{ \"a\": 1 \"b\": 2 \"cafe\": 3 \"star_BUckS\": 4 }") must throwA[ParseException]
     }
     
     "accept an object definition with backtic-delimited properties" in {
       parse("{ `$see! what I can do___`: 1, `test \\` ing \\\\ with $%^&*!@#$ me!`: 2 }") must beLike {
         case ObjectDef(_, Vector(("$see! what I can do___", NumLit(_, "1")), ("test ` ing \\ with $%^&*!@#$ me!", NumLit(_, "2")))) => ok
+      }
+    }
+    
+    "accept an object definition with quote-delimited properties containing special characters" in {
+      parse("{ \"$see! what I can do___\": 1, \"test \\\" ing \\\\ with $%^&*!@#$ me!\": 2 }") must beLike {
+        case ObjectDef(_, Vector(("$see! what I can do___", NumLit(_, "1")), ("test \" ing \\ with $%^&*!@#$ me!", NumLit(_, "2")))) => ok
       }
     }
 
