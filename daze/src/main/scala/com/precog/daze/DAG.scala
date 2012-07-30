@@ -27,6 +27,9 @@ import com.precog.yggdrasil._
 
 import scala.collection.mutable
 
+import scalaz.Monoid
+import scalaz.Scalaz._
+
 trait DAG extends Instructions {
   import instructions._
   
@@ -391,6 +394,60 @@ trait DAG extends Instructions {
     def findMemos(parent: dag.Split): Set[Int]
     
     def containsSplitArg: Boolean
+
+    def foldDown[Z](f0: PartialFunction[DepGraph, Z])(implicit monoid: Monoid[Z]): Z = {
+      val f: PartialFunction[DepGraph, Z] = f0.orElse { case _ => monoid.zero }
+
+      def foldDown0(node: DepGraph, acc: Z)(f: DepGraph => Z): Z = node match {
+        case dag.SplitParam(_, _) => acc |+| monoid.zero
+
+        case dag.SplitGroup(_, _, provenance) => acc |+| monoid.zero
+
+        case node @ dag.Root(_, _) => acc |+| monoid.zero
+
+        case dag.New(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.Morph1(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.Morph2(_, _, left, right) => 
+          val acc2 = foldDown0(left, acc |+| f(left))(f)
+          foldDown0(right, acc2 |+| f(right))(f)
+
+        case dag.Distinct(_, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.LoadLocal(_, parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.Operate(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case node @ dag.Reduce(_, _, parent) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.Split(_, specs, child) => foldDown0(child, acc |+| f(child))(f)
+
+        case dag.IUI(_, _, left, right) =>
+          val acc2 = foldDown0(left, acc |+| f(left))(f)
+          foldDown0(right, acc2 |+| f(right))(f)
+
+        case dag.Diff(_, left, right) =>
+          val acc2 = foldDown0(left, acc |+| f(left))(f)
+          foldDown0(right, acc2 |+| f(right))(f)
+
+        case dag.Join(_, _, _, left, right) =>
+          val acc2 = foldDown0(left, acc |+| f(left))(f)
+          foldDown0(right, acc2 |+| f(right))(f)
+
+        case dag.Filter(_, _, target, boolean) =>
+          val acc2 = foldDown0(target, acc |+| f(target))(f)
+          foldDown0(boolean, acc2 |+| f(boolean))(f)
+
+        case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
+      }
+
+      foldDown0(this, f(this))(f)
+    }
   }
   
   object dag {
