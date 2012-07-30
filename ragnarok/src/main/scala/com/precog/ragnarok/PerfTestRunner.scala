@@ -115,6 +115,4 @@ class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) exte
   }
 }
 
-
-
-// 
+//
