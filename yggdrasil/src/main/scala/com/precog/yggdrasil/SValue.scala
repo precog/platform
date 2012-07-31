@@ -363,3 +363,11 @@ case object SNull extends SType with SValue {
   }
 }
 
+case object SUndefined extends SType with SValue {
+  def isA(stype: SType) = stype == this
+  def =~(v: SValue): Boolean = v match {
+    case SUndefined => true
+    case _ => false
+  }
+}
+

@@ -97,6 +97,8 @@ sealed abstract class CType(val format: StorageFormat, val stype: SType) extends
     case CNull        => 10
 
     case CDate        => 11
+
+    case CUndefined   => 12
   }
   
   def =~(tpe: SType): Boolean = (this, tpe) match {
@@ -127,6 +129,7 @@ trait CTypeSerialization {
     case CEmptyObject           => "EmptyObject"
     case CEmptyArray            => "EmptyArray"
     case CDate                  => "Timestamp"
+    case CUndefined             => sys.error("CUndefined cannot be serialized")
   } 
 
   def fromName(n: String): Option[CType] = n match {
@@ -178,6 +181,7 @@ object CType extends CTypeSerialization {
     case CNull         => CNull
     case CEmptyObject  => CEmptyObject
     case CEmptyArray   => CEmptyArray
+    case CUndefined    => CUndefined
   }
 
   def canCompare(t1: CType, t2: CType): Boolean = (t1, t2) match {
@@ -336,6 +340,16 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue
   def order(v1: Null, v2: Null) = EQ
   def jvalueFor(v: Null) = JNull
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
+}
+
+case object CUndefined extends CType(FixedWidth(0), SUndefined) with CNullType with CValue {
+  def readResolve() = CUndefined
+  type CA = Nothing
+  val CC = classOf[Nothing]
+  def order(v1: Nothing, v2: Nothing) = EQ
+  def jvalueFor(v: Nothing) = JNothing
+  implicit val manifest: Manifest[Nothing] = implicitly[Manifest[Nothing]]
+
 }
 
 case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType with CValue {
