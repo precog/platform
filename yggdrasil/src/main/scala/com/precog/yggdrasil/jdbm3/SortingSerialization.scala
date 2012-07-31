@@ -25,22 +25,36 @@ import org.apache.jdbm.Serializer
 import java.io.{DataInput,DataOutput}
 import java.util.Comparator
 
-case class GroupingKey(columns: Array[CValue], ids: Identities)
+import scala.collection.BitSet
 
-object GroupingKeyComparator extends GroupingKeyComparator {
-  final val serialVersionUID = 20120724l
+/**
+ * A key for sorting tables to JDBM projections.
+ *
+ * @param columns The column values for the row. Undefind columns may be represented as any type, but CNull
+ * is preferred
+ * @param ids The identities for the row
+ * @param index A synthetic index to allow differentiation of identical value/id combinations. These may be the
+ * result of operations such as cross which result in cartesians
+ */
+case class SortingKey(columns: Array[CValue], ids: Identities, index: Long)
+
+object SortingKeyComparator extends SortingKeyComparator {
+  final val serialVersionUID = 20120730l
 }
   
-class GroupingKeyComparator extends Comparator[GroupingKey] with Serializable {
-  def readResolve() = GroupingKeyComparator
+class SortingKeyComparator extends Comparator[SortingKey] with Serializable {
+  def readResolve() = SortingKeyComparator
 
-  def compare(a: GroupingKey, b: GroupingKey) = {
+  def compare(a: SortingKey, b: SortingKey) = {
     // Compare over the key values first
     var result = 0
     var i = 0
 
     while (result == 0 && i < a.columns.length) {
       result = (a.columns(i),b.columns(i)) match {
+        case (CUndefined, CUndefined)     => 0
+        case (CUndefined, _)              => -1
+        case (_, CUndefined)              => 1
         case (CString(as), CString(bs))   => as.compareTo(bs)
         case (CBoolean(ab), CBoolean(bb)) => ab.compareTo(bb)
         case (CLong(al), CLong(bl))       => al.compareTo(bl)
@@ -50,38 +64,47 @@ class GroupingKeyComparator extends Comparator[GroupingKey] with Serializable {
         case (CNull, CNull)               => 0
         case (CEmptyObject, CEmptyObject) => 0
         case (CEmptyArray, CEmptyArray)   => 0
-        case invalid                      => sys.error("Invalid comparison for GroupingKey of " + invalid)
+        case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
       }
       i += 1
     }
 
     if (result == 0) {
-      IdentitiesComparator.compare(a.ids, b.ids)
+      result = IdentitiesComparator.compare(a.ids, b.ids)
+      if (result == 0) {
+        a.index.compareTo(b.index)
+      } else {
+        result
+      }
     } else {
       result
     }
   }
 }
     
-object GroupingKeySerializer {
-  def apply(keyFormat: Array[CType], idCount: Int) = new GroupingKeySerializer(keyFormat, idCount)
+object SortingKeySerializer {
+  def apply(keyFormat: Array[CType], idCount: Int) = new SortingKeySerializer(keyFormat, idCount)
 }
 
-class GroupingKeySerializer private[GroupingKeySerializer](val keyFormat: Array[CType], val idCount: Int) extends Serializer[GroupingKey] with Serializable {
-  final val serialVersionUID = 20120724l
+class SortingKeySerializer private[SortingKeySerializer](val keyFormat: Array[CType], val idCount: Int) extends Serializer[SortingKey] with Serializable {
+  import CValueSerializerUtil.defaultSerializer
+
+  final val serialVersionUID = 20120730l
 
   @transient
   private val keySerializer = CValueSerializer(keyFormat)
   @transient
   private val idSerializer  = IdentitiesSerializer(idCount)
 
-  def serialize(out: DataOutput, gk: GroupingKey) {
+  def serialize(out: DataOutput, gk: SortingKey) {
+    defaultSerializer.serialize(out, new java.lang.Long(gk.index))
     keySerializer.serialize(out, gk.columns)
     idSerializer.serialize(out, gk.ids)
   }
 
-  def deserialize(in: DataInput): GroupingKey = {
-    GroupingKey(keySerializer.deserialize(in), idSerializer.deserialize(in))
+  def deserialize(in: DataInput): SortingKey = {
+    val index = defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]
+    SortingKey(keySerializer.deserialize(in), idSerializer.deserialize(in), index)
   }
 }
  

@@ -39,25 +39,42 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
 
   def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
 
+  /** Arbitrary BigDecimal */
+  val newArbBigDecimal: Arbitrary[BigDecimal] = {
+    import java.math.MathContext._
+    val mcGen = Gen.oneOf(UNLIMITED, DECIMAL32, DECIMAL64, DECIMAL128)
+    val bdGen = for {
+      x <- arbBigInt.arbitrary
+      ctxt <- mcGen
+      limit <- Gen.value(if(ctxt == UNLIMITED) 0 else math.max(x.abs.toString.length - ctxt.getPrecision, 0))
+      scale <- Gen.chooseNum(Int.MinValue + limit , Int.MaxValue)
+    } yield {
+      try {
+        BigDecimal(x, scale, ctxt)
+      } catch {
+        case ae: java.lang.ArithmeticException => BigDecimal(x, scale, UNLIMITED) // Handle the case where scale/precision conflict
+      }
+    }
+    Arbitrary(bdGen)
+  }
+
+
   def genFor(tpe: CType): Gen[CValue] = tpe match {
     case CString  => arbString.arbitrary.map(CString(_))
     case CBoolean => arbBool.arbitrary.map(CBoolean(_)) 
     case CLong    => arbLong.arbitrary.map(CLong(_))
     case CDouble  => arbDouble.arbitrary.map(CDouble(_))
-    /* I don't care if Paul Phillips thinks it was a great idea, changing the default MathContext 
-     * of scala.math.BigDecimal IS A HUGE MISTAKE AND PAIN IN THE REAR. Using Arbitrary.arbBigDecimal
-     * will result in Overflow exceptions because it generates java.math.BigDecimals in MathContext.UNLIMITED,
-     * but scala now defaults to MathContext.DECIMAL128 :(
-     *
-     * Submitting a patch to Ricky */
-    case CNum     => for {
-      scale  <- arbInt.arbitrary
-      bigInt <- arbBigInt.arbitrary
-    } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
+    // ScalaCheck's arbBigDecimal fails on argument creation intermittently due to math context conflicts with scale/value.
+    case CNum     => newArbBigDecimal.arbitrary.map(CNum(_))
+//    case CNum     => for {
+//      scale  <- arbInt.arbitrary
+//      bigInt <- arbBigInt.arbitrary
+//    } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
     case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
     case CNull    => Gen.value(CNull)
     case CEmptyObject => Gen.value(CEmptyObject)
     case CEmptyArray  => Gen.value(CEmptyArray)
+    case CUndefined   => Gen.value(CUndefined)
   }
   
   override def defaultValues = super.defaultValues + (minTestsOk -> 20)
@@ -84,8 +101,13 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
           val size = data.length
           val baseDir = Files.createTempDir()
 
+          logger.info("Running projection read/write spec of size " + size)
+          logger.debug("Projection data writes to " + baseDir)
+
           try {
             val proj = new JDBMProjection(baseDir, descriptor){}
+
+            logger.debug("New projection open")
 
             // Insert all data
             (0 until size).foreach {
