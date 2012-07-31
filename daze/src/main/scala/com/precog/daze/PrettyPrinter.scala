@@ -215,8 +215,8 @@ trait PrettyPrinter extends DAG {
     }
     
     val bindings = (splitBindings ++ sharedBindings) + (graph -> "input")
-    
-    """val line = Line(0, "")\n\n"""+
+
+    """val line = Line(0, "")"""+"\n\n"+
     (splitBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
      sharedBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
      List(prettyPrintBinding(graph, bindings))).reduce(_+"\n"+_)

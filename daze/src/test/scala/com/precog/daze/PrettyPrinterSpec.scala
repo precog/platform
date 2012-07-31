@@ -46,7 +46,9 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
       
       val expected = 
-        """|lazy val input =
+        """|val line = Line(0, "")
+           |
+           |lazy val input =
            |  Join(line, DerefObject, CrossLeftSort,
            |    LoadLocal(line,
            |      Root(line, PushString("/file"))
@@ -74,7 +76,9 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
 
       val expected =
-        """|lazy val node =
+        """|val line = Line(0, "")
+           |
+           |lazy val node =
            |  LoadLocal(line,
            |    Root(line, PushString("/file"))
            |  )
@@ -120,7 +124,9 @@ object PrettyPrinterSpec extends Specification with PrettyPrinter with RandomLib
       val result = prettyPrint(input)
       
       val expected =
-        """|lazy val node =
+        """|val line = Line(0, "")
+           |
+           |lazy val node =
            |  LoadLocal(line,
            |    Root(line, PushString("/file"))
            |  )
