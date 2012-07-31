@@ -56,10 +56,11 @@ object CValueSerializerUtil {
 
 class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) extends Serializer[Array[CValue]] with Serializable {
   import CTypeMappings._
-  final val serialVersionUID = 20120727l
 
   @transient
   private final val emptyBytes = Array[Byte]()
+
+  final val serialVersionUID = 20120730l
 
   import CValueSerializerUtil._
 
@@ -69,7 +70,7 @@ class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) exten
     if (undefined.isEmpty) {
       defaultSerializer.serialize(out, emptyBytes)
     } else {
-      val backingBytes = new Array[Byte](undefined.max / 8 + (if (undefined.max % 8 == 0) 0 else 1))
+      val backingBytes = new Array[Byte](undefined.max / 8 + 1)
 
       undefined.foreach { 
         index => backingBytes(index / 8) = (backingBytes(index / 8) | (0x01 << (7 - (index % 8)))).toByte
@@ -93,7 +94,7 @@ class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) exten
         var i = 7
         while (i >= 0) {
           if ((0x01 & (backingBytes(octet) >> i)) != 0) {
-            result += (octet * 8 + i)
+            result += (octet * 8 + (7 - i))
           }
           i -= 1
         }
