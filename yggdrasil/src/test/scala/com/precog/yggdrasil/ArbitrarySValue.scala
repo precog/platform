@@ -70,7 +70,7 @@ trait CValueGenerators {
     CBoolean,
     CLong,
     CDouble,
-    CNum,
+    //CNum,
     CNull,
     CEmptyObject,
     CEmptyArray
