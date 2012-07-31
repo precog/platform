@@ -24,7 +24,7 @@ trait Timer[T] {
 /**
  * Nanosecond timer, implemented using `System.nanoTime()`.
  */
-trait SimpleTimer extends Timer[Long] {
+object SimpleTimer extends Timer[Long] {
   def now() = System.nanoTime()
 
   val TimeOrdering: Ordering[Long] = Ordering.Long
@@ -34,7 +34,7 @@ trait SimpleTimer extends Timer[Long] {
 /**
  * Millisecond timer, implemented using Joda Time `Instant`s.
  */
-trait JodaTimer extends Timer[Instant] {
+object JodaTimer extends Timer[Instant] {
   def now() = new Instant()
 
   val TimeOrdering: Ordering[Instant] = Ordering.Long.on[Instant](_.getMillis)

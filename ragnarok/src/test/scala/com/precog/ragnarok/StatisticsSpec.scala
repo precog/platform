@@ -1,6 +1,5 @@
 package com.precog.ragnarok
 
-
 import org.specs2.mutable.Specification
 
 import scalaz.std.option._
