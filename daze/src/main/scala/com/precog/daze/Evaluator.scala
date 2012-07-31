@@ -622,11 +622,46 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        case s @ Sort(parent, indexes) =>
-          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        case s @ Sort(parent, indexes) => {
+          if (indexes == Vector(0 until indexes.length: _*)) {
+            loop(parent, splits)
+          } else {
+            val fullOrder = indexes ++ ((0 until parent.provenance.length) filterNot (indexes contains))
+            val idSpec = buildIdShuffleSpec(fullOrder)
+            
+            for {
+              pending <- loop(parent, splits)
+            } yield {
+              val sortedResult = for {
+                pendingTable <- pending.table
+              } yield {
+                val table = pendingTable.transform(liftToValues(pending.trans))
+                val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(constants.Key -> idSpec)))
+                
+                // TODO this could be made more efficient by only considering the indexes we care about
+                shuffled.sort(DerefObjectStatic(Leaf(Source), constants.Key), SortAscending)
+              }
+              
+              PendingTable(sortedResult, graph, TransSpec1.Id)
+            }
+          }
+        }
         
-        case SortBy(parent, sortField, valueField, id) =>
-          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        case SortBy(parent, sortField, valueField, id) => {
+          for {
+            pending <- loop(parent, splits)
+          } yield {
+            val result = for {
+              pendingTable <- pending.table
+            } yield {
+              val table = pendingTable.transform(liftToValues(pending.trans))
+              val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
+              sorted.transform(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(valueField))))
+            }
+            
+            PendingTable(result, graph, TransSpec1.Id)
+          }
+        }
         
         case m @ Memoize(parent, _) =>
           loop(parent, splits)     // TODO
@@ -842,6 +877,12 @@ trait Evaluator[M[+_]] extends DAG
         ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)),
         wrappedIdentitySpec),
       wrappedValueSpec)
+  }
+  
+  private def buildIdShuffleSpec(indexes: Vector[Int]): TransSpec1 = {
+    indexes map { idx =>
+      trans.WrapArray(DerefArrayStatic(Leaf(Source), JPathIndex(idx))): TransSpec1
+    } reduce { trans.ArrayConcat(_, _) }
   }
   
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
