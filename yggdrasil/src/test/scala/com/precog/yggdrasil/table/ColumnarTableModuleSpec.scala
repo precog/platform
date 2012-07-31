@@ -169,6 +169,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
     }
 
     "in load" >> {
+      "reconstruct a problem sample" in testLoadSample1
+      "reconstruct a problem sample" in testLoadSample2
+      "reconstruct a problem sample" in testLoadSample3
+      "reconstruct a problem sample" in testLoadSample4
       "reconstruct a dense dataset" in checkLoadDense
     }
   }

@@ -22,6 +22,7 @@ package table
 
 import com.precog.bytecode._
 import com.precog.common._
+import com.precog.util._
 
 import blueeyes.json._
 import blueeyes.json.JsonAST._
@@ -32,6 +33,7 @@ import scalaz._
 import scalaz.effect._
 import scalaz.std.list._
 import scalaz.syntax.copointed._
+import scalaz.syntax.monad._
 
 import org.specs2.ScalaCheck
 import org.specs2.mutable._
@@ -75,11 +77,11 @@ trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubSt
             case (ColumnRef(jpath, ctype), _) =>
               colSelection.isEmpty || 
               jpath.nodes.head == JPathField("key") ||
-              colSelection.exists { desc => desc.selector == jpath && desc.valueType == ctype }
+              colSelection.exists { desc => (JPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
           }
         }
 
-        BlockData(s0.toJson(0) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1) \ "key" --> classOf[JArray], s0) 
+        BlockData(s0.toJson(0) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1) \ "key" --> classOf[JArray], s0)
       }
     }
   }
@@ -92,38 +94,153 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
 
   def checkLoadDense = {
     implicit val gen = sample(objectSchema(_, 3))
-    check { (sample: SampleData) =>
-      forall(sample.schema) { case (idCount, schema) =>
-        val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
-          def M = self.M
-          def coM = self.coM
+    check { (sample: SampleData) => testLoadDense(sample) }
+  }
 
-          val projections = {
-            schema.grouped(2) map { subschema =>
-              val descriptor = ProjectionDescriptor(
-                idCount, 
-                subschema map {
-                  case (jpath, ctype) => ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None)
-                } toList
-              )
-
-              descriptor -> Projection( 
-                descriptor, 
-                sample.data map { jv =>
-                  subschema.foldLeft[JValue](JObject(Nil)) {
-                    case (obj, (jpath, _)) => obj.set(jpath, jv.get(JPath(JPathField("value") :: jpath.nodes)))
-                  }
-                }
-              )
-            } toMap
-          }
-
-          object storage extends Storage
+  def testLoadSample1 = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+        {
+          "value":{
+            "u":false,
+            "md":"t",
+            "l":[]
+          },
+          "key":[1]
         }
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (1 , List(JPath(".u") -> CBoolean, JPath(".md") -> CString, JPath(".l") -> CEmptyArray))
+      )
+    )
 
-        module.toJson(module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).copoint) must_== sample.data
+    testLoadDense(sampleData)
+  }
+
+  def testLoadSample2 = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+        {
+          "value":{
+            "rzp":{ },
+            "hW":1.0,
+            "fa":null
+          },
+          "key":[2,1]
+        }
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CDouble, JPath(".rzp") -> CEmptyObject))
+      )
+    )
+
+    testLoadDense(sampleData)
+  }
+
+  def testLoadSample3 = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+         {
+           "value":{
+             "f":{
+               "bn":[null],
+               "wei":1.0
+             },
+             "ljz":[null,["W"],true],
+             "jmy":4.639428637939817E307
+           },
+           "key":[1,2,2]
+         },
+         {
+           "value":{
+             "f":{
+               "bn":[null],
+               "wei":5.615997508833152E307
+             },
+             "ljz":[null,[""],false],
+             "jmy":-2.612503123965922E307
+           },
+           "key":[2,1,1]
+         ]
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (3, List(JPath(".f.bn[0]") -> CNull, 
+                 JPath(".f.wei") -> CDouble, 
+                 JPath(".ljz[0]") -> CNull,
+                 JPath(".ljz[1][0]") -> CString,
+                 JPath(".ljz[2]") -> CBoolean,
+                 JPath(".jmy") -> CDouble))
+      )
+    )
+
+    testLoadDense(sampleData)
+  }
+
+  def testLoadSample4 = {
+    val sampleData = SampleData(
+      (JsonParser.parse("""[
+        {
+          "value":{
+            "dV":{
+              "d":true,
+              "l":false,
+              "vq":{
+                
+              }
+            },
+            "oy":{
+              "nm":false
+            },
+            "uR":-6.41847178802919E307
+          },
+          "key":[1,1]
+        }
+      ]""") --> classOf[JArray]).elements.toStream,
+      Some(
+        (2, List(JPath(".dV.d") -> CBoolean, 
+                 JPath(".dV.l") -> CBoolean, 
+                 JPath(".dV.vq") -> CEmptyObject, 
+                 JPath(".oy.nm") -> CBoolean, 
+                 JPath(".uR") -> CDouble))
+      )
+    )   
+
+    testLoadDense(sampleData)
+  } 
+
+  def testLoadDense(sample: SampleData) = {
+    val Some((idCount, schema)) = sample.schema
+
+    val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {
+      def M = self.M
+      def coM = self.coM
+
+      val projections = {
+        schema.grouped(2) map { subschema =>
+          val descriptor = ProjectionDescriptor(
+            idCount, 
+            subschema map {
+              case (jpath, ctype) => ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None)
+            } toList
+          )
+
+          descriptor -> Projection( 
+            descriptor, 
+            sample.data map { jv =>
+              subschema.foldLeft[JValue](JObject(JField("key", jv \ "key") :: Nil)) {
+                case (obj, (jpath, _)) => 
+                  val vpath = JPath(JPathField("value") :: jpath.nodes)
+                  obj.set(vpath, jv.get(vpath))
+              }
+            }
+          )
+        } toMap
       }
+
+      object storage extends Storage
     }
+
+    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== sample.data
   }
 }
 

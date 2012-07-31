@@ -22,6 +22,7 @@ package table
 
 import com.precog.common.Path
 import com.precog.bytecode._
+import com.precog.util._
 import Schema._
 import metadata._
 
@@ -53,15 +54,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
     def loadable(metadataView: StorageMetadata[M], path: Path, prefix: JPath, jtpe: JType): M[Set[ProjectionDescriptor]] = {
       jtpe match {
         case p: JPrimitiveType => ctypes(p).map(metadataView.findProjections(path, prefix, _)).sequence map {
-          sources => sources flatMap { source => source.keySet }
+          sources => 
+            sources flatMap { source => source.keySet }
         }
 
         case JArrayFixedT(elements) =>
-          (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
+          if (elements.isEmpty) {
+            metadataView.findProjections(path, prefix, CEmptyArray) map { _.keySet }
+          } else {
+            (elements map { case (i, jtpe) => loadable(metadataView, path, prefix \ i, jtpe) } toSet).sequence map { _.flatten }
+          }
 
         case JArrayUnfixedT =>
-          metadataView.findProjections(path, prefix) map { 
-            _.keySet filter { 
+          metadataView.findProjections(path, prefix) map { sources =>
+            sources.keySet filter { 
               _.columns exists { 
                 case ColumnDescriptor(`path`, selector, _, _) => 
                   (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathIndex])
@@ -70,11 +76,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
           }
 
         case JObjectFixedT(fields) =>
-          (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
+          if (fields.isEmpty) {
+            metadataView.findProjections(path, prefix, CEmptyObject) map { _.keySet }
+          } else {
+            (fields map { case (n, jtpe) => loadable(metadataView, path, prefix \ n, jtpe) } toSet).sequence map { _.flatten }
+          }
 
         case JObjectUnfixedT =>
-          metadataView.findProjections(path, prefix) map { 
-            _.keySet filter { 
+          metadataView.findProjections(path, prefix) map { sources =>
+            sources.keySet filter { 
               _.columns exists { 
                 case ColumnDescriptor(`path`, selector, _, _) => 
                   (selector dropPrefix prefix).flatMap(_.head).exists(_.isInstanceOf[JPathField])
@@ -114,7 +124,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
      */
     case class Cell(index: Int, maxKey: Key, slice0: Slice)(succ0: Key => M[Option[BD]]) {
       private val remap = new Array[Int](slice0.size)
-      var position: Int = -1
+      var position: Int = 0
 
       def succ: M[Option[Cell]] = {
         for (blockOpt <- succ0(maxKey)) yield {
@@ -123,24 +133,21 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       }
 
       def advance(i: Int): Boolean = {
-        position += 1
         if (position < slice0.size) {
           remap(position) = i
-          true
-        } else {
-          false
+          position += 1
         }
+        
+        position < slice0.size
       }
 
-      def slice = slice0.sparsen(remap, remap(position) + 1)
+      def slice = {
+        slice0.sparsen(remap, remap(position - 1) + 1)
+      }
 
       def split: (Option[Slice], Cell) = {
-        if (position == -1) {
-          (None, this)
-        } else {
-          val (finished, continuing) = slice.split(position)
-          (Some(finished.sparsen(remap, remap(position) + 1)), Cell(index, maxKey, continuing)(succ0))
-        }
+        val (finished, continuing) = slice.split(position)
+        (Some(finished.sparsen(remap, remap(position - 1) + 1)), Cell(index, maxKey, continuing)(succ0))
       }
     }
 
@@ -206,6 +213,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
     def load(uid: UserId, tpe: JType): M[Table] = {
       def load0(projections: Map[ProjectionDescriptor, Set[ColumnDescriptor]]): M[Table] = {
+
         val cellsM: Set[M[Option[Cell]]] = for (((desc, cols), i) <- projections.toSeq.zipWithIndex.toSet) yield {
           val succ: Option[Key] => M[Option[BD]] = (key: Option[Key]) => storage.projection(desc) map {
             case (projection, release) => 
@@ -227,23 +235,26 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
           table(
             StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(cellMatrix.ordering)) { queue =>
-              // dequeues all equal elements in a prefix of the queue
+
+              // dequeues all equal elements from the head of the queue
               @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
                 if (queue.isEmpty) cells
-                else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: Nil)
+                else if (cells.isEmpty || cellMatrix.compare(queue.head, cells.head) == EQ) dequeueEqual(queue.dequeue() :: cells)
                 else cells
               }
 
               // consume as many records as possible
               @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
                 val cellBlock = dequeueEqual(Nil)
+
                 if (cellBlock.isEmpty) {
+                  // At the end of data, since this will only occur if nothing remains in the priority queue
                   (idx, Nil)
                 } else {
                   val (continuing, expired) = cellBlock partition { _.advance(idx) }
                   queue.enqueue(continuing: _*)
 
-                  if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx, expired)
+                  if (expired.isEmpty) consumeToBoundary(idx + 1) else (idx + 1, expired)
                 }
               }
 

@@ -48,7 +48,8 @@ import CValueGenerators.JSchema
 
 case class SampleData(data: Stream[JValue], schema: Option[(Int, JSchema)] = None) {
   override def toString = {
-    "\nSampleData: ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n")
+    "SampleData: \ndata = "+data.map(_.toString.replaceAll("\n", "\n  ")).mkString("[\n  ", ",\n  ", "]\n") + 
+    "\nschema: " + schema
   }
 }
 

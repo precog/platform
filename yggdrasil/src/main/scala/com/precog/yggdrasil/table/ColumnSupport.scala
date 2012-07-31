@@ -73,7 +73,7 @@ class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { th
 
   val remap: Array[Int] = fill(new Array[Int](toSize), 0)
 
-  def isDefinedAt(row: Int) = delegate.isDefinedAt(remap(row))
+  def isDefinedAt(row: Int) = row < toSize && delegate.isDefinedAt(remap(row))
 }
 
 class InfiniteColumn { this: Column =>
