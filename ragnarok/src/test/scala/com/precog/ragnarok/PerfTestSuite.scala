@@ -94,7 +94,24 @@ trait PerfTestSuite {
 
 
   def main(args: Array[String]) {
-    // --json
+    import akka.actor.ActorSystem
+    import akka.dispatch.{ Future, ExecutionContext, Await }
+    import blueeyes.bkka.AkkaTypeClasses._
+    import PerfTestPrettyPrinters._
+
+    val actorSystem = ActorSystem("perfTestingActorSystem")
+    implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
+
+    val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer, _optimize = true, _userUID = "dummy")
+
+    implicit val futureIsCopointed = new Copointed[Future] {
+      def map[A, B](m: Future[A])(f: A => B) = m map f
+      def copoint[A](f: Future[A]) = Await.result(f, runner.yggConfig.maxEvalDuration)
+    }
+
+    println(run(runner).prettyStats(_ / 1000000))
+
+    actorSystem.shutdown()
   }
 
 
