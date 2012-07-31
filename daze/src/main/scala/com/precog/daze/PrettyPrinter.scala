@@ -103,9 +103,9 @@ trait PrettyPrinter extends DAG {
               prettyPrintAux(left, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(right, bindings, depth+1), ")")
   
           case Filter(_, filterSort, target, boolean) =>
-            wrap(depth, "Filter(line,\n",
+            wrap(depth, "Filter(line, "+filterSort+",\n",
               prettyPrintAux(target, bindings, depth+1, suffixNL = false)+",\n"+prettyPrintAux(boolean, bindings, depth+1), ")")
-          
+
           case Sort(parent, indices) =>
             wrap(depth, "Sort(\n",
               prettyPrintAux(parent, bindings, depth+1, suffixNL = false)+",\n"+mkIndent(depth+1)+indices+"\n", ")")
@@ -216,8 +216,9 @@ trait PrettyPrinter extends DAG {
     
     val bindings = (splitBindings ++ sharedBindings) + (graph -> "input")
     
-    (splitBindings.keys.map(prettyPrintBinding(_, bindings)) ++
-     sharedBindings.keys.map(prettyPrintBinding(_, bindings)) ++
+    """val line = Line(0, "")\n\n"""+
+    (splitBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
+     sharedBindings.toSeq.sortBy(_._2).map(_._1).map(prettyPrintBinding(_, bindings)) ++
      List(prettyPrintBinding(graph, bindings))).reduce(_+"\n"+_)
   }
 }
