@@ -42,7 +42,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
   val Projection: ProjectionCompanion
 
-  trait Storage extends StorageLike[Projection, M] {
+  trait Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
     def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
@@ -66,7 +66,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       }
     }
 
-    def storeBatch(ems: Seq[EventMessage], timeout: Timeout) = sys.error("Feature not implemented in test stub.")
+    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
     lazy val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
       import org.reflections.util._
@@ -98,7 +98,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): M[(Projection, Release)] = {
+    def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
         (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
@@ -109,7 +109,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
 trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] {
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    def load(tpe: JType): M[Table] = {
+    def load(uid: UserId, tpe: JType): M[Table] = {
       sys.error("todo")
     }
   }
