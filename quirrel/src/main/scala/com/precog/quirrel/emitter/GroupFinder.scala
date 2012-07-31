@@ -20,7 +20,7 @@
 package com.precog.quirrel
 package emitter
 
-trait GroupFinder extends parser.AST with typer.Binder with Solutions {
+trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChecker with Solutions {
   import Utils._
   import ast._
   
@@ -87,7 +87,15 @@ trait GroupFinder extends parser.AST with typer.Binder with Solutions {
       
       case op @ Where(_, left, right) => {
         val leftSet = loop(root, left, currentWhere)
-        val rightSet = loop(root, right, Some(op))
+        
+        val rightSet = op.provenance match {
+          case UnionProvenance(_, _) =>
+            loop(root, right, currentWhere)
+          
+          case _ =>
+            loop(root, right, Some(op))
+        }
+        
         leftSet ++ rightSet
       }
       

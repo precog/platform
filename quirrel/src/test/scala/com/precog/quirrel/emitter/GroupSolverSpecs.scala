@@ -234,6 +234,19 @@ object GroupSolverSpecs extends Specification
       tree.errors must not(beEmpty)
     }
     
+    "reject bucketing of separate sets within a relation" in {
+      val input = """
+        | foo := //foo
+        | bar := //bar
+        | 
+        | foo ~ bar
+        |   forall 'a
+        |     foo where bar.a = 'a""".stripMargin
+        
+      val tree = compile(input)
+      tree.errors must not(beEmpty)
+    }
+    
     "accept shared buckets for dependent tic variables on the same set when at least one can be solved" in {
       val input = """
         | campaigns := load(//campaigns)
