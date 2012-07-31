@@ -17,47 +17,22 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ragnarok
+package com.precog
+package ragnarok
 
-import scalaz.{ Ordering => _, _ }
+import scalaz._
 
-import org.joda.time.{ Instant, Interval }
+import muspelheim.RawJsonColumnarTableStorageModule
 
 
-trait Timer[T] {
-  import scala.math.Ordering.Implicits._
-
-  /** Returns the current time. */
-  def now(): T
-
-  def timeSpan(start: T, end: T) = (start, end)
-
-  implicit def TimeOrdering: Ordering[T]
-
-  implicit def TimeSpanSemigroup: Semigroup[(T, T)] = new Semigroup[(T, T)] {
-    def append(a: (T, T), b: => (T, T)) = (a._1 min b._1, a._2 max b._2)
+final class JsonPerfTestRunner[M[+_], T](val timer: Timer[T], _optimize: Boolean, _userUID: String)
+    (implicit val M: Monad[M]) extends EvaluatingPerfTestRunner[M, T]
+    with RawJsonColumnarTableStorageModule[M] {
+  type YggConfig = PerfTestRunnerConfig
+  object yggConfig extends EvaluatingPerfTestRunnerConfig {
+    val userUID = _userUID
+    val optimize = _optimize
   }
 }
-
-
-/**
- * Nanosecond timer, implemented using `System.nanoTime()`.
- */
-object SimpleTimer extends Timer[Long] {
-  def now() = System.nanoTime()
-
-  val TimeOrdering: Ordering[Long] = Ordering.Long
-}
-
-
-/**
- * Millisecond timer, implemented using Joda Time `Instant`s.
- */
-object JodaTimer extends Timer[Instant] {
-  def now() = new Instant()
-
-  val TimeOrdering: Ordering[Instant] = Ordering.Long.on[Instant](_.getMillis)
-}
-
 
 

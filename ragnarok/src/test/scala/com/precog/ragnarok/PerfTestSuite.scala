@@ -81,15 +81,20 @@ trait PerfTestSuite {
     selectTest(test, pred)
 
 
-  def run[M[+_]: Copointed, T: MetricSpace](config: RunConfig[M, T]) =
-    config.runner.runAll(test, config.runs) {
+  def run[M[+_]: Copointed, T: MetricSpace](runner: PerfTestRunner[M, T],
+      runs: Int = 60, outliers: Double = 0.05) = {
+    val tails = (runs * outliers).toInt
+
+    runner.runAll(test, runs) {
       case None => None
       case Some((a, b)) =>
-        Some(Statistics(MetricSpace[T].distance(a, b), tails = config.tails))
+        Some(Statistics(MetricSpace[T].distance(a, b), tails = tails))
     }
+  }
 
 
   def main(args: Array[String]) {
+    // --json
   }
 
 

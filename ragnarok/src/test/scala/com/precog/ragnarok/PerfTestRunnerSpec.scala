@@ -35,7 +35,8 @@ class PerfTestRunnerSpec extends Specification {
         Tree.leaf[PerfTest](RunQuery("."))))
       val r = new MockPerfTestRunner[Id](50)
 
-      implicit val s = r.TimeSpanSemigroup
+      import r.timer._
+      // implicit val s = r.TimeSpanSemigroup
 
       r.runAll(t, 1)(identity) must beLike {
         case Tree.Node((RunSequential, _), results) =>

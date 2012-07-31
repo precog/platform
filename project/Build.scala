@@ -94,7 +94,7 @@ object PlatformBuild extends Build {
   
   lazy val performance   = Project(id = "performance", base = file("performance")).settings(nexusSettings ++ commonSettings: _*).dependsOn(ingest, common % "compile->compile;test->test", quirrel, daze, yggdrasil, shard)
 
-  lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).settings(nexusSettings ++ commonSettings: _*).dependsOn(muspelheim, common % "compile->compile;test->test", quirrel, daze, yggdrasil)
+  lazy val ragnarok = Project(id = "ragnarok", base = file("ragnarok")).settings(nexusSettings ++ commonSettings: _*).dependsOn(muspelheim % "compile->compile;test->test", common % "compile->compile;test->test", quirrel, daze, yggdrasil)
 
   val dist = TaskKey[Unit]("dist", "builds dist")
   val dataDir = SettingKey[String]("data-dir", "The temporary directory into which to extract the test data")

@@ -22,7 +22,9 @@ package com.precog.ragnarok
 import scalaz._
 
 
-trait PerfTestRunner[M[+_], T] { self: Timer[T] =>
+// TODO: The Timer should just be a member.
+
+trait PerfTestRunner[M[+_], T] {
   import scalaz.syntax.monad._
   import scalaz.syntax.monoid._
   import scalaz.syntax.copointed._
@@ -36,6 +38,11 @@ trait PerfTestRunner[M[+_], T] { self: Timer[T] =>
 
   /** Evaluate a Quirrel query. */
   def eval(query: String): M[Result]
+
+
+  val timer: Timer[T]
+
+  import timer._
 
 
   type RunResult[A] = Tree[(PerfTest, A, Option[(T, T)])]
@@ -120,10 +127,12 @@ trait PerfTestRunner[M[+_], T] { self: Timer[T] =>
 }
 
 
-class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) extends PerfTestRunner[M, Long] with SimpleTimer {
+class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) extends PerfTestRunner[M, Long] {
   import scalaz.syntax.monad._
 
   type Result = Unit
+
+  val timer = SimpleTimer
 
   def eval(query: String): M[Result] = {
     (()).pure[M] map { _ =>
