@@ -1,7 +1,6 @@
 package com.precog.ragnarok
 
 import scalaz._
-// import blueeyes.util.Clock
 
 
 trait PerfTestRunner[M[+_], T] { self: Timer[T] =>

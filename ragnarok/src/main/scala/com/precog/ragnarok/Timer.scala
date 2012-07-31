@@ -5,23 +5,6 @@ import scalaz.{ Ordering => _, _ }
 import org.joda.time.{ Instant, Interval }
 
 
-trait MetricSpace[A] {
-  def distance(a: A, b: A): Double
-}
-
-object MetricSpace {
-  def apply[A](implicit ms: MetricSpace[A]) = ms
-
-  implicit object LongMetricSpace extends MetricSpace[Long] {
-    def distance(a: Long, b: Long) = math.abs(b - a).toDouble
-  }
-
-  implicit object InstantMetricSpace extends MetricSpace[Instant] {
-    def distance(a: Instant, b: Instant) = math.abs(b.getMillis - a.getMillis).toDouble
-  }
-}
-
-
 trait Timer[T] {
   import scala.math.Ordering.Implicits._
 
