@@ -312,20 +312,6 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
 
-        //** the original code **//
-        //case s @ dag.Split(line, spec, child) => {
-        //  val back = for {
-        //    grouping <- resolveTopLevelGroup(spec, assume, splits)
-        //    
-        //    result <- grouper.merge(grouping) { (key: Table, map: Int => Table) =>
-        //      val PendingTable(tableF, _, trans) = loop(child, assume, splits + (s -> (key, map)))
-        //      tableF map { _ transform liftToValues(trans) }
-        //    }
-        //  } yield result
-        //  
-        //  PendingTable(back, graph, TransSpec1.Id)
-        //}
-        
         case s @ dag.Split(line, spec, child) => {
           val table = for {
             grouping <- resolveTopLevelGroup(spec, splits)
@@ -348,11 +334,68 @@ trait Evaluator[M[+_]] extends DAG
         
         // VUnion and VIntersect removed, TODO: remove from bytecode
         
-        case IUI(_, union, left, right) =>
-            state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        case IUI(_, union, left, right) => {
+          for {
+            leftPending <- loop(left, splits)
+            rightPending <- loop(right, splits)
+          } yield {
+            val result = for {
+              leftPendingTable <- leftPending.table
+              rightPendingTable <- rightPending.table
+            } yield {
+              val leftTable = leftPendingTable.transform(leftPending.trans)
+              val rightTable = rightPendingTable.transform(rightPending.trans)
+              
+              val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
+              val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
+              
+              val wrappedResult = if (union) {
+                val emptySpec = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+                val fullSpec = trans.WrapArray(Leaf(Source))
+                
+                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, fullSpec, emptySpec)
+              } else {
+                val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
+                val fullSpec = trans.WrapArray(Leaf(SourceLeft))
+              
+                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(emptySpec, emptySpec, fullSpec)
+              }
+              
+              wrappedResult.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+            }
+            
+            PendingTable(result, graph, TransSpec1.Id)
+          }
+        }
         
-        case Diff(_, left, right) =>
-            state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        // TODO unify with IUI
+        case Diff(_, left, right) =>{
+          for {
+            leftPending <- loop(left, splits)
+            rightPending <- loop(right, splits)
+          } yield {
+            val result = for {
+              leftPendingTable <- leftPending.table
+              rightPendingTable <- rightPending.table
+            } yield {
+              val leftTable = leftPendingTable.transform(leftPending.trans)
+              val rightTable = rightPendingTable.transform(rightPending.trans)
+              
+              val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
+              val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
+              
+              val emptySpec1 = trans.Map1(Leaf(Source), ConstantEmptyArray)
+              val emptySpec2 = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
+              val fullSpec = trans.WrapArray(Leaf(Source))
+              
+              val wrappedResult = leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, emptySpec1, emptySpec2)
+              
+              wrappedResult.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
+            }
+            
+            PendingTable(result, graph, TransSpec1.Id)
+          }
+        }
         
         case Join(_, Eq, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           for {

@@ -1157,7 +1157,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(0)
       }
-    }    
+    }.pendingUntilFixed    
 
     "compute the iintersect of two datasets" in {
       val line = Line(0, "")
@@ -1169,7 +1169,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(0)
       }
-    }
+    }.pendingUntilFixed
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
