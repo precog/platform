@@ -119,8 +119,8 @@ trait PerfTestSuite {
   }
 
 
-  def select(prefix: String) =
-    selectTest(test, (_ mkString "." startsWith prefix))
+  def select(pred: (List[String], PerfTest) => Boolean): List[Tree[PerfTest]] =
+    selectTest(test, pred)
 
 
   def run[M[+_]: Copointed, T: MetricSpace](config: RunConfig[M, T]) =
@@ -139,7 +139,7 @@ trait PerfTestSuite {
    * Selects a test based on paths, using select to determine which sub-trees
    * should be included.
    */
-  private def selectTest(test: Tree[PerfTest], select: List[String] => Boolean): List[Tree[PerfTest]] = {
+  private def selectTest(test: Tree[PerfTest], select: (List[String], PerfTest) => Boolean): List[Tree[PerfTest]] = {
 
     @tailrec
     def find(loc: TreeLoc[PerfTest], path: List[String],
@@ -174,7 +174,7 @@ trait PerfTestSuite {
           case _ => path
         }
 
-        if (select(p.reverse)) {
+        if (select(p.reverse, loc.tree.rootLabel)) {
           find(loc, p, loc.tree :: matches, retreat = true)
         } else {
           loc.firstChild match {
