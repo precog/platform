@@ -24,54 +24,12 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.std.option._
 
-import java.util.concurrent.TimeUnit
-
 
 case class RunConfig[M[+_], T](
     runner: PerfTestRunner[M, T],
     runs: Int,
     outliers: Double) {
   def tails: Int = (runs * outliers).toInt
-}
-
-
-final class PerfTestStatsPrettyPrinter(result: Tree[(PerfTest, Option[Statistics])]) {
-
-  private def prettyStats(stats: Option[Statistics], toMillis: Double => Double): String =
-    stats map { s => "%.1f ms" format toMillis(s.mean) } getOrElse ""
-    
-  def prettyStats(toMillis: Double => Double = identity): String = {
-    def lines(test: Tree[(PerfTest, Option[Statistics])]): List[String] = {
-      test match {
-        case Tree.Node((Group(name), _), kids) =>
-          name :: (kids.toList flatMap (lines(_)))
-
-        case Tree.Node((RunSequential, s), kids) =>
-          (kids.toList map (lines(_)) flatMap {
-            case head :: tail =>
-              (" + " + head) :: (tail map (" | " + _))
-            case Nil => Nil
-          }) :+ (" ` " + prettyStats(s, toMillis))
-
-        case Tree.Node((RunConcurrent, s), kids) =>
-          (kids.toList map (lines(_)) flatMap {
-            case head :: tail =>
-              (" * " + head) :: (tail map (" | " + _))
-            case Nil => Nil
-          }) :+ (" ` " + prettyStats(s, toMillis))
-
-        case Tree.Node((RunQuery(q), s), kids) =>
-          ("-> " + q) :: ("   " + prettyStats(s, toMillis)) :: Nil
-      }
-    }
-
-    lines(result) mkString "\n"
-  }
-}
-
-object PerfTestPrettyPrinters {
-  implicit def statsPrinter(result: Tree[(PerfTest, Option[Statistics])]) =
-    new PerfTestStatsPrettyPrinter(result)
 }
 
 

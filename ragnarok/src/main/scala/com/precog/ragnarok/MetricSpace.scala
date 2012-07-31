@@ -19,45 +19,28 @@
  */
 package com.precog.ragnarok
 
-import scalaz.{ Ordering => _, _ }
-
 import org.joda.time.{ Instant, Interval }
 
 
-trait Timer[T] {
-  import scala.math.Ordering.Implicits._
+// Scalaz has a MetricSpace, but its raison d'etre is for Lev. dist and can
+// only be used for integer distances.
 
-  /** Returns the current time. */
-  def now(): T
+trait MetricSpace[A] {
+  def distance(a: A, b: A): Double
+}
 
-  def timeSpan(start: T, end: T) = (start, end)
+object MetricSpace {
+  def apply[A](implicit ms: MetricSpace[A]) = ms
 
-  implicit def TimeOrdering: Ordering[T]
+  implicit object LongMetricSpace extends MetricSpace[Long] {
+    def distance(a: Long, b: Long) = math.abs(b - a).toDouble
+  }
 
-  implicit def TimeSpanSemigroup: Semigroup[(T, T)] = new Semigroup[(T, T)] {
-    def append(a: (T, T), b: => (T, T)) = (a._1 min b._1, a._2 max b._2)
+  implicit object InstantMetricSpace extends MetricSpace[Instant] {
+    def distance(a: Instant, b: Instant) = math.abs(b.getMillis - a.getMillis).toDouble
   }
 }
 
-
-/**
- * Nanosecond timer, implemented using `System.nanoTime()`.
- */
-trait SimpleTimer extends Timer[Long] {
-  def now() = System.nanoTime()
-
-  val TimeOrdering: Ordering[Long] = Ordering.Long
-}
-
-
-/**
- * Millisecond timer, implemented using Joda Time `Instant`s.
- */
-trait JodaTimer extends Timer[Instant] {
-  def now() = new Instant()
-
-  val TimeOrdering: Ordering[Instant] = Ordering.Long.on[Instant](_.getMillis)
-}
 
 
 

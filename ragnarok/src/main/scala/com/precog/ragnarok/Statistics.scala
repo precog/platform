@@ -81,6 +81,7 @@ object Statistics {
       val y = _y
 
       val z_m = x.m + (y.n / (x.n + y.n).toDouble) * (y.m - x.m)
+      // TODO: Wrong variance when weight of y is not 1 (ie. y.n > 1).
       val z_vn = x.vn + y.n * (y.m - x.m) * (y.m - z_m)
       val z_tails = x.tails min y.tails
 
