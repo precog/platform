@@ -311,6 +311,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
   }
 
   def testLoadDense(sample: SampleData) = {
+    //println("testing for sample: " + sample)
     val Some((idCount, schema)) = sample.schema
 
     val module = new BlockLoadTestSupport[M] with BlockStoreColumnarTableModule[M] {

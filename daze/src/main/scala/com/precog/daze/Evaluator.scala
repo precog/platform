@@ -351,16 +351,11 @@ trait Evaluator[M[+_]] extends DAG
               val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
               val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
               
-              val keyValueSpec = trans.ObjectConcat(
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Key),
-                  constants.Key.name),
-                trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Value),
-                  constants.Value.name))
-              
-              if (union) {
-                leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
+              val wrappedResult = if (union) {
+                val mergeSpec = trans.WrapArray(Leaf(SourceLeft))
+                val fullSpec = trans.WrapArray(Leaf(Source))
+                
+                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, fullSpec, mergeSpec)
               } else {
                 val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
                 val fullSpec = trans.WrapArray(Leaf(SourceLeft))
