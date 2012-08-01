@@ -112,6 +112,8 @@ trait JoinOptimizer extends DAG {
         case Sort(parent, indices) => Sort(optimizeAux(splits, parent), indices)
 
         case SortBy(parent, sortField, valueField, id) => SortBy(optimizeAux(splits, parent), sortField, valueField, id)
+        
+        case ReSortBy(parent, id) => ReSortBy(optimizeAux(splits, parent), id)
   
         case Memoize(parent, priority) => Memoize(optimizeAux(splits, parent), priority)
   

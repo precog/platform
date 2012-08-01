@@ -704,6 +704,21 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
+        case ReSortBy(parent, id) => {
+          for {
+            pending <- loop(parent, splits)
+          } yield {
+            val result = for {
+              pendingTable <- pending.table
+            } yield {
+              val table = pendingTable.transform(liftToValues(pending.trans))
+              table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
+            }
+            
+            PendingTable(result, graph, TransSpec1.Id)
+          }
+        }
+        
         case m @ Memoize(parent, _) =>
           loop(parent, splits)     // TODO
       }

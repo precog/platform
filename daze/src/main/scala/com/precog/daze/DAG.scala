@@ -784,6 +784,20 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
+    case class ReSortBy(parent: DepGraph, id: Int) extends DepGraph {
+      val loc = parent.loc
+      
+      lazy val provenance = parent.provenance
+      
+      val sorting = ValueSort(id)
+      
+      lazy val isSingleton = parent.isSingleton
+      
+      def findMemos(s: Split) = parent.findMemos(s)
+      
+      lazy val containsSplitArg = parent.containsSplitArg
+    }
+    
     case class Memoize(parent: DepGraph, priority: Int) extends DepGraph {
       val loc = parent.loc
       
