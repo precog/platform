@@ -72,6 +72,10 @@ trait PerfTestSuite extends Logging {
     tests = Tree.leaf[PerfTest](RunQuery(q)) :: tests
   }
 
+  def include(suite: PerfTestSuite) {
+    tests = suite.test :: tests
+  }
+
 
   def select(pred: (List[String], PerfTest) => Boolean): Option[Tree[PerfTest]] =
     selectTest(test, pred)

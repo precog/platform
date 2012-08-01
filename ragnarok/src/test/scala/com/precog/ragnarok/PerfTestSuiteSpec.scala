@@ -79,6 +79,17 @@ class PerfTestSuiteSpec extends Specification {
 
       treeEq[PerfTest].equal(ex.test.subForest.head, exInnerTest) must beTrue
     }
+
+    "allow inclusion of other test suites" in {
+      object ex2 extends PerfTestSuite {
+        include(ex)
+      }
+
+      ex2.test must beLike {
+        case Tree.Node(Group(_), Stream(Tree.Node(RunSequential, Stream(inner)))) =>
+          treeEq[PerfTest].equal(ex.test, inner) must beTrue
+      }
+    }
   }
 
   "the test selector" should {
