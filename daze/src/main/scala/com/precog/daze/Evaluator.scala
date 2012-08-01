@@ -501,9 +501,7 @@ trait Evaluator[M[+_]] extends DAG
         }
         // end: annoyance
         
-        // TODO ValueSort
-        
-        case Join(_, op, IdentitySort, left, right) => {
+        case Join(_, op, joinSort @ (IdentitySort | ValueSort(_)), left, right) => {
           // TODO binary typing
 
           for {
@@ -513,7 +511,16 @@ trait Evaluator[M[+_]] extends DAG
             if (pendingTableLeft.graph == pendingTableRight.graph) {
               PendingTable(pendingTableLeft.table, pendingTableLeft.graph, transFromBinOp(op)(pendingTableLeft.trans, pendingTableRight.trans))
             } else {
-              val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+              val key = joinSort match {
+                case IdentitySort =>
+                  trans.DerefObjectStatic(Leaf(Source), constants.Key)
+                
+                case ValueSort(id) =>
+                  trans.DerefObjectStatic(Leaf(Source), JPathField("sort-" + id))
+                
+                case _ => sys.error("unreachable code")
+              }
+              
               val spec = buildWrappedJoinSpec(sharedPrefixLength(left, right), left.provenance.length, right.provenance.length)(transFromBinOp(op))
               
               val result = for {
@@ -553,9 +560,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        // TODO ValueSort
-        
-        case dag.Filter(_, IdentitySort, target, boolean) => {
+        case dag.Filter(_, joinSort @ (IdentitySort | ValueSort(_)), target, boolean) => {
           // TODO binary typing
 
           for {
@@ -566,7 +571,15 @@ trait Evaluator[M[+_]] extends DAG
               PendingTable(pendingTableTarget.table, pendingTableTarget.graph, trans.Filter(pendingTableTarget.trans, pendingTableBoolean.trans))
             }
             else {
-              val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+              val key = joinSort match {
+                case IdentitySort =>
+                  trans.DerefObjectStatic(Leaf(Source), constants.Key)
+                
+                case ValueSort(id) =>
+                  trans.DerefObjectStatic(Leaf(Source), JPathField("sort-" + id))
+                
+                case _ => sys.error("unreachable code")
+              }
               
               val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.provenance.length, boolean.provenance.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
@@ -639,7 +652,14 @@ trait Evaluator[M[+_]] extends DAG
                 val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(constants.Key -> idSpec)))
                 
                 // TODO this could be made more efficient by only considering the indexes we care about
-                shuffled.sort(DerefObjectStatic(Leaf(Source), constants.Key), SortAscending)
+                val sorted = shuffled.sort(DerefObjectStatic(Leaf(Source), constants.Key), SortAscending)
+              
+                parent.sorting match {
+                  case ValueSort(id) =>
+                    sorted.transform(ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id))))
+                    
+                  case _ => sorted
+                }
               }
               
               PendingTable(sortedResult, graph, TransSpec1.Id)
@@ -647,6 +667,7 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
+        // TODO check for no-op sort
         case SortBy(parent, sortField, valueField, id) => {
           for {
             pending <- loop(parent, splits)
@@ -656,7 +677,27 @@ trait Evaluator[M[+_]] extends DAG
             } yield {
               val table = pendingTable.transform(liftToValues(pending.trans))
               val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
-              sorted.transform(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(valueField))))
+              
+              val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
+              val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
+              
+              val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
+              val wrappedValue = trans.WrapObject(valueSpec, constants.Value.name)
+              
+              val oldSortField = parent.sorting match {
+                case ValueSort(id2) if id != id2 =>
+                  Some(JPathField("sort-" + id2))
+                  
+                case _ => None
+              }
+              
+              val spec = ObjectConcat(
+                ObjectConcat(
+                  ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), constants.Value) ++ oldSortField),
+                  wrappedSort),
+                wrappedValue)
+              
+              sorted.transform(spec)
             }
             
             PendingTable(result, graph, TransSpec1.Id)
