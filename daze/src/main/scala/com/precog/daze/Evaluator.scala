@@ -349,19 +349,24 @@ trait Evaluator[M[+_]] extends DAG
               val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
               val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
               
-              val wrappedResult = if (union) {
-                val emptySpec = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
-                val fullSpec = trans.WrapArray(Leaf(Source))
-                
-                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, fullSpec, emptySpec)
+              val keyValueSpec = trans.ObjectConcat(
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Key),
+                  constants.Key.name),
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Value),
+                  constants.Value.name))
+              
+              if (union) {
+                leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
                 val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
                 val fullSpec = trans.WrapArray(Leaf(SourceLeft))
               
-                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(emptySpec, emptySpec, fullSpec)
+                val wrapped = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(emptySpec, emptySpec, fullSpec)
+                
+                wrapped.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
               }
-              
-              wrappedResult.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
             }
             
             PendingTable(result, graph, TransSpec1.Id)
@@ -384,11 +389,19 @@ trait Evaluator[M[+_]] extends DAG
               val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
               val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
               
+              val keyValueSpec = trans.ObjectConcat(
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Key),
+                  constants.Key.name),
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Value),
+                  constants.Value.name))
+              
               val emptySpec1 = trans.Map1(Leaf(Source), ConstantEmptyArray)
               val emptySpec2 = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
               val fullSpec = trans.WrapArray(Leaf(Source))
               
-              val wrappedResult = leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, emptySpec1, emptySpec2)
+              val wrappedResult = leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(fullSpec, emptySpec1, emptySpec2)
               
               wrappedResult.transform(DerefArrayStatic(Leaf(Source), JPathIndex(0)))
             }
