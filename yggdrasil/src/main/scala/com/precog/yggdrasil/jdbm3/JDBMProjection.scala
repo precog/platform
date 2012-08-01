@@ -70,7 +70,7 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
