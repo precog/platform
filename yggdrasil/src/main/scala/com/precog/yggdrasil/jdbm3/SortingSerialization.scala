@@ -38,13 +38,13 @@ import scala.collection.BitSet
  */
 case class SortingKey(columns: Array[CValue], ids: Identities, index: Long)
 
-object SortingKeyComparator extends SortingKeyComparator {
+object SortingKeyComparator {
   final val serialVersionUID = 20120730l
+
+  def apply(ascending: Boolean) = new SortingKeyComparator(ascending)
 }
   
-class SortingKeyComparator extends Comparator[SortingKey] with Serializable {
-  def readResolve() = SortingKeyComparator
-
+class SortingKeyComparator private[SortingKeyComparator] (val ascending: Boolean) extends Comparator[SortingKey] with Serializable {
   def compare(a: SortingKey, b: SortingKey) = {
     // Compare over the key values first
     var result = 0
@@ -69,8 +69,8 @@ class SortingKeyComparator extends Comparator[SortingKey] with Serializable {
       i += 1
     }
 
-    if (result == 0) {
-      result = IdentitiesComparator.compare(a.ids, b.ids)
+    val finalResult = if (result == 0) {
+      result = AscendingIdentitiesComparator.compare(a.ids, b.ids)
       if (result == 0) {
         a.index.compareTo(b.index)
       } else {
@@ -79,6 +79,8 @@ class SortingKeyComparator extends Comparator[SortingKey] with Serializable {
     } else {
       result
     }
+
+    if (ascending) finalResult else -finalResult
   }
 }
     

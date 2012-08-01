@@ -27,26 +27,30 @@ import java.util.Comparator
 
 import com.precog.common.{Vector0,Vector1,Vector2,Vector3,Vector4,VectorCase}
 
-object IdentitiesComparator extends IdentitiesComparator {
-  final val serialVersionUID = 20120724l
+object IdentitiesComparator {
+  private final val serialVersionUID = 20120724l
+
+  def apply(ascending: Boolean) = new IdentitiesComparator(ascending)
 }
 
-class IdentitiesComparator extends Comparator[Identities] with Serializable {
-  def readResolve() = IdentitiesComparator
-
+class IdentitiesComparator private[jdbm3](val ascending: Boolean) extends Comparator[Identities] with Serializable {
   def compare (a: Identities, b: Identities) = {
-    a.zip(b).dropWhile { case (x,y) => x == y }.headOption.map {
+    val ret = a.zip(b).dropWhile { case (x,y) => x == y }.headOption.map {
       case (x,y) => (x - y).signum
     }.getOrElse(a.length - b.length)
+
+    if (ascending) ret else -ret
   }
 }
+
+object AscendingIdentitiesComparator extends IdentitiesComparator(true)
 
 object IdentitiesSerializer {
   def apply(count: Int) = new IdentitiesSerializer(count)
 }
 
 class IdentitiesSerializer private[IdentitiesSerializer](val count: Int) extends Serializer[Identities] with Serializable {
-  final val serialVersionUID = 20120727l
+  private final val serialVersionUID = 20120727l
 
   def serialize(out: DataOutput, ids: Identities) {
     assert(ids.length == count)
