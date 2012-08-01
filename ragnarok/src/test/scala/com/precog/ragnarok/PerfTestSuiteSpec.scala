@@ -84,8 +84,10 @@ class PerfTestSuiteSpec extends Specification {
   "the test selector" should {
     "select whole tree if root is true" in {
       val t = ex select ((_, _) => true)
-      t must have size(1)
-      treeEq[PerfTest].equal(t.head, ex.test)
+      t must beLike {
+        case Some(t) =>
+          treeEq[PerfTest].equal(t, ex.test) must beTrue
+      }
     }
 
     "selecting multiple disjoint tests gives list" in {
@@ -94,12 +96,15 @@ class PerfTestSuiteSpec extends Specification {
         case (_, _) => false
       }
 
-      ts must haveTheSameElementsAs(List(
-        Tree.leaf[PerfTest](RunQuery("1")),
-        Tree.leaf[PerfTest](RunQuery("2")),
-        Tree.leaf[PerfTest](RunQuery("3"))
-      )) ^^ (treeEq[PerfTest].equal(_, _))
-  }
+      ts must beLike {
+        case Some(Tree.Node(Group(_), ts)) =>
+          ts must haveTheSameElementsAs(List(
+            Tree.leaf[PerfTest](RunQuery("1")),
+            Tree.leaf[PerfTest](RunQuery("2")),
+            Tree.leaf[PerfTest](RunQuery("3"))
+          )) ^^ (treeEq[PerfTest].equal(_, _))
+      }
+    }
   }
 }
 
