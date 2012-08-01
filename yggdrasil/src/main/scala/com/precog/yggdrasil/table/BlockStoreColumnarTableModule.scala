@@ -123,12 +123,15 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
      * block of data.
      */
     case class Cell(index: Int, maxKey: Key, slice0: Slice)(succ0: Key => M[Option[BD]]) {
+      val uuid = java.util.UUID.randomUUID()
       private val remap = new Array[Int](slice0.size)
       var position: Int = 0
 
       def succ: M[Option[Cell]] = {
         for (blockOpt <- succ0(maxKey)) yield {
-          blockOpt map { block => Cell(index, block.maxKey, block.data)(succ0) }
+          blockOpt map { block => 
+            Cell(index, block.maxKey, block.data)(succ0) 
+          }
         }
       }
 
@@ -145,15 +148,16 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         slice0.sparsen(remap, remap(position - 1) + 1)
       }
 
-      def split: (Option[Slice], Cell) = {
-        val (finished, continuing) = slice.split(position)
-        (Some(finished.sparsen(remap, remap(position - 1) + 1)), Cell(index, maxKey, continuing)(succ0))
+      def split: (Slice, Cell) = {
+        val (finished, continuing) = slice0.split(position)
+        (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
       }
     }
 
     sealed trait CellMatrix { self => 
+      def cells: Iterable[Cell]
       def compare(cl: Cell, cr: Cell): Ordering
-      def refresh(cell: Cell): M[CellMatrix]
+      def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix]
 
       implicit lazy val ordering = new scala.math.Ordering[Cell] {
         def compare(c1: Cell, c2: Cell) = self.compare(c1, c2).toInt
@@ -161,14 +165,14 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
     }
 
     object CellMatrix {
-      def apply(cells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
-        val size = cells.size
+      def apply(initialCells: Set[Cell])(keyf: Slice => List[ColumnRef]): CellMatrix = {
+        val size = initialCells.size
 
         type ComparatorMatrix = Array[Array[(Int, Int) => Ordering]]
-        def fillMatrix(cells: Set[Cell]): ComparatorMatrix = {
-          val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](cells.size, cells.size)
+        def fillMatrix(initialCells: Set[Cell]): ComparatorMatrix = {
+          val comparatorMatrix = Array.ofDim[(Int, Int) => Ordering](initialCells.size, initialCells.size)
 
-          for (Cell(i, _, s) <- cells; Cell(i0, _, s0) <- cells if i != i0) { 
+          for (Cell(i, _, s) <- initialCells; Cell(i0, _, s0) <- initialCells if i != i0) { 
             comparatorMatrix(i)(i0) = Slice.rowComparator(s, s0)(keyf) 
           }
 
@@ -176,15 +180,17 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         }
 
         new CellMatrix { self =>
-          private[this] val allCells: mutable.Map[Int, Cell] = cells.map(c => (c.index, c))(collection.breakOut)
-          private[this] val comparatorMatrix = fillMatrix(cells)
+          private[this] val allCells: mutable.Map[Int, Cell] = initialCells.map(c => (c.index, c))(collection.breakOut)
+          private[this] val comparatorMatrix = fillMatrix(initialCells)
+
+          def cells = allCells.values
 
           def compare(cl: Cell, cr: Cell): Ordering = {
             comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
           }
 
-          def refresh(cell: Cell): M[CellMatrix] = {
-            cell.succ map {
+          def refresh(index: Int, succ: M[Option[Cell]]): M[CellMatrix] = {
+            succ map {
               case Some(c @ Cell(i, _, s)) => 
                 allCells += (i -> c)
 
@@ -196,12 +202,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 self
                 
               case None => 
-                allCells -= cell.index
+                allCells -= index
 
                 // this is basically so that we'll fail fast if something screwy happens
-                for ((_, Cell(i0, _, s0)) <- allCells if i0 != cell.index) {
-                  comparatorMatrix(cell.index)(i0) = null
-                  comparatorMatrix(i0)(cell.index) = null
+                for ((_, Cell(i0, _, s0)) <- allCells if i0 != index) {
+                  comparatorMatrix(index)(i0) = null
+                  comparatorMatrix(i0)(index) = null
                 }
 
                 self
@@ -265,16 +271,23 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 val completeSlices = expired.map(_.slice)              
                 
                 val (prefixes, suffixes) = queue.dequeueAll.map(_.split).unzip
-                queue.enqueue(suffixes: _*)
 
                 val emission = new Slice {
                   val size = finishedSize
-                  val columns: Map[ColumnRef, Column] = completeSlices.flatMap(_.columns).toMap ++ prefixes.flatten.flatMap(_.columns)
+                  val columns: Map[ColumnRef, Column] = completeSlices.flatMap(_.columns).toMap ++ prefixes.flatMap(_.columns)
                 }
 
-                expired.map(_.succ).sequence map { cells =>
-                  queue.enqueue(cells.flatten: _*)
-                  Some((emission, queue))
+                val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
+                  case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
+                }
+
+                val updatedMatrix0 = suffixes.foldLeft(updatedMatrix) {
+                  case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, M.point(Some(cell))))
+                }
+
+                updatedMatrix0 map { matrix => 
+                  val queue0 = mutable.PriorityQueue(matrix.cells.toSeq: _*)(matrix.ordering)
+                  Some((emission, queue0))
                 }
               }
             }

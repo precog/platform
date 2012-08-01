@@ -72,6 +72,8 @@ trait Evaluator[M[+_]] extends DAG
     with BigDecimalOperations
     with YggConfigComponent 
     with Logging { self =>
+
+  type UserId = String
   
   import Function._
   
@@ -250,7 +252,7 @@ trait Evaluator[M[+_]] extends DAG
         case dag.LoadLocal(_, parent, jtpe) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { _ transform liftToValues(pendingTable.trans) load(sys.error("FIXME"),jtpe) } // FIXME: This needs a proper value
+            val back = pendingTable.table flatMap { _ transform liftToValues(pendingTable.trans) load(userUID, jtpe) } // FIXME: This needs a proper value
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         

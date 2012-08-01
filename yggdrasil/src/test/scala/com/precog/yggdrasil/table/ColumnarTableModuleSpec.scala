@@ -34,6 +34,7 @@ import scala.annotation.tailrec
 import scala.collection.BitSet
 
 import scalaz._
+import scalaz.effect.IO 
 import scalaz.syntax.copointed._
 
 import org.specs2._
@@ -173,11 +174,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
       "reconstruct a problem sample" in testLoadSample2
       "reconstruct a problem sample" in testLoadSample3
       "reconstruct a problem sample" in testLoadSample4
+      //"reconstruct a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
       "reconstruct a dense dataset" in checkLoadDense
     }
   }
 }
 
-object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[test.YId] with test.YIdInstances
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
+  implicit def M = Trampoline.trampolineMonad
+  implicit def coM = Trampoline.trampolineMonad
+}
 
 // vim: set ts=4 sw=4 et:

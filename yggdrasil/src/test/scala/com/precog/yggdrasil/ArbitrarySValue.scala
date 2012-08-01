@@ -120,17 +120,12 @@ trait CValueGenerators {
 
   def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
     for {
-      idCount <- choose(1, 3) 
-      data <- containerOf[Stream, (Identities, Seq[(JPath, JValue)])](
-                for {
-                  ids <- containerOfN[Set, Long](idCount, posNum[Long])
-                  values <- Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) })
-                } yield {
-                  (VectorCase(ids.toList: _*), values)
-                }
-              )
+      idCount  <- choose(1, 3) 
+      dataSize <- choose(0, 100)
+      ids      <- containerOfN[Set, Identities](dataSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
+      values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
     } yield {
-      (idCount, data)
+      (idCount, (ids zip values).toStream)
     }
 
   def assemble(parts: Seq[(JPath, JValue)]): JValue = {

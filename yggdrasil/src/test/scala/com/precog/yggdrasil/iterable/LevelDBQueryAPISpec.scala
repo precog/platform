@@ -62,7 +62,7 @@ class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
 class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent {
   object storage extends Storage
 
-  override val sampleData: Vector[JValue] = Vector(
+  override lazy val sampleData: Vector[JValue] = Vector(
     JsonParser.parse("""[
       {"foo": {
         "bar": { "baz": 1 }
@@ -82,7 +82,7 @@ class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent 
 class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponent {
   object storage extends Storage
 
-  override val sampleData: Vector[JValue] = Vector(
+  override lazy val sampleData: Vector[JValue] = Vector(
     JsonParser.parse( 
       """[{
        "event":"activated",
