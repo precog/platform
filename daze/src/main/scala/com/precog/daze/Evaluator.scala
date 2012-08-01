@@ -636,7 +636,7 @@ trait Evaluator[M[+_]] extends DAG
         }
         
         case s @ Sort(parent, indexes) => {
-          if (indexes == Vector(0 until indexes.length: _*)) {
+          if (indexes == Vector(0 until indexes.length: _*) && parent.sorting == IdentitySort) {
             loop(parent, splits)
           } else {
             val fullOrder = indexes ++ ((0 until parent.provenance.length) filterNot (indexes contains))
@@ -667,55 +667,62 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
-        // TODO check for no-op sort
         case SortBy(parent, sortField, valueField, id) => {
-          for {
-            pending <- loop(parent, splits)
-          } yield {
-            val result = for {
-              pendingTable <- pending.table
+          if (parent.sorting == ValueSort(id)) {
+            loop(parent, splits)
+          } else {
+            for {
+              pending <- loop(parent, splits)
             } yield {
-              val table = pendingTable.transform(liftToValues(pending.trans))
-              val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
-              
-              val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
-              val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
-              
-              val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
-              val wrappedValue = trans.WrapObject(valueSpec, constants.Value.name)
-              
-              val oldSortField = parent.sorting match {
-                case ValueSort(id2) if id != id2 =>
-                  Some(JPathField("sort-" + id2))
+              val result = for {
+                pendingTable <- pending.table
+              } yield {
+                val table = pendingTable.transform(liftToValues(pending.trans))
+                val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
+                
+                val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
+                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
+                
+                val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
+                val wrappedValue = trans.WrapObject(valueSpec, constants.Value.name)
+                
+                val oldSortField = parent.sorting match {
+                  case ValueSort(id2) if id != id2 =>
+                    Some(JPathField("sort-" + id2))
                   
-                case _ => None
+                  case _ => None
+                }
+                
+                val spec = ObjectConcat(
+                  ObjectConcat(
+                    ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), constants.Value) ++ oldSortField),
+                      wrappedSort),
+                      wrappedValue)
+                
+                sorted.transform(spec)
               }
               
-              val spec = ObjectConcat(
-                ObjectConcat(
-                  ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), constants.Value) ++ oldSortField),
-                  wrappedSort),
-                wrappedValue)
-              
-              sorted.transform(spec)
+              PendingTable(result, graph, TransSpec1.Id)
             }
-            
-            PendingTable(result, graph, TransSpec1.Id)
           }
         }
         
         case ReSortBy(parent, id) => {
-          for {
-            pending <- loop(parent, splits)
-          } yield {
-            val result = for {
-              pendingTable <- pending.table
+          if (parent.sorting == ValueSort(id)) {
+            loop(parent, splits)
+          } else {
+            for {
+              pending <- loop(parent, splits)
             } yield {
-              val table = pendingTable.transform(liftToValues(pending.trans))
-              table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
+              val result = for {
+                pendingTable <- pending.table
+              } yield {
+                val table = pendingTable.transform(liftToValues(pending.trans))
+                table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
+              }
+              
+              PendingTable(result, graph, TransSpec1.Id)
             }
-            
-            PendingTable(result, graph, TransSpec1.Id)
           }
         }
         
