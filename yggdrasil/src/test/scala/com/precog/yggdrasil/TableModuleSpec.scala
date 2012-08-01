@@ -74,12 +74,20 @@ trait TableModuleSpec[M[+_]] extends Specification with ScalaCheck with CValueGe
       jschema <- schema(depth)
       (idCount, data) <- genEventColumns(jschema)
     } yield {
+      try {
+      
       SampleData(
-        data.sorted.toStream map { 
-          case (ids, jv) => toRecord(ids, assemble(jv))
+        data.sorted.toStream flatMap {
+          // Sometimes the assembly process will generate overlapping values which will
+          // cause RuntimeExceptions in JValue.unsafeInsert. It's easier to filter these
+          // out here than prevent it from happening in the first place.
+          case (ids, jv) => try { Some(toRecord(ids, assemble(jv))) } catch { case _ : RuntimeException => None }
         },
         Some(jschema)
       )
+      } catch {
+        case ex => println("depth: "+depth) ; throw ex
+      }
     }
   )
 

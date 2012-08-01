@@ -19,6 +19,8 @@
  */
 package com.precog.yggdrasil
 
+import scala.collection.mutable
+
 import blueeyes.json.JPath
 import blueeyes.json.JPathField
 import blueeyes.json.JPathIndex
@@ -49,11 +51,11 @@ trait CValueGenerators {
   def objectSchema(depth: Int, sizeGen: Gen[Int]): Gen[JSchema] = {
     for {
       size <- sizeGen
-      names <- listOfN(size, identifier)
+      names <- containerOfN[Set, String](size, identifier)
       subschemas <- listOfN(size, schema(depth - 1))  
     } yield {
       for {
-        (name, subschema) <- names zip subschemas
+        (name, subschema) <- names.toList zip subschemas
         (jpath, ctype)    <- subschema
       } yield {
         (JPathField(name) \ jpath, ctype)
@@ -116,10 +118,10 @@ trait CValueGenerators {
       idCount <- choose(1, 3) 
       data <- containerOf[Stream, (Identities, Seq[(JPath, JValue)])](
                 for {
-                  ids <- listOfN(idCount, posNum[Long])
+                  ids <- containerOfN[Set, Long](idCount, posNum[Long])
                   values <- Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) })
                 } yield {
-                  (VectorCase(ids: _*), values)
+                  (VectorCase(ids.toList: _*), values)
                 }
               )
     } yield {
@@ -148,7 +150,7 @@ trait SValueGenerators {
   def sobject(depth: Int): Gen[SValue] = {
     for {
       size <- choose(0, 3)
-      names <- listOfN(size, identifier)
+      names <- containerOfN[Set, String](size, identifier)
       values <- listOfN(size, svalue(depth - 1))  
     } yield {
       SObject((names zip values).toMap)
@@ -174,9 +176,9 @@ trait SValueGenerators {
 
   def sevent(idCount: Int, vdepth: Int): Gen[SEvent] = {
     for {
-      ids <- listOfN(idCount, posNum[Long])
+      ids <- containerOfN[Set, Long](idCount, posNum[Long])
       value <- svalue(vdepth)
-    } yield (VectorCase(ids: _*), value)
+    } yield (VectorCase(ids.toList: _*), value)
   }
 
   def chunk(size: Int, idCount: Int, vdepth: Int): Gen[Vector[SEvent]] = 
