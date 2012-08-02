@@ -47,119 +47,119 @@ class LevelDBQueryAPISpec extends Specification with StubLevelDBQueryComponent {
   "fullProjection" should {
     "return all of the objects inserted into projections" in {
       val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
-      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      dataset.iterator.toSeq must haveTheSameElementsAs(sampleData.map(fromJValue))
     }
   }
 
   "mask" should {
     "descend" in {
       val dataset = query.mask(testUID, dataPath).derefObject("gender").realize(System.currentTimeMillis + 10000, new Release(IO(())))
-      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(v => fromJValue(v \ "gender")))
+      dataset.iterator.toSeq must haveTheSameElementsAs(sampleData.map(v => fromJValue(v \ "gender")))
     }
   }
 }
 
 class LevelDBNullMergeSpec extends Specification with StubLevelDBQueryComponent {
-  object storage extends Storage {
-    override lazy val sampleData: Vector[JValue] = Vector(
-      JsonParser.parse("""[
-        {"foo": {
-          "bar": { "baz": 1 }
-        }},
-        {"foo": null}
-      ]""" ).asInstanceOf[JArray].elements: _*)
-  }
+  object storage extends Storage
+
+  override lazy val sampleData: Vector[JValue] = Vector(
+    JsonParser.parse("""[
+      {"foo": {
+        "bar": { "baz": 1 }
+      }},
+      {"foo": null}
+    ]""" ).asInstanceOf[JArray].elements: _*)
 
   "fullProjection" should {
     "restore objects with null components" in {
       val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
-      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      dataset.iterator.toSeq must haveTheSameElementsAs(sampleData.map(fromJValue))
     }
   }
 }
 
 class LevelDBNestedMergeSpec extends Specification with StubLevelDBQueryComponent {
-  object storage extends Storage {
-    override lazy val sampleData: Vector[JValue] = Vector(
-      JsonParser.parse( 
-        """[{
-         "event":"activated",
-         "currency":"USD",
-         "customer":{
-           "country":"CA",
-           "email":"john@fastspring.com",
-           "firstName":"John",
-           "lastName":"Smith",
-           "organization":"",
-           "zipcode":"11111"
-         },
-         "endDate":null,
-         "product":{
-           "name":"Subscription 1"
-         },
-         "quantity":1,
-         "regularPriceUsd":10,
-         "timestamp":{
-           "date":7,
-           "day":3,
-           "hours":0,
-           "minutes":0,
-           "month":2,
-           "seconds":0,
-           "time":1331078400000,
-           "timezoneOffset":0,
-           "year":112
-         }
-        },{
-         "event":"deactivated",
-         "currency":"USD",
-         "customer":{
-           "country":"US",
-           "email":"ryan@fastspring.com",
-           "firstName":"Ryan",
-           "lastName":"Dewell",
-           "organization":"",
-           "zipcode":"93101"
-         },
-         "endDate":{
-           "date":7,
-           "day":3,
-           "hours":0,
-           "minutes":0,
-           "month":2,
-           "seconds":0,
-           "time":1331078400000,
-           "timezoneOffset":0,
-           "year":112
-         },
-         "product":{
-           "name":"ABC Subscription"
-         },
-         "quantity":1,
-         "reason":"canceled",
-         "regularPriceUsd":9,
-         "timestamp":{
-           "date":7,
-           "day":3,
-           "hours":0,
-           "minutes":0,
-           "month":2,
-           "seconds":0,
-           "time":1331078400000,
-           "timezoneOffset":0,
-           "year":112
-         }
-        }]"""
-      ).asInstanceOf[JArray].elements: _*
-    )
-  }
+  object storage extends Storage
+
+  override lazy val sampleData: Vector[JValue] = Vector(
+    JsonParser.parse( 
+      """[{
+       "event":"activated",
+       "currency":"USD",
+       "customer":{
+         "country":"CA",
+         "email":"john@fastspring.com",
+         "firstName":"John",
+         "lastName":"Smith",
+         "organization":"",
+         "zipcode":"11111"
+       },
+       "endDate":null,
+       "product":{
+         "name":"Subscription 1"
+       },
+       "quantity":1,
+       "regularPriceUsd":10,
+       "timestamp":{
+         "date":7,
+         "day":3,
+         "hours":0,
+         "minutes":0,
+         "month":2,
+         "seconds":0,
+         "time":1331078400000,
+         "timezoneOffset":0,
+         "year":112
+       }
+      },{
+       "event":"deactivated",
+       "currency":"USD",
+       "customer":{
+         "country":"US",
+         "email":"ryan@fastspring.com",
+         "firstName":"Ryan",
+         "lastName":"Dewell",
+         "organization":"",
+         "zipcode":"93101"
+       },
+       "endDate":{
+         "date":7,
+         "day":3,
+         "hours":0,
+         "minutes":0,
+         "month":2,
+         "seconds":0,
+         "time":1331078400000,
+         "timezoneOffset":0,
+         "year":112
+       },
+       "product":{
+         "name":"ABC Subscription"
+       },
+       "quantity":1,
+       "reason":"canceled",
+       "regularPriceUsd":9,
+       "timestamp":{
+         "date":7,
+         "day":3,
+         "hours":0,
+         "minutes":0,
+         "month":2,
+         "seconds":0,
+         "time":1331078400000,
+         "timezoneOffset":0,
+         "year":112
+       }
+      }]"""
+    ).asInstanceOf[JArray].elements: _*
+  )
 
   "fullProjection" should {
     "restore objects with null components" in {
       val dataset = query.fullProjection(testUID, dataPath, System.currentTimeMillis + 10000, new Release(IO(())))
       
-      dataset.iterator.toSeq must haveTheSameElementsAs(storage.sampleData.map(fromJValue))
+      dataset.iterator.toSeq must haveTheSameElementsAs(sampleData.map(fromJValue))
     }
   }
 }

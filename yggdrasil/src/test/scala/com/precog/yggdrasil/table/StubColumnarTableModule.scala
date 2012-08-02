@@ -139,6 +139,13 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
       }
     )
   }
+
+  def debugPrint(dataset: Table): Unit = {
+    println("\n\n")
+    dataset.slices.foreach { slice => {
+      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
+    }}
+  }
 }
 
 // vim: set ts=4 sw=4 et:
@@ -151,7 +158,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
     private var initialIndices = collection.mutable.Map[Path, Int]()
     private var currentIndex = 0
     
-    override def load(jtpe: JType) = {
+    override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {
           events.toStream map (_ \ "value") flatMap {

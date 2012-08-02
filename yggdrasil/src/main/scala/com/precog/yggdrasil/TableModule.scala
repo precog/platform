@@ -30,6 +30,7 @@ import scalaz.Monoid
 import scalaz.Monad
 
 trait TableModule[M[+_]] extends FNModule {
+  type UserId
   type Scanner
   type Reducer[α]
 
@@ -215,7 +216,7 @@ trait TableModule[M[+_]] extends FNModule {
      * For each distinct path in the table, load all columns identified by the specified
      * jtype and concatenate the resulting slices into a new table.
      */
-    def load(tpe: JType): M[Table]
+    def load(uid: UserId, tpe: JType): M[Table]
     
     /**
      * Folds over the table to produce a single value (stored in a singleton table).

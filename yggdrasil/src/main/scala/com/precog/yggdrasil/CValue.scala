@@ -53,6 +53,8 @@ sealed trait CValue extends Serializable {
     case CDouble(v)  => SDecimal(v)
     case CNum(v)     => SDecimal(v)
   }
+
+  def toJValue: JValue
 }
 
 object CValue {
@@ -208,12 +210,14 @@ object CType extends CTypeSerialization {
     }
   }
   @inline
-  final def toCValue(jval: JValue): CValue = jval match {
+  final def toCValue(jval: JValue): CValue = (jval: @unchecked) match {
     case JString(s) => CString(s)
     case JInt(i)    => sizedIntCValue(i)
     case JDouble(d) => CDouble(d)
     case JBool(b)   => CBoolean(b)
-    case _          => null
+    case JNull      => CNull
+    case JObject(Nil) => CEmptyObject
+    case JArray(Nil) => CEmptyArray
   }
 
   @inline
@@ -254,7 +258,9 @@ object CType extends CTypeSerialization {
 //
 // Strings
 //
-case class CString(value: String) extends CValue
+case class CString(value: String) extends CValue {
+  def toJValue = JString(value)
+}
 
 case object CString extends CType(LengthEncoded, SString) {
   def readResolve() = CString
@@ -268,7 +274,9 @@ case object CString extends CType(LengthEncoded, SString) {
 //
 // Booleans
 //
-case class CBoolean(value: Boolean) extends CValue
+case class CBoolean(value: Boolean) extends CValue {
+  def toJValue = JBool(value)
+}
 
 case object CBoolean extends CType(FixedWidth(1), SBoolean) {
   def readResolve() = CBoolean
@@ -284,7 +292,9 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 //
 sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CType(format, stype)
 
-case class CLong(value: Long) extends CValue 
+case class CLong(value: Long) extends CValue {
+  def toJValue = JInt(value)
+}
 case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CLong
   type CA = Long
@@ -295,7 +305,9 @@ case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
-case class CDouble(value: Double) extends CValue 
+case class CDouble(value: Double) extends CValue {
+  def toJValue = JDouble(value)
+}
 case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CDouble
   type CA = Double
@@ -306,7 +318,9 @@ case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
-case class CNum(value: BigDecimal) extends CValue 
+case class CNum(value: BigDecimal) extends CValue {
+  def toJValue = JDouble(value.toDouble)
+}
 case object CNum extends CNumeric(LengthEncoded, SDecimal) {
   def readResolve() = CNum
   type CA = BigDecimal
@@ -317,7 +331,9 @@ case object CNum extends CNumeric(LengthEncoded, SDecimal) {
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 
-case class CDate(value: DateTime) extends CValue
+case class CDate(value: DateTime) extends CValue {
+  def toJValue = JString(value.toString)
+}
 
 case object CDate extends CType(FixedWidth(8), SString) {
   def readResolve() = CDate
@@ -328,7 +344,7 @@ case object CDate extends CType(FixedWidth(8), SString) {
   implicit val manifest = implicitly[Manifest[DateTime]]
 }
 
-sealed trait CNullType extends CType
+sealed trait CNullType extends CType 
 
 //
 // Nulls
@@ -339,6 +355,7 @@ case object CNull extends CType(FixedWidth(0), SNull) with CNullType with CValue
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   def jvalueFor(v: Null) = JNull
+  def toJValue = JNull
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
@@ -348,6 +365,7 @@ case object CUndefined extends CType(FixedWidth(0), SUndefined) with CNullType w
   val CC = classOf[Nothing]
   def order(v1: Nothing, v2: Nothing) = EQ
   def jvalueFor(v: Nothing) = JNothing
+  def toJValue = JNothing
   implicit val manifest: Manifest[Nothing] = implicitly[Manifest[Nothing]]
 
 }
@@ -358,6 +376,7 @@ case object CEmptyObject extends CType(FixedWidth(0), SObject) with CNullType wi
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   def jvalueFor(v: Null) = JObject(Nil)
+  def toJValue = JObject(Nil)
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 
@@ -367,6 +386,7 @@ case object CEmptyArray extends CType(FixedWidth(0), SArray) with CNullType with
   val CC = classOf[Null]
   def order(v1: Null, v2: Null) = EQ
   def jvalueFor(v: Null) = JArray(Nil)
+  def toJValue = JArray(Nil)
   implicit val manifest: Manifest[Null] = implicitly[Manifest[Null]]
 }
 

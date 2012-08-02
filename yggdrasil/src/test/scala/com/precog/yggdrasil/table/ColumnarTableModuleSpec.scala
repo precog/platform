@@ -34,6 +34,7 @@ import scala.annotation.tailrec
 import scala.collection.BitSet
 
 import scalaz._
+import scalaz.effect.IO 
 import scalaz.syntax.copointed._
 
 import org.specs2._
@@ -45,19 +46,12 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] { spec =>
+trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] with BlockLoadSpec[M] { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val testPath = Path("/tableOpsSpec")
   val actorSystem = ActorSystem("columnar-table-specs")
   implicit val asyncContext = ExecutionContext.defaultExecutionContext(actorSystem)
-
-  def debugPrint(dataset: Table): Unit = {
-    println("\n\n")
-    dataset.slices.foreach { slice => {
-      M.point(for (i <- 0 until slice.size) println(slice.toString(i)))
-    }}
-  }
 
   def lookupF1(namespace: List[String], name: String): F1 = {
     val lib = Map[String, CF1](
@@ -105,7 +99,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
 
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    def load(jtpe: JType): M[Table] = sys.error("todo")
+    def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
   }
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
@@ -174,13 +168,21 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap
     }
+
+    "in load" >> {
+      "reconstruct a problem sample" in testLoadSample1
+      "reconstruct a problem sample" in testLoadSample2
+      "reconstruct a problem sample" in testLoadSample3
+      "reconstruct a problem sample" in testLoadSample4
+      //"reconstruct a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
+      "reconstruct a dense dataset" in checkLoadDense
+    }
   }
 }
 
-import test.YId
-object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[YId] {
-  implicit val M = YId.M
-  implicit val coM = YId.M
+object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] {
+  implicit def M = Trampoline.trampolineMonad
+  implicit def coM = Trampoline.trampolineMonad
 }
 
 // vim: set ts=4 sw=4 et:

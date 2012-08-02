@@ -37,10 +37,13 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
+trait ActorStorageModuleConfig extends BaseConfig {
+}
+
 trait ActorStorageModule extends StorageModule[Future] {
   protected implicit def actorSystem: ActorSystem
 
-  trait ActorStorageLike extends StorageLike[Projection, Future] with Logging {
+  trait ActorStorageLike extends StorageLike with Logging {
     def accessControl: AccessControl[Future]
     def shardSystemActor: ActorRef
 
@@ -56,9 +59,10 @@ trait ActorStorageModule extends StorageModule[Future] {
       new UserMetadataView(uid, accessControl, metadata)
     }
     
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): Future[(Projection, Release)] = {
+    def projection(descriptor: ProjectionDescriptor): Future[(Projection, Release)] = {
       logger.debug("Obtain projection for " + descriptor)
-      implicit val ito = timeout 
+      implicit val storageTimeout: Timeout = Timeout(300 seconds)
+
 
       (for (ProjectionAcquired(projection) <- (shardSystemActor ? AcquireProjection(descriptor))) yield {
         logger.debug("  projection obtained")
@@ -68,8 +72,9 @@ trait ActorStorageModule extends StorageModule[Future] {
       }
     }
     
-    def storeBatch(msgs: Seq[EventMessage], timeout: Timeout): Future[Unit] = {
-      implicit val ito = timeout
+    def storeBatch(msgs: Seq[EventMessage]): Future[Unit] = {
+      implicit val storageTimeout: Timeout = Timeout(300 seconds)
+
       val result = Promise.apply[BatchComplete]
       val notifier = actorSystem.actorOf(Props(new BatchCompleteNotifier(result)))
       val batchHandler = actorSystem.actorOf(Props(new BatchHandler(notifier, null, YggCheckpoint.Empty, Timeout(120000))))

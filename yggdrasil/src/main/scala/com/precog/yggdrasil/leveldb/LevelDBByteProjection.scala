@@ -188,7 +188,7 @@ trait LevelDBByteProjection extends ByteProjection {
     //}
   }
 
-  final def keyOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
+  final def keyByteOrder: Order[Array[Byte]] = new Order[Array[Byte]] {
     def order(k1: Array[Byte], k2: Array[Byte]) = {
       val buf1 = ByteBuffer.wrap(k1)
       val buf2 = ByteBuffer.wrap(k2)

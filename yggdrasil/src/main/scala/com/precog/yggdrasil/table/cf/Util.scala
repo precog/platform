@@ -131,6 +131,19 @@ object util {
     case c: NullColumn => new ShiftColumn(by, c) with NullColumn
   })
 
+  case class Sparsen(idx: Array[Int], toSize: Int) extends CF1P ({
+    case c: BoolColumn   => new SparsenColumn(c, idx, toSize) with BoolColumn { def apply(row: Int) = c(remap(row)) }
+    case c: LongColumn   => new SparsenColumn(c, idx, toSize) with LongColumn { def apply(row: Int) = c(remap(row)) }
+    case c: DoubleColumn => new SparsenColumn(c, idx, toSize) with DoubleColumn { def apply(row: Int) = c(remap(row)) }
+    case c: NumColumn    => new SparsenColumn(c, idx, toSize) with NumColumn { def apply(row: Int) = c(remap(row)) }
+    case c: StrColumn    => new SparsenColumn(c, idx, toSize) with StrColumn { def apply(row: Int) = c(remap(row)) }
+    case c: DateColumn   => new SparsenColumn(c, idx, toSize) with DateColumn { def apply(row: Int) = c(remap(row)) }
+
+    case c: EmptyArrayColumn  => new SparsenColumn(c, idx, toSize) with EmptyArrayColumn
+    case c: EmptyObjectColumn => new SparsenColumn(c, idx, toSize) with EmptyObjectColumn
+    case c: NullColumn => new SparsenColumn(c, idx, toSize) with NullColumn
+  })
+
   case class Remap(f: PartialFunction[Int, Int]) extends CF1P ({
     case c: BoolColumn   => new RemapColumn(c, f) with BoolColumn { def apply(row: Int) = c(f(row)) }
     case c: LongColumn   => new RemapColumn(c, f) with LongColumn { def apply(row: Int) = c(f(row)) }

@@ -36,7 +36,7 @@ import org.joda.time.DateTime
 
 import scalaz._
 
-object AccessControlSpec extends Specification with TokenManagerTestValues with AccessControlHelpers {
+class AccessControlSpec extends Specification with TokenManagerTestValues with AccessControlHelpers {
 
   implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)
@@ -172,7 +172,7 @@ object AccessControlSpec extends Specification with TokenManagerTestValues with 
   }
 }
 
-object AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerTestValues with AccessControlHelpers {
+class AccessControlUseCasesSpec extends Specification with UseCasesTokenManagerTestValues with AccessControlHelpers {
  
   implicit lazy val accessControl = new TokenManagerAccessControl(tokens)
   implicit lazy val M: Monad[Future] = blueeyes.bkka.AkkaTypeClasses.futureApplicative(defaultFutureDispatch)

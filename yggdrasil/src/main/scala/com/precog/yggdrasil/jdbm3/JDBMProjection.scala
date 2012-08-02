@@ -70,7 +70,7 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Slice] {
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Identities, Slice] {
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
@@ -83,6 +83,8 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   private[this] final val indexDir = new File(baseDir, INDEX_SUBDIR)
 
   indexDir.mkdirs()
+
+  implicit val keyOrder = IdentitiesOrder
 
   protected lazy val idIndexFile: DB = try {
     logger.debug("Opening index file for " + toString)
@@ -124,13 +126,19 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey, kvEntry.getValue) }
   })
 
-  def getBlockAfter(id: Option[Identities]): Option[Slice] = {
+  // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
+  private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)
+
+  def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor]): Option[BlockData] = {
     try {
-      val constrainedMap = id.map(treeMap.tailMap(_)).getOrElse(treeMap)
+      // tailMap semantics are >=, but we want > the IDs if provided
+      val constrainedMap = id.map { idKey => treeMap.tailMap(identitiesAfter(idKey)) }.getOrElse(treeMap)
 
       constrainedMap.lastKey() // Will throw an exception if the map is empty
 
-      Some(new JDBMSlice(constrainedMap, descriptor, DEFAULT_SLICE_SIZE))
+      val slice = new JDBMSlice(constrainedMap, descriptor, columns, DEFAULT_SLICE_SIZE)
+
+      Some(BlockData(slice.firstKey, slice.lastKey, slice))
     } catch {
       case e: java.util.NoSuchElementException => None
     }
