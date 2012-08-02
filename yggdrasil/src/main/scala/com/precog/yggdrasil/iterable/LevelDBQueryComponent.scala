@@ -65,7 +65,7 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
         case (descriptor, selectors) :: x :: xs => 
           val (init, instr) = buildInstructions(descriptor, selectors)
           for {
-            (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+            (projection, prelease) <- storage.projection(descriptor)
             dataset    <- joinNext(x :: xs)
           } yield {
             release += prelease.release
@@ -81,7 +81,7 @@ trait LevelDBQueryComponent extends StorageEngineQueryComponent with DatasetOpsC
         case (descriptor, selectors) :: Nil =>
           val (init, instr) = buildInstructions(descriptor, selectors)
           for {
-            (projection, prelease) <- storage.projection(descriptor, yggConfig.projectionRetrievalTimeout) 
+            (projection, prelease) <- storage.projection(descriptor)
           } yield {
             release += prelease.release
             ops.extend(projection.allRecords(expiresAt)) map { appendToObject(init, instr, _) }

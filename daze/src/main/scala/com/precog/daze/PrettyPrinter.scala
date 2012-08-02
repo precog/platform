@@ -95,6 +95,11 @@ trait PrettyPrinter extends DAG {
             wrap(depth, "SortBy(\n",
               prettyPrintAux(parent, bindings, depth+1, suffixNL = false)+",\n"+
                 mkIndent(depth+1)+prettyString(sortField)+", "+prettyString(valueField)+", "+id+"\n", ")")
+                
+          case ReSortBy(parent, id) =>
+            wrap(depth, "ReSortBy(\n",
+              prettyPrintAux(parent, bindings, depth + 1, suffixNL = false) + ",\n" +
+                mkIndent(depth + 1) + id, ")")
   
           case Memoize(parent, priority) =>
             wrap(depth, "Memoize(\n",
@@ -166,6 +171,8 @@ trait PrettyPrinter extends DAG {
           case Sort(parent, _) => collectBindings(parent, counts0)
   
           case SortBy(parent, _, _, _) => collectBindings(parent, counts0)
+          
+          case ReSortBy(parent, _) => collectBindings(parent, counts0)
               
           case Memoize(parent, _) => collectBindings(parent, counts0)
   

@@ -129,6 +129,9 @@ trait Memoizer extends DAG {
           case SortBy(parent, sortField, valueField, id) =>
             SortBy(memoized(parent, splits), sortField, valueField, id)
           
+          case ReSortBy(parent, id) =>
+            ReSortBy(memoized(parent, splits), id)
+          
           case Memoize(parent, _) => memoized(parent, splits)
         }
       }
