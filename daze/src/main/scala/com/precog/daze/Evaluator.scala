@@ -97,8 +97,8 @@ trait Evaluator[M[+_]] extends DAG
   
   def freshIdScanner: Scanner
   
-  def eval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean): M[Table] = {
-    logger.debug("Eval for %s = %s".format(userUID, graph))
+  def eval(userUID: UserId, graph: DepGraph, ctx: Context, optimize: Boolean): M[Table] = {
+    logger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, M[GroupingSpec[Int]]] = spec match {
       case UnionBucketSpec(left, right) => {
@@ -252,7 +252,7 @@ trait Evaluator[M[+_]] extends DAG
         case dag.LoadLocal(_, parent, jtpe) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { _ transform liftToValues(pendingTable.trans) load(userUID, jtpe) } // FIXME: This needs a proper value
+            val back = pendingTable.table flatMap { _.transform(liftToValues(pendingTable.trans)).load(userUID, jtpe) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -351,11 +351,16 @@ trait Evaluator[M[+_]] extends DAG
               val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
               val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
               
-              val wrappedResult = if (union) {
-                val mergeSpec = trans.WrapArray(Leaf(SourceLeft))
-                val fullSpec = trans.WrapArray(Leaf(Source))
-                
-                leftSorted.cogroup(TransSpec1.Id, TransSpec1.Id, rightSorted)(fullSpec, fullSpec, mergeSpec)
+              val keyValueSpec = trans.ObjectConcat(
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Key),
+                  constants.Key.name),
+                trans.WrapObject(
+                  DerefObjectStatic(Leaf(Source), constants.Value),
+                  constants.Value.name))
+              
+              if (union) {
+                leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
               } else {
                 val emptySpec = trans.Map1(Leaf(Source), ConstantEmptyArray)
                 val fullSpec = trans.WrapArray(Leaf(SourceLeft))

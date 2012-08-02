@@ -160,8 +160,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
-    def reduce[A: Monoid](reducer: Reducer[A]): M[A] = {  
-      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(Monoid[A].zero)((a, b) => Monoid[A].append(a, b))
+    def reduce[A](reducer: Reducer[A])(implicit monoid: Monoid[A]): M[A] = {  
+      (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
     }
 
     def compact(spec: TransSpec1): Table = sys.error("todo")

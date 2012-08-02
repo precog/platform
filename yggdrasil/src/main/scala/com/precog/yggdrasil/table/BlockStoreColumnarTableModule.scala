@@ -41,7 +41,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with StorageModule[M] { self =>
-  type UserId = String
+  override type UserId = String
   type Key
   type Projection <: BlockProjectionLike[Key, Slice]
   type BD = Projection#BlockData
