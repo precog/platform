@@ -86,7 +86,7 @@ class StatisticsSpec extends Specification with ScalaCheck {
     }
 
     "be scalable" ! check { (xs: List[Double]) =>
-        statsAreEqual(stats(xs).suml map (_ * 0.0001), stats(xs map (_ * 0.0001)).suml)
+      statsAreEqual(stats(xs).suml map (_ * 0.0001), stats(xs map (_ * 0.0001)).suml)
     }
   }
 }

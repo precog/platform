@@ -37,7 +37,10 @@ case class Statistics private (
     n: Int) {
 
   /**
-   * Multiply this statistic by some constant > 0.
+   * Multiply this statistic by some constant > 0. Using this is equivalent to
+   * computing the stats of a scaled (by `x`) version of the original dataset.
+   * This can be safely used to convert between units, after the fact, for
+   * example.
    */
   def *(x: Double): Statistics = if (x >= 0.0) {
     Statistics(tails, allMin map (_ * x), allMax map (_ * x), m * x, vn * x * x, n)
