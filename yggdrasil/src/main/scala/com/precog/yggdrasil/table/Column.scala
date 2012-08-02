@@ -36,6 +36,7 @@ sealed trait Column {
 
   val tpe: CType
   def jValue(row: Int): JValue
+  def cValue(row: Int): CValue
   def strValue(row: Int): String
 
   def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
@@ -46,6 +47,7 @@ trait BoolColumn extends Column with (Int => Boolean) {
 
   override val tpe = CBoolean
   override def jValue(row: Int) = JBool(this(row))
+  override def cValue(row: Int) = CBoolean(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
@@ -54,6 +56,7 @@ trait LongColumn extends Column with (Int => Long) {
 
   override val tpe = CLong
   override def jValue(row: Int) = JInt(this(row))
+  override def cValue(row: Int) = CLong(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
@@ -62,6 +65,7 @@ trait DoubleColumn extends Column with (Int => Double) {
 
   override val tpe = CDouble
   override def jValue(row: Int) = JDouble(this(row))
+  override def cValue(row: Int) = CDouble(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
 
@@ -70,6 +74,7 @@ trait NumColumn extends Column with (Int => BigDecimal) {
 
   override val tpe = CNum
   override def jValue(row: Int) = JDouble(this(row).toDouble)
+  override def cValue(row: Int) = CNum(this(row))
   override def strValue(row: Int): String = this(row).toString
 }
 
@@ -78,6 +83,7 @@ trait StrColumn extends Column with (Int => String) {
 
   override val tpe = CString
   override def jValue(row: Int) = JString(this(row))
+  override def cValue(row: Int) = CString(this(row))
   override def strValue(row: Int): String = this(row)
 }
 
@@ -86,6 +92,7 @@ trait DateColumn extends Column with (Int => DateTime) {
 
   override val tpe = CDate
   override def jValue(row: Int) = JString(this(row).toString)
+  override def cValue(row: Int) = CDate(this(row))
   override def strValue(row: Int): String = this(row).toString
 }
 
@@ -93,6 +100,7 @@ trait DateColumn extends Column with (Int => DateTime) {
 trait EmptyArrayColumn extends Column {
   override val tpe = CEmptyArray
   override def jValue(row: Int) = JArray(Nil)
+  override def cValue(row: Int) = CEmptyArray
   override def strValue(row: Int): String = "[]"
 }
 object EmptyArrayColumn {
@@ -102,6 +110,7 @@ object EmptyArrayColumn {
 trait EmptyObjectColumn extends Column {
   override val tpe = CEmptyObject
   override def jValue(row: Int) = JObject(Nil)
+  override def cValue(row: Int) = CEmptyObject
   override def strValue(row: Int): String = "{}"
 }
 
@@ -112,6 +121,7 @@ object EmptyObjectColumn {
 trait NullColumn extends Column {
   override val tpe = CNull
   override def jValue(row: Int) = JNull
+  override def cValue(row: Int) = CNull
   override def strValue(row: Int): String = "null"
 }
 object NullColumn {
@@ -123,6 +133,7 @@ object UndefinedColumn {
     def isDefinedAt(row: Int) = false
     val tpe = col.tpe
     def jValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
+    def cValue(row: Int) = CUndefined
     def strValue(row: Int) = sys.error("Values in undefined columns SHOULD NOT BE ACCESSED")
   }
 }

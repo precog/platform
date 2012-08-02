@@ -22,12 +22,18 @@ package table
 
 import com.precog.common.{Path, VectorCase}
 import com.precog.bytecode.JType
+import com.precog.yggdrasil.jdbm3._
 
 import blueeyes.bkka.AkkaTypeClasses
 import blueeyes.json._
 import blueeyes.json.JsonAST._
 import org.apache.commons.collections.primitives.ArrayIntList
 import org.joda.time.DateTime
+import com.weiglewilczek.slf4s.Logging
+
+import org.apache.jdbm.DBMaker
+import java.io.File
+import java.util.SortedMap
 
 import scala.collection.BitSet
 import scala.collection.Set
@@ -54,6 +60,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   type Table <: ColumnarTable
 
   implicit def M: Monad[M]
+
+  def newScratchDir(): File
+  def jdbmCommitInterval: Long
 
   object ops extends TableOps {
     def empty: Table = table(StreamT.empty[M, Slice])
@@ -158,7 +167,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
   def table(slices: StreamT[M, Slice]): Table
 
-  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike { self: Table =>
+  abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike with Logging { self: Table =>
     /**
      * Folds over the table to produce a single value (stored in a singleton table).
      */
@@ -524,7 +533,79 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: SortOrder): Table = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): Table = {
+      type IndexStore = SortedMap[SortingKey,Array[CValue]]
+      case class SliceIndex(name: String, storage: IndexStore)
+      type IndexMap = Map[Set[ColumnRef], SliceIndex] 
+
+      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, SortKey.name)))
+
+      // Open a JDBM3 DB for use in sorting under a temp directory
+      val baseDir = newScratchDir()
+      val DB = DBMaker.openFile(new File(baseDir, "sortspace").getCanonicalPath).make()
+      
+      // Insert slice data based on columndescriptors
+      val inputOp: M[IndexMap] = tableWithSortKey.slices.foldLeft((Map.empty[Set[ColumnRef], SliceIndex], 0l /* synthetic global row ID */)) { case ((indices, nextId), slice) => {
+        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
+          // The conditional guarantees that dropPrefix will return Some
+          case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
+        }.toList
+
+        val dataColumns = columnsByPrefix(JPath(Value))
+        val idColumns   = columnsByPrefix(JPath(Key))
+        val sortColumns = columnsByPrefix(JPath(SortKey))
+
+        var formatIndices = indices
+        
+        val dataRefs = dataColumns.map(_._1).toSet
+        val index: SliceIndex = formatIndices.get(dataRefs).getOrElse {
+          val newIndex = SliceIndex(dataRefs.toString, DB.createTreeMap(dataRefs.toString, 
+                                                                        SortingKeyComparator(sortOrder.ascending), 
+                                                                        SortingKeySerializer(sortColumns.map(_._1.ctype).toArray, idColumns.size),
+                                                                        CValueSerializer(dataColumns.map(_._1.ctype))))
+
+          formatIndices += (dataRefs -> newIndex)
+          newIndex
+        }
+        
+        // Iterate over the slice
+        @inline
+        @tailrec
+        def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
+          val sortValues = sortColumns.map(_._2.cValue(row)).toArray
+          val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
+          val rowValues  = dataColumns.map(_._2.cValue(row)).toArray
+
+          storage.put(SortingKey(sortValues, identities, globalId), rowValues)
+
+          if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+            DB.commit()
+          }
+
+          storeRow(storage, row + 1, globalId + 1)
+        } else {
+          globalId
+        }
+
+        (formatIndices, storeRow(index.storage, 0, nextId))
+      }}.map {
+        case (indices, lastId) => logger.debug("Sorted %d rows to JDBM".format(lastId - 1)); indices
+      }
+
+      // Merge the resulting slice indices back together
+      val resultSlices: StreamT[M, Slice] = inputOp.map { indices => {
+        if (indices.size == 1) {
+          // The simple case: we had all homogeneous slices, so we just slice out the sorted data
+          sys.error("TODO")
+        } else {
+          // Heterogeneous slices, we need to build a set of comparators between each pair of indices
+          // so that we can merge sort the indices together
+          sys.error("TODO")
+        }
+      }}
+
+      table(resultSlices)
+    }
     
     // Does this have to be fully known at every point in time?
     def schema: JType = sys.error("todo")

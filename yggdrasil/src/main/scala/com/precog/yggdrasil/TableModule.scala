@@ -147,14 +147,18 @@ trait TableModule[M[+_]] extends FNModule {
     }
     
     sealed trait SortOrder
-    case object SortAscending extends SortOrder
-    case object SortDescending extends SortOrder
+    sealed trait DesiredSortOrder extends SortOrder {
+      def ascending: Boolean
+    }
+    case object SortAscending extends DesiredSortOrder { val ascending = true }
+    case object SortDescending extends DesiredSortOrder { val ascending = false }
     case object SortUnknown extends SortOrder
     
     object constants {
       val Key   = JPathField("key")
       val Value = JPathField("value")
       val Group = JPathField("group")
+      val SortKey = JPathField("sortkey")
       
       object SourceKey {
         val Single = DerefObjectStatic(Leaf(Source), Key)
@@ -176,6 +180,14 @@ trait TableModule[M[+_]] extends FNModule {
         val Left = DerefObjectStatic(Leaf(SourceLeft), Group)
         val Right = DerefObjectStatic(Leaf(SourceRight), Group)
       }
+
+      object SourceSortKey {
+        val Single = DerefObjectStatic(Leaf(Source), SortKey)
+        
+        val Left = DerefObjectStatic(Leaf(SourceLeft), SortKey)
+        val Right = DerefObjectStatic(Leaf(SourceRight), SortKey)
+      }
+
     }
   }
   
@@ -252,7 +264,7 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: SortOrder): Table
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): Table
     
     def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     
