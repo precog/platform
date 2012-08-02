@@ -43,6 +43,9 @@ trait ProjectionLike {
 case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
 
 trait BlockProjectionLike[Key, Block] extends ProjectionLike {
+  //TODO: make the following type member work instead of having a type parameter
+  // type Key
+
   implicit def keyOrder: Order[Key]
 
   /** 

@@ -21,6 +21,7 @@ package com.precog.yggdrasil
 
 import table._
 import com.precog.common.VectorCase
+import com.precog.util._
 import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
@@ -46,6 +47,7 @@ import org.scalacheck.Arbitrary._
 
 trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
   import SampleData._
+  import trans._
   import trans.constants._
   import TableModule.paths._
 
@@ -99,15 +101,31 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
     val ltable = fromSample(l)
     val rtable = fromSample(r)
 
-    val expected = computeCogroup(l.data, r.data, Stream()) map {
+    val keyOrder = Order[JValue].contramap((_: JValue) \ "key")
+
+    val expected = computeCogroup(l.data, r.data, Stream())(keyOrder) map {
       case Left3(jv) => jv
-      case Middle3((jv1, jv2)) => jv1.insertAll(jv2) match { case Success(v) => v; case Failure(ts) => throw ts.head }
+      case Middle3((jv1, jv2)) => 
+        jv1.insertAll(JObject(List(JField("value", jv2 \ "value")))) match { case Success(v) => v; case Failure(ts) => throw ts.head }
       case Right3(jv) => jv
     } 
 
-    val result: Table = sys.error("todo")
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
     val jsonResult = toJson(result)
     jsonResult.copoint must containAllOf(expected).only
+  }
+
+  def testCogroupPathology1 = {
+    import JsonParser.parse
+    val s1 = SampleData(Stream(toRecord(VectorCase(1, 1, 1), parse("""{ "a":[] }"""))))
+    val s2 = SampleData(Stream(toRecord(VectorCase(1, 1, 1), parse("""{ "b":0 }"""))))
+
+    testCogroup(s1, s2)
   }
 
   def testCogroupSliceBoundaries = {

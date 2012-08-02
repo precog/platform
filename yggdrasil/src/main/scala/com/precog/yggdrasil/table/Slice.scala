@@ -154,6 +154,13 @@ trait Slice { source =>
     }
   }
 
+  def remap(indices: ArrayIntList) = new Slice {
+    val size = source.size
+    val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
+      cf.util.Remap.forIndices(indices).apply(col).get //Remap is total
+    }
+  }
+
   def remap(pf: PartialFunction[Int, Int]) = new Slice {
     val size = source.size
     val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
@@ -253,6 +260,15 @@ trait Slice { source =>
       val columns = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => 
           acc + (ref -> acc.get(ref).flatMap(sc => cf.util.Concat(source.size)(sc, col)).getOrElse((col |> cf.util.Shift(source.size)).get))
+      }
+    }
+  }
+
+  def zip(other: Slice): Slice = {
+    new Slice {
+      val size = source.size max other.size
+      val columns: Map[ColumnRef, Column] = other.columns.foldLeft(source.columns) {
+        case (acc, (ref, col)) => acc + (ref -> (acc get ref flatMap { c => cf.util.UnionRight(c, col) } getOrElse col))
       }
     }
   }

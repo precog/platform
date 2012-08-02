@@ -158,7 +158,7 @@ object util {
   })
 
   object Remap {
-    def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i > 0 && i < indices.size) => indices.get(i) })
+    def forIndices(indices: ArrayIntList): Remap = Remap({ case i if (i >= 0 && i < indices.size) => indices.get(i) })
   }
 
   case class filter(from: Int, to: Int, definedAt: BitSet) extends CF1P ({
