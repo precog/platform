@@ -40,7 +40,7 @@ case class Statistics private (
    * Multiply this statistic by some constant > 0.
    */
   def *(x: Double): Statistics = if (x >= 0.0) {
-    Statistics(tails, allMin map (_ * x), allMax map (_ * x), m * x, vn * x, n)
+    Statistics(tails, allMin map (_ * x), allMax map (_ * x), m * x, vn * x * x, n)
   } else {
     Statistics(tails, allMax map (_ * x), allMin map (_ * x), m * x, vn * math.abs(x), n)
   }

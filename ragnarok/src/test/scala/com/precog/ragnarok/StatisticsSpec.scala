@@ -84,6 +84,10 @@ class StatisticsSpec extends Specification with ScalaCheck {
       java.lang.Double.isNaN(s1.mean) must beTrue
       java.lang.Double.isNaN(s1.variance) must beTrue
     }
+
+    "be scalable" ! check { (xs: List[Double]) =>
+        statsAreEqual(stats(xs).suml map (_ * 0.0001), stats(xs map (_ * 0.0001)).suml)
+    }
   }
 }
 

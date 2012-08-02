@@ -31,7 +31,7 @@ case class RunConfig(
     select: Option[(List[String], PerfTest) => Boolean] = None,
     runs: Int = 60,
     outliers: Double = 0.05,
-    dryRuns: Int = 1,
+    dryRuns: Int = 10,
     optimize: Boolean = true) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }

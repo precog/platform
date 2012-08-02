@@ -122,10 +122,7 @@ trait PerfTestSuite extends Logging {
             _optimize = config.optimize, _userUID = "dummy")
 
           select(config.select getOrElse ((_, _) => true)) foreach { test =>
-            if (config.dryRuns > 0) {
-              run(test = test, runner = runner, runs = config.dryRuns, outliers = config.outliers)
-            }
-
+            run(test, runner, runs = config.dryRuns, outliers = config.outliers)
             val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
               case (t, stats) =>
                 (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
