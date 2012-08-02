@@ -29,14 +29,27 @@ import scalaz.std.option._
  * `NaN` and the count will be `0`.
  */
 case class Statistics private (
-  tails: Int,
-  allMin: List[Double],
-  allMax: List[Double],
-  m: Double,
-  vn: Double,
-  n: Int) {
+    tails: Int,
+    allMin: List[Double],
+    allMax: List[Double],
+    m: Double,
+    vn: Double,
+    n: Int) {
+
+  /**
+   * Multiply this statistic by some constant > 0.
+   */
+  def *(x: Double): Statistics = if (x >= 0.0) {
+    Statistics(tails, allMin map (_ * x), allMax map (_ * x), m * x, vn * x, n)
+  } else {
+    Statistics(tails, allMax map (_ * x), allMin map (_ * x), m * x, vn * math.abs(x), n)
+  }
+
+
+  def +(x: Double): Statistics = this + Statistics(x, tails = tails)
 
   def +(that: Statistics): Statistics = Statistics.semigroup.append(this, that)
+
 
   // Calculates the mean, variance, and count without outliers.
   private lazy val meanVarCount: (Double, Double, Int) = if (n > 2 * tails) {
@@ -81,7 +94,6 @@ object Statistics {
       val y = _y
 
       val z_m = x.m + (y.n / (x.n + y.n).toDouble) * (y.m - x.m)
-      // TODO: Wrong variance when weight of y is not 1 (ie. y.n > 1).
       val z_vn = x.vn + y.vn + y.n * (y.m - x.m) * (y.m - z_m)
       val z_tails = x.tails min y.tails
 

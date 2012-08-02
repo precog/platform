@@ -31,7 +31,7 @@ trait PerfTestSuite extends Logging {
   
   private var tests: List[Tree[PerfTest]] = Nil
 
-  def suiteName: String = getClass.getName
+  def suiteName: String = getClass.getName.replaceAll("\\$$", "")
 
   /** Returns the top-level test for this suite. */
   def test: Tree[PerfTest] =
@@ -110,7 +110,8 @@ trait PerfTestSuite extends Logging {
         try {
           implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-          val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer, _optimize = true, _userUID = "dummy")
+          val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer,
+            _optimize = config.optimize, _userUID = "dummy")
 
           implicit val futureIsCopointed = new Copointed[Future] {
             def map[A, B](m: Future[A])(f: A => B) = m map f
@@ -122,7 +123,22 @@ trait PerfTestSuite extends Logging {
               run(test = test, runner = runner, runs = config.dryRuns, outliers = config.outliers)
             }
 
-            println(run(test = test, runner = runner, runs = config.runs, outliers = config.outliers).prettyStats(_ / 1000000))
+            val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
+              case (t, stats) =>
+                (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
+            }
+
+            import RunConfig.OutputFormat
+            println(config.format match {
+              case OutputFormat.Legible =>
+                result.toPrettyString("ms")
+
+              case OutputFormat.Json =>
+                result.toFlatJson
+
+              case OutputFormat.Tsv =>
+                result.toTsv
+            })
           }
 
         } finally {

@@ -19,22 +19,33 @@
  */
 package com.precog.ragnarok
 
+import scala.annotation.tailrec
+
 import scalaz._
 import scalaz.syntax.applicative._
 import scalaz.syntax.validation._
 
 
 case class RunConfig(
-    json: Boolean = true, // TODO do something with this.
+    format: RunConfig.OutputFormat = RunConfig.OutputFormat.Legible,
     select: Option[(List[String], PerfTest) => Boolean] = None,
     runs: Int = 60,
     outliers: Double = 0.05,
-    dryRuns: Int = 1) {
+    dryRuns: Int = 1,
+    optimize: Boolean = true) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }
 
 
 object RunConfig {
+
+  sealed trait OutputFormat
+  object OutputFormat {
+    case object Json extends OutputFormat
+    case object Tsv extends OutputFormat
+    case object Legible extends OutputFormat
+  }
+
 
   implicit object semigroup extends Semigroup[RunConfig] {
     def append(a: RunConfig, b: => RunConfig) = b
@@ -55,12 +66,19 @@ object RunConfig {
   }
 
 
+  @tailrec
   def fromCommandLine(args: List[String], config: ValidationNEL[String, RunConfig] = RunConfig().successNel): ValidationNEL[String, RunConfig] = args match {
     case Nil =>
       config
 
     case "--json" :: args =>
-      fromCommandLine(args, config map (_.copy(json = true)))
+      fromCommandLine(args, config map (_.copy(format = OutputFormat.Json)))
+
+    case "--tsv" :: args =>
+      fromCommandLine(args, config map (_.copy(format = OutputFormat.Tsv)))
+
+    case "--no-optimize" :: args =>
+      fromCommandLine(args, config map (_.copy(optimize = true)))
 
     case "--dry-runs" :: NonNegativeInt(runs) :: args =>
       fromCommandLine(args, config map (_.copy(dryRuns = runs.toInt)))
