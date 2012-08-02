@@ -45,7 +45,7 @@ import JDBMProjection._
  * @param descriptor The descriptor for the projection that this slice represents
  * @param size How many entries to retrieve in this slice
  */
-class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescriptor, requestedSize: Int) extends Slice with Logging {
+class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescriptor, columnConstraint: Set[ColumnDescriptor], requestedSize: Int) extends Slice with Logging {
   trait BaseColumn {
     def isDefinedAt(row: Int) = row < size
   }
@@ -59,11 +59,22 @@ class JDBMSlice private[jdbm3](source: IndexTree, descriptor: ProjectionDescript
     def apply(row: Int): Long = backing(row).getKey.apply(index)
   }
 
+  def firstKey: Identities = backing(0).getKey
+  def lastKey: Identities  = backing(size - 1).getKey
+
   protected def keyColumns: Map[ColumnRef, Column] = (0 until descriptor.identities).map {
     idx: Int => ColumnRef(JPath(JPathField("key") :: JPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
   }.toMap
 
-  def valColumns: Seq[(ColumnRef, Column)] = descriptor.columns.zipWithIndex.map {
+  protected def desiredColumns: Seq[(ColumnDescriptor,Int)] = {
+    if (columnConstraint.isEmpty) {
+      descriptor.columns.zipWithIndex
+    } else {
+      descriptor.columns.zipWithIndex.filter { case (desc, _) => columnConstraint.contains(desc) }
+    }
+  }
+
+  def valColumns: Seq[(ColumnRef, Column)] = desiredColumns.map {
     case (ColumnDescriptor(_, selector, ctpe, _),index) => ColumnRef(selector, ctpe) -> (ctpe match {
       //// Fixed width types within the var width row
       case CBoolean => new BoolColumn with BaseColumn {

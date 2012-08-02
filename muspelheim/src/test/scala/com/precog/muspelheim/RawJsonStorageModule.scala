@@ -19,7 +19,7 @@
  */
 package com.precog.muspelheim
 
-import com.precog.bytecode.JType
+import com.precog.bytecode._
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.table._
 
@@ -48,6 +48,9 @@ import org.reflections._
 import scalaz._
 import scalaz.effect.IO
 import scalaz.std.AllInstances._
+import scalaz.std.list._
+import scalaz.syntax.monad._
+import scalaz.syntax.traverse._
 
 import scala.collection.immutable.SortedMap
 import scala.collection.immutable.TreeMap
@@ -61,9 +64,9 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
   val Projection: ProjectionCompanion
 
-  trait Storage extends StorageLike[Projection, M] {
+  abstract class Storage extends StorageLike {
     implicit val ordering = IdentitiesOrder.toScalaOrdering
-    def routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
+    val routingTable: RoutingTable = new SingleColumnProjectionRoutingTable
 
     private val identity = new java.util.concurrent.atomic.AtomicInteger(0)
     private var projections: Map[ProjectionDescriptor, Vector[JValue]] = Map() 
@@ -85,9 +88,9 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       }
     }
 
-    def storeBatch(ems: Seq[EventMessage], timeout: Timeout) = sys.error("Feature not implemented in test stub.")
+    def storeBatch(ems: Seq[EventMessage]) = sys.error("Feature not implemented in test stub.")
 
-    lazy val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
+    val projectionMetadata: Map[ProjectionDescriptor, ColumnMetadata] = {
       import org.reflections.util._
       import org.reflections.scanners._
       import scala.collection.JavaConverters._
@@ -100,7 +103,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
       projections.keys.map(pd => (pd, ColumnMetadata.Empty)).toMap
     }
 
-    def metadata = new StorageMetadata[M] {
+    val metadata = new StorageMetadata[M] {
       val M = self.M
       val source = new TestMetadataStorage(projectionMetadata)
       def findChildren(path: Path) = M.point(source.findChildren(path))
@@ -117,7 +120,7 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
     def userMetadataView(uid: String) = new UserMetadataView(uid, new UnlimitedAccessControl[M](), metadata)
 
-    def projection(descriptor: ProjectionDescriptor, timeout: Timeout): M[(Projection, Release)] = {
+    def projection(descriptor: ProjectionDescriptor): M[(Projection, Release)] = {
       M.point {
         if (!projections.contains(descriptor)) descriptor.columns.map(_.path).distinct.foreach(load)
         (Projection(descriptor, projections(descriptor)), new Release(scalaz.effect.IO(())))
@@ -126,19 +129,39 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
   }
 }
 
-trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] {
+trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
-    def load(tpe: JType): M[Table] = {
-      sys.error("todo")
+    def load(uid: UserId, tpe: JType): M[Table] = {
+      val pathsM = this.reduce {
+        new CReducer[Set[Path]] {
+          def reduce(columns: JType => Set[Column], range: Range): Set[Path] = {
+            columns(JObjectFixedT(Map("value" -> JTextT))) flatMap {
+              case s: StrColumn => range.filter(s.isDefinedAt).map(i => Path(s(i)))
+              case _ => Set()
+            }
+          }
+        }
+      }
+
+      for {
+        paths <- pathsM
+        data  <- paths.toList.map(storage.userMetadataView("").findProjections).sequence
+        path  = data.flatten.headOption
+        table <- path map { 
+                   case (descriptor, _) => storage.projection(descriptor) map { projection => fromJson(projection._1.data.toStream) }
+                 } getOrElse {
+                   M.point(ops.empty)
+                 }
+      } yield table
     }
   }
 
-  class Projection(val descriptor: ProjectionDescriptor, data: Vector[JValue]) extends ProjectionLike {
+  class Projection(val descriptor: ProjectionDescriptor, val data: Vector[JValue]) extends ProjectionLike {
     def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("DummyProjection doesn't support insert")
   }
 
   object Projection extends ProjectionCompanion {
-    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = sys.error("todo")
+    def apply(descriptor: ProjectionDescriptor, data: Vector[JValue]): Projection = new Projection(descriptor, data)
   }
 
   def table(slices: StreamT[M, Slice]) = new Table(slices)

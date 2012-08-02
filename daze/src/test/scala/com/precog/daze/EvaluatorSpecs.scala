@@ -2157,6 +2157,73 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(42, 12, 77, 1, 13, true, false, "daniel", Map("test" -> SString("fubar")), Vector())
       }
     }.pendingUntilFixed
+    
+    "join two sets according to a value sort" in {
+      val line = Line(0, "")
+      
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      
+      val input = dag.Join(line,
+        Add,
+        ValueSort(0),
+        SortBy(clicks, "time", "time", 0),
+        SortBy(clicks2, "time", "time", 0))
+        
+      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
+        val expectedValues = expected collect {
+          case (_, SDecimal(d)) => d * 2
+        }
+        
+        testEval(input) { result =>
+          result must haveSize(100)
+          
+          forall(result) { result =>
+            result must beLike {
+              case (ids, SDecimal(d)) => {
+                ids must haveSize(1)
+                expectedValues must contain(d)
+              }
+            }
+          }
+        }
+      }
+    }.pendingUntilFixed
+    
+    "filter two sets according to a value sort" in {
+      val line = Line(0, "")
+      
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+      val clicks2 = dag.LoadLocal(line, Root(line, PushString("/clicks2")))
+      
+      val input = dag.Filter(line,
+        ValueSort(0),
+        SortBy(clicks, "time", "time", 0),
+        dag.Join(line,
+          Gt,
+          CrossLeftSort,
+          SortBy(clicks2, "time", "time", 0),
+          Root(line, PushNum("500"))))
+        
+      testEval(dag.Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("time")))) { expected =>
+        val expectedValues = expected collect {
+          case (ids, SDecimal(d)) if d > 500 => (ids, d)
+        }
+        
+        testEval(input) { result =>
+          result must haveSize(expectedValues.size)
+          
+          forall(result) { result =>
+            result must beLike {
+              case sev @ (ids, SDecimal(_)) => {
+                ids must haveSize(1)
+                expectedValues must contain(sev)
+              }
+            }
+          }
+        }
+      }
+    }.pendingUntilFixed
   }
 }
 

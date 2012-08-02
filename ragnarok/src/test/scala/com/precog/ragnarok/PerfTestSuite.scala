@@ -24,22 +24,18 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.std.option._
 
-
-case class RunConfig[M[+_], T](
-    runner: PerfTestRunner[M, T],
-    runs: Int,
-    outliers: Double) {
-  def tails: Int = (runs * outliers).toInt
-}
+import com.weiglewilczek.slf4s.Logging
 
 
-trait PerfTestSuite {
+trait PerfTestSuite extends Logging {
   
   private var tests: List[Tree[PerfTest]] = Nil
 
+  def suiteName: String = getClass.getName
+
   /** Returns the top-level test for this suite. */
   def test: Tree[PerfTest] =
-    Tree.node(Group(getClass.getName), Stream(Tree.node(RunSequential,
+    Tree.node(Group(suiteName), Stream(Tree.node(RunSequential,
       tests.reverse.toStream)))
 
 
@@ -76,14 +72,18 @@ trait PerfTestSuite {
     tests = Tree.leaf[PerfTest](RunQuery(q)) :: tests
   }
 
+  def include(suite: PerfTestSuite) {
+    tests = suite.test :: tests
+  }
 
-  def select(pred: (List[String], PerfTest) => Boolean): List[Tree[PerfTest]] =
+
+  def select(pred: (List[String], PerfTest) => Boolean): Option[Tree[PerfTest]] =
     selectTest(test, pred)
 
 
-  def run[M[+_]: Copointed, T: MetricSpace](runner: PerfTestRunner[M, T],
-      runs: Int = 60, outliers: Double = 0.05) = {
-    val tails = (runs * outliers).toInt
+  def run[M[+_]: Copointed, T: MetricSpace](test: Tree[PerfTest] = test,
+      runner: PerfTestRunner[M, T], runs: Int = 60, outliers: Double = 0.05) = {
+    val tails = (runs * (outliers / 2)).toInt
 
     runner.runAll(test, runs) {
       case None => None
@@ -99,19 +99,36 @@ trait PerfTestSuite {
     import blueeyes.bkka.AkkaTypeClasses._
     import PerfTestPrettyPrinters._
 
-    val actorSystem = ActorSystem("perfTestingActorSystem")
-    implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
+    RunConfig.fromCommandLine(args.toList) match {
+      case Failure(errors) =>
+        System.err.println("Error parsing command lines:")
+        errors.list foreach { msg => System.err.println("\t" + msg) }
+        System.err.println()
 
-    val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer, _optimize = true, _userUID = "dummy")
+      case Success(config) =>
+        val actorSystem = ActorSystem("perfTestingActorSystem")
+        try {
+          implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
 
-    implicit val futureIsCopointed = new Copointed[Future] {
-      def map[A, B](m: Future[A])(f: A => B) = m map f
-      def copoint[A](f: Future[A]) = Await.result(f, runner.yggConfig.maxEvalDuration)
+          val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer, _optimize = true, _userUID = "dummy")
+
+          implicit val futureIsCopointed = new Copointed[Future] {
+            def map[A, B](m: Future[A])(f: A => B) = m map f
+            def copoint[A](f: Future[A]) = Await.result(f, runner.yggConfig.maxEvalDuration)
+          }
+
+          select(config.select getOrElse ((_, _) => true)) foreach { test =>
+            if (config.dryRuns > 0) {
+              run(test = test, runner = runner, runs = config.dryRuns, outliers = config.outliers)
+            }
+
+            println(run(test = test, runner = runner, runs = config.runs, outliers = config.outliers).prettyStats(_ / 1000000))
+          }
+
+        } finally {
+          actorSystem.shutdown()
+        }
     }
-
-    println(run(runner).prettyStats(_ / 1000000))
-
-    actorSystem.shutdown()
   }
 
 
@@ -119,7 +136,7 @@ trait PerfTestSuite {
    * Selects a test based on paths, using select to determine which sub-trees
    * should be included.
    */
-  private def selectTest(test: Tree[PerfTest], select: (List[String], PerfTest) => Boolean): List[Tree[PerfTest]] = {
+  private def selectTest(test: Tree[PerfTest], select: (List[String], PerfTest) => Boolean): Option[Tree[PerfTest]] = {
 
     @tailrec
     def find(loc: TreeLoc[PerfTest], path: List[String],
@@ -168,6 +185,11 @@ trait PerfTestSuite {
       }
     }
 
-    find(test.loc, Nil, Nil)
+    test.subForest.headOption flatMap { root =>
+      find(root.loc, Nil, Nil) match {
+        case Nil => None
+        case tests => Some(Tree.node(Group(suiteName), tests.toStream))
+      }
+    }
   }
 }

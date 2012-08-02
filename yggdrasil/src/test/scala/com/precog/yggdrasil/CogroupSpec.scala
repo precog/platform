@@ -45,6 +45,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
 trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
+  import SampleData._
   import trans.constants._
 
   implicit val cogroupData = Arbitrary(

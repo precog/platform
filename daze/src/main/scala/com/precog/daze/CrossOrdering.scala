@@ -91,6 +91,21 @@ trait CrossOrdering extends DAG {
         case Diff(loc, left, right) =>
           Diff(loc, memoized(left, splits), memoized(right, splits))
         
+        case Join(loc, op, ValueSort(id), left, right) => {
+          val left2 = memoized(left, splits)
+          val right2 = memoized(right, splits)
+          
+          if (left2.sorting == ValueSort(id) && right2.sorting == ValueSort(id)) {
+            Join(loc, op, ValueSort(id), left2, right2)
+          } else if (left2.sorting == ValueSort(id) && right2.sorting != ValueSort(id)) {
+            Join(loc, op, ValueSort(id), left2, ReSortBy(right2, id))
+          } else if (left2.sorting != ValueSort(id) && right2.sorting == ValueSort(id)) {
+            Join(loc, op, ValueSort(id), ReSortBy(left2, id), right2)
+          } else {
+            Join(loc, op, ValueSort(id), ReSortBy(left2, id), ReSortBy(right2, id))
+          }
+        }
+        
         case Join(loc, op, IdentitySort, left, right) => {
           val left2 = memoized(left, splits)
           val right2 = memoized(right, splits)
@@ -100,14 +115,28 @@ trait CrossOrdering extends DAG {
           val leftPrefix = leftIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
-          if (leftPrefix && rightPrefix)
-            Join(loc, op, IdentitySort, left2, right2)
-          else if (leftPrefix && !rightPrefix)
-            Join(loc, op, IdentitySort, left2, Sort(right2, rightIndexes))
-          else if (!leftPrefix && rightPrefix)
-            Join(loc, op, IdentitySort, Sort(left2, leftIndexes), right2)
-          else
-            Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+          if (left2.sorting == IdentitySort && right2.sorting == IdentitySort) {
+            if (leftPrefix && rightPrefix)
+              Join(loc, op, IdentitySort, left2, right2)
+            else if (leftPrefix && !rightPrefix)
+              Join(loc, op, IdentitySort, left2, Sort(right2, rightIndexes))
+            else if (!leftPrefix && rightPrefix)
+              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), right2)
+            else
+              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
+          } else if (left2.sorting != IdentitySort && right2.sorting == IdentitySort) {
+            if (rightPrefix)
+              Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), right2)
+            else
+              Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), Sort(right2, rightIndexes))
+          } else if (left2.sorting == IdentitySort && right2.sorting != IdentitySort) {
+            if (leftPrefix)
+              Join(loc, op, IdentitySort, left2, Sort(right2, Vector(0 until right2.provenance.length: _*)))
+            else
+              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, Vector(0 until right2.provenance.length: _*)))
+          } else {
+            Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), Sort(right2, Vector(0 until right2.provenance.length: _*)))
+          }
         }
         
         case Join(loc, op, CrossLeftSort | CrossRightSort, left, right) => {
@@ -122,6 +151,21 @@ trait CrossOrdering extends DAG {
         case Join(loc, op, joinSort, left, right) =>
           Join(loc, op, joinSort, memoized(left, splits), memoized(right, splits))
         
+        case Filter(loc, ValueSort(id), target, boolean) => {
+          val target2 = memoized(target, splits)
+          val boolean2 = memoized(boolean, splits)
+          
+          if (target2.sorting == ValueSort(id) && boolean2.sorting == ValueSort(id)) {
+            Filter(loc, ValueSort(id), target2, boolean2)
+          } else if (target2.sorting == ValueSort(id) && boolean2.sorting != ValueSort(id)) {
+            Filter(loc, ValueSort(id), target2, ReSortBy(boolean2, id))
+          } else if (target2.sorting != ValueSort(id) && boolean2.sorting == ValueSort(id)) {
+            Filter(loc, ValueSort(id), ReSortBy(target2, id), boolean2)
+          } else {
+            Filter(loc, ValueSort(id), ReSortBy(target2, id), ReSortBy(boolean2, id))
+          }
+        }
+        
         case Filter(loc, IdentitySort, target, boolean) => {
           val target2 = memoized(target, splits)
           val boolean2 = memoized(boolean, splits)
@@ -131,14 +175,28 @@ trait CrossOrdering extends DAG {
           val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
-          if (targetPrefix && booleanPrefix)
-            Filter(loc, IdentitySort, target2, boolean2)
-          else if (targetPrefix && !booleanPrefix)
-            Filter(loc, IdentitySort, target2, Sort(boolean2, booleanIndexes))
-          else if (!targetPrefix && booleanPrefix)
-            Filter(loc, IdentitySort, Sort(target2, targetIndexes), boolean2)
-          else  
-            Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+          if (target2.sorting == IdentitySort && boolean2.sorting == IdentitySort) {
+            if (targetPrefix && booleanPrefix)
+              Filter(loc, IdentitySort, target2, boolean2)
+            else if (targetPrefix && !booleanPrefix)
+              Filter(loc, IdentitySort, target2, Sort(boolean2, booleanIndexes))
+            else if (!targetPrefix && booleanPrefix)
+              Filter(loc, IdentitySort, Sort(target2, targetIndexes), boolean2)
+            else
+              Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
+          } else if (target2.sorting != IdentitySort && boolean2.sorting == IdentitySort) {
+            if (booleanPrefix)
+              Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), boolean2)
+            else
+              Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), Sort(boolean2, booleanIndexes))
+          } else if (target2.sorting == IdentitySort && boolean2.sorting != IdentitySort) {
+            if (targetPrefix)
+              Filter(loc, IdentitySort, target2, Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
+            else
+              Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
+          } else {
+            Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
+          }
         }
         
         case Filter(loc, joinSort, target, boolean) =>
@@ -148,6 +206,9 @@ trait CrossOrdering extends DAG {
         
         case SortBy(parent, sortField, valueField, id) =>
           SortBy(memoized(parent, splits), sortField, valueField, id)
+        
+        case ReSortBy(parent, id) =>
+          ReSortBy(memoized(parent, splits), id)
         
         case Memoize(parent, priority) => Memoize(memoized(parent, splits), priority)
       }

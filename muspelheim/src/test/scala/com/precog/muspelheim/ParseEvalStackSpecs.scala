@@ -135,7 +135,9 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
   def shutdown() = ()
 }
 
-object RawJsonStackSpecs extends ParseEvalStackSpecs[test.YId] with RawJsonColumnarTableStorageModule[test.YId] with test.YIdInstances {
+object RawJsonStackSpecs extends ParseEvalStackSpecs[Free.Trampoline] with RawJsonColumnarTableStorageModule[Free.Trampoline] {
+  implicit val M = Trampoline.trampolineMonad
+  implicit val coM = Trampoline.trampolineMonad
   type YggConfig = ParseEvalStackSpecConfig
   object yggConfig extends ParseEvalStackSpecConfig
 }

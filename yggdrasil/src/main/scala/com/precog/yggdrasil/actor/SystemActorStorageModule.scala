@@ -36,8 +36,9 @@ import scalaz.effect._
 
 import com.weiglewilczek.slf4s.Logging
 
-trait SystemActorStorageModule extends ShardSystemActorModule with ActorStorageModule {
+trait SystemActorStorageModule extends ActorStorageModule with ShardSystemActorModule {
   type Storage <: SystemActorStorageLike
+  //type YggConfig <: ShardSystemActorModule#YggConfig with ActorStorageModule#YggConfig
 
   abstract class SystemActorStorageLike(metadataStorage: MetadataStorage) extends ActorStorageLike {
     private var shardSystemActor0: ActorRef = _
@@ -49,7 +50,7 @@ trait SystemActorStorageModule extends ShardSystemActorModule with ActorStorageM
     }
 
     def stop() = {
-      import yggConfig.stopTimeout
+      implicit val stopTimeout: Timeout = yggConfig.stopTimeout
 
       for {
         _ <- shardSystemActor ? ShutdownSystem

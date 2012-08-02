@@ -98,6 +98,8 @@ trait TypeInferencer extends DAG {
         case Sort(parent, _) => collectTypes(jtpe, typing, parent)
   
         case SortBy(parent, _, _, _) => collectTypes(jtpe, typing, parent)
+        
+        case ReSortBy(parent, _) => collectTypes(jtpe, typing, parent)
 
         case Memoize(parent, _) => collectTypes(jtpe, typing, parent)
   
@@ -156,6 +158,8 @@ trait TypeInferencer extends DAG {
         case Sort(parent, indices) => Sort(applyTypes(typing, splits, parent), indices)
         
         case SortBy(parent, sortField, valueField, id) => SortBy(applyTypes(typing, splits, parent), sortField, valueField, id)
+        
+        case ReSortBy(parent, id) => ReSortBy(applyTypes(typing, splits, parent), id)
   
         case Memoize(parent, priority) => Memoize(applyTypes(typing, splits, parent), priority)
   

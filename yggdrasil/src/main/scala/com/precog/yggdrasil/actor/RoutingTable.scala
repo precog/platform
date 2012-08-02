@@ -30,7 +30,13 @@ import scala.collection.mutable
 import scala.collection.immutable.ListMap
 
 case class ProjectionData(descriptor: ProjectionDescriptor, values: Seq[CValue], metadata: Seq[Set[Metadata]]) {
-  def toJValue: JValue = sys.error("todo")
+  def toJValue: JValue = {
+    assert(descriptor.columns.size == values.size)
+    (descriptor.columns zip values).foldLeft[JValue](JObject(Nil)) {
+      case (acc, (colDesc, cv)) => 
+        acc.set(colDesc.selector, cv.toJValue)
+    }
+  }
 }
 
 trait RoutingTable {

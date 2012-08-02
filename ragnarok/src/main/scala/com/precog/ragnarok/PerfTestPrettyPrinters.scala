@@ -25,7 +25,9 @@ import scalaz._
 final class PerfTestStatsPrettyPrinter(result: Tree[(PerfTest, Option[Statistics])]) {
 
   private def prettyStats(stats: Option[Statistics], toMillis: Double => Double): String =
-    stats map { s => "%.1f ms" format toMillis(s.mean) } getOrElse ""
+    stats map { s => 
+      "%.1f ms  (s = %.1f ms)" format (toMillis(s.mean), toMillis(s.stdDev))
+    } getOrElse ""
     
   def prettyStats(toMillis: Double => Double = identity): String = {
     def lines(test: Tree[(PerfTest, Option[Statistics])]): List[String] = {

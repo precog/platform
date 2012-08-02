@@ -38,6 +38,7 @@ import scala.util.Random
 import scalaz.syntax.copointed._
 
 trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
+  import SampleData._
   import trans._
 
   val resultTimeout = Duration(5, "seconds")
@@ -120,7 +121,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   def checkObjectDeref = {
     implicit val gen = sample(objectSchema(_, 3))
     check { (sample: SampleData) =>
-      val (field, _) = sample.schema.get.head
+      val (field, _) = sample.schema.get._2.head
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -136,7 +137,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   def checkArrayDeref = {
     implicit val gen = sample(arraySchema(_, 3))
     check { (sample: SampleData) =>
-      val (field, _) = sample.schema.get.head
+      val (field, _) = sample.schema.get._2.head
       val fieldHead = field.head.get
       val table = fromSample(sample)
       val results = toJson(table.transform {
@@ -304,12 +305,13 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
   def checkObjectDelete = {
     implicit val gen = sample(objectSchema(_, 3))
-    def randomDeletionMask(schema: JSchema): Option[JPathField] = {
+
+    def randomDeletionMask(schema: CValueGenerators.JSchema): Option[JPathField] = {
       Random.shuffle(schema).headOption.map({ case (JPath(x @ JPathField(_), _ @ _*), _) => x })
     }
 
     check { (sample: SampleData) =>
-      val toDelete = sample.schema.flatMap(randomDeletionMask)
+      val toDelete = sample.schema.flatMap({ case (_, schema) => randomDeletionMask(schema) })
       toDelete.isDefined ==> {
         val table = fromSample(sample)
 
@@ -496,7 +498,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   def checkTyped = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
-      val schema = sample.schema.getOrElse(List())
+      val schema = sample.schema.getOrElse(0 -> List())._2
       val reducedSchema = schema.zipWithIndex.collect { case (ctpe, i) if i%2 == 0 => ctpe }
       val valuejtpe = Schema.mkType(reducedSchema).getOrElse(JObjectFixedT(Map()))
       val jtpe = JObjectFixedT(Map(

@@ -751,7 +751,7 @@ object ImportTools extends Command with Logging {
 
           events.grouped(config.batchSize).toList.zipWithIndex.foreach { case (batch, id) => {
               logger.info("Saving batch " + id + " of size " + batch.size)
-              Await.result(storage.storeBatch(batch, new Timeout(120000)), Duration(120, "seconds"))
+              Await.result(storage.storeBatch(batch), Duration(120, "seconds"))
               logger.info("Batch saved")
             }
           }

@@ -20,33 +20,43 @@
 package com.precog.ragnarok
 
 import org.specs2.mutable.Specification
+import org.specs2.ScalaCheck
 
-import scalaz.std.option._
+import org.scalacheck.{ Arbitrary, Gen }
+
+import scalaz.std.option.{ some => somez, _ }
 import scalaz.syntax.semigroup._
 import scalaz.syntax.applicative._
+import scalaz.syntax.foldable._
+import scalaz.std.list._
 
 
-class StatisticsSpec extends Specification {
+class StatisticsSpec extends Specification with ScalaCheck {
+  def stats(xs: List[Double]): List[Option[Statistics]] = xs map (x => somez(Statistics(x)))
+
+  private def beRelativelyCloseTo(n: Double)(err: Double) = beCloseTo(n, math.abs(n * err))
+
+  private def statsAreEqual(a: Option[Statistics], b: Option[Statistics]) = (a, b) match {
+    case (Some(a), Some(b)) =>
+      a.mean must (beEqualTo(b.mean) or beRelativelyCloseTo(b.mean)(1e-10))
+      a.variance must (beEqualTo(b.variance) or beRelativelyCloseTo(b.variance)(1e-10))
+      a.count must_== b.count
+      a.min must_== b.min
+      a.max must_== b.max
+
+    case _ => ok
+  }
+
+  implicit val arbDouble: Arbitrary[Double] = Arbitrary(Gen.chooseNum(-1e250, 1e250))
+
   "statistics is a semigroup that" should {
-    "be associative" in {
-      val x: List[Option[Statistics]] =
-        List(1, 2, 3, 4, 5, 6) map (x => Some(Statistics(x, tails = 1)))
+    // Super annoying, since Double isn't associative, which is causing failures.
+    "be associative" ! check { (a: List[Double], b: List[Double]) =>
+      val c = a ++ b
 
-      val left = x.foldLeft(None: Option[Statistics])(_ |+| _)
-      val right = x.foldRight(None: Option[Statistics])(_ |+| _)
-      val split = (x take 3).foldLeft(None: Option[Statistics])(_ |+| _) |+|
-        (x drop 3).foldLeft(None: Option[Statistics])(_ |+| _)
-     
-      (left |@| right |@| split) { (left, right, split) =>
-        left.mean must beCloseTo(right.mean, 1e-10)
-        left.variance must beCloseTo(right.variance, 1e-10)
-        left.count must_== right.count
-
-        left.mean must beCloseTo(split.mean, 1e-10)
-        left.variance must beCloseTo(split.variance, 1e-10)
-        left.count must_== split.count
-      } must beSome
-    }.pendingUntilFixed
+      statsAreEqual(stats(a).suml |+| stats(b).suml, stats(c).suml)
+      statsAreEqual(stats(c).suml, stats(c).sumr)
+    }
   }
 
   "statistics" should {

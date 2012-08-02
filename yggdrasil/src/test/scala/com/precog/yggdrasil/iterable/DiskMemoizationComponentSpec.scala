@@ -49,7 +49,7 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.Gen._
 
-class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with StubStorageModule[Id] with ScalaCheck with ArbitrarySValue {
+class DiskMemoizationComponentSpec extends Specification with DiskMemoizationComponent with DistributedSampleStubStorageModule[Id] with ScalaCheck with ArbitrarySValue {
   override val defaultPrettyParams = Pretty.Params(2)
   type TestDataset = IterableDataset[Seq[CValue]]
 
