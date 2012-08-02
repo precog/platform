@@ -24,6 +24,8 @@ import scala.annotation.tailrec
 import scalaz._
 import scalaz.std.option._
 
+import akka.util.Duration
+
 import com.weiglewilczek.slf4s.Logging
 
 
@@ -109,14 +111,15 @@ trait PerfTestSuite extends Logging {
         val actorSystem = ActorSystem("perfTestingActorSystem")
         try {
           implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
+          val testTimeout = Duration(100, "seconds")
+
+          implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
+            def map[A, B](m: Future[A])(f: A => B) = m map f
+            def copoint[A](f: Future[A]) = Await.result(f, testTimeout)
+          }
 
           val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer,
             _optimize = config.optimize, _userUID = "dummy")
-
-          implicit val futureIsCopointed = new Copointed[Future] {
-            def map[A, B](m: Future[A])(f: A => B) = m map f
-            def copoint[A](f: Future[A]) = Await.result(f, runner.yggConfig.maxEvalDuration)
-          }
 
           select(config.select getOrElse ((_, _) => true)) foreach { test =>
             if (config.dryRuns > 0) {

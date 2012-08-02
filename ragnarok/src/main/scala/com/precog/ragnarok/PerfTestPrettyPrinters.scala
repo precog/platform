@@ -40,17 +40,23 @@ final class PerfTestStatsPrettyPrinter(result: Tree[(PerfTest, Option[Statistics
             case head :: tail =>
               (" + " + head) :: (tail map (" | " + _))
             case Nil => Nil
-          }) :+ (" ` " + prettyStats(s, unit))
+          }) ++ List(" ' " + prettyStats(s, unit), "")
 
         case Tree.Node((RunConcurrent, s), kids) =>
           (kids.toList map (lines(_)) flatMap {
             case head :: tail =>
               (" * " + head) :: (tail map (" | " + _))
             case Nil => Nil
-          }) :+ (" ` " + prettyStats(s, unit))
+          }) ++ List(" ' " + prettyStats(s, unit), "")
 
         case Tree.Node((RunQuery(q), s), kids) =>
-          ("-> " + q) :: ("   " + prettyStats(s, unit)) :: Nil
+          (q split "\n").toList match {
+            case Nil => Nil
+            case head :: tail =>
+              ("-> " + head) :: (tail.foldRight(List(" ' " + prettyStats(s, unit), "")) {
+                " | " + _ :: _
+              })
+          }
       }
     }
 

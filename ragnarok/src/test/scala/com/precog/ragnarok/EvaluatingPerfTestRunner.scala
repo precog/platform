@@ -61,7 +61,7 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     object memoSerialization extends IncrementalSerialization[(Identities, SValue)] with SEventRunlengthFormatting with BinarySValueFormatting with ZippedStreamSerialization
 
 
-    val maxEvalDuration = Duration(30, "seconds")
+    val maxEvalDuration: Duration = Duration(30, "seconds")
 
     val idSource = new IdSource {
       private val source = new java.util.concurrent.atomic.AtomicLong()
