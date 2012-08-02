@@ -42,7 +42,7 @@ case class Statistics private (
   def *(x: Double): Statistics = if (x >= 0.0) {
     Statistics(tails, allMin map (_ * x), allMax map (_ * x), m * x, vn * x * x, n)
   } else {
-    Statistics(tails, allMax map (_ * x), allMin map (_ * x), m * x, vn * math.abs(x), n)
+    Statistics(tails, allMax map (_ * x), allMin map (_ * x), m * x, vn * math.abs(x) * math.abs(x), n)
   }
 
 
