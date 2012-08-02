@@ -696,7 +696,7 @@ trait Evaluator[M[+_]] extends DAG
                 val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
                 
                 val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
-                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
+                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(valueField))
                 
                 val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
                 val wrappedValue = trans.WrapObject(valueSpec, constants.Value.name)
