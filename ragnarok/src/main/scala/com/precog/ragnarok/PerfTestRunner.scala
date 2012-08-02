@@ -40,6 +40,10 @@ trait PerfTestRunner[M[+_], T] {
   def eval(query: String): M[Result]
 
 
+  def startup(): Unit
+  def shutdown(): Unit
+
+
   val timer: Timer[T]
 
   import timer._
@@ -140,6 +144,9 @@ class MockPerfTestRunner[M[+_]](evalTime: => Int)(implicit val M: Monad[M]) exte
       ()
     }
   }
+
+  def startup() = ()
+  def shutdown() = ()
 }
 
 //

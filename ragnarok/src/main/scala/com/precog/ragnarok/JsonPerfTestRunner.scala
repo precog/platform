@@ -37,6 +37,9 @@ final class JsonPerfTestRunner[M[+_], T](val timer: Timer[T], _optimize: Boolean
     val userUID = _userUID
     val optimize = _optimize
   }
+
+  def startup() = ()
+  def shutdown() = ()
 }
 
 

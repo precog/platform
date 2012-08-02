@@ -121,6 +121,8 @@ trait PerfTestSuite extends Logging {
           val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer,
             _optimize = config.optimize, _userUID = "dummy")
 
+          runner.startup()
+
           select(config.select getOrElse ((_, _) => true)) foreach { test =>
             run(test, runner, runs = config.dryRuns, outliers = config.outliers)
             val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
@@ -140,6 +142,8 @@ trait PerfTestSuite extends Logging {
                 result.toTsv
             })
           }
+
+          runner.shutdown()
 
         } finally {
           actorSystem.shutdown()
