@@ -34,6 +34,7 @@ import scalaz.Success
 trait JoinOptimizerSpecs[M[+_]] extends Specification
     with Evaluator[M]
     with JoinOptimizer
+    with PrettyPrinter
     with StdLib[M]
     with TestConfigComponent[M] 
     with MemoryDatasetConsumer[M] { self =>
@@ -67,7 +68,27 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val height = Root(line, PushString("height"))
       val name = Root(line, PushString("name"))
       val userId = Root(line, PushString("userId"))
+      val key = Root(line, PushString("key"))
+      val value = Root(line, PushString("value"))
 
+      val liftedLHS =
+        SortBy(
+          Join(line, JoinObject, IdentitySort,
+            Join(line, WrapObject, CrossLeftSort,
+              key,
+              Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
+            Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+          "key", "value", 0)
+        
+      val liftedRHS =
+        SortBy(
+          Join(line, JoinObject, IdentitySort,
+            Join(line, WrapObject, CrossLeftSort,
+              key,
+              Join(line, DerefObject, CrossLeftSort, users, userId)),
+            Join(line, WrapObject, CrossLeftSort, value, users)),
+          "key", "value", 0)
+          
       val input =
         Filter(line, IdentitySort,
           Join(line, JoinObject, CrossLeftSort,
@@ -86,15 +107,17 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
               userId)))    
       
       val opt = optimize(input, new IdGen)
-              
+
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, WrapObject, CrossLeftSort,
-            height,
-            SortBy(heightWeight, "userId", "height", 0)), 
-          Join(line, WrapObject, CrossLeftSort,
-            name,
-            SortBy(users, "userId", "name", 0))) 
+        Sort(
+          Join(line, JoinObject, ValueSort(0),
+            Join(line, WrapObject, CrossLeftSort,
+              height,
+              Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
+            Join(line, WrapObject, CrossLeftSort,
+              name,
+              Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
+          Vector(0))
 
       opt must_== expectedOpt
     }
@@ -108,13 +131,33 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         |   { name: a.name, height: b.height, weight: b.weight } where a.userId = b.userId """.stripMargin
         
       val line = Line(0, "")
-      lazy val users = LoadLocal(line, Root(line, PushString("/users")))
-      lazy val heightWeight = LoadLocal(line, Root(line, PushString("/heightWeight")))
-      lazy val userId = Root(line, PushString("userId"))
-      lazy val name = Root(line, PushString("name"))
-      lazy val height = Root(line, PushString("height"))
-      lazy val weight = Root(line, PushString("weight"))
+      val users = LoadLocal(line, Root(line, PushString("/users")))
+      val heightWeight = LoadLocal(line, Root(line, PushString("/heightWeight")))
+      val userId = Root(line, PushString("userId"))
+      val name = Root(line, PushString("name"))
+      val height = Root(line, PushString("height"))
+      val weight = Root(line, PushString("weight"))
+      val key = Root(line, PushString("key"))
+      val value = Root(line, PushString("value"))
       
+      val liftedLHS =
+        SortBy(
+          Join(line, JoinObject, IdentitySort,
+            Join(line, WrapObject, CrossLeftSort,
+              key,
+              Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
+            Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+          "key", "value", 0)
+        
+      val liftedRHS =
+        SortBy(
+          Join(line, JoinObject, IdentitySort,
+            Join(line, WrapObject, CrossLeftSort,
+              key,
+              Join(line, DerefObject, CrossLeftSort, users, userId)),
+            Join(line, WrapObject, CrossLeftSort, value, users)),
+          "key", "value", 0)
+          
       lazy val input =
         Filter(line, IdentitySort,
           Join(line, JoinObject, CrossLeftSort,
@@ -140,19 +183,22 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
         )
 
       val opt = optimize(input, new IdGen)
-              
+      
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          Join(line, JoinObject, IdentitySort,
+        Sort(
+          Join(line, JoinObject, ValueSort(0),
+            Join(line, JoinObject, IdentitySort,
+              Join(line, WrapObject, CrossLeftSort,
+                height,
+                Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
+              Join(line, WrapObject, CrossLeftSort,
+                weight,
+                Join(line, DerefObject, CrossLeftSort, liftedLHS, weight))),
             Join(line, WrapObject, CrossLeftSort,
-              height,
-              SortBy(heightWeight, "userId", "height", 0)),
-            Join(line, WrapObject, CrossLeftSort,
-              weight,
-              SortBy(heightWeight, "userId", "weight", 0))), 
-          Join(line, WrapObject, CrossLeftSort,
-            name,
-            SortBy(users, "userId", "name", 0))) 
+              name,
+              Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
+          Vector(0)
+        )  
 
        opt must_== expectedOpt
     }
