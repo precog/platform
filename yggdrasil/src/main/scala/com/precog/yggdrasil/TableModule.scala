@@ -10,6 +10,15 @@ import collection.Set
 import scalaz.Monoid
 import scalaz.Monad
 
+object TableModule {
+  object paths {
+    val Key   = JPathField("key")
+    val Value = JPathField("value")
+    val Group = JPathField("group")
+    val SortKey = JPathField("sortkey")
+  }  
+}
+
 trait TableModule[M[+_]] extends FNModule {
   type UserId
   type Scanner
@@ -137,11 +146,8 @@ trait TableModule[M[+_]] extends FNModule {
     case object SortUnknown extends SortOrder
     
     object constants {
-      val Key   = JPathField("key")
-      val Value = JPathField("value")
-      val Group = JPathField("group")
-      val SortKey = JPathField("sortkey")
-      
+      import TableModule.paths._
+
       object SourceKey {
         val Single = DerefObjectStatic(Leaf(Source), Key)
         
@@ -246,7 +252,7 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): Table
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
     
     def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     

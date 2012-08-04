@@ -26,6 +26,7 @@ import org.apache.commons.collections.primitives.ArrayIntList
 
 trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalOperations with Evaluator[M] {
   import trans._
+  import TableModule.paths
   
   val StatsNamespace = Vector("std", "stats")
   val EmptyNamespace = Vector()
@@ -78,10 +79,10 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     def apply(table: Table) = {  //TODO write tests for the empty table case
       val compactedTable = table.compact(Leaf(Source))
 
-      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
-      val sortedTable = compactedTable.sort(sortKey, SortAscending)
+      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
 
       for {
+        sortedTable <- compactedTable.sort(sortKey, SortAscending)
         count <- sortedTable.reduce(Count.reducer)
         median <- if (count % 2 == 0) {
                     val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
@@ -177,10 +178,10 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     }
 
     def apply(table: Table) = {
-      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
-      val sortedTable = table.sort(sortKey, SortAscending)
+      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
+      val sortedTable: M[Table] = table.sort(sortKey, SortAscending)
 
-      sortedTable.reduce(reducer) map extract
+      sortedTable.flatMap(_.reduce(reducer).map(extract))
     }
   }
  
@@ -537,13 +538,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       }
     }
     
-    def apply(table: Table) = M.point {
-      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+    def apply(table: Table) = {
+      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), constants.Value), rankScanner)
+      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
       
-      sortedTable.transform(transScan)
+      sortedTable.map(_.transform(transScan))
     }
 
 
@@ -610,13 +611,13 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       }
     }
     
-    def apply(table: Table) = M.point {
-      val sortKey = DerefObjectStatic(Leaf(Source), constants.Value)
+    def apply(table: Table) = {
+      val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), constants.Value), rankScanner)
+      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
       
-      sortedTable.transform(transScan)
+      sortedTable.map(_.transform(transScan))
     }
 
 

@@ -145,7 +145,10 @@ object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath
 }
 
 /** 
- * The descriptor for a projection 
+ * The descriptor for a projection
+ *
+ * @param identities The number of identities in this projection
+ * @param columns The descriptors for all non-identity columns
  */
 case class ProjectionDescriptor(identities: Int, columns: List[ColumnDescriptor]) {
   lazy val selectors = columns.map(_.selector).toSet
