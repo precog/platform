@@ -71,6 +71,7 @@ object IOUtils {
     FileUtils.deleteDirectory(dir)
   }
 
+  // FIXME: Not technically safe. Should use Guava instead
   def createTmpDir(prefix: String): IO[File] = IO {
     val tmp = File.createTempFile(prefix, "tmp")
     tmp.delete

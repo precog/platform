@@ -162,7 +162,7 @@ trait DisabledLevelDBProjectionModule extends ProjectionModule {
 
     @inline final def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = traverseIndex(expiresAt)
 
-    def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor]): Option[BlockData] = sys.error("todo")
+    def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor]): Option[BlockProjectionData[Identities,Slice]] = sys.error("todo")
   }  
   
   

@@ -80,6 +80,7 @@ trait Evaluator[M[+_]] extends DAG
   import instructions._
   import dag._
   import trans._
+  import TableModule.paths
 
   type YggConfig <: EvaluatorConfig
   
@@ -240,7 +241,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             spec = TableTransSpec.makeTransSpec(
-              Map(constants.Key -> trans.WrapArray(Scan(DerefArrayStatic(Leaf(Source), JPathIndex(0)), freshIdScanner))))
+              Map(paths.Key -> trans.WrapArray(Scan(DerefArrayStatic(Leaf(Source), JPathIndex(0)), freshIdScanner))))
             
             tableM2 = for {
               table <- pendingTable.table
@@ -265,7 +266,7 @@ trait Evaluator[M[+_]] extends DAG
         
         case dag.Morph2(_, m, left, right) => {
           val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
-          val key = trans.DerefObjectStatic(Leaf(Source), constants.Key)
+          val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
           
           for {
             pendingTableLeft <- loop(left, splits)
@@ -309,7 +310,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
             wrapped = result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }
@@ -344,20 +345,18 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-            } yield {
               val leftTable = leftPendingTable.transform(leftPending.trans)
               val rightTable = rightPendingTable.transform(rightPending.trans)
-              
-              val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
-              val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
-              
+              leftSorted <- leftTable.sort(TransSpec1.Id, SortAscending)
+              rightSorted <- rightTable.sort(TransSpec1.Id, SortAscending)
+            } yield {
               val keyValueSpec = trans.ObjectConcat(
                 trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Key),
-                  constants.Key.name),
+                  DerefObjectStatic(Leaf(Source), paths.Key),
+                  paths.Key.name),
                 trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Value),
-                  constants.Value.name))
+                  DerefObjectStatic(Leaf(Source), paths.Value),
+                  paths.Value.name))
               
               if (union) {
                 leftSorted.cogroup(keyValueSpec, keyValueSpec, rightSorted)(Leaf(Source), Leaf(Source), Leaf(SourceLeft))
@@ -384,20 +383,18 @@ trait Evaluator[M[+_]] extends DAG
             val result = for {
               leftPendingTable <- leftPending.table
               rightPendingTable <- rightPending.table
-            } yield {
               val leftTable = leftPendingTable.transform(leftPending.trans)
               val rightTable = rightPendingTable.transform(rightPending.trans)
-              
-              val leftSorted = leftTable.sort(TransSpec1.Id, SortAscending)
-              val rightSorted = rightTable.sort(TransSpec1.Id, SortAscending)
-              
+              leftSorted <- leftTable.sort(TransSpec1.Id, SortAscending)
+              rightSorted <- rightTable.sort(TransSpec1.Id, SortAscending)
+            } yield {
               val keyValueSpec = trans.ObjectConcat(
                 trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Key),
-                  constants.Key.name),
+                  DerefObjectStatic(Leaf(Source), paths.Key),
+                  paths.Key.name),
                 trans.WrapObject(
-                  DerefObjectStatic(Leaf(Source), constants.Value),
-                  constants.Value.name))
+                  DerefObjectStatic(Leaf(Source), paths.Value),
+                  paths.Value.name))
               
               val emptySpec1 = trans.Map1(Leaf(Source), ConstantEmptyArray)
               val emptySpec2 = trans.Map1(Leaf(SourceLeft), ConstantEmptyArray)
@@ -528,7 +525,7 @@ trait Evaluator[M[+_]] extends DAG
             } else {
               val key = joinSort match {
                 case IdentitySort =>
-                  trans.DerefObjectStatic(Leaf(Source), constants.Key)
+                  trans.DerefObjectStatic(Leaf(Source), paths.Key)
                 
                 case ValueSort(id) =>
                   trans.DerefObjectStatic(Leaf(Source), JPathField("sort-" + id))
@@ -588,7 +585,7 @@ trait Evaluator[M[+_]] extends DAG
             else {
               val key = joinSort match {
                 case IdentitySort =>
-                  trans.DerefObjectStatic(Leaf(Source), constants.Key)
+                  trans.DerefObjectStatic(Leaf(Source), paths.Key)
                 
                 case ValueSort(id) =>
                   trans.DerefObjectStatic(Leaf(Source), JPathField("sort-" + id))
@@ -662,13 +659,11 @@ trait Evaluator[M[+_]] extends DAG
             } yield {
               val sortedResult = for {
                 pendingTable <- pending.table
-              } yield {
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(constants.Key -> idSpec)))
-                
+                val shuffled = table.transform(TableTransSpec.makeTransSpec(Map(paths.Key -> idSpec)))
                 // TODO this could be made more efficient by only considering the indexes we care about
-                val sorted = shuffled.sort(DerefObjectStatic(Leaf(Source), constants.Key), SortAscending)
-              
+                sorted <- shuffled.sort(DerefObjectStatic(Leaf(Source), paths.Key), SortAscending)
+              } yield {                              
                 parent.sorting match {
                   case ValueSort(id) =>
                     sorted.transform(ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id))))
@@ -691,15 +686,14 @@ trait Evaluator[M[+_]] extends DAG
             } yield {
               val result = for {
                 pendingTable <- pending.table
-              } yield {
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                val sorted = table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
-                
-                val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(sortField))
-                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), constants.Value), JPathField(valueField))
+                sorted <- table.sort(liftToValues(DerefObjectStatic(Leaf(Source), JPathField(sortField))), SortAscending)
+              } yield {
+                val sortSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(sortField))
+                val valueSpec = DerefObjectStatic(DerefObjectStatic(Leaf(Source), paths.Value), JPathField(valueField))
                 
                 val wrappedSort = trans.WrapObject(sortSpec, "sort-" + id)
-                val wrappedValue = trans.WrapObject(valueSpec, constants.Value.name)
+                val wrappedValue = trans.WrapObject(valueSpec, paths.Value.name)
                 
                 val oldSortField = parent.sorting match {
                   case ValueSort(id2) if id != id2 =>
@@ -710,7 +704,7 @@ trait Evaluator[M[+_]] extends DAG
                 
                 val spec = ObjectConcat(
                   ObjectConcat(
-                    ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), constants.Value) ++ oldSortField),
+                    ObjectDelete(Leaf(Source), Set(JPathField("sort-" + id), paths.Value) ++ oldSortField),
                       wrappedSort),
                       wrappedValue)
                 
@@ -731,10 +725,9 @@ trait Evaluator[M[+_]] extends DAG
             } yield {
               val result = for {
                 pendingTable <- pending.table
-              } yield {
                 val table = pendingTable.transform(liftToValues(pending.trans))
-                table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
-              }
+                sorted <- table.sort(DerefObjectStatic(Leaf(Source), JPathField("sort-" + id)), SortAscending)
+              } yield sorted
               
               PendingTable(result, graph, TransSpec1.Id)
             }
@@ -899,13 +892,13 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
-    val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), constants.Key.name)
-    trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, constants.Value.name))
+    val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), paths.Key.name)
+    trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
-    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), constants.Key)
-    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), constants.Key)
+    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
+    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
     val sharedDerefs = for (i <- 0 until sharedLength)
       yield DerefArrayStatic(leftIdentitySpec, JPathIndex(i))
@@ -923,12 +916,12 @@ trait Evaluator[M[+_]] extends DAG
     else
       derefs reduce { trans.ArrayConcat(_, _) }
     
-    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, constants.Key.name)
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
     
-    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), constants.Value)
-    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), constants.Value)
+    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
+    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
-    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), constants.Value.name)
+    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
       
     ObjectConcat(
       ObjectConcat(
@@ -938,17 +931,17 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedCrossSpec(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
-    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), constants.Key)
-    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), constants.Key)
+    val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
+    val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
     val newIdentitySpec = ArrayConcat(leftIdentitySpec, rightIdentitySpec)
     
-    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, constants.Key.name)
+    val wrappedIdentitySpec = trans.WrapObject(newIdentitySpec, paths.Key.name)
     
-    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), constants.Value)
-    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), constants.Value)
+    val leftValueSpec = DerefObjectStatic(Leaf(SourceLeft), paths.Value)
+    val rightValueSpec = DerefObjectStatic(Leaf(SourceRight), paths.Value)
     
-    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), constants.Value.name)
+    val wrappedValueSpec = trans.WrapObject(spec(leftValueSpec, rightValueSpec), paths.Value.name)
       
     ObjectConcat(
       ObjectConcat(
@@ -966,7 +959,7 @@ trait Evaluator[M[+_]] extends DAG
   private def flip[A, B, C](f: (A, B) => C)(b: B, a: A): C = f(a, b)      // is this in scalaz?
   
   private def liftToValues(trans: TransSpec1): TransSpec1 =
-    TableTransSpec.makeTransSpec(Map(constants.Value -> trans))
+    TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
    
   
   private type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]

@@ -129,16 +129,44 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
   // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
   private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)
 
-  def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor]): Option[BlockData] = {
+  def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
+    import TableModule.paths._
+
     try {
       // tailMap semantics are >=, but we want > the IDs if provided
       val constrainedMap = id.map { idKey => treeMap.tailMap(identitiesAfter(idKey)) }.getOrElse(treeMap)
 
       constrainedMap.lastKey() // Will throw an exception if the map is empty
 
-      val slice = new JDBMSlice(constrainedMap, descriptor, columns, DEFAULT_SLICE_SIZE)
+      val desiredColumns = if (columns.isEmpty) {
+        descriptor.columns.zipWithIndex
+      } else {
+        descriptor.columns.zipWithIndex.filter { case (col,_) => columns.contains(col) }
+      }
 
-      Some(BlockData(slice.firstKey, slice.lastKey, slice))
+      val slice = new ArrayRowJDBMSlice[Identities] {
+        val source = constrainedMap.entrySet.iterator.asScala
+        val requestedSize = DEFAULT_SLICE_SIZE
+
+        import blueeyes.json.{JPathField,JPathIndex}
+
+        case class IdentColumn(index: Int) extends LongColumn with BaseColumn {
+          def apply(row: Int): Long = backing(row).getKey.apply(index)
+        }
+
+        def keyColumns = (0 until descriptor.identities).map {
+          idx: Int => ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
+        }.toMap
+
+        def valColumns  = desiredColumns.map {
+          case (ColumnDescriptor(_, selector, ctpe, _),index) => 
+            columnFor(row => backing(row).getValue(), ColumnRef(JPath(Value) \ selector, ctpe), index)
+        }
+
+        lazy val columns: Map[ColumnRef, Column] = keyColumns ++ valColumns
+      }
+
+      Some(BlockProjectionData[Identities,Slice](slice.firstKey, slice.lastKey, slice))
     } catch {
       case e: java.util.NoSuchElementException => None
     }

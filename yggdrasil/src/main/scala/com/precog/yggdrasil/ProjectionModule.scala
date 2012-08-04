@@ -40,10 +40,10 @@ trait ProjectionLike {
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit]
 }
 
+case class BlockProjectionData[Key, Block](minKey: Key, maxKey: Key, data: Block)
+
 trait BlockProjectionLike[Key, Block] extends ProjectionLike {
   implicit def keyOrder: Order[Key]
-
-  case class BlockData(minKey: Key, maxKey: Key, data: Block)
 
   /** 
    * Get a block of data beginning with the first record with a key greater than
@@ -51,7 +51,7 @@ trait BlockProjectionLike[Key, Block] extends ProjectionLike {
    * key. Each resulting block should contain only the columns specified in the 
    * column set; if the set of columns is empty, return all columns.
    */
-  def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set()): Option[BlockData]
+  def getBlockAfter(id: Option[Key], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Key, Block]]
 }
 
 trait FullProjectionLike[+Dataset] extends ProjectionLike {
