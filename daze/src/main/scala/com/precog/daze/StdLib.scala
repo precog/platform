@@ -47,8 +47,11 @@ trait GenOpcode[M[+_]] extends ImplLibrary[M] {
   private val defaultBinaryOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
   abstract class Op2(val namespace: Vector[String], val name: String, val opcode: Int = defaultBinaryOpcode.getAndIncrement) extends Op2Impl
 
-  private val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
-  abstract class Reduction(val namespace: Vector[String], val name: String, val opcode: Int = defaultReductionOpcode.getAndIncrement) extends ReductionImpl
+  abstract class Reduction(val namespace: Vector[String], val name: String, val opcode: Int = GenOpcode.defaultReductionOpcode.getAndIncrement) extends ReductionImpl
+}
+
+object GenOpcode {
+  val defaultReductionOpcode = new java.util.concurrent.atomic.AtomicInteger(0)
 }
 
 trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
@@ -95,34 +98,64 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
   trait ReductionImpl extends ReductionLike with Morphism1Impl {
     type Result
     def apply(table: Table) = table.reduce(reducer) map extract
-    def reducer: CReducer[Result]
-    implicit def monoid: Monoid[Result]
-    def extract(res: Result): Table
+    def reducer: CReducer[List[Result]]
+    implicit def monoid: Monoid[List[Result]]
+    def extract(res: List[Result]): Table
   }
 
-  def coalesce[CoalescedResult](redl: Reduction, redr: Reduction): Reduction = {
+  def coalesce[LHSResult, RHSResult](redl: ReductionImpl { type Result = LHSResult }, redr: ReductionImpl { type Result = RHSResult }): ReductionImpl = {
+
+    type CoalescedResult = Either[LHSResult, RHSResult]
+
     val leftRed = redl.reducer
     val rightRed = redr.reducer
-
-    type CoalescedResult = List[Any]
   
-    val red = new CReducer[CoalescedResult] {
-      def reduce(cols: JType => Set[Column], range: Range): CoalescedResult =
-        List(leftRed.reduce(cols, range)) ++ List(rightRed.reduce(cols, range))   //TODO need some sort of flatMapping
+    val red = new CReducer[List[CoalescedResult]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[CoalescedResult] = {
+        val left: List[CoalescedResult] = leftRed.reduce(cols, range) map { Left(_) }
+        val right: List[CoalescedResult] = rightRed.reduce(cols, range) map { Right(_) }
+        
+        left ++ right
+      }
     }
-  
+
     val leftMon = redl.monoid
     val rightMon = redr.monoid
+
+    val mon = new Monoid[List[CoalescedResult]] {
+      def zero = {
+        val leftZero = leftMon.zero map { Left(_) } 
+        val rightZero = rightMon.zero map { Right(_) }
+
+        leftZero ++ rightZero
+      }
+
+      def append(first: List[CoalescedResult], second: => List[CoalescedResult]): List[CoalescedResult] = {
+        val (firstLeft, firstRight) = first partition { _.isLeft } 
+        val (secondLeft, secondRight) = second partition { _.isLeft }
+
+        val a: List[LHSResult] = for { Left(i) <- firstLeft } yield i
+        val b: List[RHSResult] = for { Right(i) <- firstRight } yield i
+        val c: List[LHSResult] = for { Left(i) <- secondLeft } yield i
+        val d: List[RHSResult] = for { Right(i) <- secondRight } yield i
+
+        val leftAppend = leftMon.append(a, c) map { Left(_) }
+        val rightAppend = rightMon.append(b, d) map { Right(_) }
+
+        leftAppend ++ rightAppend
+      }
+    }
+
+    def extractImpl(res: List[CoalescedResult]): Table = {
+      val (left, right) = res partition { _.isLeft }
+
+      val a: List[LHSResult] = for { Left(i) <- left } yield i
+      val b: List[RHSResult] = for { Right(i) <- right } yield i
   
-    //implicit val mon = new Monoid[CoalescedResult]
+      val leftTable = redl.extract(a)
+      val rightTable = redr.extract(b)
   
-    def extractImpl(res: CoalescedResult): Table = {
-      val (left, right) = res take redl
-  
-      val leftTable = lhs.extract(left)
-      val rightTable = that.extract(right)
-  
-      leftTable.cross(rightTable)(ArrayConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+      leftTable.cross(rightTable)(trans.ArrayConcat(trans.Leaf(trans.SourceLeft), trans.Leaf(trans.SourceRight)))
     }
 
     new ReductionImpl {
@@ -131,8 +164,13 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
       def reducer = red
       def monoid = mon
 
-      def extract(res: Result): Table =
+      def extract(res: List[Result]): Table =
         extractImpl(res)
+
+      val namespace = Vector()
+      val name = ""
+      val opcode = GenOpcode.defaultReductionOpcode.getAndIncrement
+      val tpe = UnaryOperationType(JNumberT, JArrayUnfixedT) //todo doesn't return a single number, returns an array!
     }
   }
 

@@ -56,6 +56,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
   object Median extends Morphism1(EmptyNamespace, "median") {
     
     import Mean._
+    import Count._
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
@@ -103,11 +104,11 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       for {
         sortedTable <- compactedTable.sort(sortKey, SortAscending)
         count <- sortedTable.reduce(Count.reducer)
-        median <- if (count % 2 == 0) {
-                    val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
+        median <- if (count.head % 2 == 0) {
+                    val middleValues = sortedTable.take((count.head.toLong / 2) + 1).drop((count.head.toLong / 2) - 1)
                     Mean(middleValues)
                   } else {
-                    M.point(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
+                    M.point(sortedTable.take((count.head.toLong / 2) + 1).drop(count.head.toLong / 2))
                   }
       } yield median
     }

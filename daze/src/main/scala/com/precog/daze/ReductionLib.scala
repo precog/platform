@@ -28,6 +28,7 @@ import yggdrasil.table._
 import com.precog.util._
 
 import scalaz._
+import Scalaz._
 import scalaz.std.anyVal._
 import scalaz.std.option._
 import scalaz.std.set._
@@ -42,39 +43,42 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
   override def _libReduction = super._libReduction ++ Set(Count, Max, Min, Sum, Mean, GeometricMean, SumSq, Variance, StdDev)
 
   // TODO swap to Reduction
-  val CountMonoid = implicitly[Monoid[Count.Result]]
   object Count extends Reduction(ReductionNamespace, "count") {
     type Result = BigDecimal
-    
-    implicit val monoid = CountMonoid
+
+    implicit val monoid = new Monoid[List[Result]] {
+      def zero = List(BigDecimal(0))
+      def append(left: List[Result], right: => List[Result]): List[Result] = List(left.head + right.head)
+    }
 
     val tpe = UnaryOperationType(JType.JUnfixedT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer: Reducer[List[Result]] = new CReducer[List[Result]] {
       def reduce(cols: JType => Set[Column], range: Range) = {
         val cx = cols(JType.JUnfixedT)
         val colSeq = range.view filter { i => cx.exists(_.isDefinedAt(i)) }
-        colSeq.size
+        List(colSeq.size)
       }
     }
 
-    def extract(res: Result): Table = ops.constDecimal(Set(CNum(res)))
+    def extract(res: List[Result]): Table = ops.constDecimal(Set(CNum(res.head)))
   }
 
   object Max extends Reduction(ReductionNamespace, "max") {
     type Result = Option[BigDecimal]
 
-    implicit val monoid = new Monoid[Result] {
-      def zero = None
-      def append(left: Result, right: => Result): Result = {
-        (for (l <- left; r <- right) yield l max r) orElse left orElse right
+    val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l max r) orElse left.head orElse right.head
+        List(result)
       }
     }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new CReducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val max = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -98,31 +102,34 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         } 
 
-        if (max.isEmpty) None
-        else Some(max.suml)
+        if (max.isEmpty) List(None)
+        else List(Some(max.suml))
         
         //(max.isEmpty).option(max.suml)
       }
     }
 
-    def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    def extract(res: List[Result]): Table = {
+      val result = res.head
+      result map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    }
   }
 
   object Min extends Reduction(ReductionNamespace, "min") {
     type Result = Option[BigDecimal]
 
-    implicit val monoid = new Monoid[Result] {
-      def zero = None
-      def append(left: Result, right: => Result): Result = {
-        (for (l <- left; r <- right) yield l min r) orElse left orElse right
+    val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l max r) orElse left.head orElse right.head
+        List(result)
       }
     }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new CReducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new CReducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val min = cols(JType.JUnfixedT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -143,24 +150,31 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         } 
 
-        if (min.isEmpty) None
-        else Some(min.suml)
+        if (min.isEmpty) List(None)
+        else List(Some(min.suml))
       } 
     }
 
-    def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    def extract(res: List[Result]): Table = {
+      val result = res.head
+      result map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    }
   }
 
-  val SumMonoid = implicitly[Monoid[Sum.Result]]
   object Sum extends Reduction(ReductionNamespace, "sum") {
     type Result = Option[BigDecimal]
 
-    implicit val monoid = SumMonoid
+    implicit val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l + r) orElse left.head orElse right.head
+        List(result)
+      }
+    }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new CReducer[Result] {
+    def reducer: Reducer[List[Result]] = new CReducer[List[Result]] {
       def reduce(cols: JType => Set[Column], range: Range) = { 
 
         val sum = cols(JNumberT) flatMap {
@@ -186,28 +200,33 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         } 
 
-        if (sum.isEmpty) None
-        else Some(sum.suml)   
-
-        //(sum.isEmpty).option(sum.suml)
+        if (sum.isEmpty) List(None)
+        else List(Some(sum.suml))
       }
     }
 
-    def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    def extract(res: List[Result]): Table = {
+      val result = res.head
+      result map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    }
   }
   
-  val MeanMonoid = implicitly[Monoid[Mean.Result]]
   object Mean extends Reduction(ReductionNamespace, "mean") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)   // (sum, count)
     
-    implicit val monoid = MeanMonoid
+    implicit val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l /*|+| r*/) orElse left.head orElse right.head
+        List(result)
+      }
+    }
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new Reducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -246,13 +265,13 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         } 
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) List(None)
+        else List(Some(result.suml))
       }
     }
 
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (_, count) => count != 0 } 
+    def extract(res: List[Result]): Table = {
+      val filteredResult = res.head filter { case (_, count) => count != 0 } 
       filteredResult map { case (sum, count) => ops.constDecimal(Set(CNum(sum / count))) } getOrElse ops.empty
     }
   }
@@ -261,18 +280,18 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal)
     
-    implicit val monoid = new Monoid[Result] {    //(product, count)
-      def zero = None
-      def append(left: Result, right: => Result) = {
-        val both = for ((l1, l2) <- left; (r1, r2) <- right) yield (l1 * r1, l2 + r2)
-        both orElse left orElse right
+    implicit val monoid = new Monoid[List[Result]] {    //(product, count)
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val both = for ((l1, l2) <- left.head; (r1, r2) <- right.head) yield (l1 * r1, l2 + r2)
+        List(both orElse left.head orElse right.head)
       }
     }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Option[(BigDecimal, BigDecimal)]] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new Reducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -311,27 +330,26 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) List(None)
+        else List(Some(result.suml))
       }
     }
 
-    def extract(res: Result): Table = { //TODO division by zero 
-      val filteredResult = res filter { case (_, count) => count != 0 }
+    def extract(res: List[Result]): Table = { //TODO division by zero 
+      val filteredResult = res.head filter { case (_, count) => count != 0 }
       filteredResult map { case (prod, count) => ops.constDecimal(Set(CNum(math.pow(prod.toDouble, 1 / count.toDouble)))) } getOrElse ops.empty
     }
   }
   
-  val SumSqMonoid = implicitly[Monoid[SumSq.Result]]
   object SumSq extends Reduction(ReductionNamespace, "sumSq") {
     type Result = Option[BigDecimal]
 
-    implicit val monoid = SumSqMonoid
+    implicit val monoid = Sum.monoid
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new Reducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -370,26 +388,34 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
           
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) List(None)
+        else List(Some(result.suml))
       }
     }
 
-    def extract(res: Result): Table =
-      res map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    def extract(res: List[Result]): Table = {
+      val result = res.head
+      res.head map { r => ops.constDecimal(Set(CNum(r))) } getOrElse ops.empty
+    }
   }
   
-  val VarianceMonoid = implicitly[Monoid[Variance.Result]]
+  //val VarianceMonoid = implicitly[Monoid[Variance.Result]]
   object Variance extends Reduction(ReductionNamespace, "variance") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
 
-    implicit val monoid = VarianceMonoid
+    implicit val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l /*|+| r*/) orElse left.head orElse right.head
+        List(result)
+      }
+    }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
     
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new Reducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -427,28 +453,33 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) List(None)
+        else List(Some(result.suml))
       }
     }
 
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (count, _, _) => count != 0 }
+    def extract(res: List[Result]): Table = {
+      val filteredResult = res.head filter { case (count, _, _) => count != 0 }
       filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum((sumsq - (sum * (sum / count))) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
     }
   }
   
-  val StdDevMonoid = implicitly[Monoid[StdDev.Result]]
   object StdDev extends Reduction(ReductionNamespace, "stdDev") {
     type Result = Option[InitialResult]
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal)   // (count, sum, sumsq)
     
-    implicit val monoid = StdDevMonoid
+    implicit val monoid = new Monoid[List[Result]] {
+      def zero = List(None)
+      def append(left: List[Result], right: => List[Result]): List[Result] = {
+        val result = (for (l <- left.head; r <- right.head) yield l /*|+| r*/) orElse left.head orElse right.head
+        List(result)
+      }
+    }
 
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    def reducer: Reducer[Result] = new Reducer[Result] {
-      def reduce(cols: JType => Set[Column], range: Range): Result = {
+    def reducer: Reducer[List[Result]] = new Reducer[List[Result]] {
+      def reduce(cols: JType => Set[Column], range: Range): List[Result] = {
         val result = cols(JNumberT) flatMap {
           case col: LongColumn => 
             val mapped = range filter col.isDefinedAt map { x => col(x) }
@@ -486,13 +517,13 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
           case _ => None
         }
 
-        if (result.isEmpty) None
-        else Some(result.suml)
+        if (result.isEmpty) List(None)
+        else List(Some(result.suml))
       }
     }
 
-    def extract(res: Result): Table = {
-      val filteredResult = res filter { case (count, _, _) => count != 0 }
+    def extract(res: List[Result]): Table = {
+      val filteredResult = res.head filter { case (count, _, _) => count != 0 }
       filteredResult map { case (count, sum, sumsq) => ops.constDecimal(Set(CNum(sqrt(count * sumsq - sum * sum) / count))) } getOrElse ops.empty  //todo using toDouble is BAD
     }
   }

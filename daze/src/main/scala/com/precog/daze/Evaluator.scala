@@ -322,7 +322,7 @@ trait Evaluator[M[+_]] extends DAG
         case MegaReduce(_, reds, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            red: Reduction = reds.map { _.red }.reduce { (r1, r2) => coalesce(r1, r2) }
+            red: ReductionImpl = reds.map { _.red }.reduce { (r1: ReductionImpl, r2: ReductionImpl) => r1 /*coalesce(r1, r2)*/ }  //TODO 
             liftedTrans = liftToValues(pendingTable.trans)
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
           } yield PendingTable(result, graph, TransSpec1.Id)  //TODO do we need to WrapArray?
