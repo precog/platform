@@ -66,6 +66,8 @@ trait TypeInferencer extends DAG {
         case Operate(_, op, parent) => collectTypes(op.tpe.arg, typing, parent)
   
         case Reduce(_, red, parent) => collectTypes(red.tpe.arg, typing, parent)
+
+        case MegaReduce(_, reds, parent) => collectTypes(jtpe, typing, parent)
   
         case Morph1(_, m, parent) => collectTypes(m.tpe.arg, typing, parent)
   
@@ -141,6 +143,8 @@ trait TypeInferencer extends DAG {
         case Operate(loc, op, parent) => Operate(loc, op, applyTypes(typing, splits, parent))
   
         case Reduce(loc, red, parent) => Reduce(loc, red, applyTypes(typing, splits, parent))
+
+        case MegaReduce(loc, reds, parent) => MegaReduce(loc, reds, applyTypes(typing, splits, parent))
   
         case Morph1(loc, m, parent) => Morph1(loc, m, applyTypes(typing, splits, parent))
   

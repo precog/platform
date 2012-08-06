@@ -400,7 +400,7 @@ trait DAG extends Instructions {
     def mapDown(body: (DepGraph => DepGraph) => PartialFunction[DepGraph, DepGraph]): DepGraph = {
       val memotable = mutable.Map[DepGraph, DepGraph]()
 
-      def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {  //this is the (DepGraph => DepGraph) in original signature
+      def memoized(_splits: => Map[dag.Split, dag.Split])(node: DepGraph): DepGraph = {
         lazy val splits = _splits
         lazy val pf: PartialFunction[DepGraph, DepGraph] = body(memoized(splits))
 

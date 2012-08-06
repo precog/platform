@@ -31,8 +31,12 @@ import bytecode.ReductionLike
 import yggdrasil._
 import yggdrasil.table._
 
-import scalaz.Monoid
+import blueeyes.json._
+
+import scalaz._
 import scalaz.syntax.monad._
+import scalaz.syntax.apply._
+import scala.annotation.tailrec
 
 trait GenOpcode[M[+_]] extends ImplLibrary[M] {
   private val defaultMorphism1Opcode = new java.util.concurrent.atomic.AtomicInteger(0)
@@ -98,80 +102,72 @@ trait ImplLibrary[M[+_]] extends Library with ColumnarTableModule[M] {
   trait ReductionImpl extends ReductionLike with Morphism1Impl {
     type Result
     def apply(table: Table) = table.reduce(reducer) map extract
-    def reducer: CReducer[List[Result]]
-    implicit def monoid: Monoid[List[Result]]
-    def extract(res: List[Result]): Table
+    def reducer: CReducer[Result]
+    implicit def monoid: Monoid[Result]
+    def extract(res: Result): Table
   }
 
-  def coalesce[LHSResult, RHSResult](redl: ReductionImpl { type Result = LHSResult }, redr: ReductionImpl { type Result = RHSResult }): ReductionImpl = {
+  class WrapArrayReductionImpl(val r: ReductionImpl) extends ReductionImpl {
+    type Result = r.Result
+    def reducer = r.reducer
+    implicit def monoid = r.monoid
+    def extract(res: Result): Table = {
+      r.extract(res).transform(trans.WrapArray(trans.Leaf(trans.Source)))
+    }
 
-    type CoalescedResult = Either[LHSResult, RHSResult]
+    val tpe = r.tpe
+    val opcode = r.opcode
+    val name = r.name
+    val namespace = r.namespace
+  }
 
-    val leftRed = redl.reducer
-    val rightRed = redr.reducer
-  
-    val red = new CReducer[List[CoalescedResult]] {
-      def reduce(cols: JType => Set[Column], range: Range): List[CoalescedResult] = {
-        val left: List[CoalescedResult] = leftRed.reduce(cols, range) map { Left(_) }
-        val right: List[CoalescedResult] = rightRed.reduce(cols, range) map { Right(_) }
-        
-        left ++ right
+  def coalesce(reductions: NonEmptyList[ReductionImpl]): ReductionImpl = {
+    def rec(reductions: List[ReductionImpl], acc: ReductionImpl): ReductionImpl = {
+      reductions match {
+        case x :: xs =>
+          new ReductionImpl {
+            type Result = (x.Result, acc.Result) 
+            val reducer = new CReducer[Result] {
+              def reduce(cols: JType => Set[Column], range: Range): Result = {
+                (x.reducer.reduce(cols, range), acc.reducer.reduce(cols, range))
+              }
+            }
+
+            implicit val monoid: Monoid[Result] = new Monoid[Result] {
+              def zero = (x.monoid.zero, acc.monoid.zero)
+              def append(r1: Result, r2: => Result): Result = {
+                (x.monoid.append(r1._1, r2._1), acc.monoid.append(r1._2, r2._2))
+              }
+            }
+
+            def extract(r: Result): Table = {
+              val left = x.extract(r._1)
+              val right = acc.extract(r._2)
+              table(Apply[({ type λ[α] = StreamT[M, α] })#λ].zip.zip(left.slices, right.slices) map { 
+                case (sl, sr) => new Slice { 
+                  val size = sl.size max sr.size
+                  val columns = {
+                    (sl.columns map { case (ColumnRef(jpath, ctype), col) => (ColumnRef(JPathIndex(0) \ jpath, ctype) -> col) }) ++ 
+                    (sr.columns collect { case (ColumnRef(JPath(JPathIndex(j), xs @ _*), ctype), col) => (ColumnRef(JPath(JPathIndex(j + 1) +: xs: _*), ctype) -> col) })
+                  }
+                }
+              })
+            }
+
+            val namespace = Vector()
+            val name = ""
+            val opcode = GenOpcode.defaultReductionOpcode.getAndIncrement
+            val tpe = UnaryOperationType(
+              JUnionT(x.tpe.arg, acc.tpe.arg), 
+              JArrayUnfixedT
+            ) 
+          }
+
+        case Nil => acc
       }
     }
 
-    val leftMon = redl.monoid
-    val rightMon = redr.monoid
-
-    val mon = new Monoid[List[CoalescedResult]] {
-      def zero = {
-        val leftZero = leftMon.zero map { Left(_) } 
-        val rightZero = rightMon.zero map { Right(_) }
-
-        leftZero ++ rightZero
-      }
-
-      def append(first: List[CoalescedResult], second: => List[CoalescedResult]): List[CoalescedResult] = {
-        val (firstLeft, firstRight) = first partition { _.isLeft } 
-        val (secondLeft, secondRight) = second partition { _.isLeft }
-
-        val a: List[LHSResult] = for { Left(i) <- firstLeft } yield i
-        val b: List[RHSResult] = for { Right(i) <- firstRight } yield i
-        val c: List[LHSResult] = for { Left(i) <- secondLeft } yield i
-        val d: List[RHSResult] = for { Right(i) <- secondRight } yield i
-
-        val leftAppend = leftMon.append(a, c) map { Left(_) }
-        val rightAppend = rightMon.append(b, d) map { Right(_) }
-
-        leftAppend ++ rightAppend
-      }
-    }
-
-    def extractImpl(res: List[CoalescedResult]): Table = {
-      val (left, right) = res partition { _.isLeft }
-
-      val a: List[LHSResult] = for { Left(i) <- left } yield i
-      val b: List[RHSResult] = for { Right(i) <- right } yield i
-  
-      val leftTable = redl.extract(a)
-      val rightTable = redr.extract(b)
-  
-      leftTable.cross(rightTable)(trans.ArrayConcat(trans.Leaf(trans.SourceLeft), trans.Leaf(trans.SourceRight)))
-    }
-
-    new ReductionImpl {
-      type Result = CoalescedResult
-
-      def reducer = red
-      def monoid = mon
-
-      def extract(res: List[Result]): Table =
-        extractImpl(res)
-
-      val namespace = Vector()
-      val name = ""
-      val opcode = GenOpcode.defaultReductionOpcode.getAndIncrement
-      val tpe = UnaryOperationType(JNumberT, JArrayUnfixedT) //todo doesn't return a single number, returns an array!
-    }
+    rec(reductions.tail, new WrapArrayReductionImpl(reductions.head))
   }
 
   type Morphism1 <: Morphism1Impl

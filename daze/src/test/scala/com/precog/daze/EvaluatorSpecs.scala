@@ -922,7 +922,62 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         result2 must contain(42, true, "daniel", 1, SNull)
       }
     }
+
+    "an array must return an array" in {
+      val line = Line(0, "")
+
+      val input = dag.LoadLocal(line, Root(line, PushString("/hom/arrays")))
+
+      testEval(input) { result =>
+        result must haveSize(5)
+
+        val result2 = result collect {
+          case (ids, SArray(arr)) if ids.size == 1 => arr
+        }
+
+        result2 must contain(Vector(SDecimal(-9), SDecimal(-42), SDecimal(42), SDecimal(87), SDecimal(4)))
+      }
+    }
+
+    "mega reduce must return an array" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val input = dag.MegaReduce(line, Vector(dag.Reduce(line, Count, parent)), parent)
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SArray(arr)) if ids.size == 0 => arr
+        }
+
+        result2.size mustEqual 1
+        result2.head mustEqual 5
+      }
+    }
     
+    "evaluate array dereference on a MegaReduce" in {
+      val line = Line(0, "")
+      
+      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      val red = Count
+      
+      val input = Join(line, DerefArray, CrossLeftSort,
+        dag.MegaReduce(line, Vector(dag.Reduce(line, red, parent)), parent),
+        Root(line, PushNum("0")))
+        
+      testEval(input) { result =>
+        result must haveSize(1)
+        
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 0 => d.toInt
+        }
+        
+        result2 must contain(5)
+      }
+    }    
+
     "evaluate array dereference on a homogeneous set" in {
       val line = Line(0, "")
       

@@ -75,6 +75,9 @@ trait Memoizer extends DAG {
           case Reduce(loc, red, parent) =>
             Reduce(loc, red, memoized(parent, splits))
 
+          case MegaReduce(loc, reds, parent) =>
+            MegaReduce(loc, reds, memoized(parent, splits))
+
           case Morph1(loc, m, parent) => {
             val back = Morph1(loc, m, memoized(parent, splits))
             
@@ -193,6 +196,9 @@ trait Memoizer extends DAG {
       increment(countRefs(parent), parent, 1)
     
     case Reduce(_, _, parent) =>
+      increment(countRefs(parent), parent, 1)
+        
+    case MegaReduce(_, _, parent) =>
       increment(countRefs(parent), parent, 1)
         
     case Morph1(_, _, parent) =>

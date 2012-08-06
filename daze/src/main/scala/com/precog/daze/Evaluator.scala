@@ -322,10 +322,14 @@ trait Evaluator[M[+_]] extends DAG
         case MegaReduce(_, reds, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            red: ReductionImpl = reds.map { _.red }.reduce { (r1: ReductionImpl, r2: ReductionImpl) => r1 /*coalesce(r1, r2)*/ }  //TODO 
+            reds0 = (reds map { _.red })
+            red: ReductionImpl = (reds0.headOption map { rhead => coalesce(NEL(rhead, reds0.tail: _*)) }).get //TODO: get rid of get
             liftedTrans = liftToValues(pendingTable.trans)
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
-          } yield PendingTable(result, graph, TransSpec1.Id)  //TODO do we need to WrapArray?
+          } yield {
+            result map { r => println("TABLE FROM MEGAREDUCE NODE = " + r.toString) }
+            PendingTable(result, graph, TransSpec1.Id)
+          }
         }
         
         case r @ dag.Reduce(_, red, parent) => {
@@ -483,7 +487,7 @@ trait Evaluator[M[+_]] extends DAG
         
         case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           right.value match {
-            case Some(value @ SDecimal(d)) => {
+            case Some(SDecimal(d)) => {
               for {
                 pendingTable <- loop(left, splits)
               } yield PendingTable(pendingTable.table, pendingTable.graph, DerefArrayStatic(pendingTable.trans, JPathIndex(d.toInt)))
@@ -770,19 +774,17 @@ trait Evaluator[M[+_]] extends DAG
     
     val rewrite = 
       (orderCrosses _) andThen
+      (g => megaReduce(g, findReductions(g))) andThen
       (memoize _) andThen
       (makePathRelative(_, prefix)) andThen //Path Relativizer
-      (if (optimize) inferTypes(JType.JUnfixedT) else identity) andThen
-      (g => megaReduce(g, findReductions(g)))
+      (if (optimize) inferTypes(JType.JUnfixedT) else identity)
 
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
-    resultState.eval(EvaluatorState(Map()))
-
-    //** original code **//
-    //val PendingTable(table, _, spec) = loop(rewrite(graph), Map())
-    //table map { _ transform liftToValues(spec) }
+    val f = resultState.eval(EvaluatorState(Map()))
+    f map { t => println("FINAL RESULT TABLE = " + t.toString) } 
+    f
   }
   
   private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
@@ -831,6 +833,7 @@ trait Evaluator[M[+_]] extends DAG
     case dag.LoadLocal(_, parent, _) => Set(parent)
     case Operate(_, _, parent) => Set(parent)
     case dag.Reduce(_, _, parent) => Set(parent)
+    case dag.MegaReduce(_, _, parent) => Set(parent)
     case dag.Split(_, spec, _) => enumerateGraphs(spec)
     case Join(_, _, _, left, right) => Set(left, right)
     case dag.Filter(_, _, target, boolean) => Set(target, boolean)

@@ -83,6 +83,8 @@ trait PrettyPrinter extends DAG {
           case Operate(_, op, parent) => wrap(depth, "Operate(line, "+op+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
   
           case Reduce(_, red, parent) => wrap(depth, "Reduce(line, "+red+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
+
+          case MegaReduce(_, reds, parent) => wrap(depth, "MegaReduce(line, "+reds+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
           
           case Morph1(_, m, parent) => wrap(depth, "Morph1(line, "+m+",\n", prettyPrintAux(parent, bindings, depth+1), ")")
   
@@ -174,6 +176,8 @@ trait PrettyPrinter extends DAG {
           case Operate(_, _, parent) => collectBindings(parent, counts0)
   
           case Reduce(_, _, parent) => collectBindings(parent, counts0)
+          
+          case MegaReduce(_, _, parent) => collectBindings(parent, counts0)
           
           case Morph1(_, _, parent) => collectBindings(parent, counts0)
   

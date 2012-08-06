@@ -77,6 +77,9 @@ trait CrossOrdering extends DAG {
         case dag.Reduce(loc, red, parent) =>
           dag.Reduce(loc, red, memoized(parent, splits))
         
+        case dag.MegaReduce(loc, reds, parent) =>
+          dag.MegaReduce(loc, reds, memoized(parent, splits))
+
         case s @ dag.Split(loc, spec, child) => {
           lazy val splits2 = splits + (s -> result)
           lazy val spec2 = memoizedSpec(spec, splits2)
