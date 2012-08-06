@@ -20,6 +20,8 @@
 package com.precog
 package daze
 
+import common.Path
+
 import org.specs2.execute.Result
 import org.specs2.mutable.Specification
 
@@ -47,7 +49,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx) match {
+    (consumeEval(testUID, graph, ctx, Path.Root) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) 

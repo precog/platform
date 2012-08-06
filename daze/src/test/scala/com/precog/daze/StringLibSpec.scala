@@ -23,7 +23,7 @@ import org.specs2.mutable._
 
 import com.precog.yggdrasil._
 import com.precog.yggdrasil.memoization._
-
+import com.precog.common.Path
 import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
@@ -47,7 +47,7 @@ trait StringLibSpec[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx) match {
+    consumeEval(testUID, graph, ctx,Path.Root) match {
       case Success(results) => results
       case Failure(error) => throw error
     }

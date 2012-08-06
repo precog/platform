@@ -118,10 +118,13 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
         case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JInt(i)::Nil)), _) => ok
       }}
     }
-    "reject query from non-root path (for now)" in {
-      query(testQuery, path = "/non/root/") must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available."), _, None, _) => ok
-      }}
+    "handle query from non-root path" in {
+      pending
+      //query("//numbers", path = "/hom") must whenDelivered { 
+      //  beLike {
+      //    case HttpResponse(HttpStatus(OK, _), _, Some(data), _) => data must be_==(JString("fixme"))
+      //  }
+      //}
     }
     "reject query when no token provided" in {
       query(testQuery, None) must whenDelivered { beLike {
@@ -178,7 +181,7 @@ trait TestQueryExecutor extends QueryExecutor {
   implicit def executionContext: ExecutionContext
   def allowedUID: String
   
-  def execute(userUID: String, query: String) = {
+  def execute(userUID: String, query: String, prefix: Path) = {
     if(userUID != allowedUID) {
       failure(UserError(JArray(List(JString("No data accessable at the specified path.")))))
     } else {

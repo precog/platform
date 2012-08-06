@@ -28,6 +28,9 @@ import daze.util._
 
 import pandora._
 
+
+import com.precog.common.Path
+
 import quirrel._
 import quirrel.emitter._
 import quirrel.parser._
@@ -138,7 +141,7 @@ object SBTConsole {
         sys.error(tree.errors map showError mkString ("Set(\"", "\", \"", "\")"))
       }
       val Right(dag) = decorate(emit(tree))
-      withContext { ctx => consumeEval("0", dag, ctx) }
+      withContext { ctx => consumeEval("0", dag, ctx,Path.Root) }
     }
 
     def printDAG(str: String) = {

@@ -43,7 +43,7 @@ object EvaluationError {
 }
 
 trait QueryExecutor {
-  def execute(userUID: String, query: String): Validation[EvaluationError, JArray]
+  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, JArray]
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]]
   def structure(userUID: String, path: Path): Future[Validation[String, JObject]]
   def status(): Future[Validation[String, JValue]]
@@ -55,7 +55,7 @@ trait NullQueryExecutor extends QueryExecutor {
   def actorSystem: ActorSystem
   implicit def executionContext: ExecutionContext
 
-  def execute(userUID: String, query: String) = {
+  def execute(userUID: String, query: String, prefix: Path) = {
     failure(SystemError(new UnsupportedOperationException("Query service not avaialble")))
   }
   

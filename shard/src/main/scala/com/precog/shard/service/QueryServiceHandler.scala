@@ -46,16 +46,16 @@ extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpRe
 
   val service = (request: HttpRequest[Future[JValue]]) => { 
     success((t: Token, p: Path, q: String) => 
-      if(p != Path("/")) {
-        Future(HttpResponse[JValue](HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available.")))
-      } else {
+     // if(p != Path("/")) {
+      //  Future(HttpResponse[JValue](HttpStatus(Unauthorized, "Queries made at non-root paths are not yet available.")))
+     // } else {
         q.trim match {
           case Command("ls", arg) => list(t.tid, Path(arg.trim))
           case Command("list", arg) => list(t.tid, Path(arg.trim))
           case Command("ds", arg) => describe(t.tid, Path(arg.trim))
           case Command("describe", arg) => describe(t.tid, Path(arg.trim))
           case qt =>
-            Future(queryExecutor.execute(t.tid, qt) match {
+            Future(queryExecutor.execute(t.tid, qt, p) match {
               case Success(result)               => HttpResponse[JValue](OK, content = Some(result))
               case Failure(UserError(errorData)) => HttpResponse[JValue](UnprocessableEntity, content = Some(errorData))
               case Failure(AccessDenied(reason)) => HttpResponse[JValue](HttpStatus(Unauthorized, reason))
@@ -66,7 +66,8 @@ extends CustomHttpService[Future[JValue], (Token, Path, String) => Future[HttpRe
                 HttpResponse[JValue](HttpStatus(InternalServerError, "A problem was encountered processing your query. We're looking into it!"))
             })
         }
-      })
+      //}
+      )
 
   }
   
