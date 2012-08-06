@@ -43,14 +43,11 @@ trait JoinOptimizer extends DAGTransform {
         case g if g == determiner => (true, true)
         
         case r : Root => (false, true)
-    
-        case Operate(_, _, parent) => determinedByAux(parent, determiner)
-    
-        case Morph1(_, _, parent) => determinedByAux(parent, determiner)
-    
-        case Morph2(_, _, left, right) => merge(determinedByAux(left, determiner), determinedByAux(right, determiner)) 
-    
-        case Join(_, _, _, left, right) => merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
+        
+        case Join(_, _, _, left, right) =>
+          merge(determinedByAux(left, determiner), determinedByAux(right, determiner))
+
+        case Filter(_, IdentitySort, body, _) => determinedByAux(body, determiner)
         
         case Memoize(parent, _) => determinedByAux(parent, determiner)
     
@@ -66,11 +63,11 @@ trait JoinOptimizer extends DAGTransform {
     def liftRewrite(graph: DepGraph, eq: DepGraph, lifted: DepGraph): DepGraph = {
       transformBottomUp(graph) { g => if(g == eq) lifted else g }
     }
-  
+
     def rewriteUnderEq(graph: DepGraph, eqA: DepGraph, eqB: DepGraph, liftedA: DepGraph, liftedB: DepGraph, sortId: Int): DepGraph =
       transformBottomUp(graph) {
         _ match {
-          case Join(loc1, op, CrossLeftSort | CrossRightSort, lhs, rhs)
+          case j @ Join(loc1, op, CrossLeftSort | CrossRightSort, lhs, rhs)
             if (determinedBy(lhs, eqA) && determinedBy(rhs, eqB)) ||
                (determinedBy(lhs, eqB) && determinedBy(rhs, eqA)) => {
             
@@ -81,7 +78,13 @@ trait JoinOptimizer extends DAGTransform {
               Join(loc1, op, ValueSort(sortId),
                 liftRewrite(lhs, eqLHS, liftedLHS),
                 liftRewrite(rhs, eqRHS, liftedRHS)),
-              Vector(0)) // @djspiewak How do we know which identities to specifiy here?
+              Vector(0 until j.provenance.length: _*))
+          }
+
+          case Join(loc1, op, IdentitySort, lhs, rhs)
+            if (determinedBy(lhs, eqA) && determinedBy(rhs, eqA)) ||
+               (determinedBy(lhs, eqB) && determinedBy(rhs, eqB)) => {
+            Join(loc1, op, ValueSort(sortId), lhs, rhs)
           }
 
           case other => other
@@ -91,7 +94,7 @@ trait JoinOptimizer extends DAGTransform {
     transformBottomUp(graph) {
       _ match {
         case
-          Filter(loc, IdentitySort,
+          f @ Filter(loc, IdentitySort,
             body,
             Join(_, Eq, CrossLeftSort | CrossRightSort,
               Join(_, DerefObject, CrossLeftSort,
@@ -113,7 +116,8 @@ trait JoinOptimizer extends DAGTransform {
                 "key", "value", sortId) 
             }
             
-            rewriteUnderEq(body, eqLHS, eqRHS, lift(eqLHS, sortFieldLHS), lift(eqRHS, sortFieldRHS), sortId)
+            val rewritten = rewriteUnderEq(body, eqLHS, eqRHS, lift(eqLHS, sortFieldLHS), lift(eqRHS, sortFieldRHS), sortId)
+            if(rewritten == body) f else rewritten
           }
         
         case other => other 

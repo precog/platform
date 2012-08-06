@@ -107,7 +107,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
               userId)))    
       
       val opt = optimize(input, new IdGen)
-
+      
       val expectedOpt =
         Sort(
           Join(line, JoinObject, ValueSort(0),
@@ -117,7 +117,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort,
               name,
               Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
-          Vector(0))
+          Vector(0, 1))
 
       opt must_== expectedOpt
     }
@@ -158,7 +158,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort, value, users)),
           "key", "value", 0)
           
-      lazy val input =
+      val input =
         Filter(line, IdentitySort,
           Join(line, JoinObject, CrossLeftSort,
             Join(line, JoinObject, IdentitySort,
@@ -187,7 +187,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val expectedOpt =
         Sort(
           Join(line, JoinObject, ValueSort(0),
-            Join(line, JoinObject, IdentitySort,
+            Join(line, JoinObject, ValueSort(0),
               Join(line, WrapObject, CrossLeftSort,
                 height,
                 Join(line, DerefObject, CrossLeftSort, liftedLHS, height)),
@@ -197,7 +197,7 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
             Join(line, WrapObject, CrossLeftSort,
               name,
               Join(line, DerefObject, CrossLeftSort, liftedRHS, name))),
-          Vector(0)
+          Vector(0, 1)
         )  
 
        opt must_== expectedOpt
@@ -238,20 +238,30 @@ trait JoinOptimizerSpecs[M[+_]] extends Specification
       val opt = optimize(input, new IdGen)
 
       val expectedOpt =
-        Join(line, JoinObject, ValueSort(0),
-          SortBy(
-            Join(line, JoinObject, IdentitySort,
-              Join(line, WrapObject, CrossLeftSort,
-                key,
-                Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
-              Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
-            "key", "value", 0), 
-          Join(line, WrapObject, CrossLeftSort,
-            name,
-            SortBy(users, "userId", "name", 0)))
+        Sort(
+          Join(line, JoinObject, ValueSort(0),
+            Join(line, WrapObject, CrossLeftSort,
+              name,
+              Join(line, DerefObject, CrossLeftSort,
+                SortBy(
+                  Join(line, JoinObject, IdentitySort,
+                    Join(line, WrapObject, CrossLeftSort,
+                      key,
+                      Join(line, DerefObject, CrossLeftSort, users, userId)),
+                    Join(line, WrapObject, CrossLeftSort, value, users)),
+                  "key", "value", 0),
+                name)),
+            SortBy(
+              Join(line, JoinObject, IdentitySort,
+                Join(line, WrapObject, CrossLeftSort,
+                  key,
+                  Join(line, DerefObject, CrossLeftSort, heightWeight, userId)),
+                Join(line, WrapObject, CrossLeftSort, value, heightWeight)),
+              "key", "value", 0)),
+          Vector(0, 1))
 
       opt must_== expectedOpt
-    }.pendingUntilFixed
+    }
   }
 }
 
