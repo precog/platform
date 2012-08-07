@@ -46,7 +46,7 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] with BlockLoadSpec[M] { spec =>
+trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] with BlockLoadSpec[M] with BlockSortSpec[M] { spec =>
   override val defaultPrettyParams = Pretty.Params(2)
 
   val testPath = Path("/tableOpsSpec")
@@ -99,7 +99,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
 
   type Table = UnloadableTable
   class UnloadableTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    import trans._
     def load(uid: UserId, jtpe: JType): M[Table] = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
   }
 
   def table(slices: StreamT[M, Slice]) = new UnloadableTable(slices)
@@ -177,6 +179,15 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
       //"reconstruct a problem sample" in testLoadSample5 //pathological sample in the case of duplicated ids.
       "reconstruct a dense dataset" in checkLoadDense
     }
+
+    "sort" >> {
+      "fully homogeneous data" in testSortSample1
+      "data with undefined sort keys" in testSortSample2
+      //"reconstruct a problem sample" in testSortSample3
+      //"reconstruct a problem sample" in testSortSample4
+      //"reconstruct a problem sample" in testSortSample5 //pathological sample in the case of duplicated ids.
+      //"reconstruct a dense dataset" in checkSortDense
+    }    
   }
 }
 

@@ -49,57 +49,76 @@ trait JDBMSlice[Key,Value] extends Slice with Logging {
   protected def requestedSize: Int
 
   // This is storage for all data within this slice
-  protected val backing: Array[java.util.Map.Entry[Key,Value]] = source.take(size).toArray
+  protected lazy val backing: Array[java.util.Map.Entry[Key,Value]] = source.take(requestedSize).toArray
 
   def size = backing.length
 
-  def firstKey: Key = backing(0).getKey
-  def lastKey: Key  = backing(size - 1).getKey
+  def firstKey: Key = if (size > 0) backing(0).getKey else throw new NoSuchElementException("No keys in slice of size zero")
+  def lastKey: Key  = if (size > 0) backing(size - 1).getKey else throw new NoSuchElementException("No keys in slice of size zero")
 }
 
 trait ArrayRowJDBMSlice[Key] extends JDBMSlice[Key,Array[CValue]] {
   trait BaseColumn {
-    def isDefinedAt(row: Int) = row < size
+    protected def columnIndex: Int
+    protected def rowData(row: Int): Array[CValue]
+    def isDefinedAt(row: Int) = row >= 0 && row < size && rowData(row).apply(columnIndex) != CUndefined
   }
   
-  def columnFor(rowData: Int => Array[CValue], ref: ColumnRef, index: Int): (ColumnRef,Column) = ref -> (ref.ctype match {
+  def columnFor(rowBacking: Int => Array[CValue], ref: ColumnRef, index: Int): (ColumnRef,Column) = ref -> (ref.ctype match {
     //// Fixed width types within the var width row
     case CBoolean => new BoolColumn with BaseColumn {
-      def apply(row: Int): Boolean = rowData(row).apply(index).asInstanceOf[java.lang.Boolean]
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): Boolean = rowData(row).apply(index).asInstanceOf[CBoolean].value
     }
 
     case  CLong  => new LongColumn with BaseColumn {
-      def apply(row: Int): Long = rowData(row).apply(index).asInstanceOf[java.lang.Long]
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): Long = rowData(row).apply(index).asInstanceOf[CLong].value
     }
 
     case CDouble => new DoubleColumn with BaseColumn {
-      def apply(row: Int): Double = rowData(row).apply(index).asInstanceOf[java.lang.Double]
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): Double = rowData(row).apply(index).asInstanceOf[CDouble].value
     }
 
     case CDate => new DateColumn with BaseColumn {
-      def apply(row: Int): DateTime = new DateTime(rowData(row).apply(index).asInstanceOf[java.lang.Long])
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): DateTime = new DateTime(rowData(row).apply(index).asInstanceOf[CLong].value)
     }
 
-    case CNull => LNullColumn
+    case CNull => new NullColumn with BaseColumn {
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+    }
     
-    case CEmptyObject => LEmptyObjectColumn
+    case CEmptyObject => new EmptyObjectColumn with BaseColumn {
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+    }
     
-    case CEmptyArray => LEmptyArrayColumn
+    case CEmptyArray => new EmptyArrayColumn with BaseColumn {
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+    }
 
     //// Variable width types
     case CString => new StrColumn with BaseColumn {
-      def apply(row: Int): String = rowData(row).apply(index).asInstanceOf[String]
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): String = rowData(row).apply(index).asInstanceOf[CString].value
     }
 
     case CNum => new NumColumn with BaseColumn {
-      def apply(row: Int): BigDecimal = BigDecimal(rowData(row).apply(index).asInstanceOf[java.math.BigDecimal])
+      protected def columnIndex = index
+      @inline def rowData(row: Int) = rowBacking(row)
+      def apply(row: Int): BigDecimal = rowData(row).apply(index).asInstanceOf[CNum].value
     }
 
     case invalid => sys.error("Invalid fixed with CType: " + invalid)
   })
-
-  object LNullColumn extends table.NullColumn with BaseColumn
-  object LEmptyObjectColumn extends table.EmptyObjectColumn with BaseColumn
-  object LEmptyArrayColumn extends table.EmptyArrayColumn with BaseColumn
 }
 

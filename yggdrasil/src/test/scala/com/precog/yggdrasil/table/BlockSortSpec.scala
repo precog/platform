@@ -45,103 +45,82 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 import SampleData._
 
-trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubStorageModule[M] with TableModuleTestSupport[M] {
-  type Key = JArray
-  case class Projection(descriptor: ProjectionDescriptor, data: Stream[JValue]) extends BlockProjectionLike[JArray, Slice] {
-    val slices = fromJson(data).slices.toStream.copoint
-
-    def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO(sys.error("Insert not supported."))
-
-    implicit val keyOrder: Order[JArray] = Order[List[JValue]].contramap((_: JArray).elements)
-
-    def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[JArray, Slice]] = {
-      @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
-        blocks match {
-          case x #:: xs =>
-            if ((x.toJson(x.size - 1) \ "key") > id) Some(x) else findBlockAfter(id, xs)
-
-          case _ => None
-        }
-      }
-
-      val slice = id map { key =>
-        findBlockAfter(key, slices) 
-      } getOrElse {
-        slices.headOption
-      }
-      
-      slice map { s => 
-        val s0 = new Slice {
-          val size = s.size
-          val columns = s.columns filter {
-            case (ColumnRef(jpath, ctype), _) =>
-              colSelection.isEmpty || 
-              jpath.nodes.head == JPathField("key") ||
-              colSelection.exists { desc => (JPathField("value") \ desc.selector) == jpath && desc.valueType == ctype }
-          }
-        }
-
-        BlockProjectionData[JArray, Slice](s0.toJson(0) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1) \ "key" --> classOf[JArray], s0)
-      }
-    }
-  }
-}
-
-
-trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
+trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
   implicit def M: Monad[M]
   implicit def coM: Copointed[M]
 
-  def checkLoadDense = {
+  def checkSortDense = {
     implicit val gen = sample(objectSchema(_, 3))
-    check { (sample: SampleData) => testLoadDense(sample) }
+    check { (sample: SampleData) => testSortDense(sample) }
   }
 
-  def testLoadSample1 = {
+  // Simple test of sorting on homogeneous data
+  def testSortSample1 = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
         {
           "value":{
+            "uid":"joe",
             "u":false,
             "md":"t",
             "l":[]
           },
           "key":[1]
+        },
+        {
+          "value":{
+            "uid":"al",
+            "u":false,
+            "md":"t",
+            "l":[]
+          },
+          "key":[2]
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (1 , List(JPath(".u") -> CBoolean, JPath(".md") -> CString, JPath(".l") -> CEmptyArray))
+        (1 , List(JPath(".uid") -> CString, JPath(".u") -> CBoolean, JPath(".md") -> CString, JPath(".l") -> CEmptyArray))
       )
     )
 
-    testLoadDense(sampleData)
+    testSortDense(sampleData)
   }
 
-  def testLoadSample2 = {
+  // Simple test of partially undefined sort key data
+  def testSortSample2 = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
+        {
+          "value":{
+            "uid":"ted",
+            "rzp":{ },
+            "hW":1.0,
+            "fa":null
+          },
+          "key":[1]
+        },
         {
           "value":{
             "rzp":{ },
             "hW":1.0,
             "fa":null
           },
-          "key":[2,1]
+          "key":[1]
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CDouble, JPath(".rzp") -> CEmptyObject))
+        (2, List(JPath(".uid") -> CString, JPath(".fa") -> CNull, JPath(".hW") -> CDouble, JPath(".rzp") -> CEmptyObject))
       )
     )
 
-    testLoadDense(sampleData)
+    testSortDense(sampleData)
   }
 
-  def testLoadSample3 = {
+  def testSortSample3 = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
          {
            "value":{
+            "uid":"hank",
              "f":{
                "bn":[null],
                "wei":1.0
@@ -153,6 +132,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
          },
          {
            "value":{
+            "uid":"fred",
              "f":{
                "bn":[null],
                "wei":5.615997508833152E307
@@ -164,7 +144,8 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
          ]
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (3, List(JPath(".f.bn[0]") -> CNull, 
+        (3, List(JPath(".uid") -> CString,
+                 JPath(".f.bn[0]") -> CNull, 
                  JPath(".f.wei") -> CDouble, 
                  JPath(".ljz[0]") -> CNull,
                  JPath(".ljz[1][0]") -> CString,
@@ -173,14 +154,15 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )
 
-    testLoadDense(sampleData)
+    testSortDense(sampleData)
   }
 
-  def testLoadSample4 = {
+  def testSortSample4 = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
         {
           "value":{
+            "uid":"fred",
             "dV":{
               "d":true,
               "l":false,
@@ -197,7 +179,8 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(JPath(".dV.d") -> CBoolean, 
+        (2, List(JPath(".uid") -> CString,
+                 JPath(".dV.d") -> CBoolean, 
                  JPath(".dV.l") -> CBoolean, 
                  JPath(".dV.vq") -> CEmptyObject, 
                  JPath(".oy.nm") -> CBoolean, 
@@ -205,14 +188,15 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )   
 
-    testLoadDense(sampleData)
+    testSortDense(sampleData)
   } 
 
-  def testLoadSample5 = {
+  def testSortSample5 = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
         {
           "value":{
+            "uid":"fred",
             "cfnYTg92dg":"gu",
             "fg":[false,8.988465674311579E307,-1],
             "o8agyghfjxe":[]
@@ -221,6 +205,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"ted",
             "cfnYTg92dg":"yoqmrz",
             "fg":[false,0.0,0],
             "o8agyghfjxe":[]
@@ -229,6 +214,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"joe",
             "cfnYTg92dg":"bzjhpndgoY",
             "fg":[true,5.899727648511153E307,0],
             "o8agyghfjxe":[]
@@ -237,6 +223,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"al",
             "cfnYTg92dg":"ztDcxy",
             "fg":[false,-1.0,-1],
             "o8agyghfjxe":[]
@@ -245,6 +232,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"brent",
             "cfnYTg92dg":"jeuHxunPdg",
             "fg":[true,3.3513345026993237E307,0],
             "o8agyghfjxe":[]
@@ -253,6 +241,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"tony",
             "cfnYTg92dg":"evxnIfv",
             "fg":[false,-5.295630177665229E307,1],
             "o8agyghfjxe":[]
@@ -261,6 +250,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"jerome",
             "cfnYTg92dg":"v",
             "fg":[true,-6.98151882908554E307,3047586736114377501],
             "o8agyghfjxe":[]
@@ -269,6 +259,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"mike",
             "cfnYTg92dg":"ontecesf",
             "fg":[false,5.647795622045506E307,-1],
             "o8agyghfjxe":[]
@@ -277,6 +268,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"george",
             "cfnYTg92dg":"",
             "fg":[true,1.0,-4341538468449353975],
             "o8agyghfjxe":[]
@@ -285,6 +277,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"dan",
             "cfnYTg92dg":"Hwpqxk",
             "fg":[true,-4.38879797446784E307,4611686018427387903],
             "o8agyghfjxe":[]
@@ -293,6 +286,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         },
         {
           "value":{
+            "uid":"gary",
             "cfnYTg92dg":"mkkhV",
             "fg":[true,-1.0,3724086638589828262],
             "o8agyghfjxe":[]
@@ -300,17 +294,18 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
           "key":[9]
         }
       ]""") --> classOf[JArray]).elements.toStream,
-      Some((1, List((JPath(".o8agyghfjxe") -> CEmptyArray), 
+      Some((1, List(JPath(".uid") -> CString,
+                    (JPath(".o8agyghfjxe") -> CEmptyArray), 
                     (JPath(".fg[0]") -> CBoolean), 
                     (JPath(".fg[1]") -> CDouble), 
                     (JPath(".fg[2]") -> CLong), 
                     (JPath(".cfnYTg92dg") -> CString))))
     )
 
-    testLoadDense(sampleData)
+    testSortDense(sampleData)
   }
 
-  def testLoadDense(sample: SampleData) = {
+  def testSortDense(sample: SampleData) = {
     //println("testing for sample: " + sample)
     val Some((idCount, schema)) = sample.schema
 
@@ -343,7 +338,20 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       object storage extends Storage
     }
 
-    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap(_.toJson).copoint.toStream must_== sample.data
+    import module.trans._
+    import TableModule.paths._
+
+    val sortTransspec = WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("uid")), "uid")
+    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
+      _.sort(sortTransspec, SortAscending)
+    }.flatMap {
+      // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
+      table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
+    }.flatMap {
+      _.toJson
+    }.copoint.toStream must_== sample.data.sortBy {
+      v => (v \ "value" \? "uid").getOrElse(JString(""))
+    }
   }
 }
 

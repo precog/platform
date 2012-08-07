@@ -150,7 +150,8 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
         import blueeyes.json.{JPathField,JPathIndex}
 
-        case class IdentColumn(index: Int) extends LongColumn with BaseColumn {
+        case class IdentColumn(index: Int) extends LongColumn {
+          def isDefinedAt(row: Int) = row >= 0 && row < backing.length
           def apply(row: Int): Long = backing(row).getKey.apply(index)
         }
 

@@ -157,6 +157,9 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
   class StubTable(slices: StreamT[M, Slice]) extends ColumnarTable(slices) { self: Table => 
     private var initialIndices = collection.mutable.Map[Path, Int]()
     private var currentIndex = 0
+
+    import trans._
+    def sort(sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
     
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>

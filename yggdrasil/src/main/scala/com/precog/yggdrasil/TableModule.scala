@@ -158,10 +158,10 @@ trait TableModule[M[+_]] extends FNModule {
     
     sealed trait SortOrder
     sealed trait DesiredSortOrder extends SortOrder {
-      def ascending: Boolean
+      def isAscending: Boolean
     }
-    case object SortAscending extends DesiredSortOrder { val ascending = true }
-    case object SortDescending extends DesiredSortOrder { val ascending = false }
+    case object SortAscending extends DesiredSortOrder { val isAscending = true }
+    case object SortDescending extends DesiredSortOrder { val isAscending = false }
     case object SortUnknown extends SortOrder
     
     object constants {

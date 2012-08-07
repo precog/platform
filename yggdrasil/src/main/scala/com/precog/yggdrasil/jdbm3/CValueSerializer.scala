@@ -60,6 +60,19 @@ private[jdbm3] object CTypeMappings {
     case CEmptyArray  => FEMPTYARRAY
     case CUndefined   => sys.error("Undefined is not a valid format")
   }
+
+  def fromFlag(b: Byte) = b match {
+    case FSTRING       => CString     
+    case FBOOLEAN      => CBoolean    
+    case FLONG         => CLong       
+    case FDOUBLE       => CDouble     
+    case FNUM          => CNum        
+    case FDATE         => CDate       
+    case FNULL         => CNull       
+    case FEMPTYOBJECT  => CEmptyObject
+    case FEMPTYARRAY   => CEmptyArray 
+    case invalid       => sys.error(invalid + " is not a valid format")
+  }
 }
 
 object CValueSerializer {

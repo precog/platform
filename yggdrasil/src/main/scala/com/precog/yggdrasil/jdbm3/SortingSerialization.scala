@@ -22,7 +22,7 @@ package jdbm3
 
 import org.apache.jdbm.Serializer
 
-import java.io.{DataInput,DataOutput}
+import java.io.{DataInput,DataOutput,Externalizable,ObjectInput,ObjectOutput}
 import java.util.Comparator
 
 import scala.collection.BitSet
@@ -88,15 +88,13 @@ object SortingKeySerializer {
   def apply(keyFormat: Array[CType], idCount: Int) = new SortingKeySerializer(keyFormat, idCount)
 }
 
-class SortingKeySerializer private[SortingKeySerializer](val keyFormat: Array[CType], val idCount: Int) extends Serializer[SortingKey] with Serializable {
+class SortingKeySerializer private[SortingKeySerializer](keyFormat: Array[CType], idCount: Int) extends Serializer[SortingKey] with Serializable {
   import CValueSerializerUtil.defaultSerializer
 
   final val serialVersionUID = 20120730l
 
-  @transient
-  private val keySerializer = CValueSerializer(keyFormat)
-  @transient
-  private val idSerializer  = IdentitiesSerializer(idCount)
+  private[this] var keySerializer = CValueSerializer(keyFormat)
+  private[this] var idSerializer  = IdentitiesSerializer(idCount)
 
   def serialize(out: DataOutput, gk: SortingKey) {
     defaultSerializer.serialize(out, new java.lang.Long(gk.index))

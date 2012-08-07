@@ -131,6 +131,8 @@ trait RawJsonStorageModule[M[+_]] extends StorageModule[M] { self =>
 
 trait RawJsonColumnarTableStorageModule[M[+_]] extends RawJsonStorageModule[M] with ColumnarTableModule[M] with TestColumnarTableModule[M] {
   class Table(slices: StreamT[M, Slice]) extends ColumnarTable(slices) {
+    import trans._
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
     def load(uid: UserId, tpe: JType): M[Table] = {
       val pathsM = this.reduce {
         new CReducer[Set[Path]] {

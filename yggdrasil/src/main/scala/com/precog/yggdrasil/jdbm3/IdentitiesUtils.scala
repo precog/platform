@@ -52,6 +52,8 @@ object IdentitiesSerializer {
 class IdentitiesSerializer private[IdentitiesSerializer](val count: Int) extends Serializer[Identities] with Serializable {
   private final val serialVersionUID = 20120727l
 
+  override def toString(): String = "IdentitiesSerializer(" + count + ")"
+
   def serialize(out: DataOutput, ids: Identities) {
     assert(ids.length == count)
     ids.foreach { i => out.writeLong(i) }

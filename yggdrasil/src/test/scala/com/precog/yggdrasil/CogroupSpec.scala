@@ -47,6 +47,7 @@ import org.scalacheck.Arbitrary._
 trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
   import SampleData._
   import trans.constants._
+  import TableModule.paths._
 
   implicit val cogroupData = Arbitrary(
     for {
