@@ -25,17 +25,19 @@ import scalaz.Monoid
 import scala.collection.mutable
 
 import com.precog.util._
+
+import scalaz.NonEmptyList
 import scalaz.std.map._
 
 trait ReductionFinder extends DAG {
   import instructions._
   import dag._
 
-  def findReductions(node: DepGraph): Map[DepGraph, Vector[dag.Reduce]] = node.foldDown[Map[DepGraph, Vector[dag.Reduce]]] {
-    case node @ dag.Reduce(_, _, parent) => Map(parent -> Vector(node))
+  def findReductions(node: DepGraph): Map[DepGraph, NonEmptyList[dag.Reduce]] = node.foldDown[Map[DepGraph, NonEmptyList[dag.Reduce]]] {
+    case node @ dag.Reduce(_, _, parent) => Map(parent -> NonEmptyList(node))
   }
 
-  def megaReduce(node: DepGraph, reds: Map[DepGraph, Vector[dag.Reduce]]): DepGraph = {
+  def megaReduce(node: DepGraph, reds: Map[DepGraph, NonEmptyList[dag.Reduce]]): DepGraph = {
     val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]()  //map from parent node to MegaReduce node
 
     node.mapDown { recurse => {
@@ -45,7 +47,7 @@ trait ReductionFinder extends DAG {
           reduceTable += (parent -> result)
           result
         }
-        val index: Int = reds(parent).indexOf(graph)
+        val index: Int = reds(parent).list.indexOf(graph)
         dag.Join(loc, DerefArray, CrossLeftSort, left, Root(loc, PushNum(index.toString)))
       }
     }}

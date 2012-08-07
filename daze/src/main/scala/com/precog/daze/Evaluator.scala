@@ -314,21 +314,22 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(pendingTable.table, pendingTable.graph, trans.Map1(pendingTable.trans, op1(op).f1))
         }
 
-// TODO what should be happening:
-// any Reduce nodes left intact (i.e. that make it to this point) should be read and operated on like normal (i.e. like before coalescence)
-// any MegaReduce nodes should do the reduction coalescence and return a table (i.e. an array) of all the results of the reductions that can later be derefed
-
-
+        /**
+        returns an array (to be dereferenced later) containing the result of each reduction
+        */
         case MegaReduce(_, reds, parent) => {
+          val red: ReductionImpl = coalesce(reds map { _.red })  
+
           for {
             pendingTable <- loop(parent, splits)
-            reds0 = (reds map { _.red })
-            red: ReductionImpl = (reds0.headOption map { rhead => coalesce(NEL(rhead, reds0.tail: _*)) }).get //TODO: get rid of get
             liftedTrans = liftToValues(pendingTable.trans)
+
             result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+            keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)), ConstantEmptyArray), constants.Key.name)  //TODO deref by index 0 is WRONG
+            valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), constants.Value.name))
+            wrapped = result map { _ transform valueWrapped }
           } yield {
-            result map { r => println("TABLE FROM MEGAREDUCE NODE = " + r.toString) }
-            PendingTable(result, graph, TransSpec1.Id)
+            PendingTable(wrapped, graph, TransSpec1.Id)
           }
         }
         
@@ -782,9 +783,7 @@ trait Evaluator[M[+_]] extends DAG
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 
       loop(rewrite(graph), Map()) map { pendingTable => pendingTable.table map { _ transform liftToValues(pendingTable.trans) } }
 
-    val f = resultState.eval(EvaluatorState(Map()))
-    f map { t => println("FINAL RESULT TABLE = " + t.toString) } 
-    f
+    resultState.eval(EvaluatorState(Map()))
   }
   
   private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
