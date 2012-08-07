@@ -12,6 +12,7 @@ import scalaz.Monoid
 import scalaz.Scalaz._
 import scalaz.std.option._
 import scalaz.std.list._
+import scalaz.{NonEmptyList => NEL, _}
 
 trait DAG extends Instructions {
   import instructions._
@@ -714,7 +715,7 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
     
-    case class MegaReduce(loc: Line, reds: Vector[dag.Reduce], parent: DepGraph) extends DepGraph {
+    case class MegaReduce(loc: Line, reds: NEL[dag.Reduce], parent: DepGraph) extends DepGraph {
       lazy val provenance = Vector()
       
       val sorting = IdentitySort

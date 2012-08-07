@@ -920,7 +920,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
-    "mega reduce must return an array" in {
+    "MegaReduce must return an array" in {
       val line = Line(0, "")
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
@@ -934,7 +934,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         }
 
         result2.size mustEqual 1
-        result2.head mustEqual 5
+        result2.head must contain(SDecimal(5))
       }
     }
     
