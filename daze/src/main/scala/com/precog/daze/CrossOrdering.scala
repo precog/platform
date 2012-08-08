@@ -95,17 +95,17 @@ trait CrossOrdering extends DAG {
           val left2 = memoized(left, splits)
           val right2 = memoized(right, splits)
           
-          if (left2.sorting == ValueSort(id) && right2.sorting == ValueSort(id)) {
-            Join(loc, op, ValueSort(id), left2, right2)
-          } else if (left2.sorting == ValueSort(id) && right2.sorting != ValueSort(id)) {
-            Join(loc, op, ValueSort(id), left2, ReSortBy(right2, id))
-          } else if (left2.sorting != ValueSort(id) && right2.sorting == ValueSort(id)) {
-            Join(loc, op, ValueSort(id), ReSortBy(left2, id), right2)
-          } else {
-            Join(loc, op, ValueSort(id), ReSortBy(left2, id), ReSortBy(right2, id))
+          def resortLeft = ReSortBy(left2, id)
+          def resortRight = ReSortBy(right2, id)
+          
+          (left2.sorting, right2.sorting) match {
+            case (ValueSort(`id`), ValueSort(`id`)) => Join(loc, op, ValueSort(id), left2, right2)
+            case (ValueSort(`id`), _              ) => Join(loc, op, ValueSort(id), left2, resortRight)
+            case (_,               ValueSort(`id`)) => Join(loc, op, ValueSort(id), resortLeft, right2)
+            case _                                  => Join(loc, op, ValueSort(id), resortLeft, resortRight)
           }
         }
-        
+
         case Join(loc, op, IdentitySort, left, right) => {
           val left2 = memoized(left, splits)
           val right2 = memoized(right, splits)
@@ -115,27 +115,26 @@ trait CrossOrdering extends DAG {
           val leftPrefix = leftIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           val rightPrefix = rightIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
-          if (left2.sorting == IdentitySort && right2.sorting == IdentitySort) {
-            if (leftPrefix && rightPrefix)
-              Join(loc, op, IdentitySort, left2, right2)
-            else if (leftPrefix && !rightPrefix)
-              Join(loc, op, IdentitySort, left2, Sort(right2, rightIndexes))
-            else if (!leftPrefix && rightPrefix)
-              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), right2)
-            else
-              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, rightIndexes))
-          } else if (left2.sorting != IdentitySort && right2.sorting == IdentitySort) {
-            if (rightPrefix)
-              Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), right2)
-            else
-              Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), Sort(right2, rightIndexes))
-          } else if (left2.sorting == IdentitySort && right2.sorting != IdentitySort) {
-            if (leftPrefix)
-              Join(loc, op, IdentitySort, left2, Sort(right2, Vector(0 until right2.provenance.length: _*)))
-            else
-              Join(loc, op, IdentitySort, Sort(left2, leftIndexes), Sort(right2, Vector(0 until right2.provenance.length: _*)))
-          } else {
-            Join(loc, op, IdentitySort, Sort(left2, Vector(0 until left2.provenance.length: _*)), Sort(right2, Vector(0 until right2.provenance.length: _*)))
+          def sortLeft = Sort(left2, leftIndexes)
+          def sortRight = Sort(right2, rightIndexes)
+          
+          def sortLeftAux = Sort(left2, Vector(0 until left2.provenance.length: _*))
+          def sortRightAux = Sort(right2, Vector(0 until right2.provenance.length: _*))
+          
+          (left2.sorting, leftPrefix, right2.sorting, rightPrefix) match {
+            case (IdentitySort, true,  IdentitySort, true ) => Join(loc, op, IdentitySort, left2, right2)
+            case (IdentitySort, true,  IdentitySort, false) => Join(loc, op, IdentitySort, left2, sortRight)
+            case (IdentitySort, false, IdentitySort, true ) => Join(loc, op, IdentitySort, sortLeft, right2)
+            case (IdentitySort, false, IdentitySort, false) => Join(loc, op, IdentitySort, sortLeft, sortRight)
+            
+            case (_,            _,     IdentitySort, true ) => Join(loc, op, IdentitySort, sortLeftAux, right2)
+            case (_,            _,     IdentitySort, false) => Join(loc, op, IdentitySort, sortLeftAux, sortRight)
+
+            case (IdentitySort, true,  _,            _    ) => Join(loc, op, IdentitySort, left2, sortRightAux) 
+            case (IdentitySort, false, _,            _    ) => Join(loc, op, IdentitySort, sortLeft, sortRightAux)
+            
+            case _                                          => Join(loc, op, IdentitySort, sortLeftAux, sortRightAux)
+              
           }
         }
         
@@ -155,17 +154,17 @@ trait CrossOrdering extends DAG {
           val target2 = memoized(target, splits)
           val boolean2 = memoized(boolean, splits)
           
-          if (target2.sorting == ValueSort(id) && boolean2.sorting == ValueSort(id)) {
-            Filter(loc, ValueSort(id), target2, boolean2)
-          } else if (target2.sorting == ValueSort(id) && boolean2.sorting != ValueSort(id)) {
-            Filter(loc, ValueSort(id), target2, ReSortBy(boolean2, id))
-          } else if (target2.sorting != ValueSort(id) && boolean2.sorting == ValueSort(id)) {
-            Filter(loc, ValueSort(id), ReSortBy(target2, id), boolean2)
-          } else {
-            Filter(loc, ValueSort(id), ReSortBy(target2, id), ReSortBy(boolean2, id))
+          def resortTarget  = ReSortBy(target2, id)
+          def resortBoolean = ReSortBy(boolean2, id)
+          
+          (target2.sorting, boolean2.sorting) match {
+            case (ValueSort(`id`), ValueSort(`id`)) => Filter(loc, ValueSort(id), target2, boolean2) 
+            case (ValueSort(`id`), _              ) => Filter(loc, ValueSort(id), target2, resortBoolean) 
+            case (_,               ValueSort(`id`)) => Filter(loc, ValueSort(id), resortTarget, boolean2)
+            case _                                  => Filter(loc, ValueSort(id), resortTarget, resortBoolean)
           }
         }
-        
+          
         case Filter(loc, IdentitySort, target, boolean) => {
           val target2 = memoized(target, splits)
           val boolean2 = memoized(boolean, splits)
@@ -175,30 +174,28 @@ trait CrossOrdering extends DAG {
           val targetPrefix = targetIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           val booleanPrefix = booleanIndexes zip (Stream from 0) forall { case (a, b) => a == b }
           
-          if (target2.sorting == IdentitySort && boolean2.sorting == IdentitySort) {
-            if (targetPrefix && booleanPrefix)
-              Filter(loc, IdentitySort, target2, boolean2)
-            else if (targetPrefix && !booleanPrefix)
-              Filter(loc, IdentitySort, target2, Sort(boolean2, booleanIndexes))
-            else if (!targetPrefix && booleanPrefix)
-              Filter(loc, IdentitySort, Sort(target2, targetIndexes), boolean2)
-            else
-              Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, booleanIndexes))
-          } else if (target2.sorting != IdentitySort && boolean2.sorting == IdentitySort) {
-            if (booleanPrefix)
-              Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), boolean2)
-            else
-              Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), Sort(boolean2, booleanIndexes))
-          } else if (target2.sorting == IdentitySort && boolean2.sorting != IdentitySort) {
-            if (targetPrefix)
-              Filter(loc, IdentitySort, target2, Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
-            else
-              Filter(loc, IdentitySort, Sort(target2, targetIndexes), Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
-          } else {
-            Filter(loc, IdentitySort, Sort(target2, Vector(0 until target2.provenance.length: _*)), Sort(boolean2, Vector(0 until boolean2.provenance.length: _*)))
+          def sortTarget     = Sort(target2, targetIndexes)
+          def sortBoolean    = Sort(boolean2, booleanIndexes)
+
+          def sortTargetAux  = Sort(target2, Vector(0 until target2.provenance.length: _*))
+          def sortBooleanAux = Sort(boolean2, Vector(0 until boolean2.provenance.length: _*))
+          
+          (target2.sorting, targetPrefix, boolean2.sorting, booleanPrefix) match {
+            case (IdentitySort, true,  IdentitySort, true ) => Filter(loc, IdentitySort, target2, boolean2)
+            case (IdentitySort, true,  IdentitySort, false) => Filter(loc, IdentitySort, target2, sortBoolean)
+            case (IdentitySort, false, IdentitySort, true ) => Filter(loc, IdentitySort, sortTarget, boolean2)
+            case (IdentitySort, false, IdentitySort, false) => Filter(loc, IdentitySort, sortTarget, sortBoolean)
+            
+            case (_, _,                IdentitySort, true ) => Filter(loc, IdentitySort, sortTargetAux, boolean2)
+            case (_, _,                IdentitySort, false) => Filter(loc, IdentitySort, sortTargetAux, sortBoolean)
+
+            case (IdentitySort, true,  _,            _    ) => Filter(loc, IdentitySort, target2, sortBooleanAux)
+            case (IdentitySort, false, _,            _    ) => Filter(loc, IdentitySort, sortTarget, sortBooleanAux)
+              
+            case _                                          => Filter(loc, IdentitySort, sortTargetAux, sortBooleanAux)
           }
         }
-        
+
         case Filter(loc, joinSort, target, boolean) =>
           Filter(loc, joinSort, memoized(target, splits), memoized(boolean, splits))
         
