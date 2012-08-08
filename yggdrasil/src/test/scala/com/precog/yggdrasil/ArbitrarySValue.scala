@@ -33,6 +33,8 @@ import org.scalacheck.Arbitrary
 import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary._
 
+import java.math.MathContext
+
 import scalaz.Order
 import scalaz.std.list._
 import scalaz.std.anyVal._
@@ -41,7 +43,7 @@ object CValueGenerators {
   type JSchema = Seq[(JPath, CType)]
 }
 
-trait CValueGenerators {
+trait CValueGenerators extends ArbitraryBigDecimal {
   import CValueGenerators._
 
   def schema(depth: Int): Gen[JSchema] = {
@@ -87,9 +89,7 @@ trait CValueGenerators {
   def ctype: Gen[CType] = oneOf(
     CString,
     CBoolean,
-    CLong,
-    CDouble,
-    //CNum,
+    CNum,
     CNull,
     CEmptyObject,
     CEmptyArray
@@ -98,9 +98,9 @@ trait CValueGenerators {
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
     case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
-    case CLong => arbitrary[Long] map (JInt(_))
-    case CDouble => arbitrary[Double] map (JDouble(_))
-    case CNum => arbitrary[Double] map (JDouble(_))
+    case CLong => arbitrary[Long] map { ln => JNum(BigDecimal(ln, MathContext.UNLIMITED)) }
+    case CDouble => arbitrary[Double] map { d => JNum(BigDecimal(d, MathContext.UNLIMITED)) }
+    case CNum => arbitrary[BigDecimal] map { bd => JNum(bd) }
     case CNull => JNull
     case CEmptyObject => JObject.empty 
     case CEmptyArray => JArray.empty
@@ -137,7 +137,7 @@ trait CValueGenerators {
   }
 }
 
-trait SValueGenerators {
+trait SValueGenerators extends ArbitraryBigDecimal {
   def svalue(depth: Int): Gen[SValue] = {
     if (depth <= 0) sleaf 
     else oneOf(1, 2, 3) flatMap { //it's much faster to lazily compute the subtrees
@@ -170,7 +170,7 @@ trait SValueGenerators {
     arbitrary[Boolean] map (SBoolean(_: Boolean)),
     arbitrary[Long]    map (l => SDecimal(BigDecimal(l))),
     arbitrary[Double]  map (d => SDecimal(BigDecimal(d))),
-    //arbitrary[BigDecimal] map SDecimal, //scalacheck's BigDecimal gen will overflow at random
+    arbitrary[BigDecimal] map { bd => SDecimal(bd) }, //scalacheck's BigDecimal gen will overflow at random
     value(SNull)
   )
 
@@ -204,6 +204,21 @@ trait ArbitrarySValue extends SValueGenerators {
 
   implicit val SEventChunkGen: Gen[Vector[SEvent]] = chunk(3, 3, 2)
   implicit val ArbitraryChunks = Arbitrary(genChunks(5))
+}
+
+trait ArbitraryBigDecimal {
+  // BigDecimal *isn't* arbitrary precision!  AWESOME!!!
+  implicit def arbBigDecimal: Arbitrary[BigDecimal] = Arbitrary(for {
+    mantissa <- arbitrary[Long]
+    exponent <- arbitrary[Int]
+    
+    adjusted = if (exponent.toLong + mantissa.toString.length >= Int.MaxValue.toLong)
+      exponent - mantissa.toString.length
+    else if (exponent.toLong - mantissa.toString.length <= Int.MinValue.toLong)
+      exponent + mantissa.toString.length
+    else
+      exponent
+  } yield BigDecimal(mantissa, adjusted, java.math.MathContext.UNLIMITED))
 }
 
 

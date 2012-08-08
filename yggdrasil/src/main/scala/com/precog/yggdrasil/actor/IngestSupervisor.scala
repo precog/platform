@@ -112,8 +112,8 @@ class IngestSupervisor(ingestActorInit: Option[() => Actor], projectionsActor: A
       processMessages(d, sender) 
   }
 
-  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JInt(initiated)) :: 
-                                                                 JField("processed", JInt(processed)) :: Nil)) :: Nil)
+  private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) :: 
+                                                                 JField("processed", JNum(processed)) :: Nil)) :: Nil)
 
   private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
     val inserts = routingTable.batchMessages(messages)

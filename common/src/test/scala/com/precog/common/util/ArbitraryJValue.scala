@@ -28,20 +28,17 @@ trait ArbitraryJValue {
   import JsonAST._
 
   def genJValue:  Gen[JValue]  = frequency((10, genSimple), (1, wrap(choose(0, 5) flatMap genArray)), (1, wrap(choose(0, 5) flatMap genObject)))
-  def genJInt:    Gen[JInt]    = arbitrary[Int].map(JInt(_))
-  def genJDouble: Gen[JDouble] = arbitrary[Double].map(JDouble(_))
+  def genJNum:    Gen[JNum]    = arbitrary[BigDecimal].map(JNum(_))
   def genJBool:   Gen[JBool]   = arbitrary[Boolean].map(JBool(_))
   def genJString: Gen[JString] = alphaStr.map(JString(_))
   def genSimple: Gen[JValue] = oneOf(
     value(JNull),
-    genJInt,
-    genJDouble,
+    genJNum,
     genJBool,
     genJString)
     
   def genSimpleNotNull: Gen[JValue] = oneOf(
-    genJInt,
-    genJDouble,
+    genJNum,
     genJBool,
     genJString)
 
@@ -53,8 +50,8 @@ trait ArbitraryJValue {
   def genField = for (name <- alphaStr; value <- genJValue; id <- choose(0, 1000000)) yield JField(name+id, value)
 
   def genJValueClass: Gen[Class[_ <: JValue]] = oneOf(
-    JNull.getClass.asInstanceOf[Class[JValue]], JNothing.getClass.asInstanceOf[Class[JValue]], classOf[JInt],
-    classOf[JDouble], classOf[JBool], classOf[JString], classOf[JField], classOf[JArray], classOf[JObject])
+    JNull.getClass.asInstanceOf[Class[JValue]], JNothing.getClass.asInstanceOf[Class[JValue]], classOf[JNum],
+    classOf[JBool], classOf[JString], classOf[JField], classOf[JArray], classOf[JObject])
 
   def listSize = choose(0, 5).sample.get
 
@@ -62,4 +59,17 @@ trait ArbitraryJValue {
   implicit def arbJObject: Arbitrary[JObject] = Arbitrary(choose(0, 5) flatMap genObject)
   implicit def arbJValueClass: Arbitrary[Class[_ <: JValue]] = Arbitrary(genJValueClass)
   implicit def shrinkJValueClass[T]: Shrink[T] = Shrink(x => Stream.empty)
+  
+  // BigDecimal *isn't* arbitrary precision!  AWESOME!!!
+  implicit def arbBigDecimal: Arbitrary[BigDecimal] = Arbitrary(for {
+    mantissa <- arbitrary[Long]
+    exponent <- arbitrary[Int]
+    
+    adjusted = if (exponent.toLong + mantissa.toString.length >= Int.MaxValue.toLong)
+      exponent - mantissa.toString.length
+    else if (exponent.toLong - mantissa.toString.length <= Int.MinValue.toLong)
+      exponent + mantissa.toString.length
+    else
+      exponent
+  } yield BigDecimal(mantissa, adjusted, java.math.MathContext.UNLIMITED))
 }

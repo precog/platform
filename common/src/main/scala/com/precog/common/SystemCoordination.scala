@@ -131,12 +131,12 @@ case class ProducerState(lastSequenceId: Int)
 
 trait ProducerStateSerialization {
   implicit val ProducerStateDecomposer: Decomposer[ProducerState] = new Decomposer[ProducerState] {
-    override def decompose(state: ProducerState): JValue = JInt(state.lastSequenceId)
+    override def decompose(state: ProducerState): JValue = JNum(state.lastSequenceId)
   }
 
   implicit val ProducerStateExtractor: Extractor[ProducerState] = new Extractor[ProducerState] with ValidatedExtraction[ProducerState] {
     override def validated(obj: JValue): Validation[Error, ProducerState] = obj match {
-      case jint @ JInt(_) => jint.validated[Int] map { id => ProducerState(id) }
+      case jint @ JNum(_) => jint.validated[Int] map { id => ProducerState(id) }
       case _              => Failure(Invalid("Invalid producer state: " + obj))
     }   
   }

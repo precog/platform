@@ -232,8 +232,7 @@ object CType extends CTypeSerialization {
   @inline
   final def toCValue(jval: JValue): CValue = (jval: @unchecked) match {
     case JString(s) => CString(s)
-    case JInt(i)    => sizedIntCValue(i)
-    case JDouble(d) => CDouble(d)
+    case JNum(d) => CNum(d)
     case JBool(b)   => CBoolean(b)
     case JNull      => CNull
     case JObject(Nil) => CEmptyObject
@@ -243,31 +242,12 @@ object CType extends CTypeSerialization {
   @inline
   final def forJValue(jval: JValue): Option[CType] = jval match {
     case JBool(_)     => Some(CBoolean)
-    case JInt(bi)     => Some(sizedIntCType(bi))
-    case JDouble(_)   => Some(CDouble)
+    case JNum(_)      => Some(CNum)
     case JString(_)   => Some(CString)
     case JNull        => Some(CNull)
     case JArray(Nil)  => Some(CEmptyArray)
     case JObject(Nil) => Some(CEmptyObject)
     case _            => None
-  }
-
-  @inline
-  final def sizedIntCValue(bi: BigInt): CValue = {
-    if(bi.isValidInt || isValidLong(bi)) {
-      CLong(bi.longValue)
-    } else {
-      CNum(BigDecimal(bi))
-    }
-  }
-
-  @inline
-  private final def sizedIntCType(bi: BigInt): CType = {
-   if(bi.isValidInt || isValidLong(bi)) {
-      CLong
-    } else {
-      CNum
-    }   
   }
 
   implicit object CTypeOrder extends Order[CType] {
@@ -313,7 +293,7 @@ case object CBoolean extends CType(FixedWidth(1), SBoolean) {
 sealed abstract class CNumeric(format: StorageFormat, stype: SType) extends CType(format, stype)
 
 case class CLong(value: Long) extends CValue {
-  def toJValue = JInt(value)
+  def toJValue = JNum(value)
 }
 case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CLong
@@ -321,12 +301,12 @@ case object CLong extends CNumeric(FixedWidth(8), SDecimal) {
   val CC = classOf[Long]
   override def isNumeric: Boolean = true
   def order(v1: Long, v2: Long) = longInstance.order(v1, v2)
-  def jvalueFor(v: Long) = JInt(v)
+  def jvalueFor(v: Long) = JNum(v)
   implicit val manifest = implicitly[Manifest[Long]]
 }
 
 case class CDouble(value: Double) extends CValue {
-  def toJValue = JDouble(value)
+  def toJValue = JNum(value)
 }
 case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   def readResolve() = CDouble
@@ -334,12 +314,12 @@ case object CDouble extends CNumeric(FixedWidth(8), SDecimal) {
   val CC = classOf[Double]
   override def isNumeric: Boolean = true
   def order(v1: Double, v2: Double) = doubleInstance.order(v1, v2)
-  def jvalueFor(v: Double) = JDouble(v)
+  def jvalueFor(v: Double) = JNum(v)
   implicit val manifest = implicitly[Manifest[Double]]
 }
 
 case class CNum(value: BigDecimal) extends CValue {
-  def toJValue = JDouble(value.toDouble)
+  def toJValue = JNum(value)
 }
 case object CNum extends CNumeric(LengthEncoded, SDecimal) {
   def readResolve() = CNum
@@ -347,7 +327,7 @@ case object CNum extends CNumeric(LengthEncoded, SDecimal) {
   val CC = classOf[BigDecimal]
   override def isNumeric: Boolean = true
   def order(v1: BigDecimal, v2: BigDecimal) = bigDecimalInstance.order(v1, v2)
-  def jvalueFor(v: BigDecimal) = JDouble(v.toDouble)
+  def jvalueFor(v: BigDecimal) = JNum(v)
   implicit val manifest = implicitly[Manifest[BigDecimal]]
 }
 

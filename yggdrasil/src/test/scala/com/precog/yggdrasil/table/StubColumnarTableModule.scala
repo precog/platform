@@ -63,22 +63,8 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
                     col(sliceIndex) = b
                     (defined + sliceIndex, col)
   
-                  case JInt(ji) => CType.sizedIntCValue(ji) match {
-                    case CLong(v) =>
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
-                      col(sliceIndex) = v
-                      (defined + sliceIndex, col)
-  
-                    case CNum(v) =>
-                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                      col(sliceIndex) = v
-                      (defined + sliceIndex, col)
-
-                    case invalid => sys.error("Invalid size Int type: " + invalid)
-                  }
-  
-                  case JDouble(d) => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
+                  case JNum(d) => 
+                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
                     col(sliceIndex) = d
                     (defined + sliceIndex, col)
   
@@ -180,7 +166,7 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
               currentIndex += parsed.length
               
               parsed zip (Stream from index) map {
-                case (value, id) => JObject(JField("key", JArray(JInt(id) :: Nil)) :: JField("value", value) :: Nil)
+                case (value, id) => JObject(JField("key", JArray(JNum(id) :: Nil)) :: JField("value", value) :: Nil)
               }
 
             case x => sys.error("Attempted to load JSON as a table from something that wasn't a string: " + x)

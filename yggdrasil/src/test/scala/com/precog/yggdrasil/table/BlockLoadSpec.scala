@@ -130,7 +130,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CDouble, JPath(".rzp") -> CEmptyObject))
+        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CNum, JPath(".rzp") -> CEmptyObject))
       )
     )
 
@@ -165,11 +165,11 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
         (3, List(JPath(".f.bn[0]") -> CNull, 
-                 JPath(".f.wei") -> CDouble, 
+                 JPath(".f.wei") -> CNum, 
                  JPath(".ljz[0]") -> CNull,
                  JPath(".ljz[1][0]") -> CString,
                  JPath(".ljz[2]") -> CBoolean,
-                 JPath(".jmy") -> CDouble))
+                 JPath(".jmy") -> CNum))
       )
     )
 
@@ -201,7 +201,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
                  JPath(".dV.l") -> CBoolean, 
                  JPath(".dV.vq") -> CEmptyObject, 
                  JPath(".oy.nm") -> CBoolean, 
-                 JPath(".uR") -> CDouble))
+                 JPath(".uR") -> CNum))
       )
     )   
 
@@ -302,8 +302,8 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       ]""") --> classOf[JArray]).elements.toStream,
       Some((1, List((JPath(".o8agyghfjxe") -> CEmptyArray), 
                     (JPath(".fg[0]") -> CBoolean), 
-                    (JPath(".fg[1]") -> CDouble), 
-                    (JPath(".fg[2]") -> CLong), 
+                    (JPath(".fg[1]") -> CNum), 
+                    (JPath(".fg[2]") -> CNum), 
                     (JPath(".cfnYTg92dg") -> CString))))
     )
 

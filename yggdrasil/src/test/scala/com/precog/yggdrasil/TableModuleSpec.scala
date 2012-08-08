@@ -55,7 +55,7 @@ case class SampleData(data: Stream[JValue], schema: Option[(Int, JSchema)] = Non
 
 object SampleData extends CValueGenerators {
   def toRecord(ids: VectorCase[Long], jv: JValue): JValue = {
-    JObject(Nil).set(JPath(".key"), JArray(ids.map(JInt(_)).toList)).set(JPath(".value"), jv)
+    JObject(Nil).set(JPath(".key"), JArray(ids.map(JNum(_)).toList)).set(JPath(".value"), jv)
   }
 
   implicit def keyOrder[A]: scala.math.Ordering[(Identities, A)] = tupledIdentitiesOrder[A](IdentitiesOrder).toScalaOrdering

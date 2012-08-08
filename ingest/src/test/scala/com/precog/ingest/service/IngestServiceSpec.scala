@@ -120,7 +120,7 @@ class IngestServiceSpec extends TestIngestService with FutureMatchers {
     token.map{ ingestService.query("tokenId", _) }.getOrElse(ingestService).post(path)(data)
   }
 
-  def testValue = JObject(List(JField("testing", JInt(123))))
+  def testValue = JObject(List(JField("testing", JNum(123))))
 
   "Ingest service" should {
     "track event with valid token" in {
