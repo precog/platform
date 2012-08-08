@@ -6,6 +6,8 @@ import cf._
 import blueeyes.json.JsonAST._
 import org.joda.time.DateTime
 
+import java.math.MathContext
+
 import scala.collection.mutable.BitSet
 import scalaz.Semigroup
 import scalaz.std.option._
@@ -38,7 +40,7 @@ trait LongColumn extends Column with (Int => Long) {
   def apply(row: Int): Long
 
   override val tpe = CLong
-  override def jValue(row: Int) = JInt(this(row))
+  override def jValue(row: Int) = JNum(BigDecimal(this(row), MathContext.UNLIMITED))
   override def cValue(row: Int) = CLong(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
@@ -47,7 +49,7 @@ trait DoubleColumn extends Column with (Int => Double) {
   def apply(row: Int): Double
 
   override val tpe = CDouble
-  override def jValue(row: Int) = JDouble(this(row))
+  override def jValue(row: Int) = JNum(BigDecimal(this(row), MathContext.UNLIMITED))
   override def cValue(row: Int) = CDouble(this(row))
   override def strValue(row: Int): String = String.valueOf(this(row))
 }
@@ -56,7 +58,7 @@ trait NumColumn extends Column with (Int => BigDecimal) {
   def apply(row: Int): BigDecimal
 
   override val tpe = CNum
-  override def jValue(row: Int) = JDouble(this(row).toDouble)
+  override def jValue(row: Int) = JNum(BigDecimal(this(row), MathContext.UNLIMITED))
   override def cValue(row: Int) = CNum(this(row))
   override def strValue(row: Int): String = this(row).toString
 }

@@ -202,8 +202,8 @@ trait YggdrasilQueryExecutor
                 JObject(
                   JField("message", JString("Errors occurred compiling your query.")) 
                   :: JField("line", JString(loc.line))
-                  :: JField("lineNum", JInt(loc.lineNum))
-                  :: JField("colNum", JInt(loc.colNum))
+                  :: JField("lineNum", JNum(loc.lineNum))
+                  :: JField("colNum", JNum(loc.colNum))
                   :: JField("detail", JString(tp.toString))
                   :: Nil
                 )
@@ -218,8 +218,8 @@ trait YggdrasilQueryExecutor
             JObject(
               JField("message", JString("An error occurred parsing your query."))
               :: JField("line", JString(ex.failures.head.tail.line))
-              :: JField("lineNum", JInt(ex.failures.head.tail.lineNum))
-              :: JField("colNum", JInt(ex.failures.head.tail.colNum))
+              :: JField("lineNum", JNum(ex.failures.head.tail.lineNum))
+              :: JField("colNum", JNum(ex.failures.head.tail.colNum))
               :: JField("detail", JString(ex.mkString))
               :: Nil
             ) :: Nil
