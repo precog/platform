@@ -50,12 +50,18 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
   implicit def coM: Copointed[M]
 
   def checkSortDense = {
+    import TableModule.paths.Value
+
     implicit val gen = sample(objectSchema(_, 3))
-    check { (sample: SampleData) => testSortDense(sample) }
+    check { (sample: SampleData) => {
+      val Some((_, schema)) = sample.schema
+
+      testSortDense(sample, schema.map(_._1).head) 
+    }}
   }
 
   // Simple test of sorting on homogeneous data
-  def testSortSample1 = {
+  def homogeneousSortSample = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
         {
@@ -82,11 +88,11 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )
 
-    testSortDense(sampleData)
+    testSortDense(sampleData, JPath(".uid"))
   }
 
   // Simple test of partially undefined sort key data
-  def testSortSample2 = {
+  def partiallyUndefinedSortSample = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
         {
@@ -112,15 +118,16 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )
 
-    testSortDense(sampleData)
+    testSortDense(sampleData, JPath(".uid"))
   }
 
-  def testSortSample3 = {
+  // Simple test of heterogeneous sort keys
+  def heterogeneousSortSample = {
     val sampleData = SampleData(
       (JsonParser.parse("""[
          {
            "value":{
-            "uid":"hank",
+            "uid": 12,
              "f":{
                "bn":[null],
                "wei":1.0
@@ -132,7 +139,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
          },
          {
            "value":{
-            "uid":"fred",
+            "uid": 1.5,
              "f":{
                "bn":[null],
                "wei":5.615997508833152E307
@@ -144,7 +151,8 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
          ]
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (3, List(JPath(".uid") -> CString,
+        (3, List(JPath(".uid") -> CLong,
+                 JPath(".uid") -> CDouble,
                  JPath(".f.bn[0]") -> CNull, 
                  JPath(".f.wei") -> CDouble, 
                  JPath(".ljz[0]") -> CNull,
@@ -154,158 +162,11 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       )
     )
 
-    testSortDense(sampleData)
+    testSortDense(sampleData, JPath(".uid"))
   }
 
-  def testSortSample4 = {
-    val sampleData = SampleData(
-      (JsonParser.parse("""[
-        {
-          "value":{
-            "uid":"fred",
-            "dV":{
-              "d":true,
-              "l":false,
-              "vq":{
-                
-              }
-            },
-            "oy":{
-              "nm":false
-            },
-            "uR":-6.41847178802919E307
-          },
-          "key":[1,1]
-        }
-      ]""") --> classOf[JArray]).elements.toStream,
-      Some(
-        (2, List(JPath(".uid") -> CString,
-                 JPath(".dV.d") -> CBoolean, 
-                 JPath(".dV.l") -> CBoolean, 
-                 JPath(".dV.vq") -> CEmptyObject, 
-                 JPath(".oy.nm") -> CBoolean, 
-                 JPath(".uR") -> CDouble))
-      )
-    )   
 
-    testSortDense(sampleData)
-  } 
-
-  def testSortSample5 = {
-    val sampleData = SampleData(
-      (JsonParser.parse("""[
-        {
-          "value":{
-            "uid":"fred",
-            "cfnYTg92dg":"gu",
-            "fg":[false,8.988465674311579E307,-1],
-            "o8agyghfjxe":[]
-          },
-          "key":[1]
-        },
-        {
-          "value":{
-            "uid":"ted",
-            "cfnYTg92dg":"yoqmrz",
-            "fg":[false,0.0,0],
-            "o8agyghfjxe":[]
-          },
-          "key":[1]
-        },
-        {
-          "value":{
-            "uid":"joe",
-            "cfnYTg92dg":"bzjhpndgoY",
-            "fg":[true,5.899727648511153E307,0],
-            "o8agyghfjxe":[]
-          },
-          "key":[2]
-        },
-        {
-          "value":{
-            "uid":"al",
-            "cfnYTg92dg":"ztDcxy",
-            "fg":[false,-1.0,-1],
-            "o8agyghfjxe":[]
-          },
-          "key":[2]
-        },
-        {
-          "value":{
-            "uid":"brent",
-            "cfnYTg92dg":"jeuHxunPdg",
-            "fg":[true,3.3513345026993237E307,0],
-            "o8agyghfjxe":[]
-          },
-          "key":[3]
-        },
-        {
-          "value":{
-            "uid":"tony",
-            "cfnYTg92dg":"evxnIfv",
-            "fg":[false,-5.295630177665229E307,1],
-            "o8agyghfjxe":[]
-          },
-          "key":[3]
-        },
-        {
-          "value":{
-            "uid":"jerome",
-            "cfnYTg92dg":"v",
-            "fg":[true,-6.98151882908554E307,3047586736114377501],
-            "o8agyghfjxe":[]
-          },
-          "key":[6]
-        },
-        {
-          "value":{
-            "uid":"mike",
-            "cfnYTg92dg":"ontecesf",
-            "fg":[false,5.647795622045506E307,-1],
-            "o8agyghfjxe":[]
-          },
-          "key":[6]
-        },
-        {
-          "value":{
-            "uid":"george",
-            "cfnYTg92dg":"",
-            "fg":[true,1.0,-4341538468449353975],
-            "o8agyghfjxe":[]
-          },
-          "key":[7]
-        },
-        {
-          "value":{
-            "uid":"dan",
-            "cfnYTg92dg":"Hwpqxk",
-            "fg":[true,-4.38879797446784E307,4611686018427387903],
-            "o8agyghfjxe":[]
-          },
-          "key":[9]
-        },
-        {
-          "value":{
-            "uid":"gary",
-            "cfnYTg92dg":"mkkhV",
-            "fg":[true,-1.0,3724086638589828262],
-            "o8agyghfjxe":[]
-          },
-          "key":[9]
-        }
-      ]""") --> classOf[JArray]).elements.toStream,
-      Some((1, List(JPath(".uid") -> CString,
-                    (JPath(".o8agyghfjxe") -> CEmptyArray), 
-                    (JPath(".fg[0]") -> CBoolean), 
-                    (JPath(".fg[1]") -> CDouble), 
-                    (JPath(".fg[2]") -> CLong), 
-                    (JPath(".cfnYTg92dg") -> CString))))
-    )
-
-    testSortDense(sampleData)
-  }
-
-  def testSortDense(sample: SampleData) = {
+  def testSortDense(sample: SampleData, sortKey: JPath) = {
     //println("testing for sample: " + sample)
     val Some((idCount, schema)) = sample.schema
 
@@ -341,7 +202,23 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
     import module.trans._
     import TableModule.paths._
 
-    val sortTransspec = WrapObject(DerefObjectStatic(DerefObjectStatic(Leaf(Source), JPathField("value")), JPathField("uid")), "uid")
+    val derefTransspec: TransSpec1 = sortKey.nodes.foldLeft[TransSpec1](DerefObjectStatic(Leaf(Source), JPathField("value"))) {
+      case (innerSpec, field: JPathField) => DerefObjectStatic(innerSpec, field)
+      case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
+    }
+
+    val sortTransspec = WrapObject(derefTransspec, "sortkey")
+
+    val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
+      import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+
+      def compare(a: JValue, b: JValue): Int = (a,b) match {
+        case (JInt(ai), JDouble(bd))    => ai.toDouble.compareTo(bd)
+        case (JDouble(ad), JInt(bi))    => ad.compareTo(bi.toDouble)
+        case _                          => JValueOrdering.compare(a, b)
+      } 
+    }
+
     module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
       _.sort(sortTransspec, SortAscending)
     }.flatMap {
@@ -349,9 +226,9 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
     }.flatMap {
       _.toJson
-    }.copoint.toStream must_== sample.data.sortBy {
-      v => (v \ "value" \? "uid").getOrElse(JString(""))
-    }
+    }.copoint.toStream must_== sample.data.sortBy({
+      v => sortKey.extract(v \ "value")
+    })(jvalueOrdering)
   }
 }
 

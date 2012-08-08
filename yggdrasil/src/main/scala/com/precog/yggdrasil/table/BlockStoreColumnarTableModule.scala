@@ -418,24 +418,30 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
 
       // Merge the resulting slice indices back together
-      inputOp.flatMap { case SortOutput(indices, Some(sortColumns), idCount, _) => {
-        // Map the distinct indices into SortProjections/Cells, then merge them
-        val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-          case ((format, SliceIndex(name, _)), index) => {
-            val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, format) {
-              def keyOrder: Order[SortingKey] = sortingKeyOrder
+      inputOp.flatMap { 
+        case SortOutput(indices, Some(sortColumns), idCount, _) => {
+          // Map the distinct indices into SortProjections/Cells, then merge them
+          val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
+            case ((format, SliceIndex(name, _)), index) => {
+              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, format) {
+                def keyOrder: Order[SortingKey] = sortingKeyOrder
+              }
+
+              val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+
+              succ(None) map { 
+                _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+              }
             }
+          }.toSet
 
-            val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
-
-            succ(None) map { 
-              _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
-            }
-          }
-        }.toSet
-
-        mergeProjections(cells)
-      }}
+          mergeProjections(cells)
+        }
+        case SortOutput(_, None, _, _) => {
+          // We've been asked to sort an empty table. Return the input
+          M.point(this)
+        }
+      }
     }
   }
 

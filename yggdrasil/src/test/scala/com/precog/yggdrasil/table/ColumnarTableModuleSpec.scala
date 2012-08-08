@@ -181,12 +181,10 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
     }
 
     "sort" >> {
-      "fully homogeneous data" in testSortSample1
-      "data with undefined sort keys" in testSortSample2
-      //"reconstruct a problem sample" in testSortSample3
-      //"reconstruct a problem sample" in testSortSample4
-      //"reconstruct a problem sample" in testSortSample5 //pathological sample in the case of duplicated ids.
-      //"reconstruct a dense dataset" in checkSortDense
+      "fully homogeneous data"        in homogeneousSortSample
+      "data with undefined sort keys" in partiallyUndefinedSortSample
+      "heterogeneous sort keys"       in heterogeneousSortSample
+      "arbitrary datasets"            in checkSortDense
     }    
   }
 }
@@ -195,5 +193,6 @@ object ColumnarTableModuleSpec extends ColumnarTableModuleSpec[Free.Trampoline] 
   implicit def M = Trampoline.trampolineMonad
   implicit def coM = Trampoline.trampolineMonad
 }
+
 
 // vim: set ts=4 sw=4 et:
