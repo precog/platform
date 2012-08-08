@@ -4,6 +4,8 @@ package daze
 import bytecode._
 import org.specs2.mutable._
 
+import scalaz.{NonEmptyList => NEL, _}
+
 object ReductionFinderSpecs extends Specification with ReductionFinder with StaticLibrary {
   import instructions._
   import dag._
@@ -20,9 +22,10 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val line = Line(0, "")
 
       val input = dag.Reduce(line, Reduction(Vector(), "count", 0x0000), Root(line, PushString("alpha")))
+      val megaR = dag.MegaReduce(line, NEL(input), Root(line, PushString("alpha")))
 
       val expected = dag.Join(line, DerefArray, CrossLeftSort, 
-        dag.MegaReduce(line, Vector(input), Root(line, PushString("alpha"))),
+        megaR,
         Root(line, PushNum("0")))
 
       megaReduce(input, findReductions(input)) mustEqual expected
@@ -37,8 +40,10 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val red = Reduction(Vector(), "count", 0x0000)
+      val megaR = dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent)
+
       val expected = dag.Join(line, DerefArray, CrossLeftSort, 
-        dag.MegaReduce(line, Vector(dag.Reduce(line, red, parent)), parent),
+        megaR,
         Root(line, PushNum("0")))
 
       megaReduce(input, findReductions(input)) mustEqual expected
@@ -57,14 +62,15 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val red1 = Reduction(Vector(), "count", 0x0000)
       val red2 = Reduction(Vector(), "stdDev", 0x0007)
-      val reductions = Vector(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent))
+      val reductions = NEL(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent))
+      val megaR = dag.MegaReduce(line, reductions, parent)
 
       val expected = Join(line, Add, CrossLeftSort,
         Join(line, DerefArray, CrossLeftSort,
-          dag.MegaReduce(line, reductions, parent),
+          megaR,
           Root(line, PushNum("0"))),
         Join(line, DerefArray, CrossLeftSort,
-          dag.MegaReduce(line, reductions, parent),
+          megaR,
           Root(line, PushNum("1"))))
 
       megaReduce(input, findReductions(input)) mustEqual expected
@@ -82,11 +88,12 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
         val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
         val red = Reduction(Vector(), "stdDev", 0x0007)
+        val megaR = dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent)
 
         val expected = Join(line, Add, CrossLeftSort,
           dag.Operate(line, Neg, parent),
           dag.Join(line, DerefArray, CrossLeftSort, 
-            dag.MegaReduce(line, Vector(dag.Reduce(line, red, parent)), parent),
+            megaR,
             Root(line, PushNum("0"))))
 
         megaReduce(input, findReductions(input)) mustEqual expected
@@ -103,10 +110,11 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
         val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
         val red = Reduction(Vector(), "count", 0x0000)
+        val megaR = dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent)
 
         val expected = Join(line, Add, CrossLeftSort,
           dag.Join(line, DerefArray, CrossLeftSort, 
-            dag.MegaReduce(line, Vector(dag.Reduce(line, red, parent)), parent),
+            megaR,
             Root(line, PushNum("0"))),
           dag.Operate(line, Neg, parent))
 
@@ -134,7 +142,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val red = Reduction(Vector(), "count", 0x0000)
-      val expected = Map(parent -> Vector(dag.Reduce(line, red, parent)))
+      val expected = Map(parent -> NEL(dag.Reduce(line, red, parent)))
 
       findReductions(input) mustEqual expected
     }   
@@ -152,7 +160,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
       val red1 = Reduction(Vector(), "count", 0x0000)
       val red2 = Reduction(Vector(), "stdDev", 0x0007)
-      val expected = Map(parent -> Vector(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent)))
+      val expected = Map(parent -> NEL(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent)))
 
       findReductions(input) mustEqual expected
     }
@@ -170,7 +178,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
         val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
         val red = Reduction(Vector(), "stdDev", 0x0007)
-        val expected = Map(parent -> Vector(dag.Reduce(line, red, parent)))
+        val expected = Map(parent -> NEL(dag.Reduce(line, red, parent)))
 
         findReductions(input) mustEqual expected
       }
@@ -186,7 +194,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
         val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
         val red = Reduction(Vector(), "count", 0x0000)
-        val expected = Map(parent -> Vector(dag.Reduce(line, red, parent)))
+        val expected = Map(parent -> NEL(dag.Reduce(line, red, parent)))
 
         findReductions(input) mustEqual expected
       }
@@ -221,7 +229,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
           nums,
           SplitParam(line, 0)(input)))  //TODO should this still require only one pass over /hom/numbers ?
       val red = Reduction(Vector(), "max", 0x0001)
-      val expected = Map(parent -> Vector(dag.Reduce(line, red, parent)))
+      val expected = Map(parent -> NEL(dag.Reduce(line, red, parent)))
 
       findReductions(input) mustEqual expected
     }
@@ -267,7 +275,7 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val red1 = Reduction(Vector(), "min", 0x0004)
       val red2 = Reduction(Vector(), "max", 0x0001)
 
-      val expected = Map(parent -> Vector(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent)))
+      val expected = Map(parent -> NEL(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent)))
 
       findReductions(input) mustEqual expected
     }
