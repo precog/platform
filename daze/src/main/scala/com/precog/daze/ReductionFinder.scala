@@ -38,10 +38,10 @@ trait ReductionFinder extends DAG {
   }
 
   def megaReduce(node: DepGraph, reds: Map[DepGraph, NonEmptyList[dag.Reduce]]): DepGraph = {
-    val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]()  //map from parent node to MegaReduce node
+    val reduceTable = mutable.Map[DepGraph, dag.MegaReduce]()  //this is a Map from parent node to MegaReduce node
 
     node.mapDown { recurse => {
-      case graph @ dag.Reduce(loc, red, parent) if reds isDefinedAt parent => {  //TODO do something other than isDefinedAt here? like get followed by getOrElse? 
+      case graph @ dag.Reduce(loc, red, parent) if reds isDefinedAt parent => {
         val left = reduceTable.get(parent) getOrElse {
           val result = dag.MegaReduce(loc, reds(parent), recurse(parent))
           reduceTable += (parent -> result)

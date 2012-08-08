@@ -71,14 +71,12 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
     "in a join of two reductions on the same dataset" >> {
       val line = Line(0, "")
 
-      val input = Join(line, Add, CrossLeftSort, 
-        dag.Reduce(line, Reduction(Vector(), "count", 0x0000), 
-          dag.LoadLocal(line, Root(line, PushString("/foo")))),
-        dag.Reduce(line, Reduction(Vector(), "stdDev", 0x0007),
-          dag.LoadLocal(line, Root(line, PushString("/foo")))))
-
-
       val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
+
+      val input = Join(line, Add, CrossLeftSort, 
+        dag.Reduce(line, Reduction(Vector(), "count", 0x0000), parent),
+        dag.Reduce(line, Reduction(Vector(), "stdDev", 0x0007), parent))
+
       val red1 = Reduction(Vector(), "count", 0x0000)
       val red2 = Reduction(Vector(), "stdDev", 0x0007)
       val reductions = NEL(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent))
@@ -139,6 +137,171 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
 
         megaReduce(input, findReductions(input)) mustEqual expected
       }
+    }
+
+    "where two different sets are being reduced" >> {
+      val line = Line(0, "")
+
+      val input = Join(line, Add, CrossRightSort,
+        dag.Reduce(line, Reduction(Vector(), "count", 0x0000),
+          dag.LoadLocal(line, Root(line, PushString("/foo")))),
+        dag.Reduce(line, Reduction(Vector(), "count", 0x0000),
+          dag.LoadLocal(line, Root(line, PushString("/bar")))))
+
+      val red = Reduction(Vector(), "count", 0x0000)
+      val parent1 = dag.LoadLocal(line, Root(line, PushString("/foo")))
+      val parent2 = dag.LoadLocal(line, Root(line, PushString("/bar")))
+
+      val megaR1 = dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent1)), parent1)
+      val megaR2 = dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent2)), parent2)
+
+      val expected = Join(line, Add, CrossRightSort,
+        Join(line, DerefArray, CrossLeftSort,
+          megaR1,
+          Root(line, PushNum("0"))),
+        Join(line, DerefArray, CrossLeftSort,
+          megaR2,
+          Root(line, PushNum("0"))))
+
+      megaReduce(input, findReductions(input)) mustEqual expected
+    }
+
+    "where a single set is being reduced three times" >> {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, PushString("/foo")))
+      val r1 = dag.Reduce(line, Reduction(Vector(), "count", 0x0000), parent)
+      val r3 = dag.Reduce(line, Reduction(Vector(), "stdDev", 0x0007), parent)
+      
+      val input = Join(line, Add, CrossRightSort,
+        r1,
+        Join(line, Sub, CrossRightSort, r1, r3))
+
+      val megaR = MegaReduce(line, NEL(r1, r1, r3), parent)
+
+      val expected = Join(line, Add, CrossRightSort,
+        Join(line, DerefArray, CrossLeftSort,
+          megaR,
+          Root(line, PushNum("0"))),
+        Join(line, Sub, CrossRightSort,
+          Join(line, DerefArray, CrossLeftSort,
+            megaR,
+            Root(line, PushNum("0"))),
+          Join(line, DerefArray, CrossLeftSort,
+            megaR,
+            Root(line, PushNum("2")))))
+
+      megaReduce(input, findReductions(input)) mustEqual expected
+    }
+
+    "in a split" >> {
+      val line = Line(0, "")
+      // 
+      // nums := dataset(//hom/numbers)
+      // sums('n) :=
+      //   m := max(nums where nums < 'n)
+      //   (nums where nums = 'n) + m     -- actually, we used split root, but close enough
+      // sums
+      // 
+       
+      val nums = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
+      
+      lazy val input: dag.Split = dag.Split(line,
+        dag.Group(1, nums, UnfixedSolution(0, nums)),
+        Join(line, Add, CrossLeftSort,
+          SplitGroup(line, 1, nums.provenance)(input),
+          dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
+            Filter(line, IdentitySort,
+              nums,
+              Join(line, Lt, CrossLeftSort,
+                nums,
+                SplitParam(line, 0)(input))))))
+
+      val parent = Filter(line, IdentitySort,
+        nums,
+        Join(line, Lt, CrossLeftSort,
+          nums,
+          SplitParam(line, 0)(input)))  //TODO need a window function
+
+      val red = Reduction(Vector(), "max", 0x0001)
+
+      val expected = dag.Split(line,
+        dag.Group(1, nums, UnfixedSolution(0, nums)),
+        Join(line, Add, CrossLeftSort,
+          SplitGroup(line, 1, nums.provenance)(input),
+          Join(line, DerefArray, CrossLeftSort,
+            MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent),
+            Root(line, PushNum("0")))))
+
+      megaReduce(input, findReductions(input)) mustEqual expected
+    }
+
+    "in a split that contains two reductions of the same dataset" >> {
+      val line = Line(0, "")
+      
+      // 
+      // clicks := dataset(//clicks)
+      // histogram('user) :=
+      //   { user: 'user, min: min(clicks.foo where clicks.user = 'user), max: max(clicks.foo where clicks.user = 'user) }  
+      //  
+      //  --if max is taken instead of clicks.bar, the change in the DAG not show up inside the Reduce, and so is hard to track the reductions
+      // histogram
+      // 
+      // 
+      
+      val clicks = dag.LoadLocal(line, Root(line, PushString("/clicks")))
+       
+      lazy val input: dag.Split =  dag.Split(line,
+        dag.Group(1,
+          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("foo"))),
+          UnfixedSolution(0,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks,
+              Root(line, PushString("user"))))),
+        Join(line, JoinObject, CrossLeftSort,
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("user")),
+            SplitParam(line, 0)(input)),
+          Join(line, JoinObject, CrossLeftSort,
+            Join(line, WrapObject, CrossLeftSort,
+              Root(line, PushString("min")),
+              dag.Reduce(line, Reduction(Vector(), "min", 0x0004),
+                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))),
+            Join(line, WrapObject, CrossLeftSort,
+              Root(line, PushString("max")),
+              dag.Reduce(line, Reduction(Vector(), "max", 0x0001),
+                SplitGroup(line, 1, Vector(StaticProvenance("/clicks")))(input))))))
+
+
+      val parent = SplitGroup(line, 1, clicks.provenance)(input)
+      val red1 = dag.Reduce(line, Reduction(Vector(), "min", 0x0004), parent)
+      val red2 = dag.Reduce(line, Reduction(Vector(), "max", 0x0001), parent)
+      val megaR = MegaReduce(line, NEL(red1, red2), parent)
+
+      val expected = dag.Split(line,
+        dag.Group(1,
+          Join(line, DerefObject, CrossLeftSort, clicks, Root(line, PushString("foo"))),
+          UnfixedSolution(0,
+            Join(line, DerefObject, CrossLeftSort,
+              clicks,
+              Root(line, PushString("user"))))),
+        Join(line, JoinObject, CrossLeftSort,
+          Join(line, WrapObject, CrossLeftSort,
+            Root(line, PushString("user")),
+            SplitParam(line, 0)(input)),
+          Join(line, JoinObject, CrossLeftSort,
+            Join(line, WrapObject, CrossLeftSort,
+              Root(line, PushString("min")),
+              Join(line, DerefArray, CrossLeftSort,
+                megaR,
+                Root(line, PushNum("0")))),
+            Join(line, WrapObject, CrossLeftSort,
+              Root(line, PushString("max")),
+              Join(line, DerefArray, CrossLeftSort,
+                megaR,
+                Root(line, PushNum("1")))))))
+
+      megaReduce(input, findReductions(input)) mustEqual expected
     }
   }
 
@@ -297,10 +460,6 @@ object ReductionFinderSpecs extends Specification with ReductionFinder with Stat
       val expected = Map(parent -> NEL(dag.Reduce(line, red1, parent), dag.Reduce(line, red2, parent)))
 
       findReductions(input) mustEqual expected
-    }
-    
-    "this test is broken to remind me that I need much better test coverage here" >> {
-      4 mustEqual 5
     }
   }
 }

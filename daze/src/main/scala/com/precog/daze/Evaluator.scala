@@ -86,12 +86,6 @@ trait Evaluator[M[+_]] extends DAG
 
   type YggConfig <: EvaluatorConfig
   
-  //private type State[S, T] = StateT[Id, S, T]
-  
-  private case class EvaluatorState(assume: Map[DepGraph, M[Table]])
-
-  sealed trait Context
-
   def withContext[A](f: Context => A): A = 
     f(new Context {})
 
@@ -207,7 +201,7 @@ trait Evaluator[M[+_]] extends DAG
       case dag.Group(_, _, _) => sys.error("assertion error")
     }
 
-    lazy val reductions: Map[DepGraph, Vector[Reduction]] = findReductions(graph)
+    lazy val reductions: Map[DepGraph, NEL[dag.Reduce]] = findReductions(graph)
 
     def loop(graph: DepGraph, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, PendingTable] = {
       val assumptionCheck: StateT[Id, EvaluatorState, Option[M[Table]]] = for {
@@ -324,9 +318,9 @@ trait Evaluator[M[+_]] extends DAG
             pendingTable <- loop(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
 
-            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
-            keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)), ConstantEmptyArray), constants.Key.name)  //TODO deref by index 0 is WRONG
-            valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), constants.Value.name))
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
+            keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)), ConstantEmptyArray), paths.Key.name)  //TODO deref by index 0 is WRONG
+            valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), paths.Value.name))
             wrapped = result map { _ transform valueWrapped }
             _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
           } yield {
@@ -338,7 +332,7 @@ trait Evaluator[M[+_]] extends DAG
           for {
             pendingTable <- loop(parent, splits)
             liftedTrans = liftToValues(pendingTable.trans)
-            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, constants.Value))) }
+            result = pendingTable.table flatMap { parentTable => red(parentTable.transform(DerefObjectStatic(liftedTrans, paths.Value))) }
             wrapped = result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
           } yield PendingTable(wrapped, graph, TransSpec1.Id)
         }

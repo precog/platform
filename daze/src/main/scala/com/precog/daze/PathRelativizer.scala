@@ -75,6 +75,8 @@ trait PathRelativizer[M[+_]] extends DAG with StringLib[M] with CrossOrdering{
         case Operate(loc, op, parent) => Operate(loc, op, copyAux(splits, parent))
   
         case Reduce(loc, red, parent) => Reduce(loc, red, copyAux(splits, parent))
+
+        case MegaReduce(loc, reds, parent) => MegaReduce(loc, reds, copyAux(splits, parent))
   
         case Morph1(loc, m, parent) => Morph1(loc, m, copyAux(splits, parent))
   

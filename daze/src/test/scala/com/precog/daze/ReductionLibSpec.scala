@@ -397,6 +397,161 @@ trait ReductionLibSpec[M[+_]] extends Specification
       result2 must contain(760.4)
     }
   }
+
+  "reduce heterogeneous sets across two slice boundaries (22 elements)" >> {
+    "count" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Count,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(22)
+    }    
+    
+    "geometricMean" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, GeometricMean,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(0)
+    }
+    
+    "mean" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Mean,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(1.8888888888888888)
+    }
+    
+    "max" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Max,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(12)
+    }
+    
+    "min" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Min,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(-3)
+    }
+    
+    "standard deviation" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, StdDev,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d.toDouble
+      }
+      
+      result2 must contain(4.121608220220312)
+    }
+    
+    "sum" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Sum,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(17)
+    }      
+
+    "sumSq" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, SumSq,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(185)
+    } 
+
+    "variance" >> {
+      val line = Line(0, "")
+      
+      val input = dag.Reduce(line, Variance,
+        dag.LoadLocal(line, Root(line, PushString("/het/numbersAcrossSlices"))))
+        
+      val result = testEval(input)
+      
+      result must haveSize(1)
+      
+      val result2 = result collect {
+        case (VectorCase(), SDecimal(d)) => d
+      }
+      
+      result2 must contain(16.987654320987655)
+    }
+  }
 }
 
 object ReductionLibSpec extends ReductionLibSpec[test.YId] with test.YIdInstances

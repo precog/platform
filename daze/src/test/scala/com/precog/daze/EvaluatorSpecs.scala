@@ -270,6 +270,33 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }
 
+    "evaluate a join of two reductions on the same dataset" in {
+      val line = Line(0, "")
+
+      val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers7")))
+
+      val input = Join(line, Add, CrossRightSort, 
+        dag.Reduce(line, Count, parent),
+        dag.Reduce(line, Sum, parent))
+
+      testEval(input) { result =>
+        result must haveSize(1)
+
+        val result2 = result collect {
+          case (ids, SDecimal(d)) if ids.size == 1 => d
+        }
+
+        result2 must contain(259)
+      }
+    }.pendingUntilFixed 
+
+
+
+
+
+
+
+
     "join two sets with a match" >> {
       "from different paths" >> {
         val line = Line(0, "")
