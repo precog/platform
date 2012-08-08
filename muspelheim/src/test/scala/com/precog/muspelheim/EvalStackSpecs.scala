@@ -663,7 +663,14 @@ trait EvalStackSpecs extends Specification {
 
         val results = eval(input) 
         
-        results must haveSize(0)
+        val sanity = """
+          | //campaigns.userId""".stripMargin
+
+        val sanityCheck = eval(sanity)
+
+        results must be empty
+
+        sanityCheck must not be empty
       }.pendingUntilFixed
     }
 
@@ -703,7 +710,14 @@ trait EvalStackSpecs extends Specification {
 
         val results = eval(input) 
         
-        results must haveSize(0)
+        val sanity = """
+          | //campaigns.userId""".stripMargin
+
+        val sanityCheck = eval(sanity)
+
+        results must be empty
+
+        sanityCheck must not be empty
       }.pendingUntilFixed
     }
 
