@@ -36,6 +36,7 @@ import scalaz.std.math._
 import scalaz.std.AllInstances._
 
 import _root_.java.io.{Externalizable,ObjectInput,ObjectOutput}
+import _root_.java.math.MathContext
 
 sealed trait CValue extends Serializable {
   @inline private[CValue] final def typeIndex: Int = (this : @unchecked) match {
@@ -68,6 +69,25 @@ object CValue {
       case (CNum(a), CNum(b)) => Order[BigDecimal].order(a, b)
       case (vx, vy) => Order[Int].order(vx.typeIndex, vy.typeIndex)
     }
+  }
+
+  def compareValues(a: CValue, b: CValue): Int = (a,b) match {
+    case (CString(as), CString(bs))   => as.compareTo(bs)
+    case (CBoolean(ab), CBoolean(bb)) => ab.compareTo(bb)
+    case (CLong(al), CLong(bl))       => al.compareTo(bl)
+    case (CLong(al), CDouble(bd))     => al.toDouble.compareTo(bd)
+    case (CLong(al), CNum(bn))        => BigDecimal(al, MathContext.UNLIMITED).compareTo(bn)
+    case (CDouble(ad), CLong(bl))     => ad.compareTo(bl.toDouble)
+    case (CDouble(ad), CDouble(bd))   => ad.compareTo(bd)
+    case (CDouble(ad), CNum(bn))      => BigDecimal(ad, MathContext.UNLIMITED).compareTo(bn)
+    case (CNum(an), CLong(bl))        => an.compareTo(BigDecimal(bl, MathContext.UNLIMITED))
+    case (CNum(an), CDouble(bd))      => an.compareTo(BigDecimal(bd, MathContext.UNLIMITED))
+    case (CNum(an), CNum(bn))         => an.compareTo(bn)
+    case (CDate(ad), CDate(bd))       => ad.compareTo(bd)
+    case (CNull, CNull)               => 0
+    case (CEmptyObject, CEmptyObject) => 0
+    case (CEmptyArray, CEmptyArray)   => 0
+    case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
   }
 }
 

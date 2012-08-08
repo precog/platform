@@ -30,7 +30,7 @@ trait DefinedAtIndex {
   def isDefinedAt(row: Int) = defined.contains(row)
 }
 
-trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex { 
+trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex with ExtensibleColumn { 
   def update(row: Int, value: A): Unit
 }
 

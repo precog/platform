@@ -42,9 +42,7 @@ trait JDBMProjectionModule extends ProjectionModule {
   val pmLogger = Logger("JDBMProjectionModule")
 
   type Key = Identities
-  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor) {
-    def traverseIndex(expiresAt: Long): IterableDataset[Seq[CValue]] = allRecords(expiresAt)
-  }
+  class Projection private[JDBMProjectionModule] (baseDir: File, descriptor: ProjectionDescriptor) extends JDBMProjection(baseDir, descriptor)
 
   trait JDBMProjectionCompanion extends ProjectionCompanion {
     def fileOps: FileOps

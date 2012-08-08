@@ -22,7 +22,7 @@ package jdbm3
 
 import org.apache.jdbm.Serializer
 
-import java.io.{DataInput,DataOutput,Externalizable,ObjectInput,ObjectOutput}
+import java.io.{DataInput,DataOutput,Externalizable,ObjectInput,ObjectInputStream,ObjectOutput}
 import java.util.Comparator
 
 import scala.collection.BitSet
@@ -36,35 +36,42 @@ import scala.collection.BitSet
  * @param index A synthetic index to allow differentiation of identical value/id combinations. These may be the
  * result of operations such as cross which result in cartesians
  */
-case class SortingKey(columns: Array[CValue], ids: Identities, index: Long)
+case class SortingKey(columns: Array[Byte], ids: Identities, index: Long)
 
 object SortingKeyComparator {
   final val serialVersionUID = 20120730l
 
-  def apply(ascending: Boolean) = new SortingKeyComparator(ascending)
+  def apply(ascending: Boolean, sortSelectors: Array[String]) = new SortingKeyComparator(ascending, sortSelectors)
 }
   
-class SortingKeyComparator private[SortingKeyComparator] (val ascending: Boolean) extends Comparator[SortingKey] with Serializable {
+class SortingKeyComparator private[SortingKeyComparator] (val ascending: Boolean, val sortSelectors: Array[String]) extends Comparator[SortingKey] with Serializable {
+  @transient
+  private var codec = new ColumnCodec()
+
+  private def readObject(in: ObjectInputStream) {
+    in.defaultReadObject()
+    codec = new ColumnCodec()
+  }
+
   def compare(a: SortingKey, b: SortingKey) = {
-    // Compare over the key values first
+    // retrieve the selector, type and value for each column in the keys, grouped by the selector
+    val aVals: Map[String,Array[(String,CValue)]] = codec.decodeWithRefs(a.columns).groupBy(_._1)
+    val bVals: Map[String,Array[(String,CValue)]] = codec.decodeWithRefs(b.columns).groupBy(_._1)
+
+    // Now, for each sort selector, compare in order based on comparable types
     var result = 0
     var i = 0
 
-    while (result == 0 && i < a.columns.length) {
-      result = (a.columns(i),b.columns(i)) match {
-        case (CUndefined, CUndefined)     => 0
-        case (CUndefined, _)              => -1
-        case (_, CUndefined)              => 1
-        case (CString(as), CString(bs))   => as.compareTo(bs)
-        case (CBoolean(ab), CBoolean(bb)) => ab.compareTo(bb)
-        case (CLong(al), CLong(bl))       => al.compareTo(bl)
-        case (CDouble(ad), CDouble(bd))   => ad.compareTo(bd)
-        case (CNum(an), CNum(bn))         => an.bigDecimal.compareTo(bn.bigDecimal)
-        case (CDate(ad), CDate(bd))       => ad.compareTo(bd)
-        case (CNull, CNull)               => 0
-        case (CEmptyObject, CEmptyObject) => 0
-        case (CEmptyArray, CEmptyArray)   => 0
-        case invalid                      => sys.error("Invalid comparison for SortingKey of " + invalid)
+    while (result == 0 && i < sortSelectors.length) {
+      if (!aVals.contains(sortSelectors(i)) || !bVals.contains(sortSelectors(i))) {
+        sys.error("Missing columns in sort key")
+      } else {
+        result = (aVals(sortSelectors(i)).find(_._2 != CUndefined), bVals(sortSelectors(i)).find(_._2 != CUndefined)) match {
+          case (None, None)         => 0
+          case (None, _)            => -1
+          case (_, None)            => 1
+          case (Some((_, av)), Some((_, bv))) => CValue.compareValues(av, bv)
+        }
       }
       i += 1
     }
@@ -85,26 +92,25 @@ class SortingKeyComparator private[SortingKeyComparator] (val ascending: Boolean
 }
     
 object SortingKeySerializer {
-  def apply(keyFormat: Array[CType], idCount: Int) = new SortingKeySerializer(keyFormat, idCount)
+  def apply(idCount: Int) = new SortingKeySerializer(idCount)
 }
 
-class SortingKeySerializer private[SortingKeySerializer](keyFormat: Array[CType], idCount: Int) extends Serializer[SortingKey] with Serializable {
+class SortingKeySerializer private[SortingKeySerializer](idCount: Int) extends Serializer[SortingKey] with Serializable {
   import CValueSerializerUtil.defaultSerializer
 
-  final val serialVersionUID = 20120730l
+  final val serialVersionUID = 20120807l
 
-  private[this] var keySerializer = CValueSerializer(keyFormat)
   private[this] var idSerializer  = IdentitiesSerializer(idCount)
 
-  def serialize(out: DataOutput, gk: SortingKey) {
-    defaultSerializer.serialize(out, new java.lang.Long(gk.index))
-    keySerializer.serialize(out, gk.columns)
-    idSerializer.serialize(out, gk.ids)
+  def serialize(out: DataOutput, sk: SortingKey) {
+    defaultSerializer.serialize(out, new java.lang.Long(sk.index))
+    defaultSerializer.serialize(out, sk.columns)
+    idSerializer.serialize(out, sk.ids)
   }
 
   def deserialize(in: DataInput): SortingKey = {
     val index = defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]
-    SortingKey(keySerializer.deserialize(in), idSerializer.deserialize(in), index)
+    SortingKey(defaultSerializer.deserialize(in).asInstanceOf[Array[Byte]], idSerializer.deserialize(in), index)
   }
 }
  

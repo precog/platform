@@ -42,6 +42,8 @@ sealed trait Column {
   def definedAt(from: Int, to: Int): BitSet = BitSet((for (i <- from until to if isDefinedAt(i)) yield i) : _*)
 }
 
+private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
+
 trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
 

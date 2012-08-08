@@ -62,7 +62,7 @@ import blueeyes.json.xschema.Extractor._
 import blueeyes.json.xschema.DefaultSerialization._
 
 object JDBMProjection {
-  private[jdbm3] type IndexTree = SortedMap[Identities,Array[CValue]]
+  private[jdbm3] type IndexTree = SortedMap[Identities,Array[Byte]]
 
   final val DEFAULT_SLICE_SIZE = 10000
   final val INDEX_SUBDIR = "jdbm"
@@ -70,7 +70,7 @@ object JDBMProjection {
   def isJDBMProjection(baseDir: File) = (new File(baseDir, INDEX_SUBDIR)).isDirectory
 }
 
-abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends FullProjectionLike[IterableDataset[Seq[CValue]]] with BlockProjectionLike[Identities, Slice] {
+abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDescriptor, sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Identities, Slice] {
   import JDBMProjection._
 
   val logger = Logger("col:" + descriptor.shows)
@@ -97,7 +97,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     val treeMap: IndexTree = idIndexFile.getTreeMap(treeMapName)
     if (treeMap == null) {
       logger.debug("Creating new projection store")
-      val ret = idIndexFile.createTreeMap(treeMapName, AscendingIdentitiesComparator, IdentitiesSerializer(descriptor.identities), CValueSerializer(descriptor.columns.map(_.valueType)))
+      val ret: IndexTree = idIndexFile.createTreeMap(treeMapName, AscendingIdentitiesComparator, IdentitiesSerializer(descriptor.identities), null)
       logger.debug("Created projection store")
       ret
     } else {
@@ -115,21 +115,18 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
   def insert(ids : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = IO {
     logger.trace("Inserting %s => %s".format(ids, v))
-    treeMap.put(ids, v.toArray[CValue])
+    val codec = new ColumnCodec()
+    treeMap.put(ids, codec.encode(v))
 
     if (shouldSync) {
       idIndexFile.commit()
     }
   }
 
-  def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
-    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey, kvEntry.getValue) }
-  })
-
   // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
   private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)
 
-  def getBlockAfter(id: Option[Identities], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
+  def getBlockAfter(id: Option[Identities], desiredColumns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Identities,Slice]] = {
     import TableModule.paths._
 
     try {
@@ -138,36 +135,42 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
       constrainedMap.lastKey() // Will throw an exception if the map is empty
 
-      val desiredColumns = if (columns.isEmpty) {
-        descriptor.columns.zipWithIndex
-      } else {
-        descriptor.columns.zipWithIndex.filter { case (col,_) => columns.contains(col) }
-      }
+      var firstKey: Identities = null
+      var lastKey: Identities  = null
 
-      val slice = new ArrayRowJDBMSlice[Identities] {
+      val slice = new JDBMSlice[Identities] {
         val source = constrainedMap.entrySet.iterator.asScala
         val requestedSize = DEFAULT_SLICE_SIZE
+        val codec = new ColumnCodec()
 
         import blueeyes.json.{JPathField,JPathIndex}
 
-        case class IdentColumn(index: Int) extends LongColumn {
-          def isDefinedAt(row: Int) = row >= 0 && row < backing.length
-          def apply(row: Int): Long = backing(row).getKey.apply(index)
+        val keyColumns = (0 until descriptor.identities).map {
+          idx: Int => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) 
+        }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+
+        val valColumns = descriptor.columns.map {
+          case ColumnDescriptor(_, selector, ctpe, _) => JDBMSlice.columnFor(JPath(Value), sliceSize)(ColumnRef(selector, ctpe))
+        }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+
+        def loadRowFromKey(row: Int, rowKey: Identities) {
+          if (row == 0) { firstKey = rowKey }
+          lastKey = rowKey
+
+          var i = 0
+          
+          while (i < descriptor.identities) {
+            keyColumns(i)._2.asInstanceOf[ArrayLongColumn].update(row, rowKey(i))
+            i += 1
+          }
         }
 
-        def keyColumns = (0 until descriptor.identities).map {
-          idx: Int => ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong) -> IdentColumn(idx)
-        }.toMap
+        val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(JPath(Value) \ selector, tpe) }
 
-        def valColumns  = desiredColumns.map {
-          case (ColumnDescriptor(_, selector, ctpe, _),index) => 
-            columnFor(row => backing(row).getValue(), ColumnRef(JPath(Value) \ selector, ctpe), index)
-        }
-
-        lazy val columns: Map[ColumnRef, Column] = keyColumns ++ valColumns
+        override val columns = (keyColumns ++ valColumns.filter { case (ref, _) => desiredRefs.contains(ref) }).toMap
       }
 
-      Some(BlockProjectionData[Identities,Slice](slice.firstKey, slice.lastKey, slice))
+      Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))
     } catch {
       case e: java.util.NoSuchElementException => None
     }

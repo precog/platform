@@ -47,6 +47,7 @@ private[jdbm3] object CTypeMappings {
   final val FNULL        = 6.toByte
   final val FEMPTYOBJECT = 7.toByte
   final val FEMPTYARRAY  = 8.toByte
+  final val FUNDEFINED   = -1.toByte
 
   def flagFor(tpe: CType): Byte = tpe match {
     case CString      => FSTRING
@@ -61,7 +62,7 @@ private[jdbm3] object CTypeMappings {
     case CUndefined   => sys.error("Undefined is not a valid format")
   }
 
-  def fromFlag(b: Byte) = b match {
+  def fromFlag(b: Byte): CType = b match {
     case FSTRING       => CString     
     case FBOOLEAN      => CBoolean    
     case FLONG         => CLong       

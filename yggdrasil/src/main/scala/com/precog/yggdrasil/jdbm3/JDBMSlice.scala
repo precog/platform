@@ -29,7 +29,6 @@ import java.util.SortedMap
 
 import com.precog.util.Bijection._
 import com.precog.yggdrasil.table._
-import com.precog.yggdrasil.table._
 import com.precog.yggdrasil.serialization.bijections._
 
 import blueeyes.json.{JPath,JPathField,JPathIndex}
@@ -41,84 +40,54 @@ import JDBMProjection._
 /**
  * A slice built from a JDBMProjection with a backing array of key/value pairs
  *
- * @param source A source iterator of Map.Entry[Key,Value] pairs, positioned at the first element of the slice
+ * @param source A source iterator of Map.Entry[Key,Array[Byte]] pairs, positioned at the first element of the slice
  * @param size How many entries to retrieve in this slice
  */
-trait JDBMSlice[Key,Value] extends Slice with Logging {
-  protected def source: Iterator[java.util.Map.Entry[Key,Value]]
+trait JDBMSlice[Key] extends Slice with Logging {
+  protected def source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]
   protected def requestedSize: Int
 
-  // This is storage for all data within this slice
-  protected lazy val backing: Array[java.util.Map.Entry[Key,Value]] = source.take(requestedSize).toArray
+  protected def keyColumns: Array[(ColumnRef,ArrayColumn[_])]
+  protected def valColumns: Array[(ColumnRef,ArrayColumn[_])]
 
-  def size = backing.length
+  // This method is responsible for loading the data from the key at the given row,
+  // most likely into one or more of the key columns defined above
+  protected def loadRowFromKey(row: Int, key: Key): Unit
 
-  def firstKey: Key = if (size > 0) backing(0).getKey else throw new NoSuchElementException("No keys in slice of size zero")
-  def lastKey: Key  = if (size > 0) backing(size - 1).getKey else throw new NoSuchElementException("No keys in slice of size zero")
+  protected def codec: ColumnCodec
+
+  private var row = 0
+  private val onlyValColumns = valColumns.map(_._2)
+
+  protected def load() {
+    source.take(requestedSize).foreach {
+      entry => {
+        loadRowFromKey(row, entry.getKey)
+        codec.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
+        row += 1
+      }
+    }
+  }
+
+  load()
+
+  val size = row
+
+  val columns = (keyColumns ++ valColumns).toMap
 }
 
-trait ArrayRowJDBMSlice[Key] extends JDBMSlice[Key,Array[CValue]] {
-  trait BaseColumn {
-    protected def columnIndex: Int
-    protected def rowData(row: Int): Array[CValue]
-    def isDefinedAt(row: Int) = row >= 0 && row < size && rowData(row).apply(columnIndex) != CUndefined
-  }
-  
-  def columnFor(rowBacking: Int => Array[CValue], ref: ColumnRef, index: Int): (ColumnRef,Column) = ref -> (ref.ctype match {
-    //// Fixed width types within the var width row
-    case CBoolean => new BoolColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): Boolean = rowData(row).apply(index).asInstanceOf[CBoolean].value
-    }
-
-    case  CLong  => new LongColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): Long = rowData(row).apply(index).asInstanceOf[CLong].value
-    }
-
-    case CDouble => new DoubleColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): Double = rowData(row).apply(index).asInstanceOf[CDouble].value
-    }
-
-    case CDate => new DateColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): DateTime = new DateTime(rowData(row).apply(index).asInstanceOf[CLong].value)
-    }
-
-    case CNull => new NullColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-    }
-    
-    case CEmptyObject => new EmptyObjectColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-    }
-    
-    case CEmptyArray => new EmptyArrayColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-    }
-
-    //// Variable width types
-    case CString => new StrColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): String = rowData(row).apply(index).asInstanceOf[CString].value
-    }
-
-    case CNum => new NumColumn with BaseColumn {
-      protected def columnIndex = index
-      @inline def rowData(row: Int) = rowBacking(row)
-      def apply(row: Int): BigDecimal = rowData(row).apply(index).asInstanceOf[CNum].value
-    }
-
-    case invalid => sys.error("Invalid fixed with CType: " + invalid)
-  })
+object JDBMSlice {
+  def columnFor(prefix: JPath, sliceSize: Int)(ref: ColumnRef) = (ref.copy(selector = (prefix \ ref.selector)), (ref.ctype match {
+    case CString      => ArrayStrColumn.empty(sliceSize)
+    case CBoolean     => ArrayBoolColumn.empty()
+    case CLong        => ArrayLongColumn.empty(sliceSize)
+    case CDouble      => ArrayDoubleColumn.empty(sliceSize)
+    case CNum         => ArrayNumColumn.empty(sliceSize)
+    case CDate        => ArrayDateColumn.empty(sliceSize)
+    case CNull        => MutableNullColumn.empty()
+    case CEmptyObject => MutableEmptyObjectColumn.empty()
+    case CEmptyArray  => MutableEmptyArrayColumn.empty()
+    case CUndefined   => sys.error("CUndefined cannot be serialized")
+  }))
 }
 
