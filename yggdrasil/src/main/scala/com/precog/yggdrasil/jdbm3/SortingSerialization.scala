@@ -41,37 +41,28 @@ case class SortingKey(columns: Array[Byte], ids: Identities, index: Long)
 object SortingKeyComparator {
   final val serialVersionUID = 20120730l
 
-  def apply(ascending: Boolean, sortSelectors: Array[String]) = new SortingKeyComparator(ascending, sortSelectors)
+  def apply(ascending: Boolean) = new SortingKeyComparator(ascending)
 }
   
-class SortingKeyComparator private[SortingKeyComparator] (val ascending: Boolean, val sortSelectors: Array[String]) extends Comparator[SortingKey] with Serializable {
-  @transient
-  private var codec = new ColumnCodec()
-
-  private def readObject(in: ObjectInputStream) {
-    in.defaultReadObject()
-    codec = new ColumnCodec()
-  }
-
+class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) extends Comparator[SortingKey] with Serializable {
   def compare(a: SortingKey, b: SortingKey) = {
     // retrieve the selector, type and value for each column in the keys, grouped by the selector
-    val aVals: Map[String,Array[(String,CValue)]] = codec.decodeWithRefs(a.columns).groupBy(_._1)
-    val bVals: Map[String,Array[(String,CValue)]] = codec.decodeWithRefs(b.columns).groupBy(_._1)
+    val aValsRaw: Array[(String,CValue)] = ColumnCodec.readOnly.decodeWithRefs(a.columns)
+    val aVals: Map[String,Array[(String,CValue)]] = aValsRaw.groupBy(_._1)
+    val bVals: Map[String,Array[(String,CValue)]] = ColumnCodec.readOnly.decodeWithRefs(b.columns).groupBy(_._1)
 
     // Now, for each sort selector, compare in order based on comparable types
     var result = 0
     var i = 0
 
+    val sortSelectors = aValsRaw.map(_._1).distinct
+
     while (result == 0 && i < sortSelectors.length) {
-      if (!aVals.contains(sortSelectors(i)) || !bVals.contains(sortSelectors(i))) {
-        sys.error("Missing columns in sort key")
-      } else {
-        result = (aVals(sortSelectors(i)).find(_._2 != CUndefined), bVals(sortSelectors(i)).find(_._2 != CUndefined)) match {
-          case (None, None)         => 0
-          case (None, _)            => -1
-          case (_, None)            => 1
-          case (Some((_, av)), Some((_, bv))) => CValue.compareValues(av, bv)
-        }
+      result = (aVals(sortSelectors(i)).find(_._2 != CUndefined), bVals(sortSelectors(i)).find(_._2 != CUndefined)) match {
+        case (None, None)         => 0
+        case (None, _)            => -1
+        case (_, None)            => 1
+        case (Some((_, av)), Some((_, bv))) => CValue.compareValues(av, bv)
       }
       i += 1
     }

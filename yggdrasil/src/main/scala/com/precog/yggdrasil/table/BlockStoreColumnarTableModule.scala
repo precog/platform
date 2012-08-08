@@ -358,7 +358,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
       
       // Insert slice data based on columndescriptors
-      val inputOp: M[(SortOutput,Order[SortingKey])] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, None, 0, 0l)) { case (SortOutput(indices, oldSortColumns, _, nextId), slice) => {
+      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, None, 0, 0l)) { case (SortOutput(indices, oldSortColumns, _, nextId), slice) => {
         def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
           // The conditional guarantees that dropPrefix will return Some
           case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
@@ -367,13 +367,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val dataColumns = columnsByPrefix(JPath(Value))
         val idColumns   = columnsByPrefix(JPath(Key))
         val sortColumns = columnsByPrefix(JPath(SortKey))
-        val sortSelectors = sortColumns.map(_._1.selector.toString).distinct.toArray
-
         val indexMapKey = dataColumns.map(_._1).toSeq
 
         val (index: SliceIndex, newIndices: IndexMap) = indices.get(indexMapKey).map((_,indices)).getOrElse {
           val newIndex = SliceIndex(indexMapKey.toString, DB.createTreeMap(indexMapKey.toString, 
-                                                                           SortingKeyComparator(sortOrder.isAscending, sortSelectors), 
+                                                                           SortingKeyComparator(sortOrder.isAscending),
                                                                            SortingKeySerializer(idColumns.size),
                                                                            null /* Use default serialization */))
 
@@ -407,23 +405,20 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         case output @ SortOutput(indices, sortColumns, idCount, lastId) => {
           DB.close()
           logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
-
-          val sortSelectors: Array[String] = sortColumns.map(_.map(_.selector.toString).distinct.toArray).getOrElse(Array())
-
-          // A little ugly, but getting this implicitly seemed a little crazy
-          val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
-            scala.math.Ordering.comparatorToOrdering(
-              SortingKeyComparator(sortOrder.isAscending, sortSelectors)
-            )
-          )
-
-          (output, sortingKeyOrder)
+          output
         }
       }
 
+      // A little ugly, but getting this implicitly seemed a little crazy
+      val sortingKeyOrder: Order[SortingKey] = scalaz.Order.fromScalaOrdering(
+        scala.math.Ordering.comparatorToOrdering(
+          SortingKeyComparator(sortOrder.isAscending)
+        )
+      )
+
 
       // Merge the resulting slice indices back together
-      inputOp.flatMap { case (SortOutput(indices, Some(sortColumns), idCount, _), sortingKeyOrder) => {
+      inputOp.flatMap { case SortOutput(indices, Some(sortColumns), idCount, _) => {
         // Map the distinct indices into SortProjections/Cells, then merge them
         val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
           case ((format, SliceIndex(name, _)), index) => {

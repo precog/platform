@@ -54,16 +54,14 @@ trait JDBMSlice[Key] extends Slice with Logging {
   // most likely into one or more of the key columns defined above
   protected def loadRowFromKey(row: Int, key: Key): Unit
 
-  protected def codec: ColumnCodec
-
   private var row = 0
-  private val onlyValColumns = valColumns.map(_._2)
+  private def onlyValColumns = valColumns.map(_._2)
 
   protected def load() {
     source.take(requestedSize).foreach {
       entry => {
         loadRowFromKey(row, entry.getKey)
-        codec.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
+        ColumnCodec.readOnly.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
         row += 1
       }
     }
@@ -71,9 +69,9 @@ trait JDBMSlice[Key] extends Slice with Logging {
 
   load()
 
-  val size = row
+  def size = row
 
-  val columns = (keyColumns ++ valColumns).toMap
+  def columns = (keyColumns ++ valColumns).toMap
 }
 
 object JDBMSlice {

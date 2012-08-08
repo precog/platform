@@ -123,6 +123,11 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
     }
   }
 
+  def allRecords(expiresAt: Long): IterableDataset[Seq[CValue]] = new IterableDataset(descriptor.identities, new Iterable[(Identities,Seq[CValue])] {
+    private val codec = ColumnCodec.readOnly
+    def iterator = treeMap.entrySet.iterator.asScala.map { case kvEntry => (kvEntry.getKey, codec.decodeToCValues(kvEntry.getValue)) }
+  })
+
   // Compute the successor to the provided Identities. Assumes that we would never use a VectorCase() for Identities
   private def identitiesAfter(id: Identities) = VectorCase((id.init :+ (id.last + 1)): _*)
 
@@ -141,7 +146,7 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
       val slice = new JDBMSlice[Identities] {
         val source = constrainedMap.entrySet.iterator.asScala
         val requestedSize = DEFAULT_SLICE_SIZE
-        val codec = new ColumnCodec()
+        val codec = ColumnCodec.readOnly
 
         import blueeyes.json.{JPathField,JPathIndex}
 

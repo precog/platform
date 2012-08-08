@@ -29,6 +29,10 @@ import java.nio.ByteBuffer
 
 import scala.collection.mutable.ArrayBuffer
 
+object ColumnCodec {
+  val readOnly = new ColumnCodec(0) // For read only work, the buffer is always provided
+}
+
 /**
  * This class is responsible for encoding and decoding a Seq[(ColumnRef,Column)]
  * into a byte array for serialization. It is *not* thread-safe.
@@ -65,7 +69,7 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
   }
 
   private def readBigDecimal(buffer: ByteBuffer): BigDecimal = {
-    BigDecimal(readString(buffer))
+    BigDecimal(readString(buffer), java.math.MathContext.UNLIMITED)
   }
 
   private def readBoolean(buffer: ByteBuffer): Boolean = {
@@ -79,19 +83,23 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
   def encode(values: Seq[CValue]): Array[Byte] = {
     workBuffer.clear()
 
-    values.foreach { v => {
-      workBuffer.put(flagFor(CType.of(v)))
-      v match {
-        case CString(cs)  => writeString(cs)                  
-        case CBoolean(cb) => writeBoolean(cb)
-        case CLong(cl)    => workBuffer.putLong(cl)
-        case CDouble(cd)  => workBuffer.putDouble(cd)
-        case CNum(cn)     => writeBigDecimal(cn)
-        case CDate(cd)    => workBuffer.putLong(cd.getMillis)
-        case CNull        => // NOOP, no value to write
-        case CEmptyObject => // NOOP, no value to write
-        case CEmptyArray  => // NOOP, no value to write
-        case CUndefined   => // NOOP, no value to write
+    values.foreach { value => {
+      if (value == CUndefined) {
+        workBuffer.put(FUNDEFINED)
+      } else {
+        workBuffer.put(flagFor(CType.of(value)))
+        value match {
+          case CString(cs)  => writeString(cs)                  
+          case CBoolean(cb) => writeBoolean(cb)
+          case CLong(cl)    => workBuffer.putLong(cl)
+          case CDouble(cd)  => workBuffer.putDouble(cd)
+          case CNum(cn)     => writeBigDecimal(cn)
+          case CDate(cd)    => workBuffer.putLong(cd.getMillis)
+          case CNull        => // NOOP, no value to write
+          case CEmptyObject => // NOOP, no value to write
+          case CEmptyArray  => // NOOP, no value to write
+          case CUndefined   => // NOOP, no value to write
+        }
       }
     }}
 
@@ -140,6 +148,22 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
     outBytes
   }
 
+  private def readToCValue(buffer: ByteBuffer): CValue = {
+    buffer.get() match {
+      case FSTRING       => CString(readString(buffer))
+      case FBOOLEAN      => CBoolean(readBoolean(buffer))
+      case FLONG         => CLong(buffer.getLong())
+      case FDOUBLE       => CDouble(buffer.getDouble())
+      case FNUM          => CNum(readBigDecimal(buffer))
+      case FDATE         => CDate(new DateTime(buffer.getLong()))
+      case FNULL         => CNull
+      case FEMPTYOBJECT  => CEmptyObject
+      case FEMPTYARRAY   => CEmptyArray
+      case FUNDEFINED    => CUndefined
+      case invalid       => sys.error("Invalid format flag: " + invalid)
+    }
+  }
+
   def decodeWithRefs(input: Array[Byte]): Array[(String, CValue)] = decodeWithRefs(ByteBuffer.wrap(input))
 
   def decodeWithRefs(buffer: ByteBuffer): Array[(String, CValue)] = {
@@ -147,20 +171,19 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
 
     while (buffer.hasRemaining()) {
       val selector = readString(buffer)
+      resultBuffer.append((selector, readToCValue(buffer)))
+    }
 
-      resultBuffer.append((selector, (buffer.get() match {
-        case FSTRING       => CString(readString(buffer))
-        case FBOOLEAN      => CBoolean(readBoolean(buffer))
-        case FLONG         => CLong(buffer.getLong())
-        case FDOUBLE       => CDouble(buffer.getDouble())
-        case FNUM          => CNum(readBigDecimal(buffer))
-        case FDATE         => CDate(new DateTime(buffer.getLong()))
-        case FNULL         => CNull
-        case FEMPTYOBJECT  => CEmptyObject
-        case FEMPTYARRAY   => CEmptyArray
-        case FUNDEFINED    => CUndefined
-        case invalid       => sys.error("Invalid format flag: " + invalid)
-      })))
+    resultBuffer.toArray
+  }
+
+  def decodeToCValues(input: Array[Byte]): Array[CValue] = decodeToCValues(ByteBuffer.wrap(input))
+
+  def decodeToCValues(buffer: ByteBuffer): Array[CValue] = {
+    var resultBuffer = ArrayBuffer[CValue]()
+
+    while (buffer.hasRemaining()) {
+      resultBuffer.append(readToCValue(buffer))
     }
 
     resultBuffer.toArray

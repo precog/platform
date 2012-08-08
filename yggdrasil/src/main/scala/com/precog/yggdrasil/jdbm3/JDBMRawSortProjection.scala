@@ -67,15 +67,13 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     var lastKey: SortingKey  = null
 
     val slice = new JDBMSlice[SortingKey] {
-      val source = constrainedMap.entrySet.iterator.asScala
-      val requestedSize = sliceSize
-      val idColumns      = (0 until idCount).map { idx => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
-      val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath(SortKey), sliceSize)).toArray
+      def source = constrainedMap.entrySet.iterator.asScala
+      def requestedSize = sliceSize
+      lazy val idColumns      = (0 until idCount).map { idx => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
+      lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath(SortKey), sliceSize)).toArray
 
-      val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      val valColumns = valRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-
-      val codec = new ColumnCodec()
+      lazy val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
       def loadRowFromKey(row: Int, rowKey: SortingKey) {
         if (row == 0) { firstKey = rowKey }
@@ -88,7 +86,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
           i += 1
         }
 
-        val sortKeyColumnsRaw = codec.decodeWithRefs(rowKey.columns)
+        val sortKeyColumnsRaw = ColumnCodec.readOnly.decodeWithRefs(rowKey.columns)
 
         i = 0
         while (i < sortKeyColumns.length) {
