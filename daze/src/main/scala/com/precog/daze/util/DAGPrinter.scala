@@ -54,9 +54,6 @@ trait DAGPrinter extends DAG {
       case dag.Reduce(_, red, parent) => "%s(%s)".format(showReduction(red), loop(parent, split))
       case dag.SetReduce(_, red, parent) => "%s(%s)".format(showSetReduction(red), loop(parent, split))
       
-      case Join(_, VUnion, left, right) => "(%s vunion %s)".format(loop(left, split), loop(right, split))
-      case Join(_, VIntersect, left, right) => "(%s vintersect %s)".format(loop(left, split), loop(right, split))
-      
       case Join(_, IUnion, left, right) => "(%s iunion %s)".format(loop(left, split), loop(right, split))
       case Join(_, IIntersect, left, right) => "(%s iintersect %s)".format(loop(left, split), loop(right, split))
 

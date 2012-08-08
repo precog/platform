@@ -505,16 +505,6 @@ object DAGSpecs extends Specification with DAG with RandomLibrary {
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
       }
       
-      "vunion" >> {     // similar to map1, only one underflow case!
-        val instr = VUnion
-        decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
-      }
-      
-      "vintersect" >> {     // similar to map1, only one underflow case!
-        val instr = VIntersect
-        decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))
-      }
-      
       "iunion" >> {     // similar to map1, only one underflow case!
         val instr = IUnion
         decorate(Vector(Line(0, ""), instr)) mustEqual Left(StackUnderflow(instr))

@@ -335,8 +335,6 @@ trait Evaluator[M[+_]] extends DAG
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
         
-        // VUnion and VIntersect removed, TODO: remove from bytecode
-        
         case IUI(_, union, left, right) => {
           for {
             leftPending <- loop(left, splits)

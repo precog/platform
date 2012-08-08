@@ -150,9 +150,6 @@ trait BytecodeReader extends Reader {
         case 0x09 => morphism1 map Morph1
         case 0x19 => morphism2 map Morph2
         
-        case 0x10 => Some(VUnion)
-        case 0x11 => Some(VIntersect)
-        
         case 0x12 => Some(IUnion)
         case 0x13 => Some(IIntersect)
 
