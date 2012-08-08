@@ -43,6 +43,7 @@ import scalaz._
 import scalaz.effect._
 import scalaz.iteratee._
 import scalaz.std.list._
+import scalaz.{NonEmptyList => NEL, _}
 import Iteratee._
 
 import org.specs2.specification.Fragment
@@ -943,7 +944,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val line = Line(0, "")
 
       val parent = dag.LoadLocal(line, Root(line, PushString("/hom/numbers")))
-      val input = dag.MegaReduce(line, Vector(dag.Reduce(line, Count, parent)), parent)
+      val input = dag.MegaReduce(line, NEL(dag.Reduce(line, Count, parent)), parent)
 
       testEval(input) { result =>
         result must haveSize(1)
@@ -964,7 +965,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       val red = Count
       
       val input = Join(line, DerefArray, CrossLeftSort,
-        dag.MegaReduce(line, Vector(dag.Reduce(line, red, parent)), parent),
+        dag.MegaReduce(line, NEL(dag.Reduce(line, red, parent)), parent),
         Root(line, PushNum("0")))
         
       testEval(input) { result =>

@@ -317,7 +317,7 @@ trait Evaluator[M[+_]] extends DAG
         /**
         returns an array (to be dereferenced later) containing the result of each reduction
         */
-        case MegaReduce(_, reds, parent) => {
+        case m @ MegaReduce(_, reds, parent) => {
           val red: ReductionImpl = coalesce(reds map { _.red })  
 
           for {
@@ -328,6 +328,7 @@ trait Evaluator[M[+_]] extends DAG
             keyWrapped = trans.WrapObject(trans.Map1(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)), ConstantEmptyArray), constants.Key.name)  //TODO deref by index 0 is WRONG
             valueWrapped = trans.ObjectConcat(keyWrapped, trans.WrapObject(Leaf(Source), constants.Value.name))
             wrapped = result map { _ transform valueWrapped }
+            _ <- modify[EvaluatorState] { state => state.copy(assume = state.assume + (m -> wrapped)) }
           } yield {
             PendingTable(wrapped, graph, TransSpec1.Id)
           }
