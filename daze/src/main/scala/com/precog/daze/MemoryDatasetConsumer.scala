@@ -62,7 +62,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
       }
       
       val events = json map { jvalue =>
-        (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JInt(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
+        (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
       }
       
       events.toSet
@@ -74,8 +74,7 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
     case JField(_, _) => sys.error("seriously?!")
     case JNull => SNull
     case JBool(value) => SBoolean(value)
-    case JInt(bi) => SDecimal(BigDecimal(bi))
-    case JDouble(d) => SDecimal(d)
+    case JNum(bi) => SDecimal(bi)
     case JString(str) => SString(str)
     
     case JObject(fields) => {

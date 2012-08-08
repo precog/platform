@@ -34,7 +34,7 @@ import akka.dispatch.{Await, ExecutionContext}
 import akka.util.duration._
 
 import blueeyes.json._
-import JsonAST.{JObject, JField, JArray, JInt}
+import JsonAST.{JObject, JField, JArray, JNum}
 
 import java.io._
 import java.util.concurrent.Executors

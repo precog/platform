@@ -134,7 +134,7 @@ sealed trait SValue {
     case SString(s)   => JString(s)
     case STrue        => JBool(true)
     case SFalse       => JBool(false)
-    case SDecimal(n)  => JDouble(n.toDouble) //sys.error("fix JValue"),
+    case SDecimal(n)  => JNum(n)
     case SNull        => JNull
   }
 }
@@ -243,8 +243,7 @@ object SValue extends SValueInstances {
     case JArray(elements) => SArray((elements map fromJValue)(collection.breakOut))
     case JString(s) => SString(s)
     case JBool(s) => SBoolean(s)
-    case JInt(i) => SDecimal(BigDecimal(i))
-    case JDouble(d) => SDecimal(d)
+    case JNum(d) => SDecimal(d)
     case JNull => SNull
     case _ => sys.error("Fix JValue")
   }

@@ -54,11 +54,11 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   }
 
   def testMap1IntLeaf = {
-    val sample = (-10 to 10).map(JInt(_)).toStream
+    val sample = (-10 to 10).map(JNum(_)).toStream
     val table = fromSample(SampleData(sample))
     val results = toJson(table.transform { Map1(Leaf(Source), lookupF1(Nil, "negate")) })
 
-    results.copoint must_== (-10 to 10).map(x => JInt(-x))
+    results.copoint must_== (-10 to 10).map(x => JNum(-x))
   }
 
   /* Do we want to allow non-boolean sets to be used as filters without an explicit existence predicate?
@@ -109,7 +109,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val expected = sample.data flatMap { jv =>
         (jv \ "value") match { 
-          case JInt(x) if x.longValue % 2 == 0 => Some(jv)
+          case JNum(x) if x.longValue % 2 == 0 => Some(jv)
           case _ => None
         }
       }
@@ -170,7 +170,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val expected = sample.data map { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JInt(x), JInt(y)) => JInt(x+y)
+          case (JNum(x), JNum(y)) => JNum(x+y)
           case _ => failure("Bogus test data")
         }
       }
@@ -224,9 +224,9 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
 
       val expected = sample.data.map { jv =>
         ((jv \ "value" \ "value1"), (jv \ "value" \ "value2")) match {
-          case (JInt(x), JInt(y))  => JBool(x == y)
-          case (JNothing, JInt(y)) => JNothing
-          case (JInt(x), JNothing) => JNothing
+          case (JNum(x), JNum(y))  => JBool(x == y)
+          case (JNothing, JNum(y)) => JNothing
+          case (JNum(x), JNothing) => JNothing
           case _ => failure("Bogus test data")
         }
       }
@@ -526,8 +526,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
             (included(JPath(tail : _*)), value) match {
               case (CBoolean, JBool(_)) => true
               case (CString, JString(_)) => true
-              case (CLong, JInt(_)) => true
-              case (CDouble | CNum, JDouble(_)) => true
+              case (CLong | CDouble | CNum, JNum(_)) => true
               case (CEmptyObject, JObject.empty) => true
               case (CEmptyArray, JArray.empty) => true
               case (CNull, JNull) => true
@@ -550,10 +549,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         Scan(DerefObjectStatic(Leaf(Source), JPathField("value")), lookupScanner(Nil, "sum"))
       })
 
-      val (_, expected) = sample.data.foldLeft((BigInt(0), Vector.empty[JValue])) { 
+      val (_, expected) = sample.data.foldLeft((BigDecimal(0), Vector.empty[JValue])) { 
         case ((a, s), jv) => 
-          val JInt(i) = jv \ "value"
-          (a + i, s :+ JDouble((a + i).toDouble))
+          val JNum(i) = jv \ "value"
+          (a + i, s :+ JNum(a + i))
       }
 
       results.copoint must_== expected.toStream
@@ -561,9 +560,9 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
   }
 
   def testDerefObjectDynamic = {
-    val data =  JObject(JField("foo", JInt(1)) :: JField("ref", JString("foo")) :: Nil) #::
-                JObject(JField("bar", JInt(2)) :: JField("ref", JString("bar")) :: Nil) #::
-                JObject(JField("baz", JInt(3)) :: JField("ref", JString("baz")) :: Nil) #:: Stream.empty[JValue]
+    val data =  JObject(JField("foo", JNum(1)) :: JField("ref", JString("foo")) :: Nil) #::
+                JObject(JField("bar", JNum(2)) :: JField("ref", JString("bar")) :: Nil) #::
+                JObject(JField("baz", JNum(3)) :: JField("ref", JString("baz")) :: Nil) #:: Stream.empty[JValue]
 
     val table = fromSample(SampleData(data))
     val results = toJson(table.transform {
@@ -573,7 +572,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       )
     })
 
-    val expected = JInt(1) #:: JInt(2) #:: JInt(3) #:: Stream.empty[JValue]
+    val expected = JNum(1) #:: JNum(2) #:: JNum(3) #:: Stream.empty[JValue]
 
     results.copoint must_== expected
   }

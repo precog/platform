@@ -95,6 +95,26 @@ trait ColumnarTableModuleSpec[M[+_]] extends
               }
 
               (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+              
+            case lc: DoubleColumn =>
+              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+                case ((a0, acc), i) => 
+                  val intermediate = a0 + lc(i)
+                  acc(i) = intermediate
+                  (intermediate, acc)
+              }
+
+              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
+              
+            case lc: NumColumn =>
+              val (a0, acc) = range.foldLeft((a, new Array[BigDecimal](range.end))) {
+                case ((a0, acc), i) => 
+                  val intermediate = a0 + lc(i)
+                  acc(i) = intermediate
+                  (intermediate, acc)
+              }
+
+              (a0, Some(ArrayNumColumn(BitSet(range: _*), acc)))
 
             case _ => (a, None)
           }
@@ -118,21 +138,21 @@ trait ColumnarTableModuleSpec[M[+_]] extends
     "verify bijection from static JSON" in {
       val sample: List[JValue] = List(
         JObject(
-          JField("key", JArray(JInt(-1L) :: JInt(0L) :: Nil)) ::
+          JField("key", JArray(JNum(-1L) :: JNum(0L) :: Nil)) ::
           JField("value", JNull) :: Nil
         ), 
         JObject(
-          JField("key", JArray(JInt(-3090012080927607325l) :: JInt(2875286661755661474l) :: Nil)) ::
+          JField("key", JArray(JNum(-3090012080927607325l) :: JNum(2875286661755661474l) :: Nil)) ::
           JField("value", JObject(List(
             JField("q8b", JArray(List(
-              JDouble(6.615224799778253E307d), 
-              JArray(List(JBool(false), JNull, JDouble(-8.988465674311579E307d))), JDouble(-3.536399224770604E307d)))), 
-            JField("lwu",JDouble(-5.121099465699862E307d))))
+              JNum(6.615224799778253E307d), 
+              JArray(List(JBool(false), JNull, JNum(-8.988465674311579E307d))), JNum(-3.536399224770604E307d)))), 
+            JField("lwu",JNum(-5.121099465699862E307d))))
           ) :: Nil
         ), 
         JObject(
-          JField("key", JArray(JInt(-3918416808128018609l) :: JInt(-1L) :: Nil)) ::
-          JField("value", JDouble(-1.0)) :: Nil
+          JField("key", JArray(JNum(-3918416808128018609l) :: JNum(-1L) :: Nil)) ::
+          JField("value", JNum(-1.0)) :: Nil
         )
       )
 

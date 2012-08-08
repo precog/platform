@@ -143,8 +143,8 @@ trait ProjectionsActorModule extends ProjectionModule {
       logger.info("Stopped ProjectionsActor")
     }
 
-    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JInt(projections.size)) :: 
-                                                                  JField("outstandingReferences", JInt(outstandingReferences.size)) :: Nil)) :: Nil)
+    protected def status =  JObject(JField("Projections", JObject(JField("cacheSize", JNum(projections.size)) :: 
+                                                                  JField("outstandingReferences", JNum(outstandingReferences.size)) :: Nil)) :: Nil)
 
     private def cacheLookup(descriptor: ProjectionDescriptor): IO[Projection] = {
       projections.get(descriptor) map { IO(_) } getOrElse {

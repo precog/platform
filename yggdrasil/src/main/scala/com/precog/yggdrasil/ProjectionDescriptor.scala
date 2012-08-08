@@ -190,7 +190,7 @@ trait ProjectionDescriptorSerialization {
         case JArray(elements) => 
           elements.foldLeft(success[Error, (Vector[ColumnDescriptor], Int)]((Vector.empty[ColumnDescriptor], 0))) {
             case (Success((columns, identities)), obj @ JObject(fields)) =>
-              val idCount = ((obj \ "index") --> classOf[JInt]).value.toInt
+              val idCount = ((obj \ "index") --> classOf[JNum]).value.toInt
               (obj \ "descriptor").validated[ColumnDescriptor] map { d =>
                 (columns :+ d, idCount max identities)
               }

@@ -40,7 +40,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
 
   "simple single-key grouping" should {
     "compute a histogram by value" in check { set: Stream[Int] =>
-      val data = set map { JInt(_) }
+      val data = set map { JNum(_) }
         
       val spec = fromJson(data).group(TransSpec1.Id, 2,
         GroupKeySpecSource(JPathField("1"), TransSpec1.Id))
@@ -52,7 +52,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
-            case JInt(i) => set must contain(i)
+            case JNum(i) => set must contain(i)
           }
         
           setIter must not(beEmpty)
@@ -60,7 +60,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             i mustEqual keyIter.head
           }
           
-          fromJson(JInt(setIter.size) #:: Stream.empty)
+          fromJson(JNum(setIter.size) #:: Stream.empty)
         }
       }
       
@@ -68,13 +68,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       
       resultIter must haveSize(set.distinct.size)
       
-      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JInt(_) }
+      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
       
       forall(resultIter) { i => expectedSet must contain(i) }
     }.pendingUntilFixed
     
     "compute a histogram by value (mapping target)" in check { set: Stream[Int] =>
-      val data = set map { JInt(_) }
+      val data = set map { JNum(_) }
       
       val doubleF1 = new CF1P({
         case c: NumColumn => new Map1Column(c) with NumColumn {
@@ -92,18 +92,18 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
-            case JInt(i) => set must contain(i)
+            case JNum(i) => set must contain(i)
           }
           
           setIter must not(beEmpty)
           forall(setIter) {
-            case JInt(v1) => {
-              val JInt(v2) = keyIter.head
+            case JNum(v1) => {
+              val JNum(v2) = keyIter.head
               v1 mustEqual (v2 * 2)
             }
           }
           
-          fromJson(JInt(setIter.size) #:: Stream.empty)
+          fromJson(JNum(setIter.size) #:: Stream.empty)
         }
       }
       
@@ -111,13 +111,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       
       resultIter must haveSize(set.distinct.size)
       
-      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JInt(_) }
+      val expectedSet = (set.toSeq groupBy identity values) map { _.length } map { JNum(_) }
       
       forall(resultIter) { i => expectedSet must contain(i) }
     }.pendingUntilFixed
     
     "compute a histogram by even/odd" in check { set: Stream[Int] =>
-      val data = set map { JInt(_) }
+      val data = set map { JNum(_) }
       
       val mod2 = new CF1P({
         case c: NumColumn => new Map1Column(c) with NumColumn {
@@ -135,19 +135,19 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         } yield {
           keyIter must haveSize(1)
           keyIter.head must beLike {
-            case JInt(i) => set must contain(i)
+            case JNum(i) => set must contain(i)
           }
           
           
           setIter must not(beEmpty)
           forall(setIter) {
-            case JInt(v1) => {
-              val JInt(v2) = keyIter.head
+            case JNum(v1) => {
+              val JNum(v2) = keyIter.head
               (v1 % 2) mustEqual v2
             }
           }
           
-          fromJson(JInt(setIter.size) #:: Stream.empty)
+          fromJson(JNum(setIter.size) #:: Stream.empty)
         }
       }
       
@@ -155,7 +155,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       
       resultIter must haveSize((set map { _ % 2 } distinct) size)
       
-      val expectedSet = (set.toSeq groupBy { _ % 2 } values) map { _.length } map { JInt(_) }
+      val expectedSet = (set.toSeq groupBy { _ % 2 } values) map { _.length } map { JNum(_) }
       
       forall(resultIter) { i => expectedSet must contain(i) }
     }.pendingUntilFixed
@@ -164,25 +164,25 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
   "simple multi-key grouping" should {
     val data = Stream(
       JObject(
-        JField("a", JInt(12)) ::
-        JField("b", JInt(7)) :: Nil),
+        JField("a", JNum(12)) ::
+        JField("b", JNum(7)) :: Nil),
       JObject(
-        JField("a", JInt(42)) :: Nil),
+        JField("a", JNum(42)) :: Nil),
       JObject(
-        JField("a", JInt(11)) ::
+        JField("a", JNum(11)) ::
         JField("c", JBool(true)) :: Nil),
       JObject(
-        JField("a", JInt(12)) :: Nil),
+        JField("a", JNum(12)) :: Nil),
       JObject(
-        JField("b", JInt(15)) :: Nil),
+        JField("b", JNum(15)) :: Nil),
       JObject(
-        JField("b", JInt(-1)) ::
+        JField("b", JNum(-1)) ::
         JField("c", JBool(false)) :: Nil),
       JObject(
-        JField("b", JInt(7)) :: Nil),
+        JField("b", JNum(7)) :: Nil),
       JObject(
-        JField("a", JInt(-7)) ::
-        JField("b", JInt(3)) ::
+        JField("a", JNum(-7)) ::
+        JField("b", JNum(3)) ::
         JField("d", JString("testing")) :: Nil))
     
     "compute a histogram on two keys" >> {
@@ -209,15 +209,15 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 a must beLike {
-                  case JInt(i) if i == 12 => {
+                  case JNum(i) if i == 12 => {
                     b must beLike {
-                      case JInt(i) if i == 7 => ok
+                      case JNum(i) if i == 7 => ok
                     }
                   }
                   
-                  case JInt(i) if i == -7 => {
+                  case JNum(i) if i == -7 => {
                     b must beLike {
-                      case JInt(i) if i == 3 => ok
+                      case JNum(i) if i == 3 => ok
                     }
                   }
                 }
@@ -225,7 +225,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             gs1Json must haveSize(1)
-            fromJson(Stream(JInt(gs1Json.size)))
+            fromJson(Stream(JNum(gs1Json.size)))
           }
         }
         
@@ -235,7 +235,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         
         forall(resultJson) { v =>
           v must beLike {
-            case JInt(i) if i == 1 => ok
+            case JNum(i) if i == 1 => ok
           }
         }
       }.pendingUntilFixed
@@ -264,29 +264,29 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             
                 if (a == JNothing) {
                   b must beLike {
-                    case JInt(i) if i == 7 => gs1Json must haveSize(2)
-                    case JInt(i) if i == 15 => gs1Json must haveSize(1)
-                    case JInt(i) if i == -1 => gs1Json must haveSize(1)
-                    case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 7 => gs1Json must haveSize(2)
+                    case JNum(i) if i == 15 => gs1Json must haveSize(1)
+                    case JNum(i) if i == -1 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 3 => gs1Json must haveSize(1)
                   }
                 } else if (b == JNothing) {
                   a must beLike {
-                    case JInt(i) if i == 12 => gs1Json must haveSize(2)
-                    case JInt(i) if i == 42 => gs1Json must haveSize(1)
-                    case JInt(i) if i == 11 => gs1Json must haveSize(1)
-                    case JInt(i) if i == -7 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 12 => gs1Json must haveSize(2)
+                    case JNum(i) if i == 42 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 11 => gs1Json must haveSize(1)
+                    case JNum(i) if i == -7 => gs1Json must haveSize(1)
                   }
                 } else {
                   a must beLike {
-                    case JInt(i) if i == 12 => {
+                    case JNum(i) if i == 12 => {
                       b must beLike {
-                        case JInt(i) if i == 7 => ok
+                        case JNum(i) if i == 7 => ok
                       }
                     }
                       
-                    case JInt(i) if i == -7 => {
+                    case JNum(i) if i == -7 => {
                       b must beLike {
-                        case JInt(i) if i == 3 => ok
+                        case JNum(i) if i == 3 => ok
                       }
                     }
                   }
@@ -296,7 +296,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               }
             }
             
-            fromJson(Stream(JInt(gs1Json.size)))
+            fromJson(Stream(JNum(gs1Json.size)))
           }
         }
         
@@ -305,7 +305,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         
         forall(resultJson) { v =>
           v must beLike {
-            case JInt(i) if i == 2 || i == 1 => ok
+            case JNum(i) if i == 2 || i == 1 => ok
           }
         }
       }.pendingUntilFixed
@@ -341,13 +341,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 b must beLike {
-                  case JInt(i) if i == 7 => ok
+                  case JNum(i) if i == 7 => ok
                 }
               }
             }
             
             gs1Json must haveSize(1)
-            fromJson(Stream(JInt(gs1Json.size)))
+            fromJson(Stream(JNum(gs1Json.size)))
           }
         }
         
@@ -357,7 +357,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         
         forall(resultJson) { v =>
           v must beLike {
-            case JInt(i) if i == 1 => ok
+            case JNum(i) if i == 1 => ok
           }
         }
       }.pendingUntilFixed
@@ -390,22 +390,22 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                   gs1Json.head must beLike {
                     case subObj: JObject => {
                       (subObj \ "a") must beLike {
-                        case JInt(i) if i == 12 => ok
+                        case JNum(i) if i == 12 => ok
                       }
                     }
                   }
                 } else {
                   b must beLike {
-                    case JInt(i) if i == 7 => gs1Json must haveSize(2)
-                    case JInt(i) if i == 15 => gs1Json must haveSize(1)
-                    case JInt(i) if i == -1 => gs1Json must haveSize(1)
-                    case JInt(i) if i == 3 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 7 => gs1Json must haveSize(2)
+                    case JNum(i) if i == 15 => gs1Json must haveSize(1)
+                    case JNum(i) if i == -1 => gs1Json must haveSize(1)
+                    case JNum(i) if i == 3 => gs1Json must haveSize(1)
                   }
                 }
               }
             }
             
-            fromJson(Stream(JInt(gs1Json.size)))
+            fromJson(Stream(JNum(gs1Json.size)))
           }
         }
         
@@ -415,7 +415,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         
         forall(resultJson) { v =>
           v must beLike {
-            case JInt(i) if i == 1 => ok
+            case JNum(i) if i == 1 => ok
           }
         }
       }.pendingUntilFixed
@@ -424,8 +424,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
   
   "multi-set grouping" should {
     "compute ctr on value" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
-      val data1 = rawData1 map { JInt(_) }
-      val data2 = rawData2 map { JInt(_) }
+      val data1 = rawData1 map { JNum(_) }
+      val data2 = rawData2 map { JNum(_) }
       
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
@@ -460,32 +460,32 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               val a = obj \ "1"
               
               a must beLike {
-                case JInt(_) => ok
+                case JNum(_) => ok
               }
             }
           }
           
-          val JInt(keyBigInt) = keyJson.head \ "1"
+          val JNum(keyBigInt) = keyJson.head \ "1"
           
           gs1Json must not(beEmpty)
           gs2Json must not(beEmpty)
           
           forall(gs1Json) { row =>
             row must beLike {
-              case JInt(i) => i mustEqual keyBigInt
+              case JNum(i) => i mustEqual keyBigInt
             }
           }
           
           forall(gs2Json) { row =>
             row must beLike {
-              case JInt(i) => i mustEqual keyBigInt
+              case JNum(i) => i mustEqual keyBigInt
             }
           }
           
           fromJson(Stream(
             JObject(
               JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
+              JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
         }
       }
       
@@ -496,8 +496,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       forall(resultJson) { v =>
         v must beLike {
           case obj: JObject => {
-            val JInt(k) = obj \ "key"
-            val JInt(v) = obj \ "value"
+            val JNum(k) = obj \ "key"
+            val JNum(v) = obj \ "value"
             
             v mustEqual ((rawData1 ++ rawData2) filter { k == _ } length)
           }
@@ -506,8 +506,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     }.pendingUntilFixed
     
     "compute pair-sum join" in check { (rawData1: Stream[Int], rawData2: Stream[Int]) =>
-      val data1 = rawData1 map { JInt(_) }
-      val data2 = rawData2 map { JInt(_) }
+      val data1 = rawData1 map { JNum(_) }
+      val data2 = rawData2 map { JNum(_) }
       
       val table1 = fromJson(data1)
       val table2 = fromJson(data2)
@@ -542,35 +542,35 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               val a = obj \ "1"
               
               a must beLike {
-                case JInt(_) => ok
+                case JNum(_) => ok
               }
             }
           }
           
-          val JInt(keyBigInt) = keyJson.head \ "1"
+          val JNum(keyBigInt) = keyJson.head \ "1"
           
           gs1Json must not(beEmpty)
           gs2Json must not(beEmpty)
           
           forall(gs1Json) { row =>
             row must beLike {
-              case JInt(i) => i mustEqual keyBigInt
+              case JNum(i) => i mustEqual keyBigInt
             }
           }
           
           forall(gs2Json) { row =>
             row must beLike {
-              case JInt(i) => i mustEqual keyBigInt
+              case JNum(i) => i mustEqual keyBigInt
             }
           }
           
-          val JInt(v1) = gs1Json.head
-          val JInt(v2) = gs2Json.head
+          val JNum(v1) = gs1Json.head
+          val JNum(v2) = gs2Json.head
           
           fromJson(Stream(
             JObject(
               JField("key", keyJson.head \ "1") ::
-              JField("value", JInt(v1 + v2)) :: Nil)))
+              JField("value", JNum(v1 + v2)) :: Nil)))
         }
       }
       
@@ -581,8 +581,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
       forall(resultJson) { v =>
         v must beLike {
           case obj: JObject => {
-            val JInt(k) = obj \ "key"
-            val JInt(v) = obj \ "value"
+            val JNum(k) = obj \ "key"
+            val JNum(v) = obj \ "value"
             
             v mustEqual (k * 2)
           }
@@ -595,14 +595,14 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
-              JField("a", JInt(a)) ::
-              JField("b", JInt(b)) :: Nil)
+              JField("a", JNum(a)) ::
+              JField("b", JNum(b)) :: Nil)
               
           case (a, None) =>
-            JObject(JField("a", JInt(a)) :: Nil)
+            JObject(JField("a", JNum(a)) :: Nil)
         }
         
-        val data2 = rawData2 map { a => JObject(JField("a", JInt(a)) :: Nil) }
+        val data2 = rawData2 map { a => JObject(JField("a", JNum(a)) :: Nil) }
         
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
@@ -643,16 +643,16 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 a must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
                 
                 b must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
               }
             }
             
-            val JInt(keyBigInt) = keyJson.head \ "1"
+            val JNum(keyBigInt) = keyJson.head \ "1"
             
             gs1Json must not(beEmpty)
             gs2Json must not(beEmpty)
@@ -661,7 +661,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -671,7 +671,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -680,7 +680,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             fromJson(Stream(
               JObject(
                 JField("key", keyJson.head \ "1") ::
-                JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
+                JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
           }
         }
         
@@ -691,8 +691,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         forall(resultJson) { v =>
           v must beLike {
             case obj: JObject => {
-              val JInt(k) = obj \ "key"
-              val JInt(v) = obj \ "value"
+              val JNum(k) = obj \ "key"
+              val JNum(v) = obj \ "value"
               
               v mustEqual (((rawData1 map { _._1 }) ++ rawData2) filter { k == _ } length)
             }
@@ -704,14 +704,14 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
-              JField("a", JInt(a)) ::
-              JField("b", JInt(b)) :: Nil)
+              JField("a", JNum(a)) ::
+              JField("b", JNum(b)) :: Nil)
               
           case (a, None) =>
-            JObject(JField("a", JInt(a)) :: Nil)
+            JObject(JField("a", JNum(a)) :: Nil)
         }
         
-        val data2 = rawData2 map { a => JObject(JField("a", JInt(a)) :: Nil) }
+        val data2 = rawData2 map { a => JObject(JField("a", JNum(a)) :: Nil) }
         
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
@@ -752,17 +752,17 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 a must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
                 
                 b must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                   case JNothing => ok
                 }
               }
             }
             
-            val JInt(keyBigInt) = keyJson.head \ "1"
+            val JNum(keyBigInt) = keyJson.head \ "1"
             
             gs1Json must not(beEmpty)
             gs2Json must not(beEmpty)
@@ -771,7 +771,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -781,7 +781,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -790,7 +790,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             fromJson(Stream(
               JObject(
                 JField("key", keyJson.head \ "1") ::
-                JField("value", JInt(gs1Json.size + gs2Json.size)) :: Nil)))
+                JField("value", JNum(gs1Json.size + gs2Json.size)) :: Nil)))
           }
         }
         
@@ -801,8 +801,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         forall(resultJson) { v =>
           v must beLike {
             case obj: JObject => {
-              val JInt(k) = obj \ "key"
-              val JInt(v) = obj \ "value"
+              val JNum(k) = obj \ "key"
+              val JNum(v) = obj \ "value"
               
               v mustEqual (((rawData1 map { _._1 }) ++ rawData2) filter { k == _ } length)
             }
@@ -816,14 +816,14 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
-              JField("a", JInt(a)) ::
-              JField("b", JInt(b)) :: Nil)
+              JField("a", JNum(a)) ::
+              JField("b", JNum(b)) :: Nil)
               
           case (a, None) =>
-            JObject(JField("a", JInt(a)) :: Nil)
+            JObject(JField("a", JNum(a)) :: Nil)
         }
         
-        val data2 = rawData2 map { a => JObject(JField("a", JInt(a)) :: Nil) }
+        val data2 = rawData2 map { a => JObject(JField("a", JNum(a)) :: Nil) }
         
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
@@ -864,16 +864,16 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 a must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
                 
                 b must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
               }
             }
             
-            val JInt(keyBigInt) = keyJson.head \ "1"
+            val JNum(keyBigInt) = keyJson.head \ "1"
             
             gs1Json must not(beEmpty)
             gs2Json must not(beEmpty)
@@ -882,7 +882,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -892,19 +892,19 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
             }
           
-            val JInt(v1) = gs1Json.head \ "a"
-            val JInt(v2) = gs2Json.head \ "a"
+            val JNum(v1) = gs1Json.head \ "a"
+            val JNum(v2) = gs2Json.head \ "a"
             
             fromJson(Stream(
               JObject(
                 JField("key", keyJson.head \ "1") ::
-                JField("value", JInt(v1 + v2)) :: Nil)))
+                JField("value", JNum(v1 + v2)) :: Nil)))
           }
         }
         
@@ -915,8 +915,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         forall(resultJson) { v =>
           v must beLike {
             case obj: JObject => {
-              val JInt(k) = obj \ "key"
-              val JInt(v) = obj \ "value"
+              val JNum(k) = obj \ "key"
+              val JNum(v) = obj \ "value"
               
               v mustEqual (k * 2)
             }
@@ -928,14 +928,14 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         val data1 = rawData1 map {
           case (a, Some(b)) =>
             JObject(
-              JField("a", JInt(a)) ::
-              JField("b", JInt(b)) :: Nil)
+              JField("a", JNum(a)) ::
+              JField("b", JNum(b)) :: Nil)
               
           case (a, None) =>
-            JObject(JField("a", JInt(a)) :: Nil)
+            JObject(JField("a", JNum(a)) :: Nil)
         }
         
-        val data2 = rawData2 map { a => JObject(JField("a", JInt(a)) :: Nil) }
+        val data2 = rawData2 map { a => JObject(JField("a", JNum(a)) :: Nil) }
         
         val table1 = fromJson(data1)
         val table2 = fromJson(data2)
@@ -977,17 +977,17 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
                 val b = obj \ "2"
                 
                 a must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                 }
                 
                 b must beLike {
-                  case JInt(_) => ok
+                  case JNum(_) => ok
                   case JNothing => ok
                 }
               }
             }
             
-            val JInt(keyBigInt) = keyJson.head \ "1"
+            val JNum(keyBigInt) = keyJson.head \ "1"
             
             gs1Json must not(beEmpty)
             gs2Json must not(beEmpty)
@@ -996,7 +996,7 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
@@ -1006,19 +1006,19 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
               row must beLike {
                 case obj: JObject => {
                   (obj \ "a") must beLike {
-                    case JInt(i) => i mustEqual keyBigInt
+                    case JNum(i) => i mustEqual keyBigInt
                   }
                 }
               }
             }
           
-            val JInt(v1) = gs1Json.head \ "a"
-            val JInt(v2) = gs2Json.head \ "a"
+            val JNum(v1) = gs1Json.head \ "a"
+            val JNum(v2) = gs2Json.head \ "a"
             
             fromJson(Stream(
               JObject(
                 JField("key", keyJson.head \ "1") ::
-                JField("value", JInt(v1 + v2)) :: Nil)))
+                JField("value", JNum(v1 + v2)) :: Nil)))
           }
         }
         
@@ -1029,8 +1029,8 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         forall(resultJson) { v =>
           v must beLike {
             case obj: JObject => {
-              val JInt(k) = obj \ "key"
-              val JInt(v) = obj \ "value"
+              val JNum(k) = obj \ "key"
+              val JNum(v) = obj \ "value"
               
               v mustEqual (k * 2)
             }
@@ -1052,91 +1052,91 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
     "handle non-trivial group alignment with composite key" in {
       val foo = Stream(
         JObject(
-          JField("a", JInt(42)) ::    // 1
-          JField("b", JInt(12)) :: Nil),
+          JField("a", JNum(42)) ::    // 1
+          JField("b", JNum(12)) :: Nil),
         JObject(
-          JField("a", JInt(42)) :: Nil),
+          JField("a", JNum(42)) :: Nil),
         JObject(
-          JField("a", JInt(77)) :: Nil),
+          JField("a", JNum(77)) :: Nil),
         JObject(
-          JField("c", JInt(-3)) :: Nil),
+          JField("c", JNum(-3)) :: Nil),
         JObject(
-          JField("b", JInt(7)) :: Nil),
+          JField("b", JNum(7)) :: Nil),
         JObject(
-          JField("a", JInt(42)) ::    // 1
-          JField("b", JInt(12)) :: Nil),
+          JField("a", JNum(42)) ::    // 1
+          JField("b", JNum(12)) :: Nil),
         JObject(
-          JField("a", JInt(7)) ::     // 2
-          JField("b", JInt(42)) :: Nil),
+          JField("a", JNum(7)) ::     // 2
+          JField("b", JNum(42)) :: Nil),
         JObject(
-          JField("a", JInt(17)) ::    // 3
-          JField("b", JInt(6)) :: Nil),
+          JField("a", JNum(17)) ::    // 3
+          JField("b", JNum(6)) :: Nil),
         JObject(
-          JField("b", JInt(1)) :: Nil),
+          JField("b", JNum(1)) :: Nil),
         JObject(
-          JField("a", JInt(21)) ::    // 4
-          JField("b", JInt(12)) :: Nil),
+          JField("a", JNum(21)) ::    // 4
+          JField("b", JNum(12)) :: Nil),
         JObject(
-          JField("a", JInt(42)) ::    // 5
-          JField("b", JInt(-2)) :: Nil),
+          JField("a", JNum(42)) ::    // 5
+          JField("b", JNum(-2)) :: Nil),
         JObject(
-          JField("c", JInt(-3)) :: Nil),
+          JField("c", JNum(-3)) :: Nil),
         JObject(
-          JField("a", JInt(7)) ::     // 2
-          JField("b", JInt(42)) :: Nil),
+          JField("a", JNum(7)) ::     // 2
+          JField("b", JNum(42)) :: Nil),
         JObject(
-          JField("a", JInt(42)) ::    // 1
-          JField("b", JInt(12)) :: Nil))
+          JField("a", JNum(42)) ::    // 1
+          JField("b", JNum(12)) :: Nil))
           
       val bar = Stream(
         JObject(
-          JField("a", JInt(42)) :: Nil),    // 1
+          JField("a", JNum(42)) :: Nil),    // 1
         JObject(
-          JField("a", JInt(42)) :: Nil),    // 1
+          JField("a", JNum(42)) :: Nil),    // 1
         JObject(
-          JField("a", JInt(77)) :: Nil),    // 6
+          JField("a", JNum(77)) :: Nil),    // 6
         JObject(
-          JField("c", JInt(-3)) :: Nil),
+          JField("c", JNum(-3)) :: Nil),
         JObject(
-          JField("b", JInt(7)) :: Nil),
+          JField("b", JNum(7)) :: Nil),
         JObject(
-          JField("b", JInt(12)) :: Nil),
+          JField("b", JNum(12)) :: Nil),
         JObject(
-          JField("a", JInt(7)) ::           // 2
-          JField("b", JInt(42)) :: Nil),
+          JField("a", JNum(7)) ::           // 2
+          JField("b", JNum(42)) :: Nil),
         JObject(
-          JField("a", JInt(17)) ::          // 3
-          JField("c", JInt(77)) :: Nil),
+          JField("a", JNum(17)) ::          // 3
+          JField("c", JNum(77)) :: Nil),
         JObject(
-          JField("b", JInt(1)) :: Nil),
+          JField("b", JNum(1)) :: Nil),
         JObject(
-          JField("b", JInt(12)) :: Nil),
+          JField("b", JNum(12)) :: Nil),
         JObject(
-          JField("b", JInt(-2)) :: Nil),
+          JField("b", JNum(-2)) :: Nil),
         JObject(
-          JField("c", JInt(-3)) :: Nil),
+          JField("c", JNum(-3)) :: Nil),
         JObject(
-          JField("a", JInt(7)) :: Nil),     // 2
+          JField("a", JNum(7)) :: Nil),     // 2
         JObject(
-          JField("a", JInt(42)) :: Nil))    // 1
+          JField("a", JNum(42)) :: Nil))    // 1
           
       val baz = Stream(
         JObject(
-          JField("b", JInt(12)) :: Nil),    // 1
+          JField("b", JNum(12)) :: Nil),    // 1
         JObject(
-          JField("b", JInt(6)) :: Nil),     // 3
+          JField("b", JNum(6)) :: Nil),     // 3
         JObject(
-          JField("a", JInt(42)) :: Nil),
+          JField("a", JNum(42)) :: Nil),
         JObject(
-          JField("b", JInt(1)) :: Nil),     // 7
+          JField("b", JNum(1)) :: Nil),     // 7
         JObject(
-          JField("b", JInt(12)) :: Nil),    // 1
+          JField("b", JNum(12)) :: Nil),    // 1
         JObject(
-          JField("c", JInt(-3)) :: Nil),
+          JField("c", JNum(-3)) :: Nil),
         JObject(
-          JField("b", JInt(42)) :: Nil),    // 2
+          JField("b", JNum(42)) :: Nil),    // 2
         JObject(
-          JField("d", JInt(0)) :: Nil))
+          JField("d", JNum(0)) :: Nil))
           
       val fooSpec = fromJson(foo).group(
         TransSpec1.Id,
@@ -1199,9 +1199,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             JObject(
               JField("a", a) ::
               JField("b", b) ::
-              JField("foo", JInt(fooPJson.size)) ::
-              JField("bar", JInt(barPJson.size)) ::
-              JField("baz", JInt(bazPJson.size)) :: Nil))
+              JField("foo", JNum(fooPJson.size)) ::
+              JField("bar", JNum(barPJson.size)) ::
+              JField("baz", JNum(bazPJson.size)) :: Nil))
               
           implicitly[Pointed[test.YId]].point(fromJson(result))
         }
@@ -1213,32 +1213,32 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         
         forall(forallJson) { row =>
           row must beLike {
-            case obj: JObject if (obj \ "a") == JInt(42) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(42) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
               ai mustEqual 42
               bi mustEqual 12
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 3
               bari mustEqual 3
               bazi mustEqual 2
             }
             
-            case obj: JObject if (obj \ "a") == JInt(7) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(7) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
               ai mustEqual 7
               bi mustEqual 42
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 2
               bari mustEqual 2
@@ -1283,9 +1283,9 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             JObject(
               JField("a", a) ::
               JField("b", b) ::
-              JField("foo", JInt(fooPJson.size)) ::
-              JField("bar", JInt(barPJson.size)) ::
-              JField("baz", JInt(bazPJson.size)) :: Nil))
+              JField("foo", JNum(fooPJson.size)) ::
+              JField("bar", JNum(barPJson.size)) ::
+              JField("baz", JNum(bazPJson.size)) :: Nil))
               
           implicitly[Pointed[test.YId]].point(fromJson(result))
         }
@@ -1298,13 +1298,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
         forall(forallJson) { row =>
           row must beLike {
             // 1
-            case obj: JObject if (obj \ "a") == JInt(42) && (obj \ "b") == JInt(12) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(42) && (obj \ "b") == JNum(12) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 3
               bari mustEqual 3
@@ -1312,13 +1312,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 2
-            case obj: JObject if (obj \ "a") == JInt(7) && (obj \ "b") == JInt(42) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(7) && (obj \ "b") == JNum(42) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 2
               bari mustEqual 2
@@ -1326,13 +1326,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 3
-            case obj: JObject if (obj \ "a") == JInt(17) && (obj \ "b") == JInt(6) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(17) && (obj \ "b") == JNum(6) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 1
               bari mustEqual 1
@@ -1340,13 +1340,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 4
-            case obj: JObject if (obj \ "a") == JInt(21) && (obj \ "b") == JInt(12) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(21) && (obj \ "b") == JNum(12) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 1
               bari mustEqual 0
@@ -1354,13 +1354,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 5
-            case obj: JObject if (obj \ "a") == JInt(42) && (obj \ "b") == JInt(-2) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(42) && (obj \ "b") == JNum(-2) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 1
               bari mustEqual 0
@@ -1368,13 +1368,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 6
-            case obj: JObject if (obj \ "a") == JInt(77) && (obj \ "b") == JNothing => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNum(77) && (obj \ "b") == JNothing => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 0
               bari mustEqual 1
@@ -1382,13 +1382,13 @@ object GrouperSpec extends Specification with StubColumnarTableModule[test.YId] 
             }
             
             // 7
-            case obj: JObject if (obj \ "a") == JNothing && (obj \ "b") == JInt(1) => {
-              val JInt(ai) = obj \ "a"
-              val JInt(bi) = obj \ "b"
+            case obj: JObject if (obj \ "a") == JNothing && (obj \ "b") == JNum(1) => {
+              val JNum(ai) = obj \ "a"
+              val JNum(bi) = obj \ "b"
               
-              val JInt(fooi) = obj \ "foo"
-              val JInt(bari) = obj \ "bar"
-              val JInt(bazi) = obj \ "baz"
+              val JNum(fooi) = obj \ "foo"
+              val JNum(bari) = obj \ "bar"
+              val JNum(bazi) = obj \ "baz"
               
               fooi mustEqual 0
               bari mustEqual 0

@@ -115,7 +115,7 @@ class ShardServiceSpec extends TestShardService with FutureMatchers {
   "Shard query service" should {
     "handle query from root path" in {
       query(testQuery) must whenDelivered { beLike {
-        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JInt(i)::Nil)), _) => ok
+        case HttpResponse(HttpStatus(OK, _), _, Some(JArray(JNum(i)::Nil)), _) => ok
       }}
     }
     "handle query from non-root path" in {
@@ -185,7 +185,7 @@ trait TestQueryExecutor extends QueryExecutor {
     if(userUID != allowedUID) {
       failure(UserError(JArray(List(JString("No data accessable at the specified path.")))))
     } else {
-      success(JArray(List(JInt(2))))
+      success(JArray(List(JNum(2))))
     } 
   }
   
