@@ -64,6 +64,7 @@ trait EvaluatorConfig {
 trait Evaluator[M[+_]] extends DAG
     with CrossOrdering
     with Memoizer
+    with PathRelativizer[M]
     with TypeInferencer
     with TableModule[M]        // TODO specific implementation
     with ImplLibrary[M]
@@ -98,7 +99,7 @@ trait Evaluator[M[+_]] extends DAG
   
   def freshIdScanner: Scanner
   
-  def eval(userUID: UserId, graph: DepGraph, ctx: Context, optimize: Boolean): M[Table] = {
+  def eval(userUID: UserId, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean): M[Table] = {
     logger.debug("Eval for %s = %s".format(userUID.toString, graph))
   
     def resolveTopLevelGroup(spec: BucketSpec, splits: Map[dag.Split, (Table, Int => Table)]): StateT[Id, EvaluatorState, M[GroupingSpec[Int]]] = spec match {
@@ -334,8 +335,6 @@ trait Evaluator[M[+_]] extends DAG
           } 
           table map { PendingTable(_, graph, TransSpec1.Id) }
         }
-        
-        // VUnion and VIntersect removed, TODO: remove from bytecode
         
         case IUI(_, union, left, right) => {
           for {
@@ -748,8 +747,10 @@ trait Evaluator[M[+_]] extends DAG
       }
     }
     
-    val rewrite = (orderCrosses _) andThen
+    val rewrite = 
+      (orderCrosses _) andThen
       (memoize _) andThen
+      (makePathRelative(_, prefix)) andThen //Path Relativizer
       (if (optimize) inferTypes(JType.JUnfixedT) else identity)
 
     val resultState: StateT[Id, EvaluatorState, M[Table]] = 

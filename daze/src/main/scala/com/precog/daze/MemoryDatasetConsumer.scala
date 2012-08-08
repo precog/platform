@@ -28,6 +28,8 @@ import yggdrasil.table._
 import akka.dispatch.Await
 import akka.util.Duration
 
+import com.precog.common.Path
+
 import scalaz._
 import scalaz.Validation
 import scalaz.effect.IO
@@ -52,10 +54,10 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
 
   implicit def coM: Copointed[M]
   
-  def consumeEval(userUID: String, graph: DepGraph, ctx: Context, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
+  def consumeEval(userUID: String, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
-      val result = eval(userUID, graph, ctx, optimize)
+      val result = eval(userUID, graph, ctx, prefix, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue =>
         (jvalue \ "value") == JNothing
       }

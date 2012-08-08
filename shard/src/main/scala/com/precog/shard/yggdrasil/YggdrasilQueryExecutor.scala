@@ -139,8 +139,8 @@ trait YggdrasilQueryExecutor
 
   case class StackException(error: StackError) extends Exception(error.toString)
 
-  def execute(userUID: String, query: String): Validation[EvaluationError, JArray] = {
-    logger.debug("Executing for %s: %s".format(userUID, query))
+  def execute(userUID: String, query: String, prefix: Path): Validation[EvaluationError, JArray] = {
+    logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
     implicit val M = Validation.validationMonad[EvaluationError]
@@ -149,7 +149,7 @@ trait YggdrasilQueryExecutor
       asBytecode(query) flatMap { bytecode =>
         Validation.fromEither(decorate(bytecode)).bimap(
           error => systemError(StackException(error)),
-          dag   => evaluateDag(userUID, dag).fail.map(systemError(_)).validation
+          dag   => evaluateDag(userUID, dag, prefix).fail.map(systemError(_)).validation
         ).join
       }
     } 
@@ -199,10 +199,10 @@ trait YggdrasilQueryExecutor
     Future(Failure("Status not supported yet"))
   }
 
-  private def evaluateDag(userUID: String, dag: DepGraph): Validation[Throwable, JArray] = {
+  private def evaluateDag(userUID: String, dag: DepGraph,prefix: Path): Validation[Throwable, JArray] = {
     withContext { ctx =>
       logger.debug("Evaluating DAG for " + userUID)
-      val result = consumeEval(userUID, dag, ctx) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
+      val result = consumeEval(userUID, dag, ctx,prefix) map { events => logger.debug("Events = " + events); JArray(events.map(_._2.toJValue)(collection.breakOut)) }
       sys.error("todo: uncomment the next line (and make it work)")
       //ctx.release.release.unsafePerformIO
       logger.debug("DAG evaluated to " + result)

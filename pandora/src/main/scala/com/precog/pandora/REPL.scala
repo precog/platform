@@ -32,6 +32,8 @@ import com.codecommit.gll.{Failure, LineStream, Success}
 import jline.TerminalFactory
 import jline.console.ConsoleReader
 
+import com.precog.common.Path
+
 import com.precog.common.kafka._
 import com.precog.common.security._
 import yggdrasil._
@@ -113,7 +115,7 @@ trait REPL
           
           for (graph <- eitherGraph.right) {
             val result = withContext { ctx =>
-              consumeEval(dummyUID, graph, ctx) fold (
+              consumeEval(dummyUID, graph, ctx,Path.Root) fold (
                 error   => "An error occurred processing your query: " + error.getMessage,
                 results => pretty(render(JArray(results.toList.map(_._2.toJValue))))
               )

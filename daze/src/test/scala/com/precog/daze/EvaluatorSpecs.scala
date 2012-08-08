@@ -90,11 +90,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph)(test: Set[SEvent] => Result): Result = withContext { ctx =>
-    (consumeEval(testUID, graph, ctx) match {
+    (consumeEval(testUID, graph, ctx, Path.Root) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     }) and 
-    (consumeEval(testUID, graph, ctx, false) match {
+    (consumeEval(testUID, graph, ctx, Path.Root, false) match {
       case Success(results) => test(results)
       case Failure(error) => throw error
     })

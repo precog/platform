@@ -131,7 +131,7 @@ histogram
                 var cnt = 0
                 while(cnt < i) {
                   val q = queries(rand.nextInt(queries.length))  
-                  val result = executor.execute("token", q) 
+                  val result = executor.execute("token", q,"") 
                   result match {
                     case Success(jval) => 
                     case Failure(e) => new RuntimeException("Query result failure")

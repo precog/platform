@@ -20,6 +20,7 @@
 package com.precog
 package muspelheim
 
+import common.Path
 import common.VectorCase
 import common.kafka._
 
@@ -115,7 +116,7 @@ trait ParseEvalStackSpecs[M[+_]] extends Specification
         tree.errors must beEmpty
         val Right(dag) = decorate(emit(tree))
         withContext { ctx => 
-          consumeEval("dummyUID", dag, ctx) match {
+          consumeEval("dummyUID", dag, ctx, Path.Root) match {
             case Success(result) => 
               logger.debug("Evaluation complete for query: " + str)
               result

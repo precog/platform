@@ -25,7 +25,6 @@ import common.kafka._
 import common.security._
 
 import daze._
-import daze.util._
 
 import pandora._
 
