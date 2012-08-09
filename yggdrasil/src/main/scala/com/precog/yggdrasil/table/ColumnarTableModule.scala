@@ -50,6 +50,7 @@ import scalaz.std.option._
 import scalaz.syntax.arrow._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
+import scalaz.syntax.std.boolean._
 
 trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   import trans._
@@ -168,7 +169,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     def identity[A](initial: A) = SliceTransform1(initial, (a: A, s: Slice) => (a, s))
   }
 
-  private case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice)) {
+  private case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
     def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
@@ -186,10 +187,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       SliceTransform2(
         (initial, t.initial),
         { case ((a, b), sl, sr) =>
-            assert(sl.size == sr.size)
             val (a0, sa) = f(a, sl, sr)
             val (b0, sb) = t.f(b, sl, sr)
-            assert(sa.size == sb.size)
+            assert(sa.size == sb.size) 
             ((a0, b0), combine(sa, sb))
         }
       )
@@ -206,6 +206,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
 
     def parallel: SliceTransform1[A] = SliceTransform1[A](initial, (a: A, s: Slice) => f(a,s,s))
+
+    def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
   }
 
   private object SliceTransform2 {
@@ -250,7 +252,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
     // No transform defined herein may reduce the size of a slice. Be it known!
     private def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
-      spec match {
+      val result = spec match {
         case Leaf(source) if source == Source || source == SourceLeft => SliceTransform2.left(())
         case Leaf(source) if source == SourceRight => SliceTransform2.right(())
 
@@ -564,6 +566,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             _ arraySwap index 
           }
       }
+      
+      result.withSource(spec)
     }
     
     /**
@@ -584,24 +588,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       class IndexBuffers(lInitialSize: Int, rInitialSize: Int) {
         val lbuf = new ArrayIntList(lInitialSize)
         val rbuf = new ArrayIntList(rInitialSize)
-        val eqbuf = new ArrayIntList(lInitialSize max rInitialSize)
+        val leqbuf = new ArrayIntList(lInitialSize max rInitialSize)
+        val reqbuf = new ArrayIntList(lInitialSize max rInitialSize)
 
         @inline def advanceLeft(lpos: Int): Unit = {
           lbuf.add(lpos)
           rbuf.add(-1)
-          eqbuf.add(-1)
+          leqbuf.add(-1)
+          reqbuf.add(-1)
         }
 
         @inline def advanceRight(rpos: Int): Unit = {
           lbuf.add(-1)
           rbuf.add(rpos)
-          eqbuf.add(-1)
+          leqbuf.add(-1)
+          reqbuf.add(-1)
         }
 
         @inline def advanceBoth(lpos: Int, rpos: Int): Unit = {
           lbuf.add(-1)
           rbuf.add(-1)
-          eqbuf.add(lpos)
+          leqbuf.add(lpos)
+          reqbuf.add(rpos)
         }
 
         def cogrouped[LR, RR, BR](lslice: Slice, 
@@ -609,9 +617,16 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                                   leftTransform:  SliceTransform1[LR], 
                                   rightTransform: SliceTransform1[RR], 
                                   bothTransform:  SliceTransform2[BR]): (Slice, LR, RR, BR) = {
-          val (ls0, lx) = leftTransform(lslice.remap(lbuf))
-          val (rs0, rx) = rightTransform(rslice.remap(rbuf))
-          val (bs0, bx) = bothTransform(lslice.remap(eqbuf), rslice.remap(eqbuf))
+
+          val remappedLeft = lslice.remap(lbuf)
+          val remappedRight = rslice.remap(rbuf)
+
+          val remappedLeq = lslice.remap(leqbuf)
+          val remappedReq = rslice.remap(reqbuf)
+
+          val (ls0, lx) = leftTransform(remappedLeft)
+          val (rs0, rx) = rightTransform(remappedRight)
+          val (bs0, bx) = bothTransform(remappedLeq, remappedReq)
 
           assert(lx.size == rx.size && rx.size == bx.size)
           val resultSlice = lx zip rx zip bx
@@ -620,17 +635,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         }
 
         override def toString = {
-          "left: " + lbuf.toArray.mkString("[", ",", "]") + "\n"
-          "right: " + rbuf.toArray.mkString("[", ",", "]") + "\n"
-          "both: " + eqbuf.toArray.mkString("[", ",", "]")
+          "left: " + lbuf.toArray.mkString("[", ",", "]") + "\n" + 
+          "right: " + rbuf.toArray.mkString("[", ",", "]") + "\n" + 
+          "both: " + (leqbuf.toArray zip reqbuf.toArray).mkString("[", ",", "]")
         }
       }
 
       sealed trait NextStep
       case class SplitLeft(lpos: Int) extends NextStep
       case class SplitRight(rpos: Int) extends NextStep
-      case class AppendLeft(lpos: Int, rpos: Int, rightReset: Int) extends NextStep
-      case class AppendRight(lpos: Int, rpos: Int, rightReset: Int) extends NextStep
+      case class AppendLeft(lpos: Int, rpos: Int, rightCartesian: Option[(Int, Option[Int])]) extends NextStep
+      case class AppendRight(lpos: Int, rpos: Int, rightCartesian: Option[(Int, Option[Int])]) extends NextStep
 
       def cogroup0[LK, RK, LR, RR, BR](stlk: SliceTransform1[LK], strk: SliceTransform1[RK], stlr: SliceTransform1[LR], strr: SliceTransform1[RR], stbr: SliceTransform2[BR]) = {
         case class SlicePosition[K](
@@ -648,7 +663,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
 
         sealed trait CogroupState
         case class EndLeft(lr: LR, lhead: Slice, ltail: StreamT[M, Slice]) extends CogroupState
-        case class Cogroup(lr: LR, rr: RR, br: BR, left: SlicePosition[LK], right: SlicePosition[RK], rightReset: Option[Int]) extends CogroupState
+        case class Cogroup(lr: LR, rr: RR, br: BR, left: SlicePosition[LK], right: SlicePosition[RK], rightReset: Option[(Int, Option[Int])]) extends CogroupState
         case class EndRight(rr: RR, rhead: Slice, rtail: StreamT[M, Slice]) extends CogroupState
         case object CogroupDone extends CogroupState
 
@@ -657,7 +672,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         // step is the continuation function fed to uncons. It is called once for each emitted slice
         def step(state: CogroupState): M[Option[(Slice, CogroupState)]] = {
           // step0 is the inner monadic recursion needed to cross slice boundaries within the emission of a slice
-          def step0(lr: LR, rr: RR, br: BR, leftPosition: SlicePosition[LK], rightPosition: SlicePosition[RK], rightReset: Option[Int])
+          def step0(lr: LR, rr: RR, br: BR, leftPosition: SlicePosition[LK], rightPosition: SlicePosition[RK], rightReset: Option[(Int, Option[Int])])
                    (ibufs: IndexBuffers = new IndexBuffers(leftPosition.key.size, rightPosition.key.size)): M[Option[(Slice, CogroupState)]] = {
             val SlicePosition(lpos0, lkstate, lkey, lhead, ltail) = leftPosition
             val SlicePosition(rpos0, rkstate, rkey, rhead, rtail) = rightPosition
@@ -672,30 +687,35 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             // a pair of slices. Any operation that must cross slice boundaries
             // must exit this inner loop and recur through the outer monadic loop
             // xrstart is an int with sentinel value for effieiency, but is Option at the slice level.
-            @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int): NextStep = {
-              if (xrstart == -1) {
+            @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int, xrend: Int, endRight: Boolean): NextStep = {
+              if (xrstart != -1) {
                 // We're currently in a cartesian. 
                 if (lpos < lhead.size && rpos < rhead.size) {
                   compare(lpos, rpos) match {
                     case LT => 
-                      buildRemappings(lpos + 1, xrstart, xrstart)
+                      buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
                     case GT => 
                       // this will miss catching input-out-of-order errors, but we know that the right must
                       // be advanced fully within the 'EQ' state before we get here, so we can just
                       // increment the right by 1
-                      buildRemappings(lpos, rpos + 1, Reset)
+                      buildRemappings(lpos, xrend, Reset, Reset, endRight)
                     case EQ => 
                       ibufs.advanceBoth(lpos, rpos)
-                      buildRemappings(lpos, rpos + 1, xrstart)
+                      buildRemappings(lpos, rpos + 1, xrstart, xrend, endRight)
                   }
                 } else if (lpos < lhead.size) {
-                  // right slice is exhausted, so we need to append to that slice from the right tail
-                  // then continue in the cartesian
-                  AppendRight(lpos, rpos, xrstart)
+                  if (endRight) {
+                    // we know there won't be another slice on the RHS, so just keep going to exhaust the left
+                    buildRemappings(lpos + 1, xrstart, xrstart, rpos, endRight)
+                  } else {
+                    // right slice is exhausted, so we need to append to that slice from the right tail
+                    // then continue in the cartesian
+                    AppendRight(lpos, rpos, Some((xrstart, (xrend != -1).option(xrend))))
+                  }
                 } else if (rpos < rhead.size) {
                   // left slice is exhausted, so we need to append to that slice from the left tail
                   // then continue in the cartesian
-                  AppendLeft(lpos, rpos, xrstart)
+                  AppendLeft(lpos, rpos, Some((xrstart, (xrend != -1).option(xrend))))
                 } else {
                   sys.error("This state should be unreachable, since we only increment one side at a time.")
                 }
@@ -705,13 +725,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                   compare(lpos, rpos) match {
                     case LT => 
                       ibufs.advanceLeft(lpos)
-                      buildRemappings(lpos + 1, rpos, Reset)
+                      buildRemappings(lpos + 1, rpos, Reset, Reset, endRight)
                     case GT => 
                       ibufs.advanceRight(rpos)
-                      buildRemappings(lpos, rpos + 1, Reset)
+                      buildRemappings(lpos, rpos + 1, Reset, Reset, endRight)
                     case EQ =>
                       ibufs.advanceBoth(lpos, rpos)
-                      buildRemappings(lpos, rpos + 1, rpos)
+                      buildRemappings(lpos, rpos + 1, rpos, Reset, endRight)
                   }
                 } else if (lpos < lhead.size) {
                   // right side is exhausted, so we should just split the left and emit 
@@ -725,8 +745,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
               }
             }
 
-            val nextStep = buildRemappings(lpos0, rpos0, rightReset.getOrElse(Reset))
-            nextStep match {
+            def continue(nextStep: NextStep): M[Option[(Slice, CogroupState)]] = nextStep match {
               case SplitLeft(lpos) =>
                 val (lpref, lsuf) = lhead.split(lpos + 1)
                 val (_, lksuf) = lkey.split(lpos + 1)
@@ -778,16 +797,30 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                     step0(lr, rr, br,
                           SlicePosition(lpos, lkstate0, lkey append lkey0, lhead append nextLeftHead, nextLeftTail),
                           SlicePosition(rpos, rkstate, rkey, rhead, rtail), 
-                          Some(rightReset))(ibufs)
+                          rightReset)(ibufs)
 
                   case None => 
-                    val (rpref, rsuf) = rhead.split(rpos + 1)
-                    val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lhead, rpref,
-                                                                         SliceTransform1[LR](lr, stlr.f),
-                                                                         SliceTransform1[RR](rr, strr.f),
-                                                                         SliceTransform2[BR](br, stbr.f))
-                    val nextState = EndRight(rr0, rsuf, rtail)
-                    M.point(Some(completeSlice -> nextState))
+                    rightReset.flatMap(_._2) map { rend =>
+                      // We've found an actual end to the cartesian on the right, and have run out of 
+                      // data inside the cartesian on the left, so we have to split the right, emit,
+                      // and then end right
+                      val (rpref, rsuf) = rhead.split(rend)
+                      val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lhead, rpref,
+                                                                           SliceTransform1[LR](lr, stlr.f),
+                                                                           SliceTransform1[RR](rr, strr.f),
+                                                                           SliceTransform2[BR](br, stbr.f))
+
+                      val nextState = EndRight(rr0, rsuf, rtail)
+                      M.point(Some((completeSlice -> nextState)))
+                    } getOrElse {
+                      // the end of the cartesian must be found on the right before trying to find the end
+                      // on the left, so if we're here then the right must be 
+                      val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lhead, rhead,
+                                                                           SliceTransform1[LR](lr, stlr.f),
+                                                                           SliceTransform1[RR](rr, strr.f),
+                                                                           SliceTransform2[BR](br, stbr.f))
+                      M.point(Some(completeSlice -> CogroupDone))
+                    }
                 }
 
               case AppendRight(lpos, rpos, rightReset) => 
@@ -797,18 +830,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                     step0(lr, rr, br, 
                           SlicePosition(lpos, lkstate, lkey, lhead, ltail), 
                           SlicePosition(rpos, rkstate0, rkey append rkey0, rhead append nextRightHead, nextRightTail),
-                          Some(rightReset))(ibufs)
+                          rightReset)(ibufs)
 
                   case None =>
-                    val (lpref, lsuf) = lhead.split(lpos + 1)
-                    val (completeSlice, lr0, rr0, br0) = ibufs.cogrouped(lpref, rhead,
-                                                                         SliceTransform1[LR](lr, stlr.f),
-                                                                         SliceTransform1[RR](rr, strr.f),
-                                                                         SliceTransform2[BR](br, stbr.f))
-                    val nextState = EndLeft(lr0, lsuf, ltail)
-                    M.point(Some(completeSlice -> nextState))               
+                    // run out the left hand side, since the right will never advance
+                    continue(buildRemappings(lpos, rpos, rightReset.map(_._1).getOrElse(Reset), rightReset.flatMap(_._2).getOrElse(Reset), true))
                 }
             }
+
+            continue(buildRemappings(lpos0, rpos0, rightReset.map(_._1).getOrElse(Reset), rightReset.flatMap(_._2).getOrElse(Reset), false))
           } // end of step0 
 
           state match {

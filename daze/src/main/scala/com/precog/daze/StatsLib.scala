@@ -223,7 +223,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         val cross = for (l <- left; r <- right) yield (l, r)
 
         val result = cross flatMap {
-          case (c1: LongColumn, c2: LongColumn) => 
+          case (c1: LongColumn, c2: LongColumn) => //TODO need cases for ALL numeric types
             val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
             if (mapped.isEmpty) {
               None

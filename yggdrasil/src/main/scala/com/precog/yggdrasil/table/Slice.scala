@@ -155,16 +155,9 @@ trait Slice { source =>
   }
 
   def remap(indices: ArrayIntList) = new Slice {
-    val size = source.size
+    val size = indices.size
     val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
       cf.util.Remap.forIndices(indices).apply(col).get //Remap is total
-    }
-  }
-
-  def remap(pf: PartialFunction[Int, Int]) = new Slice {
-    val size = source.size
-    val columns: Map[ColumnRef, Column] = source.columns mapValues { col => 
-      cf.util.Remap(pf).apply(col).get //Remap is total
     }
   }
 
@@ -454,6 +447,7 @@ object Slice {
     assert(refs1 == refs2)
 
     val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
+
     (i1: Int, i2: Int) => {
       @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
         case h :: t => 

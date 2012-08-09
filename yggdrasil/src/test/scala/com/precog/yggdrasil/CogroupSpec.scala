@@ -120,6 +120,41 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
     jsonResult.copoint must containAllOf(expected).only
   }
 
+  def testSimpleCogroup = {
+    def recl(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)))))
+    def recr(i: Int) = toRecord(VectorCase(i), JObject(List(JField("right", JString(i.toString)))))
+    def recBoth(i: Int) = toRecord(VectorCase(i), JObject(List(JField("left", JString(i.toString)), JField("right", JString(i.toString)))))
+
+    val ltable  = fromSample(SampleData(Stream(recl(0), recl(1), recl(3), recl(3), recl(5), recl(7), recl(8), recl(8))))
+    val rtable  = fromSample(SampleData(Stream(recr(0), recr(2), recr(3), recr(4), recr(5), recr(5), recr(6), recr(8), recr(8))))
+
+    val expected = Vector(
+      recBoth(0),
+      recl(1),
+      recr(2),
+      recBoth(3),
+      recBoth(3),
+      recr(4),
+      recBoth(5),
+      recBoth(5),
+      recr(6),
+      recl(7),
+      recBoth(8),
+      recBoth(8),
+      recBoth(8),
+      recBoth(8)
+    )
+
+    val result: Table = ltable.cogroup(SourceKey.Single, SourceKey.Single, rtable)(
+      Leaf(Source),
+      Leaf(Source),
+      ObjectConcat(WrapObject(SourceKey.Left, "key"), WrapObject(ObjectConcat(SourceValue.Left, SourceValue.Right), "value"))
+    )
+
+    val jsonResult = toJson(result)
+    jsonResult.copoint must containAllOf(expected).only
+  }
+
   def testCogroupPathology1 = {
     import JsonParser.parse
     val s1 = SampleData(Stream(toRecord(VectorCase(1, 1, 1), parse("""{ "a":[] }"""))))
