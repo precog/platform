@@ -518,13 +518,14 @@ trait StatsLibSpec[M[+_]] extends Specification
   "for homogenous sets, the appropriate stats funciton" should {
     "compute linear correlation" in {
       val line = Line(0, "")
+      val heightWeight = dag.LoadLocal(line, Root(line, PushString("hom/heightWeight")))
       
       val input = dag.Morph2(line, LinearCorrelation,
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          heightWeight,
           Root(line, PushString("height"))),
         Join(line, DerefObject, CrossLeftSort,
-          dag.LoadLocal(line, Root(line, PushString("hom/heightWeight"))),
+          heightWeight,
           Root(line, PushString("weight"))))
 
       val result = testEval(input)

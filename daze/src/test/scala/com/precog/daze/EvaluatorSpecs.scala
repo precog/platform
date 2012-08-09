@@ -290,18 +290,11 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       }
     }.pendingUntilFixed 
 
-
-
-
-
-
-
-
     "join two sets with a match" >> {
       "from different paths" >> {
         val line = Line(0, "")
 
-        val input = Join(line, Add, IdentitySort,
+        val input = Join(line, Add, CrossLeftSort,
           Join(line, DerefObject, CrossLeftSort, 
             dag.LoadLocal(line, Root(line, PushString("/clicks"))),
             Root(line, PushString("time"))),

@@ -137,9 +137,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
     "verify bijection from JSON" in checkMappings
 
     "in cogroup" >> {
-      //"survive scalacheck" in { 
-      //  check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
-      //}
+      "survive scalacheck" in { 
+        check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
+      }
 
       "cogroup across slice boundaries" in testCogroupSliceBoundaries
       "survive pathology 1" in testCogroupPathology1

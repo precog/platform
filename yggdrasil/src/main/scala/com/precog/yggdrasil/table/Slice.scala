@@ -451,7 +451,7 @@ object Slice {
     val refs1 = keyf(s1).sorted
     val refs2 = keyf(s2).sorted
 
-    assert (refs1 == refs2)
+    assert(refs1 == refs2)
 
     val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
     (i1: Int, i2: Int) => {

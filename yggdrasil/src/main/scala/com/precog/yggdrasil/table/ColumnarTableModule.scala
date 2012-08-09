@@ -186,6 +186,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       SliceTransform2(
         (initial, t.initial),
         { case ((a, b), sl, sr) =>
+            assert(sl.size == sr.size)
             val (a0, sa) = f(a, sl, sr)
             val (b0, sb) = t.f(b, sl, sr)
             assert(sa.size == sb.size)
@@ -651,6 +652,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         case class EndRight(rr: RR, rhead: Slice, rtail: StreamT[M, Slice]) extends CogroupState
         case object CogroupDone extends CogroupState
 
+        val Reset = -1
+
         // step is the continuation function fed to uncons. It is called once for each emitted slice
         def step(state: CogroupState): M[Option[(Slice, CogroupState)]] = {
           // step0 is the inner monadic recursion needed to cross slice boundaries within the emission of a slice
@@ -668,62 +671,61 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             // the inner tight loop; this will recur while we're within the bounds of
             // a pair of slices. Any operation that must cross slice boundaries
             // must exit this inner loop and recur through the outer monadic loop
-            // TODO: xr should be something more efficient than Option[Tuple].
-            @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xr: Option[(Int, Option[Int])]): NextStep = {
-              xr match {
-                case Some((xrstart, xrend)) =>
-                  // We're currently in a cartesian. 
-                  if (lpos < lhead.size && rpos < rhead.size) {
-                    compare(lpos, rpos) match {
-                      case LT => 
-                        buildRemappings(lpos + 1, xrstart, Some((xrstart, Some(rpos))))
-                      case GT => 
-                        xrend match {
-                          case Some(rend) => buildRemappings(lpos, rend, None)
-                          case None => sys.error("Left has advanced beyond right without end being found on the right. Something's wrong.")
-                        }
-                      case EQ => 
-                        ibufs.advanceBoth(lpos, rpos)
-                        buildRemappings(lpos, rpos + 1, xr)
-                    }
-                  } else if (lpos < lhead.size) {
-                    // right slice is exhausted, so we need to append to that slice from the right tail
-                    // then continue in the cartesian
-                    AppendRight(lpos, rpos, xrstart)
-                  } else if (rpos < rhead.size) {
-                    // left slice is exhausted, so we need to append to that slice from the left tail
-                    // then continue in the cartesian
-                    AppendLeft(lpos, rpos, xrstart)
-                  } else {
-                    sys.error("This state should be unreachable, since we only increment one side at a time.")
+            // xrstart is an int with sentinel value for effieiency, but is Option at the slice level.
+            @inline @tailrec def buildRemappings(lpos: Int, rpos: Int, xrstart: Int): NextStep = {
+              if (xrstart == -1) {
+                // We're currently in a cartesian. 
+                if (lpos < lhead.size && rpos < rhead.size) {
+                  compare(lpos, rpos) match {
+                    case LT => 
+                      buildRemappings(lpos + 1, xrstart, xrstart)
+                    case GT => 
+                      // this will miss catching input-out-of-order errors, but we know that the right must
+                      // be advanced fully within the 'EQ' state before we get here, so we can just
+                      // increment the right by 1
+                      buildRemappings(lpos, rpos + 1, Reset)
+                    case EQ => 
+                      ibufs.advanceBoth(lpos, rpos)
+                      buildRemappings(lpos, rpos + 1, xrstart)
                   }
-                case None =>
-                  // not currently in a cartesian, hence we can simply proceed.
-                  if (lpos < lhead.size && rpos < rhead.size) {
-                    compare(lpos, rpos) match {
-                      case LT => 
-                        ibufs.advanceLeft(lpos)
-                        buildRemappings(lpos + 1, rpos, None)
-                      case GT => 
-                        ibufs.advanceRight(rpos)
-                        buildRemappings(lpos, rpos + 1, None)
-                      case EQ =>
-                        ibufs.advanceBoth(lpos, rpos)
-                        buildRemappings(lpos, rpos + 1, Some((rpos, None)))
-                    }
-                  } else if (lpos < lhead.size) {
-                    // right side is exhausted, so we should just split the left and emit 
-                    SplitLeft(lpos)
-                  } else if (rpos < rhead.size) {
-                    // left side is exhausted, so we should just split the right and emit
-                    SplitRight(rpos)
-                  } else {
-                    sys.error("This state should be unreachable, since we only increment one side at a time.")
+                } else if (lpos < lhead.size) {
+                  // right slice is exhausted, so we need to append to that slice from the right tail
+                  // then continue in the cartesian
+                  AppendRight(lpos, rpos, xrstart)
+                } else if (rpos < rhead.size) {
+                  // left slice is exhausted, so we need to append to that slice from the left tail
+                  // then continue in the cartesian
+                  AppendLeft(lpos, rpos, xrstart)
+                } else {
+                  sys.error("This state should be unreachable, since we only increment one side at a time.")
+                }
+              } else {
+                // not currently in a cartesian, hence we can simply proceed.
+                if (lpos < lhead.size && rpos < rhead.size) {
+                  compare(lpos, rpos) match {
+                    case LT => 
+                      ibufs.advanceLeft(lpos)
+                      buildRemappings(lpos + 1, rpos, Reset)
+                    case GT => 
+                      ibufs.advanceRight(rpos)
+                      buildRemappings(lpos, rpos + 1, Reset)
+                    case EQ =>
+                      ibufs.advanceBoth(lpos, rpos)
+                      buildRemappings(lpos, rpos + 1, rpos)
                   }
+                } else if (lpos < lhead.size) {
+                  // right side is exhausted, so we should just split the left and emit 
+                  SplitLeft(lpos)
+                } else if (rpos < rhead.size) {
+                  // left side is exhausted, so we should just split the right and emit
+                  SplitRight(rpos)
+                } else {
+                  sys.error("This state should be unreachable, since we only increment one side at a time.")
+                }
               }
             }
 
-            val nextStep = buildRemappings(lpos0, rpos0, rightReset map { i => (i, None) }) 
+            val nextStep = buildRemappings(lpos0, rpos0, rightReset.getOrElse(Reset))
             nextStep match {
               case SplitLeft(lpos) =>
                 val (lpref, lsuf) = lhead.split(lpos + 1)
