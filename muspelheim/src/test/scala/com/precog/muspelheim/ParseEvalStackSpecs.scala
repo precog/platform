@@ -25,7 +25,6 @@ import common.VectorCase
 import common.kafka._
 
 import daze._
-import daze.util._
 
 import quirrel._
 import quirrel.emitter._
