@@ -62,11 +62,27 @@ trait TestColumnarTableModule[M[+_]] extends ColumnarTableModule[M] {
                     val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Boolean](sliceSize))).asInstanceOf[(BitSet, Array[Boolean])]
                     col(sliceIndex) = b
                     (defined + sliceIndex, col)
-  
-                  case JNum(d) => 
-                    val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
-                    col(sliceIndex) = d
+                    
+                  case JNum(d) => {
+                    val isLong = ctype == CLong
+                    val isDouble = ctype == CDouble
+                    
+                    val (defined, col) = if (isLong) {
+                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Long](sliceSize))).asInstanceOf[(BitSet, Array[Long])]
+                      col(sliceIndex) = d.toLong
+                      (defined, col)
+                    } else if (isDouble) {
+                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[Double](sliceSize))).asInstanceOf[(BitSet, Array[Double])]
+                      col(sliceIndex) = d.toDouble
+                      (defined, col)
+                    } else {
+                      val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[BigDecimal](sliceSize))).asInstanceOf[(BitSet, Array[BigDecimal])]
+                      col(sliceIndex) = d
+                      (defined, col)
+                    }
+                    
                     (defined + sliceIndex, col)
+                  }
   
                   case JString(s) => 
                     val (defined, col) = acc.getOrElse(ref, (BitSet(), new Array[String](sliceSize))).asInstanceOf[(BitSet, Array[String])]
