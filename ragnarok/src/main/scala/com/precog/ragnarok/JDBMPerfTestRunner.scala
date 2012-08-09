@@ -64,8 +64,8 @@ trait StandalonePerfTestRunner[T] extends EvaluatingPerfTestRunner[Future, T]
 }
 
 
-final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val optimize: Boolean)(implicit
-    val actorSystem: ActorSystem, val M: Monad[Future])
+final class JDBMPerfTestRunner[T](val timer: Timer[T], val userUID: String, val optimize: Boolean,
+      val actorSystem: ActorSystem)(implicit val M: Monad[Future])
     extends StandalonePerfTestRunner[T]
     with BlockStoreColumnarTableModule[Future]
     with JDBMProjectionModule { self =>

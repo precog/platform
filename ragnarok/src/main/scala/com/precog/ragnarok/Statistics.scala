@@ -17,7 +17,11 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.ragnarok
+package com.precog
+package ragnarok
+
+import blueeyes.json._
+import JsonAST._
 
 import scalaz._
 import scalaz.std.option._
@@ -28,7 +32,7 @@ import scalaz.std.option._
  * `n > 2 * tails`. If `n <= 2 * tails`, then the mean and variance will be
  * `NaN` and the count will be `0`.
  */
-case class Statistics private (
+case class Statistics private[ragnarok] (
     tails: Int,
     allMin: List[Double],
     allMax: List[Double],
@@ -80,6 +84,14 @@ case class Statistics private (
   def stdDev: Double = math.sqrt(variance)
 
   def count: Int = meanVarCount._3
+
+  def toJson: JObject = JObject(List(
+    JField("mean", JDouble(mean)),
+    JField("variance", JDouble(variance)),
+    JField("stdDev", JDouble(stdDev)),
+    JField("min", JDouble(min)),
+    JField("max", JDouble(max)),
+    JField("count", JInt(count))))
 }
 
 

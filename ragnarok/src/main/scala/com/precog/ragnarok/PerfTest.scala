@@ -28,4 +28,3 @@ case object RunSequential extends PerfTest
 case object RunConcurrent extends PerfTest
 case class Group(name: String) extends PerfTest
 
-

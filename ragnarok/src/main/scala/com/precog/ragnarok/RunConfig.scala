@@ -19,6 +19,8 @@
  */
 package com.precog.ragnarok
 
+import java.io.File
+
 import scala.annotation.tailrec
 
 import scalaz._
@@ -32,7 +34,8 @@ case class RunConfig(
     runs: Int = 60,
     outliers: Double = 0.05,
     dryRuns: Int = 10,
-    optimize: Boolean = true) {
+    optimize: Boolean = true,
+    baseline: Option[File] = None) {
   def tails: Int = (runs * (outliers / 2)).toInt
 }
 
@@ -42,7 +45,6 @@ object RunConfig {
   sealed trait OutputFormat
   object OutputFormat {
     case object Json extends OutputFormat
-    case object Tsv extends OutputFormat
     case object Legible extends OutputFormat
   }
 
@@ -71,11 +73,16 @@ object RunConfig {
     case Nil =>
       config
 
+    case "--baseline" :: file :: args =>
+      val f = new File(file)
+      if (f.isFile && f.canRead) {
+        fromCommandLine(args, config map (_. copy(baseline = Some(f))))
+      } else {
+        fromCommandLine(args, config *> "The baseline file must be regular and readable.".failNel)
+      }
+
     case "--json" :: args =>
       fromCommandLine(args, config map (_.copy(format = OutputFormat.Json)))
-
-    case "--tsv" :: args =>
-      fromCommandLine(args, config map (_.copy(format = OutputFormat.Tsv)))
 
     case "--no-optimize" :: args =>
       fromCommandLine(args, config map (_.copy(optimize = true)))

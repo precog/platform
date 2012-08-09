@@ -19,6 +19,8 @@
  */
 package com.precog.ragnarok
 
+import com.precog.util.using
+
 import scala.annotation.tailrec
 
 import scalaz._
@@ -83,7 +85,7 @@ trait PerfTestSuite extends Logging {
     selectTest(test, pred)
 
 
-  def run[M[+_]: Copointed, T: MetricSpace](test: Tree[PerfTest] = test,
+  protected def run[M[+_]: Copointed, T: MetricSpace](test: Tree[PerfTest] = test,
       runner: PerfTestRunner[M, T], runs: Int = 60, outliers: Double = 0.05) = {
     val tails = (runs * (outliers / 2)).toInt
 
@@ -95,12 +97,75 @@ trait PerfTestSuite extends Logging {
   }
 
 
-  def main(args: Array[String]) {
+  def run(config: RunConfig) {
     import akka.actor.ActorSystem
     import akka.dispatch.{ Future, ExecutionContext, Await }
     import blueeyes.bkka.AkkaTypeClasses._
     import PerfTestPrettyPrinters._
+    import RunConfig.OutputFormat
 
+    val actorSystem = ActorSystem("perfTestingActorSystem")
+    try {
+
+      implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
+      val testTimeout = Duration(100, "seconds")
+
+      implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
+        def map[A, B](m: Future[A])(f: A => B) = m map f
+        def copoint[A](f: Future[A]) = Await.result(f, testTimeout)
+      }
+
+      val runner = new JDBMPerfTestRunner(SimpleTimer,
+        optimize = config.optimize, userUID = "dummy", actorSystem = actorSystem)
+
+      runner.startup()
+
+      select(config.select getOrElse ((_, _) => true)) foreach { test =>
+        run(test, runner, runs = config.dryRuns, outliers = config.outliers)
+        val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
+          case (t, stats) =>
+            (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
+        }
+
+        config.baseline match {
+          case Some(file) =>
+            import java.io._
+
+            val in = new FileInputStream(file)
+            using(in) { in =>
+              val reader = new InputStreamReader(in)
+              val baseline = BaselineComparisons.readBaseline(reader)
+              val delta = BaselineComparisons.compareWithBaseline(result, baseline)
+
+              println(config.format match {
+                case OutputFormat.Legible =>
+                  delta.toPrettyString
+
+                case OutputFormat.Json =>
+                  delta.toJson.toString
+              })
+            }
+
+          case None =>
+            println(config.format match {
+              case OutputFormat.Legible =>
+                result.toPrettyString
+
+              case OutputFormat.Json =>
+                result.toJson.toString
+            })
+        }
+      }
+
+      runner.shutdown()
+
+    } finally {
+      actorSystem.shutdown()
+    }
+  }
+
+
+  def main(args: Array[String]) {
     RunConfig.fromCommandLine(args.toList) match {
       case Failure(errors) =>
         System.err.println("Error parsing command lines:")
@@ -108,46 +173,7 @@ trait PerfTestSuite extends Logging {
         System.err.println()
 
       case Success(config) =>
-        val actorSystem = ActorSystem("perfTestingActorSystem")
-        try {
-          implicit val execContext = ExecutionContext.defaultExecutionContext(actorSystem)
-          val testTimeout = Duration(100, "seconds")
-
-          implicit val futureIsCopointed: Copointed[Future] = new Copointed[Future] {
-            def map[A, B](m: Future[A])(f: A => B) = m map f
-            def copoint[A](f: Future[A]) = Await.result(f, testTimeout)
-          }
-
-          val runner = new JsonPerfTestRunner[Future, Long](SimpleTimer,
-            _optimize = config.optimize, _userUID = "dummy")
-
-          runner.startup()
-
-          select(config.select getOrElse ((_, _) => true)) foreach { test =>
-            run(test, runner, runs = config.dryRuns, outliers = config.outliers)
-            val result = run(test, runner, runs = config.runs, outliers = config.outliers) map {
-              case (t, stats) =>
-                (t, stats map (_ * (1 / 1000000.0))) // Convert to ms.
-            }
-
-            import RunConfig.OutputFormat
-            println(config.format match {
-              case OutputFormat.Legible =>
-                result.toPrettyString("ms")
-
-              case OutputFormat.Json =>
-                result.toFlatJson
-
-              case OutputFormat.Tsv =>
-                result.toTsv
-            })
-          }
-
-          runner.shutdown()
-
-        } finally {
-          actorSystem.shutdown()
-        }
+        run(config)
     }
   }
 
