@@ -178,8 +178,12 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         schema.grouped(2) map { subschema =>
           val descriptor = ProjectionDescriptor(
             idCount, 
-            subschema map {
-              case (jpath, ctype) => ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None)
+            subschema flatMap {
+              case (jpath, CNum | CLong | CDouble) =>
+                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+              
+              case (jpath, ctype) =>
+                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
             } toList
           )
 
@@ -213,22 +217,25 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 
       def compare(a: JValue, b: JValue): Int = (a,b) match {
-        case (JInt(ai), JDouble(bd))    => ai.toDouble.compareTo(bd)
-        case (JDouble(ad), JInt(bi))    => ad.compareTo(bi.toDouble)
-        case _                          => JValueOrdering.compare(a, b)
+        case (JNum(ai), JNum(bd)) => ai.compare(bd)
+        case _                    => JValueOrdering.compare(a, b)
       } 
     }
 
-    module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
-      _.sort(sortTransspec, SortAscending)
-    }.flatMap {
-      // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
-      table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
-    }.flatMap {
-      _.toJson
-    }.copoint.toStream must_== sample.data.sortBy({
-      v => sortKey.extract(v \ "value")
-    })(jvalueOrdering)
+    try {
+      module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
+        _.sort(sortTransspec, SortAscending)
+      }.flatMap {
+        // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
+        table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
+      }.flatMap {
+        _.toJson
+      }.copoint.toStream must_== sample.data.sortBy({
+        v => sortKey.extract(v \ "value")
+      })(jvalueOrdering)
+    } catch {
+      case e: AssertionError => e.printStackTrace; true mustEqual false
+    }
   }
 }
 

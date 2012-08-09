@@ -56,7 +56,7 @@ trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubSt
 
     def getBlockAfter(id: Option[JArray], colSelection: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[JArray, Slice]] = {
       @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
-        blocks match {
+        blocks.filterNot(_.isEmpty) match {
           case x #:: xs =>
             if ((x.toJson(x.size - 1).getOrElse(JNothing) \ "key") > id) Some(x) else findBlockAfter(id, xs)
 
@@ -130,7 +130,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         }
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
-        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CNum, JPath(".rzp") -> CEmptyObject))
+        (2, List(JPath(".fa") -> CNull, JPath(".hW") -> CLong, JPath(".rzp") -> CEmptyObject))
       )
     )
 
@@ -165,11 +165,12 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       ]""") --> classOf[JArray]).elements.toStream,
       Some(
         (3, List(JPath(".f.bn[0]") -> CNull, 
-                 JPath(".f.wei") -> CNum, 
+                 JPath(".f.wei") -> CLong, 
+                 JPath(".f.wei") -> CDouble, 
                  JPath(".ljz[0]") -> CNull,
                  JPath(".ljz[1][0]") -> CString,
                  JPath(".ljz[2]") -> CBoolean,
-                 JPath(".jmy") -> CNum))
+                 JPath(".jmy") -> CDouble))
       )
     )
 
@@ -201,7 +202,7 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
                  JPath(".dV.l") -> CBoolean, 
                  JPath(".dV.vq") -> CEmptyObject, 
                  JPath(".oy.nm") -> CBoolean, 
-                 JPath(".uR") -> CNum))
+                 JPath(".uR") -> CDouble))
       )
     )   
 
@@ -303,7 +304,9 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
       Some((1, List((JPath(".o8agyghfjxe") -> CEmptyArray), 
                     (JPath(".fg[0]") -> CBoolean), 
                     (JPath(".fg[1]") -> CNum), 
+                    (JPath(".fg[1]") -> CLong), 
                     (JPath(".fg[2]") -> CNum), 
+                    (JPath(".fg[2]") -> CLong), 
                     (JPath(".cfnYTg92dg") -> CString))))
     )
 
@@ -322,8 +325,12 @@ trait BlockLoadSpec[M[+_]] extends Specification with ScalaCheck { self =>
         schema.grouped(2) map { subschema =>
           val descriptor = ProjectionDescriptor(
             idCount, 
-            subschema map {
-              case (jpath, ctype) => ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None)
+            subschema flatMap {
+              case (jpath, CNum | CLong | CDouble) =>
+                List(CNum, CLong, CDouble) map { ColumnDescriptor(Path("/test"), jpath, _, Authorities.None) }
+              
+              case (jpath, ctype) =>
+                List(ColumnDescriptor(Path("/test"), jpath, ctype, Authorities.None))
             } toList
           )
 

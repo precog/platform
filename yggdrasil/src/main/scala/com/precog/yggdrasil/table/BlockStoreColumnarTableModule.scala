@@ -159,6 +159,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
   
         def split: (Slice, Cell) = {
           val (finished, continuing) = slice0.split(position)
+          println(">>>>>")
+          println(finished)
+          println(continuing)
           (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
         }
       }

@@ -232,7 +232,16 @@ object CType extends CTypeSerialization {
   @inline
   final def toCValue(jval: JValue): CValue = (jval: @unchecked) match {
     case JString(s) => CString(s)
-    case JNum(d) => CNum(d)
+    
+    case JNum(d) => {
+      val ctype = forJValue(jval)
+      ctype match {
+        case Some(CLong) => CLong(d.toLong)
+        case Some(CDouble) => CDouble(d.toDouble)
+        case _ => CNum(d)
+      }
+    }
+    
     case JBool(b)   => CBoolean(b)
     case JNull      => CNull
     case JObject(Nil) => CEmptyObject
@@ -242,7 +251,29 @@ object CType extends CTypeSerialization {
   @inline
   final def forJValue(jval: JValue): Option[CType] = jval match {
     case JBool(_)     => Some(CBoolean)
-    case JNum(_)      => Some(CNum)
+    
+    case JNum(d)      => {
+      lazy val isLong = try {
+        d.toLongExact
+        true
+      } catch {
+        case _: ArithmeticException => false
+      }
+      
+      lazy val isDouble = try {
+        BigDecimal(d.toDouble.toString, MathContext.UNLIMITED) == d
+      } catch {
+        case _: NumberFormatException | _: ArithmeticException => false
+      }
+      
+      if (isLong)
+        Some(CLong)
+      else if (isDouble)
+        Some(CDouble)
+      else
+        Some(CNum)
+    }
+    
     case JString(_)   => Some(CString)
     case JNull        => Some(CNull)
     case JArray(Nil)  => Some(CEmptyArray)
