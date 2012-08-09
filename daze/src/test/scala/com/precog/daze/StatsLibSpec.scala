@@ -496,7 +496,7 @@ trait StatsLibSpec[M[+_]] extends Specification
     }.pendingUntilFixed
   }
 
-  "for homogenous sets, the appropriate stats funciton" should {
+  "for homogenous sets, the appropriate stats function" should {
     "compute linear correlation" in {
       val line = Line(0, "")
       val heightWeight = dag.LoadLocal(line, Root(line, PushString("hom/heightWeight")))
@@ -1020,8 +1020,14 @@ trait StatsLibSpec[M[+_]] extends Specification
             Root(line, PushString("height"))))
 
         val result = testEval(input)
+
+        val input2 = dag.LoadLocal(line, Root(line, PushString("hom/heightWeight")))
+
+        val result2 = testEval(input2)
         
         result must haveSize(0)
+        result2 must haveSize(100)
+
       }.pendingUntilFixed
 
       "with a negative x-value in one object" >> {
