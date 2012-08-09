@@ -1,7 +1,7 @@
 package com.precog.ragnarok
 
 
-object SimplePerfTests extends PerfTestSuite {
+object PlatformPerfTests extends PerfTestSuite {
   "arithmetic" := {
     query("1 + 2")
     query("123 * 321")
@@ -11,8 +11,9 @@ object SimplePerfTests extends PerfTestSuite {
   }
 
   "objects" := {
-    query("""{ name: "John", age: 29, gender: "male" }""")
-    query("""{ name: "John", age: 29, gender: null }""")
+    // TODO: When cross is available.
+    //query("""{ name: "John", age: 29, gender: "male" }""")
+    //query("""{ name: "John", age: 29, gender: null }""")
   }
 
   "datasets" := {
@@ -29,6 +30,9 @@ object SimplePerfTests extends PerfTestSuite {
     }
 
     query("//richie1/test")
+
+    query("""mean(//movie_ratings)""")
+    query("""stdDev(//movie_ratings)""")
   }
 }
 
