@@ -531,6 +531,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     // Does this have to be fully known at every point in time?
     def schema: JType = sys.error("todo")
     
+    def distinct: Table = sys.error("todo")
+    
     def drop(n: Long): Table = sys.error("todo")
     
     def take(n: Long): Table = sys.error("todo")

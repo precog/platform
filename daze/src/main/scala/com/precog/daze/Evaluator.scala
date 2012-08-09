@@ -291,8 +291,14 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Distinct(_, parent) =>
-          state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))     // TODO
+        case dag.Distinct(_, parent) => {
+          for {
+            pending <- loop(parent, splits)
+          } yield {
+            val back = pending.table map { _ transform liftToValues(pending.trans) distinct }
+            PendingTable(back, graph, TransSpec1.Id)
+          }
+        }
         
         case Operate(_, instructions.WrapArray, parent) => {
           for {
