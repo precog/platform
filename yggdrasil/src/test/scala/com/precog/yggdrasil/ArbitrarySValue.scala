@@ -70,6 +70,8 @@ trait CValueGenerators extends ArbitraryBigDecimal {
   def ctype: Gen[CType] = oneOf(
     CString,
     CBoolean,
+    CLong,
+    CDouble,
     CNum,
     CNull,
     CEmptyObject,
