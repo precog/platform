@@ -58,7 +58,7 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(1)
-    }.pendingUntilFixed    
+    }.pendingUntilFixed
     
     "compute cos only of the numeric value" in {
       val line = Line(0, "")
@@ -498,7 +498,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute min" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(min), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -511,11 +511,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 1, -1, 7, -23)
-    }.pendingUntilFixed
+    }
     "compute hypot" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(hypot), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -528,11 +528,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
-    }.pendingUntilFixed
+    }
     "compute pow" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(pow), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -545,11 +545,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
-    }.pendingUntilFixed
+    }
     "compute max" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(max), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -562,11 +562,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(7, 42)
-    }.pendingUntilFixed
+    }
     "compute atan2" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(atan2), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -579,11 +579,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
-    }.pendingUntilFixed
+    }
     "compute copySign" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(copySign), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -596,11 +596,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, 42.0, 23.0)
-    }.pendingUntilFixed
+    }
     "compute IEEEremainder" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(IEEEremainder), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -613,7 +613,7 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
-    }.pendingUntilFixed
+    }
   }
 
   "for heterogeneous sets, the appropriate math function" should {
@@ -1036,7 +1036,7 @@ trait MathLibSpec[M[+_]] extends Specification
     "compute min" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(min), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(min), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1049,11 +1049,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 1, -1, 7, -23)
-    }.pendingUntilFixed
+    }
     "compute hypot" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(hypot), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(hypot), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1066,11 +1066,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(7.0, 7.0710678118654755, 7.0710678118654755, 42.579337712087536, 24.041630560342615)
-    }.pendingUntilFixed
+    }
     "compute pow" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(pow), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(pow), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1083,11 +1083,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, -1.0, 2.30539333248E11, -3.404825447E9)
-    }.pendingUntilFixed
+    }
     "compute max" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(max), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(max), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1100,11 +1100,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(7, 42)
-    }.pendingUntilFixed
+    }
     "compute atan2" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(atan2), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(atan2), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1117,11 +1117,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 0.1418970546041639, -0.1418970546041639, 1.4056476493802699, -1.2753554896511767)
-    }.pendingUntilFixed
+    }
     "compute copySign" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(copySign), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(copySign), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1134,11 +1134,11 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, 42.0, 23.0)
-    }.pendingUntilFixed
+    }
     "compute IEEEremainder" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(IEEEremainder), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(IEEEremainder), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/numbers4"))),
         Root(line, PushNum("7")))
         
@@ -1151,7 +1151,7 @@ trait MathLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0.0, 1.0, -1.0, -2.0)
-    }.pendingUntilFixed
+    }
   }
 }
 

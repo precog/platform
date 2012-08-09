@@ -140,7 +140,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -153,11 +153,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(101, 32, 34, 115)
-    }.pendingUntilFixed    
+    }.pendingUntilFixed  
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -170,11 +170,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed 
+    } 
     "determine startsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(startsWith), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(startsWith), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
@@ -187,11 +187,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed  
+    }  
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(lastIndexOf), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("s")))
         
@@ -204,11 +204,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(-1, 3, 14, 27)
-    }.pendingUntilFixed
+    }
     "determine concat" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(concat), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(concat), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("7")))
         
@@ -221,11 +221,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
-    }.pendingUntilFixed
+    }
     "determine endsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(endsWith), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(endsWith), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("y")))
         
@@ -238,11 +238,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -259,7 +259,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -272,11 +272,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed
+    }
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7")))
         
@@ -293,7 +293,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -306,11 +306,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed
+    }
     "determine matches" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(matches), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(matches), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
@@ -323,11 +323,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine compareTo" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(compareTo), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(compareTo), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
@@ -340,11 +340,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
-    }.pendingUntilFixed
+    }
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("QUIRKY")))
         
@@ -357,11 +357,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
-    }.pendingUntilFixed
+    }
     "determine equals" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(equals), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(equals), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("quirky")))
         
@@ -374,11 +374,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine indexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(indexOf), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(indexOf), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))),
         Root(line, PushString("e")))
         
@@ -391,11 +391,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
-    }.pendingUntilFixed
+    }
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/hom/strings"))), 
         Root(line, PushString("QUIRKY")))
         
@@ -408,7 +408,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
   }
 
   "for heterogeneous sets, the appropriate string function" should {
@@ -512,7 +512,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -529,7 +529,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointAt), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointAt), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -542,11 +542,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed
+    }
     "determine startsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(startsWith), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(startsWith), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
@@ -559,11 +559,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine lastIndexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(lastIndexOf), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(lastIndexOf), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("s")))
         
@@ -576,11 +576,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(-1, 3, 14, 27)
-    }.pendingUntilFixed
+    }
     "determine concat" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(concat), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(concat), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("7")))
         
@@ -593,11 +593,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain("quirky7", "solstice + 77", "Monkey: [Brains]7", """("alpha", "beta", "gamma")7""", "  Whitespace       is   awesome  !!!1!!   7", "7")
-    }.pendingUntilFixed
+    }
     "determine endsWith" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(endsWith), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(endsWith), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("y")))
         
@@ -610,11 +610,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine codePointBefore with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -631,7 +631,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(codePointBefore), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(codePointBefore), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -644,11 +644,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed
+    }
     "determine substring with valid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7")))
         
@@ -665,7 +665,7 @@ trait StringLibSpec[M[+_]] extends Specification
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(substring), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(substring), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushNum("7.5")))
         
@@ -678,11 +678,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain()
-    }.pendingUntilFixed
+    }
     "determine matches" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(matches), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(matches), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky"))) //todo put regex here!
         
@@ -695,11 +695,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine compareTo" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(compareTo), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(compareTo), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
@@ -712,11 +712,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 2, -36, -73, -81, -6)
-    }.pendingUntilFixed
+    }
     "determine compareToIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(compareToIgnoreCase), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("QUIRKY")))
         
@@ -729,11 +729,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(0, 2, -4, -73, -81, -6)
-    }.pendingUntilFixed
+    }
     "determine equals" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(equals), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(equals), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("quirky")))
         
@@ -746,11 +746,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
     "determine indexOf" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(indexOf), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(indexOf), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))),
         Root(line, PushString("e")))
         
@@ -763,11 +763,11 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(-1, 7, 4, 12, 6)
-    }.pendingUntilFixed
+    }
     "determine equalsIgnoreCase" in {
       val line = Line(0, "")
       
-      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), IdentitySort,
+      val input = Join(line, BuiltInFunction2Op(equalsIgnoreCase), CrossLeftSort,
         dag.LoadLocal(line, Root(line, PushString("/het/strings"))), 
         Root(line, PushString("QUIRKY")))
         
@@ -780,7 +780,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true, false)
-    }.pendingUntilFixed
+    }
   }
 }
 
