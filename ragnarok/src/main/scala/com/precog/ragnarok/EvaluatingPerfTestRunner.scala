@@ -9,6 +9,8 @@ import yggdrasil.serialization._
 
 import muspelheim.ParseEvalStack
 
+import blueeyes.json._
+
 import org.streum.configrity.Configuration
 
 import akka.util.Duration
