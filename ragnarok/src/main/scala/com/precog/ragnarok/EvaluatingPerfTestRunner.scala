@@ -20,6 +20,8 @@
 package com.precog
 package ragnarok
 
+import common.Path
+
 import daze.{ Evaluator, EvaluatorConfig, IdSourceScannerModule }
 
 import yggdrasil.{ StorageModule, BaseConfig, IdSource }
@@ -75,17 +77,17 @@ trait EvaluatingPerfTestRunner[M[+_], T] extends PerfTestRunner[M, T]
     val tree = compile(query)
 
     if (!tree.errors.isEmpty) {
-      sys.error("todo")
+      sys.error("Error parsing query:\n" + (tree.errors map (_.toString) mkString "\n"))
     }
 
     decorate(emit(tree)) match {
       case Left(stackError) =>
-        sys.error("todo")
+        sys.error("Failed to construct DAG.")
 
       case Right(dag) =>
         withContext { ctx =>
           for {
-            table <- eval(yggConfig.userUID, dag, ctx, yggConfig.optimize)
+            table <- eval(yggConfig.userUID, dag, ctx, Path.Root, yggConfig.optimize)
             json <- table.toJson
           } yield json.size
         }
