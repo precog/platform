@@ -268,6 +268,7 @@ trait Evaluator[M[+_]] extends DAG
         
         case dag.Morph2(_, m, left, right) => {
           val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
+          val specRight = trans.ArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
           val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
           
           for {
@@ -283,7 +284,16 @@ trait Evaluator[M[+_]] extends DAG
             
               val aligned = m.alignment match {
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
-                case MorphismAlignment.Match => join(leftResult, rightResult)(key, spec)
+                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
+                case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
+                  if (left.isSingleton) {
+                    rightResult.cross(leftResult)(specRight) 
+                  } else if (right.isSingleton) {
+                    leftResult.cross(rightResult)(spec) 
+                  } else {
+                    rightResult.cross(leftResult)(specRight) 
+                  }
+                }
               }
 
               result <- m(aligned)
