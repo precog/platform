@@ -435,7 +435,8 @@ object Slice {
     val refs1 = keyf(s1).sorted
     val refs2 = keyf(s2).sorted
 
-    assert(refs1 == refs2)
+    if (refs1 != refs2) sys.error("Illegal attempt to compare rows on mismatched key schemas: " + refs1 + " vs " + refs2)
+    //assert(refs1 == refs2)
 
     val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
 
