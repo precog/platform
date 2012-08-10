@@ -70,7 +70,7 @@ object EmitterSpecs extends Specification
         Vector(
           PushString("foo")))
     }
-
+    
     "emit literal boolean" in {
       testEmit("true")(
         Vector(
