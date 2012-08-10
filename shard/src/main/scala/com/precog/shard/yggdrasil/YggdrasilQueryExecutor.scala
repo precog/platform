@@ -52,6 +52,8 @@ import scalaz._
 import scalaz.Validation._
 import scalaz.effect.IO
 import scalaz.syntax.monad._
+import scalaz.syntax.bifunctor._
+import scalaz.syntax.std.either._
 
 import org.streum.configrity.Configuration
 
@@ -143,18 +145,15 @@ trait YggdrasilQueryExecutor
     logger.debug("Executing for %s: %s, prefix: %s".format(userUID, query,prefix))
 
     import EvaluationError._
-    implicit val M = Validation.validationMonad[EvaluationError]
-    
     val solution: Validation[Throwable, Validation[EvaluationError, JArray]] = Validation.fromTryCatch {
       asBytecode(query) flatMap { bytecode =>
-        Validation.fromEither(decorate(bytecode)).bimap(
-          error => systemError(StackException(error)),
-          dag   => evaluateDag(userUID, dag, prefix).fail.map(systemError(_)).validation
-        ).join
+        ((systemError _) <-: (StackException(_)) <-: decorate(bytecode).disjunction.validation) flatMap { dag =>
+          (systemError _) <-: evaluateDag(userUID, dag, prefix)
+        }
       }
     } 
 
-    solution.fail.map(systemError(_)).validation.join
+    ((systemError _) <-: solution).flatMap(identity[Validation[EvaluationError, JArray]])
   }
 
   def browse(userUID: String, path: Path): Future[Validation[String, JArray]] = {

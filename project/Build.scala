@@ -48,7 +48,7 @@ object PlatformBuild extends Build {
     organization := "com.precog",
     version := "2.0.0-SNAPSHOT",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
-    scalaVersion := "2.9.1",
+    scalaVersion := "2.9.2",
 
     EclipseKeys.createSrc := EclipseCreateSrc.Default+EclipseCreateSrc.Resource,
     EclipseKeys.withSource := true,
@@ -56,12 +56,12 @@ object PlatformBuild extends Build {
     (unmanagedSourceDirectories in Test) <<= (scalaSource in Test)(Seq(_)),
 
     libraryDependencies ++= Seq(
-      "com.weiglewilczek.slf4s"     %% "slf4s"              % "1.0.7",
+      "com.weiglewilczek.slf4s"     % "slf4s_2.9.1"         % "1.0.7",
       "org.scalaz"                  %% "scalaz-core"        % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-effect"      % "7.0-SNAPSHOT" changing(),
       "org.scalaz"                  %% "scalaz-iteratee"    % "7.0-SNAPSHOT" changing(),
-      "org.scala-tools.testing"     %% "scalacheck"         % "1.9" % "test",
-      "org.specs2"                  %% "specs2"             % "1.11" % "test",
+      "org.scalacheck"              %% "scalacheck"         % "1.10.0" % "test",
+      "org.specs2"                  %% "specs2"             % "1.12.1-SNAPSHOT" % "test" changing(),
       "org.mockito"                 %  "mockito-core"       % "1.9.0" % "test"
     )
   )

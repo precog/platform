@@ -906,12 +906,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     
     def distinct: Table = sys.error("todo")
     
-    /**
-     * Sorts the KV table by ascending or descending order of a transformation
-     * applied to the rows.
-     */
-    def sort(sortKey: TransSpec1, sortOrder: SortOrder): Table = sys.error("todo")
-    
     def drop(n: Long): Table = sys.error("todo")
     
     def take(n: Long): Table = sys.error("todo")

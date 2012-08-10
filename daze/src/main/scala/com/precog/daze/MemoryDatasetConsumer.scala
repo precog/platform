@@ -55,7 +55,6 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   implicit def coM: Copointed[M]
   
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
-    implicit val bind = Validation.validationMonad[Throwable]
     Validation.fromTryCatch {
       val result = eval(userUID, graph, ctx, prefix, optimize)
       val json = result.flatMap(_.toJson).copoint filterNot { jvalue =>

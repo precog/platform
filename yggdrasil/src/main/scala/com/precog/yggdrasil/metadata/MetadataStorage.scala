@@ -36,6 +36,7 @@ import scalaz.{Validation, Success, Failure}
 import scalaz.effect._
 import scalaz.std.set._
 import scalaz.syntax.apply._
+import scalaz.syntax.bifunctor._
 import scalaz.syntax.show._
 import scalaz.syntax.semigroup._
 import scalaz.syntax.traverse._
@@ -219,7 +220,7 @@ object FileMetadataStorage extends Logging {
         try {
           // TODO: scalaz eludes me... (DCB)
           //{ (err: Extractor.Error) => err.message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor]
-          JsonParser.parse(reader).validated[ProjectionDescriptor].fail.map { (err: Extractor.Error) => err.message } validation
+          { (_: Extractor.Error).message } <-: JsonParser.parse(reader).validated[ProjectionDescriptor] 
         } finally {
           reader.close
         }

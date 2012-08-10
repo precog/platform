@@ -85,7 +85,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
         case Some(STrue)         => out.writeBoolean(true)
         case Some(SFalse)        => out.writeBoolean(false)
         case Some(SDecimal(num)) => 
-          val bytes = num.as[Array[Byte]]
+          val bytes = biject(num).as[Array[Byte]]
           assert(bytes.length > 0)
 
           out.writeInt(bytes.length)
@@ -141,7 +141,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
 
         val bytes: Array[Byte] = new Array(length)
         in.readFully(bytes)
-        CNum(bytes.as[BigDecimal])
+        CNum(biject(bytes).as[BigDecimal])
 
       case CNull => 
         assert(in.readInt() == 0)

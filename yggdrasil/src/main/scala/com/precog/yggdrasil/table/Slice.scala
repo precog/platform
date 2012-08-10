@@ -275,15 +275,6 @@ trait Slice { source =>
     }
   }
 
-  def toValidatedJson(row: Int): ValidationNEL[Throwable, JValue] = {
-    columns.foldLeft[ValidationNEL[Throwable, JValue]](success(JNull)) {
-      case (jvv, (ref @ ColumnRef(selector, _), col)) if (col.isDefinedAt(row)) => 
-        jvv flatMap { (_: JValue).insert(selector, col.jValue(row)).toValidationNel }
-
-      case (jvv, _) => jvv
-    }
-  }
-
   def toString(row: Int): String = {
     (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }).mkString("[", ", ", "]")
   }

@@ -156,7 +156,6 @@ trait ColumnDescriptorSerialization {
 
 object ColumnDescriptor extends ColumnDescriptorSerialization with ((Path, JPath, CType, Authorities) => ColumnDescriptor) {
   implicit object briefShow extends Show[ColumnDescriptor] {
-    def show(d: ColumnDescriptor) = shows(d).toList
     override def shows(d: ColumnDescriptor) = {
       "%s::%s (%s)".format(d.path.path, d.selector.toString, d.valueType.toString)
     }
@@ -217,7 +216,6 @@ trait ProjectionDescriptorSerialization {
   }
 
   implicit object briefShow extends Show[ProjectionDescriptor] {
-    def show(d: ProjectionDescriptor) = shows(d).toList
     override def shows(d: ProjectionDescriptor) = {
       d.columns.map(c => c.shows).mkString("Projection: [", ", ", "]")
     }
