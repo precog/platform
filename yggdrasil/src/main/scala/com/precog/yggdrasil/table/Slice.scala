@@ -183,6 +183,18 @@ trait Slice { source =>
     }
   }
 
+  def compact: Slice = {
+    new Slice {
+      lazy val retained =
+        (0 until source.size).foldLeft(new ArrayIntList) {
+          case (acc, i) => if(source.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+        }
+
+      lazy val size = retained.size
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
+    }
+  }
+
   def filter(fx: (JPath, Column => BoolColumn)*): Slice = {
     new Slice {
       lazy val filters = fx flatMap { 
