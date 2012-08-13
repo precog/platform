@@ -345,7 +345,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       import sortMergeEngine._
       import TableModule.paths._
 
-      println("Starting sort")
+      // println("Starting sort")
 
       // Bookkeeping types/case classes
       type IndexStore = SortedMap[SortingKey,Array[Byte]]
@@ -379,7 +379,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
         val (index: SliceIndex, newIndices: IndexMap) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          println("Making a new index for " + indexMapKey.toString)
+          // println("Making a new index for " + indexMapKey.toString)
           val newIndex = SliceIndex(indexMapKey.toString,
                                     DB.createTreeMap(indexMapKey.toString, 
                                                      SortingKeyComparator(sortOrder.isAscending),
@@ -439,11 +439,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 def keyOrder: Order[SortingKey] = sortingKeyOrder
               }
 
-              println("Dump index " + name + " = ")
+              // println("Dump index " + name + " = ")
               sortProjection.foreach {
                 entry => {
                   val key = entry.getKey
-                  println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
+                  // println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
                 }
               }
 
