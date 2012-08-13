@@ -267,12 +267,20 @@ trait Slice { source =>
   }
 
   def toJson(row: Int): JValue = {
-    columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
+    println("Slice toJson for row %d/%d from %s".format(row, size, columns))
+    val result = columns.foldLeft[JValue](JNothing) {
+      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
+        //println("Merging in %s = %s to %s".format(selector, col.jValue(row), jv))
         jv.unsafeInsert(selector, col.jValue(row))
+      }
 
-      case (jv, _) => jv
+      case (jv, (ref, _)) => {
+        //println(ref + " not defined at row " + row)
+        jv
+      }
     }
+    println("Final merge result for row %d = %s".format(row, result))
+    result
   }
 
   def toString(row: Int): String = {

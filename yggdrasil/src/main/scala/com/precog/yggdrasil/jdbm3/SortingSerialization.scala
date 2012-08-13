@@ -65,7 +65,6 @@ class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) ex
         case (_, None)            => 1
         case (Some((_, av)), Some((_, bv))) => CValue.compareValues(av, bv)
       }
-      println("Comparing " + toCompare + " results in " + result)
       i += 1
     }
 
