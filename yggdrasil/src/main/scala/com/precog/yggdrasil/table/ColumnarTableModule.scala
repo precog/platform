@@ -922,9 +922,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       toEvents { (slice, row) => slice.toJson(row) }
     }
 
-    private def toEvents[A](f: (Slice, RowId) => A): M[Iterable[A]] = {
+    private def toEvents[A](f: (Slice, RowId) => Option[A]): M[Iterable[A]] = {
       for (stream <- self.normalize.slices.toStream) yield {
-        for (slice <- stream; i <- 0 until slice.size) yield f(slice, i) 
+        (for (slice <- stream; i <- 0 until slice.size) yield f(slice, i)).flatten 
       }
     }
   }

@@ -266,17 +266,23 @@ trait Slice { source =>
     }
   }
 
-  def toJson(row: Int): JValue = {
+  def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
         jv.unsafeInsert(selector, col.jValue(row))
 
       case (jv, _) => jv
+    } match {
+      case JNothing => None
+      case jv       => Some(jv)
     }
   }
 
-  def toString(row: Int): String = {
-    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }).mkString("[", ", ", "]")
+  def toString(row: Int): Option[String] = {
+    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+      case Nil => None
+      case l   => Some(l.mkString("[", ", ", "]")) 
+    }
   }
 
   override def toString = (0 until size).map(toString).mkString("\n")
