@@ -195,29 +195,6 @@ trait Slice { source =>
     }
   }
 
-  def filter(fx: (JPath, Column => BoolColumn)*): Slice = {
-    new Slice {
-      lazy val filters = fx flatMap { 
-        case (selector, f) => columns collect { case (ref, col) if ref.selector.hasPrefix(selector) => f(col) } 
-      }
-
-      lazy val retained: ArrayIntList = {
-        @inline @tailrec def fill(i: Int, acc: ArrayIntList): ArrayIntList = {
-          if (i < source.size && filters.forall(c => c.isDefinedAt(i) && c(i))) {
-            fill(i + 1, acc)
-          } else {
-            acc
-          }
-        }
-
-        fill(0, new ArrayIntList())
-      }
-
-      lazy val size = retained.size
-      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
-    }
-  }
-
   def retain(refs: Set[ColumnRef]) = {
     new Slice {
       val size = source.size
