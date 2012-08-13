@@ -222,17 +222,28 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       } 
     }
 
+    println("Running sort on " + sortKey)
+
     try {
-      module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
+      val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
         _.sort(sortTransspec, SortAscending)
       }.flatMap {
         // Remove the sortkey namespace for the purposes of this spec (simplifies comparisons)
         table => M.point(table.transform(ObjectDelete(Leaf(Source), Set(SortKey))))
       }.flatMap {
         _.toJson
-      }.copoint.toStream must_== sample.data.sortBy({
+      }.copoint.toList
+
+      val original = sample.data.sortBy({
         v => sortKey.extract(v \ "value")
-      })(jvalueOrdering)
+      })(jvalueOrdering).toList
+
+      if (result != original) {
+        println("Original = " + original)
+        println("Result   = " + result)
+      }
+
+      result must_== original
     } catch {
       case e: AssertionError => e.printStackTrace; true mustEqual false
     }

@@ -159,10 +159,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
   
         def split: (Slice, Cell) = {
           val (finished, continuing) = slice0.split(position)
-          println(">>>>>")
-          println(finished)
-          println(continuing)
-          (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
+          if (position == 0) {
+            // If we never read from the slice, just return an empty slice and ourself 
+            (finished, this)
+          } else {
+            (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
+          }
         }
       }
   
@@ -343,14 +345,16 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       import sortMergeEngine._
       import TableModule.paths._
 
+      println("Starting sort")
+
       // Bookkeeping types/case classes
       type IndexStore = SortedMap[SortingKey,Array[Byte]]
-      case class SliceIndex(name: String, storage: IndexStore)
+      case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
 
       // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
       type IndexMap = Map[Seq[ColumnRef], SliceIndex]
 
-      case class SortOutput(indices: IndexMap, sortColumns: Option[Seq[ColumnRef]], idCount: Int, globalId: Long)
+      case class SortOutput(indices: IndexMap, idCount: Int, globalId: Long)
 
       // We use the sort transspec1 to compute a new table with a combination of the 
       // original data and the new sort columns, referenced under the sortkey namespace
@@ -359,9 +363,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       // Open a JDBM3 DB for use in sorting under a temp directory
       val dbFile = new File(newScratchDir(), "sortspace")
       val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
+
+      val codec = new ColumnCodec()
       
       // Insert slice data based on columndescriptors
-      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, None, 0, 0l)) { case (SortOutput(indices, oldSortColumns, _, nextId), slice) => {
+      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
         def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
           // The conditional guarantees that dropPrefix will return Some
           case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
@@ -370,19 +376,21 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val dataColumns = columnsByPrefix(JPath(Value))
         val idColumns   = columnsByPrefix(JPath(Key))
         val sortColumns = columnsByPrefix(JPath(SortKey))
-        val indexMapKey = dataColumns.map(_._1).toSeq
+        val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
         val (index: SliceIndex, newIndices: IndexMap) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          val newIndex = SliceIndex(indexMapKey.toString, DB.createTreeMap(indexMapKey.toString, 
-                                                                           SortingKeyComparator(sortOrder.isAscending),
-                                                                           SortingKeySerializer(idColumns.size),
-                                                                           null /* Use default serialization */))
+          println("Making a new index for " + indexMapKey.toString)
+          val newIndex = SliceIndex(indexMapKey.toString,
+                                    DB.createTreeMap(indexMapKey.toString, 
+                                                     SortingKeyComparator(sortOrder.isAscending),
+                                                     SortingKeySerializer(idColumns.size),
+                                                     null /* Use default serialization */),
+                                    sortColumns.map(_._1),
+                                    dataColumns.map(_._1))
 
           (newIndex, indices + (indexMapKey -> newIndex))
         }
         
-        val codec = new ColumnCodec()
-
         // Iterate over the slice
         @inline
         @tailrec
@@ -400,12 +408,9 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
           globalId
         }
 
-        val newSortColumns = sortColumns.map(_._1).toSeq
-        assert(oldSortColumns.map(_ == newSortColumns).getOrElse(true)) // Sort columns should not change over the span of all slices in the table
-
-        SortOutput(newIndices, Some(newSortColumns), idColumns.size, storeRow(index.storage, 0, nextId))
+        SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
       }}.map {
-        case output @ SortOutput(indices, sortColumns, idCount, lastId) => {
+        case output @ SortOutput(indices, idCount, lastId) => {
           DB.close()
           logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
           output
@@ -422,12 +427,24 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
 
       // Merge the resulting slice indices back together
       inputOp.flatMap { 
-        case SortOutput(indices, Some(sortColumns), idCount, _) => {
+        case SortOutput(_, _, 0l) => {
+          // We've been asked to sort an empty table. Return the input
+          M.point(this)
+        }
+        case SortOutput(indices, idCount, _) => {
           // Map the distinct indices into SortProjections/Cells, then merge them
           val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-            case ((format, SliceIndex(name, _)), index) => {
-              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, format) {
+            case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
+              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
                 def keyOrder: Order[SortingKey] = sortingKeyOrder
+              }
+
+              println("Dump index " + name + " = ")
+              sortProjection.foreach {
+                entry => {
+                  val key = entry.getKey
+                  println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
+                }
               }
 
               val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
@@ -439,10 +456,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
           }.toSet
 
           mergeProjections(cells)
-        }
-        case SortOutput(_, None, _, _) => {
-          // We've been asked to sort an empty table. Return the input
-          M.point(this)
         }
       }
     }
