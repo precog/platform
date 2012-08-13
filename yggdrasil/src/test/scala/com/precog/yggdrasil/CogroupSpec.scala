@@ -117,6 +117,11 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
     )
 
     val jsonResult = toJson(result)
+    
+    forall(jsonResult.copoint zip expected) {
+      case (a, b) => a mustEqual b
+    }
+    
     jsonResult.copoint must containAllOf(expected).only
   }
 
