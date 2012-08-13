@@ -120,7 +120,7 @@ trait TableModule[M[+_]] extends FNModule {
     /**
      * Definition for a single (non-composite) key part.
      *
-     * @param a The key which will be used by `merge` to access this particular tic-variable (which may be refined by more than one `GroupKeySpecSource`)
+     * @param key The key which will be used by `merge` to access this particular tic-variable (which may be refined by more than one `GroupKeySpecSource`)
      * @param spec A transform which defines this key part as a function of the source table in `GroupingSource`.
      */
     case class GroupKeySpecSource(key: JPathField, spec: TransSpec1) extends GroupKeySpec
@@ -134,7 +134,7 @@ trait TableModule[M[+_]] extends FNModule {
      * Definition for a single group set and its associated composite key part.
      *
      * @param table The target set for the grouping
-     * @param a The key which will be used by `merge` to access a particular subset of the target
+     * @param targetTrans The key which will be used by `merge` to access a particular subset of the target
      * @param groupKeySpec A composite union/intersect overlay on top of transspec indicating the composite key for this target set
      */
     final case class GroupingSource[GroupId: scalaz.Equal](table: Table, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId]
