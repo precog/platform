@@ -135,6 +135,27 @@ trait EvalStackSpecs extends Specification {
         eval("true with []") mustEqual Set()
       }.pendingUntilFixed
     }    
+
+    "union sets coming out of a forall" >> {
+      val input = """
+        clicks := //clicks
+        foobar := forall 'a {userId: 'a, size: count(clicks where clicks.userId = 'a)}
+        foobaz := forall 'b {pageId: 'b, size: count(clicks where clicks.pageId = 'b)}
+        foobar union foobaz
+      """.stripMargin
+
+      val results = evalE(input)
+
+      results must haveSize(10)
+
+      forall(results) {
+        case (ids, SObject(obj)) => {
+          ids must haveSize(1)
+          obj must haveSize(1)
+          obj must haveKey("bar") or haveKey("baz")
+        }
+      }
+    }.pendingUntilFixed
     
     "have the correct number of identities and values in a relate" >> {
       "with the sum plus the LHS" >> {

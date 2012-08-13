@@ -378,6 +378,26 @@ object ProvenanceComputationSpecs extends Specification
       }
     }
 
+    "determine provenance coming out of a forall" in {
+      {
+        val tree = compile("""
+          | foo := //foo
+          | forall 'a {bar: sum(foo where foo.a = 'a)}
+          """.stripMargin)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+      {
+        val tree = compile("""
+          | foo := //foo
+          | obj := forall 'a {bar: sum(foo where foo.a = 'a)}
+          | obj
+          """.stripMargin)
+        tree.provenance must beLike { case DynamicProvenance(_) => ok }
+        tree.errors must beEmpty
+      }
+    }
+
     "identify distinct dispatch" in {
       {
         val tree = compile("distinct(//foo)")
@@ -757,6 +777,19 @@ object ProvenanceComputationSpecs extends Specification
         }
       }
 
+      "Forall" >> {
+        {
+          val tree = compile("""
+            | foo := //foo
+            | foobar := forall 'a {a: 'a, bar: count(foo where foo.a = 'a)}
+            | foobaz := forall 'b {b: 'b, baz: count(foo where foo.b = 'b)}
+            | foobar union foobaz
+            """.stripMargin)
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors must beEmpty
+        }
+      }
+
       "Relate" >> {
         {
           val tree = compile("//clicks ~ //views foo := //clicks + //views foo union 4")
@@ -966,6 +999,16 @@ object ProvenanceComputationSpecs extends Specification
         {
           val tree = compile("(//foo.a + //foo.b union //baz) union 12")
           tree.provenance must beLike { case DynamicProvenance(_) => ok }
+          tree.errors mustEqual Set(UnionProvenanceDifferentLength)
+        }
+        {
+          val tree = compile("""
+            | foo := //foo
+            | foobar := forall 'a {a: 'a, bar: count(foo where foo.a = 'a)}
+            | foobar union 5
+            """.stripMargin)
+
+          tree.provenance mustEqual NullProvenance
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
       }

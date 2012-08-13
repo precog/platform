@@ -148,6 +148,16 @@ object AccumulatedProvenanceSpecs extends Specification
         }
       }
 
+      "Forall" >> {
+        val tree = compile("""
+          | foo := //foo
+          | foobar := forall 'a {bar: count(foo where foo.a = 'a)}
+          | foobar
+          """.stripMargin)
+        tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+        tree.errors must beEmpty
+      }
+
       "Relate" >> {
         {
           val tree = compile("//foo ~ //bar 5")
