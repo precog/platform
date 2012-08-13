@@ -107,10 +107,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         )
       })
 
-      val expected = sample.data map { jv =>
+      val expected = sample.data flatMap { jv =>
         (jv \ "value") match { 
-          case JInt(x) if x.longValue % 2 == 0 => jv
-          case _ => JNothing 
+          case JInt(x) if x.longValue % 2 == 0 => Some(jv)
+          case _ => None
         }
       }
 
@@ -128,7 +128,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         DerefObjectStatic(Leaf(Source), fieldHead.asInstanceOf[JPathField])
       })
 
-      val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
+        case JNothing => None
+        case jv       => Some(jv)
+      }
 
       results.copoint must_== expected
     }
@@ -144,7 +147,10 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         DerefArrayStatic(Leaf(Source), fieldHead.asInstanceOf[JPathIndex])
       })
 
-      val expected = sample.data.map { jv => jv(JPath(fieldHead)) }
+      val expected = sample.data.map { jv => jv(JPath(fieldHead)) } flatMap {
+        case JNothing => None
+        case jv       => Some(jv)
+      }
 
       results.copoint must_== expected
     }

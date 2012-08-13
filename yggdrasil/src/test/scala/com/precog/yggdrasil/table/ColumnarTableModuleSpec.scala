@@ -46,7 +46,15 @@ import org.scalacheck.Gen._
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary._
 
-trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec[M] with TestColumnarTableModule[M] with TransformSpec[M] with BlockLoadSpec[M] with BlockSortSpec[M] { spec =>
+trait ColumnarTableModuleSpec[M[+_]] extends
+  TableModuleSpec[M] with
+  CogroupSpec[M] with
+  TestColumnarTableModule[M] with
+  TransformSpec[M] with
+  BlockLoadSpec[M] with
+  BlockSortSpec[M] with
+  CompactSpec[M] { spec =>
+    
   override val defaultPrettyParams = Pretty.Params(2)
 
   val testPath = Path("/tableOpsSpec")
@@ -186,7 +194,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends TableModuleSpec[M] with CogroupSpec
       "data with undefined sort keys" in partiallyUndefinedSortSample
       "heterogeneous sort keys"       in heterogeneousSortSample
       "arbitrary datasets"            in checkSortDense
-    }    
+    }
+    
+    "in compact" >> {
+      "be the identity on fully defined tables"  in testCompactIdentity
+      "preserve all defined rows"                in testCompactPreserve
+      "have no undefined rows"                   in testCompactRows
+      "have no empty slices"                     in testCompactSlices
+    }
   }
 }
 

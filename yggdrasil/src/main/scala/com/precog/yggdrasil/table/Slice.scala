@@ -183,23 +183,12 @@ trait Slice { source =>
     }
   }
 
-  def filter(fx: (JPath, Column => BoolColumn)*): Slice = {
+  def compact: Slice = {
     new Slice {
-      lazy val filters = fx flatMap { 
-        case (selector, f) => columns collect { case (ref, col) if ref.selector.hasPrefix(selector) => f(col) } 
-      }
-
-      lazy val retained: ArrayIntList = {
-        @inline @tailrec def fill(i: Int, acc: ArrayIntList): ArrayIntList = {
-          if (i < source.size && filters.forall(c => c.isDefinedAt(i) && c(i))) {
-            fill(i + 1, acc)
-          } else {
-            acc
-          }
+      lazy val retained =
+        (0 until source.size).foldLeft(new ArrayIntList) {
+          case (acc, i) => if(source.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
         }
-
-        fill(0, new ArrayIntList())
-      }
 
       lazy val size = retained.size
       lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
@@ -266,17 +255,23 @@ trait Slice { source =>
     }
   }
 
-  def toJson(row: Int): JValue = {
+  def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
       case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
         jv.unsafeInsert(selector, col.jValue(row))
 
       case (jv, _) => jv
+    } match {
+      case JNothing => None
+      case jv       => Some(jv)
     }
   }
 
-  def toString(row: Int): String = {
-    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }).mkString("[", ", ", "]")
+  def toString(row: Int): Option[String] = {
+    (columns collect { case (ref, col) if col.isDefinedAt(row) => ref.toString + ": " + col.strValue(row) }) match {
+      case Nil => None
+      case l   => Some(l.mkString("[", ", ", "]")) 
+    }
   }
 
   override def toString = (0 until size).map(toString).mkString("\n")

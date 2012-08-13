@@ -58,7 +58,7 @@ trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubSt
       @tailrec def findBlockAfter(id: JArray, blocks: Stream[Slice]): Option[Slice] = {
         blocks match {
           case x #:: xs =>
-            if ((x.toJson(x.size - 1) \ "key") > id) Some(x) else findBlockAfter(id, xs)
+            if ((x.toJson(x.size - 1).getOrElse(JNothing) \ "key") > id) Some(x) else findBlockAfter(id, xs)
 
           case _ => None
         }
@@ -81,7 +81,7 @@ trait BlockLoadTestSupport[M[+_]] extends TestColumnarTableModule[M] with StubSt
           }
         }
 
-        BlockProjectionData[JArray, Slice](s0.toJson(0) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1) \ "key" --> classOf[JArray], s0)
+        BlockProjectionData[JArray, Slice](s0.toJson(0).getOrElse(JNothing) \ "key" --> classOf[JArray], s0.toJson(s0.size - 1).getOrElse(JNothing) \ "key" --> classOf[JArray], s0)
       }
     }
   }

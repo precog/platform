@@ -225,7 +225,8 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
     }
 
-    def compact(spec: TransSpec1): Table = sys.error("todo")
+    def compact(spec: TransSpec1): Table =
+      table(transformStream(composeSliceTransform(spec) andThen map0 { _.compact }, slices)).normalize
 
     private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
 
@@ -922,9 +923,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       toEvents { (slice, row) => slice.toJson(row) }
     }
 
-    private def toEvents[A](f: (Slice, RowId) => A): M[Iterable[A]] = {
+    private def toEvents[A](f: (Slice, RowId) => Option[A]): M[Iterable[A]] = {
       for (stream <- self.normalize.slices.toStream) yield {
-        for (slice <- stream; i <- 0 until slice.size) yield f(slice, i) 
+        (for (slice <- stream; i <- 0 until slice.size) yield f(slice, i)).flatten 
       }
     }
   }
