@@ -58,12 +58,14 @@ class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) ex
     val sortSelectors = aValsRaw.map(_._1).distinct
 
     while (result == 0 && i < sortSelectors.length) {
-      result = (aVals(sortSelectors(i)).find(_._2 != CUndefined), bVals(sortSelectors(i)).find(_._2 != CUndefined)) match {
+      val toCompare = (aVals(sortSelectors(i)).find(_._2 != CUndefined), bVals(sortSelectors(i)).find(_._2 != CUndefined))
+      result = toCompare match {
         case (None, None)         => 0
         case (None, _)            => -1
         case (_, None)            => 1
         case (Some((_, av)), Some((_, bv))) => CValue.compareValues(av, bv)
       }
+      println("Comparing " + toCompare + " results in " + result)
       i += 1
     }
 

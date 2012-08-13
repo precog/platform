@@ -46,6 +46,15 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
 
+  def foreach(f : java.util.Map.Entry[SortingKey,Array[Byte]] => Unit) {
+    val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
+    val index: SortedMap[SortingKey,Array[Byte]] = DB.getTreeMap(indexName)
+
+    index.entrySet().iterator().asScala.foreach(f)
+
+    DB.close()
+  }
+
   def getBlockAfter(id: Option[SortingKey], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[SortingKey,Slice]] = try {
     // TODO: Make this far, far less ugly
     if (columns.size > 0) {
