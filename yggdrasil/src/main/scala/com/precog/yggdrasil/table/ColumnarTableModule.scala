@@ -897,7 +897,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
                composeSliceTransform(rightResultTrans), 
                composeSliceTransform2(bothResultTrans))
     }
-    
+
     /**
      * Performs a full cartesian cross on this table with the specified table,
      * applying the specified transformation to merge the two tables into
@@ -989,8 +989,17 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }))
     }
     
-    def distinct: Table = sys.error("todo")
-    
+    /**
+     * Yields a new table with distinct rows. Assumes this table is sorted.
+     */
+    def distinct: Table = {
+      def retainDistinct(prev: Option[Slice], cur: Slice): (Option[Slice], Slice) = {
+        val next = cur.distinct(prev)
+        (if(next.size > 0) Some(next) else prev, next)
+      }
+      table(transformStream(new SliceTransform1[Option[Slice]](None, retainDistinct), slices))
+    }
+
     def drop(n: Long): Table = sys.error("todo")
     
     def take(n: Long): Table = sys.error("todo")

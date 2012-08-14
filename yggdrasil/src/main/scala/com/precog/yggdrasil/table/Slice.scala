@@ -201,6 +201,47 @@ trait Slice { source =>
       val columns: Map[ColumnRef, Column] = source.columns.filterKeys(refs)
     }
   }
+  
+  /**
+   * Assumes that this and the previous slice (if any) are sorted.
+   */
+  def distinct(prev: Option[Slice]): Slice = {
+    new Slice {
+      lazy val retained : ArrayIntList = {
+        val lastDefined = prev.flatMap(slice => if(slice.size > 0) Some(slice, slice.size-1) else None)
+        val firstDefined = (0 until source.size).find(i => source.columns.values.exists(_.isDefinedAt(i)))
+        
+        @tailrec
+        def findDistinct(acc: ArrayIntList, prev: Slice, prevRow: Int, curRow: Int) : ArrayIntList = {
+          if(curRow >= source.size) acc
+          else {
+            val allKeys = if(source eq prev) source.columns.keys else prev.columns.keySet ++ source.columns.keys
+            val cols = for(key <- allKeys) yield (prev.columns(key), source.columns(key))
+            
+            val retain = cols.view.exists {
+              case (prevCol, curCol) => 
+                val defined = prevCol.isDefinedAt(prevRow)
+                defined != curCol.isDefinedAt(curRow) || (defined && prevCol.cValue(prevRow) != curCol.cValue(curRow))    
+            }
+            
+            if(retain) acc.add(curRow)
+            val (nextPrev, nextPrevRow) = if(retain) (source, curRow) else (prev, prevRow)
+            
+            findDistinct(acc, nextPrev, nextPrevRow, curRow+1)
+          }
+        }
+
+        (lastDefined, firstDefined) match {
+          case (Some((prev, i)), Some(j)) => findDistinct(new ArrayIntList, prev, i, j)
+          case (_,               Some(j)) => findDistinct(new ArrayIntList, source, j, j+1)
+          case _                          => new ArrayIntList(0)
+        }
+      }
+
+      lazy val size = retained.size
+      lazy val columns: Map[ColumnRef, Column] = source.columns mapValues { col => (col |> cf.util.Remap.forIndices(retained)).get }
+    }
+  }
 
   def sortBy(refs: VectorCase[JPath]): Slice = {
     val sortedIndices: Array[Int] = {
