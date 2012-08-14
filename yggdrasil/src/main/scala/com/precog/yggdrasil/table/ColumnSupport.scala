@@ -17,7 +17,8 @@
  * program. If not, see <http://www.gnu.org/licenses/>.
  *
  */
-package com.precog.yggdrasil.table
+package com.precog.yggdrasil
+package table
 
 import org.joda.time.DateTime
 import scala.collection.BitSet
@@ -64,16 +65,23 @@ class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this
 }
 
 class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>
+  println("Sparsen to size " + toSize)
   @inline @tailrec private def fill(a: Array[Int], i: Int): Array[Int] = {
-    if (i < idx.length) {
-      a(idx(i)) = i
+    if (i < toSize && i < idx.length) {
+      println("Assign %d to a(%d)".format(i, idx(i)))
+      if (a(idx(i)) == -1) {
+        // We can only update indices that aren't already mapped
+        a(idx(i)) = i
+      }
       fill(a, i+1)
     } else a
   }
 
-  val remap: Array[Int] = fill(new Array[Int](toSize), 0)
+  val remap: Array[Int] = fill(Array.fill[Int](toSize)(-1), 0)
 
-  def isDefinedAt(row: Int) = row < toSize && delegate.isDefinedAt(remap(row))
+  println("Remapped indices %s to %s".format(idx.mkString("[",", ","]"), remap.mkString("[",", ","]")))
+
+  def isDefinedAt(row: Int) = row < toSize && remap(row) != -1 && delegate.isDefinedAt(remap(row))
 }
 
 class InfiniteColumn { this: Column =>
@@ -85,6 +93,56 @@ class EmptyColumn[T <: Column] { this: T =>
   def apply(row: Int): Nothing = sys.error("Undefined.")
 }
 
+abstract class ArraySetColumn[T <: Column](val tpe: CType, protected val backing: Array[T]) { this: T =>
+  protected def firstDefinedIndexAt(row: Int): Int = {
+    var i = 0
+    while (i < backing.length && ! backing(i).isDefinedAt(row)) { i += 1 }
+    if (i != backing.length) i else -1
+  }
+  def isDefinedAt(row: Int) = firstDefinedIndexAt(row) != -1
+  def jValue(row: Int) = backing(firstDefinedIndexAt(row)).jValue(row)
+  def cValue(row: Int) = backing(firstDefinedIndexAt(row)).cValue(row)
+  def strValue(row: Int) = backing(firstDefinedIndexAt(row)).strValue(row)
+}
+
+object ArraySetColumn {
+  def apply[T <: Column](ctype: CType, columnSet: Array[T]): Column = {
+    assert(columnSet.length != 0)
+    ctype match {
+      case CString      => new ArraySetColumn[StrColumn](ctype, columnSet.map(_.asInstanceOf[StrColumn])) with StrColumn { 
+        def apply(row: Int): String = backing(firstDefinedIndexAt(row)).asInstanceOf[StrColumn].apply(row)
+      }
+
+      case CBoolean     => new ArraySetColumn[BoolColumn](ctype, columnSet.map(_.asInstanceOf[BoolColumn])) with BoolColumn { 
+        def apply(row: Int): Boolean = backing(firstDefinedIndexAt(row)).asInstanceOf[BoolColumn].apply(row)
+      }
+
+      case CLong        => new ArraySetColumn[LongColumn](ctype, columnSet.map(_.asInstanceOf[LongColumn])) with LongColumn { 
+        def apply(row: Int): Long = backing(firstDefinedIndexAt(row)).asInstanceOf[LongColumn].apply(row)
+      }
+
+      case CDouble      => new ArraySetColumn[DoubleColumn](ctype, columnSet.map(_.asInstanceOf[DoubleColumn])) with DoubleColumn { 
+        def apply(row: Int): Double = backing(firstDefinedIndexAt(row)).asInstanceOf[DoubleColumn].apply(row)
+      }
+
+      case CNum         => new ArraySetColumn[NumColumn](ctype, columnSet.map(_.asInstanceOf[NumColumn])) with NumColumn {
+        def apply(row: Int): BigDecimal = backing(firstDefinedIndexAt(row)).asInstanceOf[NumColumn].apply(row)
+      }
+
+      case CDate        => new ArraySetColumn[DateColumn](ctype, columnSet.map(_.asInstanceOf[DateColumn])) with DateColumn {
+        def apply(row: Int): DateTime = backing(firstDefinedIndexAt(row)).asInstanceOf[DateColumn].apply(row)
+      }
+
+      case CNull        => new ArraySetColumn[NullColumn](ctype, columnSet.map(_.asInstanceOf[NullColumn])) with NullColumn {}
+
+      case CEmptyObject => new ArraySetColumn[EmptyObjectColumn](ctype, columnSet.map(_.asInstanceOf[EmptyObjectColumn])) with EmptyObjectColumn {}
+
+      case CEmptyArray  => new ArraySetColumn[EmptyArrayColumn](ctype, columnSet.map(_.asInstanceOf[EmptyArrayColumn])) with EmptyArrayColumn {}
+
+      case CUndefined   => UndefinedColumn(columnSet(0))
+    }
+  }
+}
 
 /* help for ctags
 type ColumnSupport */

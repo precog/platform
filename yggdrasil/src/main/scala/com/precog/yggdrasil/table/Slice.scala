@@ -267,20 +267,15 @@ trait Slice { source =>
   }
 
   def toJson(row: Int): JValue = {
-    println("Slice toJson for row %d/%d from %s".format(row, size, columns))
-    val result = columns.foldLeft[JValue](JNothing) {
+    columns.foldLeft[JValue](JNothing) {
       case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
-        //println("Merging in %s = %s to %s".format(selector, col.jValue(row), jv))
         jv.unsafeInsert(selector, col.jValue(row))
       }
 
       case (jv, (ref, _)) => {
-        //println(ref + " not defined at row " + row)
         jv
       }
     }
-    println("Final merge result for row %d = %s".format(row, result))
-    result
   }
 
   def toString(row: Int): String = {
@@ -440,13 +435,81 @@ object Slice {
       }
     }
 
-    val refs1 = keyf(s1).sorted
-    val refs2 = keyf(s2).sorted
+    val refs1 = keyf(s1)
+    val refs2 = keyf(s2)
 
-    if (refs1 != refs2) sys.error("Illegal attempt to compare rows on mismatched key schemas: " + refs1 + " vs " + refs2)
-    //assert(refs1 == refs2)
+    // Return the first column in the array defined at the row, or -1 if none are defined for that row
+    @inline def firstDefinedIndexFor(columns: Array[Column], row: Int): Int = {
+      var i = 0
+      while (i < columns.length && ! columns(i).isDefinedAt(row)) { i += 1 }
+      if (i == columns.length) -1 else i
+    }
 
-    val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
+    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): (Int, Int) => Ordering = {
+      val array1 = l1.map(s1.columns).toArray
+      val array2 = l2.map(s2.columns).toArray
+
+      // Build an array of pairwise comparator functions for later use
+      val comparators = (for {
+        i1 <- 0 until array1.length
+        i2 <- 0 until array2.length
+      } yield compare0(array1(i1), array2(i2))).toArray
+
+      (i: Int, j: Int) => {
+        val first1 = firstDefinedIndexFor(array1, i)
+        val first2 = firstDefinedIndexFor(array2, j)
+
+        if (first1 == -1 && first2 == -1) {
+          println("Both undefined")
+          EQ
+        } else if (first1 == -1) {
+          println("First undefined")
+          LT
+        } else if (first2 == -1) {
+          println("Second undefined")
+          GT
+        } else {
+          // We have the indices, so use it to look up the comparator for the rows
+          comparators(first1 * array2.length + first2)(i, j)
+        }
+      }
+    }
+
+    @inline @tailrec
+    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
+      case (h1 :: _, h2 :: _) if h1.selector == h2.selector => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+      }
+
+      case (h1 :: _, h2 :: _) if h1.selector < h2.selector => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+        pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
+      }
+
+      case (h1 :: _, h2 :: _) if h1.selector > h2.selector => {
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+      }
+
+      case (h1 :: _, Nil) => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+        pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
+      }
+
+      case (Nil, h2 :: _) => {
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+      }
+
+      case (Nil, Nil) => comparators.reverse
+    }
 
     (i1: Int, i2: Int) => {
       @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
@@ -457,7 +520,7 @@ object Slice {
         case Nil => EQ
       }
 
-      compare1(colfs)
+      compare1(pairColumns(refs1, refs2, Nil))
     }
   } 
 }

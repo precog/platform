@@ -62,7 +62,7 @@ object SampleData extends CValueGenerators {
 
   def sample(schema: Int => Gen[JSchema]) = Arbitrary(
     for {
-      depth   <- choose(0, 3)
+      depth   <- choose(0, 1)
       jschema <- schema(depth)
       (idCount, data) <- genEventColumns(jschema)
     } yield {

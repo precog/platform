@@ -211,7 +211,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
     }
 
-    val sortTransspec = WrapObject(derefTransspec, "sortkey")
+    val sortTransspec = WrapArray(derefTransspec)
 
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
