@@ -787,7 +787,7 @@ trait EvalStackSpecs extends Specification {
           }
 
           results2 must haveSize(0)
-        }.pendingUntilFixed
+        }
 
         "Covariance" >> {
           val input = """

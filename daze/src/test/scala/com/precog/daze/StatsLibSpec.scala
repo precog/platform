@@ -938,7 +938,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         val result = testEval(input)
         
         result must haveSize(0)
-      }.pendingUntilFixed
+      }
     
       "with value on the left" >> {
         val line = Line(0, "")
@@ -952,7 +952,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         val result = testEval(input)
         
         result must haveSize(0)
-      }.pendingUntilFixed
+      }
     }
 
     "compute covariance" in {

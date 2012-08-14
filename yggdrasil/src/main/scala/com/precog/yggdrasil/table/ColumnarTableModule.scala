@@ -903,7 +903,91 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
      * applying the specified transformation to merge the two tables into
      * a single table.
      */
-    def cross(that: Table)(spec: TransSpec2): Table = sys.error("todo")
+    def cross(that: Table)(spec: TransSpec2): Table = {
+      def cross0[A](transform: SliceTransform2[A]): M[StreamT[M, Slice]] = {
+        case class CrossState(a: A, position: Int, tail: StreamT[M, Slice])
+
+        def crossLeftSingle(lhead: Slice, right: StreamT[M, Slice]): StreamT[M, Slice] = {
+          def step(state: CrossState): M[Option[(Slice, CrossState)]] = {
+            if (state.position < lhead.size) {
+              state.tail.uncons flatMap {
+                case Some((rhead, rtail0)) =>
+                  val lslice = new Slice {
+                    val size = rhead.size
+                    val columns = lhead.columns.mapValues { cf.util.Remap({ case _ => state.position })(_).get }
+                  }
+
+                  val (a0, resultSlice) = transform.f(state.a, lslice, rhead)
+                  M.point(Some((resultSlice, CrossState(a0, state.position, rtail0))))
+                  
+                case None => 
+                  step(CrossState(state.a, state.position + 1, right))
+              }
+            } else {
+              M.point(None)
+            }
+          }
+
+          StreamT.unfoldM(CrossState(transform.initial, 0, right))(step _)
+        }
+        
+        def crossRightSingle(left: StreamT[M, Slice], rhead: Slice): StreamT[M, Slice] = {
+          def step(state: CrossState): M[Option[(Slice, CrossState)]] = {
+            state.tail.uncons map {
+              case Some((lhead, ltail0)) =>
+                val lslice = new Slice {
+                  val size = rhead.size * lhead.size
+                  val columns = lhead.columns.mapValues { cf.util.Remap({ case i => i / rhead.size })(_).get }
+                }
+
+                val rslice = new Slice {
+                  val size = rhead.size * lhead.size
+                  val columns = rhead.columns.mapValues { cf.util.Remap({ case i => i % rhead.size })(_).get }
+                }
+
+                val (a0, resultSlice) = transform.f(state.a, lslice, rslice)
+                Some((resultSlice, CrossState(a0, state.position, ltail0)))
+                
+              case None => None
+            }
+          }
+
+          StreamT.unfoldM(CrossState(transform.initial, 0, left))(step _)
+        }
+
+        def crossBoth(ltail: StreamT[M, Slice], rtail: StreamT[M, Slice]): StreamT[M, Slice] = {
+          ltail.flatMap(crossLeftSingle(_ :Slice, rtail))
+        }
+
+        this.slices.uncons flatMap {
+          case Some((lhead, ltail)) =>
+            that.slices.uncons flatMap {
+              case Some((rhead, rtail)) =>
+                for {
+                  lempty <- ltail.isEmpty //TODO: Scalaz result here is negated from what it should be!
+                  rempty <- rtail.isEmpty
+                } yield {
+                  if (lempty) {
+                    // left side is a small set, so restart it in memory
+                    crossLeftSingle(lhead, rhead :: rtail)
+                  } else if (rempty) {
+                    // right side is a small set, so restart it in memory
+                    crossRightSingle(lhead :: ltail, rhead)
+                  } else {
+                    // both large sets, so just walk the left restarting the right.
+                    crossBoth(this.slices, that.slices)
+                  }
+                }
+
+              case None => M.point(StreamT.empty[M, Slice])
+            }
+
+          case None => M.point(StreamT.empty[M, Slice])
+        }
+      }
+
+      table(StreamT(cross0(composeSliceTransform2(spec)) map { tail => StreamT.Skip(tail) }))
+    }
     
     def distinct: Table = sys.error("todo")
     
@@ -924,7 +1008,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
 
     private def toEvents[A](f: (Slice, RowId) => Option[A]): M[Iterable[A]] = {
-      for (stream <- self.normalize.slices.toStream) yield {
+      for (stream <- self.compact(Leaf(Source)).slices.toStream) yield {
         (for (slice <- stream; i <- 0 until slice.size) yield f(slice, i)).flatten 
       }
     }

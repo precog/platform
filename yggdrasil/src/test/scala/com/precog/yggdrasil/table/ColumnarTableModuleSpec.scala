@@ -49,6 +49,7 @@ import org.scalacheck.Arbitrary._
 trait ColumnarTableModuleSpec[M[+_]] extends
   TableModuleSpec[M] with
   CogroupSpec[M] with
+  CrossSpec[M] with
   TestColumnarTableModule[M] with
   TransformSpec[M] with
   BlockLoadSpec[M] with
@@ -174,6 +175,14 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "survive scalacheck" in { 
         check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
       }.pendingUntilFixed
+    }
+
+    "in cross" >> {
+      "perform a simple cartesian" in testSimpleCross
+      "cross across slice boundaries on one side" in testCrossSingles
+      "survive scalacheck" in { 
+        check { cogroupData: (SampleData, SampleData) => testCross(cogroupData._1, cogroupData._2) } 
+      }
     }
 
     "in transform" >> {
