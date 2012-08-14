@@ -1098,7 +1098,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(7, -2.026315789473684, 0.006024096385542169, 13)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the set difference of two sets" in {
       val line = Line(0, "")
@@ -1122,7 +1122,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "compute the set difference of the set difference" in {
       val line = Line(0, "")
@@ -1148,7 +1148,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed      
+    }
     
     "compute the iunion of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1166,7 +1166,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(42, 12, 77, 1, 13, 14, -1, 0)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iunion of two datasets" in {
       val line = Line(0, "")
@@ -1178,7 +1178,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(105)
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iintersect of two homogeneous sets" in {
       val line = Line(0, "")
@@ -1196,7 +1196,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(1, 42)
       }
-    }.pendingUntilFixed    
+    }
 
     "compute the iintersect of two heterogeneous sets" in {
       val line = Line(0, "")
@@ -1221,7 +1221,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "compute the iintersect of two nonintersecting sets of numbers" in {
       val line = Line(0, "")
@@ -1233,7 +1233,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(0)
       }
-    }.pendingUntilFixed    
+    }
 
     "compute the iintersect of two datasets" in {
       val line = Line(0, "")
@@ -1245,7 +1245,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
       testEval(input) { result =>
         result must haveSize(0)
       }
-    }.pendingUntilFixed
+    }
     
     "filter homogeneous numeric set by binary operation" >> {
       "less-than" >> {
@@ -1999,7 +1999,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
         
         result2 must contain(55, 13, 119, 25)
       }
-    }.pendingUntilFixed
+    }
     
     "evaluate a histogram function" in {
       val Expected = Map("daniel" -> 9, "kris" -> 8, "derek" -> 7, "nick" -> 17,
@@ -2061,7 +2061,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
 
     "evaluate with on the clicks dataset" in {
       val line = Line(0, "")
@@ -2165,7 +2165,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "perform a naive cartesian product on the clicks dataset" in {
       val line = Line(0, "")
@@ -2264,7 +2264,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
     
     "filter two sets according to a value sort" in {
       val line = Line(0, "")
@@ -2299,7 +2299,7 @@ trait EvaluatorSpecs[M[+_]] extends Specification
           }
         }
       }
-    }.pendingUntilFixed
+    }
   }
 }
 

@@ -135,30 +135,39 @@ trait InfixLib[M[+_]] extends GenOpcode[M] {
       val tpe = BinaryOperationType(JNumberT, JNumberT, JBooleanT)
       def f2: F2 = new CF2P({
         case (c1: LongColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
         }
         case (c1: LongColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
         }
         case (c1: LongColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
         case (c1: DoubleColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = (c1(row): BigDecimal) / c2(row)
         }
         case (c1: DoubleColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with DoubleColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
         case (c1: DoubleColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
         case (c1: NumColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
         case (c1: NumColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
         case (c1: NumColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+          override def isDefinedAt(row: Int) = c1.isDefinedAt(row) && c2.isDefinedAt(row) && c2(row) != 0
           def apply(row: Int) = c1(row) / c2(row)
         }
       })
