@@ -906,8 +906,8 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
     "rewrite forall inside a" in {
       "let" >> {
         val tree = Let(LineStream(), Identifier(Vector(), "foo"), Vector(), 
-            Forall(LineStream(), "'a", TicVar(LineStream(), "'a")),
-            Dispatch(LineStream(), Identifier(Vector(), "foo"), Vector()))
+          Forall(LineStream(), "'a", TicVar(LineStream(), "'a")),
+          Dispatch(LineStream(), Identifier(Vector(), "foo"), Vector()))
         bindRoot(tree, tree)
 
         val results = rewriteForall(tree)

@@ -448,13 +448,13 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                       expr.accumulatedProvenance = None
                       (NullProvenance, Set())
                     } else {
-                      val varAssumptions: Map[(String, Let), Provenance] = {
+                      lazy val varAssumptions: Map[(String, Let), Provenance] = {
                         e.assumptions ++ Map(e.params zip provenances: _*) map {  
                           case (id, prov) => ((id, e), prov)
                         }
                       }
 
-                      val varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
+                      lazy val varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]] = {
                         e.accumulatedAssumptions ++ Map(e.params zip accumulatedProvenances: _*) map {
                           case (id, accProv) => ((id, e), accProv)
                         }
@@ -472,14 +472,14 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
                           expr.accumulatedProvenance = resultProv match {
                             case ValueProvenance => Some(Vector())
                             case NullProvenance => None
-                            case p => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions) 
+                            case _ => computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions) 
                           }
                           (resultProv, Set())
                         }
                         
                         case _ /* if e.params.length != exprs.length */ => {   //partially-quantified case
                           val prov = DynamicProvenance(provenanceId(expr))
-                          expr.accumulatedProvenance = computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions)
+                          expr.accumulatedProvenance = Some(Vector(prov))
                           (prov, Set())
                         }
                       }
@@ -1013,8 +1013,9 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
   }
 
   private def computeResultAccumulatedProvenance(body: Expr, exprs: Vector[Expr], relations: Map[Provenance, Set[Provenance]], varAccumulatedAssumptions: Map[(String, Let), Option[Vector[Provenance]]]): Option[Vector[Provenance]] = body match {
-    case Let(_, _, params, left, right) => 
-      computeResultAccumulatedProvenance(left, exprs, relations, varAccumulatedAssumptions)
+    case Let(_, _, params, left, right) => {
+      computeResultAccumulatedProvenance(right, exprs, relations, varAccumulatedAssumptions)
+    }
 
     case Import(_, _, child) => 
       computeResultAccumulatedProvenance(child, exprs, relations, varAccumulatedAssumptions)
@@ -1093,20 +1094,23 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
     }
 
     case d @ Dispatch(_, _, actuals) => {
-      val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccumulatedAssumptions) }
+      lazy val accProvenances = actuals map { e => computeResultAccumulatedProvenance(e, exprs, relations, varAccumulatedAssumptions) }
 
       if (d.isReduction) {
         Some(Vector())
       } else {
         d.binding match {
-          case LetBinding(e) if (e.params.length == actuals.length) => {
+          case LetBinding(e) if e.params.length == actuals.length => {
             val varAccumulatedAssumptions2: Map[(String, Let), Option[Vector[Provenance]]] = {
               e.accumulatedAssumptions ++ Map(e.params zip accProvenances: _*) map {
                 case (id, accProv) => ((id, e), accProv)
               }
             }
-
             computeResultAccumulatedProvenance(e.left, exprs, relations, varAccumulatedAssumptions ++ varAccumulatedAssumptions2)
+          }
+          case LetBinding(e) if e.params.length < actuals.length => {
+            val prov = DynamicProvenance(provenanceId(d))
+            Some(Vector(prov))
           }
           case _ => d.accumulatedProvenance
         }

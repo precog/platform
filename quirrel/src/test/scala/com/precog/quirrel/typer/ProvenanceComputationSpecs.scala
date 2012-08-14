@@ -1008,7 +1008,7 @@ object ProvenanceComputationSpecs extends Specification
             | foobar union 5
             """.stripMargin)
 
-          tree.provenance mustEqual NullProvenance
+          tree.provenance must beLike { case DynamicProvenance(_) => ok }
           tree.errors mustEqual Set(UnionProvenanceDifferentLength)
         }
       }

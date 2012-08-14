@@ -149,13 +149,39 @@ object AccumulatedProvenanceSpecs extends Specification
       }
 
       "Forall" >> {
+        {
         val tree = compile("""
           | foo := //foo
-          | foobar := forall 'a {bar: count(foo where foo.a = 'a)}
+          | forall 'a {bar: count(foo where foo.a = 'a)}
+          """.stripMargin)
+        tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+        tree.errors must beEmpty
+        }
+        {
+        val tree = compile("""
+          | foo := //foo
+          | forall 'a {bar: foo where foo.a = 'a}
+          """.stripMargin)
+        tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+        tree.errors must beEmpty
+        }
+        {
+        val tree = compile("""
+          | foo := //foo
+          | forall 'a foo where foo.a = 'a
+          """.stripMargin)
+        tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+        tree.errors must beEmpty
+        }        
+        {
+        val tree = compile("""
+          | foo := //foo
+          | foobar := forall 'a foo where foo.a = 'a
           | foobar
           """.stripMargin)
         tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
         tree.errors must beEmpty
+        }
       }
 
       "Relate" >> {
@@ -540,8 +566,13 @@ object AccumulatedProvenanceSpecs extends Specification
           tree.errors mustEqual Set(OperationOnUnrelatedSets)
         }
         {
-          val tree = compile("f('a, 'b) := //foo + 'a where //foo.b = 'b f(2)")
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          val tree = compile("foo := //foo f('a, 'b) := foo + 'a where foo.b = 'b f(2)")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("foo := //foo forall 'b foo + 2 where foo.b = 'b")
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
           tree.errors must beEmpty
         }
         {
@@ -561,7 +592,7 @@ object AccumulatedProvenanceSpecs extends Specification
         }        
         {
           val tree = compile("f('a, 'b) := //foo + 'a + 'b where //foo.b = 'b f(10)")
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
           tree.errors must beEmpty
         }
         {
@@ -574,7 +605,7 @@ object AccumulatedProvenanceSpecs extends Specification
               foo' ~ bar'
               foo.x - bar.y
             f""")
-          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"), StaticProvenance("/bar"))) => ok }
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
           tree.errors must beEmpty
         }
         {
@@ -585,7 +616,7 @@ object AccumulatedProvenanceSpecs extends Specification
               {page: 'page, ctr: count(clicks where clicks.pageId = 'page) / count(views where views.pageId = 'page)}
             clickthroughRate""")
 
-          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.accumulatedProvenance must beLike { case Some(Vector(DynamicProvenance(_))) => ok }
           tree.errors must beEmpty
         }
       }
