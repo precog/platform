@@ -100,8 +100,6 @@ trait ReductionLib[M[+_]] extends GenOpcode[M] with BigDecimalOperations with Ev
 
         if (max.isEmpty) None
         else Some(max.suml)
-        
-        //(max.isEmpty).option(max.suml)
       }
     }
 

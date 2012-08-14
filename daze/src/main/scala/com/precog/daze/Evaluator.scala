@@ -259,17 +259,17 @@ trait Evaluator[M[+_]] extends DAG
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph1(_, m, parent) => {
+        case dag.Morph1(_, mor, parent) => {
           for {
             pendingTable <- loop(parent, splits)
-            val back = pendingTable.table flatMap { table => m(table.transform(pendingTable.trans)) }
+            val back = pendingTable.table flatMap { table => mor(table.transform(pendingTable.trans)) }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
-        case dag.Morph2(_, m, left, right) => {
-          val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
-          val specRight = trans.ArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
-          val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
+        case dag.Morph2(_, mor, left, right) => {
+          lazy val spec = trans.ArrayConcat(trans.WrapArray(Leaf(SourceLeft)), trans.WrapArray(Leaf(SourceRight)))
+          lazy val specRight = trans.ArrayConcat(trans.WrapArray(Leaf(SourceRight)), trans.WrapArray(Leaf(SourceLeft)))
+          lazy val key = trans.DerefObjectStatic(Leaf(Source), paths.Key)
           
           for {
             pendingTableLeft <- loop(left, splits)
@@ -282,7 +282,7 @@ trait Evaluator[M[+_]] extends DAG
               rightTable <- pendingTableRight.table
               val rightResult = rightTable.transform(pendingTableRight.trans)
             
-              val aligned = m.alignment match {
+              val aligned = mor.alignment match {
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
                 case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
                 case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
@@ -296,8 +296,8 @@ trait Evaluator[M[+_]] extends DAG
                 }
               }
 
-              result <- m(aligned)
-            } yield result 
+              result <- mor(aligned)
+            } yield { println("aligned = " + aligned); result }
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -489,7 +489,7 @@ trait Evaluator[M[+_]] extends DAG
             case Some(value @ SString(str)) => {
               for {
                 pendingTable <- loop(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefObjectStatic(pendingTable.trans, JPathField(str)))
+              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefObjectStatic(DerefObjectStatic(pendingTable.trans, paths.Value), JPathField(str))) //getting rid of too much information by getting rid of the identities?
             }
             
             case _ =>
