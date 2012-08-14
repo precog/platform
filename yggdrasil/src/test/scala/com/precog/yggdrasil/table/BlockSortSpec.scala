@@ -222,7 +222,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       } 
     }
 
-    println("Running sort on " + sortKey)
+    //println("Running sort on " + sortKey)
 
     try {
       val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {

@@ -65,10 +65,10 @@ class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this
 }
 
 class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { this: T =>
-  println("Sparsen to size " + toSize)
+  //println("Sparsen to size " + toSize)
   @inline @tailrec private def fill(a: Array[Int], i: Int): Array[Int] = {
     if (i < toSize && i < idx.length) {
-      println("Assign %d to a(%d)".format(i, idx(i)))
+      //println("Assign %d to a(%d)".format(i, idx(i)))
       if (a(idx(i)) == -1) {
         // We can only update indices that aren't already mapped
         a(idx(i)) = i
@@ -79,7 +79,7 @@ class SparsenColumn[T <: Column](delegate: T, idx: Array[Int], toSize: Int) { th
 
   val remap: Array[Int] = fill(Array.fill[Int](toSize)(-1), 0)
 
-  println("Remapped indices %s to %s".format(idx.mkString("[",", ","]"), remap.mkString("[",", ","]")))
+  //println("Remapped indices %s to %s".format(idx.mkString("[",", ","]"), remap.mkString("[",", ","]")))
 
   def isDefinedAt(row: Int) = row < toSize && remap(row) != -1 && delegate.isDefinedAt(remap(row))
 }

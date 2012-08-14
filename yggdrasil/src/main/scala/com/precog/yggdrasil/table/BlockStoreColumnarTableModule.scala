@@ -203,7 +203,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
               val result = comparatorMatrix(cl.index)(cr.index)(cl.position, cr.position)
               val j1 = cl.slice0.toJson(cl.position)
               val j2 = cr.slice0.toJson(cr.position)
-              println("Comparing \"%s\" (%s) to \"%s\" (%s) = %s".format(j1 \ "sortkey", j1 \ "key", j2 \ "sortkey", j2 \ "key", result))
+              //println("Comparing \"%s\" (%s) to \"%s\" (%s) = %s".format(j1 \ "sortkey", j1 \ "key", j2 \ "sortkey", j2 \ "key", result))
               result
             }
   
@@ -271,19 +271,19 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
               } else {
                 val completeSlices = expired.map(_.slice)
 
-                //println("Remapped complete slices:\n  " + expired.map{ c => (c.index, c.remap.mkString("[",", ","]"), c.position) }.mkString(",\n  "))
+                ////println("Remapped complete slices:\n  " + expired.map{ c => (c.index, c.remap.mkString("[",", ","]"), c.position) }.mkString(",\n  "))
 
-                println("Computed complete:\n" + completeSlices.mkString("------\n", "\n", "------\n"))
+                //println("Computed complete:\n" + completeSlices.mkString("------\n", "\n", "------\n"))
 
                 val partialSlices = queue.dequeueAll
 
-                println("Remapped partial slices:\n  " + partialSlices.map{ c => (c.index, c.remap.mkString("[",", ","]"), c.position) }.mkString(",\n  ") + "\n")
+                //println("Remapped partial slices:\n  " + partialSlices.map{ c => (c.index, c.remap.mkString("[",", ","]"), c.position) }.mkString(",\n  ") + "\n")
 
-                println("Partial slice:\n  " + partialSlices.map(_.slice0).mkString("\n  "))
+                //println("Partial slice:\n  " + partialSlices.map(_.slice0).mkString("\n  "))
                 
                 val (prefixes, suffixes) = partialSlices.map(_.split).unzip
 
-                println("Computed partial:\n" + prefixes.mkString("------\n", "\n", "------\n"))
+                //println("Computed partial:\n" + prefixes.mkString("------\n", "\n", "------\n"))
 
                 val emission = new Slice {
                   val size = finishedSize
@@ -301,7 +301,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                   } 
                 }
 
-                println("New slice emitted:\n" + emission)
+                //println("New slice emitted:\n" + emission)
 
                 val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
                   case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
@@ -375,7 +375,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       import sortMergeEngine._
       import TableModule.paths._
 
-      println(("=" * 20) + "\n Starting sort\n" + ("=" * 20))
+      //println(("=" * 20) + "\n Starting sort\n" + ("=" * 20))
 
       // Bookkeeping types/case classes
       type IndexStore = SortedMap[SortingKey,Array[Byte]]
@@ -409,7 +409,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
         val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          println("Making a new index for " + indexMapKey.toString)
+          //println("Making a new index for " + indexMapKey.toString)
           val newIndex = SliceIndex(indexMapKey.toString,
                                     DB.createTreeMap(indexMapKey.toString, 
                                                      SortingKeyComparator(sortOrder.isAscending),
@@ -469,11 +469,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 def keyOrder: Order[SortingKey] = sortingKeyOrder
               }
 
-              println("Dump index " + name + " = ")
+              //println("Dump index " + name + " = ")
               sortProjection.foreach {
                 entry => {
                   val key = entry.getKey
-                  println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
+                  //println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
                 }
               }
 
