@@ -459,14 +459,12 @@ object Slice {
         val first1 = firstDefinedIndexFor(array1, i)
         val first2 = firstDefinedIndexFor(array2, j)
 
+        // In the following, undefined always sorts LT defined values
         if (first1 == -1 && first2 == -1) {
-          println("Both undefined")
           EQ
         } else if (first1 == -1) {
-          println("First undefined")
           LT
         } else if (first2 == -1) {
-          println("Second undefined")
           GT
         } else {
           // We have the indices, so use it to look up the comparator for the rows
@@ -477,38 +475,40 @@ object Slice {
 
     @inline @tailrec
     def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
-      case (h1 :: _, h2 :: _) if h1.selector == h2.selector => {
+      case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
         val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
         val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
 
         pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
       }
 
-      case (h1 :: _, h2 :: _) if h1.selector < h2.selector => {
+      case (h1 :: t1, h2 :: t2) if h1.selector < h2.selector => {
         val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
 
         pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
       }
 
-      case (h1 :: _, h2 :: _) if h1.selector > h2.selector => {
+      case (h1 :: t1, h2 :: t2) if h1.selector > h2.selector => {
         val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
 
         pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
       }
 
-      case (h1 :: _, Nil) => {
+      case (h1 :: t1, Nil) => {
         val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
 
         pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
       }
 
-      case (Nil, h2 :: _) => {
+      case (Nil, h2 :: t2) => {
         val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
 
         pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
       }
 
       case (Nil, Nil) => comparators.reverse
+
+      case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
     }
 
     (i1: Int, i2: Int) => {
