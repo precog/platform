@@ -213,7 +213,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "fully homogeneous data"        in homogeneousSortSample
       "data with undefined sort keys" in partiallyUndefinedSortSample
       "heterogeneous sort keys"       in heterogeneousSortSample
-      "arbitrary datasets"            in checkSortDense.pendingUntilFixed
+      "arbitrary datasets"            in checkSortDense
     }
     
     "in compact" >> {

@@ -211,7 +211,7 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
       case (innerSpec, index: JPathIndex) => DerefArrayStatic(innerSpec, index)
     }
 
-    val sortTransspec = WrapObject(derefTransspec, "sortkey")
+    val sortTransspec = WrapArray(derefTransspec)
 
     val jvalueOrdering: scala.math.Ordering[JValue] = new scala.math.Ordering[JValue] {
       import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
@@ -221,8 +221,6 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         case _                    => JValueOrdering.compare(a, b)
       } 
     }
-
-    // println("Running sort on " + sortKey)
 
     try {
       val result = module.ops.constString(Set(CString("/test"))).load("", Schema.mkType(schema).get).flatMap {
@@ -238,10 +236,10 @@ trait BlockSortSpec[M[+_]] extends Specification with ScalaCheck { self =>
         v => sortKey.extract(v \ "value")
       })(jvalueOrdering).toList
 
-      // if (result != original) {
-        // println("Original = " + original)
-        // println("Result   = " + result)
-      // }
+      //if (result != original) {
+      //  println("Original = " + original)
+      //  println("Result   = " + result)
+      //}
 
       result must_== original
     } catch {

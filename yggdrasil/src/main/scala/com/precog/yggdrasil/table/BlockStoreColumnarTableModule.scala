@@ -161,7 +161,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
           val (finished, continuing) = slice0.split(position)
           if (position == 0) {
             // If we never read from the slice, just return an empty slice and ourself 
-            (finished, this)
+            (finished, Cell(index, maxKey, continuing)(succ0))
           } else {
             (finished.sparsen(remap, remap(position - 1) + 1), Cell(index, maxKey, continuing)(succ0)) 
           }
@@ -231,15 +231,12 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         }
       }
 
-      def mergeProjections(cellsM: Set[M[Option[Cell]]]): M[Table] = {
+      def mergeProjections(cellsM: Set[M[Option[Cell]]], invert: Boolean = false)(keyf: Slice => List[ColumnRef]): M[Table] = {
         for (cells <- cellsM.sequence.map(_.flatten)) yield {
-          val cellMatrix = CellMatrix(cells) { slice => 
-            //todo: How do we actually determine the correct function for retrieving the key?
-            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
-          }
+          val cellMatrix = CellMatrix(cells)(keyf)
   
           table(
-            StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(cellMatrix.ordering)) { queue =>
+            StreamT.unfoldM[M, Slice, mutable.PriorityQueue[Cell]](mutable.PriorityQueue(cells.toSeq: _*)(if (invert) cellMatrix.ordering.reverse else cellMatrix.ordering)) { queue =>
   
               // dequeues all equal elements from the head of the queue
               @inline @tailrec def dequeueEqual(cells: List[Cell]): List[Cell] = {
@@ -251,7 +248,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
               // consume as many records as possible
               @inline @tailrec def consumeToBoundary(idx: Int): (Int, List[Cell]) = {
                 val cellBlock = dequeueEqual(Nil)
-  
+                
                 if (cellBlock.isEmpty) {
                   // At the end of data, since this will only occur if nothing remains in the priority queue
                   (idx, Nil)
@@ -267,15 +264,26 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
               if (expired.isEmpty) {
                 M.point(None)
               } else {
-                val completeSlices = expired.map(_.slice)              
-                
+                val completeSlices = expired.map(_.slice)
+
                 val (prefixes, suffixes) = queue.dequeueAll.map(_.split).unzip
-  
+
                 val emission = new Slice {
                   val size = finishedSize
-                  val columns: Map[ColumnRef, Column] = completeSlices.flatMap(_.columns).toMap ++ prefixes.flatMap(_.columns)
+                  val columns: Map[ColumnRef, Column] = {
+                    (completeSlices.flatMap(_.columns) ++ prefixes.flatMap(_.columns)).groupBy(_._1).map {
+                      case (ref, columns) => {
+                        val cp: Pair[ColumnRef, Column] = if (columns.size == 1) {
+                          columns.head
+                        } else {
+                          (ref, ArraySetColumn(ref.ctype, columns.map(_._2).toArray))
+                        }
+                        cp
+                      }
+                    }
+                  } 
                 }
-  
+
                 val updatedMatrix = expired.foldLeft(M.point(cellMatrix)) {
                   case (matrixM, cell) => matrixM.flatMap(_.refresh(cell.index, cell.succ))
                 }
@@ -330,7 +338,10 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       for {
         paths               <- pathsM
         coveringProjections <- (paths map { path => loadable(metadataView, path, JPath.Identity, tpe) }).sequence map { _.flatten }
-        result              <- mergeProjections(cellsM(minimalCover(tpe, coveringProjections)))
+        result              <- mergeProjections(cellsM(minimalCover(tpe, coveringProjections))) { slice => 
+            //todo: How do we actually determine the correct function for retrieving the key?
+            slice.columns.keys.filter( { case ColumnRef(selector, ctype) => selector.nodes.startsWith(JPathField("key") :: Nil) }).toList.sorted
+          }
       } yield result
     }
 
@@ -344,8 +355,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
       import sortMergeEngine._
       import TableModule.paths._
-
-      // println("Starting sort")
 
       // Bookkeeping types/case classes
       type IndexStore = SortedMap[SortingKey,Array[Byte]]
@@ -378,8 +387,7 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         val sortColumns = columnsByPrefix(JPath(SortKey))
         val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
 
-        val (index: SliceIndex, newIndices: IndexMap) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          // println("Making a new index for " + indexMapKey.toString)
+        val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
           val newIndex = SliceIndex(indexMapKey.toString,
                                     DB.createTreeMap(indexMapKey.toString, 
                                                      SortingKeyComparator(sortOrder.isAscending),
@@ -439,14 +447,6 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
                 def keyOrder: Order[SortingKey] = sortingKeyOrder
               }
 
-              // println("Dump index " + name + " = ")
-              sortProjection.foreach {
-                entry => {
-                  val key = entry.getKey
-                  // println(ColumnCodec.readOnly.decodeWithRefs(key.columns).mkString("[", ", ", "]") + ", " + key.ids + " => " + ColumnCodec.readOnly.decodeToCValues(entry.getValue).mkString("[", ", ", "]"))
-                }
-              }
-
               val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
 
               succ(None) map { 
@@ -455,7 +455,11 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
             }
           }.toSet
 
-          mergeProjections(cells)
+          mergeProjections(cells, sortOrder.isAscending) { slice => {
+            // ensure that sort keys compare before identities
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
+            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
+          }}
         }
       }
     }

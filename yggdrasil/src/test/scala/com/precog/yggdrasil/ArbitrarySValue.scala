@@ -97,6 +97,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     CEmptyArray
   )
 
+  // FIXME: Should this provide some form for CDate?
   def jvalue(ctype: CType): Gen[JValue] = ctype match {
     case CString => alphaStr map (JString(_))
     case CBoolean => arbitrary[Boolean] map (JBool(_))
@@ -106,6 +107,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
     case CNull => JNull
     case CEmptyObject => JObject.empty 
     case CEmptyArray => JArray.empty
+    case CUndefined => JNothing
   }
 
   def jvalue(schema: Seq[(JPath, CType)]): Gen[JValue] = {
@@ -123,7 +125,7 @@ trait CValueGenerators extends ArbitraryBigDecimal {
   def genEventColumns(jschema: JSchema): Gen[(Int, Stream[(Identities, Seq[(JPath, JValue)])])] = 
     for {
       idCount  <- choose(1, 3) 
-      dataSize <- choose(0, 100)
+      dataSize <- choose(0, 20)
       ids      <- containerOfN[Set, Identities](dataSize, containerOfN[List, Long](idCount, posNum[Long]) map { i => VectorCase(i: _*) })
       values   <- containerOfN[List, Seq[(JPath, JValue)]](dataSize, Gen.sequence[List, (JPath, JValue)](jschema map { case (jpath, ctype) => jvalue(ctype).map(jpath ->) }))
     } yield {
@@ -209,10 +211,11 @@ trait ArbitrarySValue extends SValueGenerators {
 }
 
 trait ArbitraryBigDecimal {
+  val MAX_EXPONENT = 50000
   // BigDecimal *isn't* arbitrary precision!  AWESOME!!!
   implicit def arbBigDecimal: Arbitrary[BigDecimal] = Arbitrary(for {
     mantissa <- arbitrary[Long]
-    exponent <- arbitrary[Int]
+    exponent <- Gen.chooseNum(-MAX_EXPONENT, MAX_EXPONENT)
     
     adjusted = if (exponent.toLong + mantissa.toString.length >= Int.MaxValue.toLong)
       exponent - mantissa.toString.length

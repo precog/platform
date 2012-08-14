@@ -257,8 +257,9 @@ trait Slice { source =>
 
   def toJson(row: Int): Option[JValue] = {
     columns.foldLeft[JValue](JNothing) {
-      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => 
+      case (jv, (ref @ ColumnRef(selector, _), col)) if col.isDefinedAt(row) => {
         jv.unsafeInsert(selector, col.jValue(row))
+      }
 
       case (jv, _) => jv
     } match {
@@ -427,13 +428,81 @@ object Slice {
       }
     }
 
-    val refs1 = keyf(s1).sorted
-    val refs2 = keyf(s2).sorted
+    val refs1 = keyf(s1)
+    val refs2 = keyf(s2)
 
-    if (refs1 != refs2) sys.error("Illegal attempt to compare rows on mismatched key schemas: " + refs1 + " vs " + refs2)
-    //assert(refs1 == refs2)
+    // Return the first column in the array defined at the row, or -1 if none are defined for that row
+    @inline def firstDefinedIndexFor(columns: Array[Column], row: Int): Int = {
+      var i = 0
+      while (i < columns.length && ! columns(i).isDefinedAt(row)) { i += 1 }
+      if (i == columns.length) -1 else i
+    }
 
-    val colfs = (refs1.map(s1.columns) zip refs2.map(s2.columns)) map compare0
+    @inline def genComparatorFor(l1: List[ColumnRef], l2: List[ColumnRef]): (Int, Int) => Ordering = {
+      val array1 = l1.map(s1.columns).toArray
+      val array2 = l2.map(s2.columns).toArray
+
+      // Build an array of pairwise comparator functions for later use
+      val comparators = (for {
+        i1 <- 0 until array1.length
+        i2 <- 0 until array2.length
+      } yield compare0(array1(i1), array2(i2))).toArray
+
+      (i: Int, j: Int) => {
+        val first1 = firstDefinedIndexFor(array1, i)
+        val first2 = firstDefinedIndexFor(array2, j)
+
+        // In the following, undefined always sorts LT defined values
+        if (first1 == -1 && first2 == -1) {
+          EQ
+        } else if (first1 == -1) {
+          LT
+        } else if (first2 == -1) {
+          GT
+        } else {
+          // We have the indices, so use it to look up the comparator for the rows
+          comparators(first1 * array2.length + first2)(i, j)
+        }
+      }
+    }
+
+    @inline @tailrec
+    def pairColumns(l1: List[ColumnRef], l2: List[ColumnRef], comparators: List[(Int, Int) => Ordering]): List[(Int, Int) => Ordering] = (l1, l2) match {
+      case (h1 :: t1, h2 :: t2) if h1.selector == h2.selector => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(l1Rest, l2Rest, genComparatorFor(l1Equal, l2Equal) :: comparators)
+      }
+
+      case (h1 :: t1, h2 :: t2) if h1.selector < h2.selector => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+        pairColumns(l1Rest, l2, genComparatorFor(l1Equal, Nil) :: comparators)
+      }
+
+      case (h1 :: t1, h2 :: t2) if h1.selector > h2.selector => {
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(l1, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+      }
+
+      case (h1 :: t1, Nil) => {
+        val (l1Equal, l1Rest) = l1.partition(_.selector == h1.selector)
+
+        pairColumns(l1Rest, Nil, genComparatorFor(l1Equal, Nil) :: comparators)
+      }
+
+      case (Nil, h2 :: t2) => {
+        val (l2Equal, l2Rest) = l2.partition(_.selector == h2.selector)
+
+        pairColumns(Nil, l2Rest, genComparatorFor(Nil, l2Equal) :: comparators)
+      }
+
+      case (Nil, Nil) => comparators.reverse
+
+      case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
+    }
 
     (i1: Int, i2: Int) => {
       @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
@@ -444,7 +513,7 @@ object Slice {
         case Nil => EQ
       }
 
-      compare1(colfs)
+      compare1(pairColumns(refs1, refs2, Nil))
     }
   } 
 }
