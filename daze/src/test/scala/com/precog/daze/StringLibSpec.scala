@@ -153,7 +153,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(101, 32, 34, 115)
-    }.pendingUntilFixed  
+    }
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
@@ -255,7 +255,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(99, 58, 97, 101)
-    }.pendingUntilFixed
+    }
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
@@ -289,7 +289,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
-    }.pendingUntilFixed
+    }
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
@@ -525,7 +525,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(101, 32, 34, 115)
-    }.pendingUntilFixed
+    }
     "determine codePointAt with invalid integer" in {
       val line = Line(0, "")
       
@@ -627,7 +627,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(99, 58, 97, 101)
-    }.pendingUntilFixed
+    }
     "determine codePointBefore with invalid integer" in {
       val line = Line(0, "")
       
@@ -661,7 +661,7 @@ trait StringLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain("e + 7", " [Brains]", """", "beta", "gamma")""", "space       is   awesome  !!!1!!   ")
-    }.pendingUntilFixed
+    }
     "determine substring with invalid integer" in {
       val line = Line(0, "")
       
