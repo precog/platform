@@ -431,6 +431,8 @@ trait DAG extends Instructions {
 
           case dag.SortBy(parent, sortField, valueField, id) => dag.SortBy(memoized(splits)(parent), sortField, valueField, id)
 
+          case dag.ReSortBy(parent, id) => dag.ReSortBy(memoized(splits)(parent), id)
+
           case dag.Memoize(parent, priority) => dag.Memoize(memoized(splits)(parent), priority)
         }
 
@@ -510,6 +512,8 @@ trait DAG extends Instructions {
         case dag.Sort(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
 
         case dag.SortBy(parent, _, _, _) => foldDown0(parent, acc |+| f(parent))(f)
+
+        case dag.ReSortBy(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
 
         case dag.Memoize(parent, _) => foldDown0(parent, acc |+| f(parent))(f)
       }
