@@ -518,7 +518,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute covariance" in {
       val line = Line(0, "")
