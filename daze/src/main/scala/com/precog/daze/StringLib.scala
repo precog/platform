@@ -35,9 +35,10 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   override def _lib2 = super._lib2 ++ Set(equalsIgnoreCase, codePointAt, startsWith, lastIndexOf, concat, endsWith, codePointBefore, substring, matches, compareTo, compareToIgnoreCase, equals, indexOf)
 
   private def isValidInt(num: BigDecimal): Boolean = {
-    try { num.toIntExact; true
+    try { 
+      num.toIntExact; true
     } catch {
-      case e:java.lang.ArithmeticException => { false }
+      case e: java.lang.ArithmeticException => { false }
     }
   }
 
@@ -141,15 +142,46 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   object codePointAt extends Op2(StringNamespace, "codePointAt") {
     val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
-      case (c1: StrColumn, c2: LongColumn)  => new Map2Column(c1, c2) with LongColumn {  //todo do we need other cases for other numeric input types?
+      case (c1: StrColumn, c2: LongColumn)  => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.codePointAt(num.toInt)
+        }
+      }
+      case (c1: StrColumn, c2: NumColumn)  => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+
         def apply(row: Int) = {
           val str = c1(row)
           val num = c2(row)
 
-          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
-            str.codePointAt(num.toInt)
-          else
-            sys.error("todo: null?")
+          str.codePointAt(num.toInt)
+        }
+      }
+      case (c1: StrColumn, c2: DoubleColumn)  => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.codePointAt(num.toInt)
         }
       }
     })
@@ -215,15 +247,45 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
   object codePointBefore extends Op2(StringNamespace, "codePointBefore") {
     val tpe = BinaryOperationType(JTextT, JNumberT, JNumberT)
     def f2: F2 = new CF2P({
-      case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with LongColumn {
+      case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.codePointBefore(num.toInt)
+        }
+      }
+
+      case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
         def apply(row: Int) = {
           val str = c1(row)
           val num = c2(row)
 
-          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
-            str.codePointBefore(num.toInt)
-          else 
-            sys.error("todo")
+          str.codePointBefore(num.toInt)
+        }
+      }
+
+      case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with NumColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.codePointBefore(num.toInt)
         }
       }
     })
@@ -238,14 +300,44 @@ trait StringLib[M[+_]] extends GenOpcode[M] {
     val tpe = BinaryOperationType(JTextT, JNumberT, JTextT)
     def f2: F2 = new CF2P({
       case (c1: StrColumn, c2: LongColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.substring(num.toInt)
+        }
+      }
+
+      case (c1: StrColumn, c2: NumColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
         def apply(row: Int) = {
           val str = c1(row)
           val num = c2(row)
 
-          if ((num >= 0) && (str.length >= num + 1) && isValidInt(num))
-            str.substring(num.toInt)
-          else
-            sys.error("todo")
+          str.substring(num.toInt)
+        }
+      }
+
+      case (c1: StrColumn, c2: DoubleColumn) => new Map2Column(c1, c2) with StrColumn {
+        override def isDefinedAt(row: Int) = {
+          val str = c1(row)
+          val num = c2(row)
+          c1.isDefinedAt(row) && c2.isDefinedAt(row) && (num >= 0) && (str.length >= num + 1) && isValidInt(num)
+        }
+        def apply(row: Int) = {
+          val str = c1(row)
+          val num = BigDecimal(c2(row))
+
+          str.substring(num.toInt)
         }
       }
     })
