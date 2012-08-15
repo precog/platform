@@ -60,7 +60,7 @@ private[jdbm3] object CTypeMappings {
     case CNull        => FNULL
     case CEmptyObject => FEMPTYOBJECT
     case CEmptyArray  => FEMPTYARRAY
-    case CArrayType(_)=> sys.error("todo")
+    case CArrayType(_)=> FARRAY
     case CUndefined   => sys.error("Undefined is not a valid format")
   }
 

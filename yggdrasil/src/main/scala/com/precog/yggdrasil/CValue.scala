@@ -119,7 +119,7 @@ sealed trait CType extends Serializable {
   }
 }
 
-sealed trait CNullType extends CType { self: CNullValue =>
+sealed trait CNullType extends CType with CNullValue {
   val format = FixedWidth(0)
 }
 

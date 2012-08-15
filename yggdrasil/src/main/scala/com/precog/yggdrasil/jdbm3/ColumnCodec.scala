@@ -29,9 +29,63 @@ import java.nio.ByteBuffer
 
 import scala.collection.mutable.ArrayBuffer
 
+import scala.annotation.tailrec
+
 object ColumnCodec {
   val readOnly = new ColumnCodec(0) // For read only work, the buffer is always provided
 }
+
+/*
+trait Codec[@specialized(Boolean, Long, Double) A] {
+  def size(a: A): Int
+
+  def headerSize(a: A): Int
+  def dataSize(a: A): Int
+
+  def write(a: A): ByteBuffer => Int
+  def read(b: ByteBuffer): A
+}
+
+object Codec {
+  import CTypeMappings._
+
+  // TODO I guess UTF-8 is always available?
+  val DefaultCharset = Charset.forName("UTF-8")
+
+  case object LongCodec extends Codec[Boolean] {
+    def size(a: Boolean): Int = 1
+    def write(a: Boolean
+
+  case object StringCodec extends Codec[String] {
+    def size(s: String): Int = s.getBytes(DefaultCharset)
+
+    type More = (CharBuffer, CharsetEncoder)
+
+    def writeInit(a: String): Option[More] = {
+      val source = CharBuffer.wrap(a)
+      // TODO How much work is it to create a newEncoder? Why is this not
+      // immutable? Ugh....
+      val encoder = DefaultCharset.newEncoder
+      if (encoder.encode(source, sink, true) == CoderResult.OVERFLOW) {
+        Some((source, encoder))
+      } else {
+        None
+      }
+    }
+
+    
+    def writeMore(more: More): Option[More]
+
+    def write(a: String) = sink => {
+            // Charset
+
+      val bytes = s.getBytes(DefaultCharset)
+      buffer.putInt(bytes.length)
+      buffer.put(bytes)
+    }
+}
+*/
+
 
 /**
  * This class is responsible for encoding and decoding a Seq[(ColumnRef,Column)]
@@ -46,6 +100,23 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
   private final val FALSE_VALUE = 0.toByte
   private final val TRUE_VALUE = 1.toByte
 
+  private def writerFor[A](cType: CValueType[A]): A => Unit = cType match {
+    case CString => writeString(_)
+    case CBoolean => writeBoolean(_)
+    case CLong => workBuffer.putLong(_)
+    case CDouble => workBuffer.putDouble(_)
+    case CNum => writeBigDecimal(_)
+    case CDate => dt => workBuffer.putLong(dt.getMillis)
+    case CArrayType(elemType) => writeArray(_, writerFor(elemType))
+  }
+
+  private def writeArray[A](s: IndexedSeq[A], w: A => Unit) {
+    workBuffer.putInt(s.length)
+    s foreach { a =>
+      w(a)
+    }
+  }
+
   private def writeString(s: String) {
     // RLE Strings
     val bytes = s.getBytes(DefaultCharset)
@@ -59,6 +130,22 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
 
   private def writeBoolean(b: Boolean) {
     workBuffer.put(if (b) TRUE_VALUE else FALSE_VALUE)
+  }
+
+  private def readerFor[A](cType: CValueType[A]): ByteBuffer => A = cType match {
+    case CString => readString(_)
+    case CBoolean => readBoolean(_)
+    case CLong => _.getLong()
+    case CDouble => _.getDouble()
+    case CNum => readBigDecimal(_)
+    case CDate => buffer => new DateTime(buffer.getLong())
+    case CArrayType(elemType) =>
+      readArray(_, readerFor(elemType))
+  }
+
+  private def readArray[A](buffer: ByteBuffer, readElem: ByteBuffer => A) = {
+    val length = buffer.getInt()
+    ((0 until length) map (_ => readElem(buffer))).toIndexedSeq
   }
 
   private def readString(buffer: ByteBuffer): String = {
@@ -80,6 +167,16 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
     }
   }
 
+  @tailrec
+  private def writeFlagFor(cType: CType) {
+    workBuffer.put(flagFor(cType))
+    cType match {
+      case CArrayType(elemType) =>
+        writeFlagFor(elemType)
+      case _ =>
+    }
+  }
+
   def encode(values: Seq[CValue]): Array[Byte] = {
     workBuffer.clear()
 
@@ -87,7 +184,7 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
       if (value == CUndefined) {
         workBuffer.put(FUNDEFINED)
       } else {
-        workBuffer.put(flagFor(CType.of(value)))
+        writeFlagFor(value.cType)
         value match {
           case CString(cs)  => writeString(cs)                  
           case CBoolean(cb) => writeBoolean(cb)
@@ -95,6 +192,7 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
           case CDouble(cd)  => workBuffer.putDouble(cd)
           case CNum(cn)     => writeBigDecimal(cn)
           case CDate(cd)    => workBuffer.putLong(cd.getMillis)
+          case CArray(as, cType) => writerFor(cType)(as)
           case CNull        => // NOOP, no value to write
           case CEmptyObject => // NOOP, no value to write
           case CEmptyArray  => // NOOP, no value to write
@@ -129,6 +227,7 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
             case CDouble      => workBuffer.putDouble(column.asInstanceOf[DoubleColumn].apply(row))      
             case CNum         => writeBigDecimal(column.asInstanceOf[NumColumn].apply(row))              
             case CDate        => workBuffer.putLong(column.asInstanceOf[DateColumn].apply(row).getMillis)
+            case CArrayType(elemType) => sys.error("TODO: cannot encode array columns yet")
             case CNull        => // No value encoded
             case CEmptyObject => // No value encoded
             case CEmptyArray  => // No value encoded
@@ -148,19 +247,29 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
     outBytes
   }
 
+  private def readCType(buffer: ByteBuffer): CType = buffer.get() match {
+    case FSTRING => CString
+    case FBOOLEAN => CBoolean
+    case FLONG => CLong
+    case FDOUBLE => CDouble
+    case FNUM => CNum
+    case FDATE => CDate
+    case FARRAY =>
+      readCType(buffer) match {
+        case elemType: CValueType[_] => CArrayType(elemType)
+        case badType => sys.error("Invalid array element type: " + badType)
+      }
+    case FNULL => CNull
+    case FEMPTYOBJECT => CEmptyObject
+    case FEMPTYARRAY => CEmptyArray
+    case FUNDEFINED => CUndefined
+    case invalid => sys.error("Invalid format flag: " + invalid)
+  }
+
   private def readToCValue(buffer: ByteBuffer): CValue = {
-    buffer.get() match {
-      case FSTRING       => CString(readString(buffer))
-      case FBOOLEAN      => CBoolean(readBoolean(buffer))
-      case FLONG         => CLong(buffer.getLong())
-      case FDOUBLE       => CDouble(buffer.getDouble())
-      case FNUM          => CNum(readBigDecimal(buffer))
-      case FDATE         => CDate(new DateTime(buffer.getLong()))
-      case FNULL         => CNull
-      case FEMPTYOBJECT  => CEmptyObject
-      case FEMPTYARRAY   => CEmptyArray
-      case FUNDEFINED    => CUndefined
-      case invalid       => sys.error("Invalid format flag: " + invalid)
+    readCType(buffer) match {
+      case cType: CValueType[_] => cType(readerFor(cType)(buffer))
+      case cType: CNullType => cType
     }
   }
 
