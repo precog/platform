@@ -310,17 +310,20 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
     var columnIndex = 0
 
     while (buffer.hasRemaining()) {
-      buffer.get() match {
-        case FSTRING       => columns(columnIndex).asInstanceOf[ArrayStrColumn].update(row, readString(buffer))
-        case FBOOLEAN      => columns(columnIndex).asInstanceOf[ArrayBoolColumn].update(row, readBoolean(buffer))
-        case FLONG         => columns(columnIndex).asInstanceOf[ArrayLongColumn].update(row, buffer.getLong())
-        case FDOUBLE       => columns(columnIndex).asInstanceOf[ArrayDoubleColumn].update(row, buffer.getDouble())
-        case FNUM          => columns(columnIndex).asInstanceOf[ArrayNumColumn].update(row, readBigDecimal(buffer))
-        case FDATE         => columns(columnIndex).asInstanceOf[ArrayDateColumn].update(row, new DateTime(buffer.getLong()))
-        case FNULL         => columns(columnIndex).asInstanceOf[MutableNullColumn].update(row, true)
-        case FEMPTYOBJECT  => columns(columnIndex).asInstanceOf[MutableEmptyObjectColumn].update(row, true)
-        case FEMPTYARRAY   => columns(columnIndex).asInstanceOf[MutableEmptyArrayColumn].update(row, true)          
-        case FUNDEFINED    => // NOOP, array/mutable columns start fully undefined                                  
+      readCType(buffer) match {
+        case CString       => columns(columnIndex).asInstanceOf[ArrayStrColumn].update(row, readString(buffer))
+        case CBoolean      => columns(columnIndex).asInstanceOf[ArrayBoolColumn].update(row, readBoolean(buffer))
+        case CLong         => columns(columnIndex).asInstanceOf[ArrayLongColumn].update(row, buffer.getLong())
+        case CDouble       => columns(columnIndex).asInstanceOf[ArrayDoubleColumn].update(row, buffer.getDouble())
+        case CNum          => columns(columnIndex).asInstanceOf[ArrayNumColumn].update(row, readBigDecimal(buffer))
+        case CDate         => columns(columnIndex).asInstanceOf[ArrayDateColumn].update(row, new DateTime(buffer.getLong()))
+        case cType @ CArrayType(_) =>
+          val col = columns(columnIndex).asInstanceOf[ArrayHomogeneousArrayColumn[AnyRef]]
+          col.update(row, readerFor(cType)(buffer).asInstanceOf[IndexedSeq[AnyRef]])
+        case CNull         => columns(columnIndex).asInstanceOf[MutableNullColumn].update(row, true)
+        case CEmptyObject  => columns(columnIndex).asInstanceOf[MutableEmptyObjectColumn].update(row, true)
+        case CEmptyArray   => columns(columnIndex).asInstanceOf[MutableEmptyArrayColumn].update(row, true)          
+        case CUndefined    => // NOOP, array/mutable columns start fully undefined                                  
         case invalid       => sys.error("Invalid format flag: " + invalid)                                          
       }                                                                                                             
       columnIndex += 1                                                                                              

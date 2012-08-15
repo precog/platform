@@ -34,6 +34,25 @@ trait ArrayColumn[@specialized(Boolean, Long, Double) A] extends DefinedAtIndex 
   def update(row: Int, value: A): Unit
 }
 
+class ArrayHomogeneousArrayColumn[A](val defined: mutable.BitSet, values: Array[IndexedSeq[A]])(val tpe: CArrayType[A]) extends HomogeneousArrayColumn[A] with ArrayColumn[IndexedSeq[A]] {
+  def apply(row: Int) = values(row)
+
+  def update(row: Int, value: IndexedSeq[A]) {
+    defined += row
+    values(row) = value
+  }
+}
+
+object ArrayHomogeneousArrayColumn {
+  def apply[A: CValueType](values: Array[IndexedSeq[A]]) =
+    new ArrayHomogeneousArrayColumn(mutable.BitSet(0 until values.length: _*), values)(CArrayType(CValueType[A]))
+  def apply[A: CValueType](defined: BitSet, values: Array[IndexedSeq[A]]) =
+    new ArrayHomogeneousArrayColumn(makeMutable(defined), values)(CArrayType(CValueType[A]))
+  def empty[A: CValueType](size: Int): ArrayHomogeneousArrayColumn[A] =
+    new ArrayHomogeneousArrayColumn(mutable.BitSet.empty, new Array[IndexedSeq[A]](size))(CArrayType(CValueType[A]))
+}
+
+
 class ArrayBoolColumn(val defined: mutable.BitSet, values: mutable.BitSet) extends ArrayColumn[Boolean] with BoolColumn {
   def apply(row: Int) = values.contains(row)
 

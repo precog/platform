@@ -46,6 +46,15 @@ sealed trait Column {
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
 
+trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) {
+  def apply(row: Int): IndexedSeq[A]
+
+  val tpe: CArrayType[A]
+  override def jValue(row: Int) = tpe.jValueFor(this(row))
+  override def cValue(row: Int) = tpe(this(row))
+  override def strValue(row: Int) = this(row) mkString ("[", ",", "]")
+}
+
 trait BoolColumn extends Column with (Int => Boolean) {
   def apply(row: Int): Boolean
 
