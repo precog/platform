@@ -48,7 +48,7 @@ trait MathLibSpec[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx,Path.Root) match {
+    consumeEval(testUID, graph, ctx, Path.Root) match {
       case Success(results) => results
       case Failure(error) => throw error
     }

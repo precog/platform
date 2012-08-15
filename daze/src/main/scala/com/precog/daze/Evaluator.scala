@@ -277,14 +277,14 @@ trait Evaluator[M[+_]] extends DAG
             
             val back = for {
               leftTable <- pendingTableLeft.table
-              val leftResult = leftTable.transform(pendingTableLeft.trans)
+              val leftResult = leftTable.transform(liftToValues(pendingTableLeft.trans))
               
               rightTable <- pendingTableRight.table
-              val rightResult = rightTable.transform(pendingTableRight.trans)
+              val rightResult = rightTable.transform(liftToValues(pendingTableRight.trans))
             
               val aligned = mor.alignment match {
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
-                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
+                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)  //TODO currently an array with two objects in it
                 case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
                   if (left.isSingleton) {
                     rightResult.cross(leftResult)(specRight) 
@@ -296,8 +296,10 @@ trait Evaluator[M[+_]] extends DAG
                 }
               }
 
-              result <- mor(aligned)
-            } yield { println("aligned = " + aligned); result }
+              result = mor(aligned)
+              wrapped <- result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
+            } yield wrapped
+
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
         
@@ -489,7 +491,7 @@ trait Evaluator[M[+_]] extends DAG
             case Some(value @ SString(str)) => {
               for {
                 pendingTable <- loop(left, splits)
-              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefObjectStatic(DerefObjectStatic(pendingTable.trans, paths.Value), JPathField(str))) //getting rid of too much information by getting rid of the identities?
+              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefObjectStatic(pendingTable.trans, JPathField(str)))
             }
             
             case _ =>

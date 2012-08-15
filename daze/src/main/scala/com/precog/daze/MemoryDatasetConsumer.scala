@@ -57,10 +57,10 @@ trait MemoryDatasetConsumer[M[+_]] extends Evaluator[M] with TableModule[M] with
   def consumeEval(userUID: String, graph: DepGraph, ctx: Context, prefix: Path, optimize: Boolean = true): Validation[X, Set[SEvent]] = {
     Validation.fromTryCatch {
       val result = eval(userUID, graph, ctx, prefix, optimize)
-      val json = result.flatMap(_.toJson).copoint filterNot { jvalue =>
+      val json = result.flatMap(_.toJson).copoint filterNot { jvalue => {
         (jvalue \ "value") == JNothing
-      }
-      
+      }}
+
       val events = json map { jvalue =>
         (VectorCase(((jvalue \ "key") --> classOf[JArray]).elements collect { case JNum(i) => i.toLong }: _*), jvalueToSValue(jvalue \ "value"))
       }

@@ -53,7 +53,7 @@ trait StatsLibSpec[M[+_]] extends Specification
   val testUID = "testUID"
 
   def testEval(graph: DepGraph): Set[SEvent] = withContext { ctx =>
-    consumeEval(testUID, graph, ctx,Path.Root) match {
+    consumeEval(testUID, graph, ctx, Path.Root) match {
       case Success(results) => results
       case Failure(error) => throw error
     }
@@ -639,7 +639,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute covariance" in {
       val line = Line(0, "")
@@ -741,7 +741,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only //todo test this answer to a certain level of accuracy
-    }.pendingUntilFixed
+    }
 
     "compute covariance" in {
       val line = Line(0, "")
@@ -843,7 +843,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only 
-    }.pendingUntilFixed
+    }
 
     "compute covariance" in {
       val line = Line(0, "")
