@@ -183,11 +183,11 @@ trait Slice { source =>
     }
   }
 
-  def compact: Slice = {
+  def compact(filter: Slice): Slice = {
     new Slice {
       lazy val retained =
-        (0 until source.size).foldLeft(new ArrayIntList) {
-          case (acc, i) => if(source.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
+        (0 until filter.size).foldLeft(new ArrayIntList) {
+          case (acc, i) => if(filter.columns.values.exists(_.isDefinedAt(i))) acc.add(i) ; acc
         }
 
       lazy val size = retained.size

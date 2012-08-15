@@ -225,8 +225,9 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       (slices map { s => reducer.reduce(s.logicalColumns, 0 until s.size) }).foldLeft(monoid.zero)((a, b) => monoid.append(a, b))
     }
 
-    def compact(spec: TransSpec1): Table =
-      table(transformStream(composeSliceTransform(spec) andThen map0 { _.compact }, slices)).normalize
+    def compact(spec: TransSpec1): Table = {
+      table(transformStream((SliceTransform1.identity(()) zip composeSliceTransform(spec))(_ compact _), slices)).normalize
+    }
 
     private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
 
