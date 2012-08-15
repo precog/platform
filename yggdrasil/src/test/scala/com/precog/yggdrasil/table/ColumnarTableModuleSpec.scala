@@ -171,10 +171,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
 
       "survive pathology 1" in testCogroupPathology1
       "survive pathology 2" in testCogroupPathology2
+      "survive pathology 3" in testCogroupPathology3
       
       "survive scalacheck" in { 
         check { cogroupData: (SampleData, SampleData) => testCogroup(cogroupData._1, cogroupData._2) } 
-      }.pendingUntilFixed
+      }
     }
 
     "in cross" >> {

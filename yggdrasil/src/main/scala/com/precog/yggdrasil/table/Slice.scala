@@ -241,7 +241,13 @@ trait Slice { source =>
       val size = source.size + other.size
       val columns = other.columns.foldLeft(source.columns) {
         case (acc, (ref, col)) => 
-          acc + (ref -> acc.get(ref).flatMap(sc => cf.util.Concat(source.size)(sc, col)).getOrElse((col |> cf.util.Shift(source.size)).get))
+          val appendedCol = acc.get(ref) flatMap { sc => 
+            cf.util.Concat(source.size)(sc, col)
+          } getOrElse {
+            (col |> cf.util.Shift(source.size)).get
+          }
+
+          acc + (ref -> appendedCol)
       }
     }
   }

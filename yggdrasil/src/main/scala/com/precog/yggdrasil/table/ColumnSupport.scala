@@ -57,7 +57,7 @@ class ConcatColumn[T <: Column](at: Int, c1: T, c2: T) { this: T =>
 }
 
 class ShiftColumn[T <: Column](by: Int, c1: T) { this: T =>
-  def isDefinedAt(row: Int) = c1.isDefinedAt(row + by)
+  def isDefinedAt(row: Int) = c1.isDefinedAt(row - by)
 }
 
 class RemapColumn[T <: Column](delegate: T, f: PartialFunction[Int, Int]) { this: T =>

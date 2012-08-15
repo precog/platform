@@ -253,6 +253,41 @@ trait CogroupSpec[M[+_]] extends TableModuleSpec[M] {
 
     testCogroup(s1, s2)
   }
+
+  def testCogroupPathology3 = {
+    import JsonParser.parse
+    val s1 = SampleData(Stream(
+      parse("""{ "value":{ "ugsrry":3.0961191760668197E+307 }, "key":[2.0] }"""),
+      parse("""{ "value":{ "ugsrry":0.0 }, "key":[3.0] }"""),
+      parse("""{ "value":{ "ugsrry":3.323617580854415E+307 }, "key":[5.0] }"""),
+      parse("""{ "value":{ "ugsrry":-9.458984438931391E+306 }, "key":[6.0] }"""),
+      parse("""{ "value":{ "ugsrry":1.0 }, "key":[10.0] }"""),
+      parse("""{ "value":{ "ugsrry":0.0 }, "key":[13.0] }"""),
+      parse("""{ "value":{ "ugsrry":-3.8439741460685273E+307 }, "key":[14.0] }"""),
+      parse("""{ "value":{ "ugsrry":5.690895589711475E+307 }, "key":[15.0] }"""),
+      parse("""{ "value":{ "ugsrry":0.0 }, "key":[16.0] }"""),
+      parse("""{ "value":{ "ugsrry":-5.567237049482096E+307 }, "key":[17.0] }"""),
+      parse("""{ "value":{ "ugsrry":-8.988465674311579E+307 }, "key":[18.0] }"""),
+      parse("""{ "value":{ "ugsrry":2.5882896341488965E+307 }, "key":[22.0] }""")
+    ))
+
+    val s2 = SampleData(Stream(
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-40146] }, "key":[2.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-9.44770762864723688E-39073] }, "key":[3.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.894611552200768372E+19] }, "key":[5.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-2.561276432629787073E-42575] }, "key":[6.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1E-10449] }, "key":[10.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2110233717777347493] }, "key":[13.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[3.039020270015831847E+19] }, "key":[14.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[1E-50000] }, "key":[15.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[-1.296393752892965818E-49982] }, "key":[16.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[4.611686018427387903E+50018] }, "key":[17.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[0E+48881] }, "key":[18.0] }"""),
+      parse("""{ "value":{ "fzqJh5csbfsZqgkoi":[2.326724524858976798E-10633] }, "key":[22.0] }""")
+    ))
+
+    testCogroup(s1, s2)
+  }
 }
 
 
