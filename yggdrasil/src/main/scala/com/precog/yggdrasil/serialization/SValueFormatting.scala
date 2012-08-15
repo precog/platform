@@ -82,7 +82,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
 
   def readValue(in: DataInputStream, structure: Seq[(JPath, CType)]): SValue = {
     structure.foldLeft(Option.empty[SValue]) {
-      case (None     , (JPath.Identity, ctype)) => {
+      case (None, (JPath.Identity, ctype)) => {
         val back = readColumn(in, ctype)
         if (back eq null) {
           ctype match {
@@ -91,7 +91,7 @@ trait BinarySValueFormatting extends SValueFormatting with IdentitiesFormatting 
             case _ => Some(SNull)
           }
         } else {
-          Some(back.toSValue)
+          Some(SValue.fromCValue(back))
         }
       }
     
