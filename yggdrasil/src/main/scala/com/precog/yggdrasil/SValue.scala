@@ -92,7 +92,7 @@ sealed trait SValue {
   }
   
   def set(selector: JPath, cv: CValue): Option[SValue] =
-    if (cv eq null) None else set(selector, cv.toSValue)
+    if (cv eq null) None else set(selector, SValue.fromCValue(cv))
   
   def structure: Seq[(JPath, CType)] = {
     import SValue._
@@ -235,6 +235,22 @@ trait SValueInstances {
 }
 
 object SValue extends SValueInstances {
+  @inline
+  def fromCValue(cv: CValue): SValue = cv match {
+    case CString(s) => SString(s)
+    case CBoolean(b) => SBoolean(b)
+    case CLong(n) => SDecimal(BigDecimal(n))
+    case CDouble(n) => SDecimal(BigDecimal(n))
+    case CNum(n) => SDecimal(n)
+    case CDate(d) => sys.error("todo") // Should this be SString(d.toString)?
+    case CArray(as, CArrayType(aType)) =>
+      SArray(as.map(a => fromCValue(aType(a)))(collection.breakOut))
+    case CNull => SNull
+    case CEmptyArray => SArray(Vector())
+    case CEmptyObject => SObject(Map())
+    case CUndefined => SUndefined
+  }
+
   // Note this conversion has a peer for CValues that should always be changed
   // in conjunction with this mapping.
    @inline
@@ -252,7 +268,7 @@ object SValue extends SValueInstances {
     selector.nodes match {
       case JPathField(_) :: xs => SObject(Map()).set(selector, cv).get
       case JPathIndex(_) :: xs => SArray(Vector.empty[SValue]).set(selector, cv).get
-      case Nil => cv.toSValue
+      case Nil => SValue.fromCValue(cv)
     }
   }
 
@@ -267,8 +283,22 @@ object SValue extends SValueInstances {
 
 sealed trait SType {
   def =~(v: SValue): Boolean
-  def =~(tpe: CType): Boolean = tpe =~ this
-} 
+}
+
+object SType {
+  @inline
+  def fromCType(ct: CType): SType = ct match {
+    case CString => SString
+    case CBoolean => SBoolean
+    case (_: CNumericType[_]) => SDecimal
+    case CDate => sys.error("todo")
+    case CNull => SNull
+    case CArrayType(_) => SArray
+    case CEmptyObject => SObject
+    case CEmptyArray => SArray
+    case CUndefined => SUndefined
+  }
+}
 
 
 case class SObject(fields: Map[String, SValue]) extends SValue {

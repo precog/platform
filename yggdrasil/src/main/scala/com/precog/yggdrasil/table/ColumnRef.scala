@@ -27,9 +27,7 @@ import com.precog.common.Path
 import scalaz.syntax.semigroup._
 import scalaz.syntax.order._
 
-case class ColumnRef(selector: CPath, ctype: CType) {
-  type CA = ctype.CA
-}
+case class ColumnRef(selector: CPath, ctype: CType)
 
 object ColumnRef {
   implicit object order extends scalaz.Order[ColumnRef] {

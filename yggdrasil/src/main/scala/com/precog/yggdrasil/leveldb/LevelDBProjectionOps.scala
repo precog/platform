@@ -105,7 +105,7 @@ abstract class LevelDBProjectionOps[Dataset](clock: Clock, shardMetadata: Storag
           children.flatMap(search(_, selector \ idx, acc))
 
         case PathValue(valueType, _, descriptors) => 
-          descriptors.headOption map { case (d, _) => acc + ((selector, valueType.stype, d)) } getOrElse acc
+          descriptors.headOption map { case (d, _) => acc + ((selector, SType.fromCType(valueType), d)) } getOrElse acc
       }
     }
 

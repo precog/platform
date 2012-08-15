@@ -47,6 +47,7 @@ private[jdbm3] object CTypeMappings {
   final val FNULL        = 6.toByte
   final val FEMPTYOBJECT = 7.toByte
   final val FEMPTYARRAY  = 8.toByte
+  final val FARRAY       = 9.toByte
   final val FUNDEFINED   = -1.toByte
 
   def flagFor(tpe: CType): Byte = tpe match {
@@ -59,6 +60,7 @@ private[jdbm3] object CTypeMappings {
     case CNull        => FNULL
     case CEmptyObject => FEMPTYOBJECT
     case CEmptyArray  => FEMPTYARRAY
+    case CArrayType(_)=> sys.error("todo")
     case CUndefined   => sys.error("Undefined is not a valid format")
   }
 
@@ -72,140 +74,143 @@ private[jdbm3] object CTypeMappings {
     case FNULL         => CNull       
     case FEMPTYOBJECT  => CEmptyObject
     case FEMPTYARRAY   => CEmptyArray 
+    case FARRAY        => sys.error("todo")
     case invalid       => sys.error(invalid + " is not a valid format")
   }
 }
 
-object CValueSerializer {
-  import CTypeMappings._
-  def apply(format: Seq[CType]) = new CValueSerializer(format.map(flagFor).toArray)
-}
+//object CValueSerializer {
+  //import CTypeMappings._
+  //def apply(format: Seq[CType]) = new CValueSerializer(format.map(flagFor).toArray)
+//}
 
 object CValueSerializerUtil {
   // We use JDBM3's more efficient serializer for some basic types like Long, Double, and BigDecimal
   private[jdbm3] val defaultSerializer = new Serialization()
-  private[jdbm3] val logger = Logger(classOf[CValueSerializer])
+  // private[jdbm3] val logger = Logger(classOf[CValueSerializer])
 }
 
-class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) extends Serializer[Array[CValue]] with Serializable {
-  import CTypeMappings._
+//class CValueSerializer private[CValueSerializer] (val format: Array[Byte]) extends Serializer[Array[CValue]] with Serializable {
+  //import CTypeMappings._
 
-  @transient
-  private final val emptyBytes = Array[Byte]()
+  //@transient
+  //private final val emptyBytes = Array[Byte]()
 
-  final val serialVersionUID = 20120730l
+  //final val serialVersionUID = 20120730l
 
-  import CValueSerializerUtil._
+  //import CValueSerializerUtil._
 
-  /* The undefined bitset is encoded as an array of bytes backing the bitset (essentially
-   * converting from an Array of longs to minimize required space) */
-  def serializeUndefinedIndices(out: DataOutput, undefined: BitSet) {
-    if (undefined.isEmpty) {
-      defaultSerializer.serialize(out, emptyBytes)
-    } else {
-      val backingBytes = new Array[Byte](undefined.max / 8 + 1)
+   //The undefined bitset is encoded as an array of bytes backing the bitset (essentially
+   //converting from an Array of longs to minimize required space) 
+  //def serializeUndefinedIndices(out: DataOutput, undefined: BitSet) {
+    //if (undefined.isEmpty) {
+      //defaultSerializer.serialize(out, emptyBytes)
+    //} else {
+      //val backingBytes = new Array[Byte](undefined.max / 8 + 1)
 
-      undefined.foreach { 
-        index => backingBytes(index / 8) = (backingBytes(index / 8) | (0x01 << (7 - (index % 8)))).toByte
-      }
+      //undefined.foreach { 
+        //index => backingBytes(index / 8) = (backingBytes(index / 8) | (0x01 << (7 - (index % 8)))).toByte
+      //}
 
-      defaultSerializer.serialize(out, backingBytes)
-    }
-  }
+      //defaultSerializer.serialize(out, backingBytes)
+    //}
+  //}
 
-  def deserializeUndefinedIndices(in: DataInput): BitSet = {
-    // Read in the byte array for undefined values
-    var backingBytes = defaultSerializer.deserialize(in).asInstanceOf[Array[Byte]]
+  //def deserializeUndefinedIndices(in: DataInput): BitSet = {
+     //Read in the byte array for undefined values
+    //var backingBytes = defaultSerializer.deserialize(in).asInstanceOf[Array[Byte]]
 
-    if (backingBytes.length == 0) {
-      BitSet.empty
-    } else {
-      var result = BitSet.empty
+    //if (backingBytes.length == 0) {
+      //BitSet.empty
+    //} else {
+      //var result = BitSet.empty
 
-      var octet = 0
-      while (octet < backingBytes.length) {
-        var i = 7
-        while (i >= 0) {
-          if ((0x01 & (backingBytes(octet) >> i)) != 0) {
-            result += (octet * 8 + (7 - i))
-          }
-          i -= 1
-        }
-        octet += 1
-      }
+      //var octet = 0
+      //while (octet < backingBytes.length) {
+        //var i = 7
+        //while (i >= 0) {
+          //if ((0x01 & (backingBytes(octet) >> i)) != 0) {
+            //result += (octet * 8 + (7 - i))
+          //}
+          //i -= 1
+        //}
+        //octet += 1
+      //}
 
-      result
-    }
-  }
+      //result
+    //}
+  //}
 
-  def serialize(out: DataOutput, seq: Array[CValue]) {
-    try {
-      var i = 0
+  //def serialize(out: DataOutput, seq: Array[CValue]) {
+    //try {
+      //var i = 0
 
-      var undefined = BitSet()
+      //var undefined = BitSet()
 
-      while (i < format.length) {
-        if (seq(i) == CUndefined) {
-          undefined += i
-        }
-        i += 1
-      }
+      //while (i < format.length) {
+        //if (seq(i) == CUndefined) {
+          //undefined += i
+        //}
+        //i += 1
+      //}
 
-      serializeUndefinedIndices(out, undefined)
+      //serializeUndefinedIndices(out, undefined)
      
-      i = 0
-      while (i < format.length) {
-        if (undefined(i)) {
-          out.write(0) // TODO: required?
-        } else {
-          format(i) match {
-            case FSTRING   => out.writeUTF(seq(i).asInstanceOf[CString].value)
-            case FBOOLEAN  => out.writeBoolean(seq(i).asInstanceOf[CBoolean].value)
-            case FLONG     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CLong].value)
-            case FDOUBLE   => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDouble].value.asInstanceOf[java.lang.Double])
-            case FNUM      => {
-              val backing: java.math.BigDecimal = seq(i).asInstanceOf[CNum].value.bigDecimal
-              out.writeUTF(backing.toString)
-            }
-            case FDATE     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
-            case FNULL | FEMPTYOBJECT | FEMPTYARRAY => out.write(0) // TODO: No value to serialize, but JDBM3 *requires* a value to be written. Can we avoid this?
-            case invalid => sys.error("Invalid format flag: " + invalid)
-          }
-        }
-        i += 1
-      }
-    } catch {
-      case t: Throwable => logger.error("Error during serialization", t)
-    }
-  }
+      //i = 0
+      //while (i < format.length) {
+        //if (undefined(i)) {
+          //out.write(0) // TODO: required?
+        //} else {
+          //format(i) match {
+            //case FSTRING   => out.writeUTF(seq(i).asInstanceOf[CString].value)
+            //case FBOOLEAN  => out.writeBoolean(seq(i).asInstanceOf[CBoolean].value)
+            //case FLONG     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CLong].value)
+            //case FDOUBLE   => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDouble].value.asInstanceOf[java.lang.Double])
+            //case FNUM      => {
+              //val backing: java.math.BigDecimal = seq(i).asInstanceOf[CNum].value.bigDecimal
+              //out.writeUTF(backing.toString)
+            //}
+            //case FDATE     => defaultSerializer.serialize(out, seq(i).asInstanceOf[CDate].value.getMillis.asInstanceOf[java.lang.Long])
+            //case FNULL | FEMPTYOBJECT | FEMPTYARRAY => out.write(0) // TODO: No value to serialize, but JDBM3 *requires* a value to be written. Can we avoid this?
+            //case FARRAY => sys.error("todo")
+            //case invalid => sys.error("Invalid format flag: " + invalid)
+          //}
+        //}
+        //i += 1
+      //}
+    //} catch {
+      //case t: Throwable => logger.error("Error during serialization", t)
+    //}
+  //}
 
-  def deserialize(in: DataInput): Array[CValue] = {
-    val values = new Array[CValue](format.length)
+  //def deserialize(in: DataInput): Array[CValue] = {
+    //val values = new Array[CValue](format.length)
 
-    val undefined = deserializeUndefinedIndices(in)
+    //val undefined = deserializeUndefinedIndices(in)
     
-    var i = 0
-    while (i < format.length) {
-      if (undefined(i)) {
-        in.skipBytes(1)
-        values(i) = CUndefined
-      } else {
-        values(i) = format(i) match {
-          case FSTRING      => CString(in.readUTF())
-          case FBOOLEAN     => CBoolean(in.readBoolean())
-          case FLONG        => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
-          case FDOUBLE      => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
-          case FNUM         => CNum(BigDecimal(new java.math.BigDecimal(in.readUTF())))
-          case FDATE        => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
-          case FNULL        => in.skipBytes(1); CNull        // JDBM requires that we write a value, so we have to read one byte back
-          case FEMPTYOBJECT => in.skipBytes(1); CEmptyObject // JDBM requires that we write a value, so we have to read one byte back 
-          case FEMPTYARRAY  => in.skipBytes(1); CEmptyArray  // JDBM requires that we write a value, so we have to read one byte back
-          case invalid      => sys.error("Invalid format flag: " + invalid)
-        }
-      }
-      i += 1
-    }
+    //var i = 0
+    //while (i < format.length) {
+      //if (undefined(i)) {
+        //in.skipBytes(1)
+        //values(i) = CUndefined
+      //} else {
+        //values(i) = format(i) match {
+          //case FSTRING      => CString(in.readUTF())
+          //case FBOOLEAN     => CBoolean(in.readBoolean())
+          //case FLONG        => CLong(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long])
+          //case FDOUBLE      => CDouble(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Double])
+          //case FNUM         => CNum(BigDecimal(new java.math.BigDecimal(in.readUTF())))
+          //case FDATE        => CDate(new DateTime(defaultSerializer.deserialize(in).asInstanceOf[java.lang.Long]))
+          //case FNULL        => in.skipBytes(1); CNull        // JDBM requires that we write a value, so we have to read one byte back
+          //case FEMPTYOBJECT => in.skipBytes(1); CEmptyObject // JDBM requires that we write a value, so we have to read one byte back 
+          //case FEMPTYARRAY  => in.skipBytes(1); CEmptyArray  // JDBM requires that we write a value, so we have to read one byte back
+          //case FARRAY       => sys.error("todo")
+          //case invalid      => sys.error("Invalid format flag: " + invalid)
+        //}
+      //}
+      //i += 1
+    //}
 
-    values
-  }
-}
+    //values
+  //}
+//}
