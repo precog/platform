@@ -273,7 +273,7 @@ trait TableModule[M[+_]] extends FNModule {
      */
     def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
     
-    def distinct: Table
+    def distinct(spec: TransSpec1): Table
     
     def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     

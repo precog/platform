@@ -993,12 +993,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     /**
      * Yields a new table with distinct rows. Assumes this table is sorted.
      */
-    def distinct: Table = {
-      def retainDistinct(prev: Option[Slice], cur: Slice): (Option[Slice], Slice) = {
-        val next = cur.distinct(prev)
-        (if(next.size > 0) Some(next) else prev, next)
+    def distinct(spec: TransSpec1): Table = {
+      def distinct0[T](id: SliceTransform1[Option[Slice]], filter: SliceTransform1[T]): Table = {
+        def stream(state: (Option[Slice], T), slices: StreamT[M, Slice]): StreamT[M, Slice] = StreamT(
+          for {
+            head <- slices.uncons
+          } yield
+            head map { case (s, sx) =>
+              val (prevFilter, cur) = id.f(state._1, s)
+              val (nextT, curFilter) = filter.f(state._2, s)
+              
+              val next = cur.distinct(prevFilter, curFilter)
+              
+              StreamT.Yield(next, stream((if(next.size > 0) Some(curFilter) else prevFilter, nextT), sx))
+            } getOrElse {
+              StreamT.Done
+            }
+        )
+        
+        table(stream((id.initial, filter.initial), slices))
       }
-      table(transformStream(new SliceTransform1[Option[Slice]](None, retainDistinct), slices))
+
+      distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
 
     def drop(n: Long): Table = sys.error("todo")
