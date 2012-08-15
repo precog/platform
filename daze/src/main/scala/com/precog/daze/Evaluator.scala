@@ -798,11 +798,15 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def findCommonality(forest: Set[DepGraph]): Option[DepGraph] = {
-    val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
-      left zip right takeWhile { case (a, b) => a == b } map { _._1 }
+    if (forest.size == 1) {
+      Some(forest.head)
+    } else {
+      val sharedPrefixReversed = forest flatMap buildChains map { _.reverse } reduceOption { (left, right) =>
+        left zip right takeWhile { case (a, b) => a == b } map { _._1 }
+      }
+      
+      sharedPrefixReversed flatMap { _.lastOption }
     }
-    
-    sharedPrefixReversed flatMap { _.lastOption }
   }
   
   private def findCommonIds(left: BucketSpec, right: BucketSpec): Set[Int] =
