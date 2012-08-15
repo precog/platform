@@ -284,7 +284,7 @@ trait Evaluator[M[+_]] extends DAG
             
               val aligned = mor.alignment match {
                 case MorphismAlignment.Cross => leftResult.cross(rightResult)(spec)
-                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)  //TODO currently an array with two objects in it
+                case MorphismAlignment.Match if sharedPrefixLength(left, right) > 0 => join(leftResult, rightResult)(key, spec)
                 case MorphismAlignment.Match if sharedPrefixLength(left, right) == 0 => {
                   if (left.isSingleton) {
                     rightResult.cross(leftResult)(specRight) 
@@ -295,8 +295,11 @@ trait Evaluator[M[+_]] extends DAG
                   }
                 }
               }
+              leftSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, JPathIndex(0)), paths.Value)
+              rightSpec = DerefObjectStatic(DerefArrayStatic(TransSpec1.Id, JPathIndex(1)), paths.Value)
+              transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
-              result = mor(aligned)
+              result = mor(transformed)
               wrapped <- result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
             } yield wrapped
 

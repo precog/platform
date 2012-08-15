@@ -216,8 +216,8 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     
     def reducer: Reducer[Result] = new Reducer[Result] {
       def reduce(cols: JType => Set[Column], range: Range): Result = {
-        val left = cols(JArrayFixedT(Map(0 -> JObjectFixedT(Map("value" -> JNumberT)))))  //TODO should we deref `value` earlier?
-        val right = cols(JArrayFixedT(Map(1 -> JObjectFixedT(Map("value" -> JNumberT))))) 
+        val left = cols(JArrayFixedT(Map(0 -> JNumberT)))
+        val right = cols(JArrayFixedT(Map(1 -> JNumberT)))
 
         val cross = for (l <- left; r <- right) yield (l, r)
 
