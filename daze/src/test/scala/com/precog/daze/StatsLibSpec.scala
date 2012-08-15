@@ -540,7 +540,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple linear regression" in {
       val line = Line(0, "")
@@ -642,7 +642,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple linear regression" in {
       val line = Line(0, "")
@@ -744,7 +744,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple linear regression" in {
       val line = Line(0, "")
@@ -846,7 +846,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple linear regression" in {
       val line = Line(0, "")
@@ -954,7 +954,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(true)
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple linear regression" in {
       val line = Line(0, "")
