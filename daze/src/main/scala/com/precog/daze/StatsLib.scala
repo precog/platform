@@ -378,11 +378,100 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
               Some(foldedMapped)
             }
+          case (c1: NumColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: LongColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: LongColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: NumColumn, c2: LongColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: NumColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: LongColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
 
           case _ => None
         }
 
-        (result.isEmpty).option(result.suml)
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
     
