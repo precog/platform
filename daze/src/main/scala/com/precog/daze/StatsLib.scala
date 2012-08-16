@@ -68,12 +68,20 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         sortedTable <- compactedTable.sort(sortKey, SortAscending)
         count <- sortedTable.reduce(Count.reducer)
         median <- if (count % 2 == 0) {
-                    val middleValues = sortedTable.take((count.toLong / 2) + 1).drop((count.toLong / 2) - 1)
-                    Mean(middleValues)
-                  } else {
-                    M.point(sortedTable.take((count.toLong / 2) + 1).drop(count.toLong / 2))
-                  }
-      } yield median
+          val middleValues = sortedTable.takeRange((count.toLong / 2) - 1, 2)
+          val transformedTable = middleValues.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value))  //todo make function for this
+          println("middleValues: %s and count: %s and sortedTable: %s".format(middleValues, count, sortedTable))
+          Mean(transformedTable)
+        } else {
+          val middleValue = M.point(sortedTable.takeRange((count.toLong / 2), 1))
+          middleValue map { _.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value)) }
+        }
+      } yield {
+        val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+        val valueTable = median.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+        
+        valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
+      }
     }
   }
   

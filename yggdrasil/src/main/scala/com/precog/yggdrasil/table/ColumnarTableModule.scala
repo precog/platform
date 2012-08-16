@@ -40,6 +40,7 @@ import java.util.SortedMap
 import scala.collection.BitSet
 import scala.collection.Set
 import scala.annotation.tailrec
+import scala.collection.immutable.NumericRange
 
 import scalaz._
 import scalaz.Ordering._
@@ -1020,11 +1021,28 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
     
-    def drop(n: Long): Table = sys.error("todo")
-    
-    def take(n: Long): Table = sys.error("todo")
-    
-    def takeRight(n: Long): Table = sys.error("todo")
+    def takeRange(startIndex: Long, numberToTake: Long): Table = {  //in slice.takeRange, need to numberToTake to not be larger than the slice. 
+      def loop(s: Stream[Slice], readSoFar: Long): Stream[Slice] = s match {
+        case h #:: rest if (readSoFar + h.size) < startIndex => loop(rest, readSoFar + h.size)
+        case rest if readSoFar < startIndex + 1 => {
+          inner(rest, 0, (startIndex - readSoFar).toInt)
+        }
+        case _ => Stream.empty[Slice]
+      }
+
+      def inner(s: Stream[Slice], takenSoFar: Long, sliceStartIndex: Int): Stream[Slice] = s match {
+        case h #:: rest if takenSoFar < numberToTake && h.size > numberToTake - takenSoFar => {
+          val needed = h.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
+          println("sliceStartIndex: %s and     numberToTake: %s and   takenSoFar: %s and    needed: %s".format(sliceStartIndex, numberToTake, takenSoFar, needed))
+          needed #:: Stream.empty[Slice]
+        }
+        case h #:: rest if takenSoFar < numberToTake =>
+          h #:: inner(rest, takenSoFar + h.size, 0)
+        case _ => Stream.empty[Slice]
+      }
+
+      table(StreamT.fromStream(slices.toStream.map(loop(_, 0))))
+    }
 
     def normalize: Table = table(slices.filter(!_.isEmpty))
 

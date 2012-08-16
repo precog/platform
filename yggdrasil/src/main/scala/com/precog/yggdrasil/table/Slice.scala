@@ -347,6 +347,15 @@ trait Slice { source =>
     }
   )
 
+  def takeRange(startIndex: Int, numberToTake: Int): Slice = {
+    new Slice {
+      val size = numberToTake
+      val columns = source.columns mapValues { 
+        col => (col |> cf.util.Remap( { case i if i < numberToTake => i + startIndex} )).get 
+      }
+    }
+  }
+
   def append(other: Slice): Slice = {
     new Slice {
       val size = source.size + other.size

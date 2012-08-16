@@ -163,8 +163,18 @@ trait StubColumnarTableModule[M[+_]] extends TestColumnarTableModule[M] {
     private var currentIndex = 0
 
     import trans._
-    def sort(sortKet: TransSpec1, sortOrder: DesiredSortOrder) = sys.error("todo")
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
+      // We use the sort transspec1 to compute a new table with a combination of the 
+      // original data and the new sort columns, referenced under the sortkey namespace
+      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, TableModule.paths.SortKey.name)))
 
+      implicit val jValueOrdering = blueeyes.json.xschema.DefaultOrderings.JValueOrdering
+
+      tableWithSortKey.toJson.map {
+        jvals => fromJson(jvals.toList.sorted.toStream)
+      }
+    }
+    
     override def load(uid: UserId, jtpe: JType) = {
       self.toJson map { events =>
         fromJson {

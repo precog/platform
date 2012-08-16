@@ -279,12 +279,8 @@ trait TableModule[M[+_]] extends FNModule {
     
     def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     
-    def drop(n: Long): Table
+    def takeRange(startIndex: Long, numberToTake: Long): Table
     
-    def take(n: Long): Table
-    
-    def takeRight(n: Long): Table
-
     def toJson: M[Iterable[JValue]]
   }
 
