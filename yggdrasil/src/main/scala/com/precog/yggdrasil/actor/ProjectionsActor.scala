@@ -48,6 +48,7 @@ object ProjectionInsert {
 
 case class BatchInsert(rows: Seq[ProjectionInsert.Row], replyTo: ActorRef)
 case class InsertMetadata(descriptor: ProjectionDescriptor, metadata: ColumnMetadata)
+case object InsertNoMetadata
 
 // projection retrieval result messages
 sealed trait ProjectionResult

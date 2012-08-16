@@ -1,6 +1,7 @@
 package com.precog.yggdrasil
 package actor
 
+import metadata.ColumnMetadata
 import com.precog.util._
 import com.precog.common._
 import com.precog.common.kafka._
@@ -46,7 +47,12 @@ trait ProductionShardSystemActorModule extends ShardSystemActorModule {
 
   def initIngestActor(checkpoint: YggCheckpoint, metadataActor: ActorRef) = {
     val consumer = new SimpleConsumer(yggConfig.kafkaHost, yggConfig.kafkaPort, yggConfig.kafkaSocketTimeout.toMillis.toInt, yggConfig.kafkaBufferSize)
-    Some(() => new KafkaShardIngestActor(yggConfig.shardId, checkpoint, metadataActor, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled))
+    Some(() => new KafkaShardIngestActor(yggConfig.shardId, checkpoint, consumer, yggConfig.kafkaTopic, yggConfig.ingestEnabled) {
+      def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]) {
+        logger.debug(pendingCheckpoint + " to be updated")
+        metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
+      }
+    })
   }
 
   def checkpointCoordination = ZookeeperSystemCoordination(yggConfig.zookeeperHosts, yggConfig.serviceUID, yggConfig.ingestEnabled) 
