@@ -59,42 +59,6 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
-    /* def reduced(enum: Dataset[SValue], graph: DepGraph, ctx: Context): Option[SValue] = {
-      val enum2 = enum.sortByValue(graph.memoId, ctx.memoizationContext)
-
-      val count = enum.reduce(BigDecimal(0)) {
-        case (count, SDecimal(v)) => count + 1
-        case (acc, _) => acc
-      }
-      
-      if (count == BigDecimal(0)) None
-      else {
-        val (c, median) = if (count.toInt % 2 == 0) {
-          val index = (count.toInt / 2, (count.toInt / 2) + 1)
-        
-          enum2.reduce((BigDecimal(0), Option.empty[BigDecimal])) {
-            case ((count, _), SDecimal(v)) if (count + 1 < index._2) => (count + 1, Some(v))
-            case ((count, prev), SDecimal(v)) if (count + 1 == index._2) => {
-              (count + 1, 
-                if (prev.isDefined) prev map { x => (x + v) / 2 } 
-                else None)  
-            }
-            case (acc, _) => acc
-          } 
-        } else {
-          val index = (count.toInt / 2) + 1
-        
-          enum2.reduce(BigDecimal(0), Option.empty[BigDecimal]) {
-            case ((count, _), SDecimal(_)) if (count + 1 < index) => (count + 1, None)
-            case ((count, _), SDecimal(v)) if (count + 1 == index) => (count + 1, Some(v))
-            case (acc, _) => acc
-          }
-        }
-        if (median.isDefined) median map { v => SDecimal(v) }
-        else None
-      }
-    } */
-   
     def apply(table: Table) = {  //TODO write tests for the empty table case
       val compactedTable = table.compact(Leaf(Source))
 
@@ -340,7 +304,11 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val stdDev1 = sqrt(count * sumsq1 - sum1 * sum1) / count
           val stdDev2 = sqrt(count * sumsq2 - sum2 * sum2) / count
 
-          ops.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))
+          val resultTable = ops.constDecimal(Set(CNum(cov / (stdDev1 * stdDev2))))  //TODO the following lines are used throughout. refactor! 
+          val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+
+          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse ops.empty
     }
@@ -484,24 +452,16 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         case (count, sum1, sum2, productSum) => {
           val cov = (productSum - ((sum1 * sum2) / count)) / count
 
-          ops.constDecimal(Set(CNum(cov)))
+          val resultTable = ops.constDecimal(Set(CNum(cov)))
+          val valueTable = resultTable.transform(trans.WrapObject(Leaf(Source), paths.Value.name))
+          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+
+          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse ops.empty
     }
 
     def apply(table: Table) = table.reduce(reducer) map extract
-
-    /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {             
-      val (count, sum1, sum2, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-        case ((count, sum1, sum2, productSum), SArray(Vector(SDecimal(num1), SDecimal(num2)))) => {
-          (count + 1, sum1 + num1, sum2 + num2, productSum + (num1 * num2))
-        }
-        case (acc, _) => acc
-      }
-
-      if (count == BigDecimal(0)) None
-      else Some(SDecimal((productSum - ((sum1 * sum2) / count)) / count))
-    } */
   }
 
   object LinearRegression extends Morphism2(StatsNamespace, "linReg") {
@@ -510,7 +470,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     lazy val alignment = MorphismAlignment.Match
 
     type InitialResult = (BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal) // (count, sum1, sum2, sumsq1, productSum)
-    type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)] // (count, sum1, sum2, sumsq1, productSum)
+    type Result = Option[(BigDecimal, BigDecimal, BigDecimal, BigDecimal, BigDecimal)]
 
     implicit def monoid = implicitly[Monoid[Result]]
     
@@ -534,11 +494,100 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
 
               Some(foldedMapped)
             }
+          case (c1: NumColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: LongColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: LongColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: LongColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: DoubleColumn, c2: NumColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: NumColumn, c2: LongColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
+          case (c1: NumColumn, c2: DoubleColumn) => 
+            val mapped = range filter ( r => c1.isDefinedAt(r) && c2.isDefinedAt(r)) map { i => (c1(i), c2(i)) }
+            if (mapped.isEmpty) {
+              None
+            } else {
+              val foldedMapped: InitialResult = mapped.foldLeft((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
+                case ((count, sum1, sum2, sumsq1, productSum), (v1, v2)) => (count + 1, sum1 + v1, sum2 + v2, sumsq1 + (v1 * v1), productSum + (v1 * v2))
+              }
+
+              Some(foldedMapped)
+            }
 
           case _ => None
         }
-
-        (result.isEmpty).option(result.suml)
+       
+        if (result.isEmpty) None
+        else Some(result.suml)
       }
     }
     
@@ -555,33 +604,26 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
           val slope = cov / vari
           val yint = (sum2 / count) - (slope * (sum1 / count))
 
+          val constSlope = ops.constDecimal(Set(CNum(slope)))
+          val constIntercept = ops.constDecimal(Set(CNum(yint)))
 
-          ops.constDecimal(Set(CNum(slope)))  //TODO want to return an object with two fields, one for slope and one for yint
+          val slopeSpec = trans.WrapObject(Leaf(SourceLeft), "slope")
+          val yintSpec = trans.WrapObject(Leaf(SourceRight), "intercept")
+          val concatSpec = trans.ObjectConcat(slopeSpec, yintSpec)
+
+          val valueTable = constSlope.cross(constIntercept)(trans.WrapObject(concatSpec, paths.Value.name))
+          val keyTable = ops.constEmptyArray.transform(trans.WrapObject(Leaf(Source), paths.Key.name))
+
+          valueTable.cross(keyTable)(ObjectConcat(Leaf(SourceLeft), Leaf(SourceRight)))
         }
       } getOrElse ops.empty
     }
 
-    def apply(table: Table) = table.reduce(reducer) map extract
-
-    /* override def reduced(enum: Dataset[SValue]): Option[SValue] = {
-      val (count, sum1, sum2, sumsq1, productSum) = enum.reduce((BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0), BigDecimal(0))) {
-        case ((count, sum1, sum2, sumsq1, productSum), SArray(Vector(SDecimal(num1), SDecimal(num2)))) => {
-          (count + 1, sum1 + num1, sum2 + num2, sumsq1 + (num1 * num1), productSum + (num1 * num2))
-        }
-        case (acc, _) => acc
-      }
-
-      if (count == BigDecimal(0)) None
-      else {
-        val cov = (productSum - ((sum1 * sum2) / count)) / count
-        val vari = (sumsq1 - (sum1 * (sum1 / count))) / count
-
-        val slope = cov / vari
-        val yint = (sum2 / count) - (slope * (sum1 / count))
-        
-        Some(SArray(Vector(SDecimal(slope), SDecimal(yint))))
-      }
-    } */
+    def apply(table: Table) = {
+      val result = table.reduce(reducer) map extract
+      println("extracted result = " + result)
+      result
+    }
   }
 
   object LogarithmicRegression extends Morphism2(StatsNamespace, "logReg") {

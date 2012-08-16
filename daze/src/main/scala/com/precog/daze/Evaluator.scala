@@ -300,8 +300,8 @@ trait Evaluator[M[+_]] extends DAG
               transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
               result = mor(transformed)
-              wrapped <- result map { _ transform buildConstantWrapSpec(Leaf(Source)) }
-            } yield wrapped
+              wrapped <- result
+            } yield {println("wrapped = " + wrapped); wrapped}
 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
@@ -936,9 +936,13 @@ trait Evaluator[M[+_]] extends DAG
     result.transform(trans.DerefArrayStatic(Leaf(Source), JPathIndex(0)))
   }
   
-  private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+  private def buildConstantWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {  //TODO don't use Map1, returns an empty array of type CNum
     val bottomWrapped = trans.WrapObject(trans.Map1(source, ConstantEmptyArray), paths.Key.name)
     trans.ObjectConcat(bottomWrapped, trans.WrapObject(source, paths.Value.name))
+  }
+
+  private def buildValueWrapSpec[A <: SourceType](source: TransSpec[A]): TransSpec[A] = {
+    trans.WrapObject(source, paths.Value.name)
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
