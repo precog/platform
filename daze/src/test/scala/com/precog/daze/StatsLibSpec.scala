@@ -568,7 +568,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple log regression" in {
       val line = Line(0, "")
@@ -670,7 +670,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple log regression" in {
       val line = Line(0, "")
@@ -772,7 +772,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple log regression" in {
       val line = Line(0, "")
@@ -874,7 +874,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple log regression" in {
       val line = Line(0, "")
@@ -980,7 +980,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(Vector(true, true)).only
-    }.pendingUntilFixed
+    }
 
     "compute the correct coefficients in a simple log regression" >> {
       "with a positive constant y-value" >> {
