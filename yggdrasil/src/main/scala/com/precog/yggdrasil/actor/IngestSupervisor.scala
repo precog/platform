@@ -66,8 +66,10 @@ case class DirectIngestData(messages: Seq[IngestMessage]) extends ShardIngestAct
  * by the ingestActor, and the "manual" ingest pipeline which may send direct ingest requests to
  * this actor. 
  */
-class IngestSupervisor(ingestActorInit: Option[() => Actor], projectionsActor: ActorRef, routingTable: RoutingTable, 
-                       idleDelay: Duration, scheduler: Scheduler, shutdownCheck: Duration) extends Actor with Logging {
+abstract class IngestSupervisor(ingestActorInit: Option[() => Actor], //projectionsActor: ActorRef, routingTable: RoutingTable, 
+                                idleDelay: Duration,
+                                scheduler: Scheduler,
+                                shutdownCheck: Duration) extends Actor with Logging {
 
   private[this] var ingestActor: Option[ActorRef] = None
 
@@ -115,13 +117,12 @@ class IngestSupervisor(ingestActorInit: Option[() => Actor], projectionsActor: A
   private def status: JValue = JObject(JField("Routing", JObject(JField("initiated", JNum(initiated)) :: 
                                                                  JField("processed", JNum(processed)) :: Nil)) :: Nil)
 
-  private def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
-    val inserts = routingTable.batchMessages(messages)
-
-    logger.debug("Sending " + inserts.size + " messages for insert")
-    batchCoordinator ! ProjectionInsertsExpected(inserts.size)
-    for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
-  }
+  /**
+   * This method is responsible for processing a batch of messages, notifying the given coordinator
+   * with ProjectionInsertsExpected to set the count, then sending either InsertMetadata or
+   * InsertNoMetadata messages after processing each message.
+   */
+  protected def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit 
 
   private def scheduleIngestRequest(delay: Duration): Unit = ingestActor.foreach { actor =>
     initiated += 1
