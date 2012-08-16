@@ -40,9 +40,15 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
   import Gen._
   import Arbitrary._
 
+  val maxArraySize = 3
+  val maxArrayDepth = 2
+
   def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
 
-  def indexedSeqOf[A](gen: Gen[A]): Gen[IndexedSeq[A]] = containerOf[List, A](gen) map (_.toIndexedSeq)
+  def containerOfAtMostN[C[_],T](maxSize: Int, g: Gen[T])(implicit b: org.scalacheck.util.Buildable[T,C]): Gen[C[T]] =
+    Gen.sized(size => for(n <- choose(0, size max maxSize); c <- containerOfN[C,T](n,g)) yield c)
+
+  def indexedSeqOf[A](gen: Gen[A]): Gen[IndexedSeq[A]] = containerOfAtMostN[List, A](maxArraySize, gen) map (_.toIndexedSeq)
 
   def genValueFor[A](cType: CValueType[A]): Gen[A] = cType match {
     case CString => arbString.arbitrary
@@ -71,7 +77,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
     } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
     case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
     case cType @ CArrayType(_) =>
-      genValueFor(cType) map (a => CArray(a, cType))
+      genValueFor(cType) map { a => CArray(a, cType) }
     case CNull    => Gen.value(CNull)
     case CEmptyObject => Gen.value(CEmptyObject)
     case CEmptyArray  => Gen.value(CEmptyArray)
@@ -79,10 +85,11 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
   }
 
   def genNonArrayCValueType: Gen[CValueType[_]] = Gen.oneOf[CValueType[_]](CString, CBoolean, CLong, CDouble, CNum, CDate)
-  def genCValueType(maxDepth: Int = 4, depth: Int = 0): Gen[CValueType[_]] =
+  def genCValueType(maxDepth: Int = maxArrayDepth, depth: Int = 0): Gen[CValueType[_]] = {
     if (depth >= maxDepth) genNonArrayCValueType else {
       frequency(1 -> (genCValueType(maxDepth, depth + 1) map (CArrayType(_))), 6 -> genNonArrayCValueType)
     }
+  }
 
   def genCType: Gen[CType] = frequency(7 -> genCValueType(), 3 -> Gen.oneOf(CNull, CEmptyObject, CEmptyArray))
 
@@ -147,7 +154,8 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
   "JDBMProjections" should {
     "properly serialize and deserialize arbitrary columns" in {
       check {
-        pd: ProjectionData => readWriteColumn(pd, Files.createTempDir())
+        pd: ProjectionData =>
+          readWriteColumn(pd, Files.createTempDir())
       }
     }
 

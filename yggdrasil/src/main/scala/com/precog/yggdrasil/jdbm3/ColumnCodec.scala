@@ -100,15 +100,28 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
   private final val FALSE_VALUE = 0.toByte
   private final val TRUE_VALUE = 1.toByte
 
-  private def writerFor[A](cType: CValueType[A]): A => Unit = cType match {
-    case CString => writeString(_)
-    case CBoolean => writeBoolean(_)
-    case CLong => workBuffer.putLong(_)
-    case CDouble => workBuffer.putDouble(_)
-    case CNum => writeBigDecimal(_)
-    case CDate => dt => workBuffer.putLong(dt.getMillis)
-    case CArrayType(elemType) => writeArray(_, writerFor(elemType))
+  def write[A](cType: CValueType[A], a: A): Unit = cType match {
+    case CString => writeString(a)
+    case CBoolean => writeBoolean(a)
+    case CLong => workBuffer.putLong(a)
+    case CDouble => workBuffer.putDouble(a)
+    case CNum => writeBigDecimal(a)
+    case CDate => workBuffer.putLong(a.getMillis)
+    case CArrayType(elemType) =>
+      workBuffer.putInt(a.length)
+      a foreach (write(elemType, _))
   }
+
+  // This generates a NoSuchMethod error for array types, for some reason.
+  //private def writerFor[A](cType: CValueType[A]): (A => Unit) = cType match {
+    //case CString => writeString(_)
+    //case CBoolean => writeBoolean(_)
+    //case CLong => workBuffer.putLong(_)
+    //case CDouble => workBuffer.putDouble(_)
+    //case CNum => writeBigDecimal(_)
+    //case CDate => dt => workBuffer.putLong(dt.getMillis)
+    //case CArrayType(elemType) => writeArray(_, writerFor(elemType))
+  //}
 
   private def writeArray[A](s: IndexedSeq[A], w: A => Unit) {
     workBuffer.putInt(s.length)
@@ -192,7 +205,7 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
           case CDouble(cd)  => workBuffer.putDouble(cd)
           case CNum(cn)     => writeBigDecimal(cn)
           case CDate(cd)    => workBuffer.putLong(cd.getMillis)
-          case CArray(as, cType) => writerFor(cType)(as)
+          case CArray(as, cType) => write(cType, as)
           case CNull        => // NOOP, no value to write
           case CEmptyObject => // NOOP, no value to write
           case CEmptyArray  => // NOOP, no value to write
