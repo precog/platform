@@ -76,6 +76,11 @@ class BatchHandler(ingestActor: ActorRef, requestor: ActorRef, checkpoint: YggCh
       projectionMetadata += (descriptor -> (projectionMetadata.getOrElse(descriptor, ColumnMetadata.Empty) |+| columnMetadata))
       remaining -= 1
       if (remaining == 0) self ! PoisonPill
+
+    case InsertNoMetadata =>
+      logger.debug("Insert without metadata")
+      remaining -= 1
+      if (remaining == 0) self ! PoisonPill
   }
 
   override def postStop() = {

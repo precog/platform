@@ -68,9 +68,15 @@ case class ProjectionInsertsExpected(projections: Int)
  *    external system with the state of the system into which data is being ingested. For Kafka,
  *    the most important component of this state is the offset.
  */
-class KafkaShardIngestActor(shardId: String, initialCheckpoint: YggCheckpoint, metadataActor: ActorRef, consumer: SimpleConsumer, topic: String, ingestEnabled: Boolean,
-                            fetchBufferSize: Int = 1024 * 1024, ingestTimeout: Timeout = 120 seconds, 
-                            maxCacheSize: Int = 5, maxConsecutiveFailures: Int = 3) extends Actor with Logging {
+abstract class KafkaShardIngestActor(shardId: String,
+                                     initialCheckpoint: YggCheckpoint,
+                                     consumer: SimpleConsumer,
+                                     topic: String,
+                                     ingestEnabled: Boolean,
+                                     fetchBufferSize: Int = 1024 * 1024,
+                                     ingestTimeout: Timeout = 120 seconds, 
+                                     maxCacheSize: Int = 5,
+                                     maxConsecutiveFailures: Int = 3) extends Actor with Logging {
 
   private var lastCheckpoint: YggCheckpoint = initialCheckpoint
 
@@ -94,8 +100,7 @@ class KafkaShardIngestActor(shardId: String, initialCheckpoint: YggCheckpoint, m
 
         pendingCompletes = pendingCompletes flatMap {
           case BatchComplete(pendingCheckpoint, metadata) if pendingCheckpoint <= checkpoint =>
-            logger.debug(pendingCheckpoint + " to be updated")
-            metadataActor ! IngestBatchMetadata(metadata, pendingCheckpoint.messageClock, Some(pendingCheckpoint.offset))
+            handleBatchComplete(pendingCheckpoint, metadata)
             None
 
           case stillPending => 
@@ -155,6 +160,11 @@ class KafkaShardIngestActor(shardId: String, initialCheckpoint: YggCheckpoint, m
       }
   }
 
+  /**
+   * This method will be called on each completed batch. Subclasses may perform additional work here.
+   */
+  protected def handleBatchComplete(pendingCheckpoint: YggCheckpoint, metadata: Map[ProjectionDescriptor, ColumnMetadata]): Unit
+
   private def readRemote(fromCheckpoint: YggCheckpoint): Validation[Throwable, (Vector[EventMessage], YggCheckpoint)] = {
     Validation.fromTryCatch {
       val messageSet = consumer.fetch(new FetchRequest(topic, partition = 0, offset = lastCheckpoint.offset, maxSize = fetchBufferSize))
@@ -177,3 +187,4 @@ class KafkaShardIngestActor(shardId: String, initialCheckpoint: YggCheckpoint, m
 
   override def postStop() = consumer.close
 }
+

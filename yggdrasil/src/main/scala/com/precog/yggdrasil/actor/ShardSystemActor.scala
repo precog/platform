@@ -20,9 +20,9 @@
 package com.precog.yggdrasil
 package actor
 
-import com.precog.common.{CheckpointCoordination,YggCheckpoint}
+import com.precog.common.{CheckpointCoordination, IngestMessage, YggCheckpoint}
 import com.precog.util.FilesystemFileOps
-import com.precog.yggdrasil.metadata.{FileMetadataStorage,MetadataStorage}
+import com.precog.yggdrasil.metadata.{FileMetadataStorage, MetadataStorage}
 
 import akka.actor._
 import akka.dispatch._
@@ -103,8 +103,18 @@ trait ShardSystemActorModule extends ProjectionsActorModule with YggConfigCompon
         // Ingest implies a metadata sync
         metadataSync = Some(context.system.scheduler.schedule(yggConfig.metadataSyncPeriod, yggConfig.metadataSyncPeriod, metadataActor, FlushMetadata))
 
-        context.actorOf(Props(new IngestSupervisor(ingestActorInit, projectionsActor, new SingleColumnProjectionRoutingTable,
-                                                   yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval)), "ingestRouter")
+        val routingTable = new SingleColumnProjectionRoutingTable
+
+        context.actorOf(Props(new IngestSupervisor(ingestActorInit,
+                                                   yggConfig.batchStoreDelay, context.system.scheduler, yggConfig.batchShutdownCheckInterval) {
+          def processMessages(messages: Seq[IngestMessage], batchCoordinator: ActorRef): Unit = {
+            val inserts = routingTable.batchMessages(messages)
+
+            logger.debug("Sending " + inserts.size + " messages for insert")
+            batchCoordinator ! ProjectionInsertsExpected(inserts.size)
+            for (insert <- inserts) projectionsActor.tell(insert, batchCoordinator)
+          }
+        }), "ingestRouter")
       }
     }
 
