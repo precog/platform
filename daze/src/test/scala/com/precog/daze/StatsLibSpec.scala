@@ -589,14 +589,14 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (VectorCase(), SObject(fields)) => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 38.867859767424704
-          val bool2 = yint.toDouble ~= -46.97865418113425
+          val bool1 = slope.toDouble ~= 38.8678597674246945
+          val bool2 = yint.toDouble ~= -46.97865418113420686
           Vector(bool1, bool2)
         }
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
   }   
   
   "for homogenous sets, in a cross, the appropriate stats function" should {
@@ -691,14 +691,14 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (VectorCase(), SObject(fields)) => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 38.867859767424704
-          val bool2 = yint.toDouble ~= -46.97865418113425
+          val bool1 = slope.toDouble ~= 38.8678597674246945
+          val bool2 = yint.toDouble ~= -46.97865418113420686
           Vector(bool1, bool2)
         }
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
   }    
   
   "for the same homogenous set, the appropriate stats function" should {
@@ -793,14 +793,14 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (VectorCase(), SObject(fields)) => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 56.59154084773969
-          val bool2 = yint.toDouble ~= -166.69026355890486
+          val bool1 = slope.toDouble ~= 56.591540847739639
+          val bool2 = yint.toDouble ~= -166.690263558904667
           Vector(bool1, bool2)
         }
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
   }  
   
   "for heterogenous sets, the appropriate stats function" should {
@@ -895,14 +895,14 @@ trait StatsLibSpec[M[+_]] extends Specification
         case (VectorCase(), SObject(fields)) => {
           val SDecimal(slope) = fields("slope")
           val SDecimal(yint) = fields("intercept")
-          val bool1 = slope.toDouble ~= 38.867859767424704
-          val bool2 = yint.toDouble ~= -46.97865418113425
+          val bool1 = slope.toDouble ~= 38.8678597674246945
+          val bool2 = yint.toDouble ~= -46.97865418113420686
           Vector(bool1, bool2)
         }
       }
       
       result2 must contain(Vector(true, true))
-    }.pendingUntilFixed
+    }
   } 
 
   "for a homogenous set and a value, the appropriate stats function" should {
@@ -1007,7 +1007,7 @@ trait StatsLibSpec[M[+_]] extends Specification
         }
         
         result2 must contain(Vector(true, true))
-      }.pendingUntilFixed
+      }
 
       "with a negative constant x-value" >> {
         val line = Line(0, "")
@@ -1026,9 +1026,9 @@ trait StatsLibSpec[M[+_]] extends Specification
         val result2 = testEval(input2)
         
         result must haveSize(0)
-        result2 must haveSize(100)
+        result2 must haveSize(5)
 
-      }.pendingUntilFixed
+      }
 
       "with a negative x-value in one object" >> {
         val line = Line(0, "")
@@ -1049,14 +1049,14 @@ trait StatsLibSpec[M[+_]] extends Specification
           case (VectorCase(), SObject(fields)) => {
             val SDecimal(slope) = fields("slope")
             val SDecimal(yint) = fields("intercept")
-            val bool1 = slope.toDouble ~= 38.867859767424704
-            val bool2 = yint.toDouble ~= -46.97865418113425
+            val bool1 = slope.toDouble ~= 38.8678597674246945
+            val bool2 = yint.toDouble ~= -46.97865418113420686
             Vector(bool1, bool2)
           }
         }
         
         result2 must contain(Vector(true, true))
-      }.pendingUntilFixed
+      }
     }
   }
 }
