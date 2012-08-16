@@ -231,6 +231,9 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "preserve all defined rows"                in testCompactPreserve
       "have no undefined rows"                   in testCompactRows
       "have no empty slices"                     in testCompactSlices
+      "preserve all defined key rows"            in testCompactPreserveKey
+      "have no undefined key rows"               in testCompactRowsKey
+      "have no empty key slices"                 in testCompactSlicesKey
     }
   }
 }
