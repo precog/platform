@@ -42,6 +42,23 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
 
   def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
 
+  def indexedSeqOf[A](gen: Gen[A]): Gen[IndexedSeq[A]] = containerOf[List, A](gen) map (_.toIndexedSeq)
+
+  def genValueFor[A](cType: CValueType[A]): Gen[A] = cType match {
+    case CString => arbString.arbitrary
+    case CBoolean => Gen.oneOf(true, false)
+    case CLong => arbLong.arbitrary
+    case CDouble => arbDouble.arbitrary
+    case CNum => for {
+      scale  <- arbInt.arbitrary
+      bigInt <- arbBigInt.arbitrary
+    } yield BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1), java.math.MathContext.UNLIMITED)
+    case CDate =>
+      choose[Long](0, Long.MaxValue) map (new DateTime(_))
+    case cType @ CArrayType(elemType) =>
+      indexedSeqOf(genValueFor(elemType))
+  }
+
   def genFor(tpe: CType): Gen[CValue] = tpe match {
     case CString  => arbString.arbitrary.map(CString(_))
     case CBoolean => arbBool.arbitrary.map(CBoolean(_)) 
@@ -53,12 +70,22 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
       bigInt <- arbBigInt.arbitrary
     } yield CNum(BigDecimal(new java.math.BigDecimal(bigInt.bigInteger, scale - 1 /* BigDecimal can't handle Integer min/max scales */), java.math.MathContext.UNLIMITED))
     case CDate    => arbLong.arbitrary.map { ts => CDate(new DateTime(ts)) }
+    case cType @ CArrayType(_) =>
+      genValueFor(cType) map (a => CArray(a, cType))
     case CNull    => Gen.value(CNull)
     case CEmptyObject => Gen.value(CEmptyObject)
     case CEmptyArray  => Gen.value(CEmptyArray)
     case invalid      => sys.error("No values for type " + invalid)
   }
-  
+
+  def genNonArrayCValueType: Gen[CValueType[_]] = Gen.oneOf[CValueType[_]](CString, CBoolean, CLong, CDouble, CNum, CDate)
+  def genCValueType(maxDepth: Int = 4, depth: Int = 0): Gen[CValueType[_]] =
+    if (depth >= maxDepth) genNonArrayCValueType else {
+      frequency(1 -> (genCValueType(maxDepth, depth + 1) map (CArrayType(_))), 6 -> genNonArrayCValueType)
+    }
+
+  def genCType: Gen[CType] = frequency(7 -> genCValueType(), 3 -> Gen.oneOf(CNull, CEmptyObject, CEmptyArray))
+
   override def defaultValues = super.defaultValues + (minTestsOk -> 20)
 
   case class ProjectionData(desc: ProjectionDescriptor, data: List[Seq[CValue]])
@@ -67,7 +94,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
     for {
       size       <- chooseNum(1,100000)
       width      <- chooseNum(1,40)
-      types      <- pick(width, List(CString, CBoolean, CLong, CDouble, CNum , CDate, CNull, CEmptyObject, CEmptyArray))
+      types      <- listOfN(width, genCType)
       descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
       val typeGens: Seq[Gen[CValue]] = types.map(genFor)
       data       <- genColumn(size, sequence[Array, CValue](typeGens))
