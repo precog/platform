@@ -59,7 +59,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(13)
-    }.pendingUntilFixed
+    }
     
     "median with even number of elements" >> {
       val line = Line(0, "")
@@ -76,7 +76,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(2)
-    }.pendingUntilFixed
+    }
 
     "median with singleton" >> {
       val line = Line(0, "")
@@ -93,7 +93,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(42)
-    }.pendingUntilFixed
+    }
     
     "mode" >> {
       val line = Line(0, "")
@@ -220,7 +220,7 @@ trait StatsLibSpec[M[+_]] extends Specification
       }
       
       result2 must contain(13)
-    }.pendingUntilFixed
+    }
     
     "mode in the case there is only one" >> {
       val line = Line(0, "")
