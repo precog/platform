@@ -300,8 +300,8 @@ trait Evaluator[M[+_]] extends DAG
               transformed = aligned.transform(ArrayConcat(trans.WrapArray(leftSpec), trans.WrapArray(rightSpec)))
 
               result = mor(transformed)
-              wrapped <- result
-            } yield {println("wrapped = " + wrapped); wrapped}
+              wrapped <- result //TODO
+            } yield wrapped
 
           } yield PendingTable(back, graph, TransSpec1.Id)
         }
