@@ -106,17 +106,17 @@ trait BaselineComparisons {
             case Some(stats) =>
               (for {
                 JArray(jpath) <- obj \? "path" flatMap (_ -->? classOf[JArray])
-                JDouble(mean) <- stats \? "mean" flatMap (_ -->? classOf[JDouble])
-                JDouble(variance) <- stats \? "variance" flatMap (_ -->? classOf[JDouble])
-                JDouble(stdDev) <- stats \? "stdDev" flatMap (_ -->? classOf[JDouble])
-                JDouble(min) <- stats \? "min" flatMap (_ -->? classOf[JDouble])
-                JDouble(max) <- stats \? "max" flatMap (_ -->? classOf[JDouble])
-                JInt(count) <- stats \? "count" flatMap (_ -->? classOf[JInt])
+                JNum(mean) <- stats \? "mean" flatMap (_ -->? classOf[JNum])
+                JNum(variance) <- stats \? "variance" flatMap (_ -->? classOf[JNum])
+                JNum(stdDev) <- stats \? "stdDev" flatMap (_ -->? classOf[JNum])
+                JNum(min) <- stats \? "min" flatMap (_ -->? classOf[JNum])
+                JNum(max) <- stats \? "max" flatMap (_ -->? classOf[JNum])
+                JNum(count) <- stats \? "count" flatMap (_ -->? classOf[JNum])
               } yield {
                 val path = (jpath collect { case JString(p) => p },
                   (obj \? "query") collect { case JString(query) => query })
                 val n = count.toInt
-                path -> Statistics(0, List(min), List(max), mean, (n - 1) * variance, n)
+                path -> Statistics(0, List(min.toDouble), List(max.toDouble), mean.toDouble, (n - 1) * variance.toDouble, n)
               }) map (acc + _) getOrElse {
                 // TODO: Replace these errors with something more useful.
                 sys.error("Error parsing: %s" format obj.toString)
@@ -138,12 +138,12 @@ trait BaselineComparisons {
     import JsonAST._
 
     def statsJson(stats: Statistics): List[JField] = List(
-      JField("mean", JDouble(stats.mean)),
-      JField("variance", JDouble(stats.variance)),
-      JField("stdDev", JDouble(stats.stdDev)),
-      JField("min", JDouble(stats.min)),
-      JField("max", JDouble(stats.max)),
-      JField("count", JInt(stats.count)))
+      JField("mean", JNum(stats.mean)),
+      JField("variance", JNum(stats.variance)),
+      JField("stdDev", JNum(stats.stdDev)),
+      JField("min", JNum(stats.min)),
+      JField("max", JNum(stats.max)),
+      JField("count", JNum(stats.count)))
  
     def values(path: List[JString], test: Tree[(PerfTest, Option[Statistics])]): List[JValue] = {
       test match {

@@ -78,7 +78,7 @@ object RunConfig {
       if (f.isFile && f.canRead) {
         fromCommandLine(args, config map (_. copy(baseline = Some(f))))
       } else {
-        fromCommandLine(args, config *> "The baseline file must be regular and readable.".failNel)
+        fromCommandLine(args, config *> "The baseline file must be regular and readable.".failureNel)
       }
 
     case "--json" :: args =>
@@ -91,19 +91,19 @@ object RunConfig {
       fromCommandLine(args, config map (_.copy(dryRuns = runs.toInt)))
 
     case "--dry-runs" :: _ :: args =>
-      fromCommandLine(args, config *> "The argument to --runs must be a positive integer".failNel)
+      fromCommandLine(args, config *> "The argument to --runs must be a positive integer".failureNel)
 
     case "--runs" :: PositiveInt(runs) :: args =>
       fromCommandLine(args, config map (_.copy(runs = runs.toInt)))
 
     case "--runs" :: _ :: args =>
-      fromCommandLine(args, config *> "The argument to --runs must be a positive integer".failNel)
+      fromCommandLine(args, config *> "The argument to --runs must be a positive integer".failureNel)
 
     case "--outliers" :: OutlierPercentage(outliers) :: args =>
       fromCommandLine(args, config map (_.copy(outliers = outliers)))
 
     case "--outliers" :: _ :: args =>
-      fromCommandLine(args, config *> "The argument to --outliers must be a real number in [0, 0.5)".failNel)
+      fromCommandLine(args, config *> "The argument to --outliers must be a real number in [0, 0.5)".failureNel)
 
     case test :: args =>
       fromCommandLine(args, config map { config =>
