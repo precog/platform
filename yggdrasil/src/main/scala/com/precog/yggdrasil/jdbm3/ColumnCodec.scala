@@ -25,47 +25,163 @@ import com.precog.yggdrasil.table._
 import blueeyes.json.JPath
 import org.joda.time.DateTime
 
-import java.nio.ByteBuffer
+import java.nio.{ ByteBuffer, CharBuffer }
+import java.nio.charset.{ Charset, CharsetEncoder, CoderResult }
 
 import scala.collection.mutable.ArrayBuffer
 
 import scala.annotation.tailrec
+import scala.{ specialized => spec }
+
+import java.math.MathContext
 
 object ColumnCodec {
   val readOnly = new ColumnCodec(0) // For read only work, the buffer is always provided
 }
 
-/*
-trait Codec[@specialized(Boolean, Long, Double) A] {
-  def size(a: A): Int
 
-  def headerSize(a: A): Int
-  def dataSize(a: A): Int
+/**
+ * Codecs allow a writer to deal with the case where we have a buffer overflow
+ * when attempting to write all data to the buffer. This lets the writer return
+ * some state indicating more data needs to be written. This state is then
+ * given to a `writeMore` method so it can finish the writing. It may take
+ * several calls to `writeMore` before it all is finally written.
+ */
+trait Codec[@spec(Boolean, Long, Double) A] { self =>
+  type S
 
-  def write(a: A): ByteBuffer => Int
-  def read(b: ByteBuffer): A
+  def encodedSize(a: A): Int
+
+  def writeInit(a: A, buffer: ByteBuffer): Option[S]
+  def writeMore(s: S, buffer: ByteBuffer): Option[S]
+
+  def writeUnsafe(a: A, buffer: ByteBuffer): Unit
+
+  def read(buffer: ByteBuffer): A
+
+  def as[B](to: B => A, from: A => B): Codec[B] = new Codec[B] {
+    type S = self.S
+
+    def encodedSize(b: B) = self.encodedSize(to(b))
+
+    def writeUnsafe(b: B, buf: ByteBuffer) = self.writeUnsafe(to(b), buf)
+    def writeInit(b: B, buf: ByteBuffer) = self.writeInit(to(b), buf)
+    def writeMore(s: S, buf: ByteBuffer) = self.writeMore(s, buf)
+
+    def read(src: ByteBuffer): B = from(self.read(src))
+  }
 }
+
+// StringCodec = Codec[String, (CharBuffer, CharsetEncoder)]
 
 object Codec {
   import CTypeMappings._
+ 
+  private final val FALSE_VALUE = 0.toByte
+  private final val TRUE_VALUE = 1.toByte
 
   // TODO I guess UTF-8 is always available?
-  val DefaultCharset = Charset.forName("UTF-8")
+  val Utf8Charset = Charset.forName("UTF-8")
 
-  case object LongCodec extends Codec[Boolean] {
-    def size(a: Boolean): Int = 1
-    def write(a: Boolean
+  /*
+  def forCType(cType: CType): Codec[_] = cType match {
+    case CBoolean => BooleanCodec
+    case CString => Utf8Codec
+    case CLong => LongCodec
+    case CDouble => DoubleCodec
+    case CNum => BigDecimalCodec
+    case CArrayType(elemType) => ArrayCodec(Codec.forCType(elemType))
+    case CNull =>
+    case _ => sys.error("todo")
+  }
+  */
 
-  case object StringCodec extends Codec[String] {
-    def size(s: String): Int = s.getBytes(DefaultCharset)
 
-    type More = (CharBuffer, CharsetEncoder)
+  trait FixedWidthCodec[@spec(Boolean, Long, Double) A] extends Codec[A] {
+    type S = A
 
-    def writeInit(a: String): Option[More] = {
+    def size: Int
+
+    def encodedSize(a: A) = size
+
+    def writeInit(a: A, b: ByteBuffer): Option[A] = if (b.remaining >= size) {
+      writeUnsafe(a, b)
+      None
+    } else {
+      Some(a)
+    }
+
+    def writeMore(a: A, b: ByteBuffer): Option[A] = writeInit(a, b)
+  }
+
+
+  case class SingletonCodec[A](a: A) extends FixedWidthCodec[A] {
+    val size = 0
+    def writeUnsafe(a: A, sink: ByteBuffer) { }
+    def read(buffer: ByteBuffer): A = a
+  }
+
+
+  implicit case object BooleanCodec extends FixedWidthCodec[Boolean] {
+    val size = 1
+    def writeUnsafe(x: Boolean, sink: ByteBuffer) {
+      if (x) sink.put(TRUE_VALUE) else sink.put(FALSE_VALUE)
+    }
+    def read(src: ByteBuffer): Boolean = src.get() match {
+      case TRUE_VALUE => true
+      case FALSE_VALUE => false
+      case invalid => sys.error("Error reading boolean: expecting %d or %d, found %d" format (TRUE_VALUE, FALSE_VALUE, invalid))
+    }
+  }
+
+
+  implicit case object LongCodec extends FixedWidthCodec[Long] {
+    val size = 8
+    def writeUnsafe(n: Long, sink: ByteBuffer) { sink.putLong(n) }
+    def read(src: ByteBuffer): Long = src.getLong()
+  }
+
+
+  implicit case object DoubleCodec extends FixedWidthCodec[Double] {
+    val size = 8
+    def writeUnsafe(n: Double, sink: ByteBuffer) { sink.putDouble(n) }
+    def read(src: ByteBuffer): Double = src.getDouble()
+  }
+
+
+  implicit case object Utf8Codec extends Codec[String] {
+
+    type S = (CharBuffer, CharsetEncoder)
+
+    def encodedSize(s: String): Int = {
+      var i = 0
+      var size = 0
+      while (i < s.length) {
+        val ch = s.codePointAt(i)
+        if (ch < 0x80) {
+          size += 1
+        } else if (ch < 0x800) {
+          size += 2
+        } else if (ch < 0x10000) {
+          size += 3
+        } else {
+          size += 4
+          i += 1
+        }
+      }
+      size
+    }
+
+    def writeUnsafe(a: String, sink: ByteBuffer) {
+      sink.put(a.getBytes(Utf8Charset))
+    }
+
+    def writeInit(a: String, sink: ByteBuffer): Option[S] = {
       val source = CharBuffer.wrap(a)
       // TODO How much work is it to create a newEncoder? Why is this not
       // immutable? Ugh....
-      val encoder = DefaultCharset.newEncoder
+      val encoder = Utf8Charset.newEncoder
+
       if (encoder.encode(source, sink, true) == CoderResult.OVERFLOW) {
         Some((source, encoder))
       } else {
@@ -73,18 +189,65 @@ object Codec {
       }
     }
 
-    
-    def writeMore(more: More): Option[More]
+    def writeMore(more: S, sink: ByteBuffer): Option[S] = {
+      val (source, encoder) = more
 
-    def write(a: String) = sink => {
-            // Charset
-
-      val bytes = s.getBytes(DefaultCharset)
-      buffer.putInt(bytes.length)
-      buffer.put(bytes)
+      if ((encoder.encode(source, sink, true) == CoderResult.OVERFLOW) ||
+          (encoder.flush(sink) == CoderResult.OVERFLOW)) {
+        Some((source, encoder))
+      } else {
+        None
+      }
     }
+
+    def read(src: ByteBuffer): String = sys.error("todo")
+  }
+
+
+  // TODO Create a proper codec for BigDecimals.
+  implicit val BigDecimalCodec = Utf8Codec.as[BigDecimal](_.toString, BigDecimal(_, MathContext.UNLIMITED))
+
+
+  final class ArrayCodec[A](val elemCodec: Codec[A]) extends Codec[IndexedSeq[A]] {
+
+    type S = Either[IndexedSeq[A], (elemCodec.S, Stream[A])]
+
+    def encodedSize(as: IndexedSeq[A]): Int = as.foldLeft(0) { (acc, a) =>
+      acc + elemCodec.encodedSize(a)
+    } + 4
+
+    def writeUnsafe(as: IndexedSeq[A], sink: ByteBuffer) {
+      sink.putInt(as.length)
+      as foreach { elemCodec.writeUnsafe(_, sink) }
+    }
+
+    @tailrec
+    private def writeArray(as: Stream[A], sink: ByteBuffer): Option[S] = as match {
+      case a #:: as => elemCodec.writeInit(a, sink) match {
+        case Some(s) => Some(Right((s, as)))
+        case None => writeArray(as, sink)
+      }
+      case _ => None
+    }
+
+    def writeInit(as: IndexedSeq[A], sink: ByteBuffer): Option[S] = {
+      if (sink.remaining < 4) Some(Left(as)) else {
+        sink.putInt(as.length)
+        writeArray(as.toStream, sink)
+      }
+    }
+
+    def writeMore(more: S, sink: ByteBuffer): Option[S] = more match {
+      case Left(as) => writeInit(as, sink)
+      case Right((s, as)) => elemCodec.writeMore(s, sink) map (Right(_, as)) orElse writeArray(as.toStream, sink)
+    }
+
+    def read(src: ByteBuffer): IndexedSeq[A] =
+      ((0 until src.getInt()) map (_ => elemCodec.read(src))).toIndexedSeq
+  }
+
+  implicit def ArrayCodec[A](implicit elemCodec: Codec[A]) = new ArrayCodec(elemCodec)
 }
-*/
 
 
 /**

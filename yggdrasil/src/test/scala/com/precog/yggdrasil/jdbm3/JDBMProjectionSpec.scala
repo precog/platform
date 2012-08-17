@@ -40,7 +40,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
   import Gen._
   import Arbitrary._
 
-  val maxArraySize = 3
+  val maxArraySize = 2
   val maxArrayDepth = 2
 
   def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
@@ -99,7 +99,7 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
 
   implicit val genData: Arbitrary[ProjectionData] = Arbitrary(
     for {
-      size       <- chooseNum(1,100000)
+      size       <- chooseNum(1,100)//000)
       width      <- chooseNum(1,40)
       types      <- listOfN(width, genCType)
       descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
