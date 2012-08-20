@@ -27,6 +27,7 @@ import blueeyes.json.JPath
 import blueeyes.json.JsonAST._
 import blueeyes.json.JsonDSL._
 import blueeyes.json.JsonParser
+import blueeyes.json.xschema.DefaultOrderings.JValueOrdering
 import blueeyes.concurrent.test.FutureMatchers
 
 import scalaz.{Ordering => _, NonEmptyList => NEL, _}
@@ -35,7 +36,11 @@ import scalaz.std.function._
 import scalaz.syntax.arrow._
 import scalaz.syntax.bifunctor._
 import scalaz.syntax.copointed._
+
 import scala.annotation.tailrec
+import scala.collection.mutable
+import scala.collection.generic.CanBuildFrom
+import scala.util.Random
 
 import org.specs2._
 import org.specs2.mutable.Specification
@@ -82,6 +87,94 @@ object SampleData extends CValueGenerators {
       }
     }
   )
+  
+  def distinctBy[T, C[X] <: Seq[X], S](c: C[T])(key: T => S)(implicit cbf: CanBuildFrom[C[T], T, C[T]]): C[T] = {
+    val builder = cbf()
+    val seen = mutable.HashSet[S]()
+    
+    for (t <- c) {
+      if (!seen(key(t))) {
+        builder += t
+        seen += key(t)
+      }
+    }
+    
+    builder.result
+  }
+  
+  def randomSubset[T, C[X] <: Seq[X], S](c: C[T], freq: Double)(implicit cbf: CanBuildFrom[C[T], T, C[T]]): C[T] = {
+    val builder = cbf()
+    
+    for (t <- c)
+      if (Random.nextDouble < freq)
+        builder += t
+    
+    builder.result
+  }
+  
+  def sort(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
+    Arbitrary(
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        SampleData(sampleData.data.sorted, sampleData.schema)
+      }
+    )
+  }
+  
+  def shuffle(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
+    val gen =
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        SampleData(Random.shuffle(sampleData.data), sampleData.schema)
+      }
+    
+    Arbitrary(gen)
+  }
+
+  def distinct(sample: Arbitrary[SampleData]) : Arbitrary[SampleData] = {
+    Arbitrary(
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        SampleData(sampleData.data.distinct, sampleData.schema)
+      }
+    )
+  }
+
+  def distinctKeys(sample: Arbitrary[SampleData]) : Arbitrary[SampleData] = {
+    Arbitrary(
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        SampleData(distinctBy(sampleData.data)(_ \ "keys"), sampleData.schema)
+      }
+    )
+  }
+
+  def distinctValues(sample: Arbitrary[SampleData]) : Arbitrary[SampleData] = {
+    Arbitrary(
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        SampleData(distinctBy(sampleData.data)(_ \ "value"), sampleData.schema)
+      }
+    )
+  }
+
+  def duplicateRows(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
+    val gen =
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        val rows = sampleData.data
+        val duplicates = randomSubset(rows, 0.25)
+        SampleData(Random.shuffle(rows ++ duplicates), sampleData.schema)
+      }
+    
+    Arbitrary(gen)
+  }
 }
 
 trait TestLib[M[+_]] extends TableModule[M] {
