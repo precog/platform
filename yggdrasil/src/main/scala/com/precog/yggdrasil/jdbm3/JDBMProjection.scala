@@ -153,8 +153,9 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
         }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
         val valColumns = descriptor.columns.map {
-          case ColumnDescriptor(_, selector, ctpe, _) => JDBMSlice.columnFor(CPath(Value), sliceSize)(ColumnRef(selector, ctpe))
-        }.toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+          case ColumnDescriptor(_, selector, cType, _) =>
+            (ColumnRef(CPath(Value) \ selector, cType), ColCodec.forCType(cType, sliceSize))
+        }
 
         def loadRowFromKey(row: Int, rowKey: Identities) {
           if (row == 0) { firstKey = rowKey }
@@ -170,7 +171,9 @@ abstract class JDBMProjection (val baseDir: File, val descriptor: ProjectionDesc
 
         val desiredRefs: Set[ColumnRef] = desiredColumns.map { case ColumnDescriptor(_, selector, tpe, _) => ColumnRef(CPath(Value) \ selector, tpe) }
 
-        override val columns = (keyColumns ++ valColumns.filter { case (ref, _) => desiredRefs.contains(ref) }).toMap
+        override val columns = super.columns filterKeys desiredRefs
+        //override val columns =
+        //  (keyColumns ++ valColumns.filter { desiredRefs(_._1) }).toMap
       }
 
       Some(BlockProjectionData[Identities,Slice](firstKey, lastKey, slice))

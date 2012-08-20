@@ -40,13 +40,13 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
   import Gen._
   import Arbitrary._
 
-  val maxArraySize = 2
-  val maxArrayDepth = 2
+  val maxArraySize = 8
+  val maxArrayDepth = 3
 
   def genColumn(size: Int, values: Gen[Array[CValue]]): Gen[List[Seq[CValue]]] = containerOfN[List,Seq[CValue]](size, values.map(_.toSeq))
 
   def containerOfAtMostN[C[_],T](maxSize: Int, g: Gen[T])(implicit b: org.scalacheck.util.Buildable[T,C]): Gen[C[T]] =
-    Gen.sized(size => for(n <- choose(0, size max maxSize); c <- containerOfN[C,T](n,g)) yield c)
+    Gen.sized(size => for(n <- choose(0, size min maxSize); c <- containerOfN[C,T](n,g)) yield c)
 
   def indexedSeqOf[A](gen: Gen[A]): Gen[IndexedSeq[A]] = containerOfAtMostN[List, A](maxArraySize, gen) map (_.toIndexedSeq)
 
@@ -99,8 +99,8 @@ class JDBMProjectionSpec extends Specification with ScalaCheck with Logging {
 
   implicit val genData: Arbitrary[ProjectionData] = Arbitrary(
     for {
-      size       <- chooseNum(1,100)//000)
-      width      <- chooseNum(1,40)
+      size       <- chooseNum(1,1000)//00) TODO bump back up to 100000 when memory isn't an issue.
+      width      <- chooseNum(1,20) // TODO bump back up to 40 when bytebuffer overflows handled.
       types      <- listOfN(width, genCType)
       descriptor <- ProjectionDescriptor(1, types.toList.map { tpe => ColumnDescriptor(Path("/test"), CPath.Identity, tpe, Authorities(Set.empty)) })
       val typeGens: Seq[Gen[CValue]] = types.map(genFor)

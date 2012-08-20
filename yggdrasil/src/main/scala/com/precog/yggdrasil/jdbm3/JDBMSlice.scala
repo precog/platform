@@ -46,21 +46,26 @@ trait JDBMSlice[Key] extends Slice with Logging {
   protected def source: Iterator[java.util.Map.Entry[Key,Array[Byte]]]
   protected def requestedSize: Int
 
-  protected def keyColumns: Array[(ColumnRef,ArrayColumn[_])]
-  protected def valColumns: Array[(ColumnRef,ArrayColumn[_])]
+  protected def keyColumns: Array[(ColumnRef, ArrayColumn[_])]
+  protected def valColumns: Seq[(ColumnRef, ColCodec[_])]
+  protected lazy val sliceCodec = SliceCodec(valColumns map (_._2))
+
+  // protected def keyColumns: Array[(ColumnRef,ArrayColumn[_])]
+  // protected def valColumns: Array[(ColumnRef,ArrayColumn[_])]
 
   // This method is responsible for loading the data from the key at the given row,
   // most likely into one or more of the key columns defined above
   protected def loadRowFromKey(row: Int, key: Key): Unit
 
   private var row = 0
-  private def onlyValColumns = valColumns.map(_._2)
+  // private def onlyValColumns = valColumns.map(_._2)
 
   protected def load() {
     source.take(requestedSize).foreach {
       entry => {
         loadRowFromKey(row, entry.getKey)
-        ColumnCodec.readOnly.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
+        sliceCodec.decode(row, ByteBuffer.wrap(entry.getValue))
+        // ColumnCodec.readOnly.decodeToArrayColumns(entry.getValue, row, onlyValColumns)
         row += 1
       }
     }
@@ -70,7 +75,10 @@ trait JDBMSlice[Key] extends Slice with Logging {
 
   def size = row
 
-  def columns = (keyColumns ++ valColumns).toMap
+  def columns = (keyColumns ++ valColumns.map { case (ref, codec) =>
+    (ref, codec.column)
+  }).toMap
+  // def columns = (keyColumns ++ valColumns).toMap
 }
 
 object JDBMSlice {
@@ -84,6 +92,7 @@ object JDBMSlice {
     case CNull        => MutableNullColumn.empty()
     case CEmptyObject => MutableEmptyObjectColumn.empty()
     case CEmptyArray  => MutableEmptyArrayColumn.empty()
+    case CArrayType(elemType) => ArrayHomogeneousArrayColumn.empty(sliceSize)(elemType)
     case CUndefined   => sys.error("CUndefined cannot be serialized")
   }))
 }

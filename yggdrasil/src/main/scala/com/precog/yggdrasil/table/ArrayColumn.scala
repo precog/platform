@@ -48,8 +48,8 @@ object ArrayHomogeneousArrayColumn {
     new ArrayHomogeneousArrayColumn(mutable.BitSet(0 until values.length: _*), values)(CArrayType(CValueType[A]))
   def apply[A: CValueType](defined: BitSet, values: Array[IndexedSeq[A]]) =
     new ArrayHomogeneousArrayColumn(makeMutable(defined), values)(CArrayType(CValueType[A]))
-  def empty[A: CValueType](size: Int): ArrayHomogeneousArrayColumn[A] =
-    new ArrayHomogeneousArrayColumn(mutable.BitSet.empty, new Array[IndexedSeq[A]](size))(CArrayType(CValueType[A]))
+  def empty[A](size: Int)(implicit elemType: CValueType[A]): ArrayHomogeneousArrayColumn[A] =
+    new ArrayHomogeneousArrayColumn(mutable.BitSet.empty, new Array[IndexedSeq[A]](size))(CArrayType(elemType))
 }
 
 

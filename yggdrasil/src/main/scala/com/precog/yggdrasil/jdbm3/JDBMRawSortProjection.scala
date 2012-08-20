@@ -82,7 +82,9 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
       lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(CPath(SortKey), sliceSize)).toArray
 
       lazy val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(CPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+      lazy val valColumns = valRefs map { case ColumnRef(selector, cType) =>
+        (ColumnRef(CPath(Value) \ selector, cType), ColCodec.forCType(cType, sliceSize))
+      }
 
       def loadRowFromKey(row: Int, rowKey: SortingKey) {
         if (row == 0) { firstKey = rowKey }
@@ -106,6 +108,8 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
             case (_, CDouble(cd))   => sortKeyColumns(i)._2.asInstanceOf[ArrayDoubleColumn].update(row, cd)
             case (_, CNum(cn))      => sortKeyColumns(i)._2.asInstanceOf[ArrayNumColumn].update(row, cn)
             case (_, CDate(cd))     => sortKeyColumns(i)._2.asInstanceOf[ArrayDateColumn].update(row, cd)
+            case (_, CArray(as: IndexedSeq[a], _)) =>
+              sortKeyColumns(i)._2.asInstanceOf[ArrayHomogeneousArrayColumn[a]].update(row, as)
             case (_, CNull)         => sortKeyColumns(i)._2.asInstanceOf[MutableNullColumn].update(row, true)
             case (_, CEmptyObject)  => sortKeyColumns(i)._2.asInstanceOf[MutableEmptyObjectColumn].update(row, true)
             case (_, CEmptyArray)   => sortKeyColumns(i)._2.asInstanceOf[MutableEmptyArrayColumn].update(row, true)                      
