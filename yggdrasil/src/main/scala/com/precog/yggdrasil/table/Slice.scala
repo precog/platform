@@ -211,13 +211,13 @@ trait Slice { source =>
         val acc = new ArrayIntList
         
         def findSelfDistinct(prevRow: Int, curRow: Int) = {
-          val selfComparator = rowComparator(filter, filter)(_.columns.keys.toList)
+          val selfComparator = rowComparator(filter, filter)(_.columns.keys.toList.sorted)
         
           @tailrec
           def findSelfDistinct0(prevRow: Int, curRow: Int) : ArrayIntList = {
-            if(curRow >= source.size) acc
+            if(curRow >= filter.size) acc
             else {
-              val retain = selfComparator(prevRow, curRow) == EQ
+              val retain = selfComparator(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               findSelfDistinct0(if(retain) curRow else prevRow, curRow+1)
             }
@@ -227,13 +227,13 @@ trait Slice { source =>
         }
 
         def findStraddlingDistinct(prev: Slice, prevRow: Int, curRow: Int) = {
-          val straddleComparator = rowComparator(prev, filter)(_.columns.keys.toList) 
-        
+          val straddleComparator = rowComparator(prev, filter)(_.columns.keys.toList.sorted) 
+
           @tailrec
           def findStraddlingDistinct0(prevRow: Int, curRow: Int): ArrayIntList = {
-            if(curRow >= source.size) acc
+            if(curRow >= filter.size) acc
             else {
-              val retain = straddleComparator(prevRow, curRow) == EQ
+              val retain = straddleComparator(prevRow, curRow) != EQ
               if(retain) acc.add(curRow)
               if(retain)
                 findSelfDistinct(curRow, curRow+1)
@@ -244,13 +244,17 @@ trait Slice { source =>
 
           findStraddlingDistinct0(prevRow, curRow)
         }
-
-        val lastDefined = prevFilter.flatMap(slice => if(slice.size > 0) Some(slice, slice.size-1) else None)
+        
+        val lastDefined = prevFilter.flatMap { slice =>
+          (slice.size-1 to 0 by -1).find(row => slice.columns.values.exists(_.isDefinedAt(row))) }.map {
+            (prevFilter.get, _)
+          }
+        
         val firstDefined = (0 until filter.size).find(i => filter.columns.values.exists(_.isDefinedAt(i)))
 
         (lastDefined, firstDefined) match {
           case (Some((prev, i)), Some(j)) => findStraddlingDistinct(prev, i, j)
-          case (_,               Some(j)) => findSelfDistinct(j, j+1)
+          case (_,               Some(j)) => acc.add(j) ; findSelfDistinct(j, j+1)
           case _                          => acc
         }
       }
