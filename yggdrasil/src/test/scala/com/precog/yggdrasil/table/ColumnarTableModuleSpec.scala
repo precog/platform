@@ -35,7 +35,8 @@ trait ColumnarTableModuleSpec[M[+_]] extends
   TransformSpec[M] with
   BlockLoadSpec[M] with
   BlockSortSpec[M] with
-  CompactSpec[M] { spec =>
+  CompactSpec[M] with 
+  DistinctSpec[M] { spec =>
     
   override val defaultPrettyParams = Pretty.Params(2)
 
@@ -215,6 +216,11 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "preserve all defined key rows"            in testCompactPreserveKey
       "have no undefined key rows"               in testCompactRowsKey
       "have no empty key slices"                 in testCompactSlicesKey
+    }
+    
+    "in distinct" >> {
+      "be the identity on tables with no duplicate rows" in testDistinctIdentity
+      "have no duplicate rows" in testDistinct
     }
   }
 }
