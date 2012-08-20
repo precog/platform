@@ -20,7 +20,7 @@
 name := "quirrel"
 
 libraryDependencies ++= Seq(
-  "com.codecommit" % "gll-combinators_2.9.1" % "2.1-SNAPSHOT"
+  "com.codecommit" %% "gll-combinators" % "2.2-SNAPSHOT"
 )
   
 initialCommands in console := """

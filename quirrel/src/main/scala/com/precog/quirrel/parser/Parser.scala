@@ -127,7 +127,7 @@ trait Parser extends RegexParsers with Filters with AST {
     | """neg\b""".r ~ expr ^# { (loc, _, e) => Neg(loc, e) }
     
     | "(" ~ expr ~ ")" ^# { (loc, _, e, _) => Paren(loc, e) }
-  ) filter (precedence & associativity)
+  ) filter (precedence & arrayDefDeref & relateRelate)
   
   private lazy val importSpec: Parser[ImportSpec] = (
       namespace ~ "::" ~ "*" ^^ { (p, _, _) => WildcardImport(p) }
@@ -200,49 +200,54 @@ trait Parser extends RegexParsers with Filters with AST {
   override val whitespace = """([;\s]+|--.*|\(-([^\-]|-+[^)\-])*-\))+""".r
   override val skipWhitespace = true
   
-  private val precedence = 
-    prec('descent, 'deref,
-      'comp, 'neg,
-      'mul, 'div,
-      'add, 'sub,
-      'union, 'intersect, 'difference,
-      'lt, 'lteq, 'gt, 'gteq,
-      'eq, 'noteq,
-      'and, 'or,
-      'with,
-      'new,
-      'where,
-      'relate,
-      'let, 'forall,
-      'import)
+  private val precedence =
+    prec(
+      Descent,
+      Deref,
+      Comp,
+      Neg,
+      Mul,
+      Div,
+      Add,
+      Sub,
+      Union,
+      Intersect,
+      Difference,
+      Lt,
+      LtEq,
+      Gt,
+      GtEq,
+      Eq,
+      NotEq,
+      And,
+      Or,
+      With,
+      New,
+      Where,
+      Relate,
+      Let,
+      Forall,
+      Import)
       
-  private val associativity = (
-      ('mul <)
-    & ('div <)
-    & ('add <)
-    & ('sub <)
-    & ('lt <)
-    & ('lteq <)
-    & ('gt <)
-    & ('gteq <)
-    & ('eq <)
-    & ('noteq <)
-    & ('and <)
-    & ('or <)
-    & ('with <)
-    & ('where <)
-    & ('union <)
-    & ('intersect <)
-    & ('difference <)
-    & ('relate <>)
-    & (arrayDefDeref _)
-  )
+  private def arrayDefDeref = new com.codecommit.gll.ast.Filter[Node] {
+    def apply(n: Node): Boolean = n match {
+      case n if n.getClass == classOf[Deref] =>
+        n.children.head.getClass != classOf[ArrayDef]
+      
+      case _ => true
+    } 
+  }
   
-  private def arrayDefDeref(n: Node): Boolean = n match {
-    case n: UnaryNode if n.label == 'deref =>
-      n.child.label != 'array
-    
-    case _ => true
+  private def relateRelate = new com.codecommit.gll.ast.Filter[Node] {
+    def apply(n: Node): Boolean = n match {
+      
+      // desugared due to some sort of wonky scalac bug that I couldn't minimize...
+      case n if n.isInstanceOf[Relate] =>
+        !n.asInstanceOf[Relate].from.isInstanceOf[Relate] &&
+          !n.asInstanceOf[Relate].to.isInstanceOf[Relate]
+      
+      case _ => true
+    }
   }
   
   // %% 

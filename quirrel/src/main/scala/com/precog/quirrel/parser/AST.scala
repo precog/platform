@@ -644,6 +644,8 @@ trait AST extends Phases {
     sealed trait ExprBinaryNode extends Expr with BinaryNode {
       override def left: Expr
       override def right: Expr
+      
+      def assocLeft = true
 
       override def children = List(left, right)
     }
@@ -657,7 +659,7 @@ trait AST extends Phases {
     }
     
     final case class Let(loc: LineStream, name: Identifier, params: Vector[TicId], left: Expr, right: Expr) extends ExprUnaryNode {
-      val label = 'let
+      val sym = 'let
       
       val isPrefix = true
       
@@ -688,30 +690,30 @@ trait AST extends Phases {
     }
 
     final case class Forall(loc: LineStream, param: TicId, child: Expr) extends ExprUnaryNode {
-      val label = 'forall
+      val sym = 'forall
       val isPrefix = true
     }
 
     final case class Import(loc: LineStream, spec: ImportSpec, child: Expr) extends ExprUnaryNode {
-      val label = 'import
+      val sym = 'import
       val isPrefix = true
     }
     
     final case class New(loc: LineStream, child: Expr) extends ExprUnaryNode {
-      val label = 'new
+      val sym = 'new
       val isPrefix = true
     }
     
-    final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends ExprBinaryNode {
-      val label = 'relate
+    final case class Relate(loc: LineStream, from: Expr, to: Expr, in: Expr) extends Expr with Node {
+      val sym = 'relate
       
-      val left = from
-      val right = to
-      override def children = List(from, to, in)
+      def form = from ~ 'relate ~ to ~ in
+      
+      override def children = List(in, to, from)
     }
     
     final case class TicVar(loc: LineStream, name: TicId) extends ExprLeafNode {
-      val label = 'ticvar
+      val sym = 'ticvar
       
       private val _binding = attribute[FormalBinding](bindNames)
       def binding = _binding()
@@ -719,46 +721,60 @@ trait AST extends Phases {
     }
     
     final case class StrLit(loc: LineStream, value: String) extends ExprLeafNode {
-      val label = 'str
+      val sym = 'str
     }
     
     final case class NumLit(loc: LineStream, value: String) extends ExprLeafNode {
-      val label = 'num
+      val sym = 'num
     }
     
     final case class BoolLit(loc: LineStream, value: Boolean) extends ExprLeafNode {
-      val label = 'bool
+      val sym = 'bool
     }
     
     final case class NullLit(loc: LineStream) extends ExprLeafNode {
-      val label = 'null
+      val sym = 'null
     }
     
     final case class ObjectDef(loc: LineStream, props: Vector[(String, Expr)]) extends Expr {
-      val label = 'object
+      val sym = 'object
+      
+      def form = {
+        val opt = (props map { case (_, e) => 'name ~ e } reduceOption { _ ~ _ })
+        
+        opt map { 'leftCurl ~ _ ~ 'rightCurl } getOrElse sym 
+      }
       
       def children = props map { _._2 } toList
     }
     
     final case class ArrayDef(loc: LineStream, values: Vector[Expr]) extends Expr {
-      val label = 'array
+      val sym = 'array
+      
+      def form = {
+        val opt = (values map { _ ~ 'comma } reduceOption { _ ~ _ })
+        
+        opt map { 'leftBracket ~ _ ~ 'rightBracket } getOrElse sym 
+      }
       
       def children = values.toList
     }
     
     final case class Descent(loc: LineStream, child: Expr, property: String) extends ExprUnaryNode {
-      val label = 'descent
+      val sym = 'descent
       val isPrefix = false
     }
     
-    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends ExprUnaryNode {
-      val label = 'deref
-      val isPrefix = false
-      val child = left
+    final case class Deref(loc: LineStream, left: Expr, right: Expr) extends Expr with Node {
+      val sym = 'deref
+      
+      def form = left ~ 'leftBracket ~ right ~ 'rightBracket
+      
+      def children = left :: right :: Nil
     }
 
     final case class Dispatch(loc: LineStream, name: Identifier, actuals: Vector[Expr]) extends Expr {
-      val label = 'dispatch
+      val sym = 'dispatch
       
       private val _isReduction = attribute[Boolean](bindNames)
       def isReduction = _isReduction()
@@ -768,90 +784,97 @@ trait AST extends Phases {
       def binding = _binding()
       private[quirrel] def binding_=(b: Binding) = _binding() = b
       
+      def form = {
+        val opt = (actuals map { _ ~ 'comma } reduceOption { _ ~ _ })
+        
+        opt map { sym ~ 'leftParen ~ _ ~ 'rightParen } getOrElse sym
+      }
+      
       def children = actuals.toList
     }
     
     final case class Where(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'where
+      val sym = 'where
     }
 
     final case class With(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'with
+      val sym = 'with
     }
     
     final case class Union(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'union
+      val sym = 'union
     }
 
     final case class Intersect(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'intersect
+      val sym = 'intersect
     }
 
     final case class Difference(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'difference
+      val sym = 'difference
     }
 
     final case class Add(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'add
+      val sym = 'add
     }
     
     final case class Sub(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'sub
+      val sym = 'sub
     }
     
     final case class Mul(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'mul
+      val sym = 'mul
     }
     
     final case class Div(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'div
+      val sym = 'div
     }
     
     final case class Lt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'lt
+      val sym = 'lt
     }
     
     final case class LtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'lteq
+      val sym = 'lteq
     }
     
     final case class Gt(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'gt
+      val sym = 'gt
     }
     
     final case class GtEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'gteq
+      val sym = 'gteq
     }
     
     final case class Eq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'eq
+      val sym = 'eq
     }
     
     final case class NotEq(loc: LineStream, left: Expr, right: Expr) extends RelationExpr {
-      val label = 'noteq
+      val sym = 'noteq
     }
     
     final case class And(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'and
+      val sym = 'and
     }
     
     final case class Or(loc: LineStream, left: Expr, right: Expr) extends ExprBinaryNode {
-      val label = 'or
+      val sym = 'or
     }
     
     final case class Comp(loc: LineStream, child: Expr) extends ExprUnaryNode {
-      val label = 'comp
+      val sym = 'comp
       val isPrefix = true
     }
     
     final case class Neg(loc: LineStream, child: Expr) extends ExprUnaryNode {
-      val label = 'neg
+      val sym = 'neg
       val isPrefix = true
     }
     
     final case class Paren(loc: LineStream, child: Expr) extends Expr {
-      val label = 'paren
-      val children = child :: Nil
+      val sym = 'paren
+      def form = 'leftParen ~ child ~ 'rightParen
+      def children = child :: Nil
     }
    
     
