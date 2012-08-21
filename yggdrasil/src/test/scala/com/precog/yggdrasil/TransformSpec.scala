@@ -234,7 +234,7 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
       results.copoint must_== expected
     }
   }
-
+  
   def checkWrapObject = {
     implicit val gen = sample(schema)
     check { (sample: SampleData) =>
@@ -589,6 +589,21 @@ trait TransformSpec[M[+_]] extends TableModuleSpec[M] {
         ((jv \ "value"): @unchecked) match {
           case JArray(x :: y :: z :: xs) => JArray(z :: y :: x :: xs)
         }
+      }
+
+      results.copoint must_== expected
+    }
+  }
+
+  def checkConst = {
+    implicit val gen = undefineRowsForColumn(sample(_ => Seq(JPath("field") -> CLong)), JPath("value") \ "field")
+    check { (sample: SampleData) =>
+      val table = fromSample(sample)
+      val results = toJson(table.transform(ConstLiteral(CString("foo"), DerefObjectStatic(Leaf(Source), JPathField("value")))))
+      
+      val expected = sample.data flatMap {
+        case jv if jv \ "value" \ "field" == JNothing => None
+        case _ => Some(JObject(JField("field", JString("foo")) :: Nil))
       }
 
       results.copoint must_== expected

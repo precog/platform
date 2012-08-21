@@ -175,6 +175,30 @@ object SampleData extends CValueGenerators {
     
     Arbitrary(gen)
   }
+
+  def undefineRows(sample: Arbitrary[SampleData]): Arbitrary[SampleData] = {
+    val gen =
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        val rows = for(row <- sampleData.data) yield if(Random.nextDouble < 0.25) JNothing else row
+        SampleData(rows, sampleData.schema) 
+      }
+    
+    Arbitrary(gen)
+  }
+
+  def undefineRowsForColumn(sample: Arbitrary[SampleData], path: JPath): Arbitrary[SampleData] = {
+    val gen =
+      for {
+        sampleData <- arbitrary(sample)
+      } yield {
+        val rows = for(row <- sampleData.data) yield if(Random.nextDouble < 0.25) row.set(path, JNothing)  else row
+        SampleData(rows, sampleData.schema) 
+      }
+    
+    Arbitrary(gen)
+  }
 }
 
 trait TestLib[M[+_]] extends TableModule[M] {
@@ -182,7 +206,6 @@ trait TestLib[M[+_]] extends TableModule[M] {
   def lookupF2(namespace: List[String], name: String): F2
   def lookupScanner(namespace: List[String], name: String): Scanner 
 }
-
 
 trait TableModuleTestSupport[M[+_]] extends TableModule[M] {
   implicit def coM : Copointed[M]

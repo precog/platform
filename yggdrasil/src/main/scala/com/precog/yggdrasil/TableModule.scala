@@ -101,6 +101,8 @@ trait TableModule[M[+_]] extends FNModule {
     case class Equal[+A <: SourceType](left: TransSpec[A], right: TransSpec[A]) extends TransSpec[A] //done
 
     case class EqualLiteral[+A <: SourceType](left: TransSpec[A], right: CValue, invert: Boolean) extends TransSpec[A]
+    
+    case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]
     

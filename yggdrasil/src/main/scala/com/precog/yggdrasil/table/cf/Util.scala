@@ -218,7 +218,48 @@ object util {
       def isDefinedAt(row: Int) = c.isDefinedAt(row) && !complement.isDefinedAt(row)
     }
   })
+  
+  case class DefinedConst(value: CValue) extends CF1(
+    c => 
+      Some(
+        value match {
+          case CString(s) => new StrColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = s
+          }
+          case CBoolean(b) => new BoolColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = b
+          }
+          case CLong(l) => new LongColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = l
+          }
+          case CDouble(d) => new DoubleColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = d
+          }
+          case CNum(n) => new NumColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = n
+          }
+          case CDate(d) => new DateColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+            def apply(row: Int) = d
+          }
+          case CNull => new NullColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+          }
+          case CEmptyObject => new EmptyObjectColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+          }
+          case CEmptyArray => new EmptyArrayColumn {
+            def isDefinedAt(row: Int) = c.isDefinedAt(row)
+          }
+          case CUndefined => UndefinedColumn(c)
+        }
+      )
+  )
 }
-
 
 // vim: set ts=4 sw=4 et:
