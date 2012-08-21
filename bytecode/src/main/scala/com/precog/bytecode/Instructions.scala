@@ -234,6 +234,7 @@ trait Instructions extends Library {
     case object ArraySwap extends UnfixedBinaryOperation
     
     case object DerefObject extends UnfixedBinaryOperation
+    case object DerefMetadata extends UnfixedBinaryOperation
     case object DerefArray extends UnfixedBinaryOperation
     
     case object Range

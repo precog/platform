@@ -110,7 +110,8 @@ trait BytecodeReader extends Reader {
         case 0x8A => Some(ArraySwap)
         
         case 0xA0 => Some(DerefObject)
-        case 0xA1 => Some(DerefArray)
+        case 0xA1 => Some(DerefMetadata)
+        case 0xA2 => Some(DerefArray)
 
         case 0xB1 => stdlib2Ops.get(((code >> 8) & 0xFFFFFF).toInt)
         
