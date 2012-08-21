@@ -190,6 +190,7 @@ trait ColumnarTableModuleSpec[M[+_]] extends
       "perform a summation scan" in checkScan
       "perform dynamic object deref" in testDerefObjectDynamic
       "perform an array swap" in checkArraySwap
+      "replace defined rows with a constant" in checkConst
     }
 
     "in load" >> {
