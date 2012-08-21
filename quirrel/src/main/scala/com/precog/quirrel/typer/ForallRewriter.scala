@@ -76,6 +76,8 @@ trait ForallRewriter extends parser.AST {
     }
 
     case Descent(loc, child, property) => Descent(loc, rewrite(child), property)
+    
+    case MetaDescent(loc, child, property) => MetaDescent(loc, rewrite(child), property)
 
     case Deref(loc, left, right) => Deref(loc, rewrite(left), rewrite(right))
 

@@ -378,6 +378,54 @@ object AccumulatedProvenanceSpecs extends Specification
           tree.errors must beEmpty
         }
       }
+      
+      "MetaDescent" >> {
+        {
+          val tree = compile("//foo@bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/foo"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("""{foo: "bar"}@foo""")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: //bar}@foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/bar"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: 1, bar: //baz}@foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/baz"))) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("{foo: //fob, bar: //baz}@bar")
+          tree.accumulatedProvenance must beLike { case Some(Vector(StaticProvenance("/fob"), StaticProvenance("/baz"))) => ok }
+          tree.errors mustEqual Set(OperationOnUnrelatedSets)
+        }
+        {
+          val tree = compile("{foo: bar(5), baz: 1}@baz")
+          tree.accumulatedProvenance must beLike { case None => ok }
+          tree.errors mustEqual Set(UndefinedFunction(Identifier(Vector(), "bar")))
+        }        
+        {
+          val tree = compile("true@foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[1,2,3]@foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+        {
+          val tree = compile("[]@foo")
+          tree.accumulatedProvenance must beLike { case Some(Vector()) => ok }
+          tree.errors must beEmpty
+        }
+      }
 
       "Deref" >> {
         {

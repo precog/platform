@@ -148,6 +148,8 @@ trait Binder extends parser.AST with Library {
       
       case Descent(_, child, _) => loop(child, env)
       
+      case MetaDescent(_, child, _) => loop(child, env)
+      
       case Deref(_, left, right) =>
         loop(left, env) ++ loop(right, env)
       

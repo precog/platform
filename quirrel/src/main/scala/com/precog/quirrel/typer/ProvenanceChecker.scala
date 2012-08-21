@@ -256,6 +256,16 @@ trait ProvenanceChecker extends parser.AST with Binder with CriticalConditionFin
         back
       }
       
+      case MetaDescent(_, child, _) => {
+        val back = loop(child, relations, constraints)
+        expr.provenance = child.provenance
+        expr.constrainingExpr = constraints get expr.provenance
+
+        expr.accumulatedProvenance = child.accumulatedProvenance
+
+        back
+      }
+      
       case Deref(_, left, right) => {
         val back = loop(left, relations, constraints) ++ loop(right, relations, constraints)
         val result = unifyProvenance(relations)(left.provenance, right.provenance) 

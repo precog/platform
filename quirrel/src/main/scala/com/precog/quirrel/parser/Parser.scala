@@ -96,7 +96,9 @@ trait Parser extends RegexParsers with Filters with AST {
     
     | "{" ~ properties ~ "}"      ^# { (loc, _, ps, _) => ObjectDef(loc, ps) }
     | "[" ~ nullableActuals ~ "]" ^# { (loc, _, as, _) => ArrayDef(loc, as) }
+    
     | expr ~ "." ~ propertyName   ^# { (loc, e, _, p) => Descent(loc, e, p) }
+    | expr ~ "@" ~ propertyName   ^# { (loc, e, _, p) => MetaDescent(loc, e, p) }
     | expr ~ "[" ~ expr ~ "]"     ^# { (loc, e1, _, e2, _) => Deref(loc, e1, e2) }
     
     | namespacedId ~ "(" ~ actuals ~ ")" ^# { (loc, id, _, as, _) => Dispatch(loc, id, as) }  
@@ -202,7 +204,7 @@ trait Parser extends RegexParsers with Filters with AST {
   
   private val precedence =
     prec(
-      Descent,
+      (Descent, MetaDescent),
       Deref,
       Comp,
       Neg,

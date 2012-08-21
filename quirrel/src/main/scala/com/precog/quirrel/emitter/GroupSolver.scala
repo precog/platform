@@ -78,6 +78,8 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     
     case Descent(_, child, _) => inferBuckets(child)
     
+    case MetaDescent(_, child, _) => inferBuckets(child)
+    
     case Deref(_, left, right) =>
       inferBuckets(left) ++ inferBuckets(right)
     
@@ -275,6 +277,7 @@ trait GroupSolver extends AST with GroupFinder with Solver {
     case ObjectDef(_, props) => (props.unzip._2 map { listTicVars(b, _) }).fold(Set()) { _ ++ _ }
     case ArrayDef(_, values) => (values map { listTicVars(b, _) }).fold(Set()) { _ ++ _ }
     case Descent(_, child, _) => listTicVars(b, child)
+    case MetaDescent(_, child, _) => listTicVars(b, child)
     case Deref(_, left, right) => listTicVars(b, left) ++ listTicVars(b, right)
     
     case d @ Dispatch(_, _, actuals) => {

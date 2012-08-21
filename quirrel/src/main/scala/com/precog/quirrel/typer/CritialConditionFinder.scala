@@ -63,6 +63,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
       
       case Descent(_, child, _) => loop(root, child, currentWhere)
       
+      case MetaDescent(_, child, _) => loop(root, child, currentWhere)
+      
       case Deref(loc, left, right) =>
         merge(loop(root, left, currentWhere), loop(root, right, currentWhere))
       
@@ -198,6 +200,8 @@ trait CriticalConditionFinder extends parser.AST with Binder {
     case ArrayDef(_, values) => values exists referencesTicVar(root)
     
     case Descent(_, child, _) => referencesTicVar(root)(child)
+    
+    case MetaDescent(_, child, _) => referencesTicVar(root)(child)
     
     case Deref(_, left, right) => referencesTicVar(root)(left) || referencesTicVar(root)(right)
     

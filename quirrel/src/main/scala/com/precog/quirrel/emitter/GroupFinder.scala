@@ -63,6 +63,8 @@ trait GroupFinder extends parser.AST with typer.Binder with typer.ProvenanceChec
       
       case Descent(_, child, _) => loop(root, child, currentWhere)
       
+      case MetaDescent(_, child, _) => loop(root, child, currentWhere)
+      
       case Deref(loc, left, right) =>
         loop(root, left, currentWhere) ++ loop(root, right, currentWhere)
       
