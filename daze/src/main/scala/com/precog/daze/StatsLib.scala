@@ -60,7 +60,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
     val tpe = UnaryOperationType(JNumberT, JNumberT)
 
     def apply(table: Table) = {  //TODO write tests for the empty table case
-      val compactedTable = table.compact(Leaf(Source))
+      val compactedTable = table.compact(WrapObject(Typed(DerefObjectStatic(Leaf(Source), paths.Value), JNumberT), paths.Value.name))
 
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
 
@@ -70,7 +70,7 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
         median <- if (count % 2 == 0) {
           val middleValues = sortedTable.takeRange((count.toLong / 2) - 1, 2)
           val transformedTable = middleValues.transform(trans.DerefObjectStatic(Leaf(Source), paths.Value))  //todo make function for this
-          println("middleValues: %s and count: %s and sortedTable: %s".format(middleValues, count, sortedTable))
+          //println("middleValues: %s and count: %s and sortedTable: %s".format(middleValues, count, sortedTable))
           Mean(transformedTable)
         } else {
           val middleValue = M.point(sortedTable.takeRange((count.toLong / 2), 1))
@@ -939,7 +939,9 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
                 }
               }
 
-              ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
+              val result = ((finalValue, finalCountEach, finalCountTotal), Some(ArrayNumColumn(defined, acc)))
+              acc map { x => print(" " + x) }
+              result
             }
 
           case _ => (a, None)
@@ -952,9 +954,16 @@ trait StatsLib[M[+_]] extends GenOpcode[M] with ReductionLib[M] with BigDecimalO
       val sortKey = DerefObjectStatic(Leaf(Source), paths.Value)
       val sortedTable = table.sort(sortKey, SortAscending)
 
-      val transScan = Scan(DerefObjectStatic(Leaf(Source), paths.Value), rankScanner)
+      println("sortedTable: %s".format(sortedTable))
+
+      import TableTransSpec._
+
+      val transScan = TableTransSpec.makeTransSpec(
+        Map(paths.Value -> Scan(Typed(Leaf(Source), JNumberT), rankScanner)))
       
-      sortedTable.map(_.transform(transScan))
+      val result = sortedTable.map(_.transform(transScan))
+      println("result of apply: %s".format(result))
+      result
     }
 
 

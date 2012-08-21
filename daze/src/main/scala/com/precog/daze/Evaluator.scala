@@ -259,7 +259,7 @@ trait Evaluator[M[+_]] extends DAG
             
             tableM2 = for {
               table <- pendingTable.table
-              transformed = table.transform(liftToValues(pendingTable.trans))
+              transformed = table.transform(liftToValues(pendingTable.trans))  //TODO `transformed` is not used
             } yield table.transform(spec)
           } yield PendingTable(tableM2, graph, TransSpec1.Id)
         }
@@ -657,6 +657,8 @@ trait Evaluator[M[+_]] extends DAG
                 
                 case _ => sys.error("unreachable code")
               }
+
+              println("sharedPrefixLength: %s \n".format(sharedPrefixLength(target, boolean)))
               
               val spec = buildWrappedJoinSpec(sharedPrefixLength(target, boolean), target.identities.length, boolean.identities.length) { (srcLeft, srcRight) =>
                 trans.Filter(srcLeft, srcRight)
@@ -943,8 +945,11 @@ trait Evaluator[M[+_]] extends DAG
     case _ => trans.Map2(left, right, op2(op).f2)
   }
 
-  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int =
+  private def sharedPrefixLength(left: DepGraph, right: DepGraph): Int = {
+    println("left identities: %s\n".format(left.identities))
+    println("right identities: %s\n".format(right.identities))
     left.identities zip right.identities takeWhile { case (a, b) => a == b } length
+  }
   
   private def svalueToCValue(sv: SValue) = sv match {
     case SString(str) => CString(str)
@@ -973,6 +978,7 @@ trait Evaluator[M[+_]] extends DAG
   }
   
   private def buildWrappedJoinSpec(sharedLength: Int, leftLength: Int, rightLength: Int)(spec: (TransSpec2, TransSpec2) => TransSpec2): TransSpec2 = {
+    assert(sharedLength > 0)
     val leftIdentitySpec = DerefObjectStatic(Leaf(SourceLeft), paths.Key)
     val rightIdentitySpec = DerefObjectStatic(Leaf(SourceRight), paths.Key)
     
@@ -986,11 +992,17 @@ trait Evaluator[M[+_]] extends DAG
       yield DerefArrayStatic(rightIdentitySpec, JPathIndex(i))
     
     val derefs: Seq[TransSpec2] = sharedDerefs ++ unsharedLeft ++ unsharedRight
+
+    println("sharedLength: %s".format(sharedLength))
+
+    println("sharedDerefs: %s \n unsharedLeft: %s \n unsharedRight: %s \n".format(sharedDerefs, unsharedLeft, unsharedRight))
     
     val newIdentitySpec = if (derefs.isEmpty)
       trans.ConstLiteral(CEmptyArray, Leaf(SourceLeft))
-    else
+    else {
+      println("is this the array concat?")
       derefs reduce { trans.ArrayConcat(_, _) }
+    }
     
     val wrappedIdentitySpec = trans.WrapObject(trans.WrapArray(newIdentitySpec), paths.Key.name)
     
@@ -1039,11 +1051,11 @@ trait Evaluator[M[+_]] extends DAG
     TableTransSpec.makeTransSpec(Map(paths.Value -> trans))
    
   
-  private type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
-  private type TableTransSpec1 = TableTransSpec[Source1]
-  private type TableTransSpec2 = TableTransSpec[Source2]
+  /*private*/ type TableTransSpec[+A <: SourceType] = Map[JPathField, TransSpec[A]]
+  /*private*/ type TableTransSpec1 = TableTransSpec[Source1]
+  /*private*/ type TableTransSpec2 = TableTransSpec[Source2]
   
-  private object TableTransSpec {
+  /*private*/ object TableTransSpec {
     def makeTransSpec(tableTrans: TableTransSpec1): TransSpec1 = {
       val wrapped = for ((key @ JPathField(fieldName), value) <- tableTrans) yield {
         val mapped = deepMap(value) {
@@ -1054,7 +1066,7 @@ trait Evaluator[M[+_]] extends DAG
         trans.WrapObject(mapped, fieldName)
       }
       
-      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>
+      wrapped.foldLeft(ObjectDelete(Leaf(Source), Set(tableTrans.keys.toSeq: _*)): TransSpec1) { (acc, ts) =>  //TODO what are we deleting and why?
         trans.ObjectConcat(acc, ts)
       }
     }

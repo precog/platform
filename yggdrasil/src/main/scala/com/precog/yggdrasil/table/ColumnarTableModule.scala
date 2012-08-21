@@ -1033,7 +1033,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] with IdSourceScannerModu
       def inner(s: Stream[Slice], takenSoFar: Long, sliceStartIndex: Int): Stream[Slice] = s match {
         case h #:: rest if takenSoFar < numberToTake && h.size > numberToTake - takenSoFar => {
           val needed = h.takeRange(sliceStartIndex, (numberToTake - takenSoFar).toInt)
-          println("sliceStartIndex: %s and     numberToTake: %s and   takenSoFar: %s and    needed: %s".format(sliceStartIndex, numberToTake, takenSoFar, needed))
           needed #:: Stream.empty[Slice]
         }
         case h #:: rest if takenSoFar < numberToTake =>

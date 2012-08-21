@@ -626,8 +626,11 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph1(loc: Line, m: Morphism1, parent: DepGraph) extends DepGraph {
-      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
+    case class Morph1(loc: Line, mor: Morphism1, parent: DepGraph) extends DepGraph {
+      lazy val identities = {
+        if (mor.retainIds) parent.identities
+        else Vector(SynthIds(IdGen.nextInt()))
+      }
       
       val sorting = IdentitySort
       
@@ -644,8 +647,11 @@ trait DAG extends Instructions {
       lazy val containsSplitArg = parent.containsSplitArg
     }
 
-    case class Morph2(loc: Line, m: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
-      lazy val identities = Vector(SynthIds(IdGen.nextInt()))
+    case class Morph2(loc: Line, mor: Morphism2, left: DepGraph, right: DepGraph) extends DepGraph {
+      lazy val identities = {
+        if (mor.retainIds) left.identities ++ right.identities  //TODO is this correct????
+        else Vector(SynthIds(IdGen.nextInt()))
+      }
       
       val sorting = IdentitySort
       
