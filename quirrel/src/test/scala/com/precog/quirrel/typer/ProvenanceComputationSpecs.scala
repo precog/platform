@@ -55,6 +55,17 @@ object ProvenanceComputationSpecs extends Specification
       }
     }    
 
+    "compute provenance of a path rewritten to be relative (as the DAG will later do)" in {
+      forall(lib2) { f =>
+        val tree = parse("""
+          load(%s("/", "/clicks"))""".format(f.fqn))
+
+        tree.provenance mustEqual StaticProvenance("/clicks")
+        
+        tree.errors must beEmpty
+      }
+    }
+
     "identify let according to its right expression" in {   // using raw, no-op let
       {
         val tree = parse("a := 1 1")
@@ -478,6 +489,11 @@ object ProvenanceComputationSpecs extends Specification
         tree.provenance must beLike {
           case DynamicProvenance(_) => ok
         }
+        tree.errors must beEmpty
+      }      
+      {
+        val tree = compile("""load("/clicks")""")
+        tree.provenance mustEqual StaticProvenance("/clicks")
         tree.errors must beEmpty
       }
     }
