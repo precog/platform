@@ -59,7 +59,7 @@ trait Slice { source =>
   def mapColumns(f: CF1): Slice = new Slice {
     val size = source.size
     val columns = source.columns flatMap {
-      case (ref, col) => 
+      case (ref, col) =>
         if (ref.selector == CPath.Identity) f(col) map { (ref, _ ) }  
         else None
     }
@@ -87,6 +87,10 @@ trait Slice { source =>
     }
   }
 
+  // ARRAYS:
+  // TODO Here, if we delete a JPathIndex/JArrayFixedT, then we need to
+  // construct a new Homo*ArrayColumn that has some indices missing.
+  //
   def delete(jtype: JType): Slice = new Slice {
     def fixArrays(columns: Map[ColumnRef, Column]): Map[ColumnRef, Column] = {
       columns.toSeq.sortBy(_._1).foldLeft((Map.empty[Vector[CPathNode], Int], Map.empty[ColumnRef, Column])) {

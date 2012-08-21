@@ -32,6 +32,7 @@ object Schema {
     case JBooleanT => Set(CBoolean)
     case JNullT => Set(CNull)
   }
+
   /**
    * Constructs a JType corresponding to the supplied sequence of (CPath, CType) pairs. Returns None if the
    * supplied sequence is empty.
@@ -44,6 +45,7 @@ object Schema {
       case (CPath.Identity, CNull) => JNullT
       case (CPath.Identity, CEmptyArray) => JArrayFixedT(Map())
       case (CPath.Identity, CEmptyObject) => JObjectFixedT(Map())
+      // case (CPath.Identity, CArrayType(elemType)) => JArrayUnfixedT
     }
 
     val indices = ctpes.foldLeft(BitSet()) {
@@ -92,10 +94,17 @@ object Schema {
       fields.get(head).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
 
     case (JArrayUnfixedT, (CPath.Identity, CEmptyArray)) => true
+    case (JArrayUnfixedT, (CPath.Identity, CArrayType(_))) => true
     case (JArrayUnfixedT, (CPath(CPathIndex(_), _*), _)) => true
     case (JArrayFixedT(elements), (CPath.Identity, CEmptyArray)) if elements.isEmpty => true
     case (JArrayFixedT(elements), (CPath(CPathIndex(i), tail @ _*), ctpe)) =>
       elements.get(i).map(includes(_, CPath(tail: _*), ctpe)).getOrElse(false)
+
+    // TODO This isn't really true and we can never know for sure that it is.
+    // Commented out for now, but need to investigate if a valid use-case for
+    // this may actually happen; ie. someone wants an array.
+    //case (JArrayFixedT(elements), (CPath.Identity, CArrayType(elemType))) =>
+    //  elements.values forall (includes(_, CPath.Identity, elemType))
 
     case (JUnionT(ljtpe, rjtpe), (path, ctpe)) => includes(ljtpe, path, ctpe) || includes(rjtpe, path, ctpe)
 
@@ -144,8 +153,9 @@ object Schema {
       val indices = elements.keySet
       indices.forall { i =>
         subsumes(
-          ctpes.collect { case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe) }, 
-          elements(i))
+          ctpes.collect {
+            case (CPath(CPathIndex(`i`), tail @ _*), ctpe) => (CPath(tail : _*), ctpe)
+          }, elements(i))
       }
     }
 

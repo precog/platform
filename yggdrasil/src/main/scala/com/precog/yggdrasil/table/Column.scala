@@ -46,13 +46,76 @@ sealed trait Column {
 
 private[yggdrasil] trait ExtensibleColumn extends Column // TODO: or should we just unseal Column?
 
-trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) {
+trait HomogeneousArrayColumn[A] extends Column with (Int => IndexedSeq[A]) { self =>
   def apply(row: Int): IndexedSeq[A]
 
   val tpe: CArrayType[A]
   override def jValue(row: Int) = tpe.jValueFor(this(row))
   override def cValue(row: Int) = tpe(this(row))
   override def strValue(row: Int) = this(row) mkString ("[", ",", "]")
+
+  /**
+   * Returns a new Column that selects the `i`-th element from the
+   * underlying arrays.
+   */
+  def select(i: Int) = HomogeneousArrayColumn.select(this, i)
+
+  /**
+   * Returns a view of this column, whose indicies, defined in `removed` have
+   * been removed. For example, `col.without(Set(0, 2))`, returns a view of
+   * this column, but removes the 1st and 3rd element from the returned
+   * arrays.
+   */
+  def without(removed: Set[Int]) = new HomogeneousArrayColumn[A] {
+    def apply(row: Int): IndexedSeq[A] =
+      self.apply(row).zipWithIndex filterNot (e => removed(e._2)) map (_._1)
+    def isDefinedAt(row: Int) = self.isDefinedAt(row)
+    val tpe = self.tpe
+  }
+ }
+
+object HomogeneousArrayColumn {
+  def unapply[A](col: HomogeneousArrayColumn[A]): Option[CValueType[A]] = Some(col.tpe.elemType)
+
+  @inline
+  private[table] def select(col: HomogeneousArrayColumn[_], i: Int) = col match {
+    case col @ HomogeneousArrayColumn(CString) => new StrColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): String = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CBoolean) => new BoolColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Boolean = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CLong) => new LongColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Long = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CDouble) => new DoubleColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): Double = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CNum) => new NumColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): BigDecimal = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(CDate) => new DateColumn {
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): DateTime = col(row)(i)
+    }
+    case col @ HomogeneousArrayColumn(cType: CArrayType[a]) => new HomogeneousArrayColumn[a] {
+      val tpe = cType
+      def isDefinedAt(row: Int): Boolean =
+        i >= 0 && col.isDefinedAt(row) && i < col(row).length
+      def apply(row: Int): IndexedSeq[a] = col(row)(i)
+    }
+  }
 }
 
 trait BoolColumn extends Column with (Int => Boolean) {
