@@ -180,6 +180,15 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
         }
       }
       
+      "metadescent" >> {
+        val tree = MetaDescent(LineStream(), NumLit(LineStream(), "1"), "a")
+        bindRoot(tree, tree)
+        
+        rewriteForall(tree) must beLike {
+          case MetaDescent(LineStream(), NumLit(LineStream(), "1"), "a") => ok
+        }
+      }
+      
       "deref" >> {
         val tree = Deref(LineStream(), NumLit(LineStream(), "1"), NumLit(LineStream(), "2"))
         bindRoot(tree, tree)
@@ -491,6 +500,23 @@ object ForallRewriterSpecs extends Specification with StubPhases with Binder wit
         }
 
         val results2 @ Let(_, _, _, Descent(_, t: TicVar, _), _) = results
+
+        t.binding mustEqual LetBinding(results2)
+      }
+      
+      "metadescent" >> {
+        val tree = Forall(LineStream(), "'a", MetaDescent(LineStream(), TicVar(LineStream(), "'a"), "b"))
+        bindRoot(tree, tree)
+
+        val results = rewriteForall(tree)
+
+        results must beLike {
+          case Let(LineStream(), Identifier(Vector(), "$forall"), Vector("'a"),
+            MetaDescent(LineStream(), TicVar(LineStream(), "'a"), "b"),
+            Dispatch(LineStream(), Identifier(Vector(), "$forall"), Vector())) => ok
+        }
+
+        val results2 @ Let(_, _, _, MetaDescent(_, t: TicVar, _), _) = results
 
         t.binding mustEqual LetBinding(results2)
       }
