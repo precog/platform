@@ -102,6 +102,9 @@ trait TableModule[M[+_]] extends FNModule {
 
     case class EqualLiteral[+A <: SourceType](left: TransSpec[A], right: CValue, invert: Boolean) extends TransSpec[A]
     
+    // target is the transspec that provides defineedness information. The resulting table will be defined
+    // and have the constant value wherever a row provided by the target transspec has at least one member
+    // that is not undefined
     case class ConstLiteral[+A <: SourceType](value: CValue, target: TransSpec[A]) extends TransSpec[A]
   
     type TransSpec1 = TransSpec[Source1]

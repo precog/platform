@@ -114,61 +114,62 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     import trans._
     
     def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
-      def deriveTransSpecs(keySpec: GroupKeySpec) = {
-        def toTransSpec(spec: GroupKeySpec, acc: Set[JPathField]): (Set[JPathField], TransSpec1) = (spec: @unchecked) match {
-          case GroupKeySpecAnd(left, right) => 
-            val (leftKey, leftSpec) = toTransSpec(left, acc)
-            val (rightKey, rightSpec) = toTransSpec(right, acc)
-            (leftKey ++ rightKey, ArrayConcat(leftSpec, rightSpec))
+      def allSources(spec: GroupingSpec[GroupId]): Vector[GroupingSource[GroupId]] = spec match {
+        case GroupingAlignment(ltrans, rtrans, leftParent, rightParent) =>
+         allSources(leftParent) ++ allSources(rightParent) 
 
-          // [["'a", 123], ["'b", 923]]
-          case GroupKeySpecSource(field, spec) => (Set(field), ArrayConcat(WrapArray(ConstLiteral(CString(field.name), spec)), WrapArray(spec)))
-        }
-
-        import GroupKeySpec.{dnf, toVector}
-        ((dnf _) andThen (toVector _)) apply keySpec map (toTransSpec(_: GroupKeySpec, Set()))
+        case source @ GroupingSource(_, _, _, _) => Vector(source)
       }
 
-      def deriveKeyOrderings(spec: GroupingSpec[GroupId]): Map[GroupKeySpec, Set[Seq[JPathField]]] = {
-        def allSources(spec: GroupingSpec[GroupId]): Vector[GroupingSource[GroupId]] = spec match {
-          case GroupingAlignment(ltrans, rtrans, leftParent, rightParent) =>
-           allSources(leftParent) ++ allSources(rightParent) 
+      def findUniverses(v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Vector[List[(GroupingSource[GroupId], GroupKeySpec)]] = {
+        Vector((v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence: _*)
+      }
 
-          case source @ GroupingSource(_, _, _, _) => Vector(source)
+      sealed trait MergeSpec
+
+      case class SourceMergeSpec(source: Table, keySpec: TransSpec1, valueSpec: TransSpec1) extends MergeSpec
+      case class IntersectMergeSpec(left: MergeSpec, right: MergeSpec, bindings: Seq[JPathField]) extends MergeSpec
+      case class CrossMergeSpec(left: MergeSpec, right: MergeSpec) extends MergeSpec
+
+      def composeMergeSpec(universe: List[(GroupingSource[GroupId], GroupKeySpec)]): MergeSpec = {
+        def bindingFields(keySpec: GroupKeySpec): Set[JPathField] = {
+          keySpec match {
+            case GroupKeySpecAnd(left, right) =>
+              bindingFields(left) ++ bindingFields(right)
+
+            case GroupKeySpecSource(field, spec) => Set(field)
+          }
         }
 
-        def combine(v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Vector[List[(GroupingSource[GroupId], GroupKeySpec)]] = {
-          Vector((v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence: _*)
+        // the GroupKeySpec passed to deriveTransSpecs must be either a source or a conjunction; all disjunctions
+        // have been factored out by this point
+        def deriveTransSpecs(conjunction: GroupKeySpec, keyOrder: Map[JPathField, Int] = Map()) = {
+          def sources(spec: GroupKeySpec): Seq[GroupKeySpecSource] = (spec: @unchecked) match {
+            case GroupKeySpecAnd(left, right) => sources(left) ++ sources(right)
+            case src: GroupKeySpecSource => Vector(src)
+          }
+
+          // [['a, value], ['b, value2]]
+          val keySpecs = sources(conjunction).sortBy(src => keyOrder.getOrElse(src.key, Int.MaxValue)) map { src => 
+            WrapArray(ArrayConcat(WrapArray(ConstLiteral(CString(src.key.name), src.spec)), WrapArray(src.spec))) : TransSpec1
+          }
+          
+          keySpecs reduce { ArrayConcat(_, _) }
         }
 
-        import GroupKeySpec.{dnf, toVector}
-        val sourceDisjuncts = (allSources(spec) map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
-       
+        universe match {
+          case (source, groupKeySpec) :: Nil => sys.error("todo")
+        }
+      }
+
+      def evaluateMergeSpecs(specs: MergeSpec*): M[Table] = {
         sys.error("todo")
       }
 
-      /*
-      def merge0(spec: GroupingSpec[GroupId]): M[Seq[(Seq[JPathField], Table)]] = {
-        spec match {
-          case GroupingSource(table, targetTrans, groupId, keySpec) =>
-            val transSpecs = deriveTransSpecs(keySpec)
-
-            table.groupByN(transSpecs map (_._2), targetTrans) flatMap { tables =>
-             
-            }
-
-          case GroupingUnion(ltrans, rtrans, leftParent, rightParent, GroupKeyAlign.Eq) =>
-            val left = merge0(leftParent)
-            val right = merge0(rightParent)
-
-            left.genCogroup(
-            
-          case _ => sys.error("remove")
-        }
-      }
-      */
-
-      sys.error("todo")
+      import GroupKeySpec.{dnf, toVector}
+      val universes: Vector[List[(GroupingSource[GroupId], GroupKeySpec)]] = findUniverses((allSources(grouping) map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) }))
+      
+      evaluateMergeSpecs(universes map { composeMergeSpec }: _*)
     }
   }
 
