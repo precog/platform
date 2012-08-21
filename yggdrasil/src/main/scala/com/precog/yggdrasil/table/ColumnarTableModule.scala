@@ -530,6 +530,11 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
             _ deref field
           }
 
+        case DerefMetadataStatic(source, field) =>
+          composeSliceTransform2(source) map {
+            _ deref field
+          }
+
         case DerefObjectDynamic(source, ref) =>
           val l0 = composeSliceTransform2(source)
           val r0 = composeSliceTransform2(ref)

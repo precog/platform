@@ -499,6 +499,19 @@ trait Evaluator[M[+_]] extends DAG
           }
         }
         
+        case Join(_, DerefMetadata, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
+          right.value match {
+            case Some(value @ SString(str)) => {
+              for {
+                pendingTable <- loop(left, splits)
+              } yield PendingTable(pendingTable.table, pendingTable.graph, DerefMetadataStatic(pendingTable.trans, JPathField(str)))
+            }
+            
+            case _ =>
+              state(PendingTable(M.point(ops.empty), graph, TransSpec1.Id))
+          }
+        }
+        
         case Join(_, DerefArray, CrossLeftSort | CrossRightSort, left, right) if right.value.isDefined => {
           right.value match {
             case Some(SDecimal(d)) => {
@@ -898,7 +911,8 @@ trait Evaluator[M[+_]] extends DAG
     
     case instructions.WrapObject | instructions.JoinObject |
          instructions.JoinArray | instructions.ArraySwap |
-         instructions.DerefObject | instructions.DerefArray => sys.error("assertion error")
+         instructions.DerefObject | instructions.DerefMetadata |
+         instructions.DerefArray => sys.error("assertion error")
   }
   
   private def transFromBinOp[A <: SourceType](op: BinaryOperation)(left: TransSpec[A], right: TransSpec[A]): TransSpec[A] = op match {
@@ -909,6 +923,7 @@ trait Evaluator[M[+_]] extends DAG
     case JoinArray => ArrayConcat(left, right)
     case instructions.ArraySwap => sys.error("nothing happens")
     case DerefObject => DerefObjectDynamic(left, right)
+    case DerefMetadata => sys.error("cannot do a dynamic metadata deref")
     case DerefArray => DerefArrayDynamic(left, right)
     case _ => trans.Map2(left, right, op2(op).f2)
   }
