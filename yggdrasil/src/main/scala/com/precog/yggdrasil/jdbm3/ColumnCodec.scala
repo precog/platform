@@ -80,6 +80,11 @@ class ColumnCodec(bufferSize: Int = (16 * 1024)) {
     }
   }
 
+  def encodeSortColumns(s: Array[(ColumnRef,Column)], row: Int, uniqueId: Long) = sys.error("todo")
+  def encodeRawColumns(s: Array[(ColumnRef,Column)], row: Int) = sys.error("todo")
+
+  def readSortColumns(keyBytes: Array[Byte], keyColumns: Array[(ColumnRef, ArrayColumn[_])]): Unit = sys.error("todo")
+
   def encode(values: Seq[CValue]): Array[Byte] = {
     workBuffer.clear()
 

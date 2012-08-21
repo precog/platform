@@ -117,8 +117,8 @@ trait TableModule[M[+_]] extends FNModule {
       val RightId = Leaf(SourceRight)
     }
   
-    sealed trait GroupKeySpec
-    
+    sealed trait GroupKeySpec 
+
     /**
      * Definition for a single (non-composite) key part.
      *
@@ -129,6 +129,33 @@ trait TableModule[M[+_]] extends FNModule {
     
     case class GroupKeySpecAnd(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
     case class GroupKeySpecOr(left: GroupKeySpec, right: GroupKeySpec) extends GroupKeySpec
+
+    object GroupKeySpec {
+      def dnf(keySpec: GroupKeySpec): GroupKeySpec = {
+        keySpec match {
+          case GroupKeySpecSource(key, spec) => GroupKeySpecSource(key, spec)
+          case GroupKeySpecAnd(GroupKeySpecOr(ol, or), right) => GroupKeySpecOr(dnf(GroupKeySpecAnd(ol, right)), dnf(GroupKeySpecAnd(or, right)))
+          case GroupKeySpecAnd(left, GroupKeySpecOr(ol, or)) => GroupKeySpecOr(dnf(GroupKeySpecAnd(left, ol)), dnf(GroupKeySpecAnd(left, or)))
+
+          case gand @ GroupKeySpecAnd(left, right) => 
+            val leftdnf = dnf(left)
+            val rightdnf = dnf(right)
+            if (leftdnf == left && rightdnf == right) gand else dnf(GroupKeySpecAnd(leftdnf, rightdnf))
+
+          case gor @ GroupKeySpecOr(left, right) => 
+            val leftdnf = dnf(left)
+            val rightdnf = dnf(right)
+            if (leftdnf == left && rightdnf == right) gor else dnf(GroupKeySpecOr(leftdnf, rightdnf))
+        }
+      }
+    
+      def toVector(keySpec: GroupKeySpec): Vector[GroupKeySpec] = {
+        keySpec match {
+          case GroupKeySpecOr(left, right) => toVector(left) ++ toVector(right)
+          case x => Vector(x)
+        }
+      }
+    }
     
     sealed trait GroupingSpec[GroupId]
     
@@ -141,11 +168,9 @@ trait TableModule[M[+_]] extends FNModule {
      */
     final case class GroupingSource[GroupId: scalaz.Equal](table: Table, targetTrans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec) extends GroupingSpec[GroupId]
     
-    final case class GroupingUnion[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
-    final case class GroupingIntersect[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId], align: GroupKeyAlign) extends GroupingSpec[GroupId]
+    final case class GroupingAlignment[GroupId: scalaz.Equal](groupKeyLeftTrans: TransSpec1, groupKeyRightTrans: TransSpec1, left: GroupingSpec[GroupId], right: GroupingSpec[GroupId]) extends GroupingSpec[GroupId]
     
     sealed trait GroupKeyAlign
-    
     object GroupKeyAlign {
       case object Eq extends GroupKeyAlign
     
@@ -273,9 +298,11 @@ trait TableModule[M[+_]] extends FNModule {
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table]
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Table]
     
     def distinct(spec: TransSpec1): Table
+
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]]
     
     def group[GroupId: scalaz.Equal](trans: TransSpec1, groupId: GroupId, groupKeySpec: GroupKeySpec): GroupingSpec[GroupId] = GroupingSource[GroupId](this, trans, groupId, groupKeySpec)
     

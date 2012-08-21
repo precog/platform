@@ -33,6 +33,7 @@ import java.io.File
 import java.util.SortedMap
 
 import org.apache.jdbm.DBMaker
+import org.apache.jdbm.DB
 
 import scalaz._
 import scalaz.Ordering._
@@ -345,83 +346,89 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
       } yield result
     }
 
-    private type SortBlockData = BlockProjectionData[SortingKey,Slice]
-    private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
-
     /**
      * Sorts the KV table by ascending or descending order of a transformation
      * applied to the rows.
      */
-    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = {
+    def sort(sortKey: TransSpec1, sortOrder: DesiredSortOrder): M[Table] = groupByN(Seq(sortKey), Leaf(Source), sortOrder).map(_.head)
+
+    private type SortingKey = Array[Byte]
+    private type SortBlockData = BlockProjectionData[SortingKey,Slice]
+    private object sortMergeEngine extends MergeEngine[SortingKey, SortBlockData]
+
+    def groupByN(groupKeys: Seq[TransSpec1], valueSpec: TransSpec1, sortOrder: DesiredSortOrder = SortAscending): M[Seq[Table]] = {
       import sortMergeEngine._
-      import TableModule.paths._
 
       // Bookkeeping types/case classes
-      type IndexStore = SortedMap[SortingKey,Array[Byte]]
+      type IndexStore = SortedMap[Array[Byte],Array[Byte]]
       case class SliceIndex(name: String, storage: IndexStore, sortRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef])
 
-      // Map a set of slice columns to a given JDBM DB index, since each slice could vary in column formats, names, etc
-      type IndexMap = Map[Seq[ColumnRef], SliceIndex]
+      // Map each group key index and slice column pair to a given JDBM DB index,
+      // since each slice could vary in column formats, names, etc
+      type IndexMap = Map[(Int, Array[ColumnRef], Array[ColumnRef]), SliceIndex]
 
-      case class SortOutput(indices: IndexMap, idCount: Int, globalId: Long)
-
-      // We use the sort transspec1 to compute a new table with a combination of the 
-      // original data and the new sort columns, referenced under the sortkey namespace
-      val tableWithSortKey = transform(ObjectConcat(Leaf(Source), WrapObject(sortKey, SortKey.name)))
+      case class DumpState(db: DB, indices: IndexMap, globalId: Long, transforms: List[(Int, SliceTransform1[_])])
 
       // Open a JDBM3 DB for use in sorting under a temp directory
-      val dbFile = new File(newScratchDir(), "sortspace")
-      val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
+      val dbFile = new File(newScratchDir(), "groupByNSpace")
+      val codec = ColumnCodec.readOnly
 
-      val codec = new ColumnCodec()
-      
-      // Insert slice data based on columndescriptors
-      val inputOp: M[SortOutput] = tableWithSortKey.slices.foldLeft(SortOutput(Map.empty, 0, 0l)) { case (SortOutput(indices, _, nextId), slice) => {
-        def columnsByPrefix(prefix: JPath): List[(ColumnRef,Column)] = slice.columns.collect {
-          // The conditional guarantees that dropPrefix will return Some
-          case (ColumnRef(selector, tpe), col) if selector.hasPrefix(prefix) => (ColumnRef(selector.dropPrefix(prefix).get, tpe), col)
-        }.toList
+      def dumpTables[A](valueTrans: SliceTransform1[A], slices: StreamT[M, Slice], state: DumpState): M[IndexMap] = {
+        slices.uncons flatMap {
+          _ map {
+            case (slice, tail) => {
+              val (va0, vslice) = valueTrans(slice)
+              val vColumns = vslice.columns.toSeq.sortBy(_._1).toArray
+              val vColumnRefs = vColumns.map(_._1)
 
-        val dataColumns = columnsByPrefix(JPath(Value))
-        val idColumns   = columnsByPrefix(JPath(Key))
-        val sortColumns = columnsByPrefix(JPath(SortKey))
-        val indexMapKey = (sortColumns ++ dataColumns).map(_._1).toSeq
+              val newState = state.transforms.foldLeft(state.copy(transforms = Nil)) { 
+                case (DumpState(db, indices, firstGlobalRowId, newTransforms), (i, SliceTransform1(a, f))) =>
+                  val (a0, slice0) = f(a, slice)
+                  val nextTransform = SliceTransform1(a0, f)
+                  
+                  val keyColumns = slice0.columns.toSeq.sortBy(_._1).toArray
+                  val keyColumnRefs = keyColumns.map(_._1)
 
-        val (index, newIndices) = indices.get(indexMapKey).map((_,indices)).getOrElse {
-          val newIndex = SliceIndex(indexMapKey.toString,
-                                    DB.createTreeMap(indexMapKey.toString, 
-                                                     SortingKeyComparator(sortOrder.isAscending),
-                                                     SortingKeySerializer(idColumns.size),
-                                                     null /* Use default serialization */),
-                                    sortColumns.map(_._1),
-                                    dataColumns.map(_._1))
+                  val indexMapKey = (i, keyColumnRefs, vColumnRefs)
 
-          (newIndex, indices + (indexMapKey -> newIndex))
-        }
-        
-        // Iterate over the slice
-        @inline
-        @tailrec
-        def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
-          val identities = VectorCase(idColumns.map(_._2.asInstanceOf[LongColumn].apply(row)) : _*)
+                  val (index, newIndices) = indices.get(indexMapKey) map { (_, indices) } getOrElse {
+                    val indexName = i + "-" + indexMapKey.toString
+                    val newIndex = SliceIndex(indexName,
+                                              db.createTreeMap(indexName,
+                                                               SortingKeyComparator(sortOrder.isAscending),
+                                                               null /* use default serialization for Array[Byte] */,
+                                                               null /* Use default serialization for Array[Byte] */),
+                                              keyColumnRefs,
+                                              vColumnRefs)
 
-          storage.put(SortingKey(codec.encode(sortColumns, row, true), identities, globalId), codec.encode(dataColumns, row))
+                    (newIndex, indices + (indexMapKey -> newIndex))
+                  }
 
-          if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
-            DB.commit()
+                  // Iterate over the slice, storing each row
+                  @inline
+                  @tailrec
+                  def storeRow(storage: IndexStore, row: Int, globalId: Long): Long = if (row < slice.size) {
+                    storage.put(codec.encodeSortColumns(keyColumns, row, globalId), codec.encodeRawColumns(vColumns, row))
+
+                    if (globalId % jdbmCommitInterval == 0 && globalId > 0) {
+                      db.commit()
+                    }
+
+                    storeRow(storage, row + 1, globalId + 1)
+                  } else {
+                    globalId
+                  }
+
+                  DumpState(db, newIndices, storeRow(index.storage, 0, firstGlobalRowId), (i, nextTransform) :: newTransforms)
+              }
+
+              dumpTables(valueTrans, tail, newState)
+            }
+          } getOrElse {
+            // No more slices, close out the JDBM database
+            state.db.close()
+            M.point(state.indices)
           }
-
-          storeRow(storage, row + 1, globalId + 1)
-        } else {
-          globalId
-        }
-
-        SortOutput(newIndices, idColumns.size, storeRow(index.storage, 0, nextId))
-      }}.map {
-        case output @ SortOutput(indices, idCount, lastId) => {
-          DB.close()
-          logger.debug("Sorted %d rows to JDBM".format(lastId - 1))
-          output
         }
       }
 
@@ -432,34 +439,35 @@ trait BlockStoreColumnarTableModule[M[+_]] extends ColumnarTableModule[M] with S
         )
       )
 
+      dumpTables(
+        composeSliceTransform(valueSpec),
+        slices,
+        DumpState(DBMaker.openFile(dbFile.getCanonicalPath).make(), Map.empty, 0l, (groupKeys map composeSliceTransform).zipWithIndex.map(_.swap).toList)
+      ) flatMap {
+        indices => {
+          (indices.groupBy(_._1._1).map {
+            case (_, backingIndices) => {
+              // Map the distinct indices into SortProjections/Cells, then merge them
+              val cells: Set[M[Option[Cell]]] = backingIndices.zipWithIndex.map {
+                case ((_, SliceIndex(name, _, keyColumns, valColumns)), index) => {
+                  val sortProjection = new JDBMRawSortProjection(dbFile, name, keyColumns, valColumns) {
+                    def keyOrder: Order[SortingKey] = sortingKeyOrder
+                  }
 
-      // Merge the resulting slice indices back together
-      inputOp.flatMap { 
-        case SortOutput(_, _, 0l) => {
-          // We've been asked to sort an empty table. Return the input
-          M.point(this)
-        }
-        case SortOutput(indices, idCount, _) => {
-          // Map the distinct indices into SortProjections/Cells, then merge them
-          val cells: Set[M[Option[Cell]]] = indices.zipWithIndex.map {
-            case ((_, SliceIndex(name, _, sortColumns, valColumns)), index) => {
-              val sortProjection = new JDBMRawSortProjection(dbFile, name, idCount, sortColumns, valColumns) {
-                def keyOrder: Order[SortingKey] = sortingKeyOrder
-              }
+                  val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
 
-              val succ: Option[SortingKey] => M[Option[SortBlockData]] = (key: Option[SortingKey]) => M.point(sortProjection.getBlockAfter(key))
+                  succ(None) map { 
+                    _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
+                  }
+                }
+              }.toSet
 
-              succ(None) map { 
-                _ map { nextBlock => Cell(index, nextBlock.maxKey, nextBlock.data) { k => succ(Some(k)) } }
-              }
+              mergeProjections(cells, sortOrder.isAscending) { slice => {
+                // only need to compare on the group keys (0th element of resulting table) between projections
+                slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(JPathIndex(0) :: Nil) }).toList.sorted
+              }}
             }
-          }.toSet
-
-          mergeProjections(cells, sortOrder.isAscending) { slice => {
-            // ensure that sort keys compare before identities
-            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(SortKey :: Nil) }).toList.sorted :::
-            slice.columns.keys.filter({ case ColumnRef(selector, _) => selector.nodes.startsWith(Key :: Nil) }).toList.sorted
-          }}
+          }).toStream.sequence
         }
       }
     }

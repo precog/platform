@@ -36,7 +36,7 @@ import scala.collection.BitSet
  * @param index A synthetic index to allow differentiation of identical value/id combinations. These may be the
  * result of operations such as cross which result in cartesians
  */
-case class SortingKey(columns: Array[Byte], ids: Identities, index: Long)
+//case class SortingKey(columns: Array[Byte], ids: Identities, index: Long)
 
 object SortingKeyComparator {
   final val serialVersionUID = 20120730l
@@ -44,8 +44,8 @@ object SortingKeyComparator {
   def apply(ascending: Boolean) = new SortingKeyComparator(ascending)
 }
   
-class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) extends Comparator[SortingKey] with Serializable {
-  def compare(a: SortingKey, b: SortingKey) = {
+class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) extends Comparator[Array[Byte]] with Serializable {
+  def compare(a: Array[Byte], b: Array[Byte]) = sys.error("TODO") /*{
     // retrieve the selector, type and value for each column in the keys, grouped by the selector
     val aValsRaw: Array[(String,CValue)] = ColumnCodec.readOnly.decodeWithRefs(a.columns)
     val aVals: Map[String,Array[(String,CValue)]] = aValsRaw.groupBy(_._1)
@@ -81,9 +81,10 @@ class SortingKeyComparator private[SortingKeyComparator] (ascending: Boolean) ex
     }
 
     if (ascending) finalResult else -finalResult
-  }
+  } */
 }
     
+/*
 object SortingKeySerializer {
   def apply(idCount: Int) = new SortingKeySerializer(idCount)
 }
@@ -106,4 +107,4 @@ class SortingKeySerializer private[SortingKeySerializer](idCount: Int) extends S
     SortingKey(defaultSerializer.deserialize(in).asInstanceOf[Array[Byte]], idSerializer.deserialize(in), index)
   }
 }
- 
+*/ 

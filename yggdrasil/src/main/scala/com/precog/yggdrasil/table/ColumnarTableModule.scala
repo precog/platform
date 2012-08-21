@@ -47,6 +47,7 @@ import scalaz.std.list._
 import scalaz.std.tuple._
 import scalaz.std.iterable._
 import scalaz.std.option._
+import scalaz.std.stream._
 import scalaz.syntax.arrow._
 import scalaz.syntax.monad._
 import scalaz.syntax.traverse._
@@ -112,8 +113,63 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
   object grouper extends Grouper {
     import trans._
     
-    def merge[A: scalaz.Equal](grouping: GroupingSpec[A])(body: (Table, A => Table) => M[Table]): M[Table] =
+    def merge[GroupId: scalaz.Equal](grouping: GroupingSpec[GroupId])(body: (Table, GroupId => Table) => M[Table]): M[Table] = {
+      def deriveTransSpecs(keySpec: GroupKeySpec) = {
+        def toTransSpec(spec: GroupKeySpec, acc: Set[JPathField]): (Set[JPathField], TransSpec1) = (spec: @unchecked) match {
+          case GroupKeySpecAnd(left, right) => 
+            val (leftKey, leftSpec) = toTransSpec(left, acc)
+            val (rightKey, rightSpec) = toTransSpec(right, acc)
+            (leftKey ++ rightKey, ArrayConcat(leftSpec, rightSpec))
+
+          // [["'a", 123], ["'b", 923]]
+          case GroupKeySpecSource(field, spec) => (Set(field), ArrayConcat(WrapArray(ConstLiteral(CString(field.name), spec)), WrapArray(spec)))
+        }
+
+        import GroupKeySpec.{dnf, toVector}
+        ((dnf _) andThen (toVector _)) apply keySpec map (toTransSpec(_: GroupKeySpec, Set()))
+      }
+
+      def deriveKeyOrderings(spec: GroupingSpec[GroupId]): Map[GroupKeySpec, Set[Seq[JPathField]]] = {
+        def allSources(spec: GroupingSpec[GroupId]): Vector[GroupingSource[GroupId]] = spec match {
+          case GroupingAlignment(ltrans, rtrans, leftParent, rightParent) =>
+           allSources(leftParent) ++ allSources(rightParent) 
+
+          case source @ GroupingSource(_, _, _, _) => Vector(source)
+        }
+
+        def combine(v: Vector[(GroupingSource[GroupId], Vector[GroupKeySpec])]): Vector[List[(GroupingSource[GroupId], GroupKeySpec)]] = {
+          Vector((v map { case (src, specs) => specs map { (src, _) } toStream } toList).sequence: _*)
+        }
+
+        import GroupKeySpec.{dnf, toVector}
+        val sourceDisjuncts = (allSources(spec) map { source => (source, ((dnf _) andThen (toVector _)) apply source.groupKeySpec) })
+       
+        sys.error("todo")
+      }
+
+      /*
+      def merge0(spec: GroupingSpec[GroupId]): M[Seq[(Seq[JPathField], Table)]] = {
+        spec match {
+          case GroupingSource(table, targetTrans, groupId, keySpec) =>
+            val transSpecs = deriveTransSpecs(keySpec)
+
+            table.groupByN(transSpecs map (_._2), targetTrans) flatMap { tables =>
+             
+            }
+
+          case GroupingUnion(ltrans, rtrans, leftParent, rightParent, GroupKeyAlign.Eq) =>
+            val left = merge0(leftParent)
+            val right = merge0(rightParent)
+
+            left.genCogroup(
+            
+          case _ => sys.error("remove")
+        }
+      }
+      */
+
       sys.error("todo")
+    }
   }
 
   implicit def liftF1(f: F1) = new F1Like {
@@ -128,7 +184,13 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     def andThen(f1: F1) = new CF2((c1, c2) => f(c1, c2) flatMap f1.apply)
   }
 
-  private case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
+  protected object SliceTransform {
+    def identity[A](initial: A) = SliceTransform1[A](initial, (a: A, s: Slice) => (a, s))
+    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
+    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
+  }
+
+  protected case class SliceTransform1[A](initial: A, f: (A, Slice) => (A, Slice)) {
     def apply(s: Slice) = f(initial, s)
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform1[(A, B)] = {
@@ -165,11 +227,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
   }
 
-  private object SliceTransform1 {
-    def identity[A](initial: A) = SliceTransform1(initial, (a: A, s: Slice) => (a, s))
-  }
-
-  private case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
+  protected case class SliceTransform2[A](initial: A, f: (A, Slice, Slice) => (A, Slice), source: Option[TransSpec[SourceType]] = None) {
     def apply(s1: Slice, s2: Slice) = f(initial, s1, s2)
 
     def andThen[B](t: SliceTransform1[B]): SliceTransform2[(A, B)] = {
@@ -210,11 +268,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     def withSource(ts: TransSpec[SourceType]) = copy(source = Some(ts))
   }
 
-  private object SliceTransform2 {
-    def left[A](initial: A)  = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sl))
-    def right[A](initial: A) = SliceTransform2[A](initial, (a: A, sl: Slice, sr: Slice) => (a, sr))
-  }
-
   def table(slices: StreamT[M, Slice]): Table
 
   abstract class ColumnarTable(val slices: StreamT[M, Slice]) extends TableLike with Logging { self: Table =>
@@ -226,7 +279,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     }
 
     def compact(spec: TransSpec1): Table = {
-      table(transformStream((SliceTransform1.identity(()) zip composeSliceTransform(spec))(_ compact _), slices)).normalize
+      table(transformStream((SliceTransform.identity(()) zip composeSliceTransform(spec))(_ compact _), slices)).normalize
     }
 
     private def map0(f: Slice => Slice): SliceTransform1[Unit] = SliceTransform1[Unit]((), Function.untupled(f.second[Unit]))
@@ -248,15 +301,15 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
       stream(sliceTransform.initial, slices)
     }
 
-    private def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
+    protected def composeSliceTransform(spec: TransSpec1): SliceTransform1[_] = {
       composeSliceTransform2(spec).parallel
     }
 
     // No transform defined herein may reduce the size of a slice. Be it known!
-    private def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
+    protected def composeSliceTransform2(spec: TransSpec[SourceType]): SliceTransform2[_] = {
       val result = spec match {
-        case Leaf(source) if source == Source || source == SourceLeft => SliceTransform2.left(())
-        case Leaf(source) if source == SourceRight => SliceTransform2.right(())
+        case Leaf(source) if source == Source || source == SourceLeft => SliceTransform.left(())
+        case Leaf(source) if source == SourceRight => SliceTransform.right(())
 
         case Map1(source, f) => 
           composeSliceTransform2(source) map {
@@ -585,7 +638,6 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
     def transform(spec: TransSpec1): Table = {
       table(transformStream(composeSliceTransform(spec), slices))
     }
-
     
     /**
      * Cogroups this table with another table, using equality on the specified
@@ -1019,7 +1071,7 @@ trait ColumnarTableModule[M[+_]] extends TableModule[M] {
         table(stream((id.initial, filter.initial), slices))
       }
 
-      distinct0(SliceTransform1.identity(None : Option[Slice]), composeSliceTransform(spec))
+      distinct0(SliceTransform.identity(None : Option[Slice]), composeSliceTransform(spec))
     }
 
     def drop(n: Long): Table = sys.error("todo")

@@ -32,6 +32,7 @@ import scalaz.effect.IO
 
 import java.io.File
 import java.util.SortedMap
+import java.nio.ByteBuffer
 
 import scala.collection.JavaConverters._
 
@@ -39,80 +40,62 @@ import scala.collection.JavaConverters._
  * A Projection wrapping a raw JDBM TreeMap index used for sorting. It's assumed that
  * the index has been created and filled prior to creating this wrapper.
  */
-abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, idCount: Int, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[SortingKey,Slice] with Logging {
-  import TableModule.paths._
-
+abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName: String, sortKeyRefs: Seq[ColumnRef], valRefs: Seq[ColumnRef], sliceSize: Int = JDBMProjection.DEFAULT_SLICE_SIZE) extends BlockProjectionLike[Array[Byte],Slice] with Logging {
   // These should not actually be used in sorting
   def descriptor: ProjectionDescriptor = sys.error("Sort projections do not have full ProjectionDescriptors")
   def insert(id : Identities, v : Seq[CValue], shouldSync: Boolean = false): IO[Unit] = sys.error("Insertion on sort projections is unsupported")
 
-  def foreach(f : java.util.Map.Entry[SortingKey,Array[Byte]] => Unit) {
+  def foreach(f : java.util.Map.Entry[Array[Byte], Array[Byte]] => Unit) {
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
-    val index: SortedMap[SortingKey,Array[Byte]] = DB.getTreeMap(indexName)
+    val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
 
     index.entrySet().iterator().asScala.foreach(f)
 
     DB.close()
   }
 
-  def getBlockAfter(id: Option[SortingKey], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[SortingKey,Slice]] = try {
+  // Compute the next possible key > the given key
+  private def keyAfter(k: Array[Byte]): Array[Byte] = {
+    val output = ByteBuffer.wrap(new Array[Byte](k.length))
+
+    // Copy the input, read out the last 4 bytes (unique ID), then write out the successor to the unique ID
+    output.put(k).position(k.length - 5)
+    val inputId = output.getInt()
+    output.position(k.length - 5).asInstanceOf[ByteBuffer].putInt(inputId + 1)
+    output.array()
+  }
+
+  def getBlockAfter(id: Option[Array[Byte]], columns: Set[ColumnDescriptor] = Set()): Option[BlockProjectionData[Array[Byte],Slice]] = try {
     // TODO: Make this far, far less ugly
     if (columns.size > 0) {
       throw new IllegalArgumentException("JDBM Sort Projections may not be constrained by column descriptor")
     }
 
     val DB = DBMaker.openFile(dbFile.getCanonicalPath).make()
-    val index: SortedMap[SortingKey,Array[Byte]] = DB.getTreeMap(indexName)
+    val index: SortedMap[Array[Byte],Array[Byte]] = DB.getTreeMap(indexName)
 
     if (index == null) {
       throw new IllegalArgumentException("No such index in DB: %s:%s".format(dbFile, indexName))
     }
 
-    val constrainedMap = id.map { idKey => index.tailMap(idKey.copy(index = idKey.index + 1)) }.getOrElse(index)
+    val constrainedMap = id.map { idKey => index.tailMap(keyAfter(idKey)) }.getOrElse(index)
     
     constrainedMap.lastKey() // should throw an exception if the map is empty, but...
 
-    var firstKey: SortingKey = null
-    var lastKey: SortingKey  = null
+    var firstKey: Array[Byte] = null
+    var lastKey: Array[Byte]  = null
 
-    val slice = new JDBMSlice[SortingKey] {
+    val slice = new JDBMSlice[Array[Byte]] {
       def source = constrainedMap.entrySet.iterator.asScala
       def requestedSize = sliceSize
-      lazy val idColumns      = (0 until idCount).map { idx => (ColumnRef(JPath(Key :: JPathIndex(idx) :: Nil), CLong), ArrayLongColumn.empty(sliceSize)) }.toArray
-      lazy val sortKeyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath(SortKey), sliceSize)).toArray
+      lazy val keyColumns = sortKeyRefs.map(JDBMSlice.columnFor(JPath("[0]"), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
+      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(JPath("[1]"), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
 
-      lazy val keyColumns = (idColumns ++ sortKeyColumns).asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-      lazy val valColumns = valRefs.map(JDBMSlice.columnFor(JPath(Value), sliceSize)).toArray.asInstanceOf[Array[(ColumnRef,ArrayColumn[_])]]
-
-      def loadRowFromKey(row: Int, rowKey: SortingKey) {
+      def loadRowFromKey(row: Int, rowKey: Array[Byte]) {
         if (row == 0) { firstKey = rowKey }
         lastKey = rowKey
 
-        var i = 0
-
-        while (i < idCount) {
-          idColumns(i)._2.update(row, rowKey.ids(i))
-          i += 1
-        }
-
-        val sortKeyColumnsRaw = ColumnCodec.readOnly.decodeWithRefs(rowKey.columns)
-
-        i = 0
-        while (i < sortKeyColumns.length) {
-          sortKeyColumnsRaw(i) match {
-            case (_, CString(cs))   => sortKeyColumns(i)._2.asInstanceOf[ArrayStrColumn].update(row, cs)
-            case (_, CBoolean(cb))  => sortKeyColumns(i)._2.asInstanceOf[ArrayBoolColumn].update(row, cb)
-            case (_, CLong(cl))     => sortKeyColumns(i)._2.asInstanceOf[ArrayLongColumn].update(row, cl)
-            case (_, CDouble(cd))   => sortKeyColumns(i)._2.asInstanceOf[ArrayDoubleColumn].update(row, cd)
-            case (_, CNum(cn))      => sortKeyColumns(i)._2.asInstanceOf[ArrayNumColumn].update(row, cn)
-            case (_, CDate(cd))     => sortKeyColumns(i)._2.asInstanceOf[ArrayDateColumn].update(row, cd)
-            case (_, CNull)         => sortKeyColumns(i)._2.asInstanceOf[MutableNullColumn].update(row, true)
-            case (_, CEmptyObject)  => sortKeyColumns(i)._2.asInstanceOf[MutableEmptyObjectColumn].update(row, true)
-            case (_, CEmptyArray)   => sortKeyColumns(i)._2.asInstanceOf[MutableEmptyArrayColumn].update(row, true)                      
-            case (_, CUndefined)    => // NOOP, array/mutable columns start fully undefined
-          }
-          i += 1
-        }        
+        ColumnCodec.readOnly.readSortColumns(rowKey, keyColumns)
       }
     }
 
@@ -121,7 +104,7 @@ abstract class JDBMRawSortProjection private[yggdrasil] (dbFile: File, indexName
     if (firstKey == null) { // Just guard against an empty slice
       None
     } else {
-      Some(BlockProjectionData[SortingKey,Slice](firstKey, lastKey, slice))
+      Some(BlockProjectionData[Array[Byte],Slice](firstKey, lastKey, slice))
     }
   } catch {
     case e: java.util.NoSuchElementException => None
