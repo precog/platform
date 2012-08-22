@@ -511,7 +511,7 @@ object Slice {
       val array2 = l2.map(s2.columns).toArray
 
       // Build an array of pairwise comparator functions for later use
-      val comparators = (for {
+      val comparators: Array[(Int, Int) => Ordering] = (for {
         i1 <- 0 until array1.length
         i2 <- 0 until array2.length
       } yield compare0(array1(i1), array2(i2))).toArray
@@ -572,16 +572,18 @@ object Slice {
       case (h1 :: t1, h2 :: t2) => sys.error("selector guard failure in pairColumns")
     }
 
-    (i1: Int, i2: Int) => {
-      @inline @tailrec def compare1(l: List[(Int, Int) => Ordering]): Ordering = l match {
-        case h :: t => 
-          val intermediateOrder = h(i1, i2)
-          if (intermediateOrder == EQ) compare1(t) else intermediateOrder
+    val comparators: Array[(Int, Int) => Ordering] = pairColumns(refs1, refs2, Nil).toArray
 
-        case Nil => EQ
+    (i1: Int, i2: Int) => {
+      var i = 0
+      var result: Ordering = EQ
+
+      while (i < comparators.length && result == EQ) {
+        result = comparators(i)(i1, i2)
+        i += 1
       }
 
-      compare1(pairColumns(refs1, refs2, Nil))
+      result
     }
   } 
 }
